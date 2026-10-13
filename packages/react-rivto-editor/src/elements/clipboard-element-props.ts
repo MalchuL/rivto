@@ -1,4 +1,4 @@
-import type { PanelElementsAPI } from "../panels/panel-elements-api";
+import type { PanelElementsAPI } from "@chulane/rivto";
 import type { ElementManagerApi, EditorElementNode } from "@chulane/rivto";
 
 /**

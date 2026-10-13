@@ -1,7 +1,7 @@
 import type { RegistrationOwner } from "../extensions/types";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { PANEL_SELECTOR } from "./panel-dom";
 
@@ -15,7 +15,7 @@ export class PanelRegistry {
   private activeRoot: HTMLElement | null = null;
   private pointerRoot?: HTMLElement;
   private readonly eventPanels = new WeakMap<globalThis.Event, HTMLElement | null>();
-  private readonly panels = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: PanelAPI; deactivate?: () => void; cancelSelection?: () => void }>();
+  private readonly panels = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: ReactPanelApi; deactivate?: () => void; cancelSelection?: () => void }>();
 
   /**
    * @param reactEditor - Document editor whose selection follows the active panel.
@@ -33,11 +33,11 @@ export class PanelRegistry {
   /** Returns the API for the last activated registered panel. The panel remains remembered
    * when focus leaves the editor. Returns undefined before activation, after its root
    * is removed, or when that root was registered without an API. */
-  getActive(): PanelAPI | undefined { return this.activeRoot ? this.getApi(this.activeRoot) : undefined; }
+  getActive(): ReactPanelApi | undefined { return this.activeRoot ? this.getApi(this.activeRoot) : undefined; }
   /** Returns the first registered full-document panel, falling back to the first subtree.
    * Returns undefined when no root is registered or the chosen root has no API.
    * This choice does not depend on which panel is active. */
-  getDefault(): PanelAPI | undefined { const root = this.getDefaultRoot(); return root ? this.getApi(root) : undefined; }
+  getDefault(): ReactPanelApi | undefined { const root = this.getDefaultRoot(); return root ? this.getApi(root) : undefined; }
   /** Returns the last activated registered root without applying a fallback, or null
    * before activation and after that root is removed. */
   getActiveRoot(): HTMLElement | null { return this.activeRoot; }
@@ -53,7 +53,7 @@ export class PanelRegistry {
 
   /** @param root - Registered editor surface.
    * @returns Its API, or undefined for an unknown root or a registration without an API. */
-  getApi(root: HTMLElement): PanelAPI | undefined { return this.panels.get(root)?.api; }
+  getApi(root: HTMLElement): ReactPanelApi | undefined { return this.panels.get(root)?.api; }
 
   /** @returns A mounted full-document surface, independent of interaction; falls back to the first subtree when no full document is mounted. */
   getDefaultRoot(): HTMLElement | null {
@@ -99,7 +99,7 @@ export class PanelRegistry {
    * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
    * Full-document surface changes preserve selection when switching presentation modes.
    */
-  registerPanel(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: PanelAPI, deactivate?: () => void, cancelSelection?: () => void): () => void {
+  registerPanel(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactPanelApi, deactivate?: () => void, cancelSelection?: () => void): () => void {
     this.extensions.assertActive();
     const entry = { document, rootBlockId, api, deactivate, cancelSelection };
     this.panels.set(root, entry);
@@ -119,7 +119,7 @@ export class PanelRegistry {
       // Retain source undo while the target is missing; the next panel interaction chooses its own history again.
       // Replacing a full-document surface (page/canvas) keeps core selection.
       // Removing the active embedded subtree releases its occurrence's selection.
-      if (entry.rootBlockId !== undefined) this.reactEditor.document.selection.clear();
+      if (entry.rootBlockId !== undefined) this.reactEditor.selection.clear();
       if (root.contains(root.ownerDocument.activeElement)) {
         const parent = root.parentElement?.closest<HTMLElement>(PANEL_SELECTOR);
         if (parent && this.panels.has(parent)) parent.focus({ preventScroll: true });
@@ -183,7 +183,7 @@ export class PanelRegistry {
     if (changed && activatesPanel) {
       if (this.activeRoot) {
         this.panels.get(this.activeRoot)?.deactivate?.();
-        this.reactEditor.document.selection.clear();
+        this.reactEditor.selection.clear();
       }
       this.activeRoot = chosen;
     }

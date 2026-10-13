@@ -1,15 +1,18 @@
-# ReactEditor, PanelAPI и время жизни
+# ReactEditor, ReactPanelApi и время жизни
 
 ## Слои API
 
 - `DocumentEditorAPI` — операции над полным документом: blocks, elements, commands,
   selection, clipboard, history, snapshots и subscriptions. Корни панели сюда не передаются.
-- `ReactEditor` реализует `ReactEditorApi`. Его `document` — DocumentEditorAPI; остальные
+- `ReactEditor` реализует `ReactEditorApi extends DocumentEditorAPI`: blocks, elements, history
+  и другие core-возможности доступны непосредственно. Дополнительные
   менеджеры регистрируют renderers, block types/behaviors, surfaces, extensions,
   DOM events, keyboard bindings, clipboard formats и slash commands.
-- `PanelAPI` — API одного отображения. `editor` указывает на общий ReactEditorApi,
-  `document` — на DocumentEditorAPI. `blocks` и `elements` ограничены деревьями панели.
-  Selection, mode, events, keyboard, clipboard и slash execution привязаны к панели.
+- `PanelAPI` — framework-neutral API ограниченного дерева: `document`, `blocks`, `elements`,
+  `rootBlockId`, `rootElementId`. Реализации `ChildrenPanel` и `EmbeddingPanel` находятся в core.
+- `ReactPanelApi extends PanelAPI` — API одного отображения. `editor` указывает на общий ReactEditorApi;
+  ограниченные blocks/elements доступны непосредственно. Selection, mode, events, keyboard, clipboard, edgeless и
+  slash execution привязаны к отображению.
 
 ## `useReactEditor(options)`
 
@@ -31,8 +34,23 @@ React resources и core, но не переданная модель. Её вр�
 фиксируются на время жизни document; для их замены перемонтируйте владельца через key.
 Preset и surface не выбираются автоматически.
 
+## Создание экземпляров в React
+
+ReactEditor и ReactPanel нельзя создавать вручную в React-компонентах, включая
+render, useMemo и initializer useState. Редактор создаёт useReactEditor после
+commit; панель создаёт эффект внутреннего usePanelContent в EditorPanel/EditorEmbed.
+useReactPanel читает существующую панель из контекста и не создаёт новую.
+
+Конструктор ReactPanel подключает проекцию и подписки. Cleanup эффекта вызывает
+panel.destroy(); при StrictMode replay создаётся новый экземпляр. Метода
+attachToEditor больше нет. До эффекта, при замене editor/корней и при SSR панель
+возвращает loading и не рендерит дочерние поверхности. Уничтоженная панель повторно
+не используется; освобождение одной панели не уничтожает общий редактор.
+
 ## `createReactEditor(options)`
 
+Фабрика предназначена для useReactEditor, управляемой инфраструктуры EditorStorage
+и внутренних тестов; React-компоненты не создают через неё экземпляры вручную.
 Низкоуровневая фабрика принимает обязательный `editor: DocumentEditorAPI` и необязательные
 `extensions`, `keymap`, `unknownBlockRenderer`. Возвращает ReactEditor.
 Managers создаются до setup расширений; extensions устанавливаются в порядке объявления.
@@ -50,7 +68,7 @@ Managers создаются до setup расширений; extensions уста
 ## EditorPanel и две реализации PanelAPI
 
 EditorPanel принимает `editor: ReactEditorApi`, явно выбранную surface в children,
-необязательные `rootBlockId`, `rootElementId`, `mode`, `panel`, `onOpenBlock` и `active`.
+необязательные `rootBlockId`, `rootElementId`, `mode` и `active`.
 
 - `EditorPanel` — дети блока или корни документа при отсутствии rootBlockId.
 - `EditorEmbed` — обязательный rootBlockId и его потомки.
@@ -60,8 +78,8 @@ EditorPanel принимает `editor: ReactEditorApi`, явно выбранн
 корни документа; ID — потомков контейнера без самого контейнера. Missing root не
 переключает панель на весь документ; undo может вернуть удалённые данные.
 
-`usePanel()` возвращает ближайший PanelAPI и выбрасывает исключение вне EditorPanel или EditorEmbed.
-Общий DocumentEditorAPI всегда возвращает настоящих родителей. PanelAPI возвращает null
+`useReactPanel()` возвращает ближайший ReactPanelApi и выбрасывает исключение вне EditorPanel или EditorEmbed.
+`usePanel()` возвращает core PanelAPI. Общий DocumentEditorAPI всегда возвращает настоящих родителей. PanelAPI возвращает null
 на видимом верхнем уровне. Изменения вне панели отклоняются до записи; batch проверяет
 все targets. Insertion destination панели — `{ root: true, beforeId? }` или
 `{ parentId: string, beforeId? }`. DocumentEditorAPI использует реальный parentId, включая null.
@@ -73,7 +91,7 @@ DOM surface определяется по data-rivto-surface; без DOM пан�
 один раз, handlers читают snapshot события.
 
 Внутренний экземпляр панели владеет локальными listeners, root registration и отложенной DOM selection.
-Unmount снимает только их. При StrictMode remount создаются свежие selection bindings;
+Unmount снимает только их. При StrictMode replay предыдущая панель уничтожается и создаётся новый экземпляр со свежими selection bindings;
 старые запланированные callbacks отменяются. Общая portable selection сохраняет прежнюю
 семантику владения активным отображением. subscribeDeactivation закрывает локальный UI.
 
@@ -88,7 +106,7 @@ Unmount снимает только их. При StrictMode remount создаю
 
 `getEditor(id)`, `getEditors()` и `getDocuments()` не загружают документы.
 Методов openCoreEditor/releaseCoreEditor и отдельного explicit ownership больше нет.
-Core доступен через acquisition.editor.document. Cache loader передаёт владение моделью
+Операции core доступны непосредственно через acquisition.editor. Cache loader передаёт владение моделью
 storage; factory обязана обернуть именно переданный core.
 
 EditorPanel не получает дополнительный acquisition из context. Владелец сохраняет
@@ -104,8 +122,8 @@ Provider сам не создаёт и не уничтожает кеш; при�
 
 ## Подписки
 
-Document revisions читаются через `editor.document.revision` и
-`editor.document.subscribe(listener)`. Selection имеет отдельный stream.
+Document revisions читаются через `editor.revision` и
+`editor.subscribe(listener)`. Selection имеет отдельный stream.
 React registries предоставляют собственные revisions и subscribe; document changes
 не заменяют их уведомления. Разные consumers используют разные callbacks и cleanup.
 У core Listeners одинаковая function reference эффективно регистрируется один раз;

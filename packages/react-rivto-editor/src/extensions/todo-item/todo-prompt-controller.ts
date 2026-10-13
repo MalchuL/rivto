@@ -59,7 +59,7 @@ export class TodoPromptController {
       return;
     }
     const owned = createTodoItemProps();
-    editor.editor.document.history.batchUpdates(() => {
+    editor.batchUpdates(() => {
       editor.blocks.setBlockType(current.blockId, TODO_ITEM_BLOCK_TYPE);
       editor.blocks.updateBlock(current.blockId, {
         content: block.content.slice(match.prompt.length).replace(/^\s+/, ""),
@@ -77,7 +77,7 @@ export class TodoPromptController {
         id: "todo-item.input",
         type: "input",
         scope: "content",
-      }, ({ blockId, contentElement, panel: editor }) => {
+      }, ({ blockId, contentElement, reactPanel: editor }) => {
         if (!blockId || !contentElement) return false;
         queueMicrotask(() => {
           if (!this.active) return;
@@ -119,10 +119,10 @@ export class TodoPromptController {
         id: "todo-item.selection-change",
         type: "selectionchange",
         target: "document",
-      }, ({ root, panel }) => {
+      }, ({ root, reactPanel }) => {
         // A lost browser range is not an editor navigation while the OS owns focus.
         if (!root.ownerDocument.hasFocus()) return false;
-        const activeBlockId = panel.selection.readDOM()?.focusBlockId;
+        const activeBlockId = reactPanel.selection.readDOM()?.focusBlockId;
         if (this.candidate && activeBlockId !== this.candidate.blockId) this.convertCandidate();
         return false;
       }),

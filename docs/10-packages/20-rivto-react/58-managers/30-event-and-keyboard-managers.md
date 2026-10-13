@@ -2,7 +2,7 @@
 
 ## `EventManager`
 
-`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `panel.events` — локальный PanelEventManager: он использует root и cleanup своего отображения.
+`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `reactPanel.events` — локальный PanelEventManager: он использует root и cleanup своего отображения.
 
 ### Properties
 
@@ -22,7 +22,7 @@ Handler получает `EditorEvent` со properties `raw`, `panel`, `root`, `
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
 - `editor.events.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. У `runtime.events` этого метода нет.
-- `panel.events.getRoot()` возвращает root этого отображения или `null`.
+- `reactPanel.events.getRoot()` возвращает root этого отображения или `null`.
 - `runtime.panels.getActive()` возвращает последнее активированное отображение либо undefined до первого взаимодействия.
 - `runtime.panels.getDefault()` выбирает full-document view, затем первое subtree. Fallback явно записывается вызывающим кодом: `getActive() ?? getDefault()`.
 - `destroy()` возвращает `void`, повторно безопасен.

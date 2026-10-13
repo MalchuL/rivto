@@ -105,7 +105,7 @@ export class KeyboardManager {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.extensions.own(() => {
+    dispose = this.extensions.registerCleanup(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -281,7 +281,7 @@ export class KeyboardManager {
     const raw = domEvent.raw;
     const event = new KeyboardEditorEvent({
       raw,
-      panel: domEvent.panel,
+      reactPanel: domEvent.reactPanel,
       root: domEvent.root,
       mode: domEvent.mode,
       selection: domEvent.selection,

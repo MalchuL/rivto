@@ -285,7 +285,7 @@ class TextSelectionController {
       return false;
   };
 
-  private onPointerDown = ({ panel, raw: event, blockId, root }: EditorEvent<"surface", "pointerdown">) => {
+  private onPointerDown = ({ reactPanel, raw: event, blockId, root }: EditorEvent<"surface", "pointerdown">) => {
     const view = root.ownerDocument.defaultView;
     let handled = false;
     if (event.ctrlKey || event.metaKey) {
@@ -336,13 +336,13 @@ class TextSelectionController {
 
         // A second click can arrive before the browser dispatches the first
         // click's selectionchange. Read its live caret before extending it.
-        const nativeSelection = event.shiftKey ? panel.selection.readDOM() : undefined;
-        if (nativeSelection) panel.selection.set(nativeSelection);
-        const current = nativeSelection ?? panel.selection.get();
+        const nativeSelection = event.shiftKey ? reactPanel.selection.readDOM() : undefined;
+        if (nativeSelection) reactPanel.selection.set(nativeSelection);
+        const current = nativeSelection ?? reactPanel.selection.get();
         // Shift extends the existing selection instead of replacing its anchor.
         if (event.shiftKey && clickedPosition) {
           const item = current;
-          const lengthOf = (id: string) => panel.blocks.getBlockNode(id)?.content.length ?? 0;
+          const lengthOf = (id: string) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0;
           const ends = item ? resolveSelectionEndpoints(item, lengthOf) : undefined;
           const originId = ends?.anchor.blockId ?? item?.anchorBlockId;
           const wholeBlocks = originId
@@ -352,7 +352,7 @@ class TextSelectionController {
             this.ownsCrossBlockSelection = true;
             this.pointer = null;
             const next = createVisibleStructuralSelection(this.selectionBlockIds(root), originId, clickedPosition.blockId);
-            if (next) panel.selection.set(next);
+            if (next) reactPanel.selection.set(next);
             root.ownerDocument.getSelection()?.removeAllRanges();
             root.focus({ preventScroll: true });
             this.releaseTimer = view?.setTimeout(() => { this.ownsCrossBlockSelection = false; });
@@ -363,7 +363,7 @@ class TextSelectionController {
             const originIndex = originFromBlock ? ids.indexOf(originFromBlock) : -1;
             const clickIndex = originFromBlock ? ids.indexOf(clickedPosition.blockId) : -1;
             const originContentLength = originFromBlock
-              ? (panel.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
+              ? (reactPanel.blocks.getBlockNode(originFromBlock)?.content.length ?? 0)
               : 0;
             const anchorPosition = ends?.anchor ?? (originFromBlock
               ? {
@@ -375,7 +375,7 @@ class TextSelectionController {
             if (anchor && anchorPosition) {
               this.ownsCrossBlockSelection = true;
               const active: PointerSelection = {
-                editor: panel, root,
+                editor: reactPanel, root,
                 startX: event.clientX,
                 startY: event.clientY,
                 anchor,
@@ -396,7 +396,7 @@ class TextSelectionController {
             // editable host. Explicit structural anchors bypass that fallback so
             // they retain their own block ID before movement begins.
             this.pointer = {
-              editor: panel, root,
+              editor: reactPanel, root,
               startX: event.clientX,
               startY: event.clientY,
               anchorPosition: { blockId, offset: 0 },
@@ -407,7 +407,7 @@ class TextSelectionController {
             const anchor = clicked;
             const anchorPosition = anchor && readDOMPointPosition(root, anchor);
             this.pointer = anchor && anchorPosition ? {
-              editor: panel, root,
+              editor: reactPanel, root,
               startX: event.clientX,
               startY: event.clientY,
               anchor,
@@ -431,7 +431,7 @@ class TextSelectionController {
     return handled;
   };
 
-  private onClick = ({ panel, raw: event, blockId, root, mode }: EditorEvent<"surface", "click">) => {
+  private onClick = ({ reactPanel, raw: event, blockId, root, mode }: EditorEvent<"surface", "click">) => {
     if (!blockId) return false;
     if (blockId === this.suppressClickBlockId) {
       // A control may still receive `click` after its pointer gesture became a
@@ -452,40 +452,40 @@ class TextSelectionController {
     if (!anchor || anchor.isContentEditable || !root.contains(anchor)) return false;
 
     const selection = createVisibleStructuralSelection(this.selectionBlockIds(root), blockId, blockId);
-    if (selection) panel.selection.set(selection);
-    if (mode === "edgeless") findEdgelessRuntime(panel)?.deactivate();
+    if (selection) reactPanel.selection.set(selection);
+    if (mode === "edgeless") findEdgelessRuntime(reactPanel)?.deactivate();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;
   };
 
-  private onBeforeInput = ({ panel }: EditorEvent<"surface", "beforeinput">) => {
+  private onBeforeInput = ({ reactPanel }: EditorEvent<"surface", "beforeinput">) => {
     // Native selectionchange may arrive after typing and an immediate undo.
     // Capture the live caret before input mutates the document so history can
     // restore editable focus even when that asynchronous event has not arrived.
-    const selection = panel.selection.readDOM();
-    if (selection) panel.selection.set(selection);
+    const selection = reactPanel.selection.readDOM();
+    if (selection) reactPanel.selection.set(selection);
     return false;
   };
 
-  private onSelectionChange = ({ panel, mode }: EditorEvent<"document", "selectionchange">) => {
+  private onSelectionChange = ({ reactPanel, mode }: EditorEvent<"document", "selectionchange">) => {
     if (this.ownsCrossBlockSelection) return false;
     // Canvas gestures own element selection. A retained native text range
     // must not replace it while a transform preview is waiting to commit.
-    if (mode === "edgeless" && findEdgelessRuntime(panel)?.get().active) return false;
+    if (mode === "edgeless" && findEdgelessRuntime(reactPanel)?.get().active) return false;
     // Cut, paste, and reparenting can report the old native range before the
     // next frame restores the command's caret. New input cancels that frame.
-    if (panel.selection.hasPendingSelectionCallback) return false;
-    const selection = panel.selection.readDOM();
+    if (reactPanel.selection.hasPendingSelectionCallback) return false;
+    const selection = reactPanel.selection.readDOM();
     if (selection) {
-      panel.selection.set(selection);
-    } else if (!(mode === "edgeless" && findEdgelessRuntime(panel)?.get().active)) {
+      reactPanel.selection.set(selection);
+    } else if (!(mode === "edgeless" && findEdgelessRuntime(reactPanel)?.get().active)) {
       // Losing the browser range keeps a structural selection and clears carets.
-      const current = panel.selection.get();
+      const current = reactPanel.selection.get();
       // Reparenting may detach native endpoints before the scheduled restore.
       // Keep that model selection; explicit core clears still invalidate it.
-      if (current && !isStructuralSelection(current) && !panel.selection.hasPendingSelectionCallback) {
-        panel.selection.clear();
+      if (current && !isStructuralSelection(current) && !reactPanel.selection.hasPendingSelectionCallback) {
+        reactPanel.selection.clear();
       }
     }
     return false;

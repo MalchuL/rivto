@@ -1,5 +1,5 @@
 import type { EditorPosition, Selection } from "@chulane/rivto";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import type { DOMSelectionPoint } from "../../../managers";
 
 /** Stable first-class element ID stored in local edgeless selection. */
@@ -14,7 +14,7 @@ export interface EdgelessSelectionSnapshot {
 /** Live state retained only for the duration of one pointer selection gesture. */
 export interface PointerSelection {
   /** API and DOM root that own this gesture, independent of later focus changes. */
-  readonly editor: PanelAPI;
+  readonly editor: ReactPanelApi;
   readonly root: HTMLElement;
   /** Pointer-down viewport position used to ignore accidental tiny movement. */
   readonly startX: number;

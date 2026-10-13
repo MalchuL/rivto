@@ -6,6 +6,7 @@ import type { BlockListPropsApi, BlockListPropsRegistration } from "./block-list
 /** Owns React list behavior while the core manager validates persisted properties. */
 export class BlockListPropsManager implements BlockListPropsApi {
   private readonly registrations = new Set<BlockListPropsRegistration>();
+  private readonly disposers = new Set<() => void>();
 
   /** @param extensions - Extension lifecycle owner. @param core - Existing property validation manager. */
   constructor(private readonly extensions: RegistrationOwner, private readonly core: BlockListPropsManagerApi) {}
@@ -20,11 +21,17 @@ export class BlockListPropsManager implements BlockListPropsApi {
     this.extensions.assertActive();
     const release = this.core.register({ id: registration.id, defaults: registration.defaults, isValid: registration.isValid });
     this.registrations.add(registration);
-    return this.extensions.own(() => {
+    const dispose = this.extensions.registerCleanup(() => {
+      this.disposers.delete(dispose);
       this.registrations.delete(registration);
       release();
     });
+    this.disposers.add(dispose);
+    return dispose;
   }
+
+  /** Releases this React manager's registrations without removing caller-owned core policies. */
+  destroy(): void { for (const dispose of this.disposers) dispose(); }
 
   /** @param id - Property registration identity. @returns Whether it is installed. */
   has(id: string): boolean { return this.core.has(id); }

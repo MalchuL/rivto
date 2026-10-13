@@ -135,7 +135,7 @@ Constructor создаёт managers, постоянно связанные с su
 
 ### Presentation state
 
-Каждая React-панель хранит mode в `panel.mode`; при необходимости host передаёт общий
+Каждая React-панель хранит mode в `reactPanel.mode`; при необходимости host передаёт общий
 ModeManager нескольким панелям. Начальное значение — block, state не персистится.
 `useEditorMode()` подписывается на manager ближайшей панели. Surface задаётся JSX,
 DOM surface определяет локальный event.mode. Document subscriptions, clipboard,
@@ -210,10 +210,10 @@ const editors = new EditorStorage({
   lookupDocumentIds: (id, options) => storage.findDocumentIdsWithBlock(id, options),
 });
 const sourceLease = await editors.acquireEditor("source");
-const source = sourceLease.editor.document;
+const source = sourceLease.editor;
 source.blocks.updateBlock("existing-block", { content: "Changed" });
 const destinationLease = await editors.acquireEditor("destination");
-const destination = destinationLease.editor.document;
+const destination = destinationLease.editor;
 destination.blocks.insertBlock({ type: "paragraph" });
 await sourceLease.release();
 await destinationLease.release();

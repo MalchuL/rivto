@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
 import type { BlockWrapperProps } from "../../../blocks";
 import { editorControlProps } from "../../../constants";
-import { useBlockEditing, useBlockNode, useBlockSelectionAnchor, usePanel } from "../../../hooks";
+import { useBlockEditing, useBlockNode, useBlockSelectionAnchor, useReactPanel, usePanel } from "../../../hooks";
 import { focusBlock, type ReactEditorExtension } from "../../../managers";
 import { KANBAN_BLOCK_TYPE, KANBAN_COLUMN_BLOCK_TYPE, kanbanBehavior, kanbanColumnBehavior } from "./kanban-behavior";
 
@@ -82,7 +82,7 @@ function useKanbanCounts(boardId: string): { readonly columnCount: number; reado
  * @returns Structural selection region and a compact collapsed summary.
  */
 export function Kanban({ blockId }: { readonly blockId: string }) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const editing = useBlockNode(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
   const { columnCount, cardCount } = useKanbanCounts(blockId);
@@ -105,12 +105,12 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
    */
   const addColumn = () => {
     let columnId = "";
-    panel.editor.document.history.batchUpdates(() => {
-      panel.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
-      columnId = panel.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }, { parentId: blockId }).id;
+    reactPanel.batchUpdates(() => {
+      reactPanel.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      columnId = reactPanel.blocks.insertBlock({ type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" }, { parentId: blockId }).id;
     });
     requestAnimationFrame(() => {
-      const root = panel.events.getRoot();
+      const root = reactPanel.events.getRoot();
       if (root) focusBlock(root, columnId, 0);
     });
   };
@@ -138,7 +138,7 @@ export function Kanban({ blockId }: { readonly blockId: string }) {
 function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
   const cardCount = editing.block?.childIds.length ?? 0;
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const header = useRef<HTMLDivElement>(null);
   const addCardButton = useRef<HTMLButtonElement>(null);
   const [addCardHost, setAddCardHost] = useState<HTMLElement | null>(null);
@@ -157,12 +157,12 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
    */
   const addCard = () => {
     let cardId = "";
-    panel.editor.document.history.batchUpdates(() => {
-      cardId = panel.blocks.insertBlock(panel.editor.createDefaultBlock(), { parentId: blockId }).id;
-      panel.selection.set(createCaretSelection(cardId, 0));
+    reactPanel.batchUpdates(() => {
+      cardId = reactPanel.blocks.insertBlock(reactPanel.editor.createDefaultBlock(), { parentId: blockId }).id;
+      reactPanel.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
-      const root = panel.events.getRoot();
+      const root = reactPanel.events.getRoot();
       if (root) focusBlock(root, cardId, 0);
     });
   };
@@ -227,9 +227,9 @@ export function kanbanExtension(): ReactEditorExtension {
           title: "Kanban",
           group: "Turn into",
           keywords: ["board", "cards", "tasks"],
-          isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId) && !reactEditor.document.blocks.hasChildren(blockId),
-          execute: ({ blockId, panel }) => {
-            convertLeafToContainer(panel, blockId, createKanbanBlockInput());
+          isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
+          execute: ({ blockId, reactPanel }) => {
+            convertLeafToContainer(reactPanel, blockId, createKanbanBlockInput());
           },
         }),
       ];

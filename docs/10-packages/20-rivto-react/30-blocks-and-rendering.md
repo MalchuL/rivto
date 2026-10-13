@@ -18,7 +18,8 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
     <button onClick={(event) => {
       if (event.defaultPrevented) return;
       const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
-      editing.operations.setProp("count", (current?.count ?? 0) + 1);
+      if (!current) return;
+      editing.operations.setProp("count", (current.count ?? 0) + 1);
     }}>Count: {editing.block?.props.count ?? 0}</button>
   </div>;
 }

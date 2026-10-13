@@ -10,7 +10,7 @@ import type { EdgelessSelectionRef, EdgelessSelectionSnapshot } from "./types";
 import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import { useEditorContext } from "../../../hooks/editor/use-editor-context";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 
 const EDGELESS_SELECTION_PLUGIN_KEY = "edgelessSelection";
 
@@ -59,9 +59,9 @@ export class EdgelessSelectionRuntime {
    * Creates an adapter over one editor's generic selection manager.
    * @param editor - Runtime whose core selection stores element state.
    */
-  constructor(private readonly editor: PanelAPI | ReactEditorApi) {}
+  constructor(private readonly editor: ReactPanelApi | ReactEditorApi) {}
 
-  private get selection() { return "editor" in this.editor ? this.editor.selection : this.editor.document.selection; }
+  private get selection() { return this.editor.selection; }
 
   /** @returns Detached current canvas selection panel. */
   get(): EdgelessSelectionSnapshot {
@@ -164,18 +164,18 @@ export class EdgelessSelectionRuntime {
 
 // Installation belongs to the shared editor; adapters read through each panel's
 // bound selection API so identical element IDs in other panels stay unselected.
-const runtimes = new WeakMap<ReactEditorApi["extensions"], WeakMap<PanelAPI | ReactEditorApi, EdgelessSelectionRuntime>>();
+const runtimes = new WeakMap<ReactEditorApi["extensions"], WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>>();
 
 /**
  * Installs the core-backed canvas selection adapter for one React editor.
  * @param editor - Owning React editor instance.
  * @returns Disposer that removes the adapter.
  */
-export function installEdgelessRuntime(editor: PanelAPI | ReactEditorApi): () => void {
+export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): () => void {
   const documentEditor = "editor" in editor ? editor.editor : editor;
   if (runtimes.has(documentEditor.extensions)) throw new Error("Edgeless selection runtime is already installed");
   const runtime = new EdgelessSelectionRuntime(editor);
-  const adapters = new WeakMap<PanelAPI | ReactEditorApi, EdgelessSelectionRuntime>();
+  const adapters = new WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>();
   adapters.set(editor, runtime);
   runtimes.set(documentEditor.extensions, adapters);
   return () => {
@@ -192,7 +192,7 @@ export function installEdgelessRuntime(editor: PanelAPI | ReactEditorApi): () =>
  * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter.
  */
-export function getEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessSelectionRuntime {
+export function getEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): EdgelessSelectionRuntime {
   const runtime = findEdgelessRuntime(editor);
   if (!runtime) throw new Error("Install edgelessSelectionExtension before edgeless interactions");
   return runtime;
@@ -204,7 +204,7 @@ export function getEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessS
  * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter, or undefined.
  */
-export function findEdgelessRuntime(editor: PanelAPI | ReactEditorApi): EdgelessSelectionRuntime | undefined {
+export function findEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): EdgelessSelectionRuntime | undefined {
   const documentEditor = "editor" in editor ? editor.editor : editor;
   const adapters = runtimes.get(documentEditor.extensions);
   if (!adapters) return undefined;
@@ -218,8 +218,8 @@ export function findEdgelessRuntime(editor: PanelAPI | ReactEditorApi): Edgeless
 
 /** @returns Reactive full canvas selection for ordered element consumers. */
 export function useEdgelessSelection(): EdgelessSelectionSnapshot {
-  const { panel } = useEditorContext();
-  const runtime = getEdgelessRuntime(panel);
+  const { reactPanel } = useEditorContext();
+  const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
     () => runtime.snapshot(),
@@ -233,8 +233,8 @@ export function useEdgelessSelection(): EdgelessSelectionSnapshot {
  * @returns Whether that element is actively selected.
  */
 export function useEdgelessSelected(id: string): boolean {
-  const { panel } = useEditorContext();
-  const runtime = getEdgelessRuntime(panel);
+  const { reactPanel } = useEditorContext();
+  const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
     () => runtime.isSelected(id),

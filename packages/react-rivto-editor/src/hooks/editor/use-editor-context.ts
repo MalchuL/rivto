@@ -6,7 +6,7 @@ import type { EditorContextValue } from "../../components/editor-panel/types";
  * Reads the complete internal EditorPanel context.
  *
  * Public hooks use this helper so the provider requirement and error message
- * stay consistent. Consumers should normally use `usePanel`, `useBlock`, or
+ * stay consistent. Consumers should normally use `useReactPanel`, `useBlock`, or
  * another focused hook rather than depending on the revision implementation.
  *
  * @returns The nearest EditorPanel's stable editor references.

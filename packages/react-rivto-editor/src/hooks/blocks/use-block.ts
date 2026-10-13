@@ -65,7 +65,7 @@ export interface UseBlockNodeResult<Props extends object = Record<string, unknow
 
 /**
  * Creates stable ID-bound commands without subscribing to document values.
- * Uses the active editor runtime from the surrounding EditorPanel.
+ * Uses the bounded core panel from the surrounding EditorPanel or EditorEmbed.
  * @param blockId - Stable block ID.
  * @returns Commands that read current document state when invoked. Property writes
  * validate through the registered block definition; invalid writes throw without mutation.

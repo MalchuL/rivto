@@ -6,7 +6,7 @@ import type {
   EditorMode,
   Selection,
 } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type {
   DOMEventMap,
   DOMEventName,
@@ -24,7 +24,7 @@ export class EditorEvent<
   Type extends DOMEventName<Target> = DOMEventName<Target>,
 > {
   readonly raw: DOMEventMap<Target>[Type];
-  readonly panel: PanelAPI;
+  readonly reactPanel: ReactPanelApi;
   readonly root: HTMLElement;
   readonly mode: EditorMode;
   readonly selection: Selection | undefined;
@@ -37,7 +37,7 @@ export class EditorEvent<
   /** Creates one normalized snapshot from registry-resolved values. */
   constructor(init: EditorEventInit<Target, Type>) {
     this.raw = init.raw;
-    this.panel = init.panel;
+    this.reactPanel = init.reactPanel;
     this.root = init.root;
     this.mode = init.mode;
     this.selection = init.selection;

@@ -9,7 +9,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { editorControlProps } from "../../../../constants";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import type {
   ConnectorLineStyle,
   ConnectorRoute,
@@ -48,7 +48,7 @@ export function CreationPanel({
   endPresetDrag,
 }: {
   category: ToolCategory;
-  controller: EdgelessVisualController;
+  controller: EdgelessOperations;
   tool: EdgelessVisualTool;
   fonts: readonly EdgelessFontOption[];
   stickers: readonly EdgelessStickerOption[];
@@ -117,7 +117,7 @@ export function CreationPanel({
               label="Eraser"
               icon="eraser"
               pressed={tool.tool === "eraser"}
-              onClick={() => { controller.execute("edgeless.tool.set", { tool: "eraser" }); }}
+              onClick={() => { controller.setTool({ tool: "eraser" }); }}
             />
           </>
         }
@@ -179,7 +179,7 @@ export function CreationPanel({
               pressed={tool.tool === "connector" && tool.route === route}
               onClick={() => {
                 controller.setCreationDefaults("connector", { route });
-                controller.execute("edgeless.tool.set", { tool: "connector", route });
+                controller.setTool({ tool: "connector", route });
               }}
             />
           ))}

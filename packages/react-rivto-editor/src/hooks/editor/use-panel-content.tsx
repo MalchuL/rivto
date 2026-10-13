@@ -1,3 +1,4 @@
+import { ReactPanel } from "../../panels/react-panel";
 import {
   useCallback,
   useContext,
@@ -10,12 +11,15 @@ import {
   useSyncExternalStore
 } from "react";
 import { BlockElementRefBoundary } from "../../blocks/block-wrapper/block-wrapper";
-import { ChildrenPanel } from "../../panels/children-panel";
-import { EmbeddingPanel } from "../../panels/embedding-panel";
+import { ChildrenPanel } from "@chulane/rivto";
+import { EmbeddingPanel } from "@chulane/rivto";
 import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "../../surfaces/page/page-virtualization-context";
 import { EditorContext } from "../../components/editor-panel/editor-context";
 import { EditorRootContext } from "../../components/editor-panel/editor-root-context";
+import type { PanelSnapshot } from "../../panels/types";
 import type { EditorPanelProps } from "../../components/editor-panel/types";
+
+const LOADING_PANEL_SNAPSHOT: PanelSnapshot = { status: "loading" };
 
 /**
  * Keeps host-supplied threshold and overscan counts safe for virtualizer index arithmetic.
@@ -39,7 +43,12 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * It does not create or destroy the editor runtime, traverse blocks itself,
  * or add a DOM wrapper around a loaded surface. The host owns runtime lifetime
  * and the child surface owns presentation and registers its own DOM root through `useEditorRoot`.
- * Mounting registers only this panel’s local bindings and releases them on cleanup.
+ * The hook creates and connects the panel in an effect after commit and destroys
+ * it on cleanup; React callers must not create ReactPanel instances manually.
+ * Abandoned renders create no panel, and StrictMode effect replay creates a new
+ * instance after destroying the old one. The first client render and SSR show
+ * loading until the effect supplies a panel. Mounting registers only this panel’s
+ * local bindings and releases them on cleanup.
  * Even with EditorStorageContext, the caller retains the shared editor acquisition.
  * Nested occurrences share a document core while retaining independent event and UI state.
  * A deleted root replaces the supplied surface with a registered status region so
@@ -56,7 +65,6 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  */
 export function usePanelContent({
   editor: hostEditor,
-  onOpenBlock,
   mode,
   rootBlockId,
   rootElementId = null,
@@ -66,25 +74,38 @@ export function usePanelContent({
   virtualizePageThreshold = false,
   virtualizePageOverscan = DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
 }: EditorPanelProps, embedding: boolean) {
-  const openBlock = onOpenBlock;
-  const documentId = hostEditor.document.getDocument().id;
+  const documentId = hostEditor.getDocument().id;
   const parent = useContext(EditorContext);
   const enabled = active && parent?.enabled !== false;
-  const instance = useMemo(() => {
-    const options = { rootBlockId, rootElementId, openBlock, mode };
+  const configuration = useMemo(() => ({ hostEditor, rootBlockId, rootElementId, embedding, mode }),
+    [hostEditor, rootBlockId, rootElementId, embedding, mode]);
+  const [current, setCurrent] = useState<{ configuration: typeof configuration; instance: ReactPanel }>();
+  useEffect(() => {
+    const { hostEditor, rootBlockId, rootElementId, embedding, mode } = configuration;
+    const options = { rootBlockId, rootElementId, mode };
+    let instance: ReactPanel;
     if (embedding) {
       if (!rootBlockId) throw new Error("Embedding panel requires a block root");
-      return new EmbeddingPanel(hostEditor, { ...options, rootBlockId });
+      instance = new ReactPanel(hostEditor, new EmbeddingPanel(hostEditor, { ...options, rootBlockId }), { mode });
+    } else {
+      instance = new ReactPanel(hostEditor, new ChildrenPanel(hostEditor, options), { mode });
     }
-    return new ChildrenPanel(hostEditor, options);
-  }, [hostEditor, rootBlockId, rootElementId, embedding, openBlock, mode]);
-  useEffect(() => instance.mount(), [instance]);
-  useLayoutEffect(() => instance.setEnabled(enabled), [instance, enabled]);
-  const snapshot = useSyncExternalStore(instance.subscribe, instance.getSnapshot, instance.getSnapshot);
+    setCurrent({ configuration, instance });
+    return instance.destroy;
+  }, [configuration]);
+  // A changed editor or root must not render children against the previous panel before its replacement effect runs.
+  const instance = current?.configuration === configuration ? current.instance : undefined;
+  useLayoutEffect(() => instance?.setEnabled(enabled), [instance, enabled]);
+  const subscribeAvailability = useCallback((listener: () => void) => {
+    if (!instance) return () => {};
+    return instance.subscribeAvailability(listener);
+  }, [instance]);
+  const getSnapshot = useCallback(() => instance?.getSnapshot() ?? LOADING_PANEL_SNAPSHOT, [instance]);
+  const snapshot = useSyncExternalStore(subscribeAvailability, getSnapshot, getSnapshot);
   useEffect(() => {
     if (snapshot.retained && snapshot.document) onReady?.(snapshot.document);
   }, [snapshot.retained, snapshot.document, onReady]);
-  const panel = snapshot.api;
+  const reactPanel = snapshot.api;
   const domIdPrefix = useId();
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
@@ -106,8 +127,8 @@ export function usePanelContent({
     () => hostEditor.extensions.revision,
     () => hostEditor.extensions.revision,
   );
-  const context = useMemo(() => panel ? ({ panel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }) : null,
-    [panel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled]);
+  const context = useMemo(() => reactPanel ? ({ reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }) : null,
+    [reactPanel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled]);
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
     if (typeof threshold === "number") {
@@ -123,11 +144,11 @@ export function usePanelContent({
   // and registering the same surface root on ordinary editor renders.
   const restoreRootFocus = useRef(false);
   const rootRef = useCallback((element: HTMLElement | null) => {
-    const previous = instance.getRoot();
+    const previous = instance?.getRoot();
     if (!element && previous) {
       restoreRootFocus.current = previous.contains(previous.ownerDocument.activeElement);
     }
-    instance.setRoot(element);
+    instance?.setRoot(element);
     setRoot(element);
     if (element && restoreRootFocus.current) {
       restoreRootFocus.current = false;

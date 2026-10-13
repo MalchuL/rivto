@@ -3,8 +3,7 @@ import type {
   EditorBlock,
   EditorBlockInput,
 } from "@chulane/rivto";
-import type { PanelAPI } from "../../../panels/types";
-import type { ReactEditorApi } from "../../../editor/types";
+import type { ReactPanelApi } from "../../../panels/types";
 
 /** Document operations required by transfer; accepts core, runtime, and view editors. */
 type BlockTransferEditor = Pick<DocumentEditorAPI, "blocks" | "history" | "getDocument">;
@@ -83,8 +82,8 @@ function getTransferBlocks(
  * @throws If the models match, IDs collide, a block is missing, or destination preparation/insertion fails.
  */
 export function crossDocumentBlockTransfer(
-  sourceInput: BlockTransferEditor | Pick<ReactEditorApi, "document"> | PanelAPI,
-  destinationInput: BlockTransferEditor | Pick<ReactEditorApi, "document"> | PanelAPI,
+  sourceInput: BlockTransferEditor | ReactPanelApi,
+  destinationInput: BlockTransferEditor | ReactPanelApi,
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): void {

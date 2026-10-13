@@ -53,7 +53,7 @@ Selection changes уведомляют только `selection.subscribe()`; `ed
 
 ### Presentation
 
-Mode принадлежит React-панели через `panel.mode`; DocumentEditorAPI и EditorStorage не имеют mode.
+Mode принадлежит React-панели через `reactPanel.mode`; DocumentEditorAPI и EditorStorage не имеют mode.
 Изменение mode увеличивает revision и разделяет history captures без document mutation.
 React host подписывается через `useEditorMode()` и выбирает surface через JSX.
 Selection принадлежит core документа; отображаемую subtree boundary и DOM

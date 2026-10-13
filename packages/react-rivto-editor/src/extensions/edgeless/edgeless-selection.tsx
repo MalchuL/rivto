@@ -10,7 +10,7 @@ import { SurfaceContext } from "../../surfaces/surface";
  */
 import { useEffect, useRef } from "react";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
-import { useDOMEvent, useEditorRoot, useKeyboardEvent, usePanel } from "../../hooks";
+import { useDOMEvent, useEditorRoot, useKeyboardEvent, useReactPanel } from "../../hooks";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import type { EdgelessSelectionRef } from "../built-ins/selection/types";
@@ -123,8 +123,8 @@ function hideRectangle(node: HTMLElement | null): void {
  * @returns Null; the marquee rectangle is an imperative DOM node.
  */
 export function EdgelessInteractionOverlay() {
-  const panel = usePanel();
-  const selection = getEdgelessRuntime(panel);
+  const reactPanel = useReactPanel();
+  const selection = getEdgelessRuntime(reactPanel);
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const gesture = useRef<RectangleGesture | null>(null);
@@ -213,7 +213,7 @@ export function EdgelessInteractionOverlay() {
     if (!start.moved) {
       start.moved = true;
       start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(panel.elements.getElementNodes());
+      start.parentByChild = groupParentByChild(reactPanel.elements.getElementNodes());
     }
     const next = {
       left: Math.min(start.x, event.clientX),

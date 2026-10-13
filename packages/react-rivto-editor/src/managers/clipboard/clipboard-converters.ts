@@ -39,7 +39,7 @@ export class ClipboardConverters {
     if (!type.trim() || map.has(type)) throw new Error(`Clipboard converter ${type || "<empty>"} is already registered`);
     map.set(type, converter);
     this.parsers.push(converter);
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       if (map.get(type) !== converter) return;
       map.delete(type);
       const index = this.parsers.indexOf(converter);

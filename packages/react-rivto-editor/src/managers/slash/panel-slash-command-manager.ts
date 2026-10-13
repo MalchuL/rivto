@@ -1,11 +1,11 @@
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { PanelSlashCommandsApi } from "./api";
 import type { SlashCommandRegistry } from "./slash-command-registry";
 
 /** Executes commands in one occurrence while sharing the document command registry. */
 export class PanelSlashCommandManager implements PanelSlashCommandsApi {
-  /** @param commands - Document command registrations. @param panel - Invoking occurrence. */
-  constructor(private readonly commands: SlashCommandRegistry, private readonly panel: PanelAPI) {}
+  /** @param commands - Document command registrations. @param reactPanel - Invoking occurrence. */
+  constructor(private readonly commands: SlashCommandRegistry, private readonly reactPanel: ReactPanelApi) {}
   get revision() { return this.commands.revision; }
   subscribe: PanelSlashCommandsApi["subscribe"] = (listener) => this.commands.subscribe(listener);
   /**
@@ -14,7 +14,7 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
    * @returns Available definitions in registry order for this panel.
    */
   getAll: PanelSlashCommandsApi["getAll"] = (context) => {
-    const commandContext = { ...context, panel: this.panel };
+    const commandContext = { ...context, reactPanel: this.reactPanel };
     return this.commands.getAll().filter((command) => command.isAvailable?.(commandContext) !== false);
   };
 
@@ -27,7 +27,7 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
   execute: PanelSlashCommandsApi["execute"] = (id, context) => {
     const command = this.commands.get(id);
     if (!command) throw new Error(`Unknown slash command ${id}`);
-    const commandContext = { ...context, panel: this.panel };
+    const commandContext = { ...context, reactPanel: this.reactPanel };
     if (command.isAvailable?.(commandContext) === false) throw new Error(`Slash command ${id} is unavailable`);
     command.execute(commandContext);
   };

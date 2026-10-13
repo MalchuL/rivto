@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 
-export type { PanelAPI } from "./panels/types";
+export type { ReactPanelApi } from "./panels/types";
 export type { CreateReactEditorOptions } from "./editor/types";
 
 /** Context supplied when a rendered Markdown link is activated. */

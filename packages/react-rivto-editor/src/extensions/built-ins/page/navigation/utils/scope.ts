@@ -10,14 +10,14 @@ import type {
   EditorElementNode,
   DocumentEditorAPI,
 } from "@chulane/rivto";
-import type { PanelAPI } from "../../../../../panels/types";
+import type { ReactPanelApi } from "../../../../../panels/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
 import { findRenderedBlock } from "../../../../../managers/events/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
 /** Walks to the document root that owns `blockId`. */
-export function owningRootId(editor: PanelAPI | DocumentEditorAPI, blockId: string): string {
+export function owningRootId(editor: ReactPanelApi | DocumentEditorAPI, blockId: string): string {
   let rootId = blockId;
   for (
     let parentId = editor.blocks.getParentId(rootId);
@@ -31,7 +31,7 @@ export function owningRootId(editor: PanelAPI | DocumentEditorAPI, blockId: stri
 
 /** Finds the edgeless card element whose root range includes `blockId`. */
 export function owningBlockElement(
-  editor: PanelAPI | DocumentEditorAPI,
+  editor: ReactPanelApi | DocumentEditorAPI,
   blockId: string,
 ): EditorElementNode | undefined {
   const rootId = owningRootId(editor, blockId);
@@ -49,7 +49,7 @@ export function owningBlockElement(
  * React callers use their rendered view's surface; core-only callers use the
  * document mode because they have no DOM occurrence.
  */
-export function navigationOutlineBlocks(editor: PanelAPI | DocumentEditorAPI, blockId: string): EditorBlock[] {
+export function navigationOutlineBlocks(editor: ReactPanelApi | DocumentEditorAPI, blockId: string): EditorBlock[] {
   const roots = editor.blocks.getBlocks();
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.

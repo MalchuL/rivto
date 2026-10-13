@@ -5,7 +5,7 @@ import type { ReactEditorApi } from "../../../../../editor/types";
  * @module
  */
 import { isStructuralSelection, type EditorBlock } from "@chulane/rivto";
-import type { PanelAPI } from "../../../../../panels/types";
+import type { ReactPanelApi } from "../../../../../panels/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
 import { blockSelection } from "../utils/block-selection";
 import { keyboardMovePlacement } from "../utils/move-placement";
@@ -27,25 +27,25 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
   const isCollapsed = (block: EditorBlock) => (
     !reactEditor.blockListProps.childrenVisible(block)
   );
-  const move = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(panel.selection);
+  const move = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(reactPanel.selection);
     const blocks = selection;
     const textLike = blocks && !isStructuralSelection(selection);
     const activeId = selection?.focusBlockId;
     if (!activeId) return false;
-    const outline = navigationOutlineBlocks(panel, activeId);
+    const outline = navigationOutlineBlocks(reactPanel, activeId);
     const roots = selectedMoveRoots(outline, selection, activeId, isCollapsed);
     const placement = keyboardMovePlacement(outline, roots.ids, direction, isCollapsed);
     if (!placement) return false;
-    panel.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
+    reactPanel.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {
-      panel.selection.set(roots.selection);
+      reactPanel.selection.set(roots.selection);
     } else if (blocks) {
-      panel.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
+      reactPanel.selection.set(blockSelection(outline, activeId, activeId, isCollapsed));
     }
     // Only restore selection and its focus after the move; block mutations remain synchronous.
-    panel.selection.scheduleIfSelectionUnchanged(() => {
-      if (textLike) panel.selection.restoreDOM(selection);
+    reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+      if (textLike) reactPanel.selection.restoreDOM(selection);
       else focusBlockSelection(root, activeId);
     });
     return true;
@@ -54,9 +54,9 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveUp],
-  }, ({ panel, root }) => move(panel, root, "up"));
+  }, ({ reactPanel, root }) => move(reactPanel, root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMoveDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMoveDown],
-  }, ({ panel, root }) => move(panel, root, "down"));
+  }, ({ reactPanel, root }) => move(reactPanel, root, "down"));
 }

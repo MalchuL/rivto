@@ -13,12 +13,12 @@ import { kanbanExtension } from "./kanban";
 
 test("moves existing subtrees into, between and out of Kanban columns with undo", async () => {
   const editor = await createTestCoreEditor();
-  const panel = createReactEditor({
+  const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), kanbanExtension()],
   });
   const boardId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  panel.slashCommands.execute("block.kanban.insert", { blockId: boardId });
+  reactPanel.slashCommands.execute("block.kanban.insert", { blockId: boardId });
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.id).toBe(boardId);
   expect(board.content).toBe("");
@@ -37,18 +37,18 @@ test("moves existing subtrees into, between and out of Kanban columns with undo"
   expect(editor.blocks.getParentId(card)).toBeNull();
   editor.history.undo();
   expect(editor.blocks.getBlock(board.children[1]!.id)!.children).toEqual([original]);
-  outdentBlocks(panel, [card]);
+  outdentBlocks(reactPanel, [card]);
   expect(editor.blocks.getParentId(card)).toBe(board.children[1]!.id);
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Nested" }, editor.blocks.getInsertionDestinationAfter(card)).id;
-  indentBlocks(panel, [nested]);
+  indentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(card);
-  outdentBlocks(panel, [nested]);
+  outdentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(board.children[1]!.id);
   const copied = editor.clipboard.copy(createStructuralSelection([board.id]));
   expect(copied?.blocks[0]?.children[1]?.children[0]?.id).toBe(card);
   const snapshot = editor.dump();
   editor.load(snapshot);
   expect(editor.dump()).toEqual(snapshot);
-  panel.editor.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });

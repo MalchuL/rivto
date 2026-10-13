@@ -9,7 +9,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
-import type { PanelAPI } from "../../../../panels/types";
+import type { ReactPanelApi } from "../../../../panels/types";
 import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
@@ -33,34 +33,34 @@ function previousSiblingBlock(
 /**
  * Removes a root empty writing block after a non-text-editable sibling.
  *
- * @param panel - Editor view owning host emptiness policy and block rendering.
+ * @param reactPanel - Editor view owning host emptiness policy and block rendering.
  * @param root - Active page surface or edgeless card DOM scope.
  * @param blockId - Collapsed editable block addressed by the key event.
  * @returns True when the empty block was removed and the key was claimed.
  */
 export function removeEmptyBlockAfterStructuralPredecessor(
-  panel: PanelAPI,
+  reactPanel: ReactPanelApi,
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = panel.editor;
-  const block = panel.blocks.getBlockNode(blockId);
+  const { isEmptyBlock } = reactPanel.editor;
+  const block = reactPanel.blocks.getBlockNode(blockId);
   if (
     !block ||
     !isEmptyBlock(block) ||
-    !panel.blocks.canRemove(block.id) ||
+    !reactPanel.blocks.canRemove(block.id) ||
     block.listProps.collapsed === true ||
-    !panel.blocks.getRootIds().includes(block.id)
+    !reactPanel.blocks.getRootIds().includes(block.id)
   ) return false;
 
   const previous = previousSiblingBlock(root, block.id);
   if (!previous || hasOwnedEditableContent(previous.element)) return false;
 
-  panel.editor.document.history.batchUpdates(() => {
-    const firstChildId = panel.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) panel.blocks.outdentBlock(firstChildId);
-    panel.blocks.removeBlock(block.id);
-    panel.selection.set(createStructuralSelection([previous.id]));
+  reactPanel.batchUpdates(() => {
+    const firstChildId = reactPanel.blocks.getBlockNode(block.id)?.childIds[0];
+    if (firstChildId) reactPanel.blocks.outdentBlock(firstChildId);
+    reactPanel.blocks.removeBlock(block.id);
+    reactPanel.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });

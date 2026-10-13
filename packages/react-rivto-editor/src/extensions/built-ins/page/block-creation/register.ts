@@ -26,30 +26,30 @@ export function registerBlockCreation(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockCreate,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
-  }, ({ panel, raw: event, root }) => {
+  }, ({ reactPanel, raw: event, root }) => {
     if (!isEditableKeyboardEvent(event)) return false;
     // Read the key event's native caret synchronously. A newly focused editor
     // can receive Enter before the browser's deferred selectionchange event.
-    const nativeSelection = panel.selection.readDOM();
-    if (nativeSelection) panel.selection.set(nativeSelection);
-    const selection = nativeSelection ?? panel.selection.get();
+    const nativeSelection = reactPanel.selection.readDOM();
+    if (nativeSelection) reactPanel.selection.set(nativeSelection);
+    const selection = nativeSelection ?? reactPanel.selection.get();
     const initialTarget = firstKeyboardTarget(selection);
     if (!initialTarget) return false;
 
     let claimed = false;
     // Selection deletion, text splitting, insertion, and nesting share one CRDT
     // transaction, so Enter is one collaborative update and one undo step.
-    panel.editor.document.history.batchUpdates(() => {
+    reactPanel.batchUpdates(() => {
       let target = initialTarget;
       if (shouldDeleteSelection(selection)) {
-        panel.selection.delete();
-        const collapsed = firstKeyboardTarget(panel.selection.get());
+        reactPanel.selection.delete();
+        const collapsed = firstKeyboardTarget(reactPanel.selection.get());
         if (!collapsed?.collapsed) return;
         target = collapsed;
       }
-      const context = createBlockBehaviorContext(panel, target.blockId, root, panel.selection.get());
+      const context = createBlockBehaviorContext(reactPanel, target.blockId, root, reactPanel.selection.get());
       if (!context) return;
-      claimed = panel.editor.blockBehaviors.dispatch(
+      claimed = reactPanel.editor.blockBehaviors.dispatch(
         "onSplit",
         context,
         target,

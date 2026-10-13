@@ -10,7 +10,7 @@ import {
   KEYBOARD_BINDING_IDS,
   parseShortcut,
   shortcutFromKeyboardEvent,
-  usePanel,
+  useReactPanel,
   type KeyboardBindingSnapshot,
 } from "@chulane/rivto-react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
@@ -167,17 +167,17 @@ function KeyboardShortcutModal({
  * @returns Collapsible shortcut table used by the journal demo and keymap e2e.
  */
 export function KeyboardPanel() {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => panel.keyboard.subscribe(listener),
-    [panel],
+    (listener: () => void) => reactPanel.keyboard.subscribe(listener),
+    [reactPanel],
   );
   const revision = useSyncExternalStore(
     subscribe,
-    () => panel.keyboard.revision,
-    () => panel.keyboard.revision,
+    () => reactPanel.keyboard.revision,
+    () => reactPanel.keyboard.revision,
   );
-  const bindings = panel.keyboard.list();
+  const bindings = reactPanel.keyboard.list();
   const [recorder, setRecorder] = useState<ShortcutRecorderTarget | undefined>();
 
   /**
@@ -190,7 +190,7 @@ export function KeyboardPanel() {
     binding: KeyboardBindingSnapshot,
     shortcut: string,
   ): void => {
-    panel.keyboard.setKeymapOverride(binding.id, [shortcut]);
+    reactPanel.keyboard.setKeymapOverride(binding.id, [shortcut]);
     setRecorder(undefined);
   };
 
@@ -251,14 +251,14 @@ export function KeyboardPanel() {
                       <button
                         type="button"
                         data-keyboard-action="disable"
-                        onClick={() => panel.keyboard.setKeymapOverride(binding.id, [])}
+                        onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, [])}
                       >
                         Disable
                       </button>
                       <button
                         type="button"
                         data-keyboard-action="restore"
-                        onClick={() => panel.keyboard.setKeymapOverride(binding.id, undefined)}
+                        onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, undefined)}
                       >
                         Restore
                       </button>

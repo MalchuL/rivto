@@ -29,14 +29,14 @@ Command properties:
 - **Возвращает:** `boolean`.
 - **Исключения:** throws после destroyed runtime; missing ID возвращает false.
 
-### `panel.slashCommands.getAll(context)`
+### `reactPanel.slashCommands.getAll(context)`
 
 - **Аргументы:** `{ blockId: string }`; локальный менеджер подставляет своё отображение.
 - Registry `runtime.slashCommands.getAll()` не принимает контекст и возвращает все определения; `get(id)` возвращает определение либо undefined.
 - **Возвращает:** available commands в declaration order.
 - **Исключения:** errors `isAvailable` predicate.
 
-### `panel.slashCommands.execute(id, context)`
+### `reactPanel.slashCommands.execute(id, context)`
 
 - **Аргументы:** ID и `{ blockId }`; локальный менеджер подставляет своё отображение.
 - У общего registry метода execute нет. Register/delete доступны только через runtime.
@@ -60,4 +60,4 @@ Availability проверяется повторно непосредствен�
 
 Registry общий для page и edgeless. Context всегда block-local, поэтому slash menu открывается внутри editable block как на page, так и внутри edgeless card. Canvas object selection без active text block сама по себе не создаёт slash context.
 
-Mode-specific command реализуется через `isAvailable`, читающий `panel.events.getSurfaceType()` для отображаемого view или `panel.mode.get()` для выбранного режима панели, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.
+Mode-specific command реализуется через `isAvailable`, читающий `reactPanel.events.getSurfaceType()` для отображаемого view или `reactPanel.mode.get()` для выбранного режима панели, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.

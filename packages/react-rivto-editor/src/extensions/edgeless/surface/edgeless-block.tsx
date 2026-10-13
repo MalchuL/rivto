@@ -64,7 +64,7 @@ function EdgelessBlockElementView({
       host.style.height = previousHeight;
       if (Math.abs(element.frame.height - height) < 1) return;
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
-      panel.editor.document.history.batchUpdatesWithoutHistory(() => {
+      panel.batchUpdatesWithoutHistory(() => {
         panel.elements.updateElement(element.id, { frame: { height } });
       });
     };

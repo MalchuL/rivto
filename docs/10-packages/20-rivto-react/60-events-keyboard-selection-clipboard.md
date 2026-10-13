@@ -56,7 +56,7 @@ core editor.selection     blockId + UTF-16 offsets, portable local state
 React DOM selection       browser nodes/ranges/highlights текущей surface
 ```
 
-`panel.selection` methods:
+`reactPanel.selection` methods:
 
 - `readDOM()` возвращает `Selection | undefined`;
 - `restoreDOM(selection?)` возвращает `boolean` success;
@@ -85,4 +85,4 @@ Core custom MIME сохраняет lossless Rivto structure; portable React for
 
 ## Slash commands
 
-`reactEditor.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `panel.slashCommands.getAll({ blockId })` фильтрует context; `panel.slashCommands.execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.
+`reactEditor.slashCommands.register({ id, title, group?, keywords?, isAvailable?, execute })` возвращает disposer. `reactPanel.slashCommands.getAll({ blockId })` фильтрует context; `reactPanel.slashCommands.execute(id, context)` запускает command или throws для unknown ID. `standardPreset()` монтирует searchable menu и generic list/duplicate/delete/collapse actions.

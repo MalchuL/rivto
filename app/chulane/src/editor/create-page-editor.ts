@@ -16,7 +16,6 @@ import {
 import {
   createReactEditor,
   edgelessPreset,
-  edgelessVisualsExtension,
   pageDragExtension,
   standardPreset,
   type MarkdownLinkClick,
@@ -69,7 +68,6 @@ export function createPageEditor(options: {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset(),
-      edgelessVisualsExtension(),
     ],
   });
   const parsed = parseEditorSnapshot(options.snapshot);

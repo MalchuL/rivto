@@ -12,7 +12,7 @@
 
 Текущая основа сохраняется: ReactEditorImpl собирает менеджеры,
 EditorViewController владеет отображением документа, PageDragController —
-перетаскиванием, DocumentViewDOM — поиском внутри одного document view.
+перетаскиванием, PanelDOM — поиском внутри одного document view.
 Core продолжает владеть документными командами, транзакциями и undo.
 
 ## Почему это нужно
@@ -273,7 +273,7 @@ Event dispatch передаёт получателя через `event.reactEdit
   дублирования переведена на этот API. Общий менеджер захватывает активный
   view при вызове; сохранённый API view не следует последующим сменам фокуса.
 - Clipboard создаёт локальный pipeline из текущих зарегистрированных стратегий.
-  Core-алгоритмы повторно используются, а `ViewPasteStrategy.createViewStrategy(editor)`
+  Core-алгоритмы повторно используются, а `PanelPasteStrategy.createViewStrategy(editor)`
   явно привязывает DOM-зависимую стратегию к получателю. Вложенная вставка
   не изменяет ни внешний pipeline, ни глобальный реестр. Конструирование
   локального core clipboard создаёт несколько короткоживущих объектов на paste;
@@ -427,12 +427,12 @@ Stage не изменяется.
 - `EditorViewController`: приобретение/освобождение документа, состояния загрузки,
   границы поддерева и mounted lifecycle. Большой объект реализации API удалён;
   контроллер создаёт экземпляр `ReactEditor`.
-- `ViewEventManager` и `ViewKeyboardManager`: локальные регистрации используют
+- `PanelEventManager` и `PanelKeyboardManager`: локальные регистрации используют
   идентичность и cleanup отображения; native listeners и настройки общие.
 - `ReactSelectionManager`: DOM адаптер принадлежит отображению. Проверка активной
   occurrence и границы поддерева перенесена сюда из контроллера; кеш проверки
   сохраняется по immutable selection snapshot и ревизии дерева.
-- `ViewClipboardManager` и `ViewSlashCommandManager`: выполнение использует
+- `PanelClipboardManager` и `PanelSlashCommandManager`: выполнение использует
   конкретный редактор. Общий slash registry получает полный `SlashCommandContext`;
   общий clipboard pipeline требует явный редактор назначения. Автоматический
   выбор активного отображения внутри этих операций удалён.
@@ -458,7 +458,7 @@ editor.clipboard.paste();
 `event.reactEditor`, slash-команды — `context.reactEditor`. При миграции исправлены
 захваты setup-runtime в navigation, collapse, list shortcuts, separator и TODO.
 Toolbar вне EditorView явно выбирает отображение через
-`runtime.events.getDocumentView()`; результат может отсутствовать.
+`runtime.events.forPanel()`; результат может отсутствовать.
 
 Реестр событий больше не поддерживает отдельный корень без зарегистрированного
 отображения и не подставляет runtime вместо редактора в payload события. Локальный

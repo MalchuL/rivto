@@ -19,8 +19,8 @@ import { createPortal } from "react-dom";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
-import type { PanelAPI } from "../../../panels/types";
-import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../../hooks";
+import type { ReactPanelApi } from "../../../panels/types";
+import { useBlockNode, useBlockSelectionAnchor, useReactPanel, usePanel } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
 import { bentoBehavior } from "./bento-behavior";
 
@@ -137,16 +137,16 @@ function clearBentoResizeStyles(tiles: readonly HTMLElement[]): void {
 /**
  * Persists one preferred tile width through the ordinary block command.
  *
- * @param panel - Active editor view.
+ * @param reactPanel - Active editor view.
  * @param blockId - Tile whose `bentoWidth` should change.
  * @param width - Requested width in CSS pixels.
  * @returns Nothing; no-ops when the block is gone or the value is unchanged.
  */
-function commitBentoTileWidth(panel: PanelAPI, blockId: string, width: number): void {
-  const block = panel.blocks.getBlockNode(blockId);
+function commitBentoTileWidth(reactPanel: ReactPanelApi, blockId: string, width: number): void {
+  const block = reactPanel.blocks.getBlockNode(blockId);
   const next = tileWidth(width);
   if (!block || tileWidth(block.props.bentoWidth) === next) return;
-  panel.blocks.updateBlock(blockId, { props: { ...block.props, bentoWidth: next } });
+  reactPanel.blocks.updateBlock(blockId, { props: { ...block.props, bentoWidth: next } });
 }
 
 /**
@@ -190,9 +190,9 @@ export function Bento({ blockId }: { readonly blockId: string }) {
  * @returns Two accessible vertical resize handles.
  */
 function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; readonly tile: HTMLElement }) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const gesture = useRef<TileResizeGesture | null>(null);
-  const width = tileWidth(panel.blocks.getBlockNode(blockId)?.props.bentoWidth);
+  const width = tileWidth(reactPanel.blocks.getBlockNode(blockId)?.props.bentoWidth);
 
   useLayoutEffect(() => () => {
     const active = gesture.current;
@@ -262,7 +262,7 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
     }
     const widthToWrite = commit ? active.width : active.startWidth;
     clearBentoResizeStyles(active.frozen);
-    if (commit) commitBentoTileWidth(panel, blockId, widthToWrite);
+    if (commit) commitBentoTileWidth(reactPanel, blockId, widthToWrite);
   };
 
   /**
@@ -278,7 +278,7 @@ function BentoResizeHandles({ blockId, tile }: { readonly blockId: string; reado
     const towardRight = event.key === "ArrowRight";
     const direction = edge === "right" ? (towardRight ? 1 : -1) : (towardRight ? -1 : 1);
     const step = event.shiftKey ? 50 : 10;
-    commitBentoTileWidth(panel, blockId, width + direction * step);
+    commitBentoTileWidth(reactPanel, blockId, width + direction * step);
   };
 
   /**

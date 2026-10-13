@@ -8,7 +8,7 @@
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import { BUILTIN_KEYMAP, firstKeyboardTarget, focusBlock, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, type ReactEditorExtension } from "../../../managers";
 import type { CreateDefaultBlock } from "../page/default-writing-block";
 
@@ -49,38 +49,38 @@ export function SeparatorBlock() {
  * Empty leaf blocks are converted in place so slash insertion does not leave a
  * meaningless blank block. Content or descendants are never discarded.
  *
- * @param panel - Editor view providing the registered separator type.
+ * @param reactPanel - Editor view providing the registered separator type.
  * @param blockId - Active block before which editing should continue.
  * @param separatorType - Plugin-owned persisted separator type.
  * @param createDefaultBlock - Factory for the follow-up writing block.
  * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
-  panel: PanelAPI,
+  reactPanel: ReactPanelApi,
   blockId: string,
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
 ): EditorBlock | undefined {
-  const block = panel.blocks.getBlockNode(blockId);
+  const block = reactPanel.blocks.getBlockNode(blockId);
   if (!block) return undefined;
   let separatorId = "";
   let writing: EditorBlock | undefined;
-  panel.editor.document.history.batchUpdates(() => {
-    if (!block.content && !panel.blocks.hasChildren(blockId)) {
+  reactPanel.batchUpdates(() => {
+    if (!block.content && !reactPanel.blocks.hasChildren(blockId)) {
       separatorId = block.id;
-      panel.blocks.setBlockType(separatorId, separatorType);
-      panel.blocks.updateBlock(separatorId, {
+      reactPanel.blocks.setBlockType(separatorId, separatorType);
+      reactPanel.blocks.updateBlock(separatorId, {
         listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
-      separatorId = panel.blocks.insertBlock({
+      separatorId = reactPanel.blocks.insertBlock({
         type: separatorType,
         content: "",
         listProps: { type: "list", checked: false },
-      }, panel.blocks.canRemove(block.id) ? panel.blocks.getInsertionDestinationAfter(block.id) : { parentId: block.id }).id;
+      }, reactPanel.blocks.canRemove(block.id) ? reactPanel.blocks.getInsertionDestinationAfter(block.id) : { parentId: block.id }).id;
     }
-    writing = panel.blocks.insertBlock(createDefaultBlock(), panel.blocks.canRemove(separatorId) ? panel.blocks.getInsertionDestinationAfter(separatorId) : { parentId: separatorId });
-    panel.selection.set(createCaretSelection(writing.id, 0));
+    writing = reactPanel.blocks.insertBlock(createDefaultBlock(), reactPanel.blocks.canRemove(separatorId) ? reactPanel.blocks.getInsertionDestinationAfter(separatorId) : { parentId: separatorId });
+    reactPanel.selection.set(createCaretSelection(writing.id, 0));
   });
   return writing;
 }
@@ -95,14 +95,14 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
   setup: (reactEditor) => {
     const createDefaultBlock = () => reactEditor.createDefaultBlock();
-    const focusInserted = (panel: PanelAPI, blockId: string): void => {
+    const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
       const writing = insertSeparator(
-        panel,
+        reactPanel,
         blockId,
         SEPARATOR_BLOCK_TYPE,
         createDefaultBlock,
       );
-      const root = panel.events.getRoot();
+      const root = reactPanel.events.getRoot();
       if (writing && root) requestAnimationFrame(() => focusBlock(root, writing.id, 0));
     };
     const disposers = [
@@ -123,19 +123,19 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         title: "Separator",
         group: "Insert",
         keywords: ["divider", "split"],
-        execute: ({ blockId, panel }) => focusInserted(panel, blockId),
+        execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
       }),
       reactEditor.keyboard.register({
         id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
         keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
         when: ({ raw: event }) => isEditableKeyboardEvent(event),
-      }, ({ panel, root }) => {
-        const nativeSelection = panel.selection.readDOM();
-        if (nativeSelection) panel.selection.set(nativeSelection);
-        const target = firstKeyboardTarget(nativeSelection ?? panel.selection.get());
+      }, ({ reactPanel, root }) => {
+        const nativeSelection = reactPanel.selection.readDOM();
+        if (nativeSelection) reactPanel.selection.set(nativeSelection);
+        const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
         if (!target) return false;
         const writing = insertSeparator(
-          panel,
+          reactPanel,
           target.blockId,
           SEPARATOR_BLOCK_TYPE,
           createDefaultBlock,

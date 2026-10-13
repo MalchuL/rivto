@@ -7,7 +7,7 @@
  */
 import { hasBlockRanges, type Selection } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { usePanel } from "../editor/use-panel";
+import { useReactPanel } from "../editor/use-react-panel";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
@@ -21,15 +21,15 @@ import { useEditorSelection } from "../editor/use-editor-selection";
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => panel.selection.subscribe(listener),
-    [panel],
+    (listener: () => void) => reactPanel.selection.subscribe(listener),
+    [reactPanel],
   );
   return useSyncExternalStore(
     subscribe,
-    () => panel.selection.isBlockSelected(blockId),
-    () => panel.selection.isBlockSelected(blockId),
+    () => reactPanel.selection.isBlockSelected(blockId),
+    () => reactPanel.selection.isBlockSelected(blockId),
   );
 }
 

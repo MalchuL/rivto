@@ -16,7 +16,7 @@ import { BlockElementRefProvider } from "../../blocks/block-wrapper/block-wrappe
 import { useEditorContext } from "../../hooks/editor/use-editor-context";
 import { ESTIMATED_ROOT_HEIGHT } from "./page-virtualization-context";
 import { usePageVirtualization } from "../../hooks/editor/use-page-virtualization";
-import { useEditorRoot, usePanel, useRootBlockIds } from "../../hooks";
+import { useEditorRoot, useReactPanel, useRootBlockIds } from "../../hooks";
 import { registerPageVirtualizationController } from "./page-virtualization-controller";
 
 const PAGE_SURFACE_CLASS = "page-surface";
@@ -64,7 +64,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   readonly surface: HTMLElement | null;
   readonly overscan: number;
 }) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const [pageTop, setPageTop] = useState(0);
   // Focused or explicitly requested roots stay mounted even when scrolling
   // moves them outside the ordinary viewport range.
@@ -112,7 +112,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const rootId = (blockId: string): string => {
       let id = blockId;
-      for (let parent = panel.blocks.getParentId(id); parent; parent = panel.blocks.getParentId(id)) id = parent;
+      for (let parent = reactPanel.blocks.getParentId(id); parent; parent = reactPanel.blocks.getParentId(id)) id = parent;
       return id;
     };
     /**
@@ -191,13 +191,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
          * @param blocks - Current sibling forest in canonical order.
          * @returns Visible IDs and text lengths in depth-first page order.
          */
-        const visit = (blocks: ReturnType<typeof panel.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+        const visit = (blocks: ReturnType<typeof reactPanel.blocks.getBlocks>): Array<{ id: string; length: number }> => (
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(!panel.editor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
+            ...(!reactPanel.editor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
           ])
         );
-        return visit(panel.blocks.getBlocks());
+        return visit(reactPanel.blocks.getBlocks());
       },
       suspendScrollAdjustments: () => {
         if (scrollAdjustmentSuspensions === 0) {
@@ -222,7 +222,7 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       surface.removeEventListener("pointerdown", onPointerDown);
       unregisterController();
     };
-  }, [blockIds, panel, surface, virtualizer]);
+  }, [blockIds, reactPanel, surface, virtualizer]);
   const items = virtualizer.getVirtualItems();
   let previousEnd = pageTop;
   let previousIndex = -2;
@@ -233,11 +233,11 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
    * @returns Number of preceding list members, or undefined for other blocks.
    */
   const counterSeed = (index: number): number | undefined => {
-    const type = panel.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
+    const type = reactPanel.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
     if (type !== "numbered_list") return undefined;
     let count = 0;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const previousType = panel.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
+      const previousType = reactPanel.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
       if (previousType !== "numbered_list" && previousType !== "start_numbered_list") break;
       count += 1;
       if (previousType === "start_numbered_list") break;
@@ -275,7 +275,7 @@ export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfac
 
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
-  const { rootBlockId, panel } = useEditorContext();
+  const { rootBlockId, reactPanel } = useEditorContext();
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
@@ -315,7 +315,7 @@ function PageSurfaceContent() {
       {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
       * Uses to add "Add block" buttons at the end of the page.
       */}
-      {(rootBlockId === undefined || (!panel.blocks.hasBlock(rootBlockId) && panel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
+      {(rootBlockId === undefined || (!reactPanel.blocks.hasBlock(rootBlockId) && reactPanel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
     </main>
   );
 }

@@ -10,7 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { createDocumentEditor, ModeManager } from '@chulane/rivto';
 import { DocumentModelImpl } from '@chulane/document-model';
 import { YjsDoc } from '@chulane/crdt-doc';
-import { createReactEditor, EditorPanel, PageSurface, EdgelessSurface, standardPreset, pageDragExtension, edgelessPreset, edgelessVisualsExtension, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
+import { createReactEditor, EditorPanel, PageSurface, EdgelessSurface, standardPreset, pageDragExtension, edgelessPreset, kanbanExtension, tableExtension, columnsExtension, bentoExtension, createKanbanBlockInput, createTableBlockInput, createColumnsBlockInput, createBentoBlockInput } from '@chulane/rivto-react';
 import { parseDocument, exportMarkdown, type DocumentFile } from './documents';
 import { DEFAULT_SETTINGS, SettingsDialog, type Settings } from './settings';
 import '@chulane/rivto-react/styles.css';
@@ -46,7 +46,7 @@ function createSession() {
   const document = new DocumentModelImpl(new YjsDoc(`rivto-desktop-${crypto.randomUUID()}`));
   const editor = createDocumentEditor({ document });
   const panelMode = new ModeManager();
-  const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset(), edgelessVisualsExtension(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
+  const reactEditor = createReactEditor({ editor, extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset(), kanbanExtension(), tableExtension(), columnsExtension(), bentoExtension()] });
   let error = '';
   for (const [id, keys] of Object.entries(settings.keymap)) {
     try { reactEditor.keyboard.setKeymapOverride(id, keys); }

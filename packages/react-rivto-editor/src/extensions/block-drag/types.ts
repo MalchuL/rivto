@@ -1,6 +1,6 @@
 import type { EditorBlock as Block } from "@chulane/rivto";
 import type { ReactNode } from "react";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import type { CanonicalDropPlacement } from "./placement/types";
 import type { DragStartEvent } from "@dnd-kit/react";
@@ -20,7 +20,7 @@ export interface PointerTracker {
 /** Live destination surface operations used by a source drag provider. */
 export interface CrossDocumentPageRootController {
   /** Executes placement reads and commits within the destination occurrence; its fixed model is available through getDocument without an explicit transfer model. */
-  panel: PanelAPI;
+  reactPanel: ReactPanelApi;
   root: HTMLElement;
   setPlacement: (placement: DropPlacement | null, empty?: boolean) => void;
   resolvePlacement: (x: number, y: number, sources: readonly Block[], sourceDocumentId: string) => CrossDocumentBlockTransferPlacement & {
@@ -56,8 +56,6 @@ export interface DropPlacementStore {
   get(id: string): DropPlacement | null;
   subscribe(id: string, listener: () => void): () => void;
   isDragged(id: string): boolean;
-  /** Changes whenever a drag starts, allowing click handlers to ignore its final click. */
-  getDragSequence(): number;
   isArmed(id: string): boolean;
   arm(id: string): void;
   getDraggable(id: string): PageDragHandle | null;

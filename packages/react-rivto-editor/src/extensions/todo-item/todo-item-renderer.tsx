@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, usePanel } from "../../hooks";
+import { useBlockEditing, useReactPanel } from "../../hooks";
 import { TodoItemActions } from "./todo-item-actions";
 import { TODO_BODY_CLASS, TODO_DESCRIPTION_CLASS, TODO_ITEM_CLASS, TODO_META_CLASS, TODO_NAME_CLASS, TODO_PRIORITY_CLASS, TODO_PROJECT_CLASS, TODO_PROPERTIES_BUTTON_CLASS, TODO_STATUS_CLASS, TODO_STATUS_DOING_CLASS, TODO_STATUS_DONE_CLASS, TODO_STATUS_TODO_CLASS } from "./todo-item-classes";
 import type { TodoItemBlock, TodoItemComponentProps, TodoItemPropertiesPatch, TodoItemProps } from "./todo-item-model";
@@ -20,9 +20,9 @@ export function TodoItem({
   blockId,
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const editing = useBlockEditing<TodoItemProps>(blockId);
-  const actions = useMemo(() => new TodoItemActions(panel, blockId), [panel, blockId]);
+  const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) return null;

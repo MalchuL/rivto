@@ -19,7 +19,7 @@
 
 ### Runtime methods класса
 
-`initialize(extensions)` вызывается `ReactEditor` один раз; repeated call или duplicate/empty extension ID throws. `own(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
+`initialize(extensions)` вызывается `ReactEditor` один раз; repeated call или duplicate/empty extension ID throws. `registerCleanup(release)` создаёт idempotent owned disposer. `assertActive()` throws `React editor is destroyed` после teardown. `destroy()` повторно безопасен и очищает custom cleanup/registrations в reverse order.
 
 ### Modes
 

@@ -39,6 +39,7 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
   await expect(leftTopSlot.locator(":scope > *")).toHaveCount(1);
   await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/page-drag-handle/);
   await expect(endSlot.locator(":scope > .demo-block-id")).toHaveCount(1);
+  await expect(endSlot.getByRole("button", { name: "Open block", exact: true })).toHaveCount(1);
 
   const checkboxContent = checkboxBlock.locator(":scope > .page-block-row [data-block-content]");
   const checkboxControl = startSlot.locator(".page-list-checkbox");

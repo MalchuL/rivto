@@ -20,12 +20,12 @@ import {
 
 test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
   const editor = await createTestCoreEditor();
-  const panel = createReactEditor({
+  const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
   });
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  panel.slashCommands.execute("block.table.insert", { blockId: before });
+  reactPanel.slashCommands.execute("block.table.insert", { blockId: before });
   const table = editor.blocks.getBlock(before)!;
 
   expect(table.id).toBe(before);
@@ -38,14 +38,14 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
 
   const rowId = table.children[0]!.id;
   const cellId = table.children[0]!.children[0]!.id;
-  expect(setTableColumnWidth(panel, table.id, 1, 260)).toBe(true);
+  expect(setTableColumnWidth(reactPanel, table.id, 1, 260)).toBe(true);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children[1]?.props.tableColumnWidth === 260)).toBe(true);
-  const addedRow = insertTableRow(panel, rowId)!;
+  const addedRow = insertTableRow(reactPanel, rowId)!;
   expect(editor.blocks.getBlock(addedRow.id)?.children).toHaveLength(3);
   expect(editor.blocks.getBlock(addedRow.id)?.children[1]?.props.tableColumnWidth).toBe(260);
 
   editor.history.clear();
-  const addedCells = insertTableColumn(panel, cellId);
+  const addedCells = insertTableColumn(reactPanel, cellId);
   expect(addedCells).toHaveLength(4);
   expect(editor.blocks.getBlock(table.id)?.children.every((row) => row.children.length === 4)).toBe(true);
   editor.history.undo();
@@ -53,7 +53,7 @@ test("inserts rectangular rows and columns as draggable ordinary blocks", async 
 
   editor.blocks.moveBlocks([cellId], table.id, "inside");
   expect(editor.blocks.getParentId(cellId)).toBe(table.id);
-  panel.editor.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });
 

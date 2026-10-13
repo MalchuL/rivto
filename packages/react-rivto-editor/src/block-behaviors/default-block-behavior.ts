@@ -49,33 +49,33 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` after a list action, insertion, or outdent attempt, including when containment prevents the move.
    */
   onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { panel, block, root } = context;
-    const { isEmptyBlock } = panel.editor;
-    if (panel.editor.blockListProps.onSplit(context)) return "handled";
-    if (isEmptyBlock(block) && panel.blocks.canOutdent(block.id)) {
+    const { reactPanel, block, root } = context;
+    const { isEmptyBlock } = reactPanel.editor;
+    if (reactPanel.editor.blockListProps.onSplit(context)) return "handled";
+    if (isEmptyBlock(block) && reactPanel.blocks.canOutdent(block.id)) {
       // Lift one permitted level per Enter, stopping at container outline floors.
-      outdentBlocks(panel, [block.id]);
-      focusCaret(panel, root, block.id, 0);
+      outdentBlocks(reactPanel, [block.id]);
+      focusCaret(reactPanel, root, block.id, 0);
       return "handled";
     }
     const splitAt = target.collapsed
       ? Math.min(target.offset ?? 0, block.content.length)
       : block.content.length;
-    const nextBlock = splitBlockAt(panel, block, splitAt);
+    const nextBlock = splitBlockAt(reactPanel, block, splitAt);
     // Core mode can be edgeless while Enter comes from a page embedding.
     // Only extend the canvas card's block range when editing its edgeless view.
-    if (panel.blocks.canRemove(block.id) && block.children.length > 0 && panel.editor.blockListProps.childrenVisible(block)) {
+    if (reactPanel.blocks.canRemove(block.id) && block.children.length > 0 && reactPanel.editor.blockListProps.childrenVisible(block)) {
       // Insertion created a sibling. Indent then prepend so Enter places the
       // new writing block as the first visible child.
-      panel.blocks.indentBlock(nextBlock.id);
-      panel.blocks.moveBlock(nextBlock.id, null);
-    } else if (panel.events.getSurfaceType() === "edgeless" && panel.blocks.getRootIds().includes(block.id)) {
-      const element = panel.elements.getElementNodes().find((candidate) =>
+      reactPanel.blocks.indentBlock(nextBlock.id);
+      reactPanel.blocks.moveBlock(nextBlock.id, null);
+    } else if (reactPanel.events.getSurfaceType() === "edgeless" && reactPanel.blocks.getRootIds().includes(block.id)) {
+      const element = reactPanel.elements.getElementNodes().find((candidate) =>
         candidate.type === "block" && candidate.props.endBlockId === block.id,
       );
-      if (element) panel.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
+      if (element) reactPanel.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
     }
-    scheduleBlockFocus(panel, root, nextBlock.id, 0);
+    scheduleBlockFocus(reactPanel, root, nextBlock.id, 0);
     return "handled";
   }
 
@@ -87,7 +87,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` after the command runs, including containment no-ops.
    */
   onIndent(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
-    indentBlocks(context.panel, ids);
+    indentBlocks(context.reactPanel, ids);
     return "handled";
   }
 
@@ -99,7 +99,7 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` after the command runs, including floor no-ops.
    */
   onOutdent(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
-    outdentBlocks(context.panel, ids);
+    outdentBlocks(context.reactPanel, ids);
     return "handled";
   }
 
@@ -113,8 +113,8 @@ export class DefaultBlockBehavior implements BlockBehavior {
   onOutdentAtStart(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
     const rendered = findRenderedBlock(context.root, target.blockId);
     if (!rendered || !findParentBlock(rendered)) return "default";
-    outdentBlocks(context.panel, [target.blockId]);
-    scheduleBlockFocus(context.panel, context.root, target.blockId, 0);
+    outdentBlocks(context.reactPanel, [target.blockId]);
+    scheduleBlockFocus(context.reactPanel, context.root, target.blockId, 0);
     return "handled";
   }
 
@@ -126,15 +126,15 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when a merge or structural removal ran; `"default"` when this method cannot apply the operation.
    */
   onMergeBackward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { panel, root } = context;
+    const { reactPanel, root } = context;
     const rendered = findRenderedBlock(root, target.blockId);
     if (rendered && findParentBlock(rendered)) return "default";
     const scope = navigationDomRoot(root, target.blockId);
-    if (removeEmptyBlockAfterStructuralPredecessor(panel, scope, target.blockId)) return "handled";
+    if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, target.blockId)) return "handled";
     const previous = findPreviousEditableBlock(scope, target.blockId);
     if (!previous) return "default";
-    const joinOffset = mergeBlocks(panel, previous.blockId, target.blockId);
-    scheduleBlockFocus(panel, root, previous.blockId, joinOffset);
+    const joinOffset = mergeBlocks(reactPanel, previous.blockId, target.blockId);
+    scheduleBlockFocus(reactPanel, root, previous.blockId, joinOffset);
     return "handled";
   }
 
@@ -146,14 +146,14 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when a merge or structural removal ran; `"default"` when this method cannot apply the operation.
    */
   onMergeForward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { panel, block, root } = context;
-    if (!panel.editor.blockListProps.childrenVisible(block)) return "default";
+    const { reactPanel, block, root } = context;
+    if (!reactPanel.editor.blockListProps.childrenVisible(block)) return "default";
     const scope = navigationDomRoot(root, block.id);
-    if (removeEmptyBlockAfterStructuralPredecessor(panel, scope, block.id)) return "handled";
+    if (removeEmptyBlockAfterStructuralPredecessor(reactPanel, scope, block.id)) return "handled";
     const next = findNextEditableBlock(scope, target.blockId);
     if (!next) return "default";
-    const joinOffset = mergeBlocks(panel, block.id, next.blockId);
-    scheduleBlockFocus(panel, root, block.id, joinOffset);
+    const joinOffset = mergeBlocks(reactPanel, block.id, next.blockId);
+    scheduleBlockFocus(reactPanel, root, block.id, joinOffset);
     return "handled";
   }
 
@@ -165,12 +165,12 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * @returns `"handled"` when the type was reset; `"default"` for nonempty blocks, writing blocks, or blocks with an editable predecessor.
    */
   onResetEmpty(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { panel, block, root } = context;
-    if (block.content !== "" || panel.editor.isEmptyBlock(block)) return "default";
+    const { reactPanel, block, root } = context;
+    if (block.content !== "" || reactPanel.editor.isEmptyBlock(block)) return "default";
     const scope = navigationDomRoot(root, block.id);
     if (findPreviousEditableBlock(scope, target.blockId)) return "default";
-    resetToWritingType(panel, block.id);
-    scheduleBlockFocus(panel, root, block.id, 0);
+    resetToWritingType(reactPanel, block.id);
+    scheduleBlockFocus(reactPanel, root, block.id, 0);
     return "handled";
   }
 

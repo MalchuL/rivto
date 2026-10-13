@@ -1,0 +1,101 @@
+import { edgelessVisualsExtension } from '../../extensions/edgeless/visuals/extension';
+import { ChildrenPanel } from '@chulane/rivto';
+import { createTestCoreEditor, createTestReactEditor } from '../../test-utils';
+import { ReactPanel } from '../../panels/react-panel';
+import { EdgelessOperations } from '../../extensions/edgeless/edgeless-operations';
+
+const observedOperations: EdgelessOperations[] = [];
+function observeOperations(panel: ReactPanel): EdgelessOperations {
+  const operations = new EdgelessOperations(panel.editor, panel);
+  operations.observeChanges();
+  observedOperations.push(operations);
+  return operations;
+}
+afterEach(() => { observedOperations.splice(0).forEach(operations => operations.destroy()); });
+
+it('installs an element atomically and cleans up without deleting persisted data', async () => {
+  const editor = await createTestCoreEditor();
+  const reactPanel = createTestReactEditor({ editor });
+  const reactPanelOperations = observeOperations(reactPanel);
+  const registration = { definition: { type: 'badge', defaults: { title: 'Badge' } }, render: () => <span>Badge</span>, clipboard: { copy: () => ({ props: { title: 'Copied' } }) } };
+  const dispose = reactPanel.editor.elementTypes.register(registration);
+  const node = reactPanelOperations.createElement({ type: 'badge', frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 });
+  expect(node.props.title).toBe('Badge');
+  expect(() => reactPanel.editor.elementTypes.register(registration)).toThrow();
+  dispose(); dispose();
+  expect(reactPanel.editor.elementTypes.get('badge')).toBeUndefined();
+  expect(editor.elementRegistry.get('badge')).toBeUndefined();
+  expect(editor.elements.getElementNode(node.id)?.props.title).toBe('Badge');
+  expect(() => reactPanelOperations.createElement({ type: 'badge', zIndex: 0 })).toThrow(/not registered/);
+  reactPanel.editor.elementTypes.register({ definition: { type: 'shape', defaults: { title: 'Custom shape' } }, render: () => null });
+  expect(reactPanelOperations.createElement({ type: 'shape' }).props).toEqual({ title: 'Custom shape' });
+  const stopConflict = reactPanel.editor.clipboard.registerElementConverter('conflict', {});
+  expect(() => reactPanel.editor.elementTypes.register({ ...registration, definition: { type: 'conflict' } })).toThrow();
+  expect(editor.elementRegistry.get('conflict')).toBeUndefined();
+  stopConflict();
+  reactPanel.editor.destroy(); await editor.destroy();
+});
+
+it('keeps tool choice and creation defaults local to independent panels', async () => {
+  const editor = await createTestCoreEditor();
+  const first = createTestReactEditor({ editor, extensions: [edgelessVisualsExtension()] });
+  const firstOperations = observeOperations(first);
+  const unregister = first.editor.elementTypes.register({ definition: { type: 'badge' }, render: () => null, creation: { title: 'Badge', create: () => ({ type: 'badge', zIndex: 0 }) } });
+  const root = editor.elements.insertElement({ type: 'group', frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 });
+  const second = new ReactPanel(first.editor, new ChildrenPanel(editor, { rootElementId: root.id }));
+  const secondOperations = observeOperations(second);
+  const closeSecond = second.destroy;
+  firstOperations.setTool({ tool: 'element', type: 'badge' });
+  expect(secondOperations.getTool()).toEqual({ tool: 'select' });
+  firstOperations.setCreationDefaults('shape', { fill: '#ff0000' });
+  expect(secondOperations.getDefaults().shape.fill).not.toBe('#ff0000');
+  secondOperations.setTool({ tool: 'pan' });
+  const node = secondOperations.createElement({ type: 'badge' });
+  expect(node.frame).toEqual({ x: 120, y: 120, width: 160, height: 120 });
+  expect(node.zIndex).toBe(1);
+  expect(editor.elements.getParentId(node.id)).toBe(root.id);
+  expect(second.elements.getElementNode(root.id)).toBeUndefined();
+  const red = firstOperations.createElement({ type: 'rectangle' });
+  const plain = secondOperations.createElement({ type: 'rectangle' });
+  expect(red.props.fill).toBe('#ff0000');
+  expect(plain.props.fill).toBe(secondOperations.getDefaults().shape.fill);
+  expect(first.editor.elementTypes.get('rectangle')?.definition.defaults?.fill).not.toBe('#ff0000');
+  editor.commands.execute('edgeless.tool.set', { operations: secondOperations, payload: { tool: 'pan' } });
+  expect(firstOperations.getTool()).toEqual({ tool: 'element', type: 'badge' });
+  expect(() => editor.commands.execute('edgeless.tool.set', 'select')).toThrow(/explicit canvas operations/);
+  expect(() => editor.commands.execute('edgeless.tool.set', { reactPanel: second, payload: 'select' })).toThrow(/explicit canvas operations/);
+  unregister();
+  expect(firstOperations.getTool()).toEqual({ tool: 'select' });
+  expect(secondOperations.getTool()).toEqual({ tool: 'pan' });
+  closeSecond();
+  first.editor.destroy(); await editor.destroy();
+});
+
+it('keeps custom properties separate from canvas identity and rejects foreign panel commands', async () => {
+  const firstCore = await createTestCoreEditor();
+  const secondCore = await createTestCoreEditor();
+  const first = createTestReactEditor({ editor: firstCore });
+  const firstOperations = observeOperations(first);
+  const second = createTestReactEditor({ editor: secondCore });
+  const secondOperations = observeOperations(second);
+  first.editor.elementTypes.register({ definition: { type: 'badge' }, render: () => null });
+  const node = firstOperations.createElement({ type: 'badge', props: { id: 'property-id', kind: 'property-kind', frame: 'property-frame' }, zIndex: 0 });
+  expect(firstOperations.getVisuals()[0]).toMatchObject({ id: node.id, kind: 'badge', frame: node.frame });
+  expect(() => new EdgelessOperations(first.editor, second)).toThrow(/same React editor/);
+  first.editor.extensions.install(edgelessVisualsExtension());
+  expect(() => firstCore.commands.execute('edgeless.visual.create', { operations: secondOperations, payload: { kind: 'rectangle' } })).toThrow(/same React editor/);
+  expect(secondCore.elements.getElementNodes()).toEqual([]);
+  let notifications = 0;
+  firstOperations.subscribe(() => notifications++);
+  firstOperations.setTool({ tool: 'pan' });
+  expect(notifications).toBe(1);
+  firstOperations.previewProperties([node.id], { title: 'Draft' });
+  expect(firstOperations.getVisuals()[0]).toMatchObject({ title: 'Draft' });
+  firstOperations.destroy();
+  expect(firstOperations.getVisuals()[0]).not.toHaveProperty('title');
+  const notificationsAfterCleanup = notifications;
+  first.editor.destroy(); second.editor.destroy();
+  firstOperations.setTool('select');
+  expect(notifications).toBe(notificationsAfterCleanup);
+  await firstCore.destroy(); await secondCore.destroy();
+});

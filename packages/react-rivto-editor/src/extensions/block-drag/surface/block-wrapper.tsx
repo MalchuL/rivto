@@ -23,7 +23,7 @@ import {
 import { createPortal } from "react-dom";
 import type { DropAxis } from "../../../block-behaviors/types";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
-import { usePanel } from "../../../hooks";
+import { useReactPanel } from "../../../hooks";
 import { findParentBlock } from "../../../managers/events/block-dom";
 import { PageDropIndicator } from "../placement/indicator";
 import { PageDragItemContext, PageDragStateContext } from "../state";
@@ -53,14 +53,14 @@ const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
 export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const targetBehavior = panel.editor.blockBehaviors.resolve(block.id);
+  const targetBehavior = reactPanel.editor.blockBehaviors.resolve(block.id);
   const isLayoutRoot = targetBehavior.dropAxis !== undefined && targetBehavior.dropParentTypes === undefined;
-  const parentBehavior = parentId ? panel.editor.blockBehaviors.resolve(parentId) : undefined;
-  const parentOutline = parentId ? blockContainment(panel, parentId)?.childOutline : undefined;
+  const parentBehavior = parentId ? reactPanel.editor.blockBehaviors.resolve(parentId) : undefined;
+  const parentOutline = parentId ? blockContainment(reactPanel, parentId)?.childOutline : undefined;
   const axis = parentOutline === "fixed" ? parentBehavior?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const dropNode = sortable || targetBehavior.acceptsDropContainer ? blockElement : row;

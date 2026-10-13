@@ -1,5 +1,6 @@
+import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
-import { PanelElements } from "../panels/panel-elements";
+import { PanelElements } from "@chulane/rivto";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
 import { PanelRegistry } from "../managers/events/panel-registry";
 import type { ReactEditorApi } from "./types";
@@ -50,23 +51,53 @@ const WRITING_NOT_INSTALLED =
  * this fully constructed runtime during setup and register their contributions once.
  *
  * Each panel implementation supplies its own DOM root, selection operations, and
- * clipboard/slash execution. Access shared operations through panel.editor.
+ * clipboard/slash execution. Access shared operations through reactPanel.editor.
  * Destroying this runtime releases React resources in dependency order; the caller
  * or EditorStorage still owns destruction of the core editor and document model.
+ *
+ * React components must obtain this runtime through useReactEditor rather than
+ * construct it manually, including in render, useMemo, or a useState initializer.
+ * The hook owns creation after commit and matching destruction. Low-level
+ * construction is reserved for managed storage infrastructure and internal tests.
  */
 export class ReactEditor implements ReactEditorApi {
   /** Framework-neutral core permanently bound to this document and its managers.
    * Document managers provide the following shared capabilities:
    * Creates and updates document elements, including canvas objects, through the core element manager.
-   * The underlying core editor is exposed through document; every view uses this same manager.
+   * The underlying core editor stays internal; every view uses these same managers.
    * Named core commands registered and invoked by extensions.
    * The manager is shared by all views without exposing the underlying core editor.
    * Core undo/redo history and synchronous transaction batching for this editor.
    * All views of the document share this local history; other editors keep their own.
    * Guarded mutations and delegated core block operations.
-   * Model selection shared by occurrences; DOM adapters belong to each PanelAPI.
+   * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
    */
-  readonly document: DocumentEditorAPI;
+  private readonly core: DocumentEditorAPI;
+  /** @inheritdoc DocumentEditorAPI.blocks */
+  get blocks(): DocumentEditorAPI["blocks"] { return this.core.blocks; }
+  /** @inheritdoc DocumentEditorAPI.elements */
+  get elements(): DocumentEditorAPI["elements"] { return this.core.elements; }
+  /** @inheritdoc DocumentEditorAPI.commands */
+  get commands(): DocumentEditorAPI["commands"] { return this.core.commands; }
+  /** @inheritdoc DocumentEditorAPI.selection */
+  get selection(): DocumentEditorAPI["selection"] { return this.core.selection; }
+  /** @inheritdoc DocumentEditorAPI.history */
+  get history(): DocumentEditorAPI["history"] { return this.core.history; }
+  /** @inheritdoc DocumentEditorAPI.blockRegistry */
+  get blockRegistry(): DocumentEditorAPI["blockRegistry"] { return this.core.blockRegistry; }
+  /** @inheritdoc DocumentEditorAPI.elementRegistry */
+  get elementRegistry(): DocumentEditorAPI["elementRegistry"] { return this.core.elementRegistry; }
+  /** @inheritdoc DocumentEditorAPI.revision */
+  get revision(): number { return this.core.revision; }
+  /** @inheritdoc DocumentEditorAPI.subscribe */
+  readonly subscribe = (listener: () => void): (() => void) => this.core.subscribe(listener);
+  /** @inheritdoc DocumentEditorAPI.getDocument */
+  getDocument(): ReturnType<DocumentEditorAPI["getDocument"]> { return this.core.getDocument(); }
+  /** @inheritdoc DocumentEditorAPI.load */
+  load(snapshot: Parameters<DocumentEditorAPI["load"]>[0]): void { this.core.load(snapshot); }
+  /** @inheritdoc DocumentEditorAPI.dump */
+  dump(): ReturnType<DocumentEditorAPI["dump"]> { return this.core.dump(); }
+
   private readonly panelProjections = new Map<string, { consumers: number; release: () => void }>();
   /** Creates input for an empty writing block using the installed writing extension.
    *
@@ -94,6 +125,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly blockBehaviors: BlockBehaviorsApi;
   /** Atomic React block-type and presentation registration. */
   readonly blockTypes: BlockTypesApi;
+  /** Atomic element definitions and React presentation registrations. */
+  readonly elementTypes: ElementTypeManager;
   /** Registers list-property validation and keyboard behavior with the core policy manager.
    * Registrations are removed when their React extension is disposed. */
   readonly blockListProps: BlockListPropsApi;
@@ -134,7 +167,7 @@ export class ReactEditor implements ReactEditorApi {
    */
   constructor(options: CreateReactEditorOptions) {
     const editor = options.editor;
-    this.document = editor;
+    this.core = editor;
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
     this.disposers.push(() => extensions.destroy());
@@ -147,7 +180,7 @@ export class ReactEditor implements ReactEditorApi {
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;
     // Release shared registrations after extension cleanup has finished using them.
-    extensions.own(() => {
+    extensions.registerCleanup(() => {
       slashCommands.destroy();
       keyboard.destroy();
       events.destroy();
@@ -158,6 +191,7 @@ export class ReactEditor implements ReactEditorApi {
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor, extensions);
     this.clipboard = new ClipboardManager(editor, this, extensions);
+    this.elementTypes = new ElementTypeManager(this, extensions);
     this.clipboardFormats = new ClipboardFormatRegistry(extensions, this.clipboard.converters);
     this.pasteStrategies = editor.clipboard.pasteStrategies;
     this.surfaces = new SurfaceManager(extensions);
@@ -167,8 +201,8 @@ export class ReactEditor implements ReactEditorApi {
     try {
       extensions.initialize(options.extensions ?? []);
       this.disposers.push(
-        this.document.blocks.subscribeStructure(this.blockElements.schedule),
-        this.document.elements.subscribe(this.blockElements.schedule),
+        this.core.blocks.subscribeStructure(this.blockElements.schedule),
+        this.core.elements.subscribe(this.blockElements.schedule),
       );
       this.blockElements.schedule();
     } catch (error) {
@@ -195,8 +229,8 @@ export class ReactEditor implements ReactEditorApi {
     let entry = this.panelProjections.get(key);
     if (!entry) {
       const projection = this.blockElements.createPanelProjection(rootBlockId, rootElementId);
-      const unsubscribeBlocks = this.document.blocks.subscribeStructure(projection.schedule);
-      const unsubscribeElements = new PanelElements(this.document.elements, this.document.getDocument(), rootElementId).subscribe(projection.schedule);
+      const unsubscribeBlocks = this.core.blocks.subscribeStructure(projection.schedule);
+      const unsubscribeElements = new PanelElements(this.core.elements, this.core.getDocument(), rootElementId).subscribe(projection.schedule);
       entry = { consumers: 0, release: () => { unsubscribeBlocks(); unsubscribeElements(); projection.destroy(); } };
       this.panelProjections.set(key, entry);
       projection.reconcile();
@@ -242,9 +276,11 @@ export class ReactEditor implements ReactEditorApi {
    * Document/model disposal belongs to EditorStorage or the caller. Close the core
    * after this synchronous React cleanup, then await model destruction before
    * destroying the application's document registry and provider metadata.
+   * @returns An already-resolved Promise after synchronous React cleanup; the borrowed core remains usable.
+   * @throws Synchronously if cleanup fails, after all React disposers have run.
    */
-  destroy(): void {
-    if (this.destroyed) return;
+  destroy(): Promise<void> {
+    if (this.destroyed) return Promise.resolve();
     this.destroyed = true;
     const errors: unknown[] = [];
     for (const dispose of this.disposers.splice(0).reverse()) {
@@ -257,10 +293,20 @@ export class ReactEditor implements ReactEditorApi {
     }
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, "React editor teardown failed");
+    return Promise.resolve();
   }
 }
 
-/** Creates a modular React runtime around the supplied single-document core editor. */
+/**
+ * Creates a modular React runtime around the supplied single-document core editor.
+ *
+ * This low-level factory serves useReactEditor, managed storage, and internal tests.
+ * React components must use useReactEditor instead of creating instances manually;
+ * the hook pairs creation after commit with destruction on unmount or replacement.
+ * @param options - Borrowed core editor and synchronous registration settings.
+ * @returns Connected runtime whose owner must destroy it before disposing its borrowed core.
+ * @throws If manager or extension setup fails; completed registrations are released before rethrowing.
+ */
 export const createReactEditor = (
   options: CreateReactEditorOptions,
 ): ReactEditor => new ReactEditor(options);

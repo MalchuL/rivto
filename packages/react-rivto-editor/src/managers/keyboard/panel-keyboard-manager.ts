@@ -11,7 +11,7 @@ export class PanelKeyboardManager implements KeyboardApi {
    * @returns Local registration methods and explicitly delegated shared keymap methods.
    */
   constructor(private readonly shared: KeyboardManager, private readonly owner: PanelRegistration) {}
-  register: KeyboardApi["register"] = (definition, listener) => this.owner.own(this.shared.register(definition, listener, this.owner));
+  register: KeyboardApi["register"] = (definition, listener) => this.owner.registerCleanup(this.shared.register(definition, listener, this.owner));
   delete(id: string): boolean { return this.shared.delete(`${this.owner.id}:${id}`); }
   list() { return this.shared.list(); }
   get revision() { return this.shared.revision; }

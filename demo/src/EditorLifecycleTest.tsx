@@ -20,8 +20,8 @@ export function EditorLifecycleTest() {
     id: "lifecycle-observer",
     setup(editor) {
       counts.setup++;
-      const destroy = editor.document.destroy.bind(editor.document);
-      editor.document.destroy = async () => {
+      const destroy = editor.destroy.bind(editor);
+      editor.destroy = async () => {
         await destroy();
         if (counts.failCleanup) throw new Error("Expected asynchronous cleanup failure");
       };
@@ -54,7 +54,7 @@ function Consumer({ document, extension, abandon, fail, onError }: {
   }], onError });
   if (abandon) throw pending;
   if (state.status !== "ready") return <p data-lifecycle-state={state.status}>{state.status}</p>;
-  return <div data-lifecycle-state="ready" data-document={state.editor.document.getDocument().id}>
+  return <div data-lifecycle-state="ready" data-document={state.editor.getDocument().id}>
     <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>
     <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>
   </div>;

@@ -1,7 +1,7 @@
 import type { DocumentModel } from "@chulane/document-model";
-import type { EditorElementInput, EditorElementPatch, EditorElementUpdate, ElementManagerApi } from "@chulane/rivto";
-import type { PanelDestination } from './panel-destination';
-import type { PanelElementsAPI } from './panel-elements-api';
+import type { EditorElementInput, EditorElementPatch, EditorElementUpdate, ElementManagerApi } from "..";
+import type { PanelDestination } from './types';
+import type { PanelElementsAPI } from './types';
 
 /** Applies element operations to one element subtree while reusing the editor's processing pipeline. */
 export class PanelElements implements PanelElementsAPI {

@@ -21,7 +21,7 @@ creates a hidden group or another stored entity. The two roots are independent.
 ```tsx
 const panel: Panel = {
   id: crypto.randomUUID(),
-  documentId: runtime.document.getDocument().id,
+  documentId: runtime.getDocument().id,
   rootBlockId: sectionId,
   rootElementId: null,
 };
@@ -30,7 +30,6 @@ const panel: Panel = {
   editor={runtime}
   rootBlockId={panel.rootBlockId ?? undefined}
   rootElementId={panel.rootElementId}
-  onOpenBlock={open}
 >
   <PageSurface />
 </EditorPanel>
@@ -42,6 +41,26 @@ root stays loading until first observed, then shows the deleted-block state if r
 roots. Undo can restore both data and layout. Panel-local mode defaults to a separate
 ModeManager; the host can pass `mode` to retain or explicitly share its state.
 
+## Core and React APIs
+
+`ChildrenPanel` and `EmbeddingPanel` implement framework-neutral `PanelAPI` in
+`@chulane/rivto`. They borrow a DocumentEditorAPI and expose bounded blocks/elements;
+they create no DOM bindings, subscriptions or storage acquisitions. Whole-document
+display is a ChildrenPanel with omitted roots.
+
+`EditorPanel` and `EditorEmbed` create these core panels from their root props and
+attach an internal ReactPanel. `usePanel()` returns that object typed as `PanelAPI`.
+`useReactPanel()` returns the same object typed as `ReactPanelApi`, extending `PanelAPI`
+with browser operations. Bounded `.blocks` and `.elements` are available directly;
+`.editor` is the shared ReactEditorApi, and `.selection`, `.events`, `.keyboard`, `.clipboard`, `.mode`,
+`.slashCommands`, and `.edgeless` belong to browser interaction. Canvas actions
+remain bound to the original panel even after another panel receives focus.
+
+`subscribe(listener)` forwards whole-document revisions, including edits outside the
+panel boundaries; it does not observe selection. Internal `subscribeAvailability`
+observes root loading/removal and mount retention separately. Neither hook creates
+another core panel, history manager, or document subscription.
+
 ## Shared and independent elements
 
 Two Panels with null element roots share the same element tree. Cards are rendered
@@ -51,7 +70,7 @@ its ID as rootElementId. Multiple Panels can also intentionally share that group
 Deleting a Panel navigation record does not delete document elements. Removing its
 element container explicitly removes that subtree through normal element commands.
 
-`editor.document.elements` exposes document-wide commands. `usePanel().elements`
+`editor.elements` exposes document-wide commands. `usePanel().elements`
 is the handle restricted to the selected container's descendants. Reads exclude the
 container, insertion appends to its children, and writes reject existing outside targets.
 Use `{ root: true }` for that panel's root list and `{ parentId }` for an included parent.
@@ -81,10 +100,12 @@ Reconciliation modifies only its own cards. Removing an obsolete card promotes a
 element children rather than deleting unrelated drawings. No hidden container is
 created when opening a block with rootElementId null.
 
-Clicking a page block's drag handle requests opening that block. Completed or
-cancelled drags do not navigate. Enter opens from the keyboard; Space starts a
-keyboard drag. Without onOpenBlock, existing drag behavior is retained. The demo
-uses shadcn/ui Breadcrumb and retains Panel-local mode in its navigation history.
+The demo registers an Open block button in the end slot, after block content,
+so nested navigation controls do not overlap parent drag handles. Clicking it
+or pressing Enter opens the block; the drag handle only controls dragging.
+Navigation is an optional application implementation, supplied through demo-owned
+React context, with no navigation callbacks in EditorPanel or ReactPanelApi. The
+demo uses shadcn/ui Breadcrumb and retains Panel-local mode in its navigation history.
 When a block is first opened, the demo creates an empty ordinary group and uses
 its ID as the Panel's rootElementId. Reconciliation inserts that Panel's block
 cards inside the group; drawings and pasted elements are inserted there too.
@@ -152,3 +173,8 @@ Snapshot v9 stores flat records and a document rootElementIds list. Recursive in
 into the same root and child ID lists; recursive output is assembled on demand.
 Only selected groups mount their outline/hit-plate components. This does not add
 viewport virtualization for canvas visuals; page virtualization remains separate.
+
+Canvas tools and creation defaults belong to each mounted EditorPanel component.
+Switching its page/edgeless surface preserves them; unmounting resets them.
+Panels share type definitions, not tool choices or remembered creation settings.
+The edgeless.tool.set named command requires an explicit { reactPanel, payload }.

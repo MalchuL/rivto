@@ -3,7 +3,7 @@ import { createPortal, flushSync } from "react-dom";
 import Moveable, { type OnResizeStart, type OnRotateStart, type OnResize, type OnRotate } from "react-moveable";
 import type { EditorElementFrame } from "@chulane/rivto";
 import { normalizeRotation } from "./visuals/utils/geometry";
-import { useEditorRoot, usePanel, useElements } from "../../hooks";
+import { useEditorRoot, useReactPanel, useElements } from "../../hooks";
 import { SurfaceContext } from "../../surfaces/surface";
 import { useEdgelessSelection } from "../built-ins/selection/edgeless-runtime";
 import type { EdgelessTransformController } from "./edgeless-transform";
@@ -12,11 +12,11 @@ import type { EdgelessTransformController } from "./edgeless-transform";
  * Mounts Moveable controls for dragging selected HTML elements, resizing, and rotation.
  * The editor owns selection, persisted geometry, connector previews, and undo;
  * Moveable computes gesture geometry and keeps its controls outside the target.
- * @param props - Shared transform controller installed by the edgeless extension.
+ * @param props - Panel-local transform controller installed by the edgeless extension.
  * @returns Controls in the canvas plane, or nothing outside an eligible selection.
  */
 export function EdgelessTransformControls({ controller }: { controller: EdgelessTransformController }) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const { element: editorRoot } = useEditorRoot();
   const mode = useContext(SurfaceContext);
   const selection = useEdgelessSelection();
@@ -25,7 +25,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
   const [targets, setTargets] = useState<HTMLElement[]>([]);
   const target = targets.length === 1 ? targets[0] : targets;
   const id = selection.items.length === 1 ? selection.items[0] : undefined;
-  const element = id ? panel.elements.getElementNode(id) : undefined;
+  const element = id ? reactPanel.elements.getElementNode(id) : undefined;
   const eligible = mode === "edgeless" && element && element.type !== "connector";
   const plane = editorRoot?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
   const viewport = plane?.parentElement ?? null;
@@ -67,12 +67,12 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
   }, [viewport]);
 
   useLayoutEffect(() => {
-    const next = plane ? controller.getMoveTargets(panel, plane, selection.items) : [];
+    const next = plane ? controller.getMoveTargets(reactPanel, plane, selection.items) : [];
     setTargets((previous) => previous.length === next.length && previous.every((host, index) => host === next[index]) ? previous : next);
     if (!moveable.current?.isDragging()) moveable.current?.updateRect();
-  }, [controller, panel, plane, selection.items, elements]);
+  }, [controller, reactPanel, plane, selection.items, elements]);
 
-  useLayoutEffect(() => controller.registerControls(panel, {
+  useLayoutEffect(() => controller.registerControls(reactPanel, {
     prepareDrag(next) {
       // Commit selection before the following native mouse/touch event starts Moveable.
       flushSync(() => setTargets(next));
@@ -86,7 +86,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
       moveable.current?.stopDrag();
       moveable.current?.updateRect();
     },
-  }), [controller, panel]);
+  }), [controller, reactPanel]);
 
   useLayoutEffect(() => {
     // Keep editor interaction markers and accessible names on library-owned controls.
@@ -133,24 +133,24 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
     return [...plane.querySelectorAll<HTMLElement>("[data-edgeless-object-kind][data-edgeless-object-id]")].filter((host) =>
       !targets.includes(host)
       && host.dataset.edgelessObjectKind !== "group"
-      && panel.elements.getElementNode(host.dataset.edgelessObjectId!)?.type !== "connector");
-  }, [settings.align, plane, targets, elements, panel]);
+      && reactPanel.elements.getElementNode(host.dataset.edgelessObjectId!)?.type !== "connector");
+  }, [settings.align, plane, targets, elements, reactPanel]);
 
   if (mode !== "edgeless" || !plane || !viewport) return null;
   const start = (kind: "move" | "resize" | "rotate") => {
-    const current = id ? panel.elements.getElementNode(id) : undefined;
+    const current = id ? reactPanel.elements.getElementNode(id) : undefined;
     if (!current) return false;
     initial.current = new Map(targets.map((host) => {
-      const node = panel.elements.getElementNode(host.dataset.edgelessObjectId!)!;
+      const node = reactPanel.elements.getElementNode(host.dataset.edgelessObjectId!)!;
       return [node.id, { frame: { ...node.frame }, rotation: node.type !== "connector" && typeof node.props.rotation === "number" ? node.props.rotation : 0 }];
     }));
-    return controller.beginControls(panel, viewport, current.id, kind, () => {
+    return controller.beginControls(reactPanel, viewport, current.id, kind, () => {
       moveable.current?.stopDrag();
       // Cancellation restores DOM geometry without a document update to refresh the handles.
       moveable.current?.updateRect();
     });
   };
-  const end = (inputEvent: MouseEvent | undefined) => controller.finishControls(panel, inputEvent?.type !== "pointercancel" && inputEvent?.type !== "touchcancel", inputEvent?.detail);
+  const end = (inputEvent: MouseEvent | undefined) => controller.finishControls(reactPanel, inputEvent?.type !== "pointercancel" && inputEvent?.type !== "touchcancel", inputEvent?.detail);
 
   const startEdgeDrag = (event: MouseEvent | TouchEvent | undefined) => {
     const origin = event?.target;
@@ -159,7 +159,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
 
   const targetId = (target: HTMLElement | SVGElement) => target.dataset.edgelessObjectId!;
   const resizeStart = (event: OnResizeStart) => {
-    const node = panel.elements.getElementNode(targetId(event.target));
+    const node = reactPanel.elements.getElementNode(targetId(event.target));
     event.setMin(node?.type === "block" ? [180, 100] : [1, 1]);
     event.setOrigin(["50%", "50%"]);
     const base = initial.current.get(targetId(event.target))!.frame;
@@ -214,13 +214,13 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
     snapGridHeight={!alt && settings.snap ? settings.grid : 0}
     elementGuidelines={alt ? [] : guidelines}
     onDragStart={(event) => {
-      if (!controller.isMoving(panel) && !startEdgeDrag(event.inputEvent)) { event.stopDrag(); return; }
+      if (!controller.isMoving(reactPanel) && !startEdgeDrag(event.inputEvent)) { event.stopDrag(); return; }
       event.set([0, 0]);
     }}
     onDrag={({ beforeTranslate }) => controller.previewMove(beforeTranslate[0]!, beforeTranslate[1]!)}
     onDragEnd={({ inputEvent }) => end(inputEvent)}
     onDragGroupStart={(event) => {
-      if (!controller.isMoving(panel) && !startEdgeDrag(event.inputEvent)) { event.stopDrag(); return; }
+      if (!controller.isMoving(reactPanel) && !startEdgeDrag(event.inputEvent)) { event.stopDrag(); return; }
       event.events.forEach((child) => child.set([0, 0]));
     }}
     onDragGroup={({ events }) => {

@@ -15,16 +15,16 @@ test("custom list behavior supplies split properties and visibility until its ex
       prepareSplit: (block) => ({ hidden: false, sequence: Number(block.listProps.sequence) + 1 }),
     }),
   });
-  const block = editor.editor.document.blocks.insertBlock({ type: "paragraph", content: "abcd", listProps: { hidden: true, sequence: 7 } });
+  const block = editor.editor.blocks.insertBlock({ type: "paragraph", content: "abcd", listProps: { hidden: true, sequence: 7 } });
   expect(editor.editor.blockListProps.childrenVisible(block)).toBe(false);
   core.history.clear();
   const next = core.history.batchUpdates(() => splitBlockAt(editor, block, 2));
-  expect(editor.editor.document.blocks.getBlockNode(block.id)?.content).toBe("ab");
+  expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("ab");
   expect(next.content).toBe("cd");
   expect(next.listProps).toMatchObject({ hidden: false, sequence: 8 });
   core.history.undo();
-  expect(editor.editor.document.blocks.getBlockNode(block.id)?.content).toBe("abcd");
-  expect(editor.editor.document.blocks.hasBlock(next.id)).toBe(false);
+  expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("abcd");
+  expect(editor.editor.blocks.hasBlock(next.id)).toBe(false);
   remove();
   expect(editor.editor.blockListProps.childrenVisible(block)).toBe(true);
   expect(editor.editor.blockListProps.prepareSplit(block)).toBeUndefined();

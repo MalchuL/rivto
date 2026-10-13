@@ -15,7 +15,7 @@ async function fixture(database = new DemoDatabase()) {
   const editors = new EditorStorage({ openDocument: (id) => models.openDocument(id), createEditor: (editor) => createReactEditor({ editor, extensions: [standardPreset()] }), lookupDocumentIds: (id, options) => models.findDocumentIdsWithBlock(id, options), subscribeDocumentIds: (listener) => database.subscribe(listener) });
   models.registerDocument("A"); models.registerDocument("B");
   const leaseA = await editors.acquireEditor("A"); const leaseB = await editors.acquireEditor("B");
-  const a = leaseA.editor.document; const b = leaseB.editor.document;
+  const a = leaseA.editor; const b = leaseB.editor;
   return { leaseA, leaseB, database, editors, models, a, b, destroy: async () => { await editors.destroy(); await models.destroy(); } };
 }
 
@@ -64,7 +64,7 @@ test("ordinary insertion reuses allocated subtree IDs and overwrites rows when r
   expect(f.database.blocks.get(source.id)?.get("B")?.content).toBe("Original");
   f.b.history.redo();
   expect(f.database.blocks.get(source.id)?.get("B")?.content).toBe("Replaced");
-  expect(((await f.editors.acquireEditor("A")).editor.document).blocks.getBlock(source.id)).toEqual(source);
+  expect(((await f.editors.acquireEditor("A")).editor).blocks.getBlock(source.id)).toEqual(source);
   await f.destroy();
 });
 
@@ -88,8 +88,8 @@ test("ordinary element insertion reuses allocated IDs and persists replacement g
   expect(f.database.elements.get(source.id)?.get("B")).toEqual(sourceNode);
   f.b.history.redo();
   await f.leaseB.release();
-  expect(((await f.editors.acquireEditor("B")).editor.document).elements.getElementNode(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
-  expect(((await f.editors.acquireEditor("A")).editor.document).elements.getElement(source.id)).toEqual(source);
+  expect(((await f.editors.acquireEditor("B")).editor).elements.getElementNode(source.id)).toMatchObject({ frame: { x: 30 }, props: { label: "Replacement" } });
+  expect(((await f.editors.acquireEditor("A")).editor).elements.getElement(source.id)).toEqual(source);
   await f.destroy();
 });
 
@@ -102,14 +102,14 @@ test("reopening replays native collaborative data and keeps blocks, elements, an
   const snapshot = f.a.dump();
   await f.leaseA.release();
   const reopenedLease = await f.editors.acquireEditor("A");
-  const reopened = reopenedLease.editor.document;
+  const reopened = reopenedLease.editor;
   expect(reopened.getDocument()).toBeInstanceOf(DBDocumentModel);
   expect(reopened.dump()).toEqual(snapshot);
   expect(f.database.blocks.get(block.id)?.get("A")?.content).toBe("Saved");
   expect(f.database.elements.get(shape.id)?.get("A")?.type).toBe("shape");
   reopened.blocks.updateBlock(block.id, { content: "Updated after reopen" });
   await reopenedLease.release();
-  expect(((await f.editors.acquireEditor("A")).editor.document).blocks.getBlockNode(block.id)?.content).toBe("Updated after reopen");
+  expect(((await f.editors.acquireEditor("A")).editor).blocks.getBlockNode(block.id)?.content).toBe("Updated after reopen");
   await f.destroy();
 });
 

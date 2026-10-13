@@ -1,4 +1,5 @@
-import { ChildrenPanel } from "../../../panels/children-panel";
+import { ReactPanel } from "../../../panels/react-panel";
+import { ChildrenPanel } from "@chulane/rivto";
 import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /** Element paste recreates visual-only clipboard bundles in edgeless mode. */
 
@@ -15,9 +16,9 @@ describe("ElementPasteStrategy", () => {
       zIndex: 2,
       props: { text: "Copied" },
     });
-    const panel = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(panel);
-    const created = new ElementPasteStrategy(panel).paste({
+    const reactPanel = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(reactPanel);
+    const created = new ElementPasteStrategy(reactPanel).paste({
       bundle: {
         version: 4,
         blocks: [],
@@ -46,9 +47,9 @@ describe("ElementPasteStrategy", () => {
       frame: { x: 34, y: 44, width: 100, height: 40 },
       props: { text: "Copied" },
     });
-    expect(findEdgelessRuntime(panel)?.get().items).toEqual([]);
+    expect(findEdgelessRuntime(reactPanel)?.get().items).toEqual([]);
     uninstall();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -62,10 +63,10 @@ describe("ElementPasteStrategy", () => {
     };
     editor.elements.insertElement(source);
     editor.elements.removeElement(source.id);
-    const panel = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(panel);
+    const reactPanel = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(reactPanel);
 
-    const created = new ElementPasteStrategy(panel).paste({
+    const created = new ElementPasteStrategy(reactPanel).paste({
       bundle: { version: 4, blocks: [], elements: [source], selectedElementIds: [source.id] },
       selection: undefined,
     }, {});
@@ -74,17 +75,17 @@ describe("ElementPasteStrategy", () => {
     expect([...(created?.elementIdMap ?? [])]).toEqual([[source.id, source.id]]);
     expect(editor.elements.getElementNode(source.id)?.props).toEqual({ text: "Cut" });
     uninstall();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   it("uses the block import map without reading block selection order", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
     const destinationId = editor.blocks.insertBlock({ type: "paragraph", content: "Pasted" }).id;
-    const panel = createReactEditor({ editor });
-    const uninstall = installEdgelessRuntime(panel);
+    const reactPanel = createReactEditor({ editor });
+    const uninstall = installEdgelessRuntime(reactPanel);
 
-    const created = new ElementPasteStrategy(panel).paste({
+    const created = new ElementPasteStrategy(reactPanel).paste({
       bundle: {
         version: 4,
         blocks: [{
@@ -110,14 +111,14 @@ describe("ElementPasteStrategy", () => {
     const elementId = created?.proposedSelection.elements?.[0];
     // Reconciliation must extend the range without resetting copied presentation settings.
     const following = editor.blocks.insertBlock({ type: "paragraph", content: "Following" }, editor.blocks.getInsertionDestinationAfter(destinationId));
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
     expect(editor.elements.getElementNode(elementId ?? "")?.props).toEqual({
       rotation: 30, autoHeight: false, custom: { color: "blue" },
       startBlockId: destinationId,
       endBlockId: following.id,
     });
     uninstall();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });
@@ -130,12 +131,12 @@ it("pastes cards into an explicit second document and remaps their block referen
   const { standardPreset } = await import("../built-ins");
   const multi = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("A")), new DocumentModelImpl(new YjsDoc("B"))], undefined, { extensions: [standardPreset()] });
   const runtime = multi.getEditor("B")!;
-  const panel = new ChildrenPanel(runtime);
-  panel.mode.set("edgeless");
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const reactPanel = new ReactPanel(runtime, new ChildrenPanel(runtime, {  }), {  });
+  reactPanel.mode.set("edgeless");
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   const block = a.blocks.insertBlock({ id: "source-block", type: "paragraph", content: "Copied card" });
   const card = a.elements.insertElement({ id: "source-card", type: "block", frame: { x: 10, y: 20, width: 100, height: 40 }, zIndex: 0, props: { startBlockId: block.id, endBlockId: block.id } });
-  await panel.clipboard.paste( { bundle: { version: 4, blocks: [block], elements: [a.elements.getElementNode(card.id)!] }, placement: { mergeText: false } });
+  await reactPanel.clipboard.paste( { bundle: { version: 4, blocks: [block], elements: [a.elements.getElementNode(card.id)!] }, placement: { mergeText: false } });
   const pasted = b.blocks.getBlocks()[0]!;
   expect(pasted.id).toBe(block.id); expect(pasted.content).toBe("Copied card");
   expect(b.elements.getElementNode("source-card")?.props).toMatchObject({ startBlockId: pasted.id, endBlockId: pasted.id });

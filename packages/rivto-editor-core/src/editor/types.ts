@@ -1,3 +1,4 @@
+import type { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
@@ -21,6 +22,8 @@ export interface CreateDocumentEditorOptions {
  * commands, selection, history, snapshots, and document subscriptions.
  */
 export interface DocumentEditorAPI {
+  /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
+  readonly elementRegistry: ElementRegistry;
   /** Typed block operations. */
   readonly blocks: BlockManagerApi;
   /** Editor-wide list-property defaults and semantic validation. */

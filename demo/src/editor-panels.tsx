@@ -1,3 +1,4 @@
+import { BlockNavigationContext } from "./extensions/block-navigation";
 import { Fragment, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ModeManager } from "@chulane/rivto";
 import type { Panel } from "./panel-types";
@@ -22,10 +23,10 @@ interface DemoPanel {
  * Panel records and modes are retained while the demo is mounted; element groups
  * belong to the document and are reused when returning through breadcrumbs.
  */
-export function DemoEditorPanels({ editor, children, ...props }: Omit<EditorPanelProps, "editor" | "panel" | "onOpenBlock" | "mode"> & { editor: ReactEditorApi; children: ReactNode }) {
+export function DemoEditorPanels({ editor, children, ...props }: Omit<EditorPanelProps, "editor" | "panel" | "mode"> & { editor: ReactEditorApi; children: ReactNode }) {
   const [state, setState] = useState(() => {
     const root: DemoPanel = {
-      panel: { id: crypto.randomUUID(), documentId: editor.document.getDocument().id, rootBlockId: null, rootElementId: null },
+      panel: { id: crypto.randomUUID(), documentId: editor.getDocument().id, rootBlockId: null, rootElementId: null },
       mode: new ModeManager(),
     };
     return { entries: new Map<string | null, DemoPanel>([[null, root]]), history: [root] };
@@ -34,7 +35,7 @@ export function DemoEditorPanels({ editor, children, ...props }: Omit<EditorPane
     let next = state.entries.get(blockId);
     if (!next) {
       // Navigation creates a container without adding an undo step for opening a Panel.
-      const group = editor.document.history.batchUpdatesWithoutHistory(() => editor.document.elements.insertElement({
+      const group = editor.history.batchUpdatesWithoutHistory(() => editor.elements.insertElement({
         type: "group",
         frame: { x: 0, y: 0, width: 1, height: 1 },
         zIndex: 0,
@@ -42,7 +43,7 @@ export function DemoEditorPanels({ editor, children, ...props }: Omit<EditorPane
       next = {
         panel: {
           id: crypto.randomUUID(),
-          documentId: editor.document.getDocument().id,
+          documentId: editor.getDocument().id,
           rootBlockId: blockId,
           rootElementId: group.id,
         },
@@ -88,15 +89,15 @@ export function DemoEditorPanels({ editor, children, ...props }: Omit<EditorPane
     )}
     {active.panel.rootBlockId && <h2><PanelTitle editor={editor} blockId={active.panel.rootBlockId} /></h2>}
     </header>
-    <EditorPanel {...props} key={active.panel.id} editor={editor} rootBlockId={active.panel.rootBlockId ?? undefined} rootElementId={active.panel.rootElementId} mode={active.mode} onOpenBlock={openBlock}>
-      {children}
+    <EditorPanel {...props} key={active.panel.id} editor={editor} rootBlockId={active.panel.rootBlockId ?? undefined} rootElementId={active.panel.rootElementId} mode={active.mode}>
+      <BlockNavigationContext.Provider value={openBlock}>{children}</BlockNavigationContext.Provider>
     </EditorPanel>
   </>;
 }
 
 function PanelTitle({ editor, blockId }: { editor: ReactEditorApi; blockId: string | null }) {
-  const subscribe = useCallback((listener: () => void) => blockId ? editor.document.blocks.subscribeBlockNode(blockId, listener) : () => undefined, [editor, blockId]);
-  const snapshot = useCallback(() => blockId ? editor.document.blocks.getBlockNode(blockId) : undefined, [editor, blockId]);
+  const subscribe = useCallback((listener: () => void) => blockId ? editor.blocks.subscribeBlockNode(blockId, listener) : () => undefined, [editor, blockId]);
+  const snapshot = useCallback(() => blockId ? editor.blocks.getBlockNode(blockId) : undefined, [editor, blockId]);
   const block = useSyncExternalStore(subscribe, snapshot, snapshot);
   if (!blockId) return "Document";
   return block ? block.content || block.type : "Deleted block";

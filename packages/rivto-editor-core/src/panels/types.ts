@@ -1,5 +1,63 @@
-import type { EditorElement, EditorElementInput, EditorElementNode, EditorElementPatch, EditorElementUpdate } from '@chulane/rivto';
-import type { PanelDestination } from './panel-destination';
+import type { DocumentEditorAPI } from '../editor/types';
+import type { EditorBlock, EditorBlockInput, EditorBlockNode, EditorBlockPatch, EditorBlockUpdate, EditorElement, EditorElementInput, EditorElementNode, EditorElementPatch, EditorElementUpdate } from '../editor/model';
+import type { BlockPrepareErrorHandler } from '../managers/block-manager/types';
+import type { ImportedBlockForest } from '../managers/types';
+
+/** Fixed, independent block and element boundaries; omitted roots select the whole document. */
+export interface PanelOptions {
+  readonly rootBlockId?: string | null;
+  readonly rootElementId?: string | null;
+}
+
+/** Framework-neutral editing operations bound permanently to one document and its selected subtrees. */
+export interface PanelAPI {
+  /** Whole-document operations; the panel borrows this editor and never destroys it. */
+  readonly document: DocumentEditorAPI;
+  /**
+   * Observes the shared document editor's change stream without filtering by panel boundaries.
+   * Changes outside this panel and block-definition changes can also notify the listener.
+   * Selection changes use their own subscription and do not notify this stream.
+   * Registration does not invoke the listener; read the initial state separately.
+   * @param listener - Callback invoked with no arguments after an observable document-editor change.
+   * @returns Function that removes this listener from the shared document editor.
+   */
+  subscribe(listener: () => void): () => void;
+  /**
+   * Groups synchronous edits into one document transaction and undo step.
+   * Nested batches share the outer transaction; history remains shared by every
+   * panel of this document. Use blocks/elements for boundary-checked mutations.
+   * This is not a rollback boundary: writes made before an error remain applied.
+   * @param operation - Synchronous work; edits after an await are outside this batch.
+   * @returns The callback's result.
+   * @throws Propagates errors from the callback.
+   */
+  batchUpdates<Result>(operation: () => Result): Result;
+  /**
+   * Groups synchronous edits into a document transaction excluded from undo history.
+   * When nested in an existing transaction, its outer origin determines history
+   * capture. Panel boundaries still come from blocks/elements, not this callback.
+   * Writes made before an error remain applied; no separate panel history is created.
+   * @param operation - Synchronous work; edits after an await are outside this batch.
+   * @returns The callback's result.
+   * @throws Propagates errors from the callback.
+   */
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result;
+  /** Document identity exposed on a scoped panel; document.getDocument always returns this editor’s model. */
+  readonly documentId: string;
+  /**
+   * Root block that bounds this subtree; undefined shows the full document.
+   * An embedding displays the root and its descendants. A Panel displays only
+   * its children, keeping the root available to the host as a title.
+   */
+  readonly rootBlockId?: string;
+  /** Element container excluded from reads and mutations; null selects document roots. */
+  readonly rootElementId: string | null;
+  /** Reads and mutations constrained to the panel block tree. */
+  readonly blocks: PanelBlocksAPI;
+  /** Reads and mutations constrained to the independent element tree. */
+  readonly elements: PanelElementsAPI;
+}
+
 /** Reads and changes only descendants of the panel's element root. Existing outside targets are rejected before mutation. */
 export interface PanelElementsAPI {
   /**
@@ -254,6 +312,98 @@ export interface PanelElementsAPI {
    * @param ids - Subtree root IDs to delete; missing IDs and an empty list are harmless.
    */
   removeElements(ids: readonly string[]): void;
-/** @param parentId - Local element parent. @returns Direct child IDs, empty when absent. */
-getChildIds(parentId: string): readonly string[];
+  /**
+   * Reads the ordered direct child IDs of an included element.
+   *
+   * @param parentId - Local element parent.
+   * @returns Direct child IDs, empty when absent or outside the panel.
+   */
+  getChildIds(parentId: string): readonly string[];
 }
+
+/** Explicit public block operations of a panel; storage and lifecycle stay document-owned. */
+export interface PanelBlocksAPI {
+  /** @returns Document block revision, used to invalidate panel membership checks. */
+  readonly revision: number;
+  /** @param id - Candidate identity. @returns Whether it is currently inside the panel. */
+  hasBlock(id: string): boolean;
+  /** @param id - Identity to read. @returns Own fields or undefined outside the panel. */
+  getBlockNode(id: string): EditorBlockNode | undefined;
+  /** @param id - Identity to read. @returns Recursive snapshot or undefined outside the panel. */
+  getBlock(id: string): EditorBlock | undefined;
+  /** @returns Stable ordered top-level IDs: children for EditorPanel, the protected root for EditorEmbed, or document roots. Empty while its selected root is absent. */
+  getRootIds(): readonly string[];
+  /** @returns Recursive snapshots of this panel's current roots. */
+  getBlocks(): EditorBlock[];
+  /** @param id - Local parent. @returns Its direct children or empty outside the panel. */
+  getChildIds(id: string): readonly string[];
+  /** @param id - Local parent. @returns Whether it has children. */
+  hasChildren(id: string): boolean;
+  /** @param id - Candidate block. @returns Local parent, null at the panel's top level, or undefined outside. */
+  getParentId(id: string): string | null | undefined;
+  /** @param id - Candidate block. @returns Whether it is a displayed root. */
+  isRootBlock(id: string): boolean;
+  /** @param ids - Candidate IDs. @returns Local IDs in document order. */
+  getOrderedIds(ids: Iterable<string>): string[];
+  /** @param listener - Root-list observer. @returns Cleanup; payload edits do not notify unchanged roots. */
+  subscribeRootIds(listener: () => void): () => void;
+  /** @param listener - Structural observer. @returns Cleanup for document placement changes affecting membership. */
+  subscribeStructure(listener: () => void): () => void;
+  /** @param id - Candidate subtree. @param listener - Observer. @returns Cleanup, including entry/exit notifications. */
+  subscribeBlock(id: string, listener: () => void): () => void;
+  /** @param id - Candidate node. @param listener - Observer. @returns Cleanup; descendant payload changes do not notify. */
+  subscribeBlockNode(id: string, listener: () => void): () => void;
+  /** @param id - Candidate identity. @returns Whether deletion/movement is allowed by the panel boundary. */
+  canRemove(id: string): boolean;
+  /** @param id - Candidate identity. @returns Whether outdent stays within the panel. */
+  canOutdent(id: string): boolean;
+  /** @param afterId - Local sibling, null to prepend, or omitted to append. @returns Explicit panel destination. @throws If insertion would escape the panel. */
+  getInsertionDestinationAfter(afterId?: string | null): PanelDestination;
+  /** @param input - Validated creation input. @param destination - Panel root or local parent. @returns Inserted subtree. @throws Before writes for an invalid destination or input. */
+  insertBlock(input: EditorBlockInput, destination?: PanelDestination): EditorBlock;
+  /** @param input - Detached forest. @param onError - Optional preparation recovery. @returns Prepared inputs without changing the document. */
+  prepareInput(input: readonly (EditorBlock | EditorBlockInput)[], onError?: BlockPrepareErrorHandler): EditorBlockInput[];
+  /** @param id - Local block. @param patch - Mutable fields. @returns Updated node. @throws Before writing outside the panel. */
+  updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
+  /** @param updates - Ordered local patches. @returns Updated nodes. @throws Before writes if any target is outside. */
+  updateBlocks(updates: readonly EditorBlockUpdate[]): EditorBlockNode[];
+  /** @param id - Local block. @param keys - List keys to remove. @returns Whether anything changed. */
+  deleteListProps(id: string, keys: readonly string[]): boolean;
+  /** @param updates - Local list-property removals. @throws Before writing for any outside target. */
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[]; }[]): void;
+  /** @param id - Local block whose content is cleared while preserving identity. */
+  clearBlock(id: string): void;
+  /** @param id - Local block. @param type - Registered destination type. */
+  setBlockType(id: string, type: string): void;
+  /** @param id - Local block. @param key - Property key. @param value - Validated value or undefined to remove. */
+  setBlockProp(id: string, key: string, value: unknown): void;
+  /** @param id - Local block. @param pluginId - Namespace. @param value - Portable plugin data. */
+  setBlockPluginData(id: string, pluginId: string, value: unknown): void;
+  /** @param id - Local subtree to remove. @throws If outside or the protected embedding root. */
+  removeBlock(id: string): void;
+  /** @param ids - Local subtrees. @throws Before any write if a target is outside or protected. */
+  removeBlocks(ids: readonly string[]): void;
+  /** @param targetId - Surviving local block. @param sourceId - Removed local block. @returns Caret offset after merging. */
+  mergeBlocks(targetId: string, sourceId: string): number;
+  /** @param id - Local subtree. @param targetId - Local destination or panel list start. @param position - Placement relative to target. */
+  moveBlock(id: string, targetId: string | null, position?: 'before' | 'after' | 'inside'): void;
+  /** @param ids - Local subtrees. @param targetId - Local destination or panel list start. @param position - Placement. @throws Before writes for an outside or protected target. */
+  moveBlocks(ids: readonly string[], targetId: string | null, position?: 'before' | 'after' | 'inside'): void;
+  /** @param id - Local subtree to indent. */
+  indentBlock(id: string): void;
+  /** @param ids - Local sibling roots. @throws If indent could adopt an outside sibling. */
+  indentBlocks(ids: readonly string[]): void;
+  /** @param id - Local subtree to outdent. @throws At the panel boundary. */
+  outdentBlock(id: string): void;
+  /** @param ids - Local sibling roots. @throws Before mutation if any outdent crosses the boundary. */
+  outdentBlocks(ids: readonly string[]): void;
+  /** Imports a copied forest directly into a validated panel destination. */
+  importForest(input: readonly (EditorBlock | EditorBlockInput)[], destination?: PanelDestination, onError?: BlockPrepareErrorHandler, ids?: ReadonlyMap<string, string>): ImportedBlockForest;
+  /** Whether the selected block itself is displayed and protected. */
+  readonly includeRoot: boolean;
+}
+
+/** Insertion or movement relative to a panel, resolved to real document placement before writing. */
+export type PanelDestination =
+  | { readonly root: true; readonly beforeId?: string }
+  | { readonly parentId: string; readonly beforeId?: string };

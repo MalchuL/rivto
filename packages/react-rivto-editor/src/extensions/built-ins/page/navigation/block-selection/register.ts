@@ -10,7 +10,7 @@ import {
   isStructuralSelection,
   type EditorBlock,
 } from "@chulane/rivto";
-import type { PanelAPI } from "../../../../../panels/types";
+import type { ReactPanelApi } from "../../../../../panels/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
 import {
   adjacentBlockSelection,
@@ -35,50 +35,50 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): v
   const isCollapsed = (block: EditorBlock) => (
     !reactEditor.blockListProps.childrenVisible(block)
   );
-  const move = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
-    const selection = currentNavigationSelection(panel.selection);
+  const move = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
+    const selection = currentNavigationSelection(reactPanel.selection);
     if (!isStructuralSelection(selection)) return false;
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(panel, item.focusBlockId);
+    const outline = navigationOutlineBlocks(reactPanel, item.focusBlockId);
     const next = extend
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : adjacentBlockSelection(outline, item, direction, isCollapsed);
     assertBlockRangeEndpoints(next);
-    panel.selection.set(next);
+    reactPanel.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
-  const grow = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(panel.selection);
+  const grow = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(reactPanel.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item)) return false;
-    const outline = navigationOutlineBlocks(panel, item.focusBlockId);
+    const outline = navigationOutlineBlocks(reactPanel, item.focusBlockId);
     const next = isStructuralSelection(selection)
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : blockSelection(outline, item.focusBlockId, item.focusBlockId, isCollapsed);
     if (!next) return false;
     assertBlockRangeEndpoints(next);
-    panel.selection.set(next);
+    reactPanel.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
     return true;
   };
 
-  const enterText = (panel: PanelAPI, root: HTMLElement): boolean => {
-    const blocks = currentNavigationSelection(panel.selection);
+  const enterText = (reactPanel: ReactPanelApi, root: HTMLElement): boolean => {
+    const blocks = currentNavigationSelection(reactPanel.selection);
     if (!blocks || !isStructuralSelection(blocks) || !hasBlockRanges(blocks)) return false;
-    setNavigationCaret(root, panel, { blockId: blocks.focusBlockId, offset: 0 });
+    setNavigationCaret(root, reactPanel, { blockId: blocks.focusBlockId, offset: 0 });
     return true;
   };
 
   const binding = (
     id: string,
-    action: (panel: PanelAPI, root: HTMLElement) => boolean,
+    action: (reactPanel: ReactPanelApi, root: HTMLElement) => boolean,
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ panel, root }) => action(panel, root));
+  }, ({ reactPanel, root }) => action(reactPanel, root));
   binding(KEYBOARD_BINDING_IDS.blockSelectionUp, (editor, root) => move(editor, root, "up", false));
   binding(KEYBOARD_BINDING_IDS.blockSelectionDown, (editor, root) => move(editor, root, "down", false));
   binding(KEYBOARD_BINDING_IDS.blockSelectionExtendUp, (editor, root) => move(editor, root, "up", true));

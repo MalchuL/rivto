@@ -32,7 +32,7 @@ export class ClipboardFormatRegistry {
       throw new Error(`Clipboard formatter ${formatter.id || "<empty>"} is already registered`);
     }
     this.formatters.push(formatter);
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.formatters.indexOf(formatter);
       if (index >= 0) this.formatters.splice(index, 1);
     });
@@ -51,7 +51,7 @@ export class ClipboardFormatRegistry {
       throw new Error(`Clipboard parser ${parser.id || "<empty>"} is already registered`);
     }
     this.parsers.push(parser);
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.parsers.indexOf(parser);
       if (index >= 0) this.parsers.splice(index, 1);
     });

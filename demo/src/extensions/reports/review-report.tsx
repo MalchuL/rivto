@@ -7,25 +7,19 @@
  *
  * @module
  */
-import type { EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
+import type { EditorElementNode } from "@chulane/rivto";
 import {
-  ElementSlots,
-  SurfaceContext,
   blockExtension,
   editorControlProps,
   useBlockEditing,
-  useEditorRoot,
   useEditorSelection,
-  useElements,
-  useEdgelessElementStyle,
+  usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
-  useContext,
   useState,
   type ChangeEvent,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   REVIEW_REPORT_TYPE,
   captureBlockReview,
@@ -41,7 +35,6 @@ import "./review-report.css";
 
 const REVIEW_BLOCK_CLASS = "review-report-block";
 const REVIEW_ELEMENT_CLASS = "review-report-element";
-const REVIEW_ELEMENT_LAYER_CLASS = "review-report-element-layer";
 const REVIEW_PROBLEM_CLASS = "review-report-problem";
 const REVIEW_CONTROLS_CLASS = "review-report-controls";
 const REVIEW_STATUS_CLASS = "review-report-status";
@@ -145,14 +138,13 @@ function ReviewControls(props: ReviewControlsProps) {
  * @returns Editable problem statement and report controls, or null after deletion.
  */
 function ReviewBlock({
-  editor,
   blockId,
   saveReport,
 }: {
-  readonly editor: DocumentEditorAPI;
   readonly blockId: string;
   readonly saveReport: SaveReviewReport;
 }) {
+  const panel = usePanel();
   const editing = useBlockEditing<ReviewBlockProps>(blockId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,11 +157,11 @@ function ReviewBlock({
     setSaving(true);
     setError(null);
     try {
-      const live = editor.blocks.getBlockNode(blockId);
+      const live = panel.blocks.getBlockNode(blockId);
       if (!live) throw new Error("Review block no longer exists");
       const liveProps = reviewBlockPropsSchema.parse(live.props);
       const capture = captureBlockReview(
-        editor,
+        panel.document,
         blockId,
         liveProps.blocksAbove,
         liveProps.blocksBelow,
@@ -183,7 +175,7 @@ function ReviewBlock({
         savedAt,
         ...capture,
       });
-      editor.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
+      panel.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {
@@ -216,7 +208,7 @@ function ReviewBlock({
             editing.operations.setProp("includeReportBlock", includeReportBlock)
           )}
           onSave={() => void save()}
-          onRestore={() => editor.load(props.snapshot!)}
+          onRestore={() => panel.document.load(props.snapshot!)}
         />
       </div>
     </section>
@@ -227,27 +219,25 @@ function ReviewBlock({
  * Renders one first-class Review element in the edgeless plane.
  *
  * @param props - Persisted element and injected report writer.
- * @returns Positioned canvas frame with the same Save UX as the block.
+ * @returns Review content with the same Save UX as the block; the registered element host owns positioning and selection slots.
  */
 function ReviewElement({
-  editor,
   element,
-  selected,
   saveReport,
 }: {
-  readonly editor: DocumentEditorAPI;
   readonly element: EditorElementNode;
-  readonly selected: boolean;
   readonly saveReport: SaveReviewReport;
 }) {
-  const { ref, style } = useEdgelessElementStyle(element);
+  const panel = usePanel();
+  const selection = useEditorSelection();
+  const selected = selection?.elements?.includes(element.id) ?? false;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
 
   /** Applies one validated persisted property patch to this element. */
   const update = (patch: Partial<ReviewElementProps>): void => {
-    editor.elements.updateElement(element.id, { props: patch });
+    panel.elements.updateElement(element.id, { props: patch });
   };
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
@@ -256,11 +246,11 @@ function ReviewElement({
     setSaving(true);
     setError(null);
     try {
-      const live = editor.elements.getElementNode(element.id);
+      const live = panel.elements.getElementNode(element.id);
       if (!live) throw new Error("Review element no longer exists");
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
-        editor,
+        panel.document,
         element.id,
         liveProps.elementsAbove,
         liveProps.elementsBelow,
@@ -273,7 +263,7 @@ function ReviewElement({
         savedAt,
         snapshot,
       });
-      editor.elements.updateElement(element.id, { props: { snapshot, savedAt } });
+      panel.elements.updateElement(element.id, { props: { snapshot, savedAt } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {
@@ -283,13 +273,9 @@ function ReviewElement({
 
   return (
     <section
-      ref={ref}
       className={REVIEW_ELEMENT_CLASS}
-      data-edgeless-object-kind="review"
-      data-edgeless-object-id={element.id}
       data-review-report={element.id}
       data-selected={selected || undefined}
-      style={style}
     >
       <textarea
         {...editorControlProps}
@@ -309,43 +295,9 @@ function ReviewElement({
         onAboveChange={(elementsAbove) => update({ elementsAbove })}
         onBelowChange={(elementsBelow) => update({ elementsBelow })}
         onSave={() => void save()}
-        onRestore={() => editor.load(props.snapshot!)}
+        onRestore={() => panel.document.load(props.snapshot!)}
       />
-      <ElementSlots element={element} selected={selected} />
     </section>
-  );
-}
-
-/**
- * Portals Review elements into the existing edgeless plane.
- *
- * @param props - Host persistence callback shared by every rendered report.
- * @returns Portal contents in edgeless mode, otherwise null.
- */
-function ReviewElementLayer({ editor, saveReport }: {
-  readonly editor: DocumentEditorAPI;
-  readonly saveReport: SaveReviewReport;
-}) {
-  const mode = useContext(SurfaceContext);
-  const { element: root } = useEditorRoot();
-  const elements = useElements();
-  const selection = useEditorSelection();
-  const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
-  if (mode !== "edgeless" || !plane) return null;
-  const selected = new Set(selection?.elements ?? []);
-  return createPortal(
-    <div className={REVIEW_ELEMENT_LAYER_CLASS}>
-      {elements.filter(({ type }) => type === REVIEW_REPORT_TYPE).map((element) => (
-        <ReviewElement
-          key={element.id}
-          editor={editor}
-          element={element}
-          selected={selected.has(element.id)}
-          saveReport={saveReport}
-        />
-      ))}
-    </div>,
-    plane,
   );
 }
 
@@ -356,14 +308,13 @@ function ReviewElementLayer({ editor, saveReport }: {
  * @returns Separate block and canvas extensions sharing one host callback.
  */
 export function reviewReportExtensions(options: {
-  readonly editor: DocumentEditorAPI;
   readonly saveReport: SaveReviewReport;
 }): readonly ReactEditorExtension[] {
   return [
     blockExtension({
       definition: reviewBlockDefinition,
       render: ({ blockId }) => (
-        <ReviewBlock editor={options.editor} blockId={blockId} saveReport={options.saveReport} />
+        <ReviewBlock blockId={blockId} saveReport={options.saveReport} />
       ),
       slashCommand: {
         title: "Review report",
@@ -374,15 +325,14 @@ export function reviewReportExtensions(options: {
     {
       id: "demo.review-report.elements",
       setup: (reactEditor) => {
-        reactEditor.extensions.mount(() => (
-          <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
-        ));
-        return reactEditor.document.elements.registerProcessor({
-          id: "demo.review-report.props",
-          priority: 0,
-          processor: (element) => element.type === REVIEW_REPORT_TYPE
-            ? { ...element, props: reviewElementPropsSchema.parse(element.props) }
-            : element,
+        return reactEditor.elementTypes.register({
+          definition: {
+            type: REVIEW_REPORT_TYPE,
+            validate: (props) => reviewElementPropsSchema.parse(props),
+          },
+          render: ({ element }) => (
+            <ReviewElement element={element} saveReport={options.saveReport} />
+          ),
         });
       },
     },

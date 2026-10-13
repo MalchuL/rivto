@@ -13,54 +13,54 @@ import { createTestCoreEditor as createEditor } from "../../test-utils";
 describe("useBlockSelected / useEditorSelection store contract", () => {
   test("snapshot identity is stable until set actually changes", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const caret = createCaretSelection(id, 1);
-    panel.selection.set(caret);
+    reactPanel.selection.set(caret);
     const snapshot = editor.selection.snapshot();
-    panel.selection.set(caret);
+    reactPanel.selection.set(caret);
     expect(editor.selection.snapshot()).toBe(snapshot);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("caret selection does not mark the block selected", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
-    panel.selection.set(createCaretSelection(id, 1));
+    reactPanel.selection.set(createCaretSelection(id, 1));
     expect(editor.selection.isBlockSelected(id)).toBe(false);
     expect(editor.selection.snapshot()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 1, end: 1 }],
     });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("whole-block selection marks only member ids", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId)).id;
     editor.selection.set(createStructuralSelection([firstId]));
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
     expect(editor.selection.snapshot()?.blocks).toHaveLength(1);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("selection set does not bump the React editor revision", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
-    const before = panel.editor.document.revision;
-    panel.selection.set(
+    const before = reactPanel.editor.revision;
+    reactPanel.selection.set(
       createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,
     );
-    expect(panel.editor.document.revision).toBe(before);
-    panel.editor.destroy();
+    expect(reactPanel.editor.revision).toBe(before);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

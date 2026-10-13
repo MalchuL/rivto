@@ -12,7 +12,7 @@ import { Checkbox } from "../../../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { editorControlProps } from "../../../../constants";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
 import { ColorControl } from "./color-control";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
@@ -76,7 +76,7 @@ export function VisualProperties({
 }: {
   visuals: readonly EdgelessVisual[];
   fonts: readonly EdgelessFontOption[];
-  controller: EdgelessVisualController;
+  controller: EdgelessOperations;
 }) {
   const visual = visuals[0]!;
   const ids = visuals.map((item) => item.id);
@@ -280,7 +280,7 @@ export function VisualProperties({
       count={visuals.length}
       ariaLabel="Visual properties"
       panelRef={panelRef}
-      onClose={() => controller.execute("edgeless.selection.clear")}
+      onClose={() => controller.clearSelection()}
     >
       {body}
     </EdgelessPropertiesPanel>

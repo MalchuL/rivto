@@ -1,4 +1,4 @@
-export { EdgelessVisualsExtension, edgelessVisualsExtension } from "./extension";
+export { edgelessVisualsExtension } from "./extension";
 
 export type {
   EdgelessSelectionRef,

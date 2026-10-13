@@ -1,5 +1,5 @@
 import type { EditorBlock, Selection } from "@chulane/rivto";
-import type { PanelAPI } from "../panels/types";
+import type { ReactPanelApi } from "../panels/types";
 import type { ReactEditorApi } from "../editor/types";
 import type { KeyboardSelectionTarget } from "../managers";
 
@@ -29,7 +29,7 @@ export interface BlockDropPlacementOptions {
  */
 export interface BlockBehaviorContext {
   /** Editor view supplying selection, block behaviors, and shared writing factories. */
-  readonly panel: PanelAPI;
+  readonly reactPanel: ReactPanelApi;
   /** Detached snapshot of the resolved block. */
   readonly block: EditorBlock;
   /** Structural parent, or `null` at the document root. */

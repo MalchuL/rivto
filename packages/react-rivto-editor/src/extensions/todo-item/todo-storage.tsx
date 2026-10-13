@@ -28,7 +28,7 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { editorControlProps } from "../../constants";
-import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, usePanel, usePreventTextEditing } from "../../hooks";
+import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, useReactPanel, usePanel, usePreventTextEditing } from "../../hooks";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
@@ -216,7 +216,7 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
     const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
     const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      panel.editor.document.history.batchUpdates(() => {
+      panel.batchUpdates(() => {
         desired.forEach((id, index) => {
           panel.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
@@ -248,7 +248,7 @@ export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) 
 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
   const editing = useBlockNode<TodoStorageProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
@@ -285,7 +285,7 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    const behaviorContext = root ? createBlockBehaviorContext(panel, blockId, root) : undefined;
+    const behaviorContext = root ? createBlockBehaviorContext(reactPanel, blockId, root) : undefined;
     if (behaviorContext) todoStorageBehavior.appendWritingBlock(behaviorContext);
   };
 

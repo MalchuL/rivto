@@ -1,3 +1,4 @@
+import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
 import { DemoEditorPanels } from "./editor-panels";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
@@ -17,7 +18,6 @@ import {
   createTableBlockInput,
   DEFAULT_WRITING_BLOCK_TYPE,
   edgelessPreset,
-  edgelessVisualsExtension,
   EditorStorage,
   EditorStorageContext,
   EditorPanel,
@@ -50,6 +50,7 @@ import {
   blockIdExtension,
   BlockIdsVisibleProvider,
 } from "./extensions/block-id";
+import { blockNavigationExtension } from "./extensions/block-navigation";
 import { blockNumberExtension } from "./extensions/block-number";
 import {
   createReviewElementInput,
@@ -81,8 +82,7 @@ async function saveDemoReviewReport(report: ReviewReport): Promise<void> {
 }
 
 /** @returns A fresh Review extension for one independently owned editor. */
-const demoReviewReports = (editor: DocumentEditorAPI) => reviewReportExtensions({
-  editor,
+const demoReviewReports = () => reviewReportExtensions({
   saveReport: saveDemoReviewReport,
 });
 
@@ -151,38 +151,38 @@ function demoThreadAnchor(block: Element): Element | null {
  * connectors, nested groups, and spare siblings for align / distribute /
  * layer-order practice — without the visitor having to create them first.
  */
-function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtension>): void {
+function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
   // Cards grow with their content, including embeddings. Keep the heading
   // above their initial frames so collapsing an outline cannot put it over a row.
-  visuals.createText({
+  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
     text: "Edgeless showcase",
     frame: { x: 60, y: 0, width: 280, height: 32 },
     fontSize: 22,
     fontFamily: "Georgia, Cambria, serif",
     color: "#212529",
-  });
-  visuals.createText({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
     text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
     frame: { x: 60, y: 32, width: 560, height: 28 },
     fontSize: 13,
     color: "#495057",
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
-  const rect = visuals.createRectangle({
+  const rect = (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 60, y: 530, width: 130, height: 90 },
     fill: "#d0ebff",
     stroke: "#1c7ed6",
     strokeWidth: 2,
     text: "Rect",
-  });
-  const ellipse = visuals.createEllipse({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  const ellipse = (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
     frame: { x: 240, y: 545, width: 110, height: 80 },
     fill: "#fff3bf",
     stroke: "#e67700",
     strokeWidth: 2,
     text: "Ellipse",
-  });
-  visuals.createConnector({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
     route: "orthogonal",
     source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
     target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
@@ -191,20 +191,20 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
     endStyle: "arrow",
     text: "link",
     textRotation: "along",
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
-  visuals.select([rect.id, ellipse.id]);
-  const shapeGroup = visuals.group();
+  editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
+  const shapeGroup = (editor.commands.execute("edgeless.selection.group") as import("@chulane/rivto").EditorElementNode);
 
-  const sticky = visuals.createSticker({
+  const sticky = (editor.commands.execute("edgeless.visual.create", { kind: "sticker", ...({
     text: "Sticky note\n(double-click to edit)",
     fill: "#eeeaff",
     color: "#362b67",
     frame: { x: 420, y: 530, width: 170, height: 130 },
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
   // Second connector: animated dashes flow toward the sticky.
-  visuals.createConnector({
+  (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
     route: "curve",
     source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
     target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
@@ -212,13 +212,13 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
     lineStyle: "dashed-animated",
     endStyle: "arrow",
     text: "",
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
-  visuals.select([shapeGroup.id, sticky.id]);
-  visuals.group();
+  editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
+  (editor.commands.execute("edgeless.selection.group") as import("@chulane/rivto").EditorElementNode);
 
-  visuals.createDrawing({
+  (editor.commands.execute("edgeless.visual.create", { kind: "drawing", ...({
     brush: "pencil",
     frame: { x: 640, y: 530, width: 150, height: 100 },
     points: [
@@ -227,38 +227,37 @@ function seedEdgelessShowcase(visuals: ReturnType<typeof edgelessVisualsExtensio
     ],
     stroke: "#212529",
     strokeWidth: 2,
-  });
-  visuals.createText({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
     text: "Free text — resize corners, drag handle, layer arrows",
     frame: { x: 640, y: 650, width: 260, height: 48 },
     fontSize: 14,
     color: "#343a40",
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
   // Unrelated siblings for align / distribute / multi-select practice.
-  visuals.createRectangle({
+  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 920, y: 530, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  });
-  visuals.createRectangle({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 1020, y: 560, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  });
-  visuals.createRectangle({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
     frame: { x: 1120, y: 510, width: 56, height: 56 },
     fill: "#d3f9d8",
     stroke: "#2b8a3e",
-  });
-  visuals.createEllipse({
+  }) }) as import("@chulane/rivto").EditorElementNode);
+  (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
     frame: { x: 920, y: 640, width: 70, height: 48 },
     fill: "#ffd8a8",
     stroke: "#d9480f",
-  });
+  }) }) as import("@chulane/rivto").EditorElementNode);
 
-  visuals.clearSelection();
-  visuals.setTool("select");
+  editor.commands.execute("edgeless.selection.clear");
 }
 
 /**
@@ -309,7 +308,6 @@ async function destroyDemoEditor(runtime: {
  */
 async function createDemoEditor() {
   const resources = await createDemoDocument();
-  const edgelessVisuals = edgelessVisualsExtension(edgelessOptions);
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
   const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
     ? {
@@ -343,19 +341,19 @@ async function createDemoEditor() {
               TODO_STORAGE_BLOCK_TYPE,
             ],
           }),
-          ...edgelessPreset(),
-          documentEditor.getDocument() === resources.document ? edgelessVisuals : edgelessVisualsExtension(edgelessOptions),
+          ...edgelessPreset({ visuals: edgelessOptions }),
           blockIdExtension(),
+          blockNavigationExtension(),
           blockNumberExtension(),
           ...customBlockExtensions,
           embeddingExtension(),
-          ...demoReviewReports(documentEditor),
+          ...demoReviewReports(),
         ],
       });
     },
   });
   const acquisition = await editorStorage.acquireEditor(resources.document.id);
-  const editor = acquisition.editor.document;
+  const editor = acquisition.editor;
   const reactEditor = editorStorage.getEditor(editor.getDocument().id)!;
   // Playwright and host scripts locate this demo instance through window, not React refs.
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
@@ -566,7 +564,7 @@ async function createDemoEditor() {
       project: "Rivto",
     },
   }, editor.blocks.getInsertionDestinationAfter(doingId));
-  seedEdgelessShowcase(edgelessVisuals);
+  seedEdgelessShowcase(editor);
   editor.elements.insertElement(createReviewElementInput({
     id: "demo-review-element",
     frame: { x: 920, y: 730, width: 420, height: 260 },
@@ -596,12 +594,11 @@ async function createEmptyDemoEditor() {
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
-      ...edgelessPreset(),
-      edgelessVisualsExtension(edgelessOptions),
+      ...edgelessPreset({ visuals: edgelessOptions }),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(editor),
+      ...demoReviewReports(),
     ],
   });
   return { ...resources, editor, reactEditor };
@@ -850,12 +847,11 @@ async function createMultiEditor(
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
-      ...edgelessPreset(),
-      edgelessVisualsExtension(edgelessOptions),
+      ...edgelessPreset({ visuals: edgelessOptions }),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(editor),
+      ...demoReviewReports(),
     ],
   });
   if (side === "left") {
@@ -1024,12 +1020,11 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
-      ...edgelessPreset(),
-      edgelessVisualsExtension(edgelessOptions),
+      ...edgelessPreset({ visuals: edgelessOptions }),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
-      ...demoReviewReports(editor),
+      ...demoReviewReports(),
     ],
   });
   if (side === "left" && !editor.blocks.getRootIds().length) {
@@ -1124,6 +1119,7 @@ function SyncEditorsApp() {
  */
 export function App() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has("elementRegistration")) return <ElementRegistrationTest />;
   if (params.get("editorLifecycle") === "1") return <EditorLifecycleTest />;
   if (params.get("embeddings") === "1") return <DocumentsDemo />;
   if (params.get("editors") === "2") return <MultiEditorApp />;

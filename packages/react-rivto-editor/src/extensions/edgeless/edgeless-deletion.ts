@@ -1,18 +1,18 @@
 import { isStructuralSelection } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
-function topLevelSelection(panel: PanelAPI, blockIds: readonly string[]): string[] {
+function topLevelSelection(reactPanel: ReactPanelApi, blockIds: readonly string[]): string[] {
   const selected = new Set(blockIds);
   return blockIds.filter((id) => {
-    let parentId = panel.blocks.getParentId(id);
+    let parentId = reactPanel.blocks.getParentId(id);
     while (parentId) {
       if (selected.has(parentId)) return false;
-      parentId = panel.blocks.getParentId(parentId);
+      parentId = reactPanel.blocks.getParentId(parentId);
     }
     return true;
   });
@@ -33,32 +33,32 @@ export function registerEdgelessDeletion(reactEditor: ReactEditorApi): void {
         !target.isContentEditable &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
     },
-  }, ({ panel, root }) => {
+  }, ({ reactPanel, root }) => {
     const canvas = selection.get();
     let handled = false;
-    if (canvas.active && canvas.items.length && panel.editor.document.commands.has("edgeless.visual.delete")) {
-      panel.editor.document.commands.execute("edgeless.visual.delete", { panel, payload: { selection: true } });
+    if (canvas.active && canvas.items.length && reactPanel.document.commands.has("edgeless.visual.delete")) {
+      reactPanel.document.commands.execute("edgeless.visual.delete", { reactPanel, payload: { selection: true } });
       root.focus({ preventScroll: true });
       handled = true;
     } else {
-      const current = panel.selection.get();
+      const current = reactPanel.selection.get();
       const core = isStructuralSelection(current) ? current : undefined;
       const blockIds = canvas.active && canvas.items.length
         ? canvas.items.flatMap((id) => {
-          const element = panel.elements.getElementNode(id);
-          return element?.type === "block" ? blockIdsOf(element, panel.blocks.getRootIds()) : [];
+          const element = reactPanel.elements.getElementNode(id);
+          return element?.type === "block" ? blockIdsOf(element, reactPanel.blocks.getRootIds()) : [];
         })
         : core?.blocks.map((block) => block.id) ?? [];
-      const targets = topLevelSelection(panel, blockIds);
-      if (targets.length && targets.every(id => panel.blocks.canRemove(id))) {
+      const targets = topLevelSelection(reactPanel, blockIds);
+      if (targets.length && targets.every(id => reactPanel.blocks.canRemove(id))) {
         if (canvas.active && canvas.items.length) {
-          panel.editor.document.history.batchUpdates(() => {
-            panel.blocks.removeBlocks(targets);
-            panel.elements.removeElements(canvas.items);
+          reactPanel.batchUpdates(() => {
+            reactPanel.blocks.removeBlocks(targets);
+            reactPanel.elements.removeElements(canvas.items);
           });
           selection.clear();
         } else {
-          panel.selection.delete();
+          reactPanel.selection.delete();
         }
         root.focus({ preventScroll: true });
         requestAnimationFrame(() => root.focus({ preventScroll: true }));

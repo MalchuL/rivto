@@ -1,7 +1,7 @@
 import { createStructuralSelection, type EditorMode } from "@chulane/rivto";
 import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import { crossDocumentBlockTransfer, type CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
 import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
@@ -42,7 +42,7 @@ export class PageDragController {
   previewPosition: PointerCoordinates | null = null;
 
   /**
-   * @param panel - Source view's document-bound API.
+   * @param reactPanel - Source view's document-bound API.
    * @param root - Source surface, or null before mounting.
    * @param mode - Rendered surface used to interpret zoom.
    * @param placements - Existing per-row store for feedback and sensor state.
@@ -54,7 +54,7 @@ export class PageDragController {
    * @param options.allowChildPlacement - Whether ordinary rows accept child drops.
    */
   constructor(
-    private readonly panel: PanelAPI,
+    private readonly reactPanel: ReactPanelApi,
     private readonly root: HTMLElement | null,
     private readonly mode: EditorMode,
     private readonly placements: DropPlacementStore,
@@ -67,12 +67,12 @@ export class PageDragController {
 
   /** Registers this surface for cross-document drops; cleanup also cancels its active gesture. */
   mount(): () => void {
-    const { panel, root, placements } = this;
+    const { reactPanel, root, placements } = this;
     const { childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone } = this.options;
     this.disposed = false;
     if (!root) return () => this.destroy();
     const controller: CrossDocumentPageRootController = {
-      panel,
+      reactPanel,
       root,
       setPlacement: (placement, empty = false) => {
         placements.set(placement);
@@ -80,7 +80,7 @@ export class PageDragController {
         else root.removeAttribute("data-drop-empty");
       },
       resolvePlacement: (x, y, sources, sourceDocumentId) => resolveCrossDocumentPageRootPlacement(
-        panel,
+        reactPanel,
         root,
         x,
         y,
@@ -156,7 +156,7 @@ export class PageDragController {
   };
 
   private updateCrossDocumentTarget = (): boolean => {
-    const { panel, root } = this;
+    const { reactPanel, root } = this;
     const { outerEdgeDropZone } = this.options;
     const pointer = this.pointerTracker?.get() ?? null;
     const controller = pointer ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone) : null;
@@ -166,10 +166,10 @@ export class PageDragController {
     } else {
       if (this.crossDocumentTarget?.controller !== controller) this.clearCrossDocumentTarget();
       const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-        const block = panel.blocks.getBlock(id);
+        const block = reactPanel.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, panel.editor.document.getDocument().id);
+      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, reactPanel.document.getDocument().id);
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
       this.crossDocumentTarget = placement ? {
         controller,
@@ -189,21 +189,21 @@ export class PageDragController {
    * @returns Accepted placement, or null when the gesture has no valid drop.
    */
   private validPlacement = (operation: PageDragOperation): DropPlacement | null => {
-    const { panel, root, mode } = this;
+    const { reactPanel, root, mode } = this;
     const { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement } = this.options;
     const zoom = mode === "edgeless"
       ? Number(root?.dataset.edgelessZoom) || 1
       : 1;
-    const blocks = excludeDropSubtrees(getDropBlocks(panel), new Set(this.activeMove?.ids ?? []));
+    const blocks = excludeDropSubtrees(getDropBlocks(reactPanel), new Set(this.activeMove?.ids ?? []));
     const livePointer = this.pointerTracker?.get() ?? null;
     const rect = operation.shape?.current.boundingRectangle;
     const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
     if (!pointer) return null;
     const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
-      const block = panel.blocks.getBlock(id);
+      const block = reactPanel.blocks.getBlock(id);
       return block ? [block] : [];
     });
-    return resolveSurfaceDrop(root, panel, sources, blocks, pointer, {
+    return resolveSurfaceDrop(root, reactPanel, sources, blocks, pointer, {
       childDropIndent: childDropIndent * zoom, gapDropZone, allowChildPlacement,
       outerEdgeDropZone, keyboard: !livePointer,
     });
@@ -231,7 +231,7 @@ export class PageDragController {
    * @param manager - Manager whose live operation is re-read after scrolling.
    */
   handleDragStart = ({ operation, nativeEvent }: DragStartEvent, manager: DragDropManager) => {
-    const { panel, root, placements, setActiveIds } = this;
+    const { reactPanel, root, placements, setActiveIds } = this;
     const source = operation.source;
     if (!source) return;
     this.clearCrossDocumentTarget();
@@ -262,12 +262,12 @@ export class PageDragController {
         ownerDocument.removeEventListener("selectionchange", clearSelection, true);
       };
     }
-    const blocks = getDropBlocks(panel);
+    const blocks = getDropBlocks(reactPanel);
     const move = selectedMoveRoots(
       blocks,
-      panel.selection.get(),
+      reactPanel.selection.get(),
       String(source.id),
-      (block) => !panel.editor.blockListProps.childrenVisible(block),
+      (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
     );
     this.activeMove = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
@@ -325,22 +325,22 @@ export class PageDragController {
    * @param event - Final operation state and cancellation flag supplied by dnd-kit.
    */
   handleDragEnd = (event: DragEndEvent) => {
-    const { panel, root } = this;
+    const { reactPanel, root } = this;
     const move = this.activeMove;
     const crossDocument = this.crossDocumentTarget;
     const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
     const sources = (move?.ids ?? []).flatMap((id) => {
-      const block = panel.blocks.getBlock(id);
+      const block = reactPanel.blocks.getBlock(id);
       return block ? [block] : [];
     });
     const valid = placement && sources.length === move?.ids.length
-      && panel.editor.blockBehaviors.acceptsDrop(placement, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(panel), new Set(move.ids)), placement);
+      && reactPanel.editor.blockBehaviors.acceptsDrop(placement, sources)
+      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(reactPanel), new Set(move.ids)), placement);
     const validCrossDocument = crossDocument && sources.length === move?.ids.length
-      && crossDocument.controller.panel.editor.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
+      && crossDocument.controller.reactPanel.editor.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
       && isCurrentDropDestination(excludeDropSubtrees(
-        getDropBlocks(crossDocument.controller.panel),
-        new Set(crossDocument.controller.panel.editor.document.getDocument() === panel.editor.document.getDocument() ? move.ids : []),
+        getDropBlocks(crossDocument.controller.reactPanel),
+        new Set(crossDocument.controller.reactPanel.document.getDocument() === reactPanel.document.getDocument() ? move.ids : []),
       ), crossDocument.destination);
     this.resetGesture();
     if (event.canceled || !move) {
@@ -349,26 +349,26 @@ export class PageDragController {
       let transferred = false;
       try {
         const destination = crossDocument.controller;
-        const destinationDocument = destination.panel.editor.document.getDocument();
-        if (destinationDocument === panel.editor.document.getDocument()) {
-          if (move.ids.some(id => !panel.blocks.canRemove(id))) throw new Error("Source is outside panel or protected");
+        const destinationDocument = destination.reactPanel.document.getDocument();
+        if (destinationDocument === reactPanel.document.getDocument()) {
+          if (move.ids.some(id => !reactPanel.blocks.canRemove(id))) throw new Error("Source is outside panel or protected");
           const { targetId, position } = crossDocument.placement;
-          const destinationPanel = destination.panel;
+          const destinationPanel = destination.reactPanel;
           const container = position === "inside" && targetId === destinationPanel.rootBlockId;
           if (targetId !== null && !container && (!destinationPanel.blocks.hasBlock(targetId) || (position !== "inside" && !destinationPanel.blocks.canRemove(targetId)))) throw new Error("Destination is outside panel or protected");
-          panel.document.blocks.moveBlocks(move.ids, targetId, position);
+          reactPanel.document.blocks.moveBlocks(move.ids, targetId, position);
         } else {
-          crossDocumentBlockTransfer(panel, destination.panel, move.ids, crossDocument.placement);
+          crossDocumentBlockTransfer(reactPanel, destination.reactPanel, move.ids, crossDocument.placement);
         }
         transferred = true;
       } catch {
         transferred = false;
       }
       if (transferred) {
-        panel.selection.clear();
+        reactPanel.selection.clear();
         const firstId = move.ids[0]!;
         const lastId = move.ids.at(-1)!;
-        crossDocument.controller.panel.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
+        crossDocument.controller.reactPanel.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
         requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
       }
     } else if (placement && valid) {
@@ -376,11 +376,11 @@ export class PageDragController {
       // Persisted parent constraints can reject a structural destination.
       // Refuse the drop instead of leaving an uncaught gesture error.
       try {
-        panel.blocks.moveBlocks(move.ids, targetId, position);
+        reactPanel.blocks.moveBlocks(move.ids, targetId, position);
         const selection = move.grouped && move.selection
           ? move.selection
           : createStructuralSelection([move.ids[0]!]);
-        panel.selection.set(selection);
+        reactPanel.selection.set(selection);
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));
       } catch {
         requestAnimationFrame(() => root?.focus({ preventScroll: true }));

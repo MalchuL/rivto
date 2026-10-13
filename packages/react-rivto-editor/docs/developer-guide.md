@@ -7,14 +7,18 @@ Rivto separates persisted data, document commands, and React presentation:
 | `DocumentModel` | Persisted blocks, elements, hierarchy and CRDT transactions |
 | `DocumentEditorAPI` | Document-wide commands, validation, history, portable selection and clipboard |
 | `ReactEditorApi` (`ReactEditor`) | Shared renderers, extensions, surfaces and browser infrastructure |
-| `PanelAPI` | Bounded blocks/elements, local mode, DOM selection, events, keyboard and clipboard |
+| `PanelAPI` (`ChildrenPanel` / `EmbeddingPanel`, core) | Bounded blocks/elements and independent subtree roots |
+| `ReactPanelApi` (`ReactPanel`, React) | Bounded `blocks`/`elements`, shared `editor`, local mode, DOM selection, events, keyboard, clipboard and edgeless actions |
 
 ## Shared editor and panels
 
 `createReactEditor({ editor: documentApi, extensions })` installs shared infrastructure once.
-Pass it as `<EditorPanel editor={editor}>`. `usePanel()` and event payloads return the
-nearest occurrence. Document-wide operations are explicit through `panel.document`,
-or `reactEditor.document`; rendering registrations are on `panel.editor`.
+Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; the latter extends the core contract and exposes `reactPanel.blocks` and `reactPanel.elements` directly. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
+
+Pass it as `<EditorPanel editor={editor}>`. `usePanel()` returns the bounded core panel;
+`useReactPanel()` and event payloads return its browser API. Document-wide operations
+are explicit through `usePanel().document` or `reactEditor`; rendering
+registrations are on `useReactPanel().editor`, and canvas actions on its `edgeless`.
 
 `EditorPanel` displays the children of `rootBlockId`, or document roots for null.
 `EditorEmbed` displays its required block root and descendants, protecting the root
@@ -22,15 +26,15 @@ from removal, moving, cutting and merge removal. Its text and properties remain 
 and it can be copied. Both implementations independently restrict elements using
 `rootElementId`; the container itself is excluded. There is no public scope object.
 
-`panel.blocks` and `panel.elements` expose bounded reads and editing operations.
+`panel.blocks` and `panel.elements` expose bounded reads and editing operations. `panel.subscribe(listener)` forwards the document-editor change stream, including changes outside the panel and block-definition updates. It does not emit on registration or selection changes; the returned function unsubscribes. Use the focused block and element subscriptions when a component observes only specific data. `panel.batchUpdates(callback)` groups synchronous changes into one shared document undo step; `panel.batchUpdatesWithoutHistory(callback)` runs maintenance changes without an undo entry. Both return the callback result and propagate errors without rolling back earlier writes. Nested transactions retain the outer capture policy. For components that only read or edit content, use `usePanel()`; use `useReactPanel()` for DOM interaction, selection, events, mode or presentation registrations. Read `panel.blocks.getBlockNode(id)` or `panel.elements.getElementNode(id)` inside deferred handlers to obtain current values and check that the entity still belongs to the panel before writing. Rendered hook snapshots are for rendering, not later read-modify-write operations.
 Top-level parents are null relative to the panel; DocumentEditorAPI returns actual parents.
 Outside destinations and targets are rejected before batch writes. Panel insertion uses
 `{ root: true, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
 `{ parentId: string | null, beforeId? }`. Omitted destinations append to the corresponding roots.
 
-Each panel owns its mode; pass a `ModeManager` explicitly to retain or share mode.
+Each React panel owns its mode; pass a `ModeManager` explicitly to retain or share mode.
 The shared editor and core have no mode. An extension's `setup(editor)` installs shared
-behavior; handlers receive `event.panel` or `context.panel` for local actions.
+behavior; handlers receive `event.reactPanel` or `context.reactPanel` for local actions.
 A global toolbar chooses an existing panel through `editor.panels` before executing
 DOM-dependent actions. Closing a panel releases only local subscriptions and registrations.
 
@@ -57,7 +61,7 @@ For loaded/cached documents use `await storage.acquireEditor(id)`: it returns
 Each call owns one idempotent release; the last release closes editor, core and model.
 EditorPanel never acquires an additional reference from context. EditorStorageContext is
 used by embeddings to acquire their source documents. `openCoreEditor` and
-`releaseCoreEditor` are removed; use the acquisition's `editor.document` for core operations.
+`releaseCoreEditor` are removed; use the acquisition's `editor` for core operations.
 
 ## Normal setup
 
@@ -126,7 +130,7 @@ paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
-Canvas visuals are opt-in through `edgelessVisualsExtension()`. Its categorized
+`edgelessPreset()` includes `edgelessVisualsExtension()` and its registered built-in element types. Its categorized
 picker creates shapes, text, styled stickies, brush drawings, and attached
 connectors. Exact-type multi-selections share one property panel, groups use
 progressive child entry, and canvas transforms expose snapping guides. See
@@ -202,7 +206,7 @@ editor.getParentId(id);
 ```
 
 Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.
-Use `editor.history.batchUpdates(() => { ... })` when several editor operations must
+Use `panel.batchUpdates(() => { ... })` when several panel operations must
 produce one collaborative update and one undo step.
 
 ## Rendering and subscriptions
@@ -221,7 +225,8 @@ Hooks resolve current values through public getters:
 | `useBlockTextEditing(id, content)` | Plain-text DOM binding without another subscription |
 | `useBlockSelectionAnchor(id)` | Structural selection marker and pending focus restoration |
 | `useRootBlockIds()` | Ordered root IDs |
-| `usePanel()` | Operations for the nearest rendered occurrence |
+| `usePanel()` | Bounded core operations for the nearest panel |
+| `useReactPanel()` | Browser operations for the nearest rendered occurrence |
 | `useContext(SurfaceContext)` | Current surface kind |
 | `useEditorSelection()` / selection hooks | Detached selection |
 | slash hooks | Slash-command manager |
@@ -311,7 +316,7 @@ There are two selection representations:
 
 The text-selection extension keeps them aligned. Page and edgeless extensions
 add their mode-specific whole-block gestures. Selection code should use
-`panel.selection` for DOM conversion and `editor.selection` for portable
+`reactPanel.selection` for DOM conversion and `editor.selection` for portable
 state.
 
 ## Source map
@@ -392,11 +397,11 @@ The minimum regression coverage for subscription work is:
 ## Shared document operations
 
 Use `ReactEditor` for operations on shared document managers and registrations.
-A rendered occurrence supplies it explicitly as `panel.editor`; the view
+A rendered occurrence supplies it explicitly as `reactPanel.editor`; the view
 itself no longer repeats the document API. The broad SharedEditorApi alias is
 removed. Cross-document transfer retains one local Pick of blocks, history, and
 getDocument because that algorithm also accepts a framework-neutral core editor.
-Use `PanelAPI` for occurrence-specific interaction, `ReactEditor` for
+Use `ReactPanelApi` for occurrence-specific browser interaction, `PanelAPI` for bounded core editing, `ReactEditor` for
 runtime ownership, or an existing manager contract when only that manager is needed.
 
 ## Block behavior and manager contracts
@@ -416,5 +421,6 @@ package entry point. Internal code imports them directly from their owner;
 
 The agreed sequence and implementation status are recorded in
 [`react-api-architecture-ru.md`](../../../dev_notes/react-api-architecture-ru.md).
-The first stage changes names and module ownership; merging the view implementation
-with its controller and separating registration from execution are subsequent stages.
+Core panel classes now own bounded editing; ReactPanel owns browser lifecycle.
+Element registrations live on `ReactEditor.elementTypes`, while canvas actions live
+on `ReactPanelApi.edgeless`. Extensions install behavior and no longer return a visual controller facade.

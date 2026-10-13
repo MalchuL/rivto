@@ -33,7 +33,7 @@ export class SlashCommandRegistry {
     this.commands.set(command.id, command);
     this.store.changed();
     let dispose: () => void = () => undefined;
-    dispose = extensions.own(() => {
+    dispose = extensions.registerCleanup(() => {
       if (this.registrations.get(command.id) === dispose) {
         this.registrations.delete(command.id);
       }

@@ -115,11 +115,11 @@ export class BlockReferenceResolver {
    * Multiple documents may contain the ID; use resolveBlock when ambiguity matters.
    */
   findEditorWithBlock(blockId: string): ReactEditorApi | undefined {
-    return this.storage.getEditors().filter((editor) => editor.document.blocks.hasBlock(blockId))
-      .sort((a, b) => a.document.getDocument().id.localeCompare(b.document.getDocument().id))[0];
+    return this.storage.getEditors().filter((editor) => editor.blocks.hasBlock(blockId))
+      .sort((a, b) => a.getDocument().id.localeCompare(b.getDocument().id))[0];
   }
   /** @param blockId - Document-local identity. @returns First loaded containing model in sorted document ID order, or undefined. */
-  findDocumentWithBlock(blockId: string): DocumentModel | undefined { return this.findEditorWithBlock(blockId)?.document.getDocument(); }
+  findDocumentWithBlock(blockId: string): DocumentModel | undefined { return this.findEditorWithBlock(blockId)?.getDocument(); }
 
   /** Cancels every outstanding location observer; documents remain owned by storage. */
   destroy(): void {

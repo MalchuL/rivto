@@ -43,11 +43,11 @@ export {
 } from "./extensions/built-ins/separator/separator-block";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
 export type { BulletThreadingAnchor, BulletThreadingOptions } from "./extensions/bullet-threading/bullet-threading";
-export { EdgelessVisualsExtension, edgelessPreset, edgelessSurfaceExtension, edgelessVisualsExtension, useEdgelessElementStyle } from "./extensions/edgeless";
+export { edgelessPreset, edgelessSurfaceExtension, edgelessVisualsExtension, useEdgelessElementStyle } from "./extensions/edgeless";
 export type { EdgelessPresetOptions } from "./extensions/edgeless";
 export { EdgelessSnappingStore } from "./extensions/edgeless/surface";
 export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./extensions/edgeless/surface";
-export type { ConnectorEndpoint, ConnectorEndpointStyle, ConnectorLineStyle, ConnectorRoute, ConnectorTextRotation, ConnectorVisual, CreateVisualPayload, EdgelessAlignment, EdgelessBrush, EdgelessFontOption, EdgelessReorder, EdgelessSelectionRef, EdgelessStickerOption, EdgelessVisual, EdgelessVisualCommandMap, EdgelessVisualsOptions, OrphanConnectorBehavior, StickerVisual, UpdateVisualPayload, VisualFrame, VisualGroup } from "./extensions/edgeless/visuals";
+export type { ConnectorEndpoint, ConnectorEndpointStyle, ConnectorLineStyle, ConnectorRoute, ConnectorTextRotation, ConnectorVisual, CreateVisualPayload, EdgelessAlignment, EdgelessBrush, EdgelessFontOption, EdgelessReorder, EdgelessSelectionRef, EdgelessStickerOption, EdgelessVisual, EdgelessVisualCommandMap, EdgelessVisualTool, EdgelessVisualsOptions, OrphanConnectorBehavior, StickerVisual, UpdateVisualPayload, VisualFrame, VisualGroup } from "./extensions/edgeless/visuals";
 export {
   DefaultTodoItemPropertiesModal,
   TODO_ITEM_BLOCK_TYPE,
@@ -75,7 +75,7 @@ export type {
   CreateReactEditorOptions,
   MarkdownLinkClick,
 } from "./types";
-export { isPanelAPI, isRivtoEditor } from "./utils";
+export { isReactPanelApi, isRivtoEditor } from "./utils";
 
 export {
   KANBAN_BLOCK_TYPE,
@@ -131,13 +131,19 @@ export * from "./editor/editor-storage";
 
 export { EditorPanel } from "./components/editor-panel/editor-panel";
 export type { EditorPanelProps } from "./components/editor-panel/types";
-export type { PanelBlocksAPI } from "./panels/panel-blocks-api";
-export type { PanelDestination } from "./panels/panel-destination";
-export type { PanelElementsAPI } from "./panels/panel-elements-api";
+export type { PanelBlocksAPI } from "@chulane/rivto";
+export type { PanelDestination } from "@chulane/rivto";
+export type { PanelElementsAPI } from "@chulane/rivto";
 export type { EditorStorageOptions, EditorAcquisition, ReactEditorApi } from "./editor/types";
 export { useReactEditor } from "./hooks/editor/use-react-editor";
 export type { ReactEditorState, UseReactEditorOptions } from "./hooks/editor/types";
-export type { PanelAPI } from "./types";
+export type { ReactPanelApi } from "./types";
 
 export { EditorEmbed } from "./components/editor-embed/editor-embed";
 export type { EditorEmbedProps } from "./components/editor-embed/types";
+
+export type { CreateElementInput, ElementTypesApi, ReactElementRegistration, ElementRenderProps, ElementPropertiesProps } from "./managers/elements/types";
+export type { PanelAPI } from "@chulane/rivto";
+export type { EdgelessAPI } from "./managers/elements/types";
+
+export { useEdgelessOperations } from "./extensions/edgeless/visuals/hooks/use-edgeless-operations";

@@ -11,7 +11,7 @@ import {
   isCaretSelection,
   isStructuralSelection,
 } from "@chulane/rivto";
-import type { PanelAPI } from "../../../../../panels/types";
+import type { ReactPanelApi } from "../../../../../panels/types";
 import { BUILTIN_KEYMAP, findNextEditableBlock, findPreviousEditableBlock, KEYBOARD_BINDING_IDS, resolveSelectionEndpoints, verticalCaretPosition } from "../../../../../managers";
 import { pageEntries } from "../utils/outline";
 import { navigationDomRoot, navigationOutlineBlocks } from "../utils/scope";
@@ -35,33 +35,32 @@ function isNativeControl(target: EventTarget | null): boolean {
  * @returns No value.
  */
 export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
-  const lengthOf = (id: string) => reactEditor.document.blocks.getBlockNode(id)?.content.length ?? 0;
-  const movePlain = (panel: PanelAPI, root: HTMLElement, direction: "left" | "right" | VerticalDirection, mode: EditorMode): boolean => {
-    const selection = currentNavigationSelection(panel.selection);
+  const movePlain = (reactPanel: ReactPanelApi, root: HTMLElement, direction: "left" | "right" | VerticalDirection, mode: EditorMode): boolean => {
+    const selection = currentNavigationSelection(reactPanel.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
-    const ends = resolveSelectionEndpoints(item, lengthOf);
+    const ends = resolveSelectionEndpoints(item, id => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0);
     if (!ends) return false;
     const scope = navigationDomRoot(root, ends.head.blockId);
     let handled = false;
     if (!isCaretSelection(item)) {
       const towardStart = direction === "left" || direction === "up";
-      setNavigationCaret(root, panel, textSelectionEdge(
-        panel,
-        panel,
+      setNavigationCaret(root, reactPanel, textSelectionEdge(
+        reactPanel,
+        reactPanel,
         item,
         towardStart ? "start" : "end",
       ));
       handled = true;
     } else if (direction === "left" || direction === "right") {
-      const block = panel.blocks.getBlockNode(ends.head.blockId);
+      const block = reactPanel.blocks.getBlockNode(ends.head.blockId);
       const adjacent = direction === "left" && ends.head.offset === 0
         ? findPreviousEditableBlock(scope, ends.head.blockId)
         : direction === "right" && ends.head.offset === (block?.content.length ?? -1)
           ? findNextEditableBlock(scope, ends.head.blockId)
           : null;
       if (adjacent) {
-        setNavigationCaret(root, panel, {
+        setNavigationCaret(root, reactPanel, {
           blockId: adjacent.blockId,
           offset: direction === "left" ? adjacent.content.textContent?.length ?? 0 : 0,
         });
@@ -70,7 +69,7 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     } else {
       const moved = verticalCaretPosition(scope, ends.head, direction);
       if (moved) {
-        setNavigationCaret(root, panel, moved);
+        setNavigationCaret(root, reactPanel, moved);
         handled = true;
       } else {
         handled = mode === "block" && focusAdjacentEditor(root, direction);
@@ -79,23 +78,23 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     return handled;
   };
 
-  const extendText = (panel: PanelAPI, root: HTMLElement, direction: VerticalDirection): boolean => {
-    const selection = currentNavigationSelection(panel.selection);
+  const extendText = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+    const selection = currentNavigationSelection(reactPanel.selection);
     const item = selection;
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) return false;
-    const ends = resolveSelectionEndpoints(item, lengthOf);
+    const ends = resolveSelectionEndpoints(item, id => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0);
     if (!ends) return false;
     const scope = navigationDomRoot(root, ends.head.blockId);
     const moved = verticalCaretPosition(scope, ends.head, direction);
     if (!moved) return false;
-    const outline = pageEntries(navigationOutlineBlocks(panel, ends.head.blockId)).map(({ block }) => ({
+    const outline = pageEntries(navigationOutlineBlocks(reactPanel, ends.head.blockId)).map(({ block }) => ({
       id: block.id,
       length: block.content.length,
     }));
     const next = createTextSelection(outline, ends.anchor, moved);
     if (!next) return false;
-    panel.selection.set(next);
-    panel.selection.restoreDOM();
+    reactPanel.selection.set(next);
+    reactPanel.selection.restoreDOM();
     return true;
   };
 
@@ -105,7 +104,7 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
   ) => reactEditor.keyboard.register({
     id,
     keys: BUILTIN_KEYMAP[id],
-  }, ({ panel, root, raw, mode }) => !isNativeControl(raw.target) && movePlain(panel, root, direction, mode));
+  }, ({ reactPanel, root, raw, mode }) => !isNativeControl(raw.target) && movePlain(reactPanel, root, direction, mode));
   bindPlain(KEYBOARD_BINDING_IDS.caretLeft, "left");
   bindPlain(KEYBOARD_BINDING_IDS.caretRight, "right");
   bindPlain(KEYBOARD_BINDING_IDS.caretUp, "up");
@@ -114,9 +113,9 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendUp,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendUp],
-  }, ({ panel, root, raw }) => !isNativeControl(raw.target) && extendText(panel, root, "up"));
+  }, ({ reactPanel, root, raw }) => !isNativeControl(raw.target) && extendText(reactPanel, root, "up"));
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.caretExtendDown,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.caretExtendDown],
-  }, ({ panel, root, raw }) => !isNativeControl(raw.target) && extendText(panel, root, "down"));
+  }, ({ reactPanel, root, raw }) => !isNativeControl(raw.target) && extendText(reactPanel, root, "down"));
 }

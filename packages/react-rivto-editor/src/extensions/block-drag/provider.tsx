@@ -16,7 +16,7 @@
 import { Accessibility, AutoScroller, KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useContext, useLayoutEffect, useMemo, useState } from "react";
-import { useEditorRoot, usePanel } from "../../hooks";
+import { useEditorRoot, useReactPanel } from "../../hooks";
 import { SurfaceContext } from "../../surfaces/surface";
 import { PageDragController } from "./controller";
 import { PageDragOverlay } from "./preview/overlay";
@@ -58,15 +58,15 @@ export function PageDragProvider({
   outerEdgeDropZone,
   allowChildPlacement = true,
 }: PageDragExtensionOptions) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const placements = useMemo(createDropPlacementStore, []);
   const controller = useMemo(() => new PageDragController(
-    panel, root, mode, placements, setActiveIds,
+    reactPanel, root, mode, placements, setActiveIds,
     { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement },
-  ), [panel, root, mode, placements, childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement]);
+  ), [reactPanel, root, mode, placements, childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement]);
   useLayoutEffect(() => controller.mount(), [controller]);
   // A plain sensor array replaces dnd-kit's defaults, so the keyboard sensor
   // is listed explicitly. Constraints are instantiated per activation because
@@ -78,7 +78,7 @@ export function PageDragProvider({
     KeyboardSensor.configure({ offset: KEYBOARD_STEP }),
   ], [activationDistance]);
   const activeBlocks = activeIds.flatMap((id) => {
-    const block = panel.blocks.getBlock(id);
+    const block = reactPanel.blocks.getBlock(id);
     return block ? [block] : [];
   });
 
@@ -96,7 +96,7 @@ export function PageDragProvider({
         <PageDragAutoScrollPolicy getPointer={controller.getDragPointer} />
         {children}
         <PageDragOverlay root={root} controller={controller} blocks={activeBlocks}
-          childrenVisible={(block) => panel.editor.blockListProps.childrenVisible(block)} />
+          childrenVisible={(block) => reactPanel.editor.blockListProps.childrenVisible(block)} />
       </DragDropProvider>
     </PageDragStateContext.Provider>
   );

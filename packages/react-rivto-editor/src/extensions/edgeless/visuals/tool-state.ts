@@ -1,3 +1,5 @@
+import type { EditorElementInput } from "@chulane/rivto";
+import { RevisionStore } from "../../../internal-store";
 import { DEFAULT_STICKERS } from "./presets";
 import type { EdgelessPlaceKind, EdgelessVisual, EdgelessVisualTool, PresetPayload, ToolCategory, VisualFrame } from "./types";
 import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
@@ -9,22 +11,36 @@ export const drawingDefaults = {
   marker: { stroke: "#facc15", strokeWidth: 16, opacity: .34 },
 } as const;
 
-/** Stores local creation defaults and the last tool selected in each category. */
-export class EdgelessToolState {
-  /** @param emit - Notifies the owning controller after a visible tool change. */
-  constructor(private readonly emit: () => void) {}
-
-  private currentTool: EdgelessVisualTool = { tool: "select" };
-
-  private placeSize: Pick<VisualFrame, "width" | "height"> = { ...DEFAULT_PLACE_SIZE };
-
-  readonly defaults = {
+/** Returns fresh built-in creation defaults, independent of mounted panels and session choices. */
+export function createEdgelessDefaults() {
+  return {
     shape: { fill: "#eeeaff", stroke: "#6c5ce7", strokeWidth: 2, filled: true, stroked: true, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 16, align: "center" as const, verticalAlign: "middle" as const },
     text: { color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 24, align: "left" as const, verticalAlign: "top" as const },
     sticker: { fill: "#fff2a8", color: "#3f3515", fontFamily: DEFAULT_FONT, fontSize: 22, align: "left" as const, verticalAlign: "top" as const },
     drawing: { brush: "pen" as const, ...drawingDefaults.pen },
     connector: { route: "straight" as const, stroke: "#52525b", strokeWidth: 2, opacity: 1, lineStyle: "solid" as const, startStyle: "none" as const, endStyle: "arrow" as const, text: "", textRotation: "horizontal" as const, color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 14, align: "center" as const, verticalAlign: "middle" as const },
   };
+}
+
+/**
+ * Stores local creation defaults and the last tool selected in each category.
+ *
+ * The mounted React component retains this state across surface changes. Each
+ * panel owns a separate instance; values are not persisted or recorded in undo.
+ * It owns neither document data nor DOM resources. Emitted tool changes notify
+ * subscribers synchronously; operation cleanup disconnects panel observers.
+ */
+export class EdgelessToolState {
+  private readonly store = new RevisionStore();
+  /** Observes local tool changes without an initial callback; returns an unsubscribe function. */
+  readonly subscribe = (listener: () => void): (() => void) => this.store.subscribe(listener);
+  private emit(): void { this.store.changed(); }
+
+  private currentTool: EdgelessVisualTool = { tool: "select" };
+
+  private placeSize: Pick<VisualFrame, "width" | "height"> = { ...DEFAULT_PLACE_SIZE };
+
+  readonly defaults = createEdgelessDefaults();
 
   private readonly lastByCategory: Record<ToolCategory, EdgelessVisualTool> = {
     shapes: { tool: "place", kind: "rectangle" },
@@ -50,6 +66,30 @@ export class EdgelessToolState {
   /** Remembers the final interactive drag size for the active place preset. */
   rememberPlaceSize(frame: VisualFrame): void {
     this.placeSize = { width: frame.width, height: frame.height };
+  }
+
+  /**
+   * Copies local built-in creation defaults into an element input without changing it.
+   *
+   * Custom types keep their registered defaults. An explicit drawing brush uses
+   * its preset when it differs from the panel's current brush.
+   * @param input - Registered element input before geometry and property validation.
+   * @returns A new input for built-in visuals, or the original input for custom types.
+   */
+  applyCreationDefaults(input: EditorElementInput): EditorElementInput {
+    if (!["rectangle", "ellipse", "text", "sticker", "drawing", "connector"].includes(input.type)) return input;
+    const category = input.type === "rectangle" || input.type === "ellipse" ? "shape" : input.type;
+    let defaults: Record<string, unknown> = this.defaults[category as keyof typeof this.defaults];
+    const brush = input.props?.brush;
+    if (category === "drawing" && (brush === "pencil" || brush === "pen" || brush === "marker")
+      && brush !== this.defaults.drawing.brush) {
+      defaults = { ...defaults, ...drawingDefaults[brush], brush };
+    }
+    const props = { ...defaults };
+    for (const [key, value] of Object.entries(input.props ?? {})) {
+      if (value != null || !(key in defaults)) props[key] = value;
+    }
+    return { ...input, props };
   }
 
   /** @returns Detached session defaults used by creation menus. */
@@ -120,7 +160,7 @@ export class EdgelessToolState {
   /** Activates one canvas interaction tool. */
   setTool(value: EdgelessVisualTool | "select"): void {
     const tool = value === "select" ? { tool: "select" } as const : value;
-    if (!tool || !["select", "pan", "place", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");
+    if (!tool || !["select", "pan", "place", "element", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");
     if (tool.tool === "place" && !(["rectangle", "ellipse", "text", "sticker"] as EdgelessPlaceKind[]).includes(tool.kind)) {
       throw new Error("Unsupported place kind");
     }

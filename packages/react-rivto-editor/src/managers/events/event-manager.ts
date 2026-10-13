@@ -94,7 +94,7 @@ export class EventManager {
 
     let active = true;
     let dispose: () => void = () => undefined;
-    dispose = this.extensions.own(() => {
+    dispose = this.extensions.registerCleanup(() => {
       if (!active) return;
       active = false;
       const index = this.registrations.indexOf(registration);
@@ -227,16 +227,16 @@ export class EventManager {
     const contentElement = closestContent && root.contains(closestContent)
       ? closestContent
       : null;
-    const panel = this.panels.getApi(root);
-    if (!panel) return;
+    const reactPanel = this.panels.getApi(root);
+    if (!reactPanel) return;
     return new EditorEvent({
       raw: raw as never,
-      panel,
+      reactPanel,
       root,
       // Route handlers by the receiving surface: core mode may be edgeless
       // while this event belongs to a page embedding of the same document.
       mode: this.panels.getSurfaceType(root),
-      selection: panel.selection.get(),
+      selection: reactPanel.selection.get(),
       eventTarget,
       insideRoot,
       blockElement,

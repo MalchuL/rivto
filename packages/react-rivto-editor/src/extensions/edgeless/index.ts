@@ -1,3 +1,5 @@
+import { edgelessVisualsExtension } from "./visuals/extension";
+import type { EdgelessVisualsOptions } from "./visuals/types";
 /**
  * Optional edgeless surface and interaction extension catalog.
  *
@@ -63,6 +65,8 @@ export function edgelessTransformExtension(): ReactEditorExtension {
 
 /** Options for the complete opt-in edgeless interaction preset. */
 export interface EdgelessPresetOptions {
+  /** Built-in figures and standard creation/property UI; toolbar can be disabled here. */
+  readonly visuals?: EdgelessVisualsOptions;
   /** Host-owned edgeless viewport settings. */
   readonly surface?: EdgelessSurfaceOptions;
 }
@@ -70,7 +74,8 @@ export interface EdgelessPresetOptions {
 /**
  * Creates the complete edgeless surface and block-interaction preset.
  *
- * Visual objects remain separately optional through `edgelessVisualsExtension`.
+ * Visual objects and their standard UI are installed by this preset. Individual
+ * interaction extensions remain available for hosts composing a custom editor.
  *
  * @param options - Optional surface configuration.
  * @returns Edgeless extensions in their required registration order.
@@ -82,6 +87,7 @@ export function edgelessPreset(options: EdgelessPresetOptions = {}): readonly Re
     edgelessTransformExtension(),
     edgelessDeletionExtension(),
     edgelessMovementExtension(),
+    edgelessVisualsExtension(options.visuals),
   ];
 }
 

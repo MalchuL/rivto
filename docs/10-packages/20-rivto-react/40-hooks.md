@@ -7,8 +7,14 @@
 
 ### `usePanel()`
 
+Возвращает core `PanelAPI`: `document`, `documentId`, независимые `rootBlockId` и `rootElementId`, ограниченные `blocks` и `elements`. API фиксирован на исходном документе и не следует за фокусом. Тип не открывает DOM, инструменты или локальное выделение; сам объект совпадает с результатом useReactPanel(). Вне `EditorPanel`/`EditorEmbed` выбрасывает ошибку контекста.
+
+### `useReactPanel()`
+
+`useReactPanel() === usePanel()`. React API предоставляет `editor`, `mode`, `events`, `keyboard`, `selection`, `clipboard`, `slashCommands` и `edgeless`. Через `edgeless` выполняются действия над текущим canvas-выделением; обычные чтения и изменения выполняются через core-панель.
+
 - **Аргументы:** отсутствуют.
-- **Возвращает:** stable `PanelAPI`.
+- **Возвращает:** stable `ReactPanelApi`.
 - **Исключения:** та же provider error.
 
 ### `useContext(SurfaceContext)`
@@ -23,7 +29,7 @@ Context immutable; он описывает ближайший rendered surface, 
 ### `useEditorMode()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ mode, setMode }`, текущее значение `panel.mode` и stable setter.
+- **Возвращает:** `{ mode, setMode }`, текущее значение `reactPanel.mode` и stable setter.
 - **Исключения:** та же provider error.
 
 Hook подписывается непосредственно на mode manager. Mode локален для панели; host может явно передать общий ModeManager нескольким панелям.
@@ -85,7 +91,7 @@ Text selection намеренно возвращает `null`.
 - **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-В рендере читайте `block.props`, а внутри event closures — актуальный `panel.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `reactPanel.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
 
 ### Отдельные команды и DOM
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { usePanel } from "./use-panel";
+import { useReactPanel } from "./use-react-panel";
 import type { EditorEventHandler, KeyboardEditorEvent, KeyboardEventDefinition } from "../../managers";
 
 /**
@@ -16,7 +16,7 @@ export function useKeyboardEvent(
   binding: KeyboardEventDefinition,
   listener: EditorEventHandler<KeyboardEditorEvent>,
 ): void {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const bindingRef = useRef(binding);
   const listenerRef = useRef(listener);
   bindingRef.current = binding;
@@ -25,11 +25,11 @@ export function useKeyboardEvent(
   const mode = binding.mode;
   const modeKey = Array.isArray(mode) ? mode.join("\u0000") : mode;
 
-  useEffect(() => panel.keyboard.register({
+  useEffect(() => reactPanel.keyboard.register({
     ...bindingRef.current,
     when: (event) => bindingRef.current.when?.(event) ?? true,
   }, (event) => listenerRef.current(event)), [
-    panel,
+    reactPanel,
     binding.id,
     keys,
     binding.phase,

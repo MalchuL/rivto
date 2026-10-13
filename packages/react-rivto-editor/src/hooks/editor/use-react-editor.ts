@@ -11,6 +11,9 @@ import type { ReactEditorState, UseReactEditorOptions } from "./types";
  * renders create nothing. The supplied model remains caller-owned and is never destroyed here.
  * Call once and share the returned editor among several EditorPanel components. Extensions and
  * keymap are construction settings: remount the hook's component with a new key to replace them.
+ * React components must use this hook rather than create ReactEditor instances manually,
+ * including through createReactEditor in render, useMemo, or useState initializers.
+ * Panels are created by the EditorPanel/EditorEmbed hooks; useReactPanel only reads their context.
  * @param options - Borrowed document, construction settings, and optional error reporter.
  * @returns Loading on first render or document replacement, ready after setup, or a construction error.
  */

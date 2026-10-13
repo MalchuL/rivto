@@ -105,9 +105,9 @@ resources after commit and disposes them on unmount or document replacement with
 destroying that model. Share one hook result across several editor panels. Extensions
 and keymap are creation settings; remount the owner to replace them.
 
-`ReactEditorApi.document` exposes the framework-neutral DocumentEditorAPI. Components use
-`usePanel()` to read and edit their bounded blocks/elements, selection, clipboard and
-local mode. `EditorPanel` displays children; `EditorEmbed` includes and protects
+`ReactEditorApi` extends DocumentEditorAPI and exposes its document managers directly. Components use
+`usePanel()` for bounded core blocks/elements, and `useReactPanel()` for selection,
+clipboard, local mode and typed `edgeless` actions. `EditorPanel` displays children; `EditorEmbed` includes and protects
 its root. Both support independent element roots. Custom blocks and extensions remain
 explicit through `blockExtension`, `standardPreset`, and surface selection.
 

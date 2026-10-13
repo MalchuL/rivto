@@ -29,17 +29,17 @@ export async function run(): Promise<void> {
     return block ? createElement("div", { ...attributes, key: domKey }) : null;
   }
   const render = (editorIndex: number, id: string, text: boolean, domKey = 0) => {
-    const panel = editors[editorIndex]!;
+    const reactPanel = editors[editorIndex]!;
     flushSync(() => root.render(createElement(EditorContext.Provider, {
-      value: { panel, documentId: panel.editor.document.getDocument().id },
+      value: { reactPanel, documentId: reactPanel.editor.getDocument().id },
     }, text ? createElement(Text, { id, domKey }) : createElement(Commands, { id }))));
   };
   const editable = () => host.querySelector<HTMLDivElement>("[contenteditable]")!;
   try {
     editors.forEach((editor, index) => {
-      for (const id of ["a", "b"]) editor.editor.document.blocks.insertBlock({ id, type: "paragraph", content: `${index}-${id}` });
-      const subscribe = editor.editor.document.blocks.subscribeBlockNode.bind(editor.editor.document.blocks);
-      editor.editor.document.blocks.subscribeBlockNode = (id, listener) => {
+      for (const id of ["a", "b"]) editor.editor.blocks.insertBlock({ id, type: "paragraph", content: `${index}-${id}` });
+      const subscribe = editor.editor.blocks.subscribeBlockNode.bind(editor.editor.blocks);
+      editor.editor.blocks.subscribeBlockNode = (id, listener) => {
         const counts = subscriptions[index]!;
         counts.set(id, (counts.get(id) ?? 0) + 1);
         const dispose = subscribe(id, listener);
@@ -55,15 +55,15 @@ export async function run(): Promise<void> {
     commands.setContent("Changed");
     await settle();
     check(renders === before, "writes must not render command-only consumers");
-    check(editors[0]!.editor.document.blocks.getBlockNode("a")?.content === "Changed", "commands must write");
+    check(editors[0]!.editor.blocks.getBlockNode("a")?.content === "Changed", "commands must write");
     render(0, "b", false);
     commands.setContent("Other ID");
     render(1, "b", false);
     commands.setContent("Other editor");
     oldCommands.setContent("Retained binding");
-    check(editors[0]!.editor.document.blocks.getBlockNode("a")?.content === "Retained binding", "retained commands must keep original binding");
-    check(editors[0]!.editor.document.blocks.getBlockNode("b")?.content === "Other ID", "ID change must rebind commands");
-    check(editors[1]!.editor.document.blocks.getBlockNode("b")?.content === "Other editor", "editor change must rebind commands");
+    check(editors[0]!.editor.blocks.getBlockNode("a")?.content === "Retained binding", "retained commands must keep original binding");
+    check(editors[0]!.editor.blocks.getBlockNode("b")?.content === "Other ID", "ID change must rebind commands");
+    check(editors[1]!.editor.blocks.getBlockNode("b")?.content === "Other editor", "editor change must rebind commands");
 
     render(0, "a", true);
     check(editable().textContent === "Retained binding", "mount must synchronize text");
@@ -71,16 +71,16 @@ export async function run(): Promise<void> {
     const oldElement = editable();
     render(0, "a", true, 1);
     check(editable() !== oldElement && editable().textContent === "Retained binding", "replacement DOM must synchronize unchanged text");
-    flushSync(() => editors[0]!.editor.document.blocks.updateBlock("a", { content: "External" }));
+    flushSync(() => editors[0]!.editor.blocks.updateBlock("a", { content: "External" }));
     check(editable().textContent === "External", "external command must synchronize");
     editable().dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
     editable().textContent = "入力";
-    flushSync(() => editors[0]!.editor.document.blocks.updateBlock("a", { content: "Remote during composition" }));
+    flushSync(() => editors[0]!.editor.blocks.updateBlock("a", { content: "Remote during composition" }));
     editable().dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
     check(editable().textContent === "入力", "IME must retain DOM ownership");
-    check(editors[0]!.editor.document.blocks.getBlockNode("a")?.content === "Remote during composition", "intermediate IME input must not commit");
+    check(editors[0]!.editor.blocks.getBlockNode("a")?.content === "Remote during composition", "intermediate IME input must not commit");
     flushSync(() => editable().dispatchEvent(new CompositionEvent("compositionend", { bubbles: true })));
-    check(editors[0]!.editor.document.blocks.getBlockNode("a")?.content === "入力", "composition end must commit");
+    check(editors[0]!.editor.blocks.getBlockNode("a")?.content === "入力", "composition end must commit");
     render(0, "b", true);
     check(subscriptions[0]!.get("a") === 0 && subscriptions[0]!.get("b") === 1, "ID change must release old subscription");
     render(1, "b", true);
@@ -88,9 +88,9 @@ export async function run(): Promise<void> {
     check(editable().textContent === "Other editor", "editor change must synchronize its text");
     editable().textContent = "Input after switch";
     flushSync(() => editable().dispatchEvent(new InputEvent("input", { bubbles: true })));
-    check(editors[1]!.editor.document.blocks.getBlockNode("b")?.content === "Input after switch", "input must use the new editor binding");
-    check(editors[0]!.editor.document.blocks.getBlockNode("b")?.content === "Other ID", "input must not write to the previous editor");
-    flushSync(() => editors[1]!.editor.document.blocks.removeBlock("b"));
+    check(editors[1]!.editor.blocks.getBlockNode("b")?.content === "Input after switch", "input must use the new editor binding");
+    check(editors[0]!.editor.blocks.getBlockNode("b")?.content === "Other ID", "input must not write to the previous editor");
+    flushSync(() => editors[1]!.editor.blocks.removeBlock("b"));
     check(editable() === null, "deletion must render missing snapshot");
   } finally {
     flushSync(() => root.unmount());

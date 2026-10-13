@@ -1,5 +1,5 @@
 import type { EditorBlock, EditorBlockInput, EditorBlockNode, EditorElementInput, EditorElementNode, PasteStrategy } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 
 /** Fields owned by a block converter; identity, type and children belong to clipboard. */
 export type BlockClipboardFields = Pick<EditorBlock, "content" | "props" | "listProps" | "pluginData">;
@@ -12,7 +12,7 @@ export interface ClipboardCopyContext {
   readonly operation: "copy" | "cut" | "duplicate";
   readonly sourceDocumentId: string;
   /** Omitted for document-only programmatic copy. */
-  readonly panel?: PanelAPI;
+  readonly reactPanel?: ReactPanelApi;
   /** Ordered block siblings represented by this source panel. */
   readonly rootBlockIds: readonly string[];
 }
@@ -23,7 +23,7 @@ export interface ClipboardPasteContext {
   readonly sourceDocumentId?: string;
   readonly destinationDocumentId: string;
   /** Receiving mounted panel, absent for document-only programmatic operations. */
-  readonly panel?: PanelAPI;
+  readonly reactPanel?: ReactPanelApi;
   /** Source IDs mapped to prepared destination IDs; text merge may reuse an existing block. */
   readonly blockIdMap: ReadonlyMap<string, string>;
   /** Source IDs mapped to new element IDs; omitted empty block cards have no entry. */
@@ -162,5 +162,5 @@ export interface CreatedClipboardRecords {
 /** Optional panel binding for paste algorithms that depend on a rendered surface. */
 export interface PanelPasteStrategy extends PasteStrategy {
   /** Returns an algorithm bound to the receiving occurrence, without changing registrations. */
-  createPanelStrategy(panel: PanelAPI): PasteStrategy;
+  createPanelStrategy(reactPanel: ReactPanelApi): PasteStrategy;
 }

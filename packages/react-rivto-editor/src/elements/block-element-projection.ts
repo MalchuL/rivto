@@ -1,5 +1,5 @@
-import { PanelElements } from "../panels/panel-elements";
-import type { PanelAPI } from "../panels/types";
+import { PanelElements } from "@chulane/rivto";
+import type { ReactPanelApi } from "../panels/types";
 import type { BlockElementProps } from "./types";
 /**
  * Generic projection between ordered root blocks and persisted block elements.
@@ -244,12 +244,12 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(editor: ReactEditorApi | PanelAPI, afterId: string): EditorBlock {
+export function insertBlockElementSeparator(editor: ReactEditorApi | ReactPanelApi, afterId: string): EditorBlock {
   const shared = "editor" in editor ? editor.editor : editor;
   const type = shared.blockTypes.getDefaultBlockElementSeparatorType();
   if (!type) throw new Error("No block element separator type is registered");
   if ("editor" in editor) return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.canRemove(afterId) ? editor.blocks.getInsertionDestinationAfter(afterId) : { parentId: afterId });
-  return editor.document.blocks.insertBlock({ type, content: "" }, editor.document.blocks.getInsertionDestinationAfter(afterId));
+  return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.getInsertionDestinationAfter(afterId));
 }
 
 /** Owns the document's block-card projection, settings, and deferred reconciliation. */
@@ -291,7 +291,7 @@ export class BlockElementProjection {
    */
   private availableElementId(blockId: string): string {
     const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
-    if (!this.reactEditor.document.elements.hasElement(base)) return base;
+    if (!this.reactEditor.elements.hasElement(base)) return base;
     return crypto.randomUUID();
   }
 
@@ -349,14 +349,14 @@ export class BlockElementProjection {
     // persisted canvas elements that render ranges of those roots as cards.
     // A deleted root is not an instruction to use document roots. Keep the
     // projection inactive until undo or a remote update restores its container.
-    if (this.rootBlockId !== null && !reactEditor.document.blocks.hasBlock(this.rootBlockId)) return;
-    if (this.rootElementId !== null && !reactEditor.document.elements.hasElement(this.rootElementId)) return;
-    const elements = new PanelElements(reactEditor.document.elements, reactEditor.document.getDocument(), this.rootElementId);
+    if (this.rootBlockId !== null && !reactEditor.blocks.hasBlock(this.rootBlockId)) return;
+    if (this.rootElementId !== null && !reactEditor.elements.hasElement(this.rootElementId)) return;
+    const elements = new PanelElements(reactEditor.elements, reactEditor.getDocument(), this.rootElementId);
     const rootIds = this.rootBlockId !== null
-      ? reactEditor.document.blocks.getBlockNode(this.rootBlockId)!.childIds
-      : reactEditor.document.blocks.getRootIds();
+      ? reactEditor.blocks.getBlockNode(this.rootBlockId)!.childIds
+      : reactEditor.blocks.getRootIds();
     const roots = rootIds.flatMap((id) => {
-      const node = reactEditor.document.blocks.getBlockNode(id);
+      const node = reactEditor.blocks.getBlockNode(id);
       return node ? [node] : [];
     });
     const rootOrder = roots.map((block) => block.id);
@@ -365,7 +365,7 @@ export class BlockElementProjection {
     // block scope can update the element. Fully deleted ranges can be removed.
     const existing = elements.getElementNodes().filter((element) => {
       if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) return false;
-      const parent = blockElementRoot(element, reactEditor.document.blocks);
+      const parent = blockElementRoot(element, reactEditor.blocks);
       return parent === undefined || parent === this.rootBlockId;
     });
     const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
@@ -479,7 +479,7 @@ export class BlockElementProjection {
     this.memberships = desiredMemberships;
     if (!remove.length && !insert.length && !update.length) return;
 
-    reactEditor.document.history.batchUpdatesWithoutHistory(() => {
+    reactEditor.history.batchUpdatesWithoutHistory(() => {
       remove.forEach((id) => elements.removeElementAndPromoteChildren(id));
       insert.forEach((element) => elements.insertElement(element));
       if (update.length) elements.updateElements(update);

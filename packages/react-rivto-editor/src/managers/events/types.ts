@@ -1,6 +1,6 @@
 import type { DOMEventMap, DOMEventName, DOMEventScope, DOMEventTarget } from "./dom-types";
 import type { EditorMode, Selection } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { EditorEvent } from "./editor-event";
 
 /** Callback used by DOM and keyboard event registrations. */
@@ -17,7 +17,7 @@ export interface PanelRegistration {
   /** Registers the occurrence's root without replacing another panel's root. */
   setRoot(root: HTMLElement | null): void;
   /** Owns a local registration until this occurrence is cleaned up. */
-  own(dispose: () => void): () => void;
+  registerCleanup(dispose: () => void): () => void;
 }
 
 /** Native listener options that must match before registrations can share a listener. */
@@ -46,7 +46,7 @@ export interface EditorEventInit<
   /** Original native browser event. */
   readonly raw: DOMEventMap<Target>[Type];
   /** React editor owning browser interaction and focused document capabilities. */
-  readonly panel: PanelAPI;
+  readonly reactPanel: ReactPanelApi;
   /** Root DOM element of the currently committed React surface. */
   readonly root: HTMLElement;
   /** Editor mode captured for this dispatch, supplied by the receiving panel's rendered surface. */

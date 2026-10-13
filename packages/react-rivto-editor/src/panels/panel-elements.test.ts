@@ -1,6 +1,6 @@
 const jest = (import.meta as ImportMeta & { jest: typeof globalThis.jest }).jest;
 import { createTestCoreEditor } from "../test-utils";
-import { PanelElements } from "./panel-elements";
+import { PanelElements } from "@chulane/rivto";
 
 it("restricts commands to a selected root and observes descendants entering or leaving it", async () => {
   const editor = await createTestCoreEditor();

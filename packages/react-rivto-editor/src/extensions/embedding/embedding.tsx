@@ -83,7 +83,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const ancestors = useContext(ancestryContext);
   const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
-  const ownAddress = JSON.stringify([panel.editor.document.getDocument().id, blockId]);
+  const ownAddress = JSON.stringify([panel.document.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
   const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
@@ -113,7 +113,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   return (
     <>
       {locationIsCurrent && location.ambiguous && <div role="status">Multiple documents contain this block; showing the first match.</div>}
-      {!cycle && targetBlockId && locationIsCurrent && location.documentId && source?.document.getDocument().id === location.documentId ? (
+      {!cycle && targetBlockId && locationIsCurrent && location.documentId && source && source.getDocument().id === location.documentId ? (
         <ancestryContext.Provider value={ancestry}>
           {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>

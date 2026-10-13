@@ -46,12 +46,12 @@ Defaults объединяются shallowly в registration order. Ошибка 
 
 ## `BlockManager` operations
 
-`reactEditor.document.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
+`reactEditor.blocks` — тот же core block manager. React не создаёт дополнительную forwarding facade; validation и mutations остаются в core.
 
 `prepareInput(input)` делегирует recursive preparation core `BlockManager`.
 
 `destination` задаёт реального parentId (null для document roots) и optional beforeId.
-PanelAPI принимает `{ root: true }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
+ReactPanelApi принимает `{ root: true }` для своих корней либо локальный parentId и ограничивает операции поддеревом.
 
 ### Mutation methods
 

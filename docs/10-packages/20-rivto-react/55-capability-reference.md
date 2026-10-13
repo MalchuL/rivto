@@ -1,6 +1,6 @@
 # React capability reference
 
-`ReactEditor` предоставляет общие менеджеры; `PanelAPI` предоставляет локальные операции и явный доступ к runtime. Контракты лежат рядом с реализациями. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
+`ReactEditor` предоставляет общие менеджеры; `ReactPanelApi` предоставляет локальные операции и явный доступ к runtime. Контракты лежат рядом с реализациями. Registrations, созданные внутри extension `setup`, автоматически удаляются при cleanup.
 
 Все публичные React `subscribe(listener)` capabilities используют один stream на manager и Set-семантику: разрешено несколько distinct callbacks, новый callback не заменяет старые, одинаковая function reference имеет одну effective registration, returned unsubscribe idempotent, immediate вызова нет. После notification consumer читает соответствующий `revision`/snapshot/getter. Исключения listener не перехватываются.
 
@@ -132,10 +132,10 @@ Handler errors передаются native dispatch caller. Higher `priority` в
 - `format(blocks)` → `{ plain, markdown, html }`; formatter errors propagate.
 - `parse({ html, text })` → first matched inputs или `undefined`; parser errors propagate.
 
-## `runtime.slashCommands` и `panel.slashCommands`
+## `runtime.slashCommands` и `reactPanel.slashCommands`
 
 - `register(command)` → disposer; throws для empty/duplicate ID.
 - `delete(id)` → `boolean`.
-- `panel.slashCommands.getAll(context)` → available commands в registration order; predicate errors propagate.
-- `panel.slashCommands.execute(id, context)` → `void`; throws для unknown ID и command errors.
+- `reactPanel.slashCommands.getAll(context)` → available commands в registration order; predicate errors propagate.
+- `reactPanel.slashCommands.execute(id, context)` → `void`; throws для unknown ID и command errors.
 - readonly `revision` и `subscribe(listener)` поддерживают menu rendering.

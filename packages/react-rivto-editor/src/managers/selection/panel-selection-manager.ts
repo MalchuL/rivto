@@ -8,7 +8,7 @@ import type { PendingSelectionCallback } from "./types";
  * including transitions from an empty selection back to an empty selection.
  */
 import { isStructuralSelection, type Selection, type SelectionManagerApi } from "@chulane/rivto";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { RestoreDOMSelectionOptions, PanelSelectionApi } from "./api";
 import { readEditorDOMSelection, restoreEditorDOMSelection } from "./editor-dom-selection";
 
@@ -22,17 +22,17 @@ export class PanelSelectionManager implements PanelSelectionApi {
   private contained = false;
 
   private containsSelection(selection: Selection): boolean {
-    if (selection.elements?.some((id) => !this.panel.elements.hasElement(id))) return false;
-    return selection.blocks.every(({ id }) => this.panel.blocks.hasBlock(id));
+    if (selection.elements?.some((id) => !this.reactPanel.elements.hasElement(id))) return false;
+    return selection.blocks.every(({ id }) => this.reactPanel.blocks.hasBlock(id));
   }
 
   private ownsSelection(): boolean {
-    const root = this.panel.events.getRoot();
-    if ((this.panel.editor.panels.getActiveRoot() ?? this.panel.editor.panels.getDefaultRoot()) !== root) return false;
+    const root = this.reactPanel.events.getRoot();
+    if ((this.reactPanel.editor.panels.getActiveRoot() ?? this.reactPanel.editor.panels.getDefaultRoot()) !== root) return false;
     const value = this.coreSelection.snapshot();
     if (!value) return false;
-    if (!this.panel.rootBlockId) return this.containsSelection(value);
-    const revision = this.panel.editor.document.getDocument().blocks.revision;
+    if (!this.reactPanel.rootBlockId) return this.containsSelection(value);
+    const revision = this.reactPanel.document.getDocument().blocks.revision;
     // Rows reuse the immutable snapshot; check subtree membership once per revision.
     if (value !== this.checkedSelection || revision !== this.checkedRevision) {
       this.checkedSelection = value;
@@ -50,11 +50,11 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * DOM requests capture the receiving panel's event scope and remain separate
    * by root. Removing a surface cancels its own pending work; panel teardown
    * cancels its remaining requests before shared extensions are destroyed.
-   * @param panel - Owning panel editor providing its fixed DOM occurrence.
+   * @param reactPanel - Owning panel editor providing its fixed DOM occurrence.
    * @param coreSelection - Core manager providing the document's local selection state.
    */
   constructor(
-    private readonly panel: PanelAPI,
+    private readonly reactPanel: ReactPanelApi,
     private readonly coreSelection: Omit<SelectionManagerApi, "resolveBlockSelection">,
   ) {}
 
@@ -63,7 +63,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @returns False after any effective core selection change, including explicit clearing.
    */
   get hasPendingSelectionCallback(): boolean {
-    const root = this.panel.events.getRoot();
+    const root = this.reactPanel.events.getRoot();
     return root !== null && this.pendingSelectionCallbacks.has(root);
   }
 
@@ -103,7 +103,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   delete(): void {
     if (!this.ownsSelection()) return;
     const selection = this.coreSelection.get();
-    if (selection && isStructuralSelection(selection) && selection.blocks.some(({ id }) => !this.panel.blocks.canRemove(id))) return;
+    if (selection && isStructuralSelection(selection) && selection.blocks.some(({ id }) => !this.reactPanel.blocks.canRemove(id))) return;
     this.coreSelection.delete();
   }
 
@@ -122,7 +122,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @param root - Receiving DOM occurrence; omitted to use this panel’s mounted root.
    * @returns Browser selection, or undefined outside this editor.
    */
-  readDOM(root = this.panel.events.getRoot()): Selection | undefined {
+  readDOM(root = this.reactPanel.events.getRoot()): Selection | undefined {
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
@@ -136,7 +136,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   restoreDOM(
     selection: Selection | undefined = this.get(),
     options?: RestoreDOMSelectionOptions,
-    root = this.panel.events.getRoot(),
+    root = this.reactPanel.events.getRoot(),
   ): boolean {
     return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
@@ -168,7 +168,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   scheduleIfSelectionUnchanged(
     callback: () => void,
     onCancel?: () => void,
-    events = this.panel.events,
+    events = this.reactPanel.events,
   ): () => void {
     const root = events.getRoot();
     const previous = root ? this.pendingSelectionCallbacks.get(root) : undefined;

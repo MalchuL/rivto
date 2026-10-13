@@ -10,7 +10,7 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
-import { useBlockNode, useBlockSelected, usePanel } from "../../hooks";
+import { useBlockNode, useBlockSelected, useReactPanel } from "../../hooks";
 import { BlockView } from "../block-view/block-view";
 import {
   BlockElementRefBoundary,
@@ -65,22 +65,22 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const selected = useBlockSelected(blockId);
   const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
-    (listener: () => void) => panel.editor.renderers.subscribe(listener),
-    [panel],
+    (listener: () => void) => reactPanel.editor.renderers.subscribe(listener),
+    [reactPanel],
   );
   useSyncExternalStore(
     subscribeRenderers,
-    () => panel.editor.renderers.revision,
-    () => panel.editor.renderers.revision,
+    () => reactPanel.editor.renderers.revision,
+    () => reactPanel.editor.renderers.revision,
   );
 
   if (!block) return null;
   const childIds = block.childIds;
-  const Content = panel.editor.renderers.get(block.type) ?? UnknownBlock;
+  const Content = reactPanel.editor.renderers.get(block.type) ?? UnknownBlock;
 
   return (
     <BlockWrapper
@@ -89,7 +89,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && panel.editor.blockListProps.childrenVisible(block) && (
+      {childIds.length > 0 && reactPanel.editor.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />

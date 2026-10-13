@@ -194,39 +194,39 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId),
-        execute: ({ blockId, panel }) => {
-          const block = panel.blocks.getBlock(blockId);
+        isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId),
+        execute: ({ blockId, reactPanel }) => {
+          const block = reactPanel.blocks.getBlock(blockId);
           if (!block) return;
-          const bundle = reactEditor.clipboard.copy(createStructuralSelection([blockId]), panel, "duplicate");
+          const bundle = reactEditor.clipboard.copy(createStructuralSelection([blockId]), reactPanel, "duplicate");
           if (!bundle) return;
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot = panel.events.getSurfaceType() === "edgeless" && panel.blocks.getRootIds().includes(blockId);
+          const isEdgelessRoot = reactPanel.events.getSurfaceType() === "edgeless" && reactPanel.blocks.getRootIds().includes(blockId);
           const sourceElement = isEdgelessRoot
-            ? panel.elements.getElementNodes().find((element) => element.type === "block" && blockIdsOf(element, panel.blocks.getRootIds()).includes(blockId))
+            ? reactPanel.elements.getElementNodes().find((element) => element.type === "block" && blockIdsOf(element, reactPanel.blocks.getRootIds()).includes(blockId))
             : undefined;
           let duplicateId = "";
-          panel.editor.document.history.batchUpdates(() => {
-            const afterId = isEdgelessRoot ? panel.blocks.getRootIds().at(-1)! : block.id;
+          reactPanel.batchUpdates(() => {
+            const afterId = isEdgelessRoot ? reactPanel.blocks.getRootIds().at(-1)! : block.id;
             reactEditor.clipboard.paste({
               bundle,
               textTarget: createStructuralSelection([]),
               placement: { afterId, mergeText: false },
-            }, panel, "duplicate");
-            duplicateId = panel.selection.get()?.blocks[0]?.id ?? "";
+            }, reactPanel, "duplicate");
+            duplicateId = reactPanel.selection.get()?.blocks[0]?.id ?? "";
             if (!duplicateId) return;
-            if (isEdgelessRoot) insertBlockElementSeparator(panel.editor, afterId);
-            if (isEdgelessRoot) panel.elements.insertElement({
+            if (isEdgelessRoot) insertBlockElementSeparator(reactPanel.editor, afterId);
+            if (isEdgelessRoot) reactPanel.elements.insertElement({
               type: "block",
               frame: sourceElement
                 ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
                 : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...panel.elements.getElementNodes().map((element) => element.zIndex)) + 1,
+              zIndex: Math.max(0, ...reactPanel.elements.getElementNodes().map((element) => element.zIndex)) + 1,
               props: { ...sourceElement?.props, startBlockId: duplicateId, endBlockId: duplicateId },
             });
           });
-          panel.selection.set(createStructuralSelection([duplicateId]));
+          reactPanel.selection.set(createStructuralSelection([duplicateId]));
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
@@ -235,10 +235,10 @@ export const slashCommandExtension = (options: SlashMenuPositionOptions = {}): R
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => reactEditor.document.blocks.hasBlock(blockId),
-        execute: ({ blockId, panel }) => {
-          panel.selection.set(createStructuralSelection([blockId]));
-          panel.selection.delete();
+        isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId),
+        execute: ({ blockId, reactPanel }) => {
+          reactPanel.selection.set(createStructuralSelection([blockId]));
+          reactPanel.selection.delete();
         },
       }),
     ];

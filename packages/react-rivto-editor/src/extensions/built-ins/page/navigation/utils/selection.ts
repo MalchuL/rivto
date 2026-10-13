@@ -17,7 +17,7 @@ import {
   BLOCK_ID_SELECTOR,
   PAGE_EDITOR_ROOT_SELECTOR,
 } from "../../../../../constants";
-import type { PanelAPI } from "../../../../../panels/types";
+import type { ReactPanelApi } from "../../../../../panels/types";
 import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
 import type { PanelSelectionApi } from "../../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../../surfaces/page/page-virtualization-controller";
@@ -43,31 +43,31 @@ export function currentNavigationSelection(
  * Publishes and focuses one caret position.
  *
  * @param root - Active editor root.
- * @param panel - Owning editor view.
+ * @param reactPanel - Owning editor view.
  * @param position - Target portable position.
  * @returns No value.
  */
 export function setNavigationCaret(
   root: HTMLElement,
-  panel: PanelAPI,
+  reactPanel: ReactPanelApi,
   position: EditorPosition,
 ): void {
-  panel.selection.set(createCaretSelection(position.blockId, position.offset));
+  reactPanel.selection.set(createCaretSelection(position.blockId, position.offset));
   focusBlock(root, position.blockId, position.offset);
 }
 
 /**
  * Resolves the document-order edge of a text selection.
  *
- * @param panel - Owning editor view.
+ * @param reactPanel - Owning editor view.
  * @param editor - Core editor API.
  * @param selection - Text-like portable selection.
  * @param edge - Requested logical edge.
  * @returns Position at that edge.
  */
 export function textSelectionEdge(
-  panel: PanelAPI,
-  editor: PanelAPI | DocumentEditorAPI,
+  reactPanel: ReactPanelApi,
+  editor: ReactPanelApi | DocumentEditorAPI,
   selection: Selection,
   edge: "start" | "end",
 ): EditorPosition {
@@ -80,7 +80,7 @@ export function textSelectionEdge(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => !panel.editor.blockListProps.childrenVisible(block),
+    (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

@@ -51,7 +51,7 @@ runtime ради владения регистрациями.
 - BlockViewBehavior → BlockBehavior.
 - BaseBlockView → DefaultBlockBehavior.
 - DocumentViewRegistry → EditorViewRegistry.
-- ReactSelectionManager → ViewSelectionManager.
+- ReactSelectionManager → PanelSelectionManager.
 - DocumentEditor, EditorView, EditorViewApi и EditorViewController сохраняют имена.
 
 Не переименовывать React-компонент BlockView только из-за совпадения слова view:
@@ -60,10 +60,10 @@ runtime ради владения регистрациями.
 
 ### 4. Регистрация и выполнение
 
-Разделить ClipboardFormatRegistry (parsers/formatters) и ViewClipboardManager
+Разделить ClipboardFormatRegistry (parsers/formatters) и PanelClipboardManager
 (copy/cut/paste). Расположение общих paste strategies определить при переносе,
 сохранив существующий pipeline и привязку стратегии к отображению.
-SlashCommandRegistry хранит определения, ViewSlashCommandManager проверяет
+SlashCommandRegistry хранит определения, PanelSlashCommandManager проверяет
 доступность и выполняет команды для своего отображения.
 
 Runtime регистрирует поведение; обработчики действуют через полученный editorView.
@@ -164,7 +164,7 @@ DOM/selection, медиану и диапазон. Не ослаблять бю�
 - `src/views/` перенесён в `src/block-behaviors/`: это алгоритмы и политики,
   а `blocks/block-view` по-прежнему содержит React-компонент отображения.
   Registry и его контракт принадлежат `managers/blocks/`.
-- EditorViewRegistry и ViewSelectionManager получили согласованные имена.
+- EditorViewRegistry и PanelSelectionManager получили согласованные имена.
 - Контракты из capabilities.ts разделены на 12 файлов рядом с владельцами;
   суффикс Capability заменён на Api. Все существующие описания методов сохранены.
   capabilities.ts остаётся только публичным реэкспортом. Внутренние импорты идут
@@ -219,7 +219,7 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
   `editorView.runtime.blocks`, `.history`, `.surfaces` и остальные менеджеры.
   `editorView.selection`, `.clipboard`, `.slashCommands`, `.events`, `.keyboard`
   сохраняют конкретное отображение при смене фокуса.
-- Selection закрыт интерфейсом ViewSelectionApi. Cleanup недоступен через этот
+- Selection закрыт интерфейсом PanelSelectionApi. Cleanup недоступен через этот
   контракт. Контроллер отменяет DOM-задачи до завершения extension lifecycle.
 - При StrictMode remount идентичность контроллера сохраняется; selection adapter
   пересоздаётся, старые DOM-задачи и локальные регистрации отменяются. Snapshot
@@ -233,14 +233,14 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
 
 - ClipboardFormatRegistry хранит formatters/parsers в `runtime.clipboardFormats`.
   Общие стратегии доступны через `runtime.pasteStrategies`.
-  ViewClipboardManager предоставляет только copy/copyText/cut/paste.
+  PanelClipboardManager предоставляет только copy/copyText/cut/paste.
   Небольшой ClipboardManager сохраняет общую интеграцию с core clipboard и
   транзакционным paste pipeline; он больше не хранит форматтеры или parsers.
   Его paste требует явный editorView, создаёт независимый pipeline для вызова
   и сохраняет destination даже при вложенной вставке. Core coordinator наружу
   для этого не раскрывается, алгоритм core paste не копируется.
 - SlashCommandRegistry хранит определения и предоставляет register/delete/get/getAll.
-  ViewSlashCommandManager проверяет доступность и выполняет команду с собственным
+  PanelSlashCommandManager проверяет доступность и выполняет команду с собственным
   editorView. У локального API нет register/delete; у registry нет execute.
 - DOMEventListeners отвечает за группировку и подключение native listeners.
   EventManager оставляет registration, filtering, event construction и dispatch.

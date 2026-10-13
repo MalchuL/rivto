@@ -4,28 +4,28 @@ import { createTestCoreEditor as createEditor, createTestReactEditor as createRe
 describe("PanelSelectionManager", () => {
   test("reports pending restoration only for the current DOM root", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
       requestAnimationFrame: () => 1,
       cancelAnimationFrame: () => {},
     } } }) as unknown as HTMLElement;
     let currentRoot = root;
-    panel.events.getRoot = () => currentRoot;
-    const cancel = panel.selection.scheduleIfSelectionUnchanged(() => {});
-    expect(panel.selection.hasPendingSelectionCallback).toBe(true);
+    reactPanel.events.getRoot = () => currentRoot;
+    const cancel = reactPanel.selection.scheduleIfSelectionUnchanged(() => {});
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(true);
     currentRoot = {} as HTMLElement;
-    expect(panel.selection.hasPendingSelectionCallback).toBe(false);
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(false);
     currentRoot = root;
-    expect(panel.selection.hasPendingSelectionCallback).toBe(true);
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(true);
     cancel();
-    expect(panel.selection.hasPendingSelectionCallback).toBe(false);
-    panel.editor.destroy();
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(false);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
   test.each(["block", "edgeless"] as const)("keeps only the newest callback when cancellation schedules work in %s", async (mode) => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    panel.mode.set(mode);
+    const reactPanel = createReactEditor({ editor });
+    reactPanel.mode.set(mode);
     const frames = new Map<number, FrameRequestCallback>();
     let nextFrame = 0;
     const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
@@ -35,12 +35,12 @@ describe("PanelSelectionManager", () => {
       },
       cancelAnimationFrame: (frame: number) => { frames.delete(frame); },
     } } }) as unknown as HTMLElement;
-    panel.events.getRoot = () => root;
+    reactPanel.events.getRoot = () => root;
     const calls: string[] = [];
-    const oldCancel = panel.selection.scheduleIfSelectionUnchanged(() => { calls.push("old"); }, () => {
-      panel.selection.scheduleIfSelectionUnchanged(() => { calls.push("newest"); });
+    const oldCancel = reactPanel.selection.scheduleIfSelectionUnchanged(() => { calls.push("old"); }, () => {
+      reactPanel.selection.scheduleIfSelectionUnchanged(() => { calls.push("newest"); });
     });
-    const outerCancel = panel.selection.scheduleIfSelectionUnchanged(() => { calls.push("outer"); }, () => {
+    const outerCancel = reactPanel.selection.scheduleIfSelectionUnchanged(() => { calls.push("outer"); }, () => {
       calls.push("outer cancelled");
     });
     // Cleanup may schedule newer work; stale handles must leave that work intact.
@@ -48,11 +48,11 @@ describe("PanelSelectionManager", () => {
     expect(calls).toEqual(["outer cancelled"]);
     oldCancel();
     outerCancel();
-    expect(panel.selection.hasPendingSelectionCallback).toBe(true);
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(true);
     for (const callback of frames.values()) callback(0);
     expect(calls).toEqual(["outer cancelled", "newest"]);
-    expect(panel.selection.hasPendingSelectionCallback).toBe(false);
-    panel.editor.destroy();
+    expect(reactPanel.selection.hasPendingSelectionCallback).toBe(false);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -62,13 +62,13 @@ describe("PanelSelectionManager", () => {
       const editor = await createEditor();
       const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
       const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }).id;
-      const panel = createReactEditor({ editor });
+      const reactPanel = createReactEditor({ editor });
       let frame: FrameRequestCallback | undefined;
       const root = Object.assign(new EventTarget(), { ownerDocument: { defaultView: {
         requestAnimationFrame: (callback: FrameRequestCallback) => { frame = callback; return 1; },
         cancelAnimationFrame: () => { frame = undefined; },
       } } }) as unknown as HTMLElement;
-      panel.events.getRoot = () => root;
+      reactPanel.events.getRoot = () => root;
       editor.selection.set(createCaretSelection(first, 1));
       if (change === "empty-away-and-back") editor.selection.clear();
       let restorationCount = 0;
@@ -77,11 +77,11 @@ describe("PanelSelectionManager", () => {
       const onCancel = () => {
         cancellationCount++;
         // Manager cleanup must run while extension-owned dependencies are usable.
-        panel.editor.extensions.install({ id: "cleanup-check", setup: () => undefined })();
+        reactPanel.editor.extensions.install({ id: "cleanup-check", setup: () => undefined })();
       };
       // The counter stands in for caret/selection work to verify invocation and cancellation.
-      const cancel = panel.selection.scheduleIfSelectionUnchanged(callback, onCancel);
-      expect(panel.selection.hasPendingSelectionCallback).toBe(true);
+      const cancel = reactPanel.selection.scheduleIfSelectionUnchanged(callback, onCancel);
+      expect(reactPanel.selection.hasPendingSelectionCallback).toBe(true);
       if (change === "replace" || change === "away-and-back") editor.selection.set(createCaretSelection(second, 0));
       if (change === "clear") editor.selection.clear();
       if (change === "empty-away-and-back") {
@@ -97,13 +97,13 @@ describe("PanelSelectionManager", () => {
         Object.assign(root, { contains: () => false });
         root.dispatchEvent(Object.assign(new Event("focusout"), { relatedTarget: new EventTarget() }));
       }
-      if (change === "destroy") panel.editor.destroy();
+      if (change === "destroy") reactPanel.editor.destroy();
       frame?.(0);
       expect(restorationCount).toBe(change === "equivalent" ? 1 : 0);
       expect(cancellationCount).toBe(change === "equivalent" ? 0 : 1);
-      expect(panel.selection.hasPendingSelectionCallback).toBe(false);
+      expect(reactPanel.selection.hasPendingSelectionCallback).toBe(false);
       cancel();
-      panel.editor.destroy();
+      reactPanel.editor.destroy();
       editor.destroy();
       expect(cancellationCount).toBe(change === "equivalent" ? 0 : 1);
     },
@@ -112,24 +112,24 @@ describe("PanelSelectionManager", () => {
   test("delegates text deletion and whole-block selection to core", async () => {
     const editor = await createEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter" }).id;
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const text = createTextSelection(
       [{ id, length: 11 }],
       { blockId: id, offset: 6 },
       { blockId: id, offset: 0 },
     )!;
-    panel.selection.set(text);
-    expect(panel.selection.get()).toEqual(editor.selection.get());
-    panel.selection.delete();
+    reactPanel.selection.set(text);
+    expect(reactPanel.selection.get()).toEqual(editor.selection.get());
+    reactPanel.selection.delete();
     expect(editor.blocks.getBlockNode(id)?.content).toBe("After");
-    expect(panel.selection.get()).toMatchObject({
+    expect(reactPanel.selection.get()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 0, end: 0 }],
     });
     editor.history.undo();
     expect(editor.blocks.getBlockNode(id)?.content).toBe("BeforeAfter");
     const block = createStructuralSelection([id]);
-    panel.selection.set(block);
+    reactPanel.selection.set(block);
     expect(editor.selection.get()).toMatchObject({
       type: "selection",
       blocks: [{ id, start: 0, end: -1 }],
@@ -137,16 +137,16 @@ describe("PanelSelectionManager", () => {
       focusBlockId: id,
     });
     editor.selection.clear();
-    expect(panel.selection.get()).toBeUndefined();
-    panel.editor.destroy();
+    expect(reactPanel.selection.get()).toBeUndefined();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("shares text editing with core and tolerates a missing active surface", async () => {
     const editor = await createEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "text" }).id;
-    const panel = createReactEditor({ editor });
-    const manager = panel.selection;
+    const reactPanel = createReactEditor({ editor });
+    const manager = reactPanel.selection;
     const selection = createCaretSelection(id, 1);
 
     manager.set(selection);
@@ -163,7 +163,7 @@ describe("PanelSelectionManager", () => {
     expect(manager.restoreDOM()).toBe(false);
     manager.clear();
     expect(editor.selection.get()).toBeUndefined();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

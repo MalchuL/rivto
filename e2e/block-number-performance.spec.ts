@@ -34,7 +34,7 @@ for (const repeat of [0, 200]) {
         if (selector === "[data-block-content]") runtime.__contentQueries += 1;
         return query.call(this, selector);
       } as typeof query;
-      const blocks = runtime.__rivtoDemo.reactEditor.document.blocks;
+      const blocks = runtime.__rivtoDemo.reactEditor.blocks;
       const getBlocks = blocks.getBlocks.bind(blocks);
       runtime.__outlineReads = 0;
       blocks.getBlocks = () => {

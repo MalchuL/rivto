@@ -1,6 +1,7 @@
-import { usePanel } from "../hooks/editor/use-panel";
-import type { PanelAPI } from "../panels/types";
-import { EditorEmbed } from "../components/editor-embed/editor-embed";
+import { TestPanel } from "../test-utils";
+import { ReactPanel } from "../panels/react-panel";
+import { useReactPanel } from "../hooks/editor/use-react-panel";
+import type { ReactPanelApi } from "../panels/types";
 import { BroadcastChannelProvider, YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
 import {
@@ -12,8 +13,8 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 import { BlockWrapper, type BlockShellProps, type BlockWrapperProps } from "../blocks";
 import { EditorPanel } from "../components/editor-panel/editor-panel";
-import { ChildrenPanel } from "../panels/children-panel";
-import { EmbeddingPanel } from "../panels/embedding-panel";
+import { ChildrenPanel } from "@chulane/rivto";
+import { EmbeddingPanel } from "@chulane/rivto";
 import { EditorStorage } from "../editor/editor-storage";
 import { EditorStorageContext } from "../editor/editor-storage-context";
 import { createReactEditor as createRuntime } from "../editor/react-editor";
@@ -27,7 +28,7 @@ import { edgelessPreset } from "../extensions/edgeless";
 import { EditorEvent, EventManager, KeyboardEditorEvent, KeyboardManager, type ReactEditorExtension } from "../managers";
 import { PageSurface } from "../surfaces/page/page-surface";
 import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor, createTestMultiEditor } from "../test-utils";
-import { isPanelAPI, isRivtoEditor } from "../utils";
+import { isReactPanelApi, isRivtoEditor } from "../utils";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
 const EmptyComponent: ComponentType = () => null;
@@ -38,30 +39,34 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
   children,
 }) => children;
 
-describe("PanelAPI", () => {
+describe("ReactPanelApi", () => {
   test("components select document roots, children or the protected embedded root", async () => {
     const core = await createEditor();
     const editor = createRuntime({ editor: core, extensions: [standardPreset()] });
     const root = core.blocks.insertBlock({ type: "paragraph", content: "Parent", children: [{ type: "paragraph", content: "Child" }] });
-    let current: PanelAPI | undefined;
-    function Probe() { current = usePanel(); return null; }
+    const documentPanel = new ReactPanel(editor, new ChildrenPanel(editor));
+    const childrenPanel = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: root.id }));
+    const embeddedPanel = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: root.id }));
+    const missingPanel = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: "not-loaded" }));
+    let current: ReactPanelApi | undefined;
+    function Probe() { current = useReactPanel(); return null; }
     try {
-      renderToStaticMarkup(createElement(EditorPanel, { editor }, createElement(Probe)));
+      renderToStaticMarkup(createElement(TestPanel, { panel: documentPanel }, createElement(Probe)));
       expect(current!.blocks.getRootIds()).toEqual([root.id]);
       expect(current!.blocks.canRemove(root.id)).toBe(true);
-      renderToStaticMarkup(createElement(EditorPanel, { editor, rootBlockId: root.id }, createElement(Probe)));
+      renderToStaticMarkup(createElement(TestPanel, { panel: childrenPanel }, createElement(Probe)));
       expect(current!.blocks.getRootIds()).toEqual([root.children[0]!.id]);
       expect(current!.blocks.hasBlock(root.id)).toBe(false);
-      const childrenMarkup = renderToStaticMarkup(createElement(EditorPanel, { editor, rootBlockId: root.id }, createElement(PageSurface)));
+      const childrenMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: childrenPanel }, createElement(PageSurface)));
       expect(childrenMarkup).toContain('data-page-end-slot="true"');
-      renderToStaticMarkup(createElement(EditorEmbed, { editor, rootBlockId: root.id }, createElement(Probe)));
+      renderToStaticMarkup(createElement(TestPanel, { panel: embeddedPanel }, createElement(Probe)));
       expect(current!.blocks.getRootIds()).toEqual([root.id]);
       expect(current!.blocks.canRemove(root.id)).toBe(false);
-      const embedMarkup = renderToStaticMarkup(createElement(EditorEmbed, { editor, rootBlockId: root.id }, createElement(PageSurface)));
+      const embedMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: embeddedPanel }, createElement(PageSurface)));
       expect(embedMarkup).not.toContain('data-page-end-slot="true"');
-      const missingMarkup = renderToStaticMarkup(createElement(EditorEmbed, { editor, rootBlockId: "not-loaded" }, createElement(PageSurface)));
+      const missingMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: missingPanel }, createElement(PageSurface)));
       expect(missingMarkup).not.toContain('data-page-end-slot="true"');
-    } finally { editor.destroy(); await core.destroy(); }
+    } finally { [documentPanel, childrenPanel, embeddedPanel, missingPanel].forEach(panel => panel.destroy()); editor.destroy(); await core.destroy(); }
   });
 
   test("nested panels inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
@@ -69,19 +74,23 @@ describe("PanelAPI", () => {
     const second = await createTestMultiEditor([new DocumentModelImpl(new YjsDoc("shared"))]);
     const a = first.getEditor("shared")!;
     const b = second.getEditor("shared")!;
-    a.document.blocks.insertBlock({ id: "same", type: "paragraph", content: "First user" });
-    b.document.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second user" });
+    a.blocks.insertBlock({ id: "same", type: "paragraph", content: "First user" });
+    b.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second user" });
+    const outer = new ReactPanel(a, new ChildrenPanel(a));
+    const nested = new ReactPanel(a, new EmbeddingPanel(a, { rootBlockId: "same" }));
+    const independent = new ReactPanel(b, new ChildrenPanel(b));
     function Source() {
       const storage = useContext(EditorStorageContext);
-      return storage?.getEditor("shared")?.document.blocks.getBlockNode("same")?.content;
+      return storage?.getEditor("shared")?.blocks.getBlockNode("same")?.content;
     }
     const markup = renderToStaticMarkup(createElement(EditorStorageContext.Provider, { value: first },
-      createElement(EditorPanel, { editor: a }, createElement(EditorEmbed, { editor: a, rootBlockId: "same" }, createElement(Source))),
-      createElement(EditorStorageContext.Provider, { value: second }, createElement(EditorPanel, { editor: b }, createElement(Source))),
-      createElement(EditorPanel, { editor: a }, createElement(Source)),
+      createElement(TestPanel, { panel: outer }, createElement(TestPanel, { panel: nested }, createElement(Source))),
+      createElement(EditorStorageContext.Provider, { value: second }, createElement(TestPanel, { panel: independent }, createElement(Source))),
+      createElement(TestPanel, { panel: outer }, createElement(Source)),
     ));
     expect(markup).toBe("First userSecond userFirst user");
-    expect(a.document.getDocument()).not.toBe(b.document.getDocument());
+    expect(a.getDocument()).not.toBe(b.getDocument());
+    [outer, nested, independent].forEach(panel => panel.destroy());
     await first.destroy(); await second.destroy();
   });
 
@@ -90,57 +99,58 @@ describe("PanelAPI", () => {
     const source = new DocumentModelImpl(new YjsDoc("bound-source"));
     const replacement = new DocumentModelImpl(new YjsDoc("bound-replacement"));
     const mediator = await createTestMultiEditor([host, source, replacement]);
-    const editor = (await mediator.acquireEditor(host.id)).editor.document;
+    const editor = (await mediator.acquireEditor(host.id)).editor;
     const reactEditor = mediator.getEditor(host.id)!;
     editor.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Host" });
     source.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Source" });
     replacement.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Replacement" });
-    const hostPanel = new ChildrenPanel(reactEditor);
+    const hostPanel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor, {  }), {  });
     hostPanel.mode.set("edgeless");
     const sourceEditor = mediator.getEditor(source.id)!;
-    const controller = new EmbeddingPanel(sourceEditor, { rootBlockId: "shared-id",  });
-    const closePanel = controller.mount();
-    const panel = controller.getSnapshot().api!;
-    expect(panel.editor.renderers).toBe(sourceEditor.renderers);
-    expect(panel.events).not.toBe(sourceEditor.events);
+    const controller = new ReactPanel(sourceEditor, new EmbeddingPanel(sourceEditor, { rootBlockId: "shared-id" }), {  });
+    const closePanel = controller.destroy;
+    const reactPanel = controller.getSnapshot().api!;
+    expect(reactPanel.editor.renderers).toBe(sourceEditor.renderers);
+    expect(reactPanel.events).not.toBe(sourceEditor.events);
     expect("getView" in sourceEditor).toBe(false);
-    expect(panel.editor.document.blocks).toBe(sourceEditor.document.blocks);
-    expect(panel.mode).not.toBe(hostPanel.mode);
-    expect(panel.mode.get()).toBe("block");
+    expect(reactPanel.editor.blocks).toBe(sourceEditor.blocks);
+    expect(reactPanel.mode).not.toBe(hostPanel.mode);
+    expect(reactPanel.mode.get()).toBe("block");
     expect(editor).not.toHaveProperty("mode");
     expect(hostPanel.mode.get()).toBe("edgeless");
     const changes: string[] = [];
-    const unsubscribe = panel.editor.document.blocks.subscribeBlockNode("shared-id", () => {
-      changes.push(panel.editor.document.blocks.getBlockNode("shared-id")!.content);
+    const unsubscribe = reactPanel.editor.blocks.subscribeBlockNode("shared-id", () => {
+      changes.push(reactPanel.editor.blocks.getBlockNode("shared-id")!.content);
     });
     // Retain an ordinary manager method across an await and another document receiving focus.
-    const update = panel.editor.document.blocks.updateBlock.bind(panel.editor.document.blocks);
+    const update = reactPanel.editor.blocks.updateBlock.bind(reactPanel.editor.blocks);
     await Promise.resolve();
     const replacementPanel = mediator.getEditor(replacement.id)!;
-    replacementPanel.document.blocks.updateBlock("shared-id", { content: "Replacement" });
-    expect(panel.editor.document.getDocument()).toBe(source);
-    expect(panel.editor.document.blocks.getRootIds()).toEqual(["shared-id"]);
-    const result = panel.editor.document.history.batchUpdates(() => {
+    replacementPanel.blocks.updateBlock("shared-id", { content: "Replacement" });
+    expect(reactPanel.editor.getDocument()).toBe(source);
+    expect(reactPanel.editor.blocks.getRootIds()).toEqual(["shared-id"]);
+    const result = reactPanel.editor.history.batchUpdates(() => {
       update("shared-id", { content: "Edited source" });
-      panel.editor.document.blocks.setBlockProp("shared-id", "checked", true);
+      reactPanel.editor.blocks.setBlockProp("shared-id", "checked", true);
       return "source transaction";
     });
     expect(result).toBe("source transaction");
     expect(changes).toContain("Edited source");
     expect(replacement.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
     expect(source.blocks.getBlockNode("shared-id")!.props.checked).toBe(true);
-    replacementPanel.document.blocks.updateBlock("shared-id", { content: "Replacement" });
-    panel.editor.document.history.undo();
+    replacementPanel.blocks.updateBlock("shared-id", { content: "Replacement" });
+    reactPanel.editor.history.undo();
     expect(source.blocks.getBlockNode("shared-id")).toMatchObject({ content: "Source", props: {} });
-    panel.editor.document.history.redo();
+    reactPanel.editor.history.redo();
     expect(source.blocks.getBlockNode("shared-id")!.content).toBe("Edited source");
-    expect(() => panel.editor.document.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
-    expect(replacementPanel.document.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
+    expect(() => reactPanel.editor.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
+    expect(replacementPanel.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
     const count = changes.length;
     unsubscribe();
     update("shared-id", { content: "After unsubscribe" });
     expect(changes).toHaveLength(count);
     closePanel();
+    hostPanel.destroy();
     reactEditor.destroy();
     await mediator.destroy();
   });
@@ -150,13 +160,13 @@ describe("PanelAPI", () => {
     const editors = new EditorStorage({ openDocument: (id) => storage.openDocument(id), createEditor: (editor) => createRuntime({ editor, extensions: [standardPreset()] }) });
     expect(editors.getDocuments()).toEqual([]);
     storage.registerDocument("first");
-    const core = (await editors.acquireEditor("first")).editor.document;
+    const core = (await editors.acquireEditor("first")).editor;
     core.blocks.insertBlock({ id: "first", type: "paragraph", content: "First document" });
     const reactEditor = editors.getEditor("first")!;
-    expect(reactEditor.document.blocks).toBe(core.blocks);
+    expect(reactEditor.blocks).toBe(core.blocks);
     expect("openCoreEditor" in reactEditor).toBe(false);
-    expect(reactEditor.document.getDocument()).toBe(core.getDocument());
-    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: reactEditor }, createElement(PageSurface)))).toContain("First document");
+    expect(reactEditor.getDocument()).toBe(core.getDocument());
+    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: reactEditor }, createElement(PageSurface)))).toContain("Loading document…");
     await editors.destroy(); await storage.destroy();
   });
 
@@ -174,35 +184,35 @@ describe("PanelAPI", () => {
     const first = firstRuntime;
     const second = secondRuntime;
     let firstUpdates = 0; let secondUpdates = 0;
-    first.document.subscribe(() => { firstUpdates += 1; });
-    second.document.subscribe(() => { secondUpdates += 1; });
-    const sharedId = first.document.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
-    for (let attempt = 0; attempt < 100 && !second.document.blocks.hasBlock(sharedId); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(second.document.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
+    first.subscribe(() => { firstUpdates += 1; });
+    second.subscribe(() => { secondUpdates += 1; });
+    const sharedId = first.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
+    for (let attempt = 0; attempt < 100 && !second.blocks.hasBlock(sharedId); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(second.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
     expect(firstUpdates).toBeGreaterThan(0); expect(secondUpdates).toBeGreaterThan(0);
     secondRuntime.destroy(); await secondCore.destroy();
     const stopped = secondUpdates;
-    const survivingId = first.document.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
-    expect(first.document.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
+    const survivingId = first.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
+    expect(first.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
     expect(secondUpdates).toBe(stopped);
     firstRuntime.destroy(); await firstCore.destroy();
   });
 
   test("distinguishes React and core editor runtimes", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
 
-    expect(isPanelAPI(panel)).toBe(true);
-    expect(isPanelAPI(panel.editor)).toBe(false);
-    expect(isRivtoEditor(panel)).toBe(false);
-    expect(isPanelAPI(editor)).toBe(false);
+    expect(isReactPanelApi(reactPanel)).toBe(true);
+    expect(isReactPanelApi(reactPanel.editor)).toBe(false);
+    expect(isRivtoEditor(reactPanel)).toBe(false);
+    expect(isReactPanelApi(editor)).toBe(false);
     expect(isRivtoEditor(editor)).toBe(true);
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
-  test("passes the complete PanelAPI runtime directly to extension setup", async () => {
+  test("passes the complete ReactPanelApi runtime directly to extension setup", async () => {
     const editor = await createEditor();
     let received: ReactEditorApi | undefined;
     const reactEditor = createRuntime({
@@ -241,8 +251,8 @@ describe("PanelAPI", () => {
         return () => calls.push(`cleanup:${id}`);
       },
     });
-    const panel = createReactEditor({ editor, extensions: [extension("a"), extension("b")] });
-    panel.editor.destroy();
+    const reactPanel = createReactEditor({ editor, extensions: [extension("a"), extension("b")] });
+    reactPanel.editor.destroy();
     editor.destroy();
     expect(calls).toEqual(["setup:a", "setup:b", "cleanup:b", "cleanup:a"]);
   });
@@ -258,20 +268,20 @@ describe("PanelAPI", () => {
 
   test("registers and disposes a model, renderer, and slash conversion atomically", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const dispose = panel.editor.blockTypes.register({
+    const reactPanel = createReactEditor({ editor });
+    const dispose = reactPanel.editor.blockTypes.register({
       definition: { type: "test.card", title: "Card" },
       render: Empty,
       slashCommand: { title: "Card" },
     });
     expect(editor.blockRegistry.has("test.card")).toBe(true);
-    expect(panel.editor.renderers.get("test.card")).toBe(Empty);
+    expect(reactPanel.editor.renderers.get("test.card")).toBe(Empty);
     const paragraphId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(panel.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
+    expect(reactPanel.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
     dispose();
     expect(editor.blockRegistry.has("test.card")).toBe(false);
-    expect(panel.editor.renderers.get("test.card")).toBeUndefined();
-    panel.editor.destroy();
+    expect(reactPanel.editor.renderers.get("test.card")).toBeUndefined();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -281,9 +291,9 @@ describe("PanelAPI", () => {
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
     }).id;
-    const panel = createReactEditor({ editor, extensions: [standardPreset()] });
+    const reactPanel = createReactEditor({ editor, extensions: [standardPreset()] });
 
-    expect(panel.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
+    expect(reactPanel.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
       expect.arrayContaining([
         "list.list",
         "list.numbered_list",
@@ -291,11 +301,11 @@ describe("PanelAPI", () => {
         "list.continue_numbered_list",
       ]),
     );
-    panel.slashCommands.execute("list.start_numbered_list", { blockId });
+    reactPanel.slashCommands.execute("list.start_numbered_list", { blockId });
     expect(editor.blocks.getBlockNode(blockId)).toMatchObject({
       listProps: { type: "start_numbered_list", checked: false },
     });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -303,12 +313,12 @@ describe("PanelAPI", () => {
     const editor = await createEditor();
     editor.blockRegistry.defineBlock({ type: "test.source" });
     const blockId = editor.blocks.insertBlock({ type: "test.source" }).id;
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [standardPreset({ writing: { slashCommand: { group: "Writing" } } })],
     });
 
-    expect(panel.slashCommands.getAll({ blockId })).toEqual(
+    expect(reactPanel.slashCommands.getAll({ blockId })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "type.paragraph",
@@ -318,29 +328,29 @@ describe("PanelAPI", () => {
         }),
       ]),
     );
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("rolls block registration back when its slash command conflicts", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const releaseConflict = panel.editor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
-    expect(() => panel.editor.blockTypes.register({
+    const reactPanel = createReactEditor({ editor });
+    const releaseConflict = reactPanel.editor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
+    expect(() => reactPanel.editor.blockTypes.register({
       definition: { type: "test.conflict" },
       render: Empty,
       slashCommand: { title: "Conflict" },
     })).toThrow(/already registered/);
     expect(editor.blockRegistry.has("test.conflict")).toBe(false);
-    expect(panel.editor.renderers.get("test.conflict")).toBeUndefined();
+    expect(reactPanel.editor.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keeps mode-specific block wrappers in registration order", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [{
         id: "wrapper",
@@ -350,13 +360,13 @@ describe("PanelAPI", () => {
         },
       }],
     });
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toEqual([
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toEqual([
       EmptyWrapper,
       SecondWrapper,
     ]);
-    expect(panel.editor.surfaces.getBlockWrappers("edgeless")).toEqual([]);
-    panel.editor.destroy();
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toEqual([]);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toEqual([]);
+    reactPanel.editor.destroy();
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toEqual([]);
     editor.destroy();
   });
 
@@ -377,7 +387,7 @@ describe("PanelAPI", () => {
       isSelected: false,
       content: null,
     });
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [{
         id: "ordered-wrappers",
@@ -389,58 +399,58 @@ describe("PanelAPI", () => {
       }],
     });
 
-    const markup = renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
+    const markup = renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)));
     expect(markup).toContain(
       '<div data-layer="outer"><div data-layer="inner"><span data-layer="shell"></span></div></div>',
     );
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("supports dynamic public presentation registration and disposal", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const disposeComponent = panel.editor.extensions.mount(EmptyComponent);
-    const disposeEditorWrapper = panel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
-    const disposeSurface = panel.editor.surfaces.register("block", EmptySurface);
-    const disposeBlockWrapper = panel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+    const reactPanel = createReactEditor({ editor });
+    const disposeComponent = reactPanel.editor.extensions.mount(EmptyComponent);
+    const disposeEditorWrapper = reactPanel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
+    const disposeSurface = reactPanel.editor.surfaces.register("block", EmptySurface);
+    const disposeBlockWrapper = reactPanel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper);
 
-    expect(panel.editor.extensions.getComponents()).toEqual([EmptyComponent]);
-    expect(panel.editor.surfaces.getEditorWrappers("block")).toEqual([EmptyEditorWrapper]);
-    expect(panel.editor.surfaces.get("block")).toBe(EmptySurface);
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toEqual([EmptyWrapper]);
+    expect(reactPanel.editor.extensions.getComponents()).toEqual([EmptyComponent]);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toEqual([EmptyEditorWrapper]);
+    expect(reactPanel.editor.surfaces.get("block")).toBe(EmptySurface);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toEqual([EmptyWrapper]);
 
     disposeBlockWrapper();
     disposeSurface();
     disposeEditorWrapper();
     disposeComponent();
-    expect(panel.editor.extensions.getComponents()).toEqual([]);
-    expect(panel.editor.surfaces.getEditorWrappers("block")).toEqual([]);
-    expect(panel.editor.surfaces.get("block")).toBeUndefined();
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toEqual([]);
+    expect(reactPanel.editor.extensions.getComponents()).toEqual([]);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toEqual([]);
+    expect(reactPanel.editor.surfaces.get("block")).toBeUndefined();
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toEqual([]);
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("makes public presentation disposers idempotent", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const dispose = panel.editor.extensions.mount(EmptyComponent);
+    const reactPanel = createReactEditor({ editor });
+    const dispose = reactPanel.editor.extensions.mount(EmptyComponent);
 
     dispose();
-    const revisionAfterDisposal = panel.editor.extensions.revision;
+    const revisionAfterDisposal = reactPanel.editor.extensions.revision;
     dispose();
 
-    expect(panel.editor.extensions.revision).toBe(revisionAfterDisposal);
-    panel.editor.destroy();
+    expect(reactPanel.editor.extensions.revision).toBe(revisionAfterDisposal);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("runs extension cleanup before removing its owned registrations", async () => {
     const editor = await createEditor();
     let sawMountedComponent = false;
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [{
         id: "owned-ui",
@@ -453,9 +463,9 @@ describe("PanelAPI", () => {
       }],
     });
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     expect(sawMountedComponent).toBe(true);
-    expect(panel.editor.extensions.getComponents()).toEqual([]);
+    expect(reactPanel.editor.extensions.getComponents()).toEqual([]);
     editor.destroy();
   });
 
@@ -463,15 +473,15 @@ describe("PanelAPI", () => {
     const editor = await createEditor();
     const First: ComponentType = () => null;
     const Second: ComponentType = () => null;
-    const panel = createReactEditor({ editor });
-    panel.editor.extensions.mount(First);
-    panel.editor.extensions.mount(Second);
+    const reactPanel = createReactEditor({ editor });
+    reactPanel.editor.extensions.mount(First);
+    reactPanel.editor.extensions.mount(Second);
     const snapshots: ComponentType[][] = [];
-    panel.editor.extensions.subscribe(() => {
-      snapshots.push([...panel.editor.extensions.getComponents()]);
+    reactPanel.editor.extensions.subscribe(() => {
+      snapshots.push([...reactPanel.editor.extensions.getComponents()]);
     });
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
 
     expect(snapshots[0]).toEqual([First]);
     expect(snapshots[1]).toEqual([]);
@@ -506,36 +516,36 @@ describe("PanelAPI", () => {
 
   test("standardPreset excludes optional edgeless and drag extensions", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [standardPreset()],
     });
 
-    expect(panel.editor.blockTypes.getDefinition("paragraph")).toBeDefined();
-    expect(panel.editor.surfaces.get("edgeless")).toBeUndefined();
-    expect(panel.editor.surfaces.getEditorWrappers("block")).toHaveLength(0);
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toHaveLength(0);
-    expect(panel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
+    expect(reactPanel.editor.blockTypes.getDefinition("paragraph")).toBeDefined();
+    expect(reactPanel.editor.surfaces.get("edgeless")).toBeUndefined();
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toHaveLength(0);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toHaveLength(0);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
     // Slash menu and trailing block controls are the standard preset's UI.
-    expect(panel.editor.extensions.getComponents()).toHaveLength(2);
+    expect(reactPanel.editor.extensions.getComponents()).toHaveLength(2);
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("installs optional edgeless and block drag extensions explicitly", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()],
     });
 
-    expect(panel.editor.extensions.getComponents().length).toBeGreaterThan(0);
-    expect(panel.editor.surfaces.getEditorWrappers("block")).toHaveLength(1);
-    expect(panel.editor.surfaces.getBlockWrappers("block")).toHaveLength(1);
-    expect(panel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
+    expect(reactPanel.editor.extensions.getComponents().length).toBeGreaterThan(0);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toHaveLength(1);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toHaveLength(1);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -555,19 +565,19 @@ describe("PanelAPI", () => {
       children: [{ type: "paragraph", content: "child" }],
     }, editor.blocks.getInsertionDestinationAfter(rightId)).id;
     const childId = editor.blocks.getBlock(parentId)!.children[0]!.id;
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     let updates = 0;
-    const dispose = panel.editor.document.subscribe(() => { updates += 1; });
-    const initialRevision = panel.editor.document.revision;
+    const dispose = reactPanel.editor.subscribe(() => { updates += 1; });
+    const initialRevision = reactPanel.editor.revision;
 
     editor.blocks.updateBlock(leftId, { content: "changed" });
     editor.blocks.updateBlock(childId, { content: "changed child" });
     editor.blocks.moveBlock(childId, rightId, "inside");
     expect(updates).toBe(3);
-    expect(panel.editor.document.revision).toBe(initialRevision + 3);
+    expect(reactPanel.editor.revision).toBe(initialRevision + 3);
 
     dispose();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -578,19 +588,19 @@ describe("PanelAPI", () => {
     const secondCore = await createEditor();
     const second = { editor: secondCore, document: secondCore.getDocument(), release: () => secondCore.destroy() };
     second.editor.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second" });
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const other = createReactEditor({ editor: secondCore });
-    expect(other.editor.renderers).not.toBe(panel.editor.renderers);
-    expect(other.editor.document.getDocument()).toBe(second.document);
+    expect(other.editor.renderers).not.toBe(reactPanel.editor.renderers);
+    expect(other.editor.getDocument()).toBe(second.document);
     let updates = 0;
-    const dispose = panel.editor.document.blocks.subscribeBlockNode("same", () => { updates += 1; });
-    other.editor.document.blocks.updateBlock("same", { content: "Changed second" });
-    expect(panel.editor.document.blocks.getBlockNode("same")?.content).toBe("First");
-    expect(other.editor.document.blocks.getBlockNode("same")?.content).toBe("Changed second");
+    const dispose = reactPanel.editor.blocks.subscribeBlockNode("same", () => { updates += 1; });
+    other.editor.blocks.updateBlock("same", { content: "Changed second" });
+    expect(reactPanel.editor.blocks.getBlockNode("same")?.content).toBe("First");
+    expect(other.editor.blocks.getBlockNode("same")?.content).toBe("Changed second");
     expect(updates).toBe(0);
-    panel.editor.document.blocks.updateBlock("same", { content: "Changed first" });
+    reactPanel.editor.blocks.updateBlock("same", { content: "Changed first" });
     expect(updates).toBe(1);
-    dispose(); panel.editor.destroy(); other.editor.destroy(); await second.release(); await editor.destroy();
+    dispose(); reactPanel.editor.destroy(); other.editor.destroy(); await second.release(); await editor.destroy();
   });
 
   test("rolls back registrations when a duplicate surface fails setup", async () => {
@@ -646,17 +656,17 @@ describe("PanelAPI", () => {
 
   test("rejects presentation registration after destruction", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    panel.editor.destroy();
+    const reactPanel = createReactEditor({ editor });
+    reactPanel.editor.destroy();
 
-    expect(() => panel.editor.extensions.mount(EmptyComponent)).toThrow(/destroyed/);
-    expect(() => panel.editor.blockTypes.delete("paragraph")).toThrow(/destroyed/);
-    expect(() => panel.editor.renderers.delete("paragraph")).toThrow(/destroyed/);
-    expect(() => panel.editor.surfaces.delete("block")).toThrow(/destroyed/);
-    expect(() => panel.editor.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);
-    expect(() => panel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(/destroyed/);
-    expect(() => panel.editor.surfaces.register("block", EmptySurface)).toThrow(/destroyed/);
-    expect(() => panel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.extensions.mount(EmptyComponent)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.blockTypes.delete("paragraph")).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.renderers.delete("paragraph")).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.delete("block")).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.register("block", EmptySurface)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(/destroyed/);
     editor.destroy();
   });
 });
@@ -761,10 +771,10 @@ describe("delegated events", () => {
 
   test("uses separate event and keyboard managers across surface realms", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const events = panel.events;
-    expect(panel.editor.events).toBeInstanceOf(EventManager);
-    expect(panel.editor.keyboard).toBeInstanceOf(KeyboardManager);
+    const reactPanel = createReactEditor({ editor });
+    const events = reactPanel.events;
+    expect(reactPanel.editor.events).toBeInstanceOf(EventManager);
+    expect(reactPanel.editor.keyboard).toBeInstanceOf(KeyboardManager);
     const first = realm();
     const second = realm();
     const disposeDocument = events.register({
@@ -772,11 +782,11 @@ describe("delegated events", () => {
       type: "selectionchange",
       target: "document",
     }, () => undefined);
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "test.surface-key",
       keys: "Enter",
     }, () => false);
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "test.window-key",
       keys: "Escape",
       target: "window",
@@ -791,7 +801,7 @@ describe("delegated events", () => {
     expect(first.window.count()).toBe(0);
     expect(second.document.count()).toBe(1);
     disposeDocument();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     expect(second.root.count()).toBe(0);
     expect(second.document.count()).toBe(0);
     expect(second.window.count()).toBe(0);
@@ -800,9 +810,9 @@ describe("delegated events", () => {
 
   test("orders handlers, claims events, and falls through conditional bindings", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const events = panel.events;
-    const keyboard = panel.keyboard;
+    const reactPanel = createReactEditor({ editor });
+    const events = reactPanel.events;
+    const keyboard = reactPanel.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -833,21 +843,21 @@ describe("delegated events", () => {
     expect(handlerEvent?.raw).toBe(event);
     expect(handlerEvent?.phase).toBe("keydown");
     expect(event.defaultPrevented).toBe(true);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("matches primary letter shortcuts by physical key across keyboard layouts", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    panel.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
+    reactPanel.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
       calls.push("undo");
       return true;
     });
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "test.redo",
       keys: ["Primary+Shift+z", "Primary+y"],
     }, () => {
@@ -864,25 +874,25 @@ describe("delegated events", () => {
     root.emit("keydown", keyboardEvent(root, "н", { code: "KeyY", ctrlKey: true }));
 
     expect(calls).toEqual(["undo", "redo", "redo"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("filters keyboard targets, modes, and scopes before applying priority", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { document, root, window } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const content = new FakeElement();
     content.ownerDocument = document;
     content.parent = root;
     content.attributes.set("data-block-content", "");
     const calls: string[] = [];
-    panel.keyboard.register({ id: "low", keys: ["Tab"] }, () => {
+    reactPanel.keyboard.register({ id: "low", keys: ["Tab"] }, () => {
       calls.push("low");
       return true;
     });
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "high",
       keys: ["Tab"],
       mode: "block",
@@ -892,7 +902,7 @@ describe("delegated events", () => {
       calls.push("high");
       return true;
     });
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "window",
       keys: ["Escape"],
       target: "window",
@@ -903,18 +913,18 @@ describe("delegated events", () => {
 
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(content, "Tab"));
-    panel.mode.set("edgeless");
+    reactPanel.mode.set("edgeless");
     root.emit("keydown", keyboardEvent(content, "Tab"));
     window.emit("keydown", keyboardEvent(root, "Escape"));
     expect(calls).toEqual(["low", "high", "low", "window"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("filters DOM modes and never resolves markers outside the active surface", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const events = panel.events;
+    const reactPanel = createReactEditor({ editor });
+    const events = reactPanel.events;
     const { document, root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const inside = new FakeElement();
@@ -948,7 +958,7 @@ describe("delegated events", () => {
       cancelable: true,
       preventDefault() {},
     } as unknown as PointerEvent);
-    panel.mode.set("edgeless");
+    reactPanel.mode.set("edgeless");
     document.emit("pointerdown", {
       type: "pointerdown",
       target: inside,
@@ -957,14 +967,14 @@ describe("delegated events", () => {
       preventDefault() {},
     } as unknown as PointerEvent);
     expect(seen).toEqual([[true, "inside"], [false, undefined]]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("filters delegated events by surface, block, and content scope", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const events = panel.events;
+    const reactPanel = createReactEditor({ editor });
+    const events = reactPanel.events;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const block = new FakeElement();
@@ -995,43 +1005,43 @@ describe("delegated events", () => {
       preventDefault() {},
     } as unknown as PointerEvent);
     expect(calls).toEqual(["surface", "block", "content"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("deletes DOM registrations and releases their stable IDs", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const register = () => panel.events.register({
+    const reactPanel = createReactEditor({ editor });
+    const register = () => reactPanel.events.register({
       id: "test.delete-dom",
       type: "click",
     }, () => false);
 
     const staleDisposer = register();
     expect(() => register()).toThrow(/already registered/);
-    expect(panel.events.delete("test.delete-dom")).toBe(true);
-    expect(panel.events.delete("test.delete-dom")).toBe(false);
+    expect(reactPanel.events.delete("test.delete-dom")).toBe(true);
+    expect(reactPanel.events.delete("test.delete-dom")).toBe(false);
     expect(register).not.toThrow();
     staleDisposer();
     expect(() => register()).toThrow(/already registered/);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("dispatches keyboard actions before ordinary DOM key handlers", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    panel.keyboard.register({
+    reactPanel.keyboard.register({
       id: "test.keyboard-first",
       keys: ["Enter"],
     }, () => {
       calls.push("keyboard");
       return true;
     });
-    panel.events.register({
+    reactPanel.events.register({
       id: "test.dom-second",
       type: "keydown",
     }, () => {
@@ -1041,19 +1051,19 @@ describe("delegated events", () => {
 
     root.emit("keydown", keyboardEvent(root, "Enter"));
     expect(calls).toEqual(["keyboard"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("orders DOM handlers, applies when, and stops after a claim", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     let predicateEvent: EditorEvent | undefined;
     let handlerEvent: EditorEvent | undefined;
-    panel.events.register({
+    reactPanel.events.register({
       id: "test.dom-skipped",
       type: "click",
       when: (event) => {
@@ -1064,7 +1074,7 @@ describe("delegated events", () => {
       calls.push("skipped");
       return true;
     });
-    panel.events.register({
+    reactPanel.events.register({
       id: "test.dom-claimed",
       type: "click",
     }, (event) => {
@@ -1072,7 +1082,7 @@ describe("delegated events", () => {
       calls.push("claimed");
       return true;
     });
-    panel.events.register({
+    reactPanel.events.register({
       id: "test.dom-late",
       type: "click",
     }, () => {
@@ -1094,22 +1104,22 @@ describe("delegated events", () => {
     expect(handlerEvent).toBeInstanceOf(EditorEvent);
     expect(handlerEvent?.raw).toBe(event);
     expect(nativeEvent.defaultPrevented).toBe(true);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("constructs exported editor event values directly", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
     const surface = root as unknown as HTMLElement;
     const raw = keyboardEvent(root, "Enter");
-    const selection = panel.selection.get();
+    const selection = reactPanel.selection.get();
     const base = {
       raw,
-      panel,
+      reactPanel,
       root: surface,
-      mode: panel.mode.get(),
+      mode: reactPanel.mode.get(),
       selection,
       eventTarget: "surface" as const,
       insideRoot: true,
@@ -1128,13 +1138,13 @@ describe("delegated events", () => {
     expect(event.selection).toBe(selection);
     expect(keyboardEventValue).toBeInstanceOf(EditorEvent);
     expect(keyboardEventValue.shortcut).toBe("Enter");
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("applies overrides, disabling, exact modifiers, and duplicate IDs", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       keymap: {
         remapped: ["Primary+ArrowRight"],
@@ -1142,8 +1152,8 @@ describe("delegated events", () => {
         unknown: ["Escape"],
       },
     });
-    const events = panel.events;
-    const keyboard = panel.keyboard;
+    const events = reactPanel.events;
+    const keyboard = reactPanel.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -1178,27 +1188,27 @@ describe("delegated events", () => {
     expect(keyboard.list().find((item) => item.id === "remapped")?.keys).toEqual(["Enter"]);
     expect(revisions.length).toBeGreaterThan(0);
     stop();
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("replaces the complete keymap and applies overrides registered later", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     const defaults = ["a"];
-    panel.keyboard.register({ id: "dynamic", keys: defaults }, () => {
+    reactPanel.keyboard.register({ id: "dynamic", keys: defaults }, () => {
       calls.push("dynamic");
       return true;
     });
 
-    panel.keyboard.replaceKeymap({
+    reactPanel.keyboard.replaceKeymap({
       dynamic: ["b"],
       future: ["c"],
     });
-    panel.keyboard.register({ id: "future", keys: ["d"] }, () => {
+    reactPanel.keyboard.register({ id: "future", keys: ["d"] }, () => {
       calls.push("future");
       return true;
     });
@@ -1209,29 +1219,29 @@ describe("delegated events", () => {
 
     calls.length = 0;
     defaults[0] = "x";
-    panel.keyboard.replaceKeymap({});
+    reactPanel.keyboard.replaceKeymap({});
     root.emit("keydown", keyboardEvent(root, "b"));
     root.emit("keydown", keyboardEvent(root, "a"));
     root.emit("keydown", keyboardEvent(root, "d"));
     expect(calls).toEqual(["dynamic", "future"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("updates one override defensively and rejects invalid keymaps atomically", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    panel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    panel.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
+    reactPanel.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
       calls.push("dynamic");
       return true;
     });
     const keys = ["b"];
-    panel.keyboard.setKeymapOverride("dynamic", keys);
+    reactPanel.keyboard.setKeymapOverride("dynamic", keys);
     keys[0] = "c";
-    expect(() => panel.keyboard.replaceKeymap({
+    expect(() => reactPanel.keyboard.replaceKeymap({
       dynamic: ["Unknown+b"],
     })).toThrow(/Unknown keyboard modifier/);
     root.emit("keydown", keyboardEvent(root, "b"));
@@ -1239,20 +1249,20 @@ describe("delegated events", () => {
     expect(calls).toEqual(["dynamic"]);
 
     calls.length = 0;
-    panel.keyboard.setKeymapOverride("dynamic", []);
+    reactPanel.keyboard.setKeymapOverride("dynamic", []);
     root.emit("keydown", keyboardEvent(root, "b"));
-    panel.keyboard.setKeymapOverride("dynamic", undefined);
+    reactPanel.keyboard.setKeymapOverride("dynamic", undefined);
     root.emit("keydown", keyboardEvent(root, "a"));
     expect(calls).toEqual(["dynamic"]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("supports keyup and all composition policies", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({ editor });
-    const events = panel.events;
-    const keyboard = panel.keyboard;
+    const reactPanel = createReactEditor({ editor });
+    const events = reactPanel.events;
+    const keyboard = reactPanel.keyboard;
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
@@ -1272,7 +1282,7 @@ describe("delegated events", () => {
     expect(ignored.defaultPrevented).toBe(false);
     expect(handled.defaultPrevented).toBe(true);
     expect(prevented.defaultPrevented).toBe(true);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

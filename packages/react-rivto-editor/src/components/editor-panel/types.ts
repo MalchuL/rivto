@@ -2,16 +2,14 @@ import type { DocumentModel } from "@chulane/document-model";
 import type { ModeManagerApi } from "@chulane/rivto";
 import type { ReactNode, RefCallback } from "react";
 import type { ReactEditorApi } from "../../editor/types";
-import type { OpenPanelBlock, PanelAPI } from "../../panels/types";
+import type { ReactPanel } from "../../panels/react-panel";
 
 /** Properties accepted by the React editor boundary. */
 export interface EditorPanelProps {
-  /** React runtime created and destroyed by the host application. */
+  /** React runtime owned by useReactEditor or managed EditorStorage; React components must not create instances manually. */
   readonly editor: ReactEditorApi;
   /** Independent element container; null or omitted selects document element roots. */
   readonly rootElementId?: string | null;
-  /** Host navigation handler for a specific block. */
-  readonly onOpenBlock?: OpenPanelBlock;
   /** Optional Panel-local presentation mode retained by the host. */
   readonly mode?: ModeManagerApi;
   /** Block whose children are displayed; omitted displays document roots. */
@@ -36,8 +34,8 @@ export interface EditorPanelProps {
  * to the resolved model until the target moves to another document.
  */
 export interface EditorContextValue {
-  /** Editor for this occurrence, with shared runtime available through its runtime field. */
-  readonly panel: PanelAPI;
+  /** React panel for this occurrence, with the shared React editor available through its editor field. */
+  readonly reactPanel: ReactPanel;
   /** Model acquired by this panel; absent while its document is loading. */
   readonly document?: DocumentModel;
   /** Identity used to route mutations to the single editor acquired by this panel. */

@@ -8,7 +8,7 @@ import type { ReactEditorApi } from "../../editor/types";
  *
  * @module
  */
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
 } from "../../elements/block-element-projection";
@@ -17,7 +17,7 @@ import { type EdgelessSurfaceOptions } from "./surface";
 const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
 
 /** @param editor - View or host sharing the surface manager. @returns Configured canvas defaults, or empty options. */
-export function getEdgelessSurfaceOptions(editor: PanelAPI): EdgelessSurfaceOptions {
+export function getEdgelessSurfaceOptions(editor: ReactPanelApi): EdgelessSurfaceOptions {
   return surfaceOptions.get(editor.editor.surfaces) ?? {};
 }
 

@@ -41,10 +41,10 @@
   text-transform: uppercase;
 }
 
-.review-report-element-layer { display: contents; }
-
 .review-report-element {
-  position: absolute;
+  position: relative;
+  width: 100%;
+  height: 100%;
   overflow: auto;
   cursor: move;
   pointer-events: auto;

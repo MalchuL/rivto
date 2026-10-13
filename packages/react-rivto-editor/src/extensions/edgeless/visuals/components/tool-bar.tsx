@@ -1,3 +1,4 @@
+import { RegisteredElementTools } from "./registered-element-tools";
 /**
  * Bottom-centered create toolbar for the edgeless canvas.
  *
@@ -13,7 +14,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
 import { Separator } from "../../../../components/ui/separator";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../types";
 import { CreationPanel } from "./creation-panel";
 import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
@@ -70,7 +71,7 @@ export function ToolBar({
   movePresetDrag,
   endPresetDrag,
 }: {
-  controller: EdgelessVisualController;
+  controller: EdgelessOperations;
   tool: EdgelessVisualTool;
   fonts: readonly EdgelessFontOption[];
   stickers: readonly EdgelessStickerOption[];
@@ -111,12 +112,12 @@ export function ToolBar({
   }, [controller, menu]);
 
   const selectTool = () => {
-    controller.execute("edgeless.tool.set", "select");
+    controller.setTool("select");
     close();
   };
 
   const panTool = () => {
-    controller.execute("edgeless.tool.set", { tool: "pan" });
+    controller.setTool({ tool: "pan" });
     close();
   };
 
@@ -157,6 +158,7 @@ export function ToolBar({
           />
         );
       })}
+      <RegisteredElementTools controller={controller} />
       {menu && (
         <CreationPanel
           category={menu}

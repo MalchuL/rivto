@@ -27,31 +27,31 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.selectionDelete,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    when: ({ panel, selection, raw: event, blockId }) => {
-      const root = panel.events.getRoot();
+    when: ({ reactPanel, selection, raw: event, blockId }) => {
+      const root = reactPanel.events.getRoot();
       if (!root) return false;
       const editableEvent = isEditableKeyboardEvent(event);
       const current = editableEvent
-        ? readKeyboardSelection(panel.selection, panel.blocks, blockId)
+        ? readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)
         : selection;
       if (!shouldDeleteSelection(current)) return false;
       const rootBlockSelection = root.ownerDocument.activeElement === root &&
         isStructuralSelection(current);
       return rootBlockSelection || editableEvent;
     },
-  }, ({ panel, root }) => {
-    const current = panel.selection.get();
-    panel.editor.document.history.batchUpdates(() => {
+  }, ({ reactPanel, root }) => {
+    const current = reactPanel.selection.get();
+    reactPanel.batchUpdates(() => {
       if (current && isStructuralSelection(current)) {
         const ids = getSelectedBlockIds(current);
         const seen = new Set<BlockBehavior>();
         // A non-default outcome claims the whole selection and skips generic deletion.
         let claimed = false;
         for (const id of ids) {
-          const behavior = panel.editor.blockBehaviors.resolve(id);
+          const behavior = reactPanel.editor.blockBehaviors.resolve(id);
           if (seen.has(behavior)) continue;
           seen.add(behavior);
-          const context = createBlockBehaviorContext(panel, id, root, current);
+          const context = createBlockBehaviorContext(reactPanel, id, root, current);
           if (context && behavior.onStructuralDelete(context, ids) !== "default") {
             claimed = true;
             break;
@@ -59,15 +59,15 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
         }
         if (claimed) return;
       }
-      panel.selection.delete();
+      reactPanel.selection.delete();
     });
     // Keep keyboard ownership inside Rivto immediately when a normal browser
     // briefly focuses a block deletion just removed. This does not address
     // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
     // the known-host limitation documented in the history extension.
-    if (!focusSelectionCaret(root, panel.selection)) root.focus({ preventScroll: true });
+    if (!focusSelectionCaret(root, reactPanel.selection)) root.focus({ preventScroll: true });
     // Only restore the caret and its editing focus; document deletion has already completed.
-    panel.selection.scheduleIfSelectionUnchanged(() => focusSelectionCaret(root, panel.selection));
+    reactPanel.selection.scheduleIfSelectionUnchanged(() => focusSelectionCaret(root, reactPanel.selection));
     return true;
   });
 }

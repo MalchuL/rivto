@@ -1,3 +1,4 @@
+import type { ElementTypesApi } from "../managers/elements/types";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { BlockRenderer, ClipboardFormatRegistry, ClipboardManager, EventManager, KeyboardManager, KeymapOverrides, ReactEditorExtension, SlashCommandRegistry } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
@@ -67,20 +68,21 @@ export interface Entry {
   closing?: Promise<void>;
 }
 
-/** Shared React registrations around one document; occurrence operations belong to PanelAPI. */
-export interface ReactEditorApi {
-  /** Framework-neutral core permanently bound to this document and its managers.
-   * Document managers provide the following shared capabilities:
-   * Creates and updates document elements, including canvas objects, through the core element manager.
-   * The underlying core editor is exposed through document; every view uses this same manager.
-   * Named core commands registered and invoked by extensions.
-   * The manager is shared by all views without exposing the underlying core editor.
-   * Core undo/redo history and synchronous transaction batching for this editor.
-   * All views of the document share this local history; other editors keep their own.
-   * Guarded mutations and delegated core block operations.
-   * Model selection shared by occurrences; DOM adapters belong to each PanelAPI.
-   */
-  readonly document: DocumentEditorAPI;
+/** Shared React registrations and the operations of one fixed document editor.
+ * Document managers provide the following shared capabilities:
+ * Creates and updates document elements, including canvas objects, through the core element manager.
+ * The underlying core editor stays internal; every view uses these same managers.
+ * Named core commands registered and invoked by extensions.
+ * The manager is shared by all views without exposing the underlying core editor.
+ * Core undo/redo history and synchronous transaction batching for this editor.
+ * All views of the document share this local history; other editors keep their own.
+ * Guarded mutations and delegated core block operations.
+ * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
+ */
+export interface ReactEditorApi extends DocumentEditorAPI {
+  /** Shared definitions, renderers and editing contributions for canvas element types. */
+  readonly elementTypes: ElementTypesApi;
+
   /** Creates input for an empty writing block using the installed writing extension.
    *
    * Enter, trailing insertion, separators, and clipboard operations share this factory.
@@ -160,6 +162,8 @@ export interface ReactEditorApi {
    * Document/model disposal belongs to EditorStorage or the caller. Close the core
    * after this synchronous React cleanup, then await model destruction before
    * destroying the application's document registry and provider metadata.
+   * @returns An already-resolved Promise after synchronous React cleanup; the borrowed core remains usable.
+   * @throws Synchronously if cleanup fails, after all React disposers have run.
    */
-  destroy(): void;
+  destroy(): Promise<void>;
 }

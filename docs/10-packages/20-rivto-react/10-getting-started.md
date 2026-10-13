@@ -15,6 +15,12 @@ import "@chulane/rivto-react/styles.css";
 ## Создание через hook
 
 Если модель уже загружена, используйте `useReactEditor({ document, extensions })`.
+Не создавайте `ReactEditor` или `ReactPanel` вручную в компонентах.
+Для React-интеграции создание редактора выполняется только через `useReactEditor`,
+а панель создаёт внутренний хук `EditorPanel`/`EditorEmbed`. `useReactPanel` лишь
+читает уже созданную панель из контекста. Ни render, ни `useMemo`, ни initializer
+`useState` не должны создавать эти экземпляры.
+
 Hook создаёт core и ReactEditor после commit, возвращает loading/ready/error,
 очищает свои ресурсы при unmount или замене модели. Сам DocumentModel остаётся у caller.
 Один ready editor можно передавать нескольким EditorPanel. Для смены extensions/keymap
@@ -34,7 +40,9 @@ function MyEditor({ document }: { document: DocumentModel }) {
 
 ## Создание runtime
 
-Для загрузки и кеширования нескольких документов используйте EditorStorage с явным cleanup. `EditorPanel` использует готовый runtime, но не владеет им.
+Низкоуровневые фабрики предназначены для инфраструктуры managed storage и внутренних тестов,
+а не для ручного создания экземпляров в React-компонентах. Для загрузки и кеширования
+нескольких документов используйте EditorStorage с явным cleanup. `EditorPanel` использует готовый runtime, но не владеет им.
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -60,7 +68,7 @@ export function DocumentEditor() {
       }),
     });
     void editors.acquireEditor("document-id").then((acquisition) => {
-      acquisition.editor.document.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
+      acquisition.editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
       if (active) setView({ reactEditor: acquisition.editor, editors, releaseInitial: acquisition.release });
       else void acquisition.release();
     }).catch(console.error);
@@ -80,11 +88,11 @@ export function DocumentEditor() {
 `standardPreset()` регистрирует default writing type. После создания React runtime можно вставлять blocks:
 
 ```ts
-reactEditor.document.blocks.insertBlock({
+reactEditor.blocks.insertBlock({
   type: DEFAULT_WRITING_BLOCK_TYPE,
   content: "# Первый документ",
 });
-reactEditor.document.history.clear();
+reactEditor.history.clear();
 ```
 
 `history.clear()` после seed/load делает начальные данные baseline.
@@ -95,10 +103,10 @@ Children `EditorPanel` находятся в том же context перед acti
 
 ```tsx
 function Toolbar() {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   return <header>
-    <button data-editor-control="" onClick={() => panel.document.history.undo()}>Undo</button>
-    <button data-editor-control="" onClick={() => panel.document.history.redo()}>Redo</button>
+    <button data-editor-control="" onClick={() => reactPanel.document.history.undo()}>Undo</button>
+    <button data-editor-control="" onClick={() => reactPanel.document.history.redo()}>Redo</button>
   </header>;
 }
 

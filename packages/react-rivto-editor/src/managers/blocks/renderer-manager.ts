@@ -49,7 +49,7 @@ export class RendererManager implements RenderersApi {
     };
     this.renderers.set(type, registration);
     this.store.changed();
-    registration.dispose = this.registrations.own(() => {
+    registration.dispose = this.registrations.registerCleanup(() => {
       if (this.renderers.get(type) !== registration) return;
       this.renderers.delete(type);
       this.store.changed();

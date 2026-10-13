@@ -10,21 +10,19 @@ async function createAppEditor() {
   storage.registerDocument("document-id");
   const document = await storage.openDocument("document-id");
   const core = createDocumentEditor({ document });
-  const visuals = edgelessVisualsExtension(appVisualOptions);
   const reactEditor = createReactEditor({
     editor: core,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleLink } }),
-      ...edgelessPreset(),
-      visuals,
+      ...edgelessPreset({ visuals: appVisualOptions }),
       ...customBlockExtensions,
     ],
   });
-  return { storage, core, editor: core, reactEditor, visuals };
+  return { storage, core, editor: core, reactEditor };
 }
 ```
 
-Factory концентрирует extension ordering и возвращает imperative extension handles, которые реально нужны host.
+Factory концентрирует extension ordering. Canvas-команды доступны через `useEdgelessOperations()`; регистрация расширения не служит отдельным imperative API.
 
 ## Custom blocks
 
@@ -34,7 +32,7 @@ Core definitions находятся отдельно от React renderers. Эт�
 
 ## Application toolbar
 
-Demo toolbar получает core editor от host для persistence/lifecycle и использует `usePanel()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
+Demo toolbar получает core editor от host для persistence/lifecycle и использует `useReactPanel()` для focused operations. Host React state выбирает `<PageSurface />` либо `<EdgelessSurface />`. UI state вроде видимости block IDs остаётся React state, а не pluginData документа.
 
 ## Decorator без duplicate block DOM
 
@@ -44,14 +42,14 @@ Demo block-ID extension регистрирует `BlockWrapper` и исполь�
 
 Один user получает EditorStorage с фабрикой отдельных ReactEditor для документов.
 Два документа используют разные document-bound runtimes; два views одного
-документа получают один cached ReactEditor и независимые PanelAPI:
+документа получают один cached ReactEditor и независимые ReactPanelApi:
 
 ```tsx
 <EditorPanel editor={leftAcquisition.editor}><PageSurface /></EditorPanel>
 <EditorPanel editor={rightAcquisition.editor}><PageSurface /></EditorPanel>
 ```
 
-View автоматически удерживает consumer, включая nesting. Cross-document transfer
+Владелец сохраняет acquisition до размонтирования зависимых EditorPanel; повторный consumer внутри EditorPanel не создаётся. Cross-document transfer
 явно получает source/destination APIs и проверяет collisions до удаления source.
 
 ## Collaboration
@@ -69,7 +67,7 @@ const editors = new EditorStorage({
   }),
 });
 const acquisition = await editors.acquireEditor("document-id");
-// Views retain the document through the nearest provider before releasing the initial consumer.
+// Keep this acquisition until the dependent panels unmount, then call release().
 <EditorStorageContext.Provider value={editors}>
   <EditorPanel editor={acquisition.editor}>
     <PageSurface />

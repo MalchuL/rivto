@@ -63,7 +63,7 @@ export class ExtensionManager implements ExtensionsApi {
     const registration = { component, position };
     this.components.push(registration);
     this.store.changed();
-    return this.own(() => {
+    return this.registerCleanup(() => {
       const index = this.components.indexOf(registration);
       if (index < 0) return;
       this.components.splice(index, 1);
@@ -97,7 +97,7 @@ export class ExtensionManager implements ExtensionsApi {
    * @param release - Exact underlying resource cleanup.
    * @returns Idempotent disposer safe for callers and repeated teardown.
    */
-  own(release: RegistrationDisposer): RegistrationDisposer {
+  registerCleanup(release: RegistrationDisposer): RegistrationDisposer {
     this.assertActive();
     let active = true;
     const dispose = () => {

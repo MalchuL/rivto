@@ -30,17 +30,17 @@ describe("edgeless block element reconciliation", () => {
 
   test("avoids only block cards when reconciling new ranges and supports opt-out", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(separator));
     editor.elements.insertElement({ type: "rectangle", frame: { x: 60, y: 60, width: 1000, height: 1000 }, zIndex: 0 });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
     const cards = editor.elements.getElementNodes().filter((element) => element.type === "block");
     expect(cards).toHaveLength(2);
     expect(blockFramesOverlap(cards[0]!.frame, cards[1]!.frame)).toBe(false);
     expect(cards[0]!.frame).toMatchObject({ x: 60, y: 60 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
 
     const overlapEditor = await createDocumentEditor();
@@ -58,21 +58,21 @@ describe("edgeless block element reconciliation", () => {
 
   test("uses the page-sized default card width and accepts a panel override", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     editor.blocks.insertBlock({ type: "paragraph" });
-    panel.editor.blockElements.setDefaultWidth(640);
+    reactPanel.editor.blockElements.setDefaultWidth(640);
 
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     expect(EDGELESS_CARD_DEFAULT_FRAME.width).toBe(720);
     expect(editor.elements.getElementNodes()[0]!.frame.width).toBe(640);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("automatically reconciles block edits without adding derived history steps", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     await Promise.resolve();
@@ -87,40 +87,40 @@ describe("edgeless block element reconciliation", () => {
     await Promise.resolve();
     expect(editor.blocks.hasBlock(separator)).toBe(false);
     expect(ranges(editor)).toEqual([[first, last]]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keeps consecutive empty paragraphs as ordinary card content", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, editor.blocks.getInsertionDestinationAfter(empty)).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(secondEmpty)).id;
 
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     const elements = editor.elements.getElementNodes();
     expect(ranges(editor)).toEqual([[first, empty, secondEmpty, last]]);
     expect(elements.map((element) => element.id)).toEqual([`${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${first}`]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("ignores nested separators when partitioning document roots", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const root = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
     const child = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(root)).id;
     editor.blocks.indentBlock(child);
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 1, y: 2, width: 300, height: 120 }, zIndex: 0, props: { startBlockId: root, endBlockId: root } });
 
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     expect(editor.elements.getElementNodes()).toHaveLength(1);
     expect(blockIdsOf(editor.elements.getElementNode("card")!, editor.blocks.getRootIds())).toEqual([root]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -148,31 +148,31 @@ describe("edgeless block element reconciliation", () => {
 
   test("keeps several empty roots inside persisted range boundaries", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 0, props: { startBlockId: first, endBlockId: last } });
     const firstEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const secondEmpty = editor.blocks.insertBlock({ type: "paragraph", content: "" }, editor.blocks.getInsertionDestinationAfter(firstEmpty)).id;
 
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     expect(editor.elements.getElementNodes()).toHaveLength(1);
     expect(ranges(editor)).toEqual([[first, firstEmpty, secondEmpty, last]]);
     expect(editor.elements.getElementNode("card")?.props).toEqual({ startBlockId: first, endBlockId: last });
     expect(editor.elements.getElementNode("card")?.frame).toMatchObject({ x: 10, y: 20 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keeps the first card on split and the earlier card on merge", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(middle)).id;
     editor.elements.insertElement({ id: "original-card", type: "block", frame: { x: 410, y: 220, width: 360, height: 180 }, zIndex: 4, props: { startBlockId: first, endBlockId: last } });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
     await Promise.resolve();
 
     const separator = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }, editor.blocks.getInsertionDestinationAfter(first)).id;
@@ -188,13 +188,13 @@ describe("edgeless block element reconciliation", () => {
     expect(editor.elements.getElementNodes()).toHaveLength(1);
     expect(blockIdsOf(editor.elements.getElementNode("original-card")!, editor.blocks.getRootIds())).toEqual([first, middle, last]);
     expect(editor.elements.getElementNode("original-card")?.frame).toMatchObject({ x: 410, y: 220 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keeps element identity and geometry when the first range block moves across a separator", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(middle)).id;
@@ -203,7 +203,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, editor.blocks.getInsertionDestinationAfter(rightFirst)).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     editor.blocks.moveBlock(first, rightFirst, "after");
     await Promise.resolve();
@@ -213,13 +213,13 @@ describe("edgeless block element reconciliation", () => {
     expect(blockIdsOf(editor.elements.getElementNode("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, first, rightLast]);
     expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
     expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keeps element identity and geometry when the last range block moves across a separator", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     const middle = editor.blocks.insertBlock({ type: "paragraph", content: "Middle" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(middle)).id;
@@ -228,7 +228,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ type: "paragraph", content: "Right last" }, editor.blocks.getInsertionDestinationAfter(rightFirst)).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: first, endBlockId: last } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     editor.blocks.moveBlock(last, rightFirst, "after");
     await Promise.resolve();
@@ -238,13 +238,13 @@ describe("edgeless block element reconciliation", () => {
     expect(blockIdsOf(editor.elements.getElementNode("right-card")!, editor.blocks.getRootIds())).toEqual([rightFirst, last, rightLast]);
     expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
     expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("matches all reusable elements globally instead of taking the first local overlap", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const leftIds = ["a", "b", "c", "d", "e"].map((id, index, ids) =>
       editor.blocks.insertBlock({ id, type: "paragraph", content: id }, editor.blocks.getInsertionDestinationAfter(index ? ids[index - 1] : undefined)).id);
     const separator = editor.blocks.insertBlock({ id: "separator", type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(leftIds.at(-1))).id;
@@ -252,7 +252,7 @@ describe("edgeless block element reconciliation", () => {
     const rightLast = editor.blocks.insertBlock({ id: "g", type: "paragraph", content: "g" }, editor.blocks.getInsertionDestinationAfter(rightFirst)).id;
     editor.elements.insertElement({ id: "left-card", type: "block", frame: { x: 10, y: 20, width: 300, height: 120 }, zIndex: 1, props: { startBlockId: leftIds[0]!, endBlockId: leftIds.at(-1)! } });
     editor.elements.insertElement({ id: "right-card", type: "block", frame: { x: 500, y: 200, width: 400, height: 180 }, zIndex: 2, props: { startBlockId: rightFirst, endBlockId: rightLast } });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
 
     editor.history.batchUpdates(() => {
       editor.blocks.moveBlocks([rightFirst, rightLast], leftIds[2]!, "after");
@@ -265,30 +265,30 @@ describe("edgeless block element reconciliation", () => {
     expect(blockIdsOf(editor.elements.getElementNode("left-card")!, editor.blocks.getRootIds())).toEqual(["d", "e"]);
     expect(editor.elements.getElementNode("left-card")?.frame).toMatchObject({ x: 10, y: 20 });
     expect(editor.elements.getElementNode("right-card")?.frame).toMatchObject({ x: 500, y: 200 });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("repairs a missing range end without replacing the card owning its start", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const last = editor.blocks.insertBlock({ type: "paragraph" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.elements.insertElement({ id: "card", type: "block", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: "missing" },
     });
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
     expect(editor.elements.getElementNodes()).toEqual([expect.objectContaining({
       id: "card", frame: { x: 300, y: 200, width: 400, height: 150 }, zIndex: 4,
       props: { startBlockId: first, endBlockId: last },
     })]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("reconciles root cards without reading descendant snapshots", async () => {
     const editor = await createDocumentEditor();
-    const panel = createRuntime(editor);
+    const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const child = editor.blocks.insertBlock({ type: "paragraph" }, editor.blocks.getInsertionDestinationAfter(first)).id;
     editor.blocks.indentBlock(child);
@@ -296,19 +296,19 @@ describe("edgeless block element reconciliation", () => {
     const getBlocks = editor.blocks.getBlocks;
     editor.blocks.getBlocks = () => { throw new Error("Unexpected full-tree read"); };
     try {
-      panel.editor.blockElements.reconcile();
+      reactPanel.editor.blockElements.reconcile();
       expect(ranges(editor)).toEqual([[first]]);
       expect(editor.blocks.getParentId(child)).toBe(first);
     } finally {
       editor.blocks.getBlocks = getBlocks;
-      panel.editor.destroy();
+      reactPanel.editor.destroy();
       editor.destroy();
     }
   });
 
   test("supports a custom separator block plugin", async () => {
     const editor = await createDocumentEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [{
         id: "custom-separator",
@@ -324,19 +324,19 @@ describe("edgeless block element reconciliation", () => {
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
     editor.blocks.insertBlock({ type: "test.separator" }, editor.blocks.getInsertionDestinationAfter(first));
     const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(editor.blocks.getRootIds().at(-1))).id;
-    panel.editor.blockElements.reconcile();
+    reactPanel.editor.blockElements.reconcile();
     expect(ranges(editor)).toEqual([[first], [last]]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });
 
 test("queued projection work cannot mutate the document after runtime destruction", async () => {
   const core = await createDocumentEditor();
-  const panel = createReactEditor({ editor: core });
+  const reactPanel = createReactEditor({ editor: core });
   core.blocks.insertBlock({ type: "paragraph", content: "Pending card" });
-  panel.editor.blockElements.schedule();
-  panel.editor.destroy();
+  reactPanel.editor.blockElements.schedule();
+  reactPanel.editor.destroy();
   await Promise.resolve();
   expect(core.elements.getElementNodes()).toHaveLength(0);
   core.destroy();

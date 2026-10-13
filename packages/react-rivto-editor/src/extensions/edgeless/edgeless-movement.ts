@@ -1,5 +1,5 @@
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
@@ -8,17 +8,17 @@ import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
   const selection = getEdgelessRuntime(reactEditor);
 
-  const move = (panel: PanelAPI, dx: number, dy: number): boolean => {
-    const items = getEdgelessRuntime(panel).get().items;
+  const move = (reactPanel: ReactPanelApi, dx: number, dy: number): boolean => {
+    const items = getEdgelessRuntime(reactPanel).get().items;
     if (!items.length) return false;
-    if (reactEditor.document.commands.has("edgeless.selection.move")) {
-      reactEditor.document.commands.execute("edgeless.selection.move", { panel, payload: { dx, dy } });
+    if (reactEditor.commands.has("edgeless.selection.move")) {
+      reactEditor.commands.execute("edgeless.selection.move", { reactPanel, payload: { dx, dy } });
     } else {
       const updates = items.flatMap((id) => {
-        const element = panel.elements.getElementNode(id);
+        const element = reactPanel.elements.getElementNode(id);
         return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
       });
-      if (updates.length) panel.elements.updateElements(updates);
+      if (updates.length) reactPanel.elements.updateElements(updates);
     }
     return true;
   };
@@ -35,7 +35,7 @@ export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
         !target.closest(EDITOR_CONTROL_SELECTOR) &&
         !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
     },
-  }, ({ panel }) => move(panel, dx, dy));
+  }, ({ reactPanel }) => move(reactPanel, dx, dy));
 
   bind(KEYBOARD_BINDING_IDS.edgelessMoveLeft, -1, 0);
   bind(KEYBOARD_BINDING_IDS.edgelessMoveRight, 1, 0);

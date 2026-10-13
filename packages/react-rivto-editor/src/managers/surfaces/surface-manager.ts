@@ -73,7 +73,7 @@ export class SurfaceManager implements SurfacesApi {
     };
     this.surfaces.set(mode, registration);
     this.store.changed();
-    registration.dispose = this.registrations.own(() => {
+    registration.dispose = this.registrations.registerCleanup(() => {
       if (this.surfaces.get(mode) !== registration) return;
       this.surfaces.delete(mode);
       this.store.changed();
@@ -120,7 +120,7 @@ export class SurfaceManager implements SurfacesApi {
     wrappers.push(registration);
     this.blockWrappers.set(mode, wrappers);
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const current = this.blockWrappers.get(mode);
       if (!current) return;
       const index = current.indexOf(registration);
@@ -157,7 +157,7 @@ export class SurfaceManager implements SurfacesApi {
     this.blockSlots.push(entry);
     this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.blockSlots.indexOf(entry);
       if (index < 0) return;
       this.blockSlots.splice(index, 1);
@@ -195,7 +195,7 @@ export class SurfaceManager implements SurfacesApi {
     this.elementSlots.push(entry);
     this.elementSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.elementSlots.indexOf(entry);
       if (index < 0) return;
       this.elementSlots.splice(index, 1);
@@ -288,7 +288,7 @@ export class SurfaceManager implements SurfacesApi {
     const registration = { wrapper, mode };
     this.editorWrappers.push(registration);
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.editorWrappers.indexOf(registration);
       if (index < 0) return;
       this.editorWrappers.splice(index, 1);

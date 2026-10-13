@@ -7,12 +7,12 @@ const fallback: ComponentType<{ blockId: string }> = () => null;
 describe("RendererManager", () => {
   test("registers exact renderers and falls back without exposing mutable state", async () => {
     const editor = await createEditor();
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       unknownBlockRenderer: fallback,
     });
-    const manager = panel.editor.renderers;
-    const revision = panel.editor.renderers.revision;
+    const manager = reactPanel.editor.renderers;
+    const revision = reactPanel.editor.renderers.revision;
     const dispose = manager.register("card", renderer);
 
     expect(manager.get("card")).toBe(renderer);
@@ -24,8 +24,8 @@ describe("RendererManager", () => {
     expect(manager.delete("card")).toBe(false);
     dispose();
     expect(manager.get("card")).toBe(fallback);
-    expect(panel.editor.renderers.revision).toBe(revision + 2);
-    panel.editor.destroy();
+    expect(reactPanel.editor.renderers.revision).toBe(revision + 2);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

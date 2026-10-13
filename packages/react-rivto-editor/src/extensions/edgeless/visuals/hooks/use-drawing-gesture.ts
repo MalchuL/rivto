@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import type { ConnectorEndpoint, ConnectorRoute, CreateVisualPayload, EdgelessVisualTool, VisualFrame } from "../types";
 import { canvasPoint, type CanvasPoint } from "../utils/canvas-point";
 import {
@@ -60,7 +60,7 @@ export function useDrawingGesture({
   zoom,
   tool,
 }: {
-  controller: EdgelessVisualController;
+  controller: EdgelessOperations;
   root: HTMLElement | null;
   zoom: number;
   tool: EdgelessVisualTool;
@@ -149,7 +149,7 @@ export function useDrawingGesture({
     const host = captureEl.current;
     if (host?.hasPointerCapture(pointerId)) host.releasePointerCapture(pointerId);
     if (root) showSnapGuides(root, []);
-    if (toolRef.current.tool === "place" && last) setPlacePreview(placedFrame(last).frame);
+    if ((toolRef.current.tool === "place" || toolRef.current.tool === "element") && last) setPlacePreview(placedFrame(last).frame);
     else setPlacePreview(null);
     return true;
   };
@@ -160,21 +160,26 @@ export function useDrawingGesture({
   }, [tool]);
 
   useEffect(() => {
-    if (tool.tool === "place") return;
+    if ((tool.tool === "place" || tool.tool === "element")) return;
     setPlacePreview(null);
     if (root) showSnapGuides(root, []);
   }, [root, tool]);
 
   useEffect(() => {
-    const dispose = controller.editor.keyboard.register({
+    const dispose = (controller.reactPanel ?? controller.runtime).keyboard.register({
       id: "edgeless.gesture-cancel",
       keys: ["Escape"],
       mode: "edgeless",
       priority: 40,
       when: () => Boolean(gesture.current),
     }, () => cancelGesture());
-    return dispose;
-  }, [controller]);
+    const deactivate = controller.reactPanel?.subscribeDeactivation(() => cancelGesture());
+    return () => {
+      dispose();
+      deactivate?.();
+      cancelGesture();
+    };
+  }, [controller, root]);
 
   const pointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (tool.tool === "select" || tool.tool === "pan" || event.button !== 0) return;
@@ -189,7 +194,7 @@ export function useDrawingGesture({
     gesture.current = start;
     captureEl.current = event.currentTarget;
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (tool.tool === "place") {
+    if ((tool.tool === "place" || tool.tool === "element")) {
       const snapped = placedFrame(point, event.altKey);
       setPlacePreview(snapped.frame);
       if (root) showSnapGuides(root, snapped.guides);
@@ -222,7 +227,7 @@ export function useDrawingGesture({
       return;
     }
 
-    if (tool.tool === "place") {
+    if ((tool.tool === "place" || tool.tool === "element")) {
       const active = gesture.current;
       if (!active || active.pointerId !== event.pointerId) {
         const snapped = placedFrame(point, event.altKey);
@@ -284,14 +289,21 @@ export function useDrawingGesture({
         frame: padded.frame,
         points: padded.points,
       });
-    } else if (tool.tool === "place") {
+    } else if ((tool.tool === "place" || tool.tool === "element")) {
       const start = active.points[0]!;
       const end = active.points.at(-1) ?? start;
       const moved = Math.hypot(end.x - start.x, end.y - start.y) >= 4;
       const frame = moved
         ? snapDraggedFrame(start, end, creationCandidates(), snapOptions(event.altKey), event.shiftKey).frame
         : placedFrame(start, event.altKey).frame;
-      controller.create(placePayload(tool, frame));
+      if (tool.tool === "element") {
+        const reactPanel = controller.reactPanel;
+        const creation = controller.runtime.elementTypes.get(tool.type)?.creation;
+        if (!reactPanel || !creation) return;
+        const input = creation.create(reactPanel);
+        if (input.type !== tool.type) throw new Error("Element creation factory returned a different type");
+        controller.createElement({ ...input, frame });
+      } else controller.create(placePayload(tool, frame));
       if (moved) controller.rememberPlaceSize(frame);
       setPlacePreview(placedFrame(end, event.altKey).frame);
     }

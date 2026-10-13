@@ -36,15 +36,15 @@ export interface UseEditorModeResult {
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { panel } = useEditorContext();
+  const { reactPanel } = useEditorContext();
   const subscribe = useCallback(
-    (listener: () => void) => panel.mode.subscribe(listener),
-    [panel],
+    (listener: () => void) => reactPanel.mode.subscribe(listener),
+    [reactPanel],
   );
-  const mode = useSyncExternalStore(subscribe, () => panel.mode.get(), () => panel.mode.get());
+  const mode = useSyncExternalStore(subscribe, () => reactPanel.mode.get(), () => reactPanel.mode.get());
   const setMode = useCallback(
-    (mode: EditorMode) => panel.mode.set(mode),
-    [panel],
+    (mode: EditorMode) => reactPanel.mode.set(mode),
+    [reactPanel],
   );
 
   return {

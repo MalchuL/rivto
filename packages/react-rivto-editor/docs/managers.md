@@ -19,13 +19,13 @@ Mutable maps and arrays remain private. Every registration validates that the
 runtime is active, preserves declaration order, returns an idempotent disposer,
 and is automatically released by `ReactEditor.destroy()`.
 
-Each rendered occurrence has an `PanelAPI` with local event, keyboard,
+Each rendered occurrence has an `ReactPanelApi` with local event, keyboard,
 selection, clipboard, and slash managers. Their constructors receive the shared
 registrations and the occurrence dependencies they need. Document history and rendering definitions are shared; blocks and elements have
 panel-bound managers that validate membership before invoking document mutations. Keyboard keymap overrides and
 the unknown-renderer fallback remain explicit document-wide configuration.
 
-Components receive this occurrence API through `usePanel()`. Event and
+Components receive this occurrence API through `useReactPanel()`. Event and
 slash handlers receive it in their callback context. Shared managers never
 substitute an active occurrence when executing clipboard or slash operations;
 the receiving editor is explicit. Local cleanup does not destroy the runtime.
@@ -61,7 +61,7 @@ component registrations are valid.
 | `clipboardFormats` | Portable formatters and parsers |
 | `pasteStrategies` | Shared ordered paste algorithms |
 | `keyboard` | Semantic bindings, shortcut matching, and dynamic keymaps |
-| `selection` | Shared portable document selection; DOM synchronization belongs to panel.selection |
+| `selection` | Shared portable document selection; DOM synchronization belongs to reactPanel.selection |
 | `slashCommands` | React-owned slash-command registry and lifecycle |
 
 `extensions.mount` has no mode argument. A mounted component is present beside
@@ -72,7 +72,7 @@ effect with surface-specific behavior checks `useContext(SurfaceContext)`.
 not extension lifecycle. The first registered block or editor wrapper is
 outermost. Defensive read methods return new arrays.
 
-`panel.selection` adds DOM behavior to core selection state. `slashCommands` is owned
+`reactPanel.selection` adds DOM behavior to core selection state. `slashCommands` is owned
 entirely by the React runtime.
 
 Presentation registries publish focused revisions. Document, tree, mode,
@@ -104,5 +104,6 @@ loaded persisted type.
 Extension custom cleanup runs before registrations created by that extension.
 Manager-owned registrations then unwind in reverse order. The event manager
 disconnects native listeners through DOMEventListeners after extension teardown.
-panel implementation cancels local DOM work and releases its acquisition on unmount;
-the public PanelAPI has no destroy method and never destroys its core editor.
+ReactPanel cancels local DOM work and releases its local subscriptions on unmount;
+the host retains and releases its storage acquisition separately.
+the public ReactPanelApi has no destroy method and never destroys its core editor.

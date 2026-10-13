@@ -6,11 +6,11 @@
  * Nested blocks keep the same left column as their ancestors. Edgeless cards omit the
  * numbers because their frames are not a vertical outline.
  */
+import type { PanelAPI } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import {
   usePanel,
   type BlockSlotProps,
-  type PanelAPI,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
@@ -76,11 +76,11 @@ function buildOrdinals(
  * @returns The shared ordinal map for that document.
  */
 function blockOrderSnapshot(panel: PanelAPI): ReadonlyMap<string, BlockOrdinal> {
-  const document = panel.editor.document.getDocument();
+  const document = panel.document.getDocument();
   if (!document) throw new Error("Document context is required for gutter numbering");
   let cache = blockOrders.get(document);
   if (!cache) {
-    cache = { map: buildOrdinals(panel.editor.document.blocks.getBlocks()) };
+    cache = { map: buildOrdinals(panel.document.blocks.getBlocks()) };
     blockOrders.set(document, cache);
   }
   return cache.map;
@@ -106,7 +106,7 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   const panel = usePanel();
   // Read after document publication: undo can notify structure observers
   // before every affected root/child snapshot has been invalidated.
-  const subscribe = useCallback((listener: () => void) => panel.editor.document.subscribe(listener), [panel]);
+  const subscribe = useCallback((listener: () => void) => panel.subscribe(listener), [panel]);
   const previous = useRef<BlockOrdinal | undefined>(undefined);
   const getBlockOrderSnapshot = useCallback(() => {
     const current = blockOrderSnapshot(panel).get(block.id);
@@ -143,7 +143,7 @@ export function blockNumberExtension(): ReactEditorExtension {
     setup(reactEditor) {
       // Invalidate once during structure observation. Rows read on document
       // publication, sharing one rebuild after all storage observers finish.
-      const document = reactEditor.document.getDocument();
+      const document = reactEditor.getDocument();
       const unsubscribe = document.blocks.subscribeStructure(() => invalidateBlockOrder(document));
       reactEditor.surfaces.registerBlockSlot({
         position: "left",

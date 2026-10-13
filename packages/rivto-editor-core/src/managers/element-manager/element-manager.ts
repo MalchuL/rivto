@@ -88,7 +88,8 @@ export class ElementManager implements ElementManagerApi {
    *
    * The pipeline belongs to this editor, not shared document state, and remains
    * available across its document operations. Insertions process every new node;
-   * updates process the merged record but write only fields requested by the patch.
+   * updates process the merged record and write the requested frame/stacking fields.
+   * Property edits and type-specific resize behavior write the normalized merged properties.
    * Processors also run on new grouping records. Remote writes and snapshot loading
    * do not pass through this editor pipeline.
    *
@@ -302,7 +303,8 @@ export class ElementManager implements ElementManagerApi {
     const process = (value: ElementInput): ElementInput => {
       if (visiting.has(value)) throw new Error("Cyclic element input");
       visiting.add(value);
-      const processed = this.pipe.process(value);
+      const piped = this.pipe.process(value);
+      const processed = { ...piped, props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}) };
       if (processed !== value && visiting.has(processed)) throw new Error("Cyclic element input");
       visiting.add(processed);
       const children = processed.children?.map(process);
@@ -434,19 +436,22 @@ export class ElementManager implements ElementManagerApi {
       const stored = this.getElementNode(id);
       if (!stored) throw new Error(`Element ${id} not found`);
       const current = simulated.get(id) ?? stored;
-      const processed = this.pipe.process({
+      const frameInput = patch.frame ? { ...current.frame, ...patch.frame } : current.frame;
+      const resize = patch.frame ? this.editor.elementRegistry.get(current.type)?.resize?.({ ...stored, ...current } as EditorElementNode, frameInput) : undefined;
+      const piped = this.pipe.process({
         ...current,
         frame: patch.frame ? { ...current.frame, ...patch.frame } : current.frame,
         zIndex: patch.zIndex ?? current.zIndex,
-        props: patch.props ? { ...current.props, ...patch.props } : current.props,
+        props: { ...current.props, ...resize, ...patch.props },
       });
+      const processed = { ...piped, props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}) };
       if (!processed.frame) throw new Error("Updated elements require a frame");
       simulated.set(id, { ...processed, frame: processed.frame });
       const frame = patch.frame
         ? Object.fromEntries(Object.keys(patch.frame).map((key) => [key, processed.frame![key as keyof NonNullable<typeof processed.frame>]]))
         : undefined;
-      const props = patch.props
-        ? Object.fromEntries(Object.keys(patch.props).map((key) => [key, processed.props?.[key]]))
+      const props = patch.props || resize
+        ? processed.props
         : undefined;
       return {
         id,

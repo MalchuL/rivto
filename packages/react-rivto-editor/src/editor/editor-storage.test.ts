@@ -15,16 +15,17 @@ const configured = (editor: DocumentEditorAPI) => {
 };
 
 it("creates empty documents by default and returns the same single editor for concurrent requests", async () => {
-  const multi = new EditorStorage();
+  let core!: DocumentEditorAPI;
+  const multi = new EditorStorage({ createEditor: (editor) => { core = editor; return createReactEditor({ editor }); } });
   const [first, second] = await Promise.all([multi.acquireEditor("A"), multi.acquireEditor("A")]);
-  const a = first.editor.document; const b = second.editor.document;
+  const a = first.editor; const b = second.editor;
   expect(a).toBe(b); expect(a.getDocument().id).toBe("A");
   expect(a.blocks.getBlocks()).toEqual([]); expect(a).not.toHaveProperty("documents"); expect(a).not.toHaveProperty("mode");
   const destroy = jestApi.spyOn(a.getDocument(), "destroy");
-  const coreDestroy = jestApi.spyOn(a, "destroy");
+  const coreDestroy = jestApi.spyOn(core, "destroy");
   const reactEditor = multi.getEditor("A")!;
   const reactDestroy = jestApi.spyOn(reactEditor, "destroy");
-  expect(reactEditor.document.blocks).toBe(a.blocks);
+  expect(reactEditor.blocks).toBe(a.blocks);
   expect(reactEditor).not.toHaveProperty("openCoreEditor");
   await first.release(); await second.release();
   expect(reactDestroy).toHaveBeenCalledTimes(1); expect(coreDestroy).toHaveBeenCalledTimes(1);
@@ -43,8 +44,8 @@ it("runs the async loader and specific factory once, preserving per-document def
     return createReactEditor({ editor });
   } });
   const leases = await Promise.all([multi.acquireEditor("A"), multi.acquireEditor("A")]);
-  const [a, same] = leases.map(lease => lease.editor.document);
-  const b = (await multi.acquireEditor("B")).editor.document;
+  const [a, same] = leases.map(lease => lease.editor);
+  const b = (await multi.acquireEditor("B")).editor;
   expect(a).toBe(same); expect(open.mock.calls.map(([id]) => id)).toEqual(["A", "B"]);
   expect(a.blocks.insertBlock({ type: "paragraph" }).props.owner).toBe("A");
   expect(b.blocks.insertBlock({ type: "paragraph" }).props.owner).toBe("B");
@@ -57,7 +58,7 @@ it("runs the async loader and specific factory once, preserving per-document def
 it.each([10, 2000])("routes block edits without reading forests for %i blocks, and never loads unrelated documents", async (count) => {
   const open = jestApi.fn(async (id: string) => model(id));
   const multi = new EditorStorage({ openDocument: open, createEditor: configured });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "a", type: "paragraph", children: Array.from({ length: count }, (_, index) => ({ id: `a-${index}`, type: "paragraph" })) });
   b.blocks.insertBlock({ id: "b", type: "paragraph", content: "B" });
   const reads = jestApi.spyOn(a.blocks, "getBlocks"); const otherReads = jestApi.spyOn(b.blocks, "getBlocks");
@@ -71,11 +72,11 @@ it.each([10, 2000])("routes block edits without reading forests for %i blocks, a
 
 it("resolves qualified IDs first and reports ambiguity only for fallback", async () => {
   const multi = new EditorStorage({ createEditor: configured });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   for (const editor of [a, b]) editor.blocks.insertBlock({ id: "same", type: "paragraph" });
   expect(await multi.blockReferences.resolveBlock({ documentId: "B", blockId: "same" })).toEqual({ documentId: "B", ambiguous: false });
   expect(await multi.blockReferences.resolveBlock({ documentId: "missing", blockId: "same" })).toEqual({ documentId: "missing", ambiguous: false });
-  const empty = (await multi.acquireEditor("empty")).editor.document;
+  const empty = (await multi.acquireEditor("empty")).editor;
   expect(await multi.blockReferences.resolveBlock({ documentId: empty.getDocument().id, blockId: "same" })).toEqual({ documentId: "A", ambiguous: true });
   b.blocks.updateBlock("same", { content: "Explicit" });
   expect(b.blocks.getBlockNode("same")?.content).toBe("Explicit"); expect(a.blocks.getBlockNode("same")?.content).toBe("");
@@ -85,7 +86,7 @@ it("resolves qualified IDs first and reports ambiguity only for fallback", async
 
 it("remaps clipboard subtree IDs only against the destination document and does not overwrite source data", async () => {
   const multi = new EditorStorage({ createEditor: configured });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "source", type: "paragraph", content: "Parent", children: [{ id: "child", type: "paragraph", content: "Child" }] });
   a.selection.set(createStructuralSelection(["source"]));
   const bundle = await a.clipboard.copy();
@@ -101,7 +102,7 @@ it("remaps clipboard subtree IDs only against the destination document and does 
 
 it("keeps selection, subscriptions and history independent between single editors", async () => {
   const multi = new EditorStorage({ createEditor: configured });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "a", type: "paragraph", content: "A" }); b.blocks.insertBlock({ id: "b", type: "paragraph", content: "B" });
   a.selection.set(createCaretSelection("a", 0)); b.selection.set(createCaretSelection("b", 1));
   const subscriber = jestApi.fn(); a.blocks.subscribeBlockNode("a", subscriber);
@@ -113,7 +114,7 @@ it("keeps selection, subscriptions and history independent between single editor
 
 it("transfers stable subtree IDs and validates the destination before deleting the source", async () => {
   const multi = new EditorStorage({ createEditor: configured });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
   expect(() => crossDocumentBlockTransfer(multi.getEditor("A")!, multi.getEditor("B")!, ["parent"], { targetId: "missing", position: "inside" })).toThrow();
   expect(a.blocks.hasBlock("parent")).toBe(true); expect(b.blocks.getRootIds()).toEqual([]);
@@ -130,7 +131,7 @@ it("rejects destination type rules without a partial transfer", async () => {
     if (document.id === "A") editor.blockRegistry.defineBlock({ type: "custom" });
     return createReactEditor({ editor });
   } });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "custom", type: "custom" });
   expect(() => crossDocumentBlockTransfer(multi.getEditor("A")!, multi.getEditor("B")!, ["custom"], { targetId: null, position: "after" })).toThrow("not registered");
   expect(a.blocks.hasBlock("custom")).toBe(true); expect(b.blocks.getRootIds()).toEqual([]);
@@ -169,7 +170,7 @@ it("disposes late loader results during shutdown and permits retry after loader 
   let attempts = 0;
   const retry = new EditorStorage({ openDocument: async (id) => { if (++attempts === 1) throw new Error("offline"); return model(id); } });
   await expect(retry.acquireEditor("B")).rejects.toThrow("offline");
-  expect(((await retry.acquireEditor("B")).editor.document).getDocument().id).toBe("B"); await retry.destroy();
+  expect(((await retry.acquireEditor("B")).editor).getDocument().id).toBe("B"); await retry.destroy();
 });
 
 it("rolls back failed factory/setup, including a model returned with the wrong identity", async () => {
@@ -198,7 +199,7 @@ it("reopens safely when an acquisition races the final release", async () => {
   const editor = "editor" in result ? result.editor : result;
   await closing;
   expect(editor).not.toBe(first.editor);
-  expect(multi.getEditor("A")!.document.blocks).toBe(editor.document.blocks);
+  expect(multi.getEditor("A")!.blocks).toBe(editor.blocks);
   if ("release" in result) await result.release();
   await multi.destroy();
 });
@@ -222,7 +223,7 @@ it("resolves closed sources through metadata without opening candidates, and sel
   expect(await multi.blockReferences.resolveBlock({ documentId: "Z", blockId: "same" })).toEqual({ documentId: "Z", ambiguous: false });
   expect(await multi.blockReferences.resolveBlock({ documentId: "old", blockId: "same" })).toEqual({ documentId: "A", ambiguous: true });
   expect(open).not.toHaveBeenCalled();
-  const z = (await multi.acquireEditor("Z")).editor.document;
+  const z = (await multi.acquireEditor("Z")).editor;
   z.getDocument().blocks.insertBlock({ id: "same", type: "opaque" });
   lookup.mockClear();
   expect(await multi.blockReferences.resolveBlock({ documentId: "Z", blockId: "same" })).toEqual({ documentId: "Z", ambiguous: false });
@@ -232,7 +233,7 @@ it("resolves closed sources through metadata without opening candidates, and sel
 
 it("keeps a pending preferred source when metadata confirms it, rather than using an already loaded duplicate", async () => {
   const multi = new EditorStorage({ lookupDocumentIds: async () => ["A", "B"] });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.getDocument().blocks.insertBlock({ id: "same", type: "opaque", content: "Other document" });
   expect(b.blocks.hasBlock("same")).toBe(false);
   expect(await multi.blockReferences.resolveBlock({ documentId: "B", blockId: "same" })).toEqual({ documentId: "B", ambiguous: false });
@@ -257,7 +258,7 @@ it("uses the application's resolver and propagates loading errors without choosi
 it.each([10, 2000])("observes only a directly addressed document and performs no fallback searches while editing %i blocks", async (count) => {
   const lookup = jestApi.fn(async () => ["A", "B"]);
   const multi = new EditorStorage({ lookupDocumentIds: lookup });
-  const a = (await multi.acquireEditor("A")).editor.document; const b = (await multi.acquireEditor("B")).editor.document;
+  const a = (await multi.acquireEditor("A")).editor; const b = (await multi.acquireEditor("B")).editor;
   a.getDocument().blocks.insertBlock({ id: "same", type: "opaque", children: Array.from({ length: count }, (_, index) => ({ id: `child-${index}`, type: "opaque" })) });
   b.getDocument().blocks.insertBlock({ id: "same", type: "opaque" });
   const observeOther = jestApi.spyOn(b.getDocument().blocks, "subscribeBlockNode");

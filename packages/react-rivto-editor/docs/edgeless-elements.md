@@ -2,12 +2,14 @@
 
 Canvas state is stored in the document's `elements` collection, independently
 from block content. Every element has an ID, a renderer-defined `type`, a
-complete `frame`, a finite `zIndex`, and opaque `props`. Core validates only the
-common envelope and exposes CRUD through `document.elements` and
-`editor.elements`; React extensions own type-specific validation and behavior.
+complete `frame`, a finite `zIndex`, and opaque `props`. The model validates the
+common envelope; DocumentEditor validates registered element definitions on local
+insertion and updates. React registrations install these definitions together with
+rendering, clipboard, creation and property-editing contributions. Remote data and
+loaded snapshots do not run editor validation.
 
-Schema-v5 snapshots always contain `blocks`, `links`, and `elements`. Blocks do
-not contain coordinates. The structured clipboard uses version 3: page copies
+Snapshots contain independent block and element trees. Blocks do
+not contain coordinates. The structured clipboard uses version 4: page copies
 contain blocks and internal links, while edgeless copies may additionally carry
 elements and selected top-level element IDs.
 
@@ -56,29 +58,37 @@ clipboard and undo.
 not supported. Applications may append font and sticky presets:
 
 ```ts
-const visuals = edgelessVisualsExtension({
-  fonts: [{ label: "Brand", fontFamily: "Brand Sans, sans-serif" }],
-  stickers: [{ id: "brand", label: "Brand sticky", fill: "#e8f0ff" }],
-  orphanConnectors: "detach",
-});
-
 const reactEditor = createReactEditor({
   editor,
-  extensions: [standardPreset(), ...edgelessPreset(), visuals],
+  extensions: [standardPreset(), ...edgelessPreset({ visuals: {
+    fonts: [{ label: "Brand", fontFamily: "Brand Sans, sans-serif" }],
+    stickers: [{ id: "brand", label: "Brand sticky", fill: "#e8f0ff" }],
+    orphanConnectors: "detach",
+  } })],
 });
-
-const rectangle = visuals.createRectangle({
-  frame: { x: 40, y: 40, width: 160, height: 100 },
-});
-const sticky = visuals.createSticker({ text: "Reusable API" });
-visuals.select([rectangle, sticky]);
-visuals.group();
 ```
 
-The returned `EdgelessVisualsExtension` is both the installable extension and
-the typed host API. Its methods are available after `createReactEditor()` installs
-it and stop being available after that React editor is destroyed. String-based
-`edgeless.*` commands remain available for command palettes and integrations.
+Inside an EditorPanel subtree, a toolbar can use the typed panel API:
+
+```tsx
+function CreateRectangle() {
+  const reactPanel = useReactPanel();
+  return <button onClick={() => reactPanel.edgeless.createElement({
+    type: "rectangle",
+    frame: { x: 40, y: 40, width: 160, height: 100 },
+    zIndex: 1,
+  })}>Rectangle</button>;
+}
+```
+
+`edgelessVisualsExtension()` remains an installable extension for manual composition;
+do not add it again beside `edgelessPreset()`. It exposes no command facade.
+String-based `edgeless.*` commands remain available for command palettes and integrations.
+Register custom types through `reactEditor.elementTypes.register({ definition, render,
+behavior, clipboard, creation, properties })`. `definition.resize` or `behavior.resize`
+returns property changes for core frame updates, including programmatic resize and
+Moveable commits. Disposing a registration removes presentation and contributions;
+persisted unknown elements remain visible through the fallback renderer.
 
 Snapping preferences can be shared and persisted by the host without entering
 the collaborative document:

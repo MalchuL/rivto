@@ -1,3 +1,4 @@
+import { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
@@ -26,6 +27,8 @@ export class DocumentEditor implements DocumentEditorAPI {
   readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
+  /** Element definitions and property rules shared by all panels of this editor. */
+  readonly elementRegistry = new ElementRegistry();
   /** Named command handlers exposed to integrations and focused managers. */
   readonly commands = new CommandRegistry();
   /** Local text and structural selection state; never persisted to the document. */
@@ -193,6 +196,7 @@ export class DocumentEditor implements DocumentEditorAPI {
     };
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
     run(() => this.elements.destroy());
+    run(() => this.elementRegistry.destroy());
     run(() => this.blocks.destroy());
     run(() => this.blockListProps.destroy());
     run(() => this.blockRegistry.destroy());

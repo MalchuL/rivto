@@ -9,7 +9,7 @@ import { useId } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
 import { editorControlProps } from "../../../../constants";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
 
 const AUTO_HEIGHT_FIELD_CLASS = "flex items-center gap-2";
@@ -27,7 +27,7 @@ export function BlockProperties({
   controller,
 }: {
   readonly elements: readonly EditorElementNode[];
-  readonly controller: EdgelessVisualController;
+  readonly controller: EdgelessOperations;
 }) {
   const ids = elements.map((element) => element.id);
   const autoHeight = elements.every((element) => element.props.autoHeight !== false);
@@ -37,7 +37,7 @@ export function BlockProperties({
       title="Block card"
       count={elements.length}
       ariaLabel="Block properties"
-      onClose={() => controller.execute("edgeless.selection.clear")}
+      onClose={() => controller.clearSelection()}
     >
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">

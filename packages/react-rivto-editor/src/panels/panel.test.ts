@@ -1,7 +1,9 @@
+import { edgelessPreset } from "../extensions/edgeless";
+import { ReactPanel } from "./react-panel";
 import { outdentBlocks } from "../block-behaviors/ops/outline-ops";
 import { createTestCoreEditor, createTestReactEditor } from "../test-utils";
-import { ChildrenPanel } from "./children-panel";
-import { PanelElements } from "./panel-elements";
+import { ChildrenPanel } from "@chulane/rivto";
+import { PanelElements } from "@chulane/rivto";
 
 const groupInput = { type: "group", frame: { x: 0, y: 0, width: 100, height: 100 }, zIndex: 0 };
 
@@ -10,10 +12,10 @@ it("reconciles separate element groups of one subtree without resetting their ge
   const fullPanel = createTestReactEditor({ editor: core });
   const runtime = fullPanel.editor;
   const root = core.blocks.insertBlock({ type: "paragraph", content: "Title", children: [{ type: "paragraph", content: "Child" }] });
-  const first = runtime.document.elements.insertElement(groupInput);
-  const second = runtime.document.elements.insertElement(groupInput);
+  const first = runtime.elements.insertElement(groupInput);
+  const second = runtime.elements.insertElement(groupInput);
   const releaseFirst = runtime.acquirePanel(root.id, first.id); const releaseSecond = runtime.acquirePanel(root.id, second.id);
-  const a = new PanelElements(runtime.document.elements, runtime.document.getDocument(), first.id); const b = new PanelElements(runtime.document.elements, runtime.document.getDocument(), second.id);
+  const a = new PanelElements(runtime.elements, runtime.getDocument(), first.id); const b = new PanelElements(runtime.elements, runtime.getDocument(), second.id);
   const card = a.getElementNodes()[0]!;
   expect(card.props.startBlockId).toBe(root.children[0]!.id);
   expect(b.getElementNodes()[0]!.id).not.toBe(card.id);
@@ -30,26 +32,26 @@ it("reconciles separate element groups of one subtree without resetting their ge
 it("shows children and prevents outdenting them past the Panel root", async () => {
   const core = await createTestCoreEditor(); const fullPanel = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph", content: "Child" }] });
-  const panel = new ChildrenPanel(fullPanel.editor, { rootBlockId: root.id });
-  expect(panel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
-  outdentBlocks(panel, [root.children[0]!.id]);
+  const reactPanel = new ReactPanel(fullPanel.editor, new ChildrenPanel(fullPanel.editor, { rootBlockId: root.id }), {  });
+  expect(reactPanel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
+  outdentBlocks(reactPanel, [root.children[0]!.id]);
   expect(core.blocks.getParentId(root.children[0]!.id)).toBe(root.id);
   core.history.clear(); core.blocks.removeBlock(root.id);
-  expect(panel.blocks.getRootIds()).toEqual([]);
+  expect(reactPanel.blocks.getRootIds()).toEqual([]);
   core.history.undo();
-  expect(panel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
+  expect(reactPanel.blocks.getRootIds()).toEqual([root.children[0]!.id]);
   fullPanel.editor.destroy(); await core.destroy();
 });
 
 it("pastes text and structured blocks into an empty Panel without changing document roots", async () => {
   const core = await createTestCoreEditor(); const fullPanel = createTestReactEditor({ editor: core });
   const root = core.blocks.insertBlock({ type: "paragraph", content: "Title" });
-  const panel = new ChildrenPanel(fullPanel.editor, { rootBlockId: root.id });
-  panel.clipboard.paste({ text: "Pasted child", defaultBlockType: "paragraph" });
+  const reactPanel = new ReactPanel(fullPanel.editor, new ChildrenPanel(fullPanel.editor, { rootBlockId: root.id }), {  });
+  reactPanel.clipboard.paste({ text: "Pasted child", defaultBlockType: "paragraph" });
   expect(core.blocks.getRootIds()).toEqual([root.id]);
   expect(core.blocks.getBlock(root.id)!.children[0]!.content).toBe("Pasted child");
   core.blocks.removeBlocks([...core.blocks.getBlockNode(root.id)!.childIds]);
-  panel.clipboard.paste({ bundle: { version: 4, blocks: [{ id: "source", type: "paragraph", content: "Structured", props: {}, listProps: {}, pluginData: {}, children: [] }] } });
+  reactPanel.clipboard.paste({ bundle: { version: 4, blocks: [{ id: "source", type: "paragraph", content: "Structured", props: {}, listProps: {}, pluginData: {}, children: [] }] } });
   expect(core.blocks.getRootIds()).toEqual([root.id]);
   expect(core.blocks.getBlock(root.id)!.children[0]!.content).toBe("Structured");
   fullPanel.editor.destroy(); await core.destroy();
@@ -57,19 +59,19 @@ it("pastes text and structured blocks into an empty Panel without changing docum
 
 it("remaps copied group and connector references into the receiving element subtree", async () => {
   const { ElementPasteStrategy } = await import("../extensions/built-ins/clipboard/element-paste-strategy");
-  const core = await createTestCoreEditor(); const fullPanel = createTestReactEditor({ editor: core });
+  const core = await createTestCoreEditor(); const fullPanel = createTestReactEditor({ editor: core, extensions: [...edgelessPreset()] });
   const container = core.elements.insertElement(groupInput);
-  const panel = new ChildrenPanel(fullPanel.editor, { rootElementId: container.id });
+  const reactPanel = new ReactPanel(fullPanel.editor, new ChildrenPanel(fullPanel.editor, { rootElementId: container.id }), {  });
   const base = { childIds: [], type: "rectangle", frame: { x: 0, y: 0, width: 40, height: 50 }, zIndex: 0 };
   const left = core.elements.insertElement(base);
   const right = core.elements.insertElement(base);
-  const connector = core.elements.insertElement({ ...base, type: "connector", props: { source: { elementId: left.id, position: { x: 1, y: 2 } }, target: { elementId: right.id, position: { x: 3, y: 4 } } } });
+  const connector = core.elements.insertElement({ ...base, type: "connector", props: { source: { elementId: left.id, anchor: { x: 1, y: .5 }, position: { x: 1, y: 2 } }, target: { elementId: right.id, anchor: { x: 0, y: .5 }, position: { x: 3, y: 4 } } } });
   const group = core.elements.insertElement({ ...base, type: "group", childIds: [left.id, right.id, connector.id], props: {} });
-  const result = new ElementPasteStrategy(panel).paste({ bundle: { version: 4, blocks: [], elements: [left, right, connector, group].map(({ id }) => core.elements.getElementNode(id)!), selectedElementIds: [group.id] } }, {});
+  const result = new ElementPasteStrategy(reactPanel).paste({ bundle: { version: 4, blocks: [], elements: [left, right, connector, group].map(({ id }) => core.elements.getElementNode(id)!), selectedElementIds: [group.id] } }, {});
   const ids = result!.elementIdMap!;
-  expect(panel.elements.getElementNodes()).toHaveLength(4);
-  expect(panel.elements.getElementNode(ids.get(group.id)!)!.childIds).toEqual([left, right, connector].map((element) => ids.get(element.id)));
-  expect(panel.elements.getElementNode(ids.get(connector.id)!)!.props.source).toMatchObject({ elementId: ids.get(left.id) });
+  expect(reactPanel.elements.getElementNodes()).toHaveLength(4);
+  expect(reactPanel.elements.getElementNode(ids.get(group.id)!)!.childIds).toEqual([left, right, connector].map((element) => ids.get(element.id)));
+  expect(reactPanel.elements.getElementNode(ids.get(connector.id)!)!.props.source).toMatchObject({ elementId: ids.get(left.id) });
   expect(core.elements.getElement(group.id)).toEqual(group);
   fullPanel.editor.destroy(); await core.destroy();
 });

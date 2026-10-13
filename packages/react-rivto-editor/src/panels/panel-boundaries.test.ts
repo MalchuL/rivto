@@ -1,9 +1,10 @@
+import { ReactPanel } from "./react-panel";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import { convertLeafToContainer } from "../block-behaviors/ops/outline-ops";
 import { createReactEditor } from "../editor/react-editor";
 import { createTestCoreEditor } from "../test-utils";
-import { ChildrenPanel } from "./children-panel";
-import { EmbeddingPanel } from "./embedding-panel";
+import { ChildrenPanel } from "@chulane/rivto";
+import { EmbeddingPanel } from "@chulane/rivto";
 
 async function fixture() {
   const document = await createTestCoreEditor();
@@ -15,8 +16,8 @@ async function fixture() {
   document.elements.insertElement({ ...shape, id: "container", children: [{ ...shape, id: "inside" }] });
   document.elements.insertElement({ ...shape, id: "outside-element" });
   const editor = createReactEditor({ editor: document });
-  const children = new ChildrenPanel(editor, { rootBlockId: "root", rootElementId: "container" });
-  const embedding = new EmbeddingPanel(editor, { rootBlockId: "root", rootElementId: "container" });
+  const children = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: "root", rootElementId: "container" }), {  });
+  const embedding = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: "root", rootElementId: "container" }), {  });
   return { document, children, embedding, close: async () => { editor.destroy(); await document.destroy(); } };
 }
 
@@ -29,12 +30,12 @@ test("panel roots and parents are relative while document hierarchy stays absolu
   expect(f.embedding.blocks.getParentId("a")).toBe("root");
   expect(f.embedding.blocks.getParentId("root")).toBeNull();
   expect(f.document.blocks.getParentId("a")).toBe("root");
-  for (const panel of [f.children, f.embedding]) {
-    expect(panel.elements.getRootIds()).toContain("inside");
-    expect(panel.elements.getParentId("inside")).toBeNull();
-    expect(panel.elements.getElementNode("container")).toBeUndefined();
-    expect(panel.elements.getElementNode("outside-element")).toBeUndefined();
-    const inserted = panel.elements.insertElement({ type: "shape", zIndex: 1, frame: { x: 0, y: 0, width: 10, height: 10 } });
+  for (const reactPanel of [f.children, f.embedding]) {
+    expect(reactPanel.elements.getRootIds()).toContain("inside");
+    expect(reactPanel.elements.getParentId("inside")).toBeNull();
+    expect(reactPanel.elements.getElementNode("container")).toBeUndefined();
+    expect(reactPanel.elements.getElementNode("outside-element")).toBeUndefined();
+    const inserted = reactPanel.elements.insertElement({ type: "shape", zIndex: 1, frame: { x: 0, y: 0, width: 10, height: 10 } });
     expect(f.document.elements.getParentId(inserted.id)).toBe("container");
   }
   await f.close();

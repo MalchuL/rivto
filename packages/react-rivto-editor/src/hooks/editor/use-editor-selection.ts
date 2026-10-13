@@ -8,7 +8,7 @@
  */
 import type { Selection } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { usePanel } from "./use-panel";
+import { useReactPanel } from "./use-react-panel";
 
 /**
  * Returns the current detached local selection.
@@ -17,14 +17,14 @@ import { usePanel } from "./use-panel";
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useEditorSelection(): Selection | undefined {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => panel.selection.subscribe(listener),
-    [panel],
+    (listener: () => void) => reactPanel.selection.subscribe(listener),
+    [reactPanel],
   );
   return useSyncExternalStore(
     subscribe,
-    () => panel.selection.snapshot(),
-    () => panel.selection.snapshot(),
+    () => reactPanel.selection.snapshot(),
+    () => reactPanel.selection.snapshot(),
   );
 }

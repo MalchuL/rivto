@@ -1,6 +1,6 @@
 /** Foreign documents use the same regions and acceptance as local dragging. */
 import type { EditorBlock } from "@chulane/rivto";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import type { CrossDocumentBlockTransferPlacement } from "../../built-ins/clipboard/cross-document-block-transfer";
 import type { DropBlock } from "../placement/types";
 import { dropMoveTarget, excludeDropSubtrees } from "../placement/utils";
@@ -14,7 +14,7 @@ import type { DropPlacement } from "../types";
  * empty document accepts a root-level append without a block indicator;
  * populated documents translate the resolved canonical placement into a target.
  *
- * @param panel - Destination editor view providing its tree and block views.
+ * @param reactPanel - Destination editor view providing its tree and block views.
  * @param root - Rendered destination page surface.
  * @param x - Pointer's horizontal viewport coordinate in pixels.
  * @param y - Pointer's vertical viewport coordinate in pixels.
@@ -28,7 +28,7 @@ import type { DropPlacement } from "../types";
  * for an empty document, or `null` when no destination is accepted.
  */
 export function resolveCrossDocumentPageRootPlacement(
-  panel: PanelAPI,
+  reactPanel: ReactPanelApi,
   root: HTMLElement,
   x: number,
   y: number,
@@ -39,21 +39,21 @@ export function resolveCrossDocumentPageRootPlacement(
   outerEdgeDropZone?: number,
   sourceDocumentId?: string,
 ): (CrossDocumentBlockTransferPlacement & { readonly indicator: DropPlacement | null }) | null {
-  let blocks: readonly DropBlock[] = getDropBlocks(panel);
-  if (sourceDocumentId === panel.editor.document.getDocument().id) {
+  let blocks: readonly DropBlock[] = getDropBlocks(reactPanel);
+  if (sourceDocumentId === reactPanel.document.getDocument().id) {
     blocks = excludeDropSubtrees(blocks, new Set(sources.map(({ id }) => id)));
   }
   if (!blocks.length) {
-    if (panel.rootBlockId && !panel.blocks.hasBlock(panel.rootBlockId) && panel.document.blocks.hasBlock(panel.rootBlockId)) {
-      const destination = { kind: "inside", parentId: panel.rootBlockId } as const;
-      return panel.editor.blockBehaviors.acceptsDrop(destination, sources)
-        ? { targetId: panel.rootBlockId, position: "inside", indicator: null } : null;
+    if (reactPanel.rootBlockId && !reactPanel.blocks.hasBlock(reactPanel.rootBlockId) && reactPanel.document.blocks.hasBlock(reactPanel.rootBlockId)) {
+      const destination = { kind: "inside", parentId: reactPanel.rootBlockId } as const;
+      return reactPanel.editor.blockBehaviors.acceptsDrop(destination, sources)
+        ? { targetId: reactPanel.rootBlockId, position: "inside", indicator: null } : null;
     }
-    if (panel.rootBlockId) return null;
+    if (reactPanel.rootBlockId) return null;
     const destination = { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 } as const;
-    return panel.editor.blockBehaviors.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
+    return reactPanel.editor.blockBehaviors.acceptsDrop(destination, sources) ? { targetId: null, position: "after", indicator: null } : null;
   }
-  const indicator = resolveSurfaceDrop(root, panel, sources, blocks, { x, y }, {
+  const indicator = resolveSurfaceDrop(root, reactPanel, sources, blocks, { x, y }, {
     childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone,
   });
   return indicator ? { ...dropMoveTarget(indicator), indicator } : null;

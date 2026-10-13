@@ -1,5 +1,5 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import type { EdgelessVisualController } from "../controller";
+import type { EdgelessOperations } from "../../edgeless-operations";
 import type { PresetPayload, VisualFrame } from "../types";
 import { canvasPoint } from "../utils/canvas-point";
 import { centeredPlaceFrame, snapPlacedFrame } from "../utils/creation-geometry";
@@ -23,7 +23,7 @@ export function usePresetDrag({
   plane,
   zoom,
 }: {
-  controller: EdgelessVisualController;
+  controller: EdgelessOperations;
   root: HTMLElement | null;
   plane: HTMLElement | null;
   zoom: number;

@@ -1,7 +1,7 @@
 import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
 import { resolveBeforeDropPlacement, resolveSiblingAfterDropPlacement } from "../placement/utils";
@@ -11,12 +11,12 @@ import { blockContainment } from "../utils/containment";
 /**
  * Returns the tree displayed by this view without changing document operations.
  *
- * @param panel - Destination view, optionally scoped to one subtree.
+ * @param reactPanel - Destination view, optionally scoped to one subtree.
  * @returns The displayed subtree, the complete forest for a document view,
  * or an empty list when the scoped root has been deleted.
  */
-export function getDropBlocks(panel: PanelAPI): EditorBlock[] {
-  return panel.blocks.getBlocks();
+export function getDropBlocks(reactPanel: ReactPanelApi): EditorBlock[] {
+  return reactPanel.blocks.getBlocks();
 }
 
 /**
@@ -25,23 +25,23 @@ export function getDropBlocks(panel: PanelAPI): EditorBlock[] {
  * them. Each access reads the live DOM; no geometry survives between calculations.
  *
  * @param root - Surface element containing the rendered destination blocks.
- * @param panel - Destination React view providing block-view behavior and containment.
+ * @param reactPanel - Destination React view providing block-view behavior and containment.
  * @returns Rendered block identities and layout policies with live viewport
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
-export function collectDropLayout(root: HTMLElement, panel: PanelAPI): DropLayoutBlock[] {
+export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi): DropLayoutBlock[] {
   const dom = new PanelDOM(root);
   return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
     const row = dom.getRow(element);
     if (!id || !row || !element.getClientRects().length) return [];
     const parent = dom.getParent(element);
-    const behavior = panel.editor.blockBehaviors.resolve(id);
+    const behavior = reactPanel.editor.blockBehaviors.resolve(id);
     return [{
       id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,
       get row() { return row.getBoundingClientRect(); },
       get rect() { return element.getBoundingClientRect(); },
-      axis: behavior.dropAxis, fixed: blockContainment(panel, id)?.childOutline === "fixed",
+      axis: behavior.dropAxis, fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
       acceptsBody: Boolean(behavior.acceptsDropContainer), options: behavior.dropPlacement,
       hasRenderedChildren: Boolean(element.querySelector(":scope > .page-block-children > [data-block-id]")),
     }];
@@ -60,7 +60,7 @@ export function collectDropLayout(root: HTMLElement, panel: PanelAPI): DropLayou
  * neighbors outside the card so the final move validates against that tree.
  *
  * @param root - Destination surface element, or `null` when unavailable.
- * @param panel - Destination React view providing layout and acceptance behavior.
+ * @param reactPanel - Destination React view providing layout and acceptance behavior.
  * @param sources - Source blocks checked against each candidate destination.
  * @param blocks - Destination tree participating in placement resolution.
  * @param pointer - Pointer or keyboard-generated position in viewport pixels.
@@ -70,7 +70,7 @@ export function collectDropLayout(root: HTMLElement, panel: PanelAPI): DropLayou
  */
 export function resolveSurfaceDrop(
   root: HTMLElement | null,
-  panel: PanelAPI,
+  reactPanel: ReactPanelApi,
   sources: readonly EditorBlock[],
   blocks: readonly DropBlock[],
   pointer: PointerCoordinates,
@@ -85,11 +85,11 @@ export function resolveSurfaceDrop(
   // contributes blocks. Keyboard movement still uses its supplied geometry.
   if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) return null;
   const layoutRoot = card && root.contains(card) && isInPanel(root, card) ? card : root;
-  const measured = collectDropLayout(layoutRoot, panel);
-  const panelRoot = panel.rootBlockId && !panel.blocks.hasBlock(panel.rootBlockId) && panel.document.blocks.hasBlock(panel.rootBlockId) ? panel.rootBlockId : undefined;
+  const measured = collectDropLayout(layoutRoot, reactPanel);
+  const panelRoot = reactPanel.rootBlockId && !reactPanel.blocks.hasBlock(reactPanel.rootBlockId) && reactPanel.document.blocks.hasBlock(reactPanel.rootBlockId) ? reactPanel.rootBlockId : undefined;
   const placement = resolveDropPlacement(measured, blocks, pointer, options,
-    (destination) => (!panel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null)
-      && panel.editor.blockBehaviors.acceptsDrop(panelRoot && destination.parentId === null ? { ...destination, parentId: panelRoot } : destination, sources));
+    (destination) => (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null)
+      && reactPanel.editor.blockBehaviors.acceptsDrop(panelRoot && destination.parentId === null ? { ...destination, parentId: panelRoot } : destination, sources));
   if (placement?.kind !== "between") return placement;
   // A card boundary is a document gap, not necessarily the document's edge.
   // Keep the visible indicator, but include hidden separators or other cards

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { usePanel } from "./use-panel";
+import { useReactPanel } from "./use-react-panel";
 import type { DOMEventDefinition, DOMEventName, DOMEventTarget, EditorEvent, EditorEventHandler } from "../../managers";
 
 /**
@@ -16,7 +16,7 @@ export function useDOMEvent<
   definition: DOMEventDefinition<Target, Type>,
   listener: EditorEventHandler<EditorEvent<Target, Type>>,
 ): void {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const definitionRef = useRef(definition);
   const listenerRef = useRef(listener);
   definitionRef.current = definition;
@@ -29,7 +29,7 @@ export function useDOMEvent<
   const passive = definition.passive;
   const type = definition.type;
 
-  useEffect(() => panel.events.register({
+  useEffect(() => reactPanel.events.register({
     ...definitionRef.current,
     when: (event) => definitionRef.current.when?.(event) ?? true,
   },
@@ -37,7 +37,7 @@ export function useDOMEvent<
   ), [
     capture,
     definition.id,
-    panel,
+    reactPanel,
     modeKey,
     passive,
     scope,

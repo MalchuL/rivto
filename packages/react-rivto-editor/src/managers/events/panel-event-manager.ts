@@ -13,8 +13,8 @@ export class PanelEventManager implements PanelEventsApi {
    * @param panels - Mounted roots and their rendered surface kinds.
    * @returns Event methods that retain this panel even when another panel gains focus.
    */
-  constructor(private readonly shared: EventManager, private readonly owner: PanelRegistration & Pick<import("../../panels/types").PanelAPI, "mode">, private readonly panels: PanelRegistry) {}
-  register: PanelEventsApi["register"] = (definition, listener) => this.owner.own(this.shared.register(definition, listener, this.owner));
+  constructor(private readonly shared: EventManager, private readonly owner: PanelRegistration & Pick<import("../../panels/types").ReactPanelApi, "mode">, private readonly panels: PanelRegistry) {}
+  register: PanelEventsApi["register"] = (definition, listener) => this.owner.registerCleanup(this.shared.register(definition, listener, this.owner));
   delete(id: string): boolean { return this.shared.delete(`${this.owner.id}:${id}`); }
   getRoot(): HTMLElement | null { return this.owner.getRoot(); }
   setRoot(root: HTMLElement | null): void { this.owner.setRoot(root); }

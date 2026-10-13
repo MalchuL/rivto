@@ -1,4 +1,5 @@
-import { EditorEmbed } from "../../components/editor-embed/editor-embed";
+import { ReactPanel } from "../../panels/react-panel";
+import { ChildrenPanel, EmbeddingPanel } from "@chulane/rivto";
 import { createTestReactEditor as createReactEditor } from "../../test-utils";
 /**
  * Covers the full useBlock and node-level useBlockNode contracts used by
@@ -9,7 +10,7 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  */
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EditorPanel } from "../../components/editor-panel/editor-panel";
+import { TestPanel } from "../../test-utils";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestCoreEditor as createEditor, createTestMultiEditor } from "../../test-utils";
 
@@ -34,25 +35,25 @@ describe("useBlock", () => {
       nodeResult = useBlockNode(parentId);
       return null;
     };
-    const panel = createReactEditor({ editor });
-    panel.editor.surfaces.register("block", Surface);
+    const reactPanel = createReactEditor({ editor });
+    reactPanel.editor.surfaces.register("block", Surface);
 
-    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)));
     expect(blockResult?.block).toMatchObject({ id: parentId, type: "paragraph", content: "Parent" });
     expect(blockResult?.block?.children.map((child) => child.id)).toEqual([childId]);
     expect(nodeResult?.block?.childIds).toEqual([childId]);
     expect(nodeResult?.block && "children" in nodeResult.block).toBe(false);
 
     editor.blocks.updateBlock(childId, { content: "After" });
-    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)));
     expect(blockResult?.block?.children[0]?.content).toBe("After");
     expect(nodeResult?.block?.childIds).toEqual([childId]);
 
     const extraId = editor.blocks.insertBlock({ type: "paragraph", content: "Extra" }, editor.blocks.getInsertionDestinationAfter(childId)).id;
-    renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)));
+    renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)));
     expect(nodeResult?.block?.childIds).toEqual([childId, extraId]);
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
@@ -65,14 +66,14 @@ describe("useBlock", () => {
       const { block } = useBlockNode(parentId);
       return block ? createElement(BlockCollapseSlot, { block, mode: "block", selected: false }) : null;
     };
-    const panel = createReactEditor({ editor });
-    panel.editor.surfaces.register("block", Surface);
+    const reactPanel = createReactEditor({ editor });
+    reactPanel.editor.surfaces.register("block", Surface);
 
-    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)))).toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)))).toContain("Collapse block");
     editor.blocks.removeBlock(childId);
-    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: panel.editor }, createElement(Surface)))).not.toContain("Collapse block");
+    expect(renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)))).not.toContain("Collapse block");
 
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });
@@ -81,7 +82,7 @@ test("native source panels reuse renderers and bind ordinary editor calls withou
   const { DocumentStorage } = await import("@chulane/document-model");
   const { YjsDocumentRegistry } = await import("@chulane/crdt-doc");
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const { usePanel } = await import("../editor/use-panel");
+  const { useReactPanel } = await import("../editor/use-react-panel");
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
   const source = await storage.create("source", [
     { id: "source", type: "custom", content: "Source" },
@@ -89,20 +90,21 @@ test("native source panels reuse renderers and bind ordinary editor calls withou
   ]);
   const host = await storage.create("host");
   const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset()] });
-  const editor = (await runtime.acquireEditor(host.id)).editor.document;
+  const editor = (await runtime.acquireEditor(host.id)).editor;
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
   const reactEditor = runtime.getEditor(source.id)!;
   let result: UseBlockNodeResult | undefined;
   let directWrite: (() => void) | undefined;
   reactEditor.blockTypes.register({ definition: { type: "custom" }, render: ({ blockId }) => {
-    const panel = usePanel();
-    expect(panel.editor.renderers).toBe(reactEditor.renderers);
-    expect(panel.editor.document.getDocument()).toBe(source);
-    directWrite = () => panel.editor.document.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
+    const reactPanel = useReactPanel();
+    expect(reactPanel.editor.renderers).toBe(reactEditor.renderers);
+    expect(reactPanel.editor.getDocument()).toBe(source);
+    directWrite = () => reactPanel.editor.blocks.updateBlock(blockId, { content: "Direct renderer edit" });
     result = useBlockNode(blockId);
     return createElement("span", { "data-custom": "true" }, result.block?.content);
   } });
-  const markup = renderToStaticMarkup(createElement(EditorEmbed, { editor: reactEditor, rootBlockId: "source" }, createElement(PageSurface)));
+  const sourcePanel = new ReactPanel(reactEditor, new EmbeddingPanel(reactEditor, { rootBlockId: "source" }));
+  const markup = renderToStaticMarkup(createElement(TestPanel, { panel: sourcePanel }, createElement(PageSurface)));
   expect(markup).toContain('data-custom="true">Source');
   expect(markup).not.toContain("Outside displayed subtree");
   directWrite!();
@@ -110,6 +112,7 @@ test("native source panels reuse renderers and bind ordinary editor calls withou
   result!.operations.setProp("checked", true);
   expect(source.blocks.getBlockNode("source")?.props.checked).toBe(true);
   expect(editor.blocks.getBlocks()).toMatchObject([{ id: "host", content: "Host" }]);
+  sourcePanel.destroy();
   await runtime.destroy(); await storage.destroy();
 });
 
@@ -123,13 +126,44 @@ test.each([
   editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
   const sourceCore = await createEditor();
   const { standardPreset } = await import("../../extensions/built-ins/built-ins");
-  const panel = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
-  panel.editor.document.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
-  const markup = renderToStaticMarkup(createElement(EditorEmbed, { editor: panel.editor, rootBlockId: "container" }, createElement(PageSurface)));
+  const reactPanel = createReactEditor({ editor: sourceCore, extensions: [standardPreset(), extension()] });
+  reactPanel.editor.blocks.insertBlock({ ...input(), id: "container", listProps: { collapsed: true } });
+  const embedded = new ReactPanel(reactPanel.editor, new EmbeddingPanel(reactPanel.editor, { rootBlockId: "container" }));
+  const markup = renderToStaticMarkup(createElement(TestPanel, { panel: embedded }, createElement(PageSurface)));
   expect(markup).toContain(title);
   expect(markup).toContain('data-block-id="container"');
   if (title === "Kanban") expect(markup).toContain("3 columns");
   if (title === "Table") expect(markup).toContain("3 × 3");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
-  panel.editor.destroy(); await sourceCore.destroy(); await editor.destroy();
+  embedded.destroy();
+  reactPanel.editor.destroy(); await sourceCore.destroy(); await editor.destroy();
+});
+
+test("a retained collapse handler reads current state and ignores blocks moved outside its panel", async () => {
+  const editor = await createEditor();
+  const root = editor.blocks.insertBlock({ type: "paragraph", children: [
+    { id: "toggle", type: "paragraph", children: [{ type: "paragraph" }] },
+  ] });
+  const reactPanel = createReactEditor({ editor });
+  const bounded = new ReactPanel(reactPanel.editor, new ChildrenPanel(reactPanel.editor, { rootBlockId: root.id }));
+  let click: (() => void) | undefined;
+  const Surface = () => {
+    const { block } = useBlockNode("toggle");
+    const control = BlockCollapseSlot({ block: block!, mode: "block", selected: false });
+    click = control?.props.onClick;
+    return null;
+  };
+  try {
+    renderToStaticMarkup(createElement(TestPanel, { panel: bounded }, createElement(Surface)));
+    editor.blocks.updateBlock("toggle", { listProps: { collapsed: true } });
+    click!();
+    expect(editor.blocks.getBlockNode("toggle")?.listProps.collapsed).toBe(false);
+    editor.blocks.moveBlock("toggle", root.id, "after");
+    expect(() => click!()).not.toThrow();
+    expect(editor.blocks.getBlockNode("toggle")?.listProps.collapsed).toBe(false);
+  } finally {
+    bounded.destroy();
+    reactPanel.editor.destroy();
+    await editor.destroy();
+  }
 });

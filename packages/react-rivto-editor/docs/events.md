@@ -1,6 +1,6 @@
 # React events and keymaps
 
-`PanelAPI` owns an `EventManager` for delegated native DOM events and a
+`ReactPanelApi` owns an `EventManager` for delegated native DOM events and a
 `KeyboardManager` for semantic shortcuts. The keyboard manager registers its
 surface/window keydown and keyup transport through the event manager, so both
 follow the active surface's browser realm and share event claiming.

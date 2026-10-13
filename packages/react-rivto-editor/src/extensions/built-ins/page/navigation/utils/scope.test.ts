@@ -46,7 +46,7 @@ function outlineBlock(
 describe("edgeless outline scope", () => {
   const twoCards = async () => {
     const editor = await createDocumentEditor({ mode: "edgeless" });
-    const panel = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       extensions: [separatorBlockExtension()],
     });
@@ -67,57 +67,57 @@ describe("edgeless outline scope", () => {
       zIndex: 1,
       props: { startBlockId: rightA, endBlockId: rightB },
     });
-    return { editor, panel, leftA, leftB, rightA, rightB };
+    return { editor, reactPanel, leftA, leftB, rightA, rightB };
   };
 
   test("navigationOutlineBlocks keeps page mode as the full document", async () => {
     const editor = await createDocumentEditor({ mode: "block" });
-    const panel = createReactEditor({ editor });
+    const reactPanel = createReactEditor({ editor });
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "A" }).id;
     const second = editor.blocks.insertBlock({ type: "paragraph", content: "B" }, editor.blocks.getInsertionDestinationAfter(first)).id;
-    expect(navigationOutlineBlocks(panel, first).map((block) => block.id)).toEqual([first, second]);
+    expect(navigationOutlineBlocks(reactPanel, first).map((block) => block.id)).toEqual([first, second]);
     editor.destroy();
   });
 
   test("navigationOutlineBlocks stays inside the owning card", async () => {
-    const { editor, panel, leftA, leftB, rightA, rightB } = await twoCards();
+    const { editor, reactPanel, leftA, leftB, rightA, rightB } = await twoCards();
     expect(owningBlockElement(editor, leftB)?.id).toBe("left");
-    expect(navigationOutlineBlocks(panel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
-    expect(navigationOutlineBlocks(panel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
-    expect(navigationOutlineBlocks(panel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    expect(navigationOutlineBlocks(panel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
-    panel.editor.destroy();
+    expect(navigationOutlineBlocks(reactPanel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(reactPanel, leftB).map((block) => block.id)).toEqual([leftA, leftB]);
+    expect(navigationOutlineBlocks(reactPanel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
+    expect(navigationOutlineBlocks(reactPanel, rightA).map((block) => block.id)).toEqual([rightA, rightB]);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("adjacent block selection does not leave the card", async () => {
-    const { editor, panel, leftA, leftB } = await twoCards();
-    const outline = navigationOutlineBlocks(panel, leftB);
+    const { editor, reactPanel, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(reactPanel, leftB);
     const current = createStructuralSelection([leftB], leftB, leftB);
     expect(adjacentBlockSelection(outline, current, "down")).toEqual(current);
     expect(adjacentBlockSelection(outline, current, "up").focusBlockId).toBe(leftA);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("keyboard move placement refuses to cross into another card", async () => {
-    const { editor, panel, leftA, leftB } = await twoCards();
-    const outline = navigationOutlineBlocks(panel, leftB);
+    const { editor, reactPanel, leftA, leftB } = await twoCards();
+    const outline = navigationOutlineBlocks(reactPanel, leftB);
     expect(keyboardMovePlacement(outline, [leftB], "down")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftA], "up")).toBeUndefined();
     expect(keyboardMovePlacement(outline, [leftB], "up")).toEqual({
       targetId: leftA,
       position: "before",
     });
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("pageEntries on a card outline excludes other cards", async () => {
-    const { editor, panel, leftA, leftB } = await twoCards();
-    const ids = pageEntries(navigationOutlineBlocks(panel, leftA)).map(({ block }) => block.id);
+    const { editor, reactPanel, leftA, leftB } = await twoCards();
+    const ids = pageEntries(navigationOutlineBlocks(reactPanel, leftA)).map(({ block }) => block.id);
     expect(ids).toEqual([leftA, leftB]);
-    panel.editor.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

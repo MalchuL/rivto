@@ -30,6 +30,8 @@
 | Property | Основные methods |
 | --- | --- |
 | `blocks` | `prepareInput`, `insertBlock`, `updateBlock(s)`, `deleteListProps(Batch)`, core block delegation |
+| `elementTypes` | `register`, `get`, `getAll`, `subscribe`, `revision` |
+| `useEdgelessOperations()` | `createElement`, `getTool`, `setTool`, `move`, `resize`, `group`, `ungroup`, `align`, `distribute`, `reorder`, `duplicateSelection` |
 | `blockTypes` | `register`, `delete`, `getDefinition`, `validateBlockProps`, separator metadata |
 | `blockListProps` | `register`, `has`, `validate`, `prepare` (core policy lifecycle adapter) |
 | `renderers` | `register`, `get`, `has`, `delete`, `subscribe`, `revision` |
@@ -37,13 +39,13 @@
 | `extensions` | `mount`, `getComponents`, `subscribe`, `revision` |
 | `runtime.events` | `register`, `delete` |
 | `runtime.panels` | `getActive`, `getDefault`, `getActiveRoot`, `getDefaultRoot` |
-| `panel.events` | `register`, `delete`, `setRoot`, `getRoot` |
+| `reactPanel.events` | `register`, `delete`, `setRoot`, `getRoot` |
 | `keyboard` | `register`, `delete`, `replaceKeymap`, `setKeymapOverride` |
-| `panel.selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
+| `reactPanel.selection` | `readDOM`, `restoreDOM`, `clearDOMHighlight`, `updateDOMHighlight` |
 | `runtime.clipboardFormats` | `registerFormatter`, `registerParser`, `format`, `parse` |
 | `runtime.slashCommands` | `register`, `delete`, `get`, `getAll`, `subscribe`, `revision` |
-| `panel.slashCommands` | `getAll(context)`, `execute`, `subscribe`, `revision` |
-| `panel.clipboard` | `copy`, `copyText`, `cut`, `paste` |
+| `reactPanel.slashCommands` | `getAll(context)`, `execute`, `subscribe`, `revision` |
+| `reactPanel.clipboard` | `copy`, `copyText`, `cut`, `paste` |
 
 Registrations обычно возвращают idempotent disposer и автоматически принадлежат extension lifecycle. Stable-key deletion возвращает `boolean`.
 
@@ -54,13 +56,13 @@ src/editor/
   runtime, storage, creation options
 
 src/panels/
-  internal panel implementations, bounded operations and PanelAPI
+  ReactPanel lifecycle and ReactPanelApi (bounded PanelAPI lives in core)
 
 src/components/editor-panel/ + src/components/editor-embed/
   React components, contexts and component props
 
 src/hooks/editor/
-  usePanel, useReactEditor and internal context readers
+  usePanel, useReactPanel, useReactEditor and internal context readers
 
 src/managers/*/api.ts and focused *-api.ts
   public contracts beside their implementations
@@ -99,7 +101,8 @@ demo/src/
 | Custom keyboard behavior | `useKeyboardEvent()` или extension `keyboard.register()` |
 | Custom browser gesture | `useDOMEvent()` |
 | Custom page decoration | block/editor wrapper registration |
-| Canvas shapes | `edgelessVisualsExtension()` |
+| Canvas shapes | `edgelessPreset()` включает visuals; `edgelessVisualsExtension()` для ручной сборки |
+| Custom canvas element | `editor.elementTypes.register({ definition, render, behavior, clipboard, creation, properties })` |
 | Persistence/sync | core `editor`/`CRDTDoc`, не React managers |
 
 ## Package validation

@@ -167,6 +167,7 @@ export type EdgelessPlaceKind = "rectangle" | "ellipse" | "text" | "sticker";
 
 /** Local tool state; place tools create shapes/text/stickies on the canvas. */
 export type EdgelessVisualTool =
+  | { tool: "element"; type: string }
   | { tool: "select" }
   | { tool: "pan" }
   | { tool: "place"; kind: EdgelessPlaceKind; fill?: string; color?: string; fontFamily?: string }

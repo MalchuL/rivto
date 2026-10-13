@@ -64,7 +64,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       dispose: () => undefined,
     };
     this.behaviors.set(type, registration);
-    registration.dispose = this.extensions.own(() => {
+    registration.dispose = this.extensions.registerCleanup(() => {
       if (this.behaviors.get(type) !== registration) return;
       this.behaviors.delete(type);
     });
@@ -115,7 +115,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * @returns The registered instance, or the shared default without creating an instance.
    */
   resolve(blockId: string): BlockBehavior {
-    const type = this.reactEditor.document.blocks.getBlockNode(blockId)?.type;
+    const type = this.reactEditor.blocks.getBlockNode(blockId)?.type;
     return (type && this.behaviors.get(type)?.behavior) || this.fallback;
   }
 
@@ -144,7 +144,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    */
   acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean {
     const parent = destination.parentId
-      ? this.reactEditor.document.blocks.getBlock(destination.parentId)
+      ? this.reactEditor.blocks.getBlock(destination.parentId)
       : undefined;
     if (destination.parentId && !parent) return false;
     const behavior = parent ? this.resolve(parent.id) : this.fallback;

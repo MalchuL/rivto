@@ -47,14 +47,14 @@ export class EditorStorage {
   /** @returns Usable editors, excluding pending and closing entries. */
   getEditors(): readonly ReactEditorApi[] { return [...this.entries.values()].flatMap((entry) => entry.editor && !entry.closing ? [entry.editor] : []); }
   /** @returns Loaded models without acquiring them. */
-  getDocuments(): readonly DocumentModel[] { return this.getEditors().map((editor) => editor.document.getDocument()); }
+  getDocuments(): readonly DocumentModel[] { return this.getEditors().map((editor) => editor.getDocument()); }
   /** @param documentId - Requested identity. @returns Constructed editor, or undefined before construction, while closing, or absent. */
   getEditor(documentId: string): ReactEditorApi | undefined {
     const entry = this.entries.get(documentId);
     return entry?.closing ? undefined : entry?.editor;
   }
   /** @param documentId - Requested identity. @returns Loaded model, or undefined without a usable editor. */
-  getDocument(documentId: string): DocumentModel | undefined { return this.getEditor(documentId)?.document.getDocument(); }
+  getDocument(documentId: string): DocumentModel | undefined { return this.getEditor(documentId)?.getDocument(); }
 
   /**
    * Retains a model/editor for one independent consumer until its release callback.
@@ -82,7 +82,7 @@ export class EditorStorage {
     try {
       const editor = await waitWithAbort(entry.pending, options.signal);
       options.signal?.throwIfAborted(); this.assertActive();
-      return { editor, document: editor.document.getDocument(), release };
+      return { editor, document: editor.getDocument(), release };
     } catch (error) {
       void release().catch((failure) => this.reportError(failure));
       throw error;
@@ -127,7 +127,7 @@ export class EditorStorage {
       entry.core = createDocumentEditor({ document });
       editor = this.createEditor(entry.core);
       entry.editor = editor;
-      if (editor.document.getDocument() !== document || editor.document.blocks !== entry.core.blocks) throw new Error("Editor factory must bind the supplied core");
+      if (editor.getDocument() !== document || editor.blocks !== entry.core.blocks) throw new Error("Editor factory must bind the supplied core");
       this.notifyDocuments();
       return editor;
     } catch (error) {
@@ -149,7 +149,7 @@ export class EditorStorage {
         let editor: ReactEditorApi;
         try { editor = await entry.pending; } catch { return; }
         const errors: unknown[] = [];
-        for (const action of [() => editor.destroy(), () => entry.core!.destroy(), () => editor.document.getDocument().destroy()]) {
+        for (const action of [() => editor.destroy(), () => entry.core!.destroy(), () => editor.getDocument().destroy()]) {
           try { await action(); } catch (error) { errors.push(error); }
         }
         if (errors.length) throw new AggregateError(errors, `Closing document ${id} failed`);

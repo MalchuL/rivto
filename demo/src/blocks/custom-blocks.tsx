@@ -78,7 +78,8 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const commitValue = useCallback((next: number) => {
     setDraftValue(null);
-    if (next === (panel.editor.document.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
+    const current = panel.blocks.getBlockNode(blockId);
+    if (!current || next === (current.props.value ?? 50)) return;
     setProp("value", next);
   }, [panel, blockId, setProp]);
 
@@ -162,8 +163,9 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
   const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    const current = panel.editor.document.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
-    editing.operations.setProp("count", (current?.count ?? 0) + 1);
+    const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    if (!current) return;
+    editing.operations.setProp("count", (current.count ?? 0) + 1);
   };
   return (
     // The renderer region fills the block row, making its otherwise empty

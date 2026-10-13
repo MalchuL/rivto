@@ -20,16 +20,16 @@ export function registerForwardBlockMerge(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register({
     id: KEYBOARD_BINDING_IDS.blockMergeForward,
     keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ panel, raw: event, blockId }) =>
+    when: ({ reactPanel, raw: event, blockId }) =>
       isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(panel.selection, panel.blocks, blockId)),
-  }, ({ panel, root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(panel.selection, panel.blocks, blockId));
-    const block = target?.collapsed ? panel.blocks.getBlockNode(target.blockId) : undefined;
+      !shouldDeleteSelection(readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)),
+  }, ({ reactPanel, root, blockId }) => {
+    const target = firstKeyboardTarget(readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId));
+    const block = target?.collapsed ? reactPanel.blocks.getBlockNode(target.blockId) : undefined;
     if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
-    const context = createBlockBehaviorContext(panel, target.blockId, root, panel.selection.get());
+    const context = createBlockBehaviorContext(reactPanel, target.blockId, root, reactPanel.selection.get());
     if (!context) return false;
-    return panel.editor.blockBehaviors.dispatch(
+    return reactPanel.editor.blockBehaviors.dispatch(
       "onMergeForward",
       context,
       target,

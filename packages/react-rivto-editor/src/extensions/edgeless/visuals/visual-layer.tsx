@@ -1,3 +1,5 @@
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers/keyboard";
+import { useEdgelessOperations } from "./hooks/use-edgeless-operations";
 import { useContext } from "react";
 import { useEdgelessElementStyle } from "../use-edgeless-element-style";
 import { SurfaceContext } from "../../../surfaces/surface";
@@ -12,7 +14,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorRoot, usePanel } from "../../../hooks";
+import { useEditorRoot, useReactPanel } from "../../../hooks";
 import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
 import { DrawingCapture } from "./components/drawing-capture";
@@ -20,7 +22,7 @@ import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "./components/visual-element";
 import { VisualProperties } from "./components/visual-properties";
-import type { EdgelessVisualController } from "./controller";
+import type { EdgelessOperations } from "../edgeless-operations";
 import { useDrawingGesture, type ConnectorHover } from "./hooks/use-drawing-gesture";
 import { usePresetDrag } from "./hooks/use-preset-drag";
 import { useVisualTool } from "./hooks/use-visual-tool";
@@ -48,7 +50,7 @@ const GROUP_HIT_CLASS = "edgeless-group-hit";
  */
 function GroupHitArea({ groupId, controller }: {
   readonly groupId: string;
-  readonly controller: EdgelessVisualController;
+  readonly controller: EdgelessOperations;
 }) {
   const bounds = controller.getFrame(groupId);
   const element = controller.elements.getElementNode(groupId);
@@ -71,7 +73,7 @@ function GroupHitArea({ groupId, controller }: {
  * @param props - Controller used to read the selected group nodes and bounds.
  * @returns Invisible hit areas between the currently selected groups' children.
  */
-function SelectedGroups({ controller }: { controller: EdgelessVisualController }) {
+function SelectedGroups({ controller }: { controller: EdgelessOperations }) {
   const selection = useEdgelessSelection();
   return selection.items.map((id) => controller.elements.getElementNode(id)?.type === "group"
     ? <GroupHitArea key={id} groupId={id} controller={controller} />
@@ -91,19 +93,23 @@ function EdgelessSelectionChrome({
   visuals,
   fonts,
 }: {
-  readonly controller: EdgelessVisualController;
+  readonly controller: EdgelessOperations;
   readonly visuals: readonly EdgelessVisual[];
   readonly fonts: readonly EdgelessFontOption[];
 }) {
   const selection = useEdgelessSelection();
+  const reactPanel = useReactPanel();
+  const selected = selection.items.flatMap(id => reactPanel.elements.getElementNode(id) ?? []);
+  const sameType = selected.length > 0 && selected.every(element => element.type === selected[0]!.type);
+  const Properties = sameType ? reactPanel.editor.elementTypes.get(selected[0]!.type)?.properties : undefined;
   if (!selection.items.length) return null;
-  const sameType = selection.items
+  const selectedVisuals = selection.items
     .map((id) => visuals.find((visual) => visual.id === id))
     .filter(Boolean) as EdgelessVisual[];
-  const propertyVisuals = sameType.length
-    && sameType.length === selection.items.length
-    && sameType.every((visual) => visual.kind === sameType[0]!.kind)
-    ? sameType
+  const propertyVisuals = selectedVisuals.length
+    && selectedVisuals.length === selection.items.length
+    && selectedVisuals.every((visual) => visual.kind === selectedVisuals[0]!.kind)
+    ? selectedVisuals
     : [];
   const propertyBlocks = selection.items.flatMap((id) => {
     const element = controller.elements.getElementNode(id);
@@ -112,7 +118,8 @@ function EdgelessSelectionChrome({
   return (
     <>
       <SelectionToolbar controller={controller} items={selection.items} />
-      {propertyVisuals.length > 0 && (
+      {Properties && <Properties elements={selected} reactPanel={reactPanel} />}
+      {!Properties && propertyVisuals.length > 0 && (
         <VisualProperties
           visuals={propertyVisuals}
           fonts={fonts}
@@ -133,15 +140,29 @@ function EdgelessSelectionChrome({
  * @returns Portaled visual plane and tool chrome, or null outside edgeless mode.
  */
 export function EdgelessVisualLayer({
-  controller: sharedController,
   options,
 }: {
-  readonly controller: EdgelessVisualController;
   readonly options: EdgelessVisualsOptions;
 }) {
-  const panel = usePanel();
-  const controller = useMemo(() => sharedController.forPanel(panel), [sharedController, panel]);
   const mode = useContext(SurfaceContext);
+  return mode === "edgeless" ? <EdgelessCanvasVisuals options={options} /> : null;
+}
+
+/** Owns canvas tools, previews, and subscriptions only while the edgeless surface is displayed. */
+function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsOptions }) {
+  const controller = useEdgelessOperations();
+  const reactPanel = useReactPanel();
+  useEffect(() => reactPanel.keyboard.register({
+    id: KEYBOARD_BINDING_IDS.edgelessToolSelect,
+    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
+    mode: "edgeless",
+    priority: 20,
+    when: ({ root }) => !root.dataset.transforming && controller.getTool().tool !== "select",
+  }, () => {
+    controller.setTool("select");
+    return true;
+  }), [controller, reactPanel]);
+
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(controller);
   useSyncExternalStore(
@@ -190,13 +211,13 @@ export function EdgelessVisualLayer({
 
   useEffect(() => {
     if (!root) return;
-    const creationTools = new Set(["place", "drawing", "eraser", "connector"]);
+    const creationTools = new Set(["place", "element", "drawing", "eraser", "connector"]);
     const onContextMenu = (event: MouseEvent) => {
       if (!creationTools.has(controller.getTool().tool)) return;
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.execute("edgeless.tool.set", "select");
+      controller.setTool("select");
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) return;
@@ -204,7 +225,7 @@ export function EdgelessVisualLayer({
       const target = event.target;
       if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
       event.preventDefault();
-      controller.execute("edgeless.tool.set", "select");
+      controller.setTool("select");
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);
@@ -214,7 +235,7 @@ export function EdgelessVisualLayer({
     };
   }, [controller, root]);
 
-  if (mode !== "edgeless" || !root || !plane) return null;
+  if (!root || !plane) return null;
 
   const defaults = controller.getDefaults();
   const connectorHover = drawing.connectorHover ?? reconnectHover;

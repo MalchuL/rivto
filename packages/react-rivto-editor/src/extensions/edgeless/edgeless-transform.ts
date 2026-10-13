@@ -1,13 +1,13 @@
-import { createElement, useContext } from "react";
+import { useReactPanel } from "../../hooks/editor/use-react-panel";
+import { createElement, useContext, useLayoutEffect, useMemo } from "react";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
-import type { PanelAPI } from "../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
 import { SurfaceContext } from "../../surfaces/surface";
 import { EdgelessTransformControls } from "./edgeless-transform-controls";
 import { ElementGeometry } from "./element-geometry";
 import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
-import { drawingResizeProps } from "./visuals/utils/drawing-frame";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -38,8 +38,12 @@ import {
 } from "./visuals/utils/geometry";
 
 /** Mounts controls only when this view renders an edgeless surface. */
-function TransformControls({ controller }: { controller: EdgelessTransformController }) {
+function TransformControls() {
   const mode = useContext(SurfaceContext);
+  const reactPanel = useReactPanel();
+  const controller = useMemo(() => new EdgelessTransformController(reactPanel.editor), [reactPanel]);
+  // Claim object gestures before the passive marquee selection handlers change selection.
+  useLayoutEffect(() => mode === "edgeless" ? controller.setup(reactPanel) : undefined, [controller, reactPanel, mode]);
   if (mode !== "edgeless") return null;
   return createElement(EdgelessTransformControls, { controller });
 }
@@ -57,16 +61,16 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
 export function registerEdgelessTransform(reactEditor: ReactEditorApi): () => void {
-  return new EdgelessTransformController(reactEditor).setup();
+  return reactEditor.extensions.mount(TransformControls);
 }
 
-/** Owns transform gesture state, preview geometry, and commit for one editor runtime. */
+/** Owns transform gesture state, preview geometry, and commit for one mounted panel. */
 export class EdgelessTransformController {
-  private panel?: PanelAPI;
-  private get elements() { return this.panel?.elements ?? this.reactEditor.document.elements; }
-  private get selection() { return getEdgelessRuntime(this.panel ?? this.reactEditor); }
+  private reactPanel?: ReactPanelApi;
+  private get elements() { return this.reactPanel?.elements ?? this.reactEditor.elements; }
+  private get selection() { return getEdgelessRuntime(this.reactPanel ?? this.reactEditor); }
 
-  private controls = new Map<PanelAPI, {
+  private controls = new Map<ReactPanelApi, {
     prepareDrag(targets: HTMLElement[]): void;
     dragStart(event: MouseEvent | TouchEvent): void;
     stop(): void;
@@ -74,35 +78,35 @@ export class EdgelessTransformController {
 
   /**
    * Registers the mounted view's Moveable instance for drags started by editor selection.
-   * @param panel - View whose DOM targets and gestures the controls own.
+   * @param reactPanel - View whose DOM targets and gestures the controls own.
    * @param controls - Prepares selected hosts, forwards native mouse/touch starts,
    * and stops library tracking on cancellation.
    * @returns Cleanup that cancels this view's gesture and releases the registration.
    */
-  registerControls(panel: PanelAPI, controls: {
+  registerControls(reactPanel: ReactPanelApi, controls: {
     prepareDrag(targets: HTMLElement[]): void;
     dragStart(event: MouseEvent | TouchEvent): void;
     stop(): void;
   }): () => void {
-    this.controls.set(panel, controls);
+    this.controls.set(reactPanel, controls);
     return () => {
-      this.finishControls(panel, false);
-      this.controls.delete(panel);
+      this.finishControls(reactPanel, false);
+      this.controls.delete(reactPanel);
     };
   }
 
   /**
    * Resolves mounted leaves for Moveable's single or group target.
    * Groups expand recursively; their hit areas follow the preview and are not Moveable targets.
-   * @param panel - View supplying the selected element tree.
+   * @param reactPanel - View supplying the selected element tree.
    * @param root - DOM root restricting the search to this mounted view.
    * @param ids - Selected element or group IDs, in selection order.
    * @returns Unique mounted leaf hosts for the supplied selection; missing elements are skipped.
    */
-  getMoveTargets(panel: PanelAPI, root: HTMLElement, ids: readonly string[]): HTMLElement[] {
+  getMoveTargets(reactPanel: ReactPanelApi, root: HTMLElement, ids: readonly string[]): HTMLElement[] {
     const leaves = new Set<string>();
     const visit = (id: string) => {
-      const element = panel.elements.getElementNode(id);
+      const element = reactPanel.elements.getElementNode(id);
       if (!element) return;
       if (element.type === "group" && element.childIds.length) element.childIds.forEach(visit);
       else leaves.add(id);
@@ -114,11 +118,11 @@ export class EdgelessTransformController {
 
   /**
    * Checks whether editor selection accepted a move before Moveable begins tracking it.
-   * @param panel - View reporting the library's drag-start event.
+   * @param reactPanel - View reporting the library's drag-start event.
    * @returns False for content editing, controls, or a gesture owned by another view.
    */
-  isMoving(panel: PanelAPI): boolean {
-    return this.panel === panel && this.start?.kind === "move";
+  isMoving(reactPanel: ReactPanelApi): boolean {
+    return this.reactPanel === reactPanel && this.start?.kind === "move";
   }
 
   private start: TransformStart | null = null;
@@ -457,12 +461,11 @@ export class EdgelessTransformController {
     }
     if (active.kind !== "move") {
       if (active.moved && active.previews) {
-        this.reactEditor.document.history.batchUpdates(() => this.elements.updateElements(
+        this.reactEditor.history.batchUpdates(() => this.elements.updateElements(
           [...active.previews!.values()].map(({ id, frame, rotation }) => ({
             id, patch: { frame: this.groupChildren(id).length ? undefined : frame, props: {
               ...(this.elements.getElementNode(id)?.type === "connector" ? {} : { rotation }),
               ...(active.kind === "resize" && this.elements.getElementNode(id)?.type === "block" ? { autoHeight: false } : {}),
-              ...drawingResizeProps(this.elements.getElementNode(id)!, frame),
               ...this.connectorControlProps(id, frame, rotation),
             } },
           })),
@@ -482,10 +485,10 @@ export class EdgelessTransformController {
       }
       return false;
     }
-    if (this.reactEditor.document.commands.has("edgeless.selection.move")) {
-      this.reactEditor.document.commands.execute("edgeless.selection.move", { panel: this.panel, payload: { dx: active.dx, dy: active.dy } });
+    if (this.reactEditor.commands.has("edgeless.selection.move")) {
+      this.reactEditor.commands.execute("edgeless.selection.move", { reactPanel: this.reactPanel, payload: { dx: active.dx, dy: active.dy } });
     } else {
-      this.reactEditor.document.history.batchUpdates(() => active.ids.forEach((id) => {
+      this.reactEditor.history.batchUpdates(() => active.ids.forEach((id) => {
         const frame = this.previewFrame(id, active, active.dx, active.dy);
         if (frame) this.elements.updateElement(id, { frame });
       }));
@@ -524,7 +527,7 @@ export class EdgelessTransformController {
   /**
    * Captures editor state when a Moveable edge or handle starts a move, resize, or rotation.
    * No document writes occur until finishControls commits the final geometry.
-   * @param panel - View owning the selected element and its Panel coordinates.
+   * @param reactPanel - View owning the selected element and its Panel coordinates.
    * @param root - Mounted edgeless viewport containing the target and connector previews.
    * @param id - Selected element or group ID; missing elements and standalone connectors are rejected.
    * Group children are expanded recursively without changing their stored parentage.
@@ -532,9 +535,9 @@ export class EdgelessTransformController {
    * @param stop - Stops Moveable's pointer tracking if Escape cancels the gesture.
    * @returns Whether the editor accepted the gesture.
    */
-  beginControls(panel: PanelAPI, root: HTMLElement, id: string, kind: "move" | "resize" | "rotate", stop: () => void): boolean {
+  beginControls(reactPanel: ReactPanelApi, root: HTMLElement, id: string, kind: "move" | "resize" | "rotate", stop: () => void): boolean {
     if (this.start) this.finish(false);
-    this.panel = panel;
+    this.reactPanel = reactPanel;
     const element = this.elements.getElementNode(id);
     if (!element || element.type === "connector") return false;
     const moving = new Set(this.leaves([id]));
@@ -611,16 +614,16 @@ export class EdgelessTransformController {
   /**
    * Finishes only a Moveable gesture belonging to the supplied view.
    * Cancellation restores DOM styles; commitment records one history operation.
-   * @param panel - View that mounted the Moveable controls.
+   * @param reactPanel - View that mounted the Moveable controls.
    * @param commit - False on unmount, pointer cancellation, or explicit cancellation.
    * @param eventDetail - Click count used to preserve double-click text editing.
    */
-  finishControls(panel: PanelAPI, commit: boolean, eventDetail = 1): void {
-    if (this.panel === panel && this.start) this.finish(commit, eventDetail);
+  finishControls(reactPanel: ReactPanelApi, commit: boolean, eventDetail = 1): void {
+    if (this.reactPanel === reactPanel && this.start) this.finish(commit, eventDetail);
   }
 
   /** Resolves click/drill-in selection and starts a permitted object move. */
-  private onPointerDown = ({ raw: event, root, panel }: EditorEvent<"surface", "pointerdown">): boolean => {
+  private onPointerDown = ({ raw: event, root, reactPanel }: EditorEvent<"surface", "pointerdown">): boolean => {
     if (event.button !== 0 || !(event.target instanceof Element)) return false;
     if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
     if (event.target.closest("[data-edgeless-ui]")) return false;
@@ -628,7 +631,7 @@ export class EdgelessTransformController {
     const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
     let id = card?.dataset.edgelessRoot ?? object?.dataset.edgelessObjectId;
     if (!id) return false;
-    this.panel = panel;
+    this.reactPanel = reactPanel;
     const childId = id;
     const parent = this.parentId(id);
     const current = this.selection.get().items;
@@ -675,7 +678,7 @@ export class EdgelessTransformController {
     const movable = !event.target.closest(CONTROL_SELECTOR) && (
       !card ||
       !hitBlock ||
-      (element?.type === "block" && elementContainsBlock(this.reactEditor.document.blocks, element, panel.blocks.getRootIds(), hitBlockId))
+      (element?.type === "block" && elementContainsBlock(reactPanel.blocks, element, reactPanel.blocks.getRootIds(), hitBlockId))
     );
     if (!movable) return false;
     event.stopPropagation();
@@ -703,7 +706,7 @@ export class EdgelessTransformController {
       const frame = this.transformFrame(item);
       if (frame) frames.set(item, { ...frame });
     });
-    const controls = this.controls.get(panel);
+    const controls = this.controls.get(reactPanel);
     if (!controls) return false;
     const kind = "move" as const;
     const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
@@ -723,7 +726,7 @@ export class EdgelessTransformController {
     root.dataset.transforming = this.start.kind;
     root.focus({ preventScroll: true });
     this.lockGeometry(root, ids);
-    controls.prepareDrag(this.getMoveTargets(panel, root, ids));
+    controls.prepareDrag(this.getMoveTargets(reactPanel, root, ids));
     return true;
   };
 
@@ -754,22 +757,23 @@ export class EdgelessTransformController {
   }
 
   /** Mounts per-view Moveable controls and installs move handlers; destruction cancels previews. */
-  setup(): () => void {
-    this.reactEditor.extensions.mount(() => createElement(TransformControls, { controller: this }));
+  setup(reactPanel: ReactPanelApi): () => void {
+    const disposers: Array<() => void> = [];
     // Cancelling pointerdown suppresses the mouse events that Moveable tracks.
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, preventDefault: false, mode: "edgeless" }, this.onPointerDown);
-    this.reactEditor.events.register({ id: "edgeless.transform.mouse-start", type: "mousedown", capture: true, mode: "edgeless" }, ({ raw, panel }) => {
-      if (!this.isMoving(panel)) return false;
-      this.controls.get(panel)?.dragStart(raw);
+    disposers.push(reactPanel.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, preventDefault: false, mode: "edgeless" }, this.onPointerDown));
+    disposers.push(reactPanel.events.register({ id: "edgeless.transform.mouse-start", type: "mousedown", capture: true, mode: "edgeless" }, ({ raw, reactPanel }) => {
+      if (!this.isMoving(reactPanel)) return false;
+      this.controls.get(reactPanel)?.dragStart(raw);
       return true;
-    });
-    this.reactEditor.events.register({ id: "edgeless.transform.touch-start", type: "touchstart", capture: true, mode: "edgeless" }, ({ raw, panel }) => {
-      if (!this.isMoving(panel)) return false;
-      this.controls.get(panel)?.dragStart(raw);
+    }));
+    disposers.push(reactPanel.events.register({ id: "edgeless.transform.touch-start", type: "touchstart", capture: true, mode: "edgeless" }, ({ raw, reactPanel }) => {
+      if (!this.isMoving(reactPanel)) return false;
+      this.controls.get(reactPanel)?.dragStart(raw);
       return true;
-    });
-    this.reactEditor.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false));
-    this.reactEditor.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false));
-    return () => { this.finish(false); this.clearPreview(); };
+    }));
+    disposers.push(reactPanel.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => this.finish(false)));
+    disposers.push(reactPanel.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(this.start) }, () => this.finish(false)));
+    disposers.push(reactPanel.subscribeDeactivation(() => this.finish(false)));
+    return () => { disposers.reverse().forEach(dispose => dispose()); this.finish(false); this.clearPreview(); };
   }
 }

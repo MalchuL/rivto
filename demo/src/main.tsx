@@ -1,3 +1,4 @@
+import "./crypto-polyfill";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
@@ -10,6 +11,7 @@ if (!root) {
   throw new Error("Missing #root element");
 }
 
-// The lifecycle fixture exercises root StrictMode effect replay in development.
-const lifecycleTest = new URLSearchParams(window.location.search).has("editorLifecycle");
+// Lifecycle and custom element fixtures exercise root StrictMode effect replay in development.
+const params = new URLSearchParams(window.location.search);
+const lifecycleTest = params.has("editorLifecycle") || params.has("elementRegistration");
 createRoot(root).render(lifecycleTest ? <StrictMode><App /></StrictMode> : <App />);

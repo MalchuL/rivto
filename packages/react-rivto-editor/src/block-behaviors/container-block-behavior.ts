@@ -46,8 +46,8 @@ export class ContainerBlockBehavior extends DefaultBlockBehavior {
    * @returns "handled" after insertion and scheduling focus at offset zero.
    */
   appendWritingBlock(context: BlockBehaviorContext): BlockBehaviorOutcome {
-    const child = appendWritingBlock(context.panel, context.block.id);
-    scheduleBlockFocus(context.panel, context.root, child.id, 0);
+    const child = appendWritingBlock(context.reactPanel, context.block.id);
+    scheduleBlockFocus(context.reactPanel, context.root, child.id, 0);
     return "handled";
   }
 }

@@ -34,7 +34,6 @@ export class BlockTypeManager implements BlockTypesApi {
    * @throws On definition, renderer, behavior, or slash-command conflicts.
    */
   register(registration: ReactBlockRegistration): () => void {
-    const core = this.editor.blocks;
     const { renderers, slashCommands, blockBehaviors } = this.reactEditor;
     const extensions = this.extensions;
     extensions.assertActive();
@@ -65,14 +64,14 @@ export class BlockTypeManager implements BlockTypesApi {
           ...slashCommand,
           id: slashCommand.id ?? `type.${definition.type}`,
           isAvailable: (context) => {
-            const block = core.getBlockNode(context.blockId);
+            const block = context.reactPanel.blocks.getBlockNode(context.blockId);
             return Boolean(
               block
               && block.type !== definition.type
               && slashCommand.isAvailable?.(context) !== false
             );
           },
-          execute: ({ blockId }) => core.setBlockType(blockId, definition.type),
+          execute: ({ blockId, reactPanel }) => reactPanel.blocks.setBlockType(blockId, definition.type),
         }));
       }
     } catch (error) {
@@ -81,7 +80,7 @@ export class BlockTypeManager implements BlockTypesApi {
     }
 
     let dispose: () => void = () => undefined;
-    dispose = extensions.own(() => {
+    dispose = extensions.registerCleanup(() => {
       if (this.registrations.get(definition.type) === dispose) {
         this.registrations.delete(definition.type);
       }

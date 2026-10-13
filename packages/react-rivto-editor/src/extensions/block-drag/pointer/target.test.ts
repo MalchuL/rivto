@@ -1,5 +1,5 @@
 import type { EditorBlock } from "@chulane/rivto";
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import { resolveCrossDocumentPageRootPlacement } from "../cross-document/placement";
 import { resolveDropPlacement, type DropLayoutBlock, type DropRect } from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
@@ -35,7 +35,7 @@ function surface(items: DropLayoutBlock[]) {
     querySelectorAll: () => [...elements.values()],
     contains: (element: HTMLElement) => [...elements.values()].includes(element),
   } as unknown as HTMLElement;
-  const panel = {
+  const reactPanel = {
     blocks: { getBlockNode: () => undefined },
     editor: {
       blockBehaviors: { resolve: (id: string) => {
@@ -43,15 +43,15 @@ function surface(items: DropLayoutBlock[]) {
         return { dropAxis: entry.axis, acceptsDropContainer: entry.acceptsBody, dropPlacement: entry.options };
       } },
     },
-  } as unknown as PanelAPI;
-  return { root, panel, reads };
+  } as unknown as ReactPanelApi;
+  return { root, reactPanel, reads };
 }
 
 test.each([2, 2000])("keeps complete neighbors without reading bounding rectangles of an unrelated subtree of %i blocks", (count) => {
   const items = [item("a", 0), item("b", 40), item("other", 80, { rect: rect(80, count * 40 + 40) }),
     ...Array.from({ length: count }, (_, index) => item(`child-${index}`, 120 + index * 40, { parentId: "other" }))];
   const fixture = surface(items);
-  const layout = collectDropLayout(fixture.root, fixture.panel);
+  const layout = collectDropLayout(fixture.root, fixture.reactPanel);
   expect(layout).toHaveLength(count + 3);
   expect(resolveDropPlacement(layout, tree(items), { x: 12, y: 32 }, defaults, () => true))
     .toMatchObject({ kind: "between", parentId: null, previousId: "a", nextId: "b" });
@@ -67,7 +67,7 @@ test.each(["vertical", "horizontal", "grid"] as const)("fresh %s geometry matche
     item("c", 160, { parentId: "parent", rect: rect(160, 60, 20, 160), row: rect(160, 60, 20, 160) }),
     item("next", 420)];
   const fixture = surface(items);
-  const layout = collectDropLayout(fixture.root, fixture.panel);
+  const layout = collectDropLayout(fixture.root, fixture.reactPanel);
   for (const keyboard of [false, true]) {
     for (const y of [-2, 8, 32, 75, 115, 150, 380, 408]) {
       for (const x of [10, 100, 190, 210, 390]) {
@@ -88,17 +88,16 @@ test.each([2, 2000])("embedded placement reads its subtree without visiting %i u
   let nodeReads = 0;
   let forestReads = 0;
   const forest = Array.from({ length: count }, (_, index) => ({ id: `other-${index}`, children: [] }));
-  const panel = {
-    rootBlockId: "branch",
-    blocks: { getBlocks: () => { nodeReads++; return [root]; } },
+  const reactPanel = {
+    rootBlockId: "branch", blocks: { getBlocks: () => { nodeReads++; return [root]; } },
     editor: {
       blocks: {
         getBlock: (id: string) => { nodeReads++; return id === "branch" ? root : undefined; },
         getBlocks: () => { forestReads++; return forest; },
       },
     },
-  } as unknown as PanelAPI;
-  expect(getDropBlocks(panel)).toEqual([root]);
+  } as unknown as ReactPanelApi;
+  expect(getDropBlocks(reactPanel)).toEqual([root]);
   expect(nodeReads).toBe(1);
   expect(forestReads).toBe(0);
 });
@@ -108,16 +107,16 @@ test("retains hidden siblings when dropping before a filtered container child", 
     item("storage", 0, { acceptsBody: true, axis: "vertical", rect: rect(0, 160) }),
     item("visible", 40, { parentId: "storage" }),
   ]);
-  fixture.panel.editor.blockBehaviors.acceptsDrop = () => true;
+  fixture.reactPanel.editor.blockBehaviors.acceptsDrop = () => true;
   const blocks = [{ id: "storage", children: [{ id: "hidden", children: [] }, { id: "visible", children: [] }] }];
-  expect(resolveSurfaceDrop(fixture.root, fixture.panel, [], blocks, { x: 12, y: 36 }, defaults))
+  expect(resolveSurfaceDrop(fixture.root, fixture.reactPanel, [], blocks, { x: 12, y: 36 }, defaults))
     .toMatchObject({ kind: "between", parentId: "storage", previousId: "hidden", nextId: "visible" });
 });
 
 test("does not measure an outline when the pointer is over blank canvas", () => {
   const fixture = surface([item("block", 0)]);
   Object.assign(fixture.root, { getAttribute: () => "edgeless" });
-  expect(resolveSurfaceDrop(fixture.root, fixture.panel, [], [{ id: "block", children: [] }], { x: 100, y: 20 }, defaults)).toBeNull();
+  expect(resolveSurfaceDrop(fixture.root, fixture.reactPanel, [], [{ id: "block", children: [] }], { x: 100, y: 20 }, defaults)).toBeNull();
   expect(fixture.reads).toEqual([]);
 });
 
@@ -125,20 +124,20 @@ test("embedded placement accepts children but refuses gaps outside the displayed
   const fixture = surface([item("branch", 0, { rect: rect(0, 80) }), item("child", 40, { parentId: "branch" })]);
   const branch = { id: "branch", children: [{ id: "child", children: [] }] } as unknown as EditorBlock;
   const foreign = { id: "foreign", children: [] } as unknown as EditorBlock;
-  const panel = Object.assign(fixture.panel, {
-    rootBlockId: "branch",
-    blocks: { ...fixture.panel.blocks, hasBlock: (id: string) => id === "branch" || id === "child", getBlock: () => branch, getBlocks: () => [branch] },
+  const reactPanel = Object.assign(fixture.reactPanel, {
+    document: { getDocument: () => ({ id: "A" }) }, rootBlockId: "branch",
+    blocks: { ...fixture.reactPanel.blocks, hasBlock: (id: string) => id === "branch" || id === "child", getBlock: () => branch, getBlocks: () => [branch] },
     editor: {
-      document: { getDocument: () => ({ id: "A" }) },
-      blockBehaviors: { ...fixture.panel.editor.blockBehaviors, acceptsDrop: () => true },
+      getDocument: () => ({ id: "A" }),
+      blockBehaviors: { ...fixture.reactPanel.editor.blockBehaviors, acceptsDrop: () => true },
     },
-  }) as PanelAPI;
-  expect(resolveSurfaceDrop(fixture.root, panel, [foreign], [branch], { x: 100, y: 52 }, defaults))
+  }) as ReactPanelApi;
+  expect(resolveSurfaceDrop(fixture.root, reactPanel, [foreign], [branch], { x: 100, y: 52 }, defaults))
     .toMatchObject({ kind: "inside", parentId: "child" });
-  expect(resolveSurfaceDrop(fixture.root, panel, [foreign], [branch], { x: 12, y: 0 }, defaults)).toBeNull();
-  expect(resolveCrossDocumentPageRootPlacement(panel, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "A")).toBeNull();
+  expect(resolveSurfaceDrop(fixture.root, reactPanel, [foreign], [branch], { x: 12, y: 0 }, defaults)).toBeNull();
+  expect(resolveCrossDocumentPageRootPlacement(reactPanel, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "A")).toBeNull();
   // Identical IDs in another document are independent; do not remove that destination subtree.
-  expect(resolveCrossDocumentPageRootPlacement(panel, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "B"))
+  expect(resolveCrossDocumentPageRootPlacement(reactPanel, fixture.root, 100, 52, 24, 8, true, [branch], undefined, "B"))
     .toMatchObject({ targetId: "child", position: "inside" });
 });
 
@@ -152,12 +151,12 @@ test("pointer drops use the visible canvas card instead of an overlapping card b
     ownerDocument: { elementFromPoint: () => ({ closest: () => card }) },
     contains: (element: HTMLElement) => element === card || contains(element),
   });
-  Object.assign(fixture.panel.editor.blockBehaviors, { acceptsDrop: () => true });
-  expect(resolveSurfaceDrop(fixture.root, fixture.panel, [], tree(items), { x: 100, y: 188 }, defaults))
+  Object.assign(fixture.reactPanel.editor.blockBehaviors, { acceptsDrop: () => true });
+  expect(resolveSurfaceDrop(fixture.root, fixture.reactPanel, [], tree(items), { x: 100, y: 188 }, defaults))
     .toMatchObject({ kind: "between", parentId: null, previousId: "first", nextId: "second" });
   expect(fixture.reads).not.toContain("behind");
-  expect(resolveSurfaceDrop(fixture.root, fixture.panel, [], tree(items), { x: 12, y: 2 }, defaults))
+  expect(resolveSurfaceDrop(fixture.root, fixture.reactPanel, [], tree(items), { x: 12, y: 2 }, defaults))
     .toMatchObject({ kind: "between", parentId: null, previousId: "behind", nextId: "first", indicatorId: "first" });
-  expect(resolveSurfaceDrop(fixture.root, fixture.panel, [], tree(items), { x: 12, y: 225 }, defaults))
+  expect(resolveSurfaceDrop(fixture.root, fixture.reactPanel, [], tree(items), { x: 12, y: 225 }, defaults))
     .toMatchObject({ kind: "between", parentId: null, previousId: "second", nextId: "following", indicatorId: "second" });
 });

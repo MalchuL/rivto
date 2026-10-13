@@ -26,7 +26,7 @@ export interface ReactEditorExtension {
 /** Owns registrations and rejects new work after extension teardown begins. */
 export interface RegistrationOwner {
   /** Retains cleanup and returns an idempotent disposer. */
-  own(release: RegistrationDisposer): RegistrationDisposer;
+  registerCleanup(release: RegistrationDisposer): RegistrationDisposer;
   /** Throws when the owner has started destruction. */
   assertActive(): void;
 }

@@ -50,8 +50,8 @@ export function todoItemExtension(
             title: "TODO storage",
             group: "Turn into",
             keywords: ["tasks", "todos"],
-            isAvailable: ({ blockId }) => (
-              reactEditor.document.blocks.hasBlock(blockId) && !reactEditor.document.blocks.hasChildren(blockId)
+            isAvailable: ({ blockId, reactPanel }) => (
+              reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId)
             ),
           },
         }),

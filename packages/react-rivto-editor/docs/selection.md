@@ -48,7 +48,7 @@ changes. Selection is local runtime state and is never persisted or synchronized
 
 ## Browser gestures
 
-`panel.selection` delegates state to core and adds `readDOM()` and
+`reactPanel.selection` delegates state to core and adds `readDOM()` and
 `restoreDOM()`. Shift+Alt-click or Shift+Alt-drag keeps partial first/last
 offsets and full text ranges between them without structural chrome. A
 contentless block such as Counter receives structural coverage while surrounding
@@ -97,7 +97,7 @@ own selection behavior.
 `EditorPanel` displays the children of `Panel.rootBlockId`; `EditorPanel` embeddings
 continue to display their root block itself. Selection cannot include a Panel's
 hidden title block or elements outside its selected element subtree. Use `panel.elements` for
-canvas interaction and `runtime.document.elements` only for document-wide operations.
+canvas interaction and `runtime.elements` only for document-wide operations.
 
 Panels share document history. Opening a panel is application navigation; the demo
 uses null element roots and creates no container on navigation. Deleting a root

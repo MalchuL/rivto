@@ -93,6 +93,7 @@ export function DrawingCapture({
           opacity={drawingOpacity}
         />
       )}
+      {placePreview && tool.tool === "element" && <rect x={placePreview.x} y={placePreview.y} width={placePreview.width} height={placePreview.height} fill="none" stroke="currentColor" strokeDasharray="4 4" />}
       {placePreview && tool.tool === "place" && (
         <PlacePreview frame={placePreview} kind={tool.kind} style={placeStyle} zoom={zoom} fill={tool.kind === "sticker" ? tool.fill : undefined} />
       )}

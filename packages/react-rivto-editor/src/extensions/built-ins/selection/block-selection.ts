@@ -76,7 +76,7 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
     type: "pointerdown",
     capture: true,
     scope: "surface",
-  }, ({ panel, raw: event, root, mode }) => {
+  }, ({ reactPanel, raw: event, root, mode }) => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return false;
     if (!(event.target instanceof Element)) return false;
     if (event.target.closest(`${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}`)) return false;
@@ -85,11 +85,11 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
     if (mode === "edgeless" && (
       !anchor?.isContentEditable || root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan"
     )) return false;
-    const current = panel.selection.get();
-    const canvasActive = mode === "edgeless" && findEdgelessRuntime(panel)?.get().active;
+    const current = reactPanel.selection.get();
+    const canvasActive = mode === "edgeless" && findEdgelessRuntime(reactPanel)?.get().active;
     if (!isStructuralSelection(current) && (current?.blocks.length ?? 0) < 2 && !canvasActive) return false;
     // Release old coverage before the browser's delayed selectionchange publishes the new caret.
-    panel.selection.clear();
+    reactPanel.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     return false;
   });
@@ -99,7 +99,7 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
     type: "pointerdown",
     capture: true,
     scope: "block",
-  }, ({ panel, raw: event, root, mode }) => {
+  }, ({ reactPanel, raw: event, root, mode }) => {
     if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) return false;
     if (
       !(event.target instanceof Element) ||
@@ -109,21 +109,21 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
     const blockId = block?.getAttribute(BLOCK_ID_ATTRIBUTE);
     if (!block || !blockId || !root.contains(block)) return false;
 
-    const selection = panel.selection.get();
+    const selection = reactPanel.selection.get();
     // A caret starts a new block selection; carrying its partial range forward
     // creates a mixed selection that the next native selectionchange clears.
     const current = isStructuralSelection(selection) ? selection : undefined;
     const next = toggleBlockSelection(
-      panel.blocks.getBlocks(),
+      reactPanel.blocks.getBlocks(),
       current,
       blockId,
       mode === "edgeless",
-      (candidate) => !panel.editor.blockListProps.childrenVisible(candidate),
+      (candidate) => !reactPanel.editor.blockListProps.childrenVisible(candidate),
     );
-    const canvas = mode === "edgeless" ? findEdgelessRuntime(panel) : undefined;
+    const canvas = mode === "edgeless" ? findEdgelessRuntime(reactPanel) : undefined;
     if (next && canvas) canvas.setBlocks(next);
-    else if (next) panel.selection.set(next);
-    else panel.selection.clear();
+    else if (next) reactPanel.selection.set(next);
+    else reactPanel.selection.clear();
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
     return true;

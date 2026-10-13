@@ -29,7 +29,7 @@ import {
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
 } from "../../../elements/block-element-projection";
-import { useDOMEvent, useEditorRoot, usePanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../../hooks";
+import { useDOMEvent, useEditorRoot, useReactPanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import { ToolBarDivider } from "../visuals/components/tool-bar";
 import { EdgelessToolButton } from "../visuals/components/tool-button";
@@ -78,7 +78,7 @@ function gridDotFade(zoom: number): string {
  */
 /** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
 export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
-  const editor = usePanel();
+  const editor = useReactPanel();
   const configured = getEdgelessSurfaceOptions(editor);
   const suppliedSnapping = props.snapping ?? configured.snapping;
   const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
@@ -94,10 +94,10 @@ function EdgelessSurfaceContent({
   readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }) {
-  const panel = usePanel();
+  const reactPanel = useReactPanel();
   const rootIds = useRootBlockIds();
   const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE
-    && blockElementRoot(element, panel.blocks) === null);
+    && blockElementRoot(element, reactPanel.blocks) === null);
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spotlightOverlay = useRef<HTMLDivElement | null>(null);
@@ -268,26 +268,26 @@ function EdgelessSurfaceContent({
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, panel.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(preferredFrame, reactPanel.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
       : preferredFrame;
-    const roots = panel.blocks.getRootIds().flatMap((id) => panel.blocks.getBlockNode(id) ?? []);
-    const zIndex = Math.max(0, ...panel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
+    const roots = reactPanel.blocks.getRootIds().flatMap((id) => reactPanel.blocks.getBlockNode(id) ?? []);
+    const zIndex = Math.max(0, ...reactPanel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     let id = "";
-    panel.editor.document.history.batchUpdates(() => {
+    reactPanel.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
       const last = roots.at(-1);
-      if (last && !panel.editor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(panel, last.id).id;
+      if (last && !reactPanel.editor.blockTypes.separatesBlockElements(last.type)) {
+        afterId = insertBlockElementSeparator(reactPanel, last.id).id;
       }
-      id = panel.blocks.insertBlock(panel.editor.createDefaultBlock(), panel.blocks.getInsertionDestinationAfter(afterId)).id;
-      panel.elements.insertElement({
+      id = reactPanel.blocks.insertBlock(reactPanel.editor.createDefaultBlock(), reactPanel.blocks.getInsertionDestinationAfter(afterId)).id;
+      reactPanel.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
         zIndex,
         props: { startBlockId: id, endBlockId: id },
       });
     });
-    panel.selection.set(createCaretSelection(id, 0));
+    reactPanel.selection.set(createCaretSelection(id, 0));
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 

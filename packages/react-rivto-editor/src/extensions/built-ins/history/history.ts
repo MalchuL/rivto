@@ -1,4 +1,4 @@
-import type { PanelAPI } from "../../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import type { ReactEditorApi } from "../../../editor/types";
 import { KEYBOARD_BINDING_IDS } from "../../../managers";
 
@@ -60,12 +60,12 @@ export function registerHistory(
   options: HistoryExtensionOptions = {},
 ): void {
   /** Executes one history step and restores focus after React renders it. */
-  const run = (panel: PanelAPI, root: HTMLElement, action: HistoryAction): void => {
+  const run = (reactPanel: ReactPanelApi, root: HTMLElement, action: HistoryAction): void => {
     if (!root) return;
-    panel.editor.document.history[action]();
+    reactPanel.document.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
-    panel.selection.scheduleIfSelectionUnchanged(() => {
-      if (panel.selection.restoreDOM()) return;
+    reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+      if (reactPanel.selection.restoreDOM()) return;
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
@@ -75,8 +75,8 @@ export function registerHistory(
     id: KEYBOARD_BINDING_IDS.historyUndo,
     keys: options.undoKeys ?? ["Primary+z"],
     composing: "prevent",
-  }, ({ panel, root }) => {
-    run(panel, root, "undo");
+  }, ({ reactPanel, root }) => {
+    run(reactPanel, root, "undo");
     return true;
   });
 
@@ -84,8 +84,8 @@ export function registerHistory(
     id: KEYBOARD_BINDING_IDS.historyRedo,
     keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
     composing: "prevent",
-  }, ({ panel, root }) => {
-    run(panel, root, "redo");
+  }, ({ reactPanel, root }) => {
+    run(reactPanel, root, "redo");
     return true;
   });
 
@@ -93,11 +93,11 @@ export function registerHistory(
     id: "history.before-input",
     type: "beforeinput",
     scope: "surface",
-  }, ({ panel, raw: event, root }) => {
+  }, ({ reactPanel, raw: event, root }) => {
     const action = inputHistoryAction(event);
     if (!action) return false;
 
-    if (!event.isComposing) run(panel, root, action);
+    if (!event.isComposing) run(reactPanel, root, action);
     return true;
   });
 }

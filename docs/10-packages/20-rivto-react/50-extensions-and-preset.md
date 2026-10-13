@@ -5,7 +5,7 @@
 ```ts
 interface ReactEditorExtension {
   readonly id: string;
-  setup(reactEditor: PanelAPI): void | (() => void);
+  setup(reactEditor: ReactEditorApi): void | (() => void);
 }
 ```
 
@@ -20,7 +20,7 @@ Manager registrations автоматически принадлежат active e
 const analyticsExtension = (editor: DocumentEditorAPI): ReactEditorExtension => ({
   id: "app.analytics",
   setup(reactEditor) {
-    return reactEditor.document.subscribe(() => report(editor.dump()));
+    return reactEditor.subscribe(() => report(editor.dump()));
   },
 });
 ```
@@ -39,7 +39,7 @@ Preset устанавливает writing/error/separator blocks, page surface, 
 
 Drag подключается через `pageDragExtension()`. Canvas surface и interactions подключаются через `...edgelessPreset({ surface })`.
 
-`edgelessVisualsExtension()` намеренно не входит в preset: visual shapes — opt-in product feature.
+`edgelessPreset({ surface, visuals })` включает `edgelessVisualsExtension()` с регистрацией встроенных элементов и UI. Не добавляйте visuals повторно рядом с preset. Для ручной сборки остаются отдельные extension factories.
 
 ## `defaultWritingBlockExtension(options?)`
 

@@ -13,7 +13,7 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  * @module
  */
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import { useBlockOperations } from "../../hooks";
+import { useBlockOperations, usePanel } from "../../hooks";
 import type { BlockSlotProps } from "../../managers";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -59,6 +59,7 @@ export function BlockListSlot({ block }: BlockSlotProps) {
  * @returns Collapse toggle for a branch block, otherwise nothing.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
+  const panel = usePanel();
   const operations = useBlockOperations(block.id);
   const childrenId = useBlockChildrenId(block.id);
   if (!block.childIds.length) return null;
@@ -76,7 +77,13 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         event.preventDefault();
         event.stopPropagation();
       }}
-      onClick={() => operations.update({ listProps: { collapsed: !collapsed } })}
+      onClick={() => {
+        const current = panel.blocks.getBlockNode(block.id);
+        if (!current?.childIds.length) return;
+        // undefined treats as false
+        const currentCollapsed = current.listProps.collapsed === true;
+        operations.update({ listProps: { collapsed: !currentCollapsed } });
+      }}
     >
       {collapsed ? <ChevronRightIcon aria-hidden="true" /> : <ChevronDownIcon aria-hidden="true" />}
     </Button>
