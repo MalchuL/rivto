@@ -39,8 +39,9 @@
 @import "../extensions/embedding/embedding.css" layer(components);
 
 /* Edgeless canvas and visual objects. */
-@import "../extensions/edgeless/edgeless.css" layer(components);
+@import "../surfaces/edgeless/edgeless.css" layer(components);
 @import "../extensions/edgeless/moveable.css";
+@import "../elements/visuals/visuals.css" layer(components);
 @import "../extensions/edgeless/visuals/visuals.css" layer(components);
 
 /* Layout containers built from the shared block tree. */
@@ -53,4 +54,5 @@
 @import "../extensions/todo-item/todo-item.css" layer(components);
 
 /* Chrome shares the utility layer with the primitives it customizes. */
+@import "../components/edgeless/controls.css" layer(utilities);
 @import "../extensions/edgeless/visuals/controls.css" layer(utilities);

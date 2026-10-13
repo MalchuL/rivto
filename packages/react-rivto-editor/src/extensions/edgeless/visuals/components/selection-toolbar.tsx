@@ -7,8 +7,8 @@
  * transaction per click.
  */
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import { EdgelessToolButton } from "./tool-button";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
 
 /** Bottom-centered bar; `edgeless-selection-toolbar` is a stable hook. */
 const SELECTION_TOOLBAR_CLASS = `${UI_SCOPE_CLASS} edgeless-selection-toolbar`;

@@ -9,10 +9,10 @@
  */
 import type { EditorElementNode } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef } from "react";
-import { BlockTree, ElementSlots } from "../../../blocks";
-import { usePanel } from "../../../hooks";
-import { useEdgelessSelected } from "../../built-ins/selection/edgeless-runtime";
-import { useEdgelessElementStyle } from "../use-edgeless-element-style";
+import { BlockTree, ElementSlots } from "../../blocks";
+import { usePanel } from "../../hooks";
+import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
+import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
 
 const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";

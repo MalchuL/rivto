@@ -1,3 +1,4 @@
+export type { EdgelessVisualsOptions } from "./types";
 export { edgelessVisualsExtension } from "./extension";
 
 export type {
@@ -21,7 +22,6 @@ export type {
   EdgelessFontOption,
   EdgelessStickerOption,
   OrphanConnectorBehavior,
-  EdgelessVisualsOptions,
   CreateVisualPayload,
   PresetPayload,
   ToolCategory,
@@ -31,4 +31,4 @@ export type {
   EdgelessPlaceKind,
   EdgelessVisualTool,
   EdgelessVisualCommandMap,
-} from "./types";
+} from "../../../elements/visuals/types";

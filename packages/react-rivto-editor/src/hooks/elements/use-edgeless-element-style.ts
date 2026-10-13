@@ -1,6 +1,6 @@
 import type { EditorElementNode } from "@chulane/rivto";
 import { useRef, type CSSProperties } from "react";
-import { normalizeRotation } from "./visuals/utils/geometry";
+import { normalizeRotation } from "../../elements/visuals/utils/geometry";
 
 /**
  * Supplies the host ref and inline geometry for a positioned canvas element.

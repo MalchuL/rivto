@@ -1,6 +1,6 @@
-import { EDITOR_CONTROL_SELECTOR } from "../../../constants";
-import { SurfaceBoundary } from "../../../surfaces/surface";
-import { getEdgelessSurfaceOptions } from "../register";
+import { EDITOR_CONTROL_SELECTOR } from "../../constants";
+import { SurfaceBoundary } from "../surface";
+import { getEdgelessSurfaceOptions } from "./register";
 /**
  * React surface for the zoomable edgeless canvas.
  *
@@ -20,7 +20,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { UI_SCOPE_CLASS } from "../../../components/ui-scope";
+import { UI_SCOPE_CLASS } from "../../components/ui-scope";
 import {
   blockIdsOf,
   blockElementRoot,
@@ -28,12 +28,12 @@ import {
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
-} from "../../../elements/block-element-projection";
-import { useDOMEvent, useEditorRoot, useReactPanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../../hooks";
-import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
-import { ToolBarDivider } from "../visuals/components/tool-bar";
-import { EdgelessToolButton } from "../visuals/components/tool-button";
-import { EDGELESS_GRID_SIZE } from "../visuals/utils/geometry";
+} from "../../elements/block-element-projection";
+import { useDOMEvent, useEditorRoot, useReactPanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../hooks";
+import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
+import { ToolBarDivider } from "../../components/edgeless/tool-bar-divider";
+import { EdgelessToolButton } from "../../components/edgeless/tool-button";
+import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
 import { EdgelessSnappingStore } from "./snapping-store";
 

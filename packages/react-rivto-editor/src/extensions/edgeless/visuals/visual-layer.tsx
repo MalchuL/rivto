@@ -1,7 +1,8 @@
+import type { EdgelessVisualsOptions } from "./types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers/keyboard";
-import { useEdgelessOperations } from "./hooks/use-edgeless-operations";
+import { useEdgelessOperations } from "../../../hooks/elements/use-edgeless-operations";
 import { useContext } from "react";
-import { useEdgelessElementStyle } from "../use-edgeless-element-style";
+import { useEdgelessElementStyle } from "../../../hooks/elements/use-edgeless-element-style";
 import { SurfaceContext } from "../../../surfaces/surface";
 /**
  * Edgeless visual plane: persisted visuals, group hit areas, tools, and previews.
@@ -20,20 +21,19 @@ import { BlockProperties } from "./components/block-properties";
 import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
-import { VisualElement } from "./components/visual-element";
+import { VisualElement } from "../../../elements/visuals/visual-element";
 import { VisualProperties } from "./components/visual-properties";
-import type { EdgelessOperations } from "../edgeless-operations";
+import type { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
 import { useDrawingGesture, type ConnectorHover } from "./hooks/use-drawing-gesture";
 import { usePresetDrag } from "./hooks/use-preset-drag";
-import { useVisualTool } from "./hooks/use-visual-tool";
-import { DEFAULT_FONTS, DEFAULT_STICKERS } from "./presets";
+import { useVisualTool } from "../../../hooks/elements/use-visual-tool";
+import { DEFAULT_FONTS, DEFAULT_STICKERS } from "../../../elements/visuals/presets";
 import type {
   ConnectorEndpoint,
   EdgelessFontOption,
   EdgelessVisual,
-  EdgelessVisualsOptions,
-} from "./types";
-import { canvasPoint } from "./utils/canvas-point";
+} from "../../../elements/visuals/types";
+import { canvasPoint } from "../../../elements/visuals/utils/canvas-point";
 
 const VISUAL_LAYER_CLASS = "edgeless-visual-layer";
 const GROUP_HIT_CLASS = "edgeless-group-hit";

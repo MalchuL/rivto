@@ -9,7 +9,7 @@
  * `data-edgeless-ui` so canvas pointer handlers can ignore chrome hits, and an
  * accessible label that doubles as the native tooltip.
  */
-import { editorControlProps } from "../../../../constants";
+import { editorControlProps } from "../../constants";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "cn";
 import {
@@ -50,8 +50,8 @@ import {
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
-import { Button } from "../../../../components/ui/button";
-import { Toggle } from "../../../../components/ui/toggle";
+import { Button } from "../ui/button";
+import { Toggle } from "../ui/toggle";
 
 /** Icon names supported by the built-in edgeless tool button. */
 export type EdgelessToolIcon =

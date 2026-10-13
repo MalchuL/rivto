@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import type { ToolCategory } from "../types";
+import type { ToolCategory } from "../../../../elements/visuals/types";
 
 /** Floating panel above the toolbar; `edgeless-tool-popover` is a stable hook. */
 const POPOVER_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-popover`;

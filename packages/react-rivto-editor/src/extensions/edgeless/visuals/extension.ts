@@ -1,6 +1,6 @@
-import { registerConnectorNormalization } from "./normalize-connectors";
+import { registerConnectorNormalization } from "../../../managers/elements/normalize-connectors";
 import { registerEdgelessCommands } from "../../../managers/elements/register-edgeless-commands";
-import { registerVisualElements } from "./register-elements";
+import { registerVisualElements } from "../../../elements/visuals/register-elements";
 import { createElement } from "react";
 import type { ReactEditorExtension } from "../../../managers";
 import type { EdgelessVisualsOptions } from "./types";

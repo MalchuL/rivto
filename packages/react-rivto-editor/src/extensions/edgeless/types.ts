@@ -1,6 +1,6 @@
 import type { EditorElementFrame } from "@chulane/rivto";
 import type { ConnectorPreviewTarget } from "./edgeless-transform-connectors";
-import type { ElementGeometry } from "./element-geometry";
+import type { ElementGeometry } from "../../elements/element-geometry";
 
 /** Geometry computed by Moveable for one leaf, in canvas units and clockwise degrees. */
 export interface ElementTransformPreview {

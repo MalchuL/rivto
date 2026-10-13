@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import type { ConnectorEndpoint, ConnectorRoute, CreateVisualPayload, EdgelessVisualTool, VisualFrame } from "../types";
-import { canvasPoint, type CanvasPoint } from "../utils/canvas-point";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { ConnectorEndpoint, ConnectorRoute, CreateVisualPayload, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
+import { canvasPoint, type CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 import {
   centeredPlaceFrame,
   snapDraggedFrame,
   snapPlacedFrame,
   type CreationSnapOptions,
-} from "../utils/creation-geometry";
-import { padDrawingFrame } from "../utils/drawing-frame";
-import { edgeAnchors, endpointPoint, inflateFrame, nearestAnchor, pointInRotatedFrame, segmentIntersectsRotatedFrame } from "../utils/geometry";
+} from "../../../../elements/visuals/utils/creation-geometry";
+import { padDrawingFrame } from "../../../../elements/visuals/utils/drawing-frame";
+import { edgeAnchors, endpointPoint, inflateFrame, nearestAnchor, pointInRotatedFrame, segmentIntersectsRotatedFrame } from "../../../../elements/visuals/utils/geometry";
 import { showSnapGuides } from "../utils/snap-guides";
 
 /** Outside attach halo in canvas units (screen-constant via zoom). */

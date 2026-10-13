@@ -2,7 +2,7 @@ import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } fro
 import { createPortal, flushSync } from "react-dom";
 import Moveable, { type OnResizeStart, type OnRotateStart, type OnResize, type OnRotate } from "react-moveable";
 import type { EditorElementFrame } from "@chulane/rivto";
-import { normalizeRotation } from "./visuals/utils/geometry";
+import { normalizeRotation } from "../../elements/visuals/utils/geometry";
 import { useEditorRoot, useReactPanel, useElements } from "../../hooks";
 import { SurfaceContext } from "../../surfaces/surface";
 import { useEdgelessSelection } from "../built-ins/selection/edgeless-runtime";

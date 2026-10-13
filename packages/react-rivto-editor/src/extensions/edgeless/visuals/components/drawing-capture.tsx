@@ -1,9 +1,9 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { ConnectorLineStyle, EdgelessVisualTool, VisualFrame } from "../types";
+import type { ConnectorLineStyle, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
 import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gesture";
-import { connectorPath } from "../utils/geometry";
-import { shapeStrokePad } from "../utils/shape-stroke";
-import type { CanvasPoint } from "../utils/canvas-point";
+import { connectorPath } from "../../../../elements/visuals/utils/geometry";
+import { shapeStrokePad } from "../../../../elements/visuals/utils/shape-stroke";
+import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 
 /** Visual defaults used to paint a near-real place preview. */
 export interface PlacePreviewStyle {

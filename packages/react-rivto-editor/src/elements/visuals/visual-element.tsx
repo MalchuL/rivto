@@ -5,13 +5,13 @@
  * does not re-render this node or recreate its label editor.
  */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ElementSlots } from "../../../../blocks";
-import { type EditableLabelFocusPoint } from "../../../../components";
-import { editorControlProps } from "../../../../constants";
-import { useEdgelessSelected } from "../../../built-ins/selection/edgeless-runtime";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import type { ConnectorEndpoint, EdgelessVisual } from "../types";
-import { useEdgelessElementStyle } from "../../use-edgeless-element-style";
+import { ElementSlots } from "../../blocks";
+import { type EditableLabelFocusPoint } from "../../components";
+import { editorControlProps } from "../../constants";
+import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
+import type { EdgelessOperations } from "../../managers/elements/edgeless-operations";
+import type { ConnectorEndpoint, EdgelessVisual } from "./types";
+import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
 import { VisualContentContext } from "./builtin-visual-content";
 
 const LABEL_KINDS = new Set(["text", "sticker", "rectangle", "ellipse", "connector"]);

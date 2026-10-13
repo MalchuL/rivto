@@ -12,25 +12,15 @@ import { RegisteredElementTools } from "./registered-element-tools";
  */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { Separator } from "../../../../components/ui/separator";
+import { ToolBarDivider } from "../../../../components/edgeless/tool-bar-divider";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../types";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../../../../elements/visuals/types";
 import { CreationPanel } from "./creation-panel";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
+import { EdgelessToolButton, type EdgelessToolIcon } from "../../../../components/edgeless/tool-button";
 
 /** Floating bar chrome; `edgeless-tool-bar` is a stable hook for hosts. */
 const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
-const DIVIDER_CLASS = "edgeless-tool-bar-divider";
-
-/**
- * Renders the thin vertical rule that separates groups of toolbar buttons.
- *
- * @returns A decorative vertical shadcn `Separator`.
- */
-export function ToolBarDivider() {
-  return <Separator orientation="vertical" className={DIVIDER_CLASS} />;
-}
 
 const categories: readonly { id: ToolCategory; label: string; icon: EdgelessToolIcon }[] = [
   { id: "shapes", label: "Shapes", icon: "rectangle" },

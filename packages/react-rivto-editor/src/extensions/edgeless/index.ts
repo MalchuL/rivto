@@ -11,13 +11,13 @@ import type { EdgelessVisualsOptions } from "./visuals/types";
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
-import type { EdgelessSurfaceOptions } from "./surface";
+import type { EdgelessSurfaceOptions } from "../../surfaces/edgeless";
 import { registerEdgelessDeletion } from "./edgeless-deletion";
 import { registerEdgelessMovement } from "./edgeless-movement";
 import { installEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
 import { registerEdgelessTransform } from "./edgeless-transform";
-import { registerEdgelessSurface } from "./register";
+import { registerEdgelessSurface } from "../../surfaces/edgeless/register";
 
 /** @returns The built-in positioned-card surface. */
 export function edgelessSurfaceExtension(
@@ -93,4 +93,4 @@ export function edgelessPreset(options: EdgelessPresetOptions = {}): readonly Re
 
 export * from "./visuals";
 
-export { useEdgelessElementStyle } from "./use-edgeless-element-style";
+export { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";

@@ -205,3 +205,21 @@ Deleting a block element is a React structural operation: it deletes the
 referenced block trees and removes affected group references atomically. Core
 element deletion itself deliberately has no implicit effects on blocks, links,
 groups, or opaque props.
+
+## Implementation ownership
+
+The React package keeps canvas operations and local tool state in
+`src/managers/elements/`, with their lifecycle hooks in `src/hooks/elements/`.
+Visual definitions, renderers, creation geometry and shared styles live in
+`src/elements/`; the viewport, block cards, snapping and surface configuration
+live in `src/surfaces/edgeless/`. Extensions install these contributions and own
+optional interaction handlers, creation gestures, toolbars and property panels.
+
+`EdgelessOperations` remains owned by the mounted canvas representation, even
+though its implementation lives beside the element managers. Separate calls to
+`useEdgelessOperations()` create independent tools and previews; pass the existing
+operations to child UI that must share the canvas state. The toolbar remains a
+separate component receiving that instance. Extension UI is mounted beneath the
+receiving panel context, where `usePanel()` exposes the core panel contract and
+`useReactPanel()` exposes the React panel and its `editor`. This refactor does
+not add toolbar slots, sidebars or floating-window APIs.

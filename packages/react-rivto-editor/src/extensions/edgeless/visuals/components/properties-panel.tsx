@@ -9,7 +9,7 @@
  */
 import { useState, type ReactNode, type RefObject } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { EdgelessToolButton } from "./tool-button";
+import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
 
 /** Right-side floating panel; `edgeless-visual-properties` is a stable hook. */
 const PANEL_CLASS = `${UI_SCOPE_CLASS} edgeless-visual-properties group/panel`;

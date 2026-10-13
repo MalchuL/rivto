@@ -2,7 +2,7 @@ import { edgelessVisualsExtension } from '../../extensions/edgeless/visuals/exte
 import { ChildrenPanel } from '@chulane/rivto';
 import { createTestCoreEditor, createTestReactEditor } from '../../test-utils';
 import { ReactPanel } from '../../panels/react-panel';
-import { EdgelessOperations } from '../../extensions/edgeless/edgeless-operations';
+import { EdgelessOperations } from './edgeless-operations';
 
 const observedOperations: EdgelessOperations[] = [];
 function observeOperations(panel: ReactPanel): EdgelessOperations {

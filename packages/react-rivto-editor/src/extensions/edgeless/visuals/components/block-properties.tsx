@@ -9,7 +9,7 @@ import { useId } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
 import { editorControlProps } from "../../../../constants";
-import type { EdgelessOperations } from "../../edgeless-operations";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
 
 const AUTO_HEIGHT_FIELD_CLASS = "flex items-center gap-2";

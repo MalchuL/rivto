@@ -1,9 +1,9 @@
 import { createContext, useContext, type RefObject } from 'react';
-import { EditableLabel, type EditableLabelFocusPoint } from '../../../../components';
-import type { EdgelessOperations } from '../../edgeless-operations';
-import type { ConnectorEndpoint, EdgelessVisual } from '../types';
-import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from '../utils/geometry';
-import { shapeStrokePad } from '../utils/shape-stroke';
+import { EditableLabel, type EditableLabelFocusPoint } from '../../components';
+import type { EdgelessOperations } from '../../managers/elements/edgeless-operations';
+import type { ConnectorEndpoint, EdgelessVisual } from './types';
+import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from './utils/geometry';
+import { shapeStrokePad } from './utils/shape-stroke';
 
 /** Per-element label and connector interaction supplied by the common positioned host. */
 interface VisualContentState {

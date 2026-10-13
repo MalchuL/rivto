@@ -7,7 +7,7 @@ import { EditorStorage } from "../editor/editor-storage";
 import { createReactEditor } from "../editor/react-editor";
 import { registerCollapse } from "../extensions/built-ins/page/collapse/register";
 import { getEdgelessRuntime, installEdgelessRuntime } from "../extensions/built-ins/selection/edgeless-runtime";
-import { getEdgelessSurfaceOptions, registerEdgelessSurface } from "../extensions/edgeless/register";
+import { getEdgelessSurfaceOptions, registerEdgelessSurface } from "../surfaces/edgeless/register";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
 

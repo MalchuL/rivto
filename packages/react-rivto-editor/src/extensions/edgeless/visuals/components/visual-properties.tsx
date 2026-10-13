@@ -12,12 +12,12 @@ import { Checkbox } from "../../../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { editorControlProps } from "../../../../constants";
 import { isNodeLike } from "../../../../managers/events/dom-nodes";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../types";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { EdgelessFontOption, EdgelessVisual, TextHorizontalAlign, TextVerticalAlign } from "../../../../elements/visuals/types";
 import { ColorControl } from "./color-control";
 import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
 import { SizeControl } from "./size-control";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
+import { EdgelessToolButton, type EdgelessToolIcon } from "../../../../components/edgeless/tool-button";
 
 /* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
 const ALIGN_TOGGLES_CLASS = "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";

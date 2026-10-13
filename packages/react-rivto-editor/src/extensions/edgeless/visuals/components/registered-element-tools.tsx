@@ -1,7 +1,7 @@
-import type { EdgelessOperations } from "../../edgeless-operations";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
 import { useSyncExternalStore } from 'react';
 import { useReactPanelContext } from '../../../../hooks/editor/use-react-panel-context';
-import { useVisualTool } from '../hooks/use-visual-tool';
+import { useVisualTool } from '../../../../hooks/elements/use-visual-tool';
 import { editorControlProps } from '../../../../constants';
 
 /** Adds registered creation contributions to the standard toolbar; all types use the existing placement gesture. */

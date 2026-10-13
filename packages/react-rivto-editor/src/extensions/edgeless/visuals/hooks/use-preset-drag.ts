@@ -1,8 +1,8 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import type { EdgelessOperations } from "../../edgeless-operations";
-import type { PresetPayload, VisualFrame } from "../types";
-import { canvasPoint } from "../utils/canvas-point";
-import { centeredPlaceFrame, snapPlacedFrame } from "../utils/creation-geometry";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { PresetPayload, VisualFrame } from "../../../../elements/visuals/types";
+import { canvasPoint } from "../../../../elements/visuals/utils/canvas-point";
+import { centeredPlaceFrame, snapPlacedFrame } from "../../../../elements/visuals/utils/creation-geometry";
 import { showSnapGuides } from "../utils/snap-guides";
 
 interface PresetDrag {

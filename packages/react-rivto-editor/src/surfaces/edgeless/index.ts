@@ -1,8 +1,9 @@
 /**
  * Public contracts and components for the optional edgeless React surface.
  *
- * Surface rendering and host-owned snapping state live with the edgeless
- * extension; generic persisted block-element projection remains in `elements`.
+ * Surface rendering and host-owned snapping state live together in this module;
+ * extensions configure them and install optional interactions, while generic
+ * persisted block-element projection remains in `elements`.
  *
  * @module
  */

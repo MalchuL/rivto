@@ -43,11 +43,13 @@ export {
 } from "./extensions/built-ins/separator/separator-block";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
 export type { BulletThreadingAnchor, BulletThreadingOptions } from "./extensions/bullet-threading/bullet-threading";
-export { edgelessPreset, edgelessSurfaceExtension, edgelessVisualsExtension, useEdgelessElementStyle } from "./extensions/edgeless";
+export { edgelessPreset, edgelessSurfaceExtension, edgelessVisualsExtension } from "./extensions/edgeless";
+export { useEdgelessElementStyle } from "./hooks/elements/use-edgeless-element-style";
 export type { EdgelessPresetOptions } from "./extensions/edgeless";
-export { EdgelessSnappingStore } from "./extensions/edgeless/surface";
-export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./extensions/edgeless/surface";
-export type { ConnectorEndpoint, ConnectorEndpointStyle, ConnectorLineStyle, ConnectorRoute, ConnectorTextRotation, ConnectorVisual, CreateVisualPayload, EdgelessAlignment, EdgelessBrush, EdgelessFontOption, EdgelessReorder, EdgelessSelectionRef, EdgelessStickerOption, EdgelessVisual, EdgelessVisualCommandMap, EdgelessVisualTool, EdgelessVisualsOptions, OrphanConnectorBehavior, StickerVisual, UpdateVisualPayload, VisualFrame, VisualGroup } from "./extensions/edgeless/visuals";
+export { EdgelessSnappingStore } from "./surfaces/edgeless";
+export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./surfaces/edgeless";
+export type { ConnectorEndpoint, ConnectorEndpointStyle, ConnectorLineStyle, ConnectorRoute, ConnectorTextRotation, ConnectorVisual, CreateVisualPayload, EdgelessAlignment, EdgelessBrush, EdgelessFontOption, EdgelessReorder, EdgelessSelectionRef, EdgelessStickerOption, EdgelessVisual, EdgelessVisualCommandMap, EdgelessVisualTool, OrphanConnectorBehavior, StickerVisual, UpdateVisualPayload, VisualFrame, VisualGroup } from "./elements/visuals/types";
+export type { EdgelessVisualsOptions } from "./extensions/edgeless/visuals/types";
 export {
   DefaultTodoItemPropertiesModal,
   TODO_ITEM_BLOCK_TYPE,
@@ -123,7 +125,7 @@ export {
 
 export { EMBEDDING_BLOCK_TYPE, embeddingExtension, type EmbeddingProps } from "./extensions/embedding/embedding";
 
-export { EdgelessSurface } from "./extensions/edgeless/surface/edgeless-surface";
+export { EdgelessSurface } from "./surfaces/edgeless/edgeless-surface";
 export { PageSurface } from "./surfaces/page/page-surface";
 export { SurfaceContext } from "./surfaces/surface";
 
@@ -146,4 +148,4 @@ export type { CreateElementInput, ElementTypesApi, ReactElementRegistration, Ele
 export type { PanelAPI } from "@chulane/rivto";
 export type { EdgelessAPI } from "./managers/elements/types";
 
-export { useEdgelessOperations } from "./extensions/edgeless/visuals/hooks/use-edgeless-operations";
+export { useEdgelessOperations } from "./hooks/elements/use-edgeless-operations";

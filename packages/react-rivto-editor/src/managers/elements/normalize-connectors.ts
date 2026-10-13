@@ -1,8 +1,8 @@
 import { createEdgelessDefaults } from './tool-state';
-import type { ReactEditorApi } from '../../../editor/types';
-import { ElementGeometry } from '../element-geometry';
-import type { ConnectorEndpoint, ConnectorVisual, EdgelessVisualsOptions } from './types';
-import { connectorFrame, endpointPoint } from './utils/geometry';
+import type { ReactEditorApi } from '../../editor/types';
+import { ElementGeometry } from '../../elements/element-geometry';
+import type { ConnectorEndpoint, ConnectorVisual, OrphanConnectorBehavior } from '../../elements/visuals/types';
+import { connectorFrame, endpointPoint } from '../../elements/visuals/utils/geometry';
 
 /**
  * Installs one document-wide connector reconciliation subscription, independent
@@ -15,11 +15,11 @@ import { connectorFrame, endpointPoint } from './utils/geometry';
  * Registration does not perform an initial reconciliation.
  *
  * @param editor - React editor whose complete document supplies connector targets.
- * @param options - Visual options; orphanConnectors selects deletion or detachment
+ * @param options - Connector maintenance options; orphanConnectors selects deletion or detachment
  * when an attached target no longer has usable geometry.
  * @returns Unsubscribe callback that stops automatic connector reconciliation.
  */
-export function registerConnectorNormalization(editor: ReactEditorApi, options: EdgelessVisualsOptions): () => void {
+export function registerConnectorNormalization(editor: ReactEditorApi, options: { readonly orphanConnectors?: OrphanConnectorBehavior }): () => void {
   const geometry = new ElementGeometry(id => editor.elements.getElementNode(id));
   const defaults = createEdgelessDefaults().connector;
   const rotation = (id: string): number => { const value = editor.elements.getElementNode(id)?.props.rotation; return typeof value === 'number' ? value : 0; };

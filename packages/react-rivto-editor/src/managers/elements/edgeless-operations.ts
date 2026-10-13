@@ -3,14 +3,14 @@ import {
   type ClipboardBundle,
   type EditorElementNode,
 } from "@chulane/rivto";
-import type { CreateElementInput } from "../../managers/elements/types";
+import type { CreateElementInput } from "./types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
-import { EdgelessSelectionRuntime } from "../built-ins/selection/edgeless-runtime";
-import type { EdgelessSelectionRef } from "../built-ins/selection/types";
-import { ElementGeometry } from "./element-geometry";
-import { drawingDefaults, EdgelessToolState } from "./visuals/tool-state";
+import { EdgelessSelectionRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
+import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
+import { ElementGeometry } from "../../elements/element-geometry";
+import { drawingDefaults, EdgelessToolState } from "./tool-state";
 import type {
   CreateVisualPayload,
   EdgelessAlignment,
@@ -22,8 +22,8 @@ import type {
   UpdateVisualPayload,
   VisualFrame,
   VisualGroup,
-} from "./visuals/types";
-import { normalizeRotation, unionFrames } from "./visuals/utils/geometry";
+} from "../../elements/visuals/types";
+import { normalizeRotation, unionFrames } from "../../elements/visuals/utils/geometry";
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
 const copy = <Value>(value: Value): Value => structuredClone(value);

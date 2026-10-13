@@ -6,7 +6,7 @@ import type { ReactEditorApi } from "../../editor/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
 import { SurfaceContext } from "../../surfaces/surface";
 import { EdgelessTransformControls } from "./edgeless-transform-controls";
-import { ElementGeometry } from "./element-geometry";
+import { ElementGeometry } from "../../elements/element-geometry";
 import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
@@ -26,7 +26,7 @@ import {
   isConnectorEndpoint,
   type ConnectorPreviewTarget,
 } from "./edgeless-transform-connectors";
-import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
+import type { ConnectorRoute, ConnectorTextRotation } from "../../elements/visuals/types";
 import {
   connectorLabelCssDegrees,
   connectorLabelPoint,
@@ -35,7 +35,7 @@ import {
   endpointPoint,
   normalizeRotation,
   rotatedFrameBounds,
-} from "./visuals/utils/geometry";
+} from "../../elements/visuals/utils/geometry";
 
 /** Mounts controls only when this view renders an edgeless surface. */
 function TransformControls() {

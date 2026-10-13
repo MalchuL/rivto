@@ -80,10 +80,13 @@ src/extensions/
   optional interaction behavior
 
 src/surfaces/
-  standard page layout, virtualization context and settings
+  page and edgeless layout, virtualization, snapping and surface settings
 
-src/elements/ + src/extensions/edgeless/surface/
-  generic element projection + optional canvas layout
+src/elements/
+  element projection, visual renderers, definitions and geometry
+
+src/managers/elements/ + src/hooks/elements/
+  canvas operations, local tools and subscriptions
 
 demo/src/
   product-level integration examples

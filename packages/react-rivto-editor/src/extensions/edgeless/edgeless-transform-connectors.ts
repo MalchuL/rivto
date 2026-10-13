@@ -7,7 +7,7 @@
  * object is moving and both ends stay attached — selecting the stroke alone
  * does not drag its anchors.
  */
-import type { ConnectorEndpoint } from "./visuals/types";
+import type { ConnectorEndpoint } from "../../elements/visuals/types";
 
 /** How a live preview should follow a transforming selection. */
 export type ConnectorPreviewKind = "translate" | "path";

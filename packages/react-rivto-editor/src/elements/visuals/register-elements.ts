@@ -1,7 +1,7 @@
-import { createEdgelessDefaults } from './tool-state';
-import type { ReactEditorApi } from '../../../editor/types';
-import { connectorClipboardConverter, textElementClipboardConverter } from '../../../elements/clipboard-converters';
-import { BuiltinVisualContent } from './components/builtin-visual-content';
+import { createEdgelessDefaults } from '../../managers/elements/tool-state';
+import type { ReactEditorApi } from '../../editor/types';
+import { connectorClipboardConverter, textElementClipboardConverter } from '../clipboard-converters';
+import { BuiltinVisualContent } from './builtin-visual-content';
 import { drawingResizeProps } from './utils/drawing-frame';
 import { prepareBuiltinElement } from './prepare-builtin-element';
 

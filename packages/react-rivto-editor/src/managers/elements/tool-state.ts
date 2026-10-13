@@ -1,8 +1,8 @@
 import type { EditorElementInput } from "@chulane/rivto";
-import { RevisionStore } from "../../../internal-store";
-import { DEFAULT_STICKERS } from "./presets";
-import type { EdgelessPlaceKind, EdgelessVisual, EdgelessVisualTool, PresetPayload, ToolCategory, VisualFrame } from "./types";
-import { DEFAULT_PLACE_SIZE } from "./utils/creation-geometry";
+import { RevisionStore } from "../../internal-store";
+import { DEFAULT_STICKERS } from "../../elements/visuals/presets";
+import type { EdgelessPlaceKind, EdgelessVisual, EdgelessVisualTool, PresetPayload, ToolCategory, VisualFrame } from "../../elements/visuals/types";
+import { DEFAULT_PLACE_SIZE } from "../../elements/visuals/utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
 export const drawingDefaults = {
@@ -25,8 +25,9 @@ export function createEdgelessDefaults() {
 /**
  * Stores local creation defaults and the last tool selected in each category.
  *
- * The mounted React component retains this state across surface changes. Each
- * panel owns a separate instance; values are not persisted or recorded in undo.
+ * The mounted edgeless representation retains this state until it unmounts. Each
+ * operations instance owns separate state; values reset after a surface change
+ * and are not persisted or recorded in undo.
  * It owns neither document data nor DOM resources. Emitted tool changes notify
  * subscribers synchronously; operation cleanup disconnects panel observers.
  */

@@ -4,7 +4,7 @@ import type { ReactEditorApi } from "../../editor/types";
  *
  * The registration applies editor-local card placement options and connects
  * the explicit edgeless surface to shared snapping and placement defaults. Canvas
- * interaction behavior remains in the sibling edgeless extensions.
+ * interaction behavior remains in the optional edgeless extensions.
  *
  * @module
  */
@@ -12,7 +12,7 @@ import type { ReactPanelApi } from "../../panels/types";
 import {
   EDGELESS_CARD_DEFAULT_FRAME,
 } from "../../elements/block-element-projection";
-import { type EdgelessSurfaceOptions } from "./surface";
+import { type EdgelessSurfaceOptions } from ".";
 
 const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
 

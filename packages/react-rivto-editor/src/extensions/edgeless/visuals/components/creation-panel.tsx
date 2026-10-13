@@ -9,7 +9,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { editorControlProps } from "../../../../constants";
-import type { EdgelessOperations } from "../../edgeless-operations";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
 import type {
   ConnectorLineStyle,
   ConnectorRoute,
@@ -19,10 +19,10 @@ import type {
   EdgelessVisualTool,
   PresetPayload,
   ToolCategory,
-} from "../types";
+} from "../../../../elements/visuals/types";
 import { ColorControl } from "./color-control";
 import { SizeControl } from "./size-control";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
+import { EdgelessToolButton, type EdgelessToolIcon } from "../../../../components/edgeless/tool-button";
 import { ToolPopover } from "./tool-popover";
 
 /** Sticker presets are square thumbnails rather than icon-plus-label buttons. */

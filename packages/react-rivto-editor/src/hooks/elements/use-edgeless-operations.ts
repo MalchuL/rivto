@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { useReactPanel } from "../../../../hooks/editor/use-react-panel";
-import { EdgelessOperations } from "../../edgeless-operations";
+import { useReactPanel } from "../editor/use-react-panel";
+import { EdgelessOperations } from "../../managers/elements/edgeless-operations";
 
 /**
  * Creates canvas operations and local tool/default/preview state for this component.

@@ -7,9 +7,9 @@ import { edgelessSelectionExtension } from "..";
 import { PageSurface } from "../../../surfaces/page/page-surface";
 import { createTestMultiEditor } from "../../../test-utils";
 import { separatorBlockExtension } from "../../built-ins/separator/separator-block";
-import { EdgelessSurface } from "../surface/edgeless-surface";
+import { EdgelessSurface } from "../../../surfaces/edgeless/edgeless-surface";
 import { edgelessVisualsExtension } from ".";
-import { EdgelessOperations } from "../edgeless-operations";
+import { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
 
 const observedOperations: EdgelessOperations[] = [];
 function observeOperations(panel: ReactPanel): EdgelessOperations {

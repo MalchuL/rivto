@@ -1,7 +1,7 @@
 import type { ReactEditorApi } from '../../editor/types';
 import type { ReactPanelApi } from '../../panels/types';
-import { EdgelessOperations } from '../../extensions/edgeless/edgeless-operations';
-import type { VisualCommandPayload } from '../../extensions/edgeless/visuals/types';
+import { EdgelessOperations } from './edgeless-operations';
+import type { VisualCommandPayload } from '../../elements/visuals/types';
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 /**
  * Installs named commands against an explicit document or supplied panel; never follows DOM focus.

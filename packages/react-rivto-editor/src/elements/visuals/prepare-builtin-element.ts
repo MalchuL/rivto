@@ -1,6 +1,6 @@
 import type { EditorElementInput, PanelAPI } from '@chulane/rivto';
 import type { CreateVisualPayload, VisualFrame, ConnectorEndpoint } from './types';
-import { drawingDefaults, createEdgelessDefaults } from './tool-state';
+import { drawingDefaults, createEdgelessDefaults } from '../../managers/elements/tool-state';
 import { ElementGeometry } from '../element-geometry';
 import { connectorFrame, endpointPoint, normalizeRotation } from './utils/geometry';
 const copy = <Value>(value: Value): Value => structuredClone(value);
