@@ -11,6 +11,13 @@ test("an independent collapsed handle renders host artwork without drag installa
     <TestPanel panel={panel}>
       <BlockHandleContext.Provider
         value={{
+          /**
+           * Exposes the host icon inputs in server-rendered markup for assertions.
+           *
+           * @param current - Block snapshot passed to the custom renderer.
+           * @param collapsed - Collapse state derived by the handle.
+           * @returns Text identifying the block and its collapse state.
+           */
           renderIcon: (current, collapsed) => (
             <span>
               {current.id}:{String(collapsed)}

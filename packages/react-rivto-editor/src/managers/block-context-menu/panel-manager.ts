@@ -5,9 +5,24 @@ import { executeBlockMenuEntry } from "./targets";
 export type BlockContextMenuTargets = Omit<BlockContextMenuContext, "reactPanel">;
 /** Binds shared menu contributions to the invoking editor occurrence. */
 export class PanelBlockContextMenuManager {
-  /** @param reactPanel - Occurrence whose guarded operations all actions receive. */
+  /**
+   * Binds shared registrations to one invoking editor occurrence.
+   *
+   * @param reactPanel - Occurrence whose guarded operations all actions receive.
+   */
   constructor(private readonly reactPanel: ReactPanelApi) {}
-  /** Returns available ordered entries for the captured targets. */
+  /**
+   * Resolves available menu definitions for captured targets in this panel.
+   *
+   * Availability predicates receive this manager's panel even if a caller passes
+   * an object containing another reactPanel. This read does not verify target
+   * existence or remove empty submenus; execution performs the target check.
+   *
+   * @param targets - Captured clicked block, explicit targets, and root IDs.
+   * @returns Ordered definition references whose isAvailable callback is absent
+   * or does not return false.
+   * @throws If an availability predicate throws.
+   */
   getAll(targets: BlockContextMenuTargets) {
     const context = { ...targets, reactPanel: this.reactPanel };
     return this.reactPanel.editor.blockContextMenu

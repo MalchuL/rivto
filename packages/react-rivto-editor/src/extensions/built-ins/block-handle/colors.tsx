@@ -17,9 +17,24 @@ export const BLOCK_BACKGROUND_COLORS = [
   "purple",
 ] as const;
 
-/** Renders keyboard-focusable color swatches; mixed selections have no pressed swatch. */
+/**
+ * Renders inline background swatches for the captured explicit block targets.
+ *
+ * Subscribes to editor changes and derives the pressed swatch from all target
+ * background values; mixed selections have no pressed swatch. Activation rechecks
+ * target existence, batches color updates, and closes the menu. Default removes
+ * each target's override; descendant overrides are not rewritten.
+ *
+ * @param context - Panel, captured target IDs, and callback closing the owning menu.
+ * @returns A labeled group of keyboard-focusable menu items with color buttons.
+ */
 function BlockBackgroundColors(context: BlockContextMenuRenderContext) {
   const { reactPanel, blockIds, close } = context;
+  /**
+   * Reads the current background values for React's external-store comparison.
+   *
+   * @returns Comma-separated colors in captured target order; missing blocks or overrides contribute an empty string.
+   */
   const snapshot = () =>
     blockIds
       .map((id) => String(reactPanel.blocks.getBlockNode(id)?.listProps.backgroundColor ?? ""))
@@ -75,11 +90,27 @@ function BlockBackgroundColors(context: BlockContextMenuRenderContext) {
   );
 }
 
-/** Registers validated list properties and an extension-owned custom menu contribution. */
+/**
+ * Registers the persisted background-color property and its inline menu renderer.
+ *
+ * The palette accepts only BLOCK_BACKGROUND_COLORS, with the empty string as the
+ * default meaning no local override. The custom contribution mounts swatches in
+ * the active menu rather than introducing a submenu.
+ *
+ * @param editor - Runtime owning list-property definitions and menu contributions.
+ * @returns No value; both registrations are owned by the extension lifecycle.
+ * @throws If registration is rejected by the list-property or context-menu registry.
+ */
 export function registerBlockBackground(editor: ReactEditorApi): void {
   editor.blockListProps.register({
     id: "backgroundColor",
     defaults: { backgroundColor: "" },
+    /**
+     * Checks the background property against the persisted palette tokens.
+     *
+     * @param candidate - Proposed list-property values supplied by the registry.
+     * @returns True when backgroundColor is a supported token, including the empty default.
+     */
     isValid: (candidate) =>
       BLOCK_BACKGROUND_COLORS.includes(
         candidate.backgroundColor as (typeof BLOCK_BACKGROUND_COLORS)[number],
@@ -90,6 +121,12 @@ export function registerBlockBackground(editor: ReactEditorApi): void {
     title: "Background",
     kind: "custom",
     order: 10,
+    /**
+     * Mounts the inline palette for the currently open menu.
+     *
+     * @param context - Captured panel targets and the owning menu's close callback.
+     * @returns The subscribed background-color control.
+     */
     render: (context) => <BlockBackgroundColors {...context} />,
   });
 }

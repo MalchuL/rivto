@@ -70,6 +70,18 @@ Every method must have a TypeScript JSDoc docstring (`/** ... */`) directly abov
 
 Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Private helpers also require meaningful documentation of their behavior, parameters, and return values.
 
+Use this required format for function and method documentation, including private helpers, hooks, components, constructors, accessors, and declared callback contracts:
+
+1. Start a multiline `/** ... */` block with a complete sentence describing the concrete behavior. Do not merely expand the declaration's name into words.
+2. After a blank `*` line, explain the contract when relevant: ownership, captured versus live state, identity, defaults and units, mutation, transaction boundaries, subscriptions and cleanup, asynchronous completion, and edge cases. Describe only guarantees supported by the implementation and its callers.
+3. After another blank `*` line, add `@param name - Meaning and constraints.` for each parameter. For destructured component props, document `@param props` and the meaningful fields as `@param props.field`; describe callback inputs as well as when the callback is invoked.
+4. Add `@returns` describing the result and its missing-value cases. For promises, state when they resolve; for disposers, state what they release. For void functions, state the completed side effect rather than writing only "Nothing." Constructors and setters do not need an invented return value.
+5. Add `@throws` for meaningful validation, lifecycle, browser, or delegated failures, including rejected promises. Do not promise validation, rollback, atomicity, or error handling that the implementation does not provide.
+
+One-line JSDoc is sufficient for a straightforward data field or constant whose complete contract fits in one sentence. It is not sufficient for a function or callback with parameters, side effects, lifecycle behavior, or failure conditions. Avoid filler, repeated type annotations, and generic phrases such as "handles the operation" or "returns the result." Keep useful existing explanations when expanding a docstring.
+
+Before completing a change, review the added and modified declarations in the diff against these rules. For documentation-only work, verify that executable code and type declarations are unchanged; browser and performance tests are unnecessary when there is no runtime change.
+
 For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-block.ts` subscribes to a recursive snapshot and returns ID-bound commands. Its documentation can describe that contract as follows:
 
 ```ts

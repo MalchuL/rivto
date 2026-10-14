@@ -4,7 +4,12 @@ import { blockMenuTargets, executeBlockMenuEntry } from "./targets";
 import { standardPreset } from "../../extensions/built-ins/built-ins";
 import { todoItemExtension } from "../../extensions/todo-item/todo-item";
 
-/** Creates nested targets under the actual standard extension registrations. */
+/**
+ * Creates nested targets under the actual standard extension registrations.
+ *
+ * @returns Core and React panel runtimes, a parent/child subtree, and an unrelated
+ * root. The test owns destruction of both runtimes after its assertions.
+ */
 async function fixture() {
   const core = await createTestCoreEditor();
   const panel = createTestReactEditor({
@@ -83,6 +88,11 @@ test("registration cleanup and stale targets prevent execution", async () => {
   const dispose = registry.register({
     id: "custom",
     title: "Custom",
+    /**
+     * Records execution so cleanup and stale-target checks can detect unwanted calls.
+     *
+     * @returns After incrementing the test-local invocation count.
+     */
     execute: () => {
       calls++;
     },

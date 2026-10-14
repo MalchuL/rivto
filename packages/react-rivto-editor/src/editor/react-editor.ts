@@ -171,9 +171,9 @@ export class ReactEditor implements ReactEditorApi {
   readonly panels: PanelRegistry;
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: KeyboardManager;
-  /** React-owned slash-command registry. */
   /** Dedicated extension-owned block menu contributions. */
   readonly blockContextMenu: BlockContextMenuRegistry;
+  /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandRegistry;
   private destroyed = false;
   /** Maintains the document's block elements and their default canvas geometry.

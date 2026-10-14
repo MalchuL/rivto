@@ -26,6 +26,9 @@ import {
  * so the root-focus branch is essential. A focused toolbar, collapse toggle,
  * or drag handle cannot enter that branch and therefore keeps its own native
  * Delete/Backspace behavior.
+ *
+ * @param reactEditor - Editor owning the deletion binding and its lifecycle.
+ * @returns After registering the binding; deletion occurs only on a matching keyboard event.
  */
 export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
   reactEditor.keyboard.register(
@@ -67,7 +70,18 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
   );
 }
 
-/** Deletes captured structural targets through the same container policies as keyboard deletion. */
+/**
+ * Deletes the panel's current selection using registered container policies.
+ *
+ * For structural selections, each distinct block behavior is consulted once. The
+ * first non-default outcome claims the whole selection and suppresses generic
+ * deletion. Otherwise selection.delete handles the selection, including expanded
+ * text. Policy calls and deletion share one panel batch; focus is left to callers.
+ *
+ * @param reactPanel - Occurrence whose current selection and block behaviors are used.
+ * @param root - Mounted surface root passed to structural-deletion behavior contexts.
+ * @returns No value after the selected behavior or generic deletion completes.
+ */
 export function deletePanelSelection(reactPanel: ReactPanelApi, root: HTMLElement): void {
   const current = reactPanel.selection.get();
   reactPanel.batchUpdates(() => {

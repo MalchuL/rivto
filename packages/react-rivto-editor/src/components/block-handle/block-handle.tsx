@@ -21,9 +21,27 @@ import { BlockContextMenu } from "./menu";
 
 /** Application-owned navigation and optional handle artwork; no persisted icon state is introduced. */
 export interface BlockHandleOptions {
-  /** Navigates to this document-local block; omitted disables click navigation without disabling menus or drag. */
+  /**
+   * Requests host navigation when the handle is clicked without completing a drag.
+   *
+   * A component callback takes precedence over the context callback. When neither
+   * is provided, clicking does not navigate; menus and optional dragging still work.
+   *
+   * @param blockId - Stable document-local ID of the clicked block.
+   * @returns No value; the host decides how and where to open the block.
+   */
   readonly onOpen?: (blockId: string) => void;
-  /** Receives the current detached block and collapse state; omitted or nullish output uses the default four-dot grip. */
+  /**
+   * Provides host artwork for the handle without persisting icon state.
+   *
+   * A component renderer takes precedence over the context renderer. Omission or
+   * a nullish result uses the default four-dot grip. Artwork is decorative and
+   * rendered inside an aria-hidden wrapper; it must not contain interactive controls.
+   *
+   * @param block - Current detached block snapshot supplied by the rendered slot.
+   * @param collapsed - Whether the block's collapsed list property is true.
+   * @returns Decorative React content, or null/undefined to use the default grip.
+   */
   readonly renderIcon?: (block: EditorBlockNode, collapsed: boolean) => ReactNode;
 }
 /** Supplies navigation and artwork to handles within this application view. */
@@ -35,14 +53,29 @@ export const BlockHandleContext = createContext<BlockHandleOptions>({});
  * Registration stays lazy, armed by pointer entry or keyboard focus. dnd-kit owns
  * drag accessibility attributes through its ref, without spreading sensor props.
  * Ancestor-dependent visibility and collapsed presentation live in block-handle.css.
- * @param props - Current block snapshot, with optional application overrides.
+ * Component callbacks override context callbacks. A completed or cancelled
+ * drag suppresses the following click; right-click and keyboard context-menu
+ * invocation capture structural targets before mounting the menu.
+ *
+ * @param props - Current slot snapshot and optional application overrides.
+ * @param props.block - Detached block snapshot whose ID binds interactions.
+ * @param props.onOpen - Host navigation callback overriding the context value.
+ * @param props.renderIcon - Decorative renderer overriding the context value.
  * @returns The handle and, only while requested, its context menu.
+ * @throws If rendered outside a React editor panel context.
  */
 export function BlockHandle({ block, onOpen, renderIcon }: BlockSlotProps & BlockHandleOptions) {
   const options = useContext(BlockHandleContext);
   const reactPanel = useReactPanel();
   const { item, button, suppressClick, ref } = useBlockHandleDrag(block.id);
   const [menu, setMenu] = useState<{ context: BlockContextMenuContext; x: number; y: number }>();
+  /**
+   * Captures structural selection targets before mounting the menu at an anchor.
+   *
+   * @param x - Horizontal viewport coordinate in CSS pixels.
+   * @param y - Vertical viewport coordinate in CSS pixels.
+   * @returns No value after the captured menu state has been scheduled for rendering.
+   */
   const openMenu = (x: number, y: number) => {
     setMenu({ context: blockMenuTargets(reactPanel, block.id), x, y });
   };
@@ -87,7 +120,18 @@ export function BlockHandle({ block, onOpen, renderIcon }: BlockSlotProps & Bloc
   );
 }
 
-/** Keeps per-block drag subscriptions lazy and remembers a completed or cancelled gesture until the next press. */
+/**
+ * Connects a handle button to its optional per-block drag registration.
+ *
+ * Observes only the requested block's placement notifications. When that block
+ * participates in a drag, the suppression ref stays true through completion or
+ * cancellation until the event handlers reset it. The callback ref retains the
+ * button and forwards attachment and cleanup to the current dnd-kit handle.
+ *
+ * @param blockId - Stable document-local ID whose registration is observed.
+ * @returns Optional drag context, button ref, click-suppression ref, and attachment
+ * callback. Without a drag provider, the hook has no active drag subscription.
+ */
 function useBlockHandleDrag(blockId: string) {
   const item = useContext(PageDragItemContext);
   const button = useRef<HTMLButtonElement>(null);
@@ -117,7 +161,20 @@ function useBlockHandleDrag(blockId: string) {
   return { item, button, suppressClick, ref };
 }
 
-/** Separates click, context-menu, and keyboard intent without suppressing the drag sensor's pointer events. */
+/**
+ * Builds button handlers separating navigation, menus, and drag activation.
+ *
+ * Pointer presses reset click suppression without preventing the drag sensor's
+ * events. Context-menu events prevent the native menu; keyboard invocation uses
+ * the handle's lower-left viewport corner. Enter clears stale suppression only
+ * when a keyboard drag is not active, leaving drag completion to the sensor.
+ *
+ * @param suppressClick - Mutable flag set when this block participates in a drag.
+ * @param open - Host navigation callback invoked by an unsuppressed click.
+ * @param menu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
+ * @param dragging - Reads whether keyboard dragging currently owns Enter.
+ * @returns Pointer-down, click, context-menu, and key-down props for the button.
+ */
 function handleEvents(
   suppressClick: RefObject<boolean>,
   open: () => void,
@@ -125,20 +182,43 @@ function handleEvents(
   dragging: () => boolean,
 ): ButtonHTMLAttributes<HTMLButtonElement> {
   return {
+    /**
+     * Clears click suppression for a new pointer gesture without blocking drag activation.
+     *
+     * @returns No value after updating suppression or invoking the relevant callback.
+     */
     onPointerDown: () => {
       suppressClick.current = false;
     },
+    /**
+     * Stops row click propagation and requests navigation unless the drag consumed this click.
+     *
+     * @param event - Button click whose propagation is stopped.
+     * @returns No value after updating suppression or invoking the relevant callback.
+     */
     onClick: (event) => {
       event.stopPropagation();
       if (!suppressClick.current) {
         open();
       }
     },
+    /**
+     * Suppresses the browser menu and opens block actions at the pointer position.
+     *
+     * @param event - Context-menu event supplying viewport coordinates.
+     * @returns No value after updating suppression or invoking the relevant callback.
+     */
     onContextMenu: (event) => {
       event.preventDefault();
       event.stopPropagation();
       menu(event.clientX, event.clientY);
     },
+    /**
+     * Opens keyboard-invoked menus and preserves Enter ownership during keyboard dragging.
+     *
+     * @param event - Keyboard event checked for ContextMenu, Shift+F10, or Enter.
+     * @returns No value after updating suppression or invoking the relevant callback.
+     */
     onKeyDown: (event) => {
       if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
         event.preventDefault();

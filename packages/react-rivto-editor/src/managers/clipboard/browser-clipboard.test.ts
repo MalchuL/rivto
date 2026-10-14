@@ -5,7 +5,16 @@ import { embeddingExtension } from "../../extensions/embedding/embedding";
 import { blockMenuTargets, executeBlockMenuEntry } from "../block-context-menu/targets";
 import type { ClipboardBundle } from "@chulane/rivto";
 
-/** Captures browser clipboard flavors without a native clipboard in the headless model tests. */
+/**
+ * Installs browser clipboard test doubles while retaining the original globals.
+ *
+ * The ClipboardItem double exposes its input blobs directly to the supplied
+ * writer, allowing tests to inspect formats or simulate asynchronous rejection.
+ *
+ * @param write - Test implementation receiving each clipboard item's MIME-to-blob map.
+ * @returns Cleanup restoring the original navigator and ClipboardItem descriptors,
+ * or removing those globals when they did not previously exist.
+ */
 function clipboard(write: (data: Record<string, Blob>[]) => Promise<void>) {
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   const originalItem = Object.getOwnPropertyDescriptor(globalThis, "ClipboardItem");
@@ -16,7 +25,11 @@ function clipboard(write: (data: Record<string, Blob>[]) => Promise<void>) {
   Object.defineProperty(globalThis, "ClipboardItem", {
     configurable: true,
     value: class {
-      /** Retains blobs as a browser-independent test double. */
+      /**
+       * Retains blobs as a browser-independent test double.
+       *
+       * @param data - MIME-to-blob map returned directly instead of a native ClipboardItem.
+       */
       constructor(data: Record<string, Blob>) {
         return data;
       }

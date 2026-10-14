@@ -22,6 +22,12 @@ import { findEdgelessRuntime } from "./edgeless-runtime";
  * Ordinary page clicks release existing block coverage before native caret
  * events arrive. On canvas, only editable block content releases selection here;
  * canvas backgrounds and controls retain their own interaction handlers.
+ *
+ * Universal-handle clicks preserve the current block group for handle actions.
+ *
+ * @param reactEditor - Editor owning the keyboard and pointer registrations.
+ * @returns Cleanup removing modifier CSS markers from tracked roots; listener cleanup
+ * belongs to the editor's registration lifecycle.
  */
 export function registerBlockSelection(reactEditor: ReactEditorApi): () => void {
   const markedRoots = new Set<HTMLElement>();

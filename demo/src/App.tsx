@@ -142,7 +142,9 @@ function demoRepeatCount(): number {
  * Resolves the demo thread endpoint from the controls rendered in one block row.
  *
  * @param block - Rendered block shell being measured.
- * @returns Universal block handle with layout geometry, a visible collapse-toggle fallback, or null.
+ * @returns The universal handle when it has nonzero layout dimensions, otherwise
+ * a collapse toggle with nonzero dimensions, or null when neither is available.
+ * Opacity is not checked, so a hover-hidden handle still supplies a stable anchor.
  */
 function demoThreadAnchor(block: Element): Element | null {
   const row = block.querySelector(":scope > .page-block-row");
@@ -362,6 +364,10 @@ async function destroyDemoEditor(runtime: {
  * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
  * Optional `?repeat=N` clones the second edgeless card N extra times, each
  * preceded by a separator so reconciliation mounts N additional cards.
+ *
+ * @returns Seeded journal resources and editor cache after initialization and history reset.
+ * The caller owns their cleanup through destroyDemoEditor.
+ * @throws If storage initialization, editor creation, or document seeding fails.
  */
 async function createDemoEditor() {
   const resources = await createDemoDocument();
@@ -381,6 +387,12 @@ async function createDemoEditor() {
       prepared.delete(id);
       return document ?? resources.storage.openDocument(id);
     },
+    /**
+     * Installs the demo renderers and interactions for a cached document editor.
+     *
+     * @param documentEditor - Core editor whose lifecycle is managed by EditorStorage.
+     * @returns React editor retained and disposed by the owning cache.
+     */
     createEditor: (documentEditor) => {
       return createReactEditor({
         editor: documentEditor,
@@ -826,6 +838,18 @@ function JournalDate({ date }: { readonly date: Date }) {
  * Needed so visitors can flip Page ↔ Edgeless, toggle debug block IDs and numbering, and
  * exercise delete/undo without digging into keyboard shortcuts. Reused by
  * journal, multi-editor, and sync surfaces.
+ *
+ * @param props - Editor actions and host-controlled display settings.
+ * @param props.editor - Core editor receiving delete, undo, and snapshot operations.
+ * @param props.showBlockIds - Whether debug block IDs are visible.
+ * @param props.onShowBlockIdsChange - Receives the requested ID visibility.
+ * @param props.showBlockNumbers - Whether gutter numbers are visible.
+ * @param props.onShowBlockNumbersChange - Receives the requested number visibility.
+ * @param props.virtualizePageThreshold - Current page virtualization setting, when exposed.
+ * @param props.onVirtualizePageThresholdChange - Receives the requested virtualization setting.
+ * @param props.virtualizePageOverscan - Current number of extra page rows to render.
+ * @param props.onVirtualizePageOverscanChange - Receives the requested extra-row count.
+ * @returns Toolbar controls and any report-restoration error, within the active panel.
  */
 function DemoToolbar({
   editor,
@@ -840,6 +864,12 @@ function DemoToolbar({
 }: {
   readonly editor: DocumentEditorAPI;
   readonly showBlockNumbers: boolean;
+  /**
+   * Requests a host-owned change to gutter-number visibility.
+   *
+   * @param visible - Checked state selected by the toolbar checkbox.
+   * @returns No value; the host supplies the updated showBlockNumbers prop.
+   */
   readonly onShowBlockNumbersChange: (visible: boolean) => void;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
@@ -1004,6 +1034,9 @@ function DemoToolbar({
  *
  * Needed as the primary product walkthrough — two editors, shared toolbar
  * patterns, and lifecycle cleanup when the page unmounts.
+ *
+ * @returns Loading or initialization-error feedback, then two journal surfaces.
+ * The component disposes created runtimes on unmount, including late completions.
  */
 function JournalDemoApp() {
   const [runtime, setRuntime] = useState<{
@@ -1199,7 +1232,16 @@ function DocumentStateDump({ editor }: { readonly editor: DocumentEditorAPI }) {
   );
 }
 
-/** One pane of `?editors=2` (toolbar + document dump for e2e). */
+/**
+ * One pane of `?editors=2` (toolbar + document dump for e2e).
+ *
+ * Owns debug-label visibility; the parent owns the supplied runtime's lifetime.
+ *
+ * @param props - Pane identity and initialized editor resources.
+ * @param props.side - Stable left/right identity used to scope browser assertions.
+ * @param props.runtime - Core and React editors created for this pane.
+ * @returns Independent editor surface, toolbar, revisions, and serialized document state.
+ */
 function MultiEditorPane({
   side,
   runtime,
@@ -1409,6 +1451,9 @@ async function createSyncedPeer(
  *
  * Needed to verify same-origin Yjs sync over BroadcastChannel: two panes on
  * this page, plus more peers if another tab opens the same URL.
+ *
+ * @returns Loading or initialization-error feedback, then two synchronized editor panes.
+ * The component closes created peers on unmount, including late completions.
  */
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";

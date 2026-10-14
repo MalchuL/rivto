@@ -206,11 +206,29 @@ function EmbeddingBody({ block }: BlockSlotProps) {
 export function embeddingExtension(): ReactEditorExtension {
   return {
     id: "block.embedding",
+    /**
+     * Registers embedding copying, block rendering, controls, and clipboard conversion.
+     *
+     * @param reactEditor - Host editor receiving the embedding registrations.
+     * @returns Cleanup for converters, slots, and block type; the menu registration
+     * is released by the extension registration lifecycle.
+     * @throws If a delegated registration fails.
+     */
     setup: (reactEditor) => {
       reactEditor.blockContextMenu.register({
         id: "embedding.copy",
         title: "Copy block embedding",
         order: 70,
+        /**
+         * Copies live embedding references for the captured root blocks.
+         *
+         * Each reference carries the source document ID and block ID; source
+         * content is not cloned or changed. Normal paste creates reference blocks.
+         *
+         * @param context - Invoking panel and ancestor-deduplicated source roots.
+         * @returns Completion of the browser clipboard write.
+         * @throws If formatting or browser clipboard access fails.
+         */
         execute: async ({ reactPanel, rootIds }) => {
           const bundle = clipboardContentBundle({
             blocks: rootIds.map((id) => ({

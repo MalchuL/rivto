@@ -491,7 +491,18 @@ for (const canvas of [false, true]) {
   });
 }
 
-/** Moves the real mouse from a row's handle to another row; the caller checks feedback and releases it. */
+/**
+ * Moves the real mouse from a row's handle to another row; the caller checks feedback and releases it.
+ *
+ * Scrolls the destination away from viewport edges to avoid drag autoscroll.
+ *
+ * @param page - Browser page receiving the pointer gesture.
+ * @param source - Source page row containing a direct handle slot.
+ * @param destination - Page row receiving the held pointer.
+ * @param before - Targets the top insertion edge instead of the row center when true.
+ * @returns Resolves after confirming active drag and destination hit testing; the mouse remains down.
+ * @throws If geometry is missing, browser input fails, or either drag assertion fails.
+ */
 async function dragRow(
   page: Page,
   source: Locator,

@@ -36,6 +36,14 @@ async function seed(page: Page, repeat = 0) {
   });
 }
 
+/**
+ * Opens a block through its handle in today's journal.
+ *
+ * @param page - Demo page containing the seeded journal.
+ * @param id - Persisted block ID to open as a panel root.
+ * @returns Resolves once the matching panel root is visible.
+ * @throws If the block cannot be clicked or the expected panel does not appear.
+ */
 async function open(page: Page, id: string) {
   const block = page.locator(`[data-journal-document="today"] [data-block-id="${id}"]`).first();
   await block.locator(":scope > .page-block-row").hover();

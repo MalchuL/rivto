@@ -70,6 +70,12 @@ export interface ClipboardExtensionOptions {
  * Event listeners are delegated to the active surface root and are removed by
  * the keyboard and DOM event runtimes when this component unmounts.
  *
+ * Also registers the block menu's Copy, Cut, and Delete actions. Browser copies
+ * carry structured data in both the custom MIME and an HTML envelope. Paste
+ * prefers custom MIME, then the envelope, then the existing fallback; plain-text
+ * paste bypasses all structured formats. Menu registrations follow extension
+ * cleanup rather than the returned canvas-strategy disposer.
+ *
  * @param reactEditor - React editor whose DOM events and clipboard managers are connected.
  * @param options - Plain-text fallback and invalid-block handling configuration.
  * @returns Disposer that unregisters the canvas paste strategy.
@@ -117,7 +123,18 @@ export function registerClipboard(
     return blockIds.length ? createStructuralSelection(blockIds) : undefined;
   };
 
-  /** Writes the core-produced flavors into a native clipboard event. */
+  /**
+   * Writes the core-produced flavors into a native clipboard event.
+   *
+   * Caches the structured payload and plain text for later fallback even when
+   * the event has no clipboardData. Does not call the asynchronous Clipboard API.
+   *
+   * @param reactPanel - Panel whose editor formats the portable clipboard flavors.
+   * @param event - Native copy or cut event receiving the available formats.
+   * @param bundle - Core-produced content to serialize and cache.
+   * @returns After writing available event data and replacing the local fallback.
+   * @throws If formatting, serialization, or a native clipboard write fails.
+   */
   const writeClipboard = (
     reactPanel: ReactPanelApi,
     event: ClipboardEvent,
@@ -156,7 +173,19 @@ export function registerClipboard(
     }
   };
 
-  /** Pastes either the richest clipboard flavor or one unbroken plain-text value. */
+  /**
+   * Pastes either the richest clipboard flavor or one unbroken plain-text value.
+   *
+   * Consumes the pending plain-text override. Rich paste tries native structured
+   * data, the HTML envelope, then the last-copy fallback. Invalid structured JSON
+   * or bundles fall back to content parsing. Structural page paste restores focus
+   * and schedules DOM selection restoration only while the resulting selection remains current.
+   *
+   * @param reactPanel - Destination panel supplying selection and insertion operations.
+   * @param event - Native paste event supplying clipboard content.
+   * @returns After invoking paste and scheduling any required selection restoration.
+   * @throws If content parsing or delegated paste operations fail outside structured-data validation.
+   */
   const pasteClipboard = (reactPanel: ReactPanelApi, event: ClipboardEvent): void => {
     const plainText = pasteAsPlainText;
     pasteAsPlainText = false;

@@ -4,7 +4,13 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 
 type Demo = { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditorApi } };
 
-/** Seeds nested blocks without including setup in interaction measurements. */
+/**
+ * Loads the demo and seeds nested targets before measuring menu interactions.
+ *
+ * @param page - Browser page hosting the demo editor.
+ * @param repeat - Demo fixture repetition count; zero uses the normal document.
+ * @returns IDs for a nested parent/child pair and a separate sibling target.
+ */
 async function seed(page: Page, repeat = 0) {
   await page.goto(`/?repeat=${repeat}`);
   await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
@@ -33,7 +39,13 @@ async function seed(page: Page, repeat = 0) {
   });
 }
 
-/** Opens a row's own menu without accidentally selecting a nested handle. */
+/**
+ * Opens a row's own menu without accidentally selecting a nested handle.
+ *
+ * @param page - Browser page containing the seeded demo document.
+ * @param id - Document-local block ID whose direct row owns the handle.
+ * @returns Completion after right-clicking the handle and observing a visible menu.
+ */
 async function menu(page: Page, id: string) {
   const row = page
     .locator(`[data-journal-document="today"] [data-block-id="${id}"] > .page-block-row`)

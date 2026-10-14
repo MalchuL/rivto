@@ -44,9 +44,9 @@ export interface ReactPanelApi extends PanelAPI {
   readonly keyboard: KeyboardApi;
   /** Reads the selection owned by this panel and synchronizes its DOM caret and highlights. */
   readonly selection: PanelSelectionApi;
-  /** Filters and executes shared command definitions using this panel as their context. */
   /** Menu actions bound to this panel and captured structural targets. */
   readonly blockContextMenu: PanelBlockContextMenuManager;
+  /** Filters and executes shared command definitions using this panel as their context. */
   readonly slashCommands: PanelSlashCommandsApi;
   /** Observes deactivation so transient UI closes when another occurrence receives focus. */
   subscribeDeactivation(listener: () => void): () => void;

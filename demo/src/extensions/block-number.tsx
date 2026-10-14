@@ -21,7 +21,17 @@ import {
 
 const BlockNumbersVisibleContext = createContext(false);
 
-/** Makes demo gutter numbers visible or hidden without changing editor data. */
+/**
+ * Controls demo gutter-number visibility without changing editor data.
+ *
+ * Hidden slots do not mount their number labels, avoiding ordinal subscriptions
+ * until labels are shown. Visibility is scoped to this provider's descendants.
+ *
+ * @param props - Visibility setting and subtree receiving it.
+ * @param props.visible - Whether descendant page slots should render gutter numbers.
+ * @param props.children - Editor subtree sharing the visibility setting.
+ * @returns A context provider around the supplied children.
+ */
 export function BlockNumbersVisibleProvider({
   visible,
   children,
@@ -147,13 +157,28 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot);
 }
 
-/** Draws the block's document-order number in the page's left gutter. */
+/**
+ * Conditionally mounts a block's document-order number in the page's left gutter.
+ *
+ * @param props - Current block slot context forwarded to the visible label.
+ * @returns A subscribed label when the visibility context is true, otherwise null.
+ * Hidden slots do not subscribe to ordinal changes.
+ */
 function BlockNumberSlot(props: BlockSlotProps) {
   const visible = useContext(BlockNumbersVisibleContext);
   return visible ? <BlockNumberLabel {...props} /> : null;
 }
 
-/** Subscribes to and draws a visible block's document-order number. */
+/**
+ * Subscribes to and draws a visible block's document-order number.
+ *
+ * The depth CSS variable keeps nested labels aligned in their ancestor's gutter.
+ *
+ * @param props - Slot context supplying the block snapshot.
+ * @param props.block - Block whose ID resolves its cached document-order ordinal.
+ * @returns The ordinal label, or null when the block is absent from the numbered outline.
+ * @throws If no panel or loaded document is available to resolve the ordinal.
+ */
 function BlockNumberLabel({ block }: BlockSlotProps) {
   const ordinal = useBlockOrdinal(block);
   if (!ordinal) {
