@@ -17,7 +17,9 @@ export interface BlockSelectionAnchorAttributes {
   readonly [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "";
 }
 
-const selectionAnchorAttributes: BlockSelectionAnchorAttributes = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+const selectionAnchorAttributes: BlockSelectionAnchorAttributes = {
+  [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "",
+};
 
 /**
  * Restores a pending command's caret when its renderer mounts or changes editor/ID.
@@ -25,15 +27,22 @@ const selectionAnchorAttributes: BlockSelectionAnchorAttributes = { [BLOCK_SELEC
  * @param elementRef - Text editable; when omitted, focus returns to the surface root.
  * @returns Nothing; layout cleanup cancels stale queued focus restoration.
  */
-export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTMLDivElement | null>): void {
+export function useRestoreBlockFocus(
+  blockId: string,
+  elementRef?: RefObject<HTMLDivElement | null>,
+): void {
   const reactPanel = useReactPanel();
   /** Restores a pending command's caret after commit; cleanup cancels stale work. */
   useLayoutEffect(() => {
     const textEdit = elementRef !== undefined;
     const element = elementRef ? elementRef.current : reactPanel.events.getRoot();
-    if (!element || !reactPanel.selection.hasPendingSelectionCallback) return;
+    if (!element || !reactPanel.selection.hasPendingSelectionCallback) {
+      return;
+    }
     const selection = reactPanel.selection.snapshot();
-    if (selection?.focusBlockId !== blockId || !isCaretSelection(selection)) return;
+    if (selection?.focusBlockId !== blockId || !isCaretSelection(selection)) {
+      return;
+    }
 
     // A structural command remounts the focused editable before its scheduled
     // frame. Restore its caret immediately after the commit so the next key cannot land
@@ -46,18 +55,29 @@ export function useRestoreBlockFocus(blockId: string, elementRef?: RefObject<HTM
     // Focusing inside the commit forces layout while React is still updating
     // sibling blocks. A newer selection or an unmount invalidates this work.
     queueMicrotask(() => {
-      if (!mounted || !element.isConnected || !reactPanel.selection.hasPendingSelectionCallback ||
-        reactPanel.selection.snapshot() !== selection) return;
+      if (
+        !mounted ||
+        !element.isConnected ||
+        !reactPanel.selection.hasPendingSelectionCallback ||
+        reactPanel.selection.snapshot() !== selection
+      ) {
+        return;
+      }
       element.focus({ preventScroll: true });
       if (textEdit) {
         const range = selection.blocks[0]!;
-        const point = { textOffset: resolveBlockRange(element.textContent?.length ?? 0, range.start, range.end).startOffset };
+        const point = {
+          textOffset: resolveBlockRange(element.textContent?.length ?? 0, range.start, range.end)
+            .startOffset,
+        };
         restoreDOMSelection(element, { anchor: point, focus: point });
       } else {
         element.ownerDocument.getSelection()?.removeAllRanges();
       }
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [reactPanel, blockId, elementRef]);
 }
 

@@ -65,5 +65,15 @@ export interface PanelOptions {
  * The snapshot is replaced on change; its model and API are live references.
  */
 export type PanelSnapshot =
-  | { readonly status: "loading"; readonly document?: DocumentModel; readonly api?: ReactPanel; readonly retained?: boolean }
-  | { readonly status: "available" | "missing"; readonly document: DocumentModel; readonly api: ReactPanel; readonly retained: boolean };
+  | {
+      readonly status: "loading";
+      readonly document?: DocumentModel;
+      readonly api?: ReactPanel;
+      readonly retained?: boolean;
+    }
+  | {
+      readonly status: "available" | "missing";
+      readonly document: DocumentModel;
+      readonly api: ReactPanel;
+      readonly retained: boolean;
+    };

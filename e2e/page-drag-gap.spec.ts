@@ -34,7 +34,12 @@ const REPORT_ANOTHER_ID = "fe679c9a-de62-4d8c-a77b-356774bc7c2d";
  * @param y - Destination viewport Y when X is supplied as a number.
  * @returns Completion after the cursor reaches the destination.
  */
-async function holdDragAt(page: Page, source: Locator, x: number | (() => Promise<{ x: number; y: number }>), y?: number): Promise<void> {
+async function holdDragAt(
+  page: Page,
+  source: Locator,
+  x: number | (() => Promise<{ x: number; y: number }>),
+  y?: number,
+): Promise<void> {
   const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
   await source.locator(`:scope > .${ROW_CLASS}`).hover();
   await handle.hover();
@@ -44,7 +49,12 @@ async function holdDragAt(page: Page, source: Locator, x: number | (() => Promis
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
   if (typeof x === "function") {
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
   }
   const point = typeof x === "function" ? await x() : { x, y: y! };
   await page.mouse.move(point.x, point.y, { steps: 15 });
@@ -57,14 +67,18 @@ async function holdDragAt(page: Page, source: Locator, x: number | (() => Promis
  * @returns Completion after the native v6 snapshot is loaded.
  */
 async function loadSingleChildReport(page: Page): Promise<void> {
-  const snapshot = JSON.parse(await readFile(
-    resolve(process.cwd(), "e2e/fixtures/single-nested-block-drag.snapshot.json"),
-    "utf8",
-  )) as EditorSnapshot;
+  const snapshot = JSON.parse(
+    await readFile(
+      resolve(process.cwd(), "e2e/fixtures/single-nested-block-drag.snapshot.json"),
+      "utf8",
+    ),
+  ) as EditorSnapshot;
   await page.evaluate((value) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     editor.load(value);
   }, snapshot);
 }
@@ -72,9 +86,11 @@ async function loadSingleChildReport(page: Page): Promise<void> {
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     const alpha = editor.blocks.insertBlock({ type: "paragraph", content: "Alpha" }).id;
     const beta = editor.blocks.insertBlock({ type: "paragraph", content: "Beta" }).id;
     const board = editor.blocks.insertBlock({
@@ -86,7 +102,8 @@ test.beforeEach(async ({ page }) => {
       ],
     }).id;
     editor.load({
-      ...editor.dump(), rootElementIds: [],
+      ...editor.dump(),
+      rootElementIds: [],
       blocks: [
         editor.blocks.getBlock(alpha)!,
         editor.blocks.getBlock(beta)!,
@@ -98,8 +115,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("a gap between outline blocks does not drop inside a later kanban", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
-  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
+  const beta = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Beta", { exact: true }) })
+    .first();
   const board = page.locator('[data-block-type="kanban"]');
   const alphaBox = (await alpha.boundingBox())!;
   const betaBox = (await beta.boundingBox())!;
@@ -112,7 +135,9 @@ test("a gap between outline blocks does not drop inside a later kanban", async (
 
 test("keeps a block in place from the bottom edge of the block above", async ({ page }) => {
   const roots = page.locator(`.page-surface > [data-block-id]`);
-  const before = await roots.evaluateAll((blocks) => blocks.map((block) => block.getAttribute("data-block-id")));
+  const before = await roots.evaluateAll((blocks) =>
+    blocks.map((block) => block.getAttribute("data-block-id")),
+  );
   const alpha = roots.filter({ has: page.getByText("Alpha", { exact: true }) });
   const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
   const alphaRow = alpha.locator(`:scope > .${ROW_CLASS}`);
@@ -126,14 +151,18 @@ test("keeps a block in place from the bottom edge of the block above", async ({ 
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(alphaBox.y + alphaBox.height, 0);
   await page.mouse.up();
 
-  await expect.poll(() => roots.evaluateAll(
-    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
-  )).toEqual(before);
+  await expect
+    .poll(() =>
+      roots.evaluateAll((blocks) => blocks.map((block) => block.getAttribute("data-block-id"))),
+    )
+    .toEqual(before);
 });
 
 test("keeps a block in place from the top edge of the block below", async ({ page }) => {
   const roots = page.locator(`.page-surface > [data-block-id]`);
-  const before = await roots.evaluateAll((blocks) => blocks.map((block) => block.getAttribute("data-block-id")));
+  const before = await roots.evaluateAll((blocks) =>
+    blocks.map((block) => block.getAttribute("data-block-id")),
+  );
   const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
   const board = page.locator('[data-block-type="kanban"]');
   const boardRow = board.locator(`:scope > .${ROW_CLASS}`);
@@ -147,9 +176,11 @@ test("keeps a block in place from the top edge of the block below", async ({ pag
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y, 0);
   await page.mouse.up();
 
-  await expect.poll(() => roots.evaluateAll(
-    (blocks) => blocks.map((block) => block.getAttribute("data-block-id")),
-  )).toEqual(before);
+  await expect
+    .poll(() =>
+      roots.evaluateAll((blocks) => blocks.map((block) => block.getAttribute("data-block-id"))),
+    )
+    .toEqual(before);
 });
 
 test("drops a block after the last root container", async ({ page }) => {
@@ -167,24 +198,44 @@ test("drops a block after the last root container", async ({ page }) => {
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
   const { lineBox, currentBoardBox } = await page.evaluate((id) => {
-    const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
-    const currentBoardBox = document.querySelector(`[data-block-id="${id}"]`)!.getBoundingClientRect().toJSON();
+    const lineBox = document
+      .querySelector(".page-drop-indicator")!
+      .getBoundingClientRect()
+      .toJSON();
+    const currentBoardBox = document
+      .querySelector(`[data-block-id="${id}"]`)!
+      .getBoundingClientRect()
+      .toJSON();
     return { lineBox, currentBoardBox };
   }, boardId);
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(currentBoardBox.y + currentBoardBox.height, 0);
   await page.mouse.up();
 
-  await expect.poll(() => page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getBlocks().map((block) => block.id);
-  })).toEqual([betaId, boardId, alphaId]);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getBlocks().map((block) => block.id);
+      }),
+    )
+    .toEqual([betaId, boardId, alphaId]);
 });
 
-test("uses the final pointer event for feedback and the committed destination", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
-  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+test("uses the final pointer event for feedback and the committed destination", async ({
+  page,
+}) => {
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
+  const beta = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Beta", { exact: true }) })
+    .first();
   const row = beta.locator(`:scope > .${ROW_CLASS}`);
   const box = (await row.boundingBox())!;
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + 2);
@@ -192,7 +243,9 @@ test("uses the final pointer event for feedback and the committed destination", 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await expect(row).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  await expect(beta.locator('[data-block-id]').filter({ has: page.getByText("Alpha", { exact: true }) })).toHaveCount(1);
+  await expect(
+    beta.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }),
+  ).toHaveCount(1);
 });
 
 test("drops a block before the first root container", async ({ page }) => {
@@ -203,16 +256,22 @@ test("drops a block before the first root container", async ({ page }) => {
   const alphaId = await alpha.getAttribute("data-block-id");
   const betaId = await beta.getAttribute("data-block-id");
   const boardId = await board.getAttribute("data-block-id");
-  await page.evaluate(({ alphaId, betaId, boardId }) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    editor.load({
-      ...editor.dump(), rootElementIds: [],
-      blocks: [boardId, alphaId, betaId].map((id) => editor.blocks.getBlock(id!)!),
-      elements: [],
-    });
-  }, { alphaId, betaId, boardId });
+  await page.evaluate(
+    ({ alphaId, betaId, boardId }) => {
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor;
+      editor.load({
+        ...editor.dump(),
+        rootElementIds: [],
+        blocks: [boardId, alphaId, betaId].map((id) => editor.blocks.getBlock(id!)!),
+        elements: [],
+      });
+    },
+    { alphaId, betaId, boardId },
+  );
   const boardBox = (await board.boundingBox())!;
 
   await holdDragAt(page, beta, boardBox.x + CHILD_DROP_INDENT / 2, boardBox.y - 12);
@@ -222,12 +281,18 @@ test("drops a block before the first root container", async ({ page }) => {
   expect(lineBox.y + lineBox.height / 2).toBeCloseTo(boardBox.y, 0);
   await page.mouse.up();
 
-  await expect.poll(() => page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getBlocks().map((block) => block.id);
-  })).toEqual([betaId, boardId, alphaId]);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getBlocks().map((block) => block.id);
+      }),
+    )
+    .toEqual([betaId, boardId, alphaId]);
 });
 
 const ROOT_CONTAINER_INPUTS = [
@@ -241,28 +306,45 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`drops a container at the Kanban–Columns outer edge in ${mode}`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const ids = await page.evaluate((nextMode) => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: DocumentEditorAPI };
-      }).__rivtoDemo.editor;
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor;
       const holder = editor.blocks.insertBlock({
-        type: "paragraph", content: "Holder",
+        type: "paragraph",
+        content: "Holder",
         children: [{ type: "bento", children: [{ type: "paragraph", content: "Move me" }] }],
       }).id;
       const source = editor.blocks.getBlock(holder)!.children[0]!.id;
       const first = editor.blocks.insertBlock({
-        type: "kanban", content: "Board", children: [{ type: "kanban-column", content: "Lane" }],
+        type: "kanban",
+        content: "Board",
+        children: [{ type: "kanban-column", content: "Lane" }],
       }).id;
-      const second = editor.blocks.insertBlock({ type: "columns", children: [{ type: "columns-column" }] }).id;
-      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!), elements: [] });
+      const second = editor.blocks.insertBlock({
+        type: "columns",
+        children: [{ type: "columns-column" }],
+      }).id;
+      editor.load({
+        ...editor.dump(),
+        rootElementIds: [],
+        blocks: [holder, first, second].map((id) => editor.blocks.getBlock(id)!),
+        elements: [],
+      });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({           type: "block", zIndex: 0,
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
           frame: { x: 20, y: 20, width: 900, height: 650 },
           props: { startBlockId: holder, endBlockId: second },
         });
       }
       return { holder, source, first, second };
     }, mode);
-    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    if (mode === "edgeless") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
     const source = page.locator(`[data-block-id="${ids.source}"]`).first();
     await source.scrollIntoViewIfNeeded();
     await source.locator(`:scope > .${ROW_CLASS}`).hover();
@@ -270,19 +352,29 @@ for (const mode of ["block", "edgeless"] as const) {
     const first = page.locator(`[data-block-id="${ids.first}"]`).first();
     const firstBox = (await first.boundingBox())!;
 
-    await holdDragAt(page, source, firstBox.x + firstBox.width / 2,
-      firstBox.y + firstBox.height - 4);
+    await holdDragAt(
+      page,
+      source,
+      firstBox.x + firstBox.width / 2,
+      firstBox.y + firstBox.height - 4,
+    );
     const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
     await expect(line).toBeVisible();
     const lineBox = (await line.boundingBox())!;
     expect(Math.abs(lineBox.y + lineBox.height / 2 - firstBox.y - firstBox.height)).toBeLessThan(9);
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(() => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: DocumentEditorAPI };
-      }).__rivtoDemo.editor;
-      return editor.blocks.getRootIds();
-    })).toEqual([ids.holder, ids.first, ids.source, ids.second]);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: { editor: DocumentEditorAPI };
+            }
+          ).__rivtoDemo.editor;
+          return editor.blocks.getRootIds();
+        }),
+      )
+      .toEqual([ids.holder, ids.first, ids.source, ids.second]);
   });
 }
 
@@ -291,27 +383,43 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
   const document = page.locator('[data-journal-document="today"]');
   const board = document.locator('[data-block-type="kanban"]').first();
   const columns = document.locator('[data-block-type="columns"]').first();
-  const card = board.locator('[data-block-type="paragraph"]')
-    .filter({ hasText: "Drag me between columns or back into the editor" }).first();
+  const card = board
+    .locator('[data-block-type="paragraph"]')
+    .filter({ hasText: "Drag me between columns or back into the editor" })
+    .first();
   const cardId = await card.getAttribute("data-block-id");
   await card.scrollIntoViewIfNeeded();
   await holdDragAt(page, card, async () => {
     // Bring the destination into view after activation; scrolling the handle
     // into view alone can leave the gap below the viewport.
     await columns.evaluate((element) => element.scrollIntoView({ block: "center" }));
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     const boardBox = (await board.boundingBox())!;
     const columnsBox = (await columns.boundingBox())!;
-    return { x: boardBox.x + boardBox.width / 2, y: (boardBox.y + boardBox.height + columnsBox.y) / 2 };
+    return {
+      x: boardBox.x + boardBox.width / 2,
+      y: (boardBox.y + boardBox.height + columnsBox.y) / 2,
+    };
   });
   await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
   await page.mouse.up();
-  await expect.poll(() => page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getParentId(id!);
-  }, cardId)).toBeNull();
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id!);
+      }, cardId),
+    )
+    .toBeNull();
 });
 
 test("moves a block between the demo TODO storage and Bento", async ({ page }) => {
@@ -321,9 +429,11 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
   const bento = document.locator('[data-block-type="bento"]').first();
   const source = storage.locator('[data-block-type="todo-item"]').last();
   const ids = await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     const roots = editor.blocks.getRootIds();
     const storageId = roots.find((id) => editor.blocks.getBlock(id)?.type === "todo-storage")!;
     const bentoId = roots.find((id) => editor.blocks.getBlock(id)?.type === "bento")!;
@@ -336,59 +446,117 @@ test("moves a block between the demo TODO storage and Bento", async ({ page }) =
     // The last task may be visible while the storage's bottom is offscreen.
     // Centre the destination after activation before measuring its boundary.
     await storage.evaluate((element) => element.scrollIntoView({ block: "center" }));
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     const box = (await storage.boundingBox())!;
     return { x: box.x + box.width / 2, y: box.y + box.height - 4 };
   });
   const line = page.locator(`.${LINE_CLASS}[data-kind="between"]`);
   await expect(line).toBeVisible();
   const { lineBox, storageBox } = await page.evaluate((id) => {
-    const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
-    const storageBox = document.querySelector(`[data-block-id="${id}"]`)!.getBoundingClientRect().toJSON();
+    const lineBox = document
+      .querySelector(".page-drop-indicator")!
+      .getBoundingClientRect()
+      .toJSON();
+    const storageBox = document
+      .querySelector(`[data-block-id="${id}"]`)!
+      .getBoundingClientRect()
+      .toJSON();
     return { lineBox, storageBox };
   }, ids.storageId);
-  expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(9);
+  expect(Math.abs(lineBox.y + lineBox.height / 2 - storageBox.y - storageBox.height)).toBeLessThan(
+    9,
+  );
   await page.mouse.up();
-  await expect.poll(() => page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getRootIds().indexOf(id!);
-  }, sourceId)).toBe((await page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getRootIds().indexOf(id);
-  }, ids.storageId)) + 1);
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getRootIds().indexOf(id!);
+      }, sourceId),
+    )
+    .toBe(
+      (await page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getRootIds().indexOf(id);
+      }, ids.storageId)) + 1,
+    );
   await expect(bento).toBeVisible();
 });
 
 for (const mode of ["block", "edgeless"] as const) {
   for (const container of ROOT_CONTAINER_INPUTS) {
-    test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({ page }) => {
-      const ids = await page.evaluate(({ input, nextMode }) => {
-        const editor = (window as unknown as {
-          __rivtoDemo: { editor: DocumentEditorAPI };
-        }).__rivtoDemo.editor;
-        const roots = [
-          editor.blocks.insertBlock({ id: "gap-source", type: "paragraph", content: "Gap source" }),
-          editor.blocks.insertBlock({ id: "gap-markdown", type: "paragraph", content: "Markdown" }),
-          editor.blocks.insertBlock({ id: "gap-slider", type: "demo.slider", props: { value: 25 } }),
-          editor.blocks.insertBlock({ id: "gap-counter", type: "demo.counter", props: { count: 2 } }),
-          editor.blocks.insertBlock({ id: "gap-container", ...input }),
-          editor.blocks.insertBlock({ id: "gap-after", type: "paragraph", content: "After container" }),
-        ].map((block) => block.id);
-        editor.load({ ...editor.dump(), rootElementIds: [], blocks: roots.map((id) => editor.blocks.getBlock(id)!), elements: [] });
-        if (nextMode === "edgeless") {
-          editor.elements.insertElement({             type: "block",
-            zIndex: 0,
-            frame: { x: 20, y: 20, width: 900, height: 1200 },
-            props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
+    test(`centers the ${container.type} root gap like an ordinary block in ${mode}`, async ({
+      page,
+    }) => {
+      const ids = await page.evaluate(
+        ({ input, nextMode }) => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: { editor: DocumentEditorAPI };
+            }
+          ).__rivtoDemo.editor;
+          const roots = [
+            editor.blocks.insertBlock({
+              id: "gap-source",
+              type: "paragraph",
+              content: "Gap source",
+            }),
+            editor.blocks.insertBlock({
+              id: "gap-markdown",
+              type: "paragraph",
+              content: "Markdown",
+            }),
+            editor.blocks.insertBlock({
+              id: "gap-slider",
+              type: "demo.slider",
+              props: { value: 25 },
+            }),
+            editor.blocks.insertBlock({
+              id: "gap-counter",
+              type: "demo.counter",
+              props: { count: 2 },
+            }),
+            editor.blocks.insertBlock({ id: "gap-container", ...input }),
+            editor.blocks.insertBlock({
+              id: "gap-after",
+              type: "paragraph",
+              content: "After container",
+            }),
+          ].map((block) => block.id);
+          editor.load({
+            ...editor.dump(),
+            rootElementIds: [],
+            blocks: roots.map((id) => editor.blocks.getBlock(id)!),
+            elements: [],
           });
-        }
-        return roots;
-      }, { input: container, nextMode: mode });
-      if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+          if (nextMode === "edgeless") {
+            editor.elements.insertElement({
+              type: "block",
+              zIndex: 0,
+              frame: { x: 20, y: 20, width: 900, height: 1200 },
+              props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
+            });
+          }
+          return roots;
+        },
+        { input: container, nextMode: mode },
+      );
+      if (mode === "edgeless") {
+        await page.locator('[data-editor-mode="edgeless"]').click();
+      }
 
       const source = page.locator(`[data-block-id="${ids[0]}"]`).first();
       const previous = page.locator(`[data-block-id="${ids[3]}"]`).first();
@@ -405,26 +573,41 @@ for (const mode of ["block", "edgeless"] as const) {
       expect(lineBox.x).toBeCloseTo(previousBox.x, 0);
       expect(lineBox.width).toBeCloseTo(previousBox.width, 0);
       await page.mouse.up();
-      await expect.poll(() => page.evaluate(() => {
-        const editor = (window as unknown as {
-          __rivtoDemo: { editor: DocumentEditorAPI };
-        }).__rivtoDemo.editor;
-        return editor.blocks.getRootIds();
-      })).toEqual([ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]]);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const editor = (
+              window as unknown as {
+                __rivtoDemo: { editor: DocumentEditorAPI };
+              }
+            ).__rivtoDemo.editor;
+            return editor.blocks.getRootIds();
+          }),
+        )
+        .toEqual([ids[1], ids[2], ids[3], ids[0], ids[4], ids[5]]);
     });
   }
 }
 
 test("hovering a row body still puts the drop inside that block", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
-  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
+  const beta = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Beta", { exact: true }) })
+    .first();
   const betaRow = beta.locator(`:scope > .${ROW_CLASS}`);
   const box = (await betaRow.boundingBox())!;
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height / 2);
   await expect(betaRow).toHaveAttribute("data-drop-inside", "true");
   const indicator = betaRow.locator(`:scope > .${LINE_CLASS}[data-kind='inside']`);
   await expect(indicator).toHaveCSS("outline-width", "4px");
-  await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute("data-drop-inside", "true");
+  await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute(
+    "data-drop-inside",
+    "true",
+  );
   await page.mouse.up();
 });
 
@@ -466,18 +649,24 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     const lineBox = (await line.boundingBox())!;
     expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
     await page.mouse.up();
-    await expect.poll(() => page.evaluate(({ sourceId, expectedParentId }) => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: DocumentEditorAPI };
-      }).__rivtoDemo.editor;
-      const siblings = expectedParentId
-        ? editor.blocks.getBlock(expectedParentId)?.children.map(({ id }) => id)
-        : editor.blocks.getRootIds();
-      return { parentId: editor.blocks.getParentId(sourceId), siblings };
-    }, scenario)).toEqual({
-      parentId: scenario.expectedParentId,
-      siblings: [...scenario.expectedSiblings],
-    });
+    await expect
+      .poll(() =>
+        page.evaluate(({ sourceId, expectedParentId }) => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: { editor: DocumentEditorAPI };
+            }
+          ).__rivtoDemo.editor;
+          const siblings = expectedParentId
+            ? editor.blocks.getBlock(expectedParentId)?.children.map(({ id }) => id)
+            : editor.blocks.getRootIds();
+          return { parentId: editor.blocks.getParentId(sourceId), siblings };
+        }, scenario),
+      )
+      .toEqual({
+        parentId: scenario.expectedParentId,
+        siblings: [...scenario.expectedSiblings],
+      });
   }
 });
 
@@ -498,12 +687,18 @@ test("keeps the report's parent body and next-block top edge drop zones", async 
   );
   await expect(parentRow).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  await expect.poll(() => page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getParentId(id);
-  }, REPORT_LEVEL_2_ID)).toBe(REPORT_PARENT_ID);
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id);
+      }, REPORT_LEVEL_2_ID),
+    )
+    .toBe(REPORT_PARENT_ID);
 
   await loadSingleChildReport(page);
   const next = page.locator(`[data-block-id="${REPORT_NEXT_ID}"]`).first();
@@ -513,26 +708,46 @@ test("keeps the report's parent body and next-block top edge drop zones", async 
   await holdDragAt(page, source, nextRowBox.x + CHILD_DROP_INDENT / 2, nextRowBox.y + 2);
   await expect(next.locator(`:scope > .${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
   await page.mouse.up();
-  await expect.poll(() => page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getParentId(id);
-  }, REPORT_LEVEL_2_ID)).toBeNull();
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id);
+      }, REPORT_LEVEL_2_ID),
+    )
+    .toBeNull();
 });
 
 test("hovering a block in a free container nests inside that block", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
-  const beta = page.locator("[data-block-id]").filter({ has: page.getByText("Beta", { exact: true }) }).first();
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
+  const beta = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Beta", { exact: true }) })
+    .first();
   const alphaId = await alpha.getAttribute("data-block-id");
   const betaId = await beta.getAttribute("data-block-id");
-  const columnId = await page.locator('[data-block-type="kanban-column"]').first().getAttribute("data-block-id");
-  await page.evaluate(({ alphaId, betaId, columnId }) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    editor.blocks.moveBlocks([alphaId!, betaId!], columnId!, "inside");
-  }, { alphaId, betaId, columnId });
+  const columnId = await page
+    .locator('[data-block-type="kanban-column"]')
+    .first()
+    .getAttribute("data-block-id");
+  await page.evaluate(
+    ({ alphaId, betaId, columnId }) => {
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor;
+      editor.blocks.moveBlocks([alphaId!, betaId!], columnId!, "inside");
+    },
+    { alphaId, betaId, columnId },
+  );
 
   const nestedAlpha = page.locator(`[data-block-id="${alphaId}"]`);
   const nestedBeta = page.locator(`[data-block-id="${betaId}"]`);
@@ -541,16 +756,28 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   await holdDragAt(page, nestedAlpha, box.x + box.width / 2, box.y + box.height / 2);
   await expect(betaRow).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  await expect.poll(() => page.evaluate(({ sourceId }) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getParentId(sourceId!);
-  }, { sourceId: alphaId })).toBe(betaId);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ sourceId }) => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: { editor: DocumentEditorAPI };
+            }
+          ).__rivtoDemo.editor;
+          return editor.blocks.getParentId(sourceId!);
+        },
+        { sourceId: alphaId },
+      ),
+    )
+    .toBe(betaId);
 });
 
 test("an empty kanban column still accepts an inside drop on its body", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
   const empty = page.locator('[data-block-type="kanban-column"]').nth(1);
   const alphaId = await alpha.getAttribute("data-block-id");
   const emptyId = await empty.getAttribute("data-block-id");
@@ -558,43 +785,73 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
   await expect(empty).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  await expect.poll(() => page.evaluate(({ sourceId }) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return sourceId ? editor.blocks.getParentId(sourceId) : undefined;
-  }, { sourceId: alphaId })).toBe(emptyId);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ sourceId }) => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: { editor: DocumentEditorAPI };
+            }
+          ).__rivtoDemo.editor;
+          return sourceId ? editor.blocks.getParentId(sourceId) : undefined;
+        },
+        { sourceId: alphaId },
+      ),
+    )
+    .toBe(emptyId);
 });
 
 test("does not add an ordinary block directly to an empty kanban", async ({ page }) => {
   const boardId = await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     return editor.blocks.insertBlock({ type: "kanban", content: "Empty board" }).id;
   });
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
   const alphaId = await alpha.getAttribute("data-block-id");
   const board = page.locator(`[data-block-id="${boardId}"]`).first();
   const box = (await board.boundingBox())!;
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
   await expect(board).not.toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  expect(await page.evaluate(({ sourceId, targetId }) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return { parentId: editor.blocks.getParentId(sourceId!), childIds: editor.blocks.getBlock(targetId)?.children.map(({ id }) => id) };
-  }, { sourceId: alphaId, targetId: boardId })).toEqual({ parentId: null, childIds: [] });
+  expect(
+    await page.evaluate(
+      ({ sourceId, targetId }) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return {
+          parentId: editor.blocks.getParentId(sourceId!),
+          childIds: editor.blocks.getBlock(targetId)?.children.map(({ id }) => id),
+        };
+      },
+      { sourceId: alphaId, targetId: boardId },
+    ),
+  ).toEqual({ parentId: null, childIds: [] });
 });
 
 test("moves an ordinary block between sibling kanban columns", async ({ page }) => {
   const ids = await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    const alpha = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.content === "Alpha")!;
-    const board = editor.blocks.getRootIds().find((id) => editor.blocks.getBlock(id)?.type === "kanban")!;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
+    const alpha = editor.blocks
+      .getRootIds()
+      .find((id) => editor.blocks.getBlock(id)?.content === "Alpha")!;
+    const board = editor.blocks
+      .getRootIds()
+      .find((id) => editor.blocks.getBlock(id)?.type === "kanban")!;
     const [first, second] = editor.blocks.getBlock(board)!.children.map(({ id }) => id);
     editor.blocks.moveBlock(alpha, first, "inside");
     return { alpha, first, second };
@@ -605,16 +862,27 @@ test("moves an ordinary block between sibling kanban columns", async ({ page }) 
   await holdDragAt(page, source, box.x + box.width / 2, box.y + box.height * 0.7);
   await expect(destination).toHaveAttribute("data-drop-inside", "true");
   await page.mouse.up();
-  await expect.poll(() => page.evaluate((id) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
-    return editor.blocks.getParentId(id);
-  }, ids.alpha)).toBe(ids.second);
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getParentId(id);
+      }, ids.alpha),
+    )
+    .toBe(ids.second);
 });
 
-test("dragging onto a kanban title does not insert a column or paint a board-sized line", async ({ page }) => {
-  const alpha = page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }).first();
+test("dragging onto a kanban title does not insert a column or paint a board-sized line", async ({
+  page,
+}) => {
+  const alpha = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Alpha", { exact: true }) })
+    .first();
   const board = page.locator('[data-block-type="kanban"]');
   const title = board.locator(`:scope > .${ROW_CLASS}`);
   const box = (await title.boundingBox())!;
@@ -627,17 +895,22 @@ test("dragging onto a kanban title does not insert a column or paint a board-siz
   await expect(line).toHaveAttribute("data-axis", "horizontal");
   await page.mouse.up();
   await expect(page.locator('[data-block-type="kanban-column"]')).toHaveCount(2);
-  await expect(page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }))
-    .not.toHaveAttribute("data-block-type", "kanban-column");
+  await expect(
+    page.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }),
+  ).not.toHaveAttribute("data-block-type", "kanban-column");
 });
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`appends after final nested subtrees in ordinary and free container outlines in ${mode}`, async ({ page }) => {
+  test(`appends after final nested subtrees in ordinary and free container outlines in ${mode}`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     const ids = await page.evaluate((nextMode) => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: DocumentEditorAPI };
-      }).__rivtoDemo.editor;
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor;
       const inputs = [
         { type: "paragraph", content: "Ordinary source" },
         {
@@ -649,43 +922,53 @@ for (const mode of ["block", "edgeless"] as const) {
         {
           type: "kanban",
           content: "End-gap kanban",
-          children: [{
-            type: "kanban-column",
-            content: "End-gap lane",
-            children: [{
-              type: "paragraph",
-              content: "Kanban final",
-              children: [{ type: "paragraph", content: "Kanban nested" }],
-            }],
-          }],
+          children: [
+            {
+              type: "kanban-column",
+              content: "End-gap lane",
+              children: [
+                {
+                  type: "paragraph",
+                  content: "Kanban final",
+                  children: [{ type: "paragraph", content: "Kanban nested" }],
+                },
+              ],
+            },
+          ],
         },
         { type: "paragraph", content: "Columns source" },
         {
           type: "columns",
-          children: [{
-            type: "columns-column",
-            children: [{
-              type: "paragraph",
-              content: "Columns final",
-              children: [{ type: "paragraph", content: "Columns nested" }],
-            }],
-          }],
+          children: [
+            {
+              type: "columns-column",
+              children: [
+                {
+                  type: "paragraph",
+                  content: "Columns final",
+                  children: [{ type: "paragraph", content: "Columns nested" }],
+                },
+              ],
+            },
+          ],
         },
       ];
       const roots = inputs.map((input) => editor.blocks.insertBlock(input).id);
       editor.load({
-        ...editor.dump(), rootElementIds: [],
+        ...editor.dump(),
+        rootElementIds: [],
         blocks: roots.map((id) => editor.blocks.getBlock(id)!),
         elements: [],
       });
       if (nextMode === "edgeless") {
-        editor.elements.insertElement({           type: "block",
+        editor.elements.insertElement({
+          type: "block",
           zIndex: 0,
           frame: { x: 20, y: 20, width: 1100, height: 850 },
           props: { startBlockId: roots[0]!, endBlockId: roots.at(-1)! },
         });
       }
-      const all = editor.blocks.getBlocks().flatMap(function walk(block): typeof block[] {
+      const all = editor.blocks.getBlocks().flatMap(function walk(block): (typeof block)[] {
         return [block, ...block.children.flatMap(walk)];
       });
       const id = (content: string) => all.find((block) => block.content === content)!.id;
@@ -700,7 +983,9 @@ for (const mode of ["block", "edgeless"] as const) {
         columnsLane: all.find((block) => block.type === "columns-column")!.id,
       };
     }, mode);
-    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    if (mode === "edgeless") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
 
     const cases = [
       { source: ids.ordinarySource, nested: ids.ordinaryNested, expectedParent: null },
@@ -709,7 +994,9 @@ for (const mode of ["block", "edgeless"] as const) {
     ];
     for (const dragCase of cases) {
       const source = page.locator(`[data-block-id="${dragCase.source}"]`).first();
-      const nestedRow = page.locator(`[data-block-id="${dragCase.nested}"] > .${ROW_CLASS}`).first();
+      const nestedRow = page
+        .locator(`[data-block-id="${dragCase.nested}"] > .${ROW_CLASS}`)
+        .first();
       // Keep this boundary away from auto-scroll; edge scrolling has separate coverage.
       await nestedRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
       await holdDragAt(page, source, async () => {
@@ -718,12 +1005,18 @@ for (const mode of ["block", "edgeless"] as const) {
       });
       await expect(page.locator(`.${LINE_CLASS}[data-kind="between"]`)).toBeVisible();
       await page.mouse.up();
-      await expect.poll(() => page.evaluate((sourceId) => {
-        const editor = (window as unknown as {
-          __rivtoDemo: { editor: DocumentEditorAPI };
-        }).__rivtoDemo.editor;
-        return editor.blocks.getParentId(sourceId);
-      }, dragCase.source)).toBe(dragCase.expectedParent);
+      await expect
+        .poll(() =>
+          page.evaluate((sourceId) => {
+            const editor = (
+              window as unknown as {
+                __rivtoDemo: { editor: DocumentEditorAPI };
+              }
+            ).__rivtoDemo.editor;
+            return editor.blocks.getParentId(sourceId);
+          }, dragCase.source),
+        )
+        .toBe(dragCase.expectedParent);
     }
   });
 }

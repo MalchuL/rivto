@@ -5,13 +5,12 @@
  *
  * @module
  */
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useState,
-} from "react";
-import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
+import { memo, useCallback, useMemo, useState } from "react";
+import ReactMarkdown, {
+  defaultUrlTransform,
+  type Components,
+  type UrlTransform,
+} from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { editorControlProps } from "../../constants";
@@ -46,16 +45,24 @@ const MarkdownPreview = memo(function MarkdownPreview({
   readonly source: string;
   readonly transformUrl: UrlTransform;
 }) {
-  if (PLAIN_TEXT_SOURCE.test(source)) return <p>{source}</p>;
+  if (PLAIN_TEXT_SOURCE.test(source)) {
+    return <p>{source}</p>;
+  }
   return (
     <ReactMarkdown
       components={components}
       urlTransform={transformUrl}
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeCodeFenceMetadata, [rehypeHighlight, {
-        detect: true,
-        plainText: ["text", "txt", "plaintext"],
-      }]]}
+      rehypePlugins={[
+        rehypeCodeFenceMetadata,
+        [
+          rehypeHighlight,
+          {
+            detect: true,
+            plainText: ["text", "txt", "plaintext"],
+          },
+        ],
+      ]}
       skipHtml
     >
       {source}
@@ -93,34 +100,48 @@ export function MarkdownContent({
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
 
-  const updateCode = useCallback((node: PositionedNode, value: string) => {
-    // An external write can precede this old render's input handler in the
-    // same turn. Preserve its current surrounding text rather than the snapshot.
-    const current = panel.blocks.getBlockNode(blockId)?.content;
-    if (current !== undefined) operations.setContent(replaceMarkdownCode(current, node, value));
-  }, [panel, blockId, operations]);
-  const transformUrl = useCallback<UrlTransform>((url) => {
-    const safe = defaultUrlTransform(url);
-    if (safe || !onLinkClick) return safe;
-    return /^(?!javascript:|vbscript:|data:)[a-z][a-z\d+.-]*:/i.test(url) ? url : safe;
-  }, [onLinkClick]);
-  const components = useMemo<Components>(() => ({
-    a: ({ node: _node, href = "", ...props }) => (
-      <a {...editorControlProps}
-        {...props}
-        href={href}
-        tabIndex={-1}
-        onClick={(event) => onLinkClick?.({ blockId, href, event })}
-      />
-    ),
-    pre: (props) => (
-      <MarkdownCodeBlock
-        {...props}
-        onCodeChange={updateCode}
-        preventTextEditingAttributes={editing.preventTextEditingAttributes}
-      />
-    ),
-  }), [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode]);
+  const updateCode = useCallback(
+    (node: PositionedNode, value: string) => {
+      // An external write can precede this old render's input handler in the
+      // same turn. Preserve its current surrounding text rather than the snapshot.
+      const current = panel.blocks.getBlockNode(blockId)?.content;
+      if (current !== undefined) {
+        operations.setContent(replaceMarkdownCode(current, node, value));
+      }
+    },
+    [panel, blockId, operations],
+  );
+  const transformUrl = useCallback<UrlTransform>(
+    (url) => {
+      const safe = defaultUrlTransform(url);
+      if (safe || !onLinkClick) {
+        return safe;
+      }
+      return /^(?!javascript:|vbscript:|data:)[a-z][a-z\d+.-]*:/i.test(url) ? url : safe;
+    },
+    [onLinkClick],
+  );
+  const components = useMemo<Components>(
+    () => ({
+      a: ({ node: _node, href = "", ...props }) => (
+        <a
+          {...editorControlProps}
+          {...props}
+          href={href}
+          tabIndex={-1}
+          onClick={(event) => onLinkClick?.({ blockId, href, event })}
+        />
+      ),
+      pre: (props) => (
+        <MarkdownCodeBlock
+          {...props}
+          onCodeChange={updateCode}
+          preventTextEditingAttributes={editing.preventTextEditingAttributes}
+        />
+      ),
+    }),
+    [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode],
+  );
 
   return (
     <div className={MARKDOWN_CONTENT_CLASS}>
@@ -131,24 +152,26 @@ export function MarkdownContent({
         aria-label="Markdown block content"
         aria-multiline="true"
         spellCheck
-        style={isEditing ? undefined : {
-          position: "absolute",
-          inset: 0,
-          zIndex: 1,
-          color: "transparent",
-          caretColor: "transparent",
-          // Raw Markdown can contain more lines than its formatted preview.
-          // Clip only the idle interaction layer so its invisible text cannot
-          // enlarge the scrollable area or intercept following blocks.
-          overflow: "hidden",
-        }}
+        style={
+          isEditing
+            ? undefined
+            : {
+                position: "absolute",
+                inset: 0,
+                zIndex: 1,
+                color: "transparent",
+                caretColor: "transparent",
+                // Raw Markdown can contain more lines than its formatted preview.
+                // Clip only the idle interaction layer so its invisible text cannot
+                // enlarge the scrollable area or intercept following blocks.
+                overflow: "hidden",
+              }
+        }
         onFocus={() => setIsEditing(true)}
         onBlur={() => setIsEditing(false)}
       />
       {!isEditing && (
-        <div
-          className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_PREVIEW_CLASS}`}
-        >
+        <div className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_PREVIEW_CLASS}`}>
           <MarkdownPreview components={components} source={source} transformUrl={transformUrl} />
         </div>
       )}

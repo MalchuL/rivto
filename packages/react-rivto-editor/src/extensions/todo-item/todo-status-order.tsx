@@ -53,7 +53,8 @@ export function reorderTodoStatuses(
   from: number,
   to: number,
 ): readonly TodoItemStatus[] {
-  const inRange = (index: number): boolean => Number.isInteger(index) && index >= 0 && index < order.length;
+  const inRange = (index: number): boolean =>
+    Number.isInteger(index) && index >= 0 && index < order.length;
   return !inRange(from) || !inRange(to) || from === to ? order : arrayMove([...order], from, to);
 }
 
@@ -66,7 +67,8 @@ export function reorderTodoStatuses(
 function SortableStatusRow({ status, position, total }: SortableStatusRowProps) {
   const { ref, isDragging } = useSortable({ id: status, index: position - 1 });
   return (
-    <Button {...editorControlProps}
+    <Button
+      {...editorControlProps}
       ref={ref}
       variant="secondary"
       size="sm"
@@ -75,7 +77,10 @@ function SortableStatusRow({ status, position, total }: SortableStatusRowProps) 
       type="button"
       role="listitem"
       aria-label={`${TODO_STATUS_LABELS[status]} status order. Position ${position} of ${total}. Press Space to pick up, arrow keys to move, and Space to drop.`}
-    ><GripVerticalIcon aria-hidden="true" />{TODO_STATUS_LABELS[status]}</Button>
+    >
+      <GripVerticalIcon aria-hidden="true" />
+      {TODO_STATUS_LABELS[status]}
+    </Button>
   );
 }
 
@@ -96,17 +101,26 @@ export function TodoStatusOrder({ order, onChange }: TodoStatusOrderProps) {
     const { source } = event.operation;
     // A canceled gesture has already been rolled back by the optimistic
     // sorting plugin, so the controlled order must not be touched.
-    if (event.canceled || !isSortable(source)) return;
+    if (event.canceled || !isSortable(source)) {
+      return;
+    }
     const from = order.indexOf(source.id as TodoItemStatus);
     const next = reorderTodoStatuses(order, from, source.index);
-    if (next !== order) onChange(next);
+    if (next !== order) {
+      onChange(next);
+    }
   };
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
       <div className={TODO_STATUS_ORDER_CLASS} role="list" aria-label="Status order">
         {order.map((status, index) => (
-          <SortableStatusRow key={status} status={status} position={index + 1} total={order.length} />
+          <SortableStatusRow
+            key={status}
+            status={status}
+            position={index + 1}
+            total={order.length}
+          />
         ))}
       </div>
     </DragDropProvider>

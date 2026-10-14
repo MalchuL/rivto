@@ -16,13 +16,13 @@ props, state и event handlers. Здесь подробно объясняютс
 
 ## Порядок чтения
 
-| Глава | Что изучаем | Главные файлы |
-| --- | --- | --- |
-| [00](./00-boundary-and-data-flow.md) | Граница React ↔ runtime и полный data flow | `react/rivto-editor.tsx`, `editor/document-editor.ts` |
-| [01](./01-subscriptions-and-lifecycle.md) | external stores, revision, effects, ownership | `react/rivto-editor.tsx`, demo `App.tsx` |
-| [02](./02-editable-block.md) | `contentEditable`, input, keydown, formatting | `react/renderers.tsx`, `markdown.ts` |
-| [03](./03-renderers-and-interactions.md) | block tree, canvas, drag, resize, events, UI | `react/renderers.tsx` |
-| [04](./04-customization-testing-debugging.md) | custom renderers, tests и диагностика | demo и E2E tests |
+| Глава                                         | Что изучаем                                   | Главные файлы                                         |
+| --------------------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| [00](./00-boundary-and-data-flow.md)          | Граница React ↔ runtime и полный data flow    | `react/rivto-editor.tsx`, `editor/document-editor.ts` |
+| [01](./01-subscriptions-and-lifecycle.md)     | external stores, revision, effects, ownership | `react/rivto-editor.tsx`, demo `App.tsx`              |
+| [02](./02-editable-block.md)                  | `contentEditable`, input, keydown, formatting | `react/renderers.tsx`, `markdown.ts`                  |
+| [03](./03-renderers-and-interactions.md)      | block tree, canvas, drag, resize, events, UI  | `react/renderers.tsx`                                 |
+| [04](./04-customization-testing-debugging.md) | custom renderers, tests и диагностика         | demo и E2E tests                                      |
 
 Selection и clipboard здесь рассматриваются только на границе React adapter.
 Их алгоритмы подробно разобраны в отдельном

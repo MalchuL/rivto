@@ -31,7 +31,9 @@ test("rejects format and parser registrations after runtime cleanup", async () =
   const reactPanel = createReactEditor({ editor });
   const formats = reactPanel.editor.clipboardFormats;
   reactPanel.editor.destroy();
-  expect(() => formats.registerFormatter({ id: "late", format: (_context, value) => value })).toThrow();
+  expect(() =>
+    formats.registerFormatter({ id: "late", format: (_context, value) => value }),
+  ).toThrow();
   expect(() => formats.registerParser({ id: "late", parse: () => undefined })).toThrow();
   editor.destroy();
 });

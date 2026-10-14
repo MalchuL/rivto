@@ -279,16 +279,16 @@ BlockSuite supplies the right ownership precedent (extension-local keymaps); Log
 
 ## Verification results and limitations
 
-| Check | Result |
-|---|---|
-| `pnpm check-types` | Passed for core, React, Demo, and docs |
-| `pnpm --filter @chulane/rivto build` | Passed |
-| `pnpm --filter @chulane/rivto-react build` | Passed |
-| `pnpm --dir demo build` | Passed with 1.0 MB chunk warning |
-| `pnpm exec playwright test e2e/keymap.spec.ts --project=chromium` | Passed, 1 test |
-| `pnpm lint` | Failed, 2 test-file errors |
-| Core Jest | Did not start: `Preset ts-jest not found` |
-| React Jest | Did not start: `Preset ts-jest/presets/default-esm not found` |
+| Check                                                             | Result                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `pnpm check-types`                                                | Passed for core, React, Demo, and docs                        |
+| `pnpm --filter @chulane/rivto build`                              | Passed                                                        |
+| `pnpm --filter @chulane/rivto-react build`                        | Passed                                                        |
+| `pnpm --dir demo build`                                           | Passed with 1.0 MB chunk warning                              |
+| `pnpm exec playwright test e2e/keymap.spec.ts --project=chromium` | Passed, 1 test                                                |
+| `pnpm lint`                                                       | Failed, 2 test-file errors                                    |
+| Core Jest                                                         | Did not start: `Preset ts-jest not found`                     |
+| React Jest                                                        | Did not start: `Preset ts-jest/presets/default-esm not found` |
 
 The audit is static plus targeted runtime reproduction, not exhaustive browser QA or fuzzing. Performance findings 28, 34, 36, 40, and 44 need measurements before optimization. Parent/child constraints and same-kind provider multiplicity need product decisions. Jest failure means existing unit assertions were inspected but not executed in this checkout.
 

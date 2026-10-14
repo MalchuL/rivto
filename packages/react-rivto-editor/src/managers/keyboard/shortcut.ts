@@ -10,9 +10,13 @@ export interface ParsedShortcut {
 /** Normalizes one browser key name for portable shortcut comparison. */
 const normalizeKey = (key: string): string => {
   let normalized: string;
-  if (key === " ") normalized = "Space";
-  else if (key.length === 1) normalized = key.toLowerCase();
-  else normalized = `${key[0]?.toUpperCase()}${key.slice(1)}`;
+  if (key === " ") {
+    normalized = "Space";
+  } else if (key.length === 1) {
+    normalized = key.toLowerCase();
+  } else {
+    normalized = `${key[0]?.toUpperCase()}${key.slice(1)}`;
+  }
   return normalized;
 };
 
@@ -41,14 +45,18 @@ export function parseShortcut(shortcut: string): ParsedShortcut {
   }
   const keyToken = parts.pop() ?? "";
   const key = keyToken.toLowerCase() === "plus" ? "+" : normalizeKey(keyToken);
-  if (!key) throw new Error(`Invalid keyboard shortcut: ${shortcut}`);
+  if (!key) {
+    throw new Error(`Invalid keyboard shortcut: ${shortcut}`);
+  }
   const normalizedParts = parts.map((part) => part.toLowerCase());
   if (normalizedParts.length !== new Set(normalizedParts).size) {
     throw new Error(`Duplicate keyboard modifier in ${shortcut}`);
   }
   const modifiers = new Set(normalizedParts);
   for (const modifier of modifiers) {
-    if (!["primary", "ctrl", "control", "meta", "cmd", "command", "alt", "shift"].includes(modifier)) {
+    if (
+      !["primary", "ctrl", "control", "meta", "cmd", "command", "alt", "shift"].includes(modifier)
+    ) {
       throw new Error(`Unknown keyboard modifier ${modifier} in ${shortcut}`);
     }
   }
@@ -58,15 +66,29 @@ export function parseShortcut(shortcut: string): ParsedShortcut {
   if ([primary, ctrl, meta].filter(Boolean).length > 1) {
     throw new Error(`Primary, Ctrl, and Meta cannot be combined in ${shortcut}`);
   }
+  let modifier: ParsedShortcut["modifier"] = "none";
+  let modifierLabel = "";
+  if (primary) {
+    modifier = "primary";
+    modifierLabel = "Primary";
+  } else if (ctrl) {
+    modifier = "ctrl";
+    modifierLabel = "Ctrl";
+  } else if (meta) {
+    modifier = "meta";
+    modifierLabel = "Meta";
+  }
   return {
     source: [
-      primary ? "Primary" : ctrl ? "Ctrl" : meta ? "Meta" : "",
+      modifierLabel,
       modifiers.has("alt") ? "Alt" : "",
       modifiers.has("shift") ? "Shift" : "",
       key === "+" ? "Plus" : key,
-    ].filter(Boolean).join("+"),
+    ]
+      .filter(Boolean)
+      .join("+"),
     key,
-    modifier: primary ? "primary" : ctrl ? "ctrl" : meta ? "meta" : "none",
+    modifier: modifier,
     alt: modifiers.has("alt"),
     shift: modifiers.has("shift"),
   };
@@ -90,15 +112,23 @@ export function matchesShortcut(
   const modifiers = eventModifiers(event);
   const logicalKey = normalizeKey(event.key);
   const physicalKey = shortcut.modifier === "none" ? undefined : letterFromCode(event.code);
-  if (shortcut.key !== logicalKey && shortcut.key !== physicalKey) return false;
-  if (shortcut.alt !== modifiers.alt || shortcut.shift !== modifiers.shift) return false;
+  if (shortcut.key !== logicalKey && shortcut.key !== physicalKey) {
+    return false;
+  }
+  if (shortcut.alt !== modifiers.alt || shortcut.shift !== modifiers.shift) {
+    return false;
+  }
   if (shortcut.modifier === "primary") {
     return resolvePrimaryModifier() === "meta"
       ? modifiers.meta && !modifiers.ctrl
       : modifiers.ctrl && !modifiers.meta;
   }
-  if (shortcut.modifier === "ctrl") return modifiers.ctrl && !modifiers.meta;
-  if (shortcut.modifier === "meta") return modifiers.meta && !modifiers.ctrl;
+  if (shortcut.modifier === "ctrl") {
+    return modifiers.ctrl && !modifiers.meta;
+  }
+  if (shortcut.modifier === "meta") {
+    return modifiers.meta && !modifiers.ctrl;
+  }
   return !modifiers.ctrl && !modifiers.meta;
 }
 
@@ -106,16 +136,22 @@ export function matchesShortcut(
 export function shortcutFromKeyboardEvent(event: globalThis.KeyboardEvent): string {
   const modifiers = eventModifiers(event);
   const primary = resolvePrimaryModifier();
-  const usesPrimary = primary === "meta"
-    ? modifiers.meta && !modifiers.ctrl
-    : modifiers.ctrl && !modifiers.meta;
+  const usesPrimary =
+    primary === "meta" ? modifiers.meta && !modifiers.ctrl : modifiers.ctrl && !modifiers.meta;
   const key = usesPrimary
-    ? letterFromCode(event.code) ?? normalizeKey(event.key)
+    ? (letterFromCode(event.code) ?? normalizeKey(event.key))
     : normalizeKey(event.key);
-  return [
-    usesPrimary ? "Primary" : modifiers.ctrl && modifiers.meta ? "Ctrl+Meta" : modifiers.ctrl ? "Ctrl" : modifiers.meta ? "Meta" : "",
-    modifiers.alt ? "Alt" : "",
-    modifiers.shift ? "Shift" : "",
-    key,
-  ].filter(Boolean).join("+");
+  let modifierLabel = "";
+  if (usesPrimary) {
+    modifierLabel = "Primary";
+  } else if (modifiers.ctrl && modifiers.meta) {
+    modifierLabel = "Ctrl+Meta";
+  } else if (modifiers.ctrl) {
+    modifierLabel = "Ctrl";
+  } else if (modifiers.meta) {
+    modifierLabel = "Meta";
+  }
+  return [modifierLabel, modifiers.alt ? "Alt" : "", modifiers.shift ? "Shift" : "", key]
+    .filter(Boolean)
+    .join("+");
 }

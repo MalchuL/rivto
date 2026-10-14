@@ -1,4 +1,7 @@
-export interface CanvasPoint { x: number; y: number }
+export interface CanvasPoint {
+  x: number;
+  y: number;
+}
 
 /** Converts a viewport pointer into unscaled canvas coordinates. */
 export function canvasPoint(

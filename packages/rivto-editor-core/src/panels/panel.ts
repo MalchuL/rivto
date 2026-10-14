@@ -1,6 +1,6 @@
-import type { DocumentEditorAPI } from '../editor/types';
-import { PanelElements } from './panel-elements';
-import type { PanelAPI, PanelBlocksAPI, PanelElementsAPI, PanelOptions } from './types';
+import type { DocumentEditorAPI } from "../editor/types";
+import { PanelElements } from "./panel-elements";
+import type { PanelAPI, PanelBlocksAPI, PanelElementsAPI, PanelOptions } from "./types";
 
 /**
  * Borrows one document editor and exposes bounded operations without subscriptions
@@ -24,10 +24,18 @@ export abstract class Panel implements PanelAPI {
    * @param options - Independent subtree boundaries; omitted or null roots select document roots.
    * @param blocks - Concrete panel's boundary and root-protection policy.
    */
-  protected constructor(readonly document: DocumentEditorAPI, options: PanelOptions, readonly blocks: PanelBlocksAPI) {
+  protected constructor(
+    readonly document: DocumentEditorAPI,
+    options: PanelOptions,
+    readonly blocks: PanelBlocksAPI,
+  ) {
     this.rootBlockId = options.rootBlockId ?? undefined;
     this.rootElementId = options.rootElementId ?? null;
-    this.elements = new PanelElements(document.elements, document.getDocument(), this.rootElementId);
+    this.elements = new PanelElements(
+      document.elements,
+      document.getDocument(),
+      this.rootElementId,
+    );
   }
   /** @inheritdoc PanelAPI.subscribe */
   subscribe(listener: () => void): () => void {
@@ -46,5 +54,7 @@ export abstract class Panel implements PanelAPI {
    *
    * @returns Persisted identity of the borrowed document.
    */
-  get documentId(): string { return this.document.getDocument().id; }
+  get documentId(): string {
+    return this.document.getDocument().id;
+  }
 }

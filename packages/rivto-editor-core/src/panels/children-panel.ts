@@ -9,5 +9,4 @@ export class ChildrenPanel extends Panel {
   constructor(editor: DocumentEditorAPI, options: PanelOptions = {}) {
     super(editor, options, new PanelBlocks(editor, options.rootBlockId ?? null, false));
   }
-
 }

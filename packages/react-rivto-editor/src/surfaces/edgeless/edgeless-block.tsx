@@ -46,7 +46,9 @@ function EdgelessBlockElementView({
   useLayoutEffect(() => {
     const content = contentRef.current;
     const host = hostRef.current;
-    if (!autoHeight || !content || !host) return;
+    if (!autoHeight || !content || !host) {
+      return;
+    }
     /**
      * Writes content-driven height into the element frame when it drifted.
      *
@@ -57,19 +59,25 @@ function EdgelessBlockElementView({
      * @returns Nothing.
      */
     const measure = () => {
-      if (host.dataset.edgelessGeometryLock === "true") return;
+      if (host.dataset.edgelessGeometryLock === "true") {
+        return;
+      }
       const previousHeight = host.style.height;
       host.style.height = "auto";
       const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
       host.style.height = previousHeight;
-      if (Math.abs(element.frame.height - height) < 1) return;
+      if (Math.abs(element.frame.height - height) < 1) {
+        return;
+      }
       // Undoing a recorded height change would remeasure and record it again, trapping undo.
       panel.batchUpdatesWithoutHistory(() => {
         panel.elements.updateElement(element.id, { frame: { height } });
       });
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
     const observer = new ResizeObserver(measure);
     observer.observe(content);
     [...content.children].forEach((child) => observer.observe(child));
@@ -78,7 +86,9 @@ function EdgelessBlockElementView({
     return () => observer.disconnect();
   }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, panel]);
 
-  if (!blockIds.length) return null;
+  if (!blockIds.length) {
+    return null;
+  }
 
   return (
     <section
@@ -111,9 +121,11 @@ function sameEdgelessBlockElement(
   previous: { readonly element: EditorElementNode; readonly blockIds: readonly string[] },
   next: { readonly element: EditorElementNode; readonly blockIds: readonly string[] },
 ): boolean {
-  return previous.element === next.element
-    && previous.blockIds.length === next.blockIds.length
-    && previous.blockIds.every((id, index) => id === next.blockIds[index]);
+  return (
+    previous.element === next.element &&
+    previous.blockIds.length === next.blockIds.length &&
+    previous.blockIds.every((id, index) => id === next.blockIds[index])
+  );
 }
 
 /** Memoized positioned card woken by its own selection or changed persisted inputs. */

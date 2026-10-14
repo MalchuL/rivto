@@ -221,4 +221,3 @@ Y.UndoManager history
 3. Transaction объединяет связанные изменения.
 4. Origin отделяет локальные операции от удалённых.
 5. Scope определяет, какие части collaborative document отслеживаются.
-

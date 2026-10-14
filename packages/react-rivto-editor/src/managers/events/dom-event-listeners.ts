@@ -11,7 +11,9 @@ import type { ConnectedListener, NativeListenerGroup } from "./types";
 export class DOMEventListeners {
   private readonly connected: ConnectedListener[] = [];
   /** @param dispatch - Receives native events with their group and optional surface root. */
-  constructor(private readonly dispatch: (group: NativeListenerGroup, raw: Event, root?: HTMLElement) => void) {}
+  constructor(
+    private readonly dispatch: (group: NativeListenerGroup, raw: Event, root?: HTMLElement) => void,
+  ) {}
   /**
    * Replaces all native listeners using the current registrations and panel roots.
    *
@@ -23,12 +25,16 @@ export class DOMEventListeners {
    */
   connect(registrations: readonly NativeListenerGroup[], roots: ReadonlySet<HTMLElement>): void {
     this.disconnect();
-    if (!roots.size) return;
+    if (!roots.size) {
+      return;
+    }
     const groups = new Map<string, NativeListenerGroup>();
     for (const registration of registrations) {
       const group: NativeListenerGroup = registration;
       const key = [group.target, group.type, group.capture, group.passive].join(":");
-      if (!groups.has(key)) groups.set(key, group);
+      if (!groups.has(key)) {
+        groups.set(key, group);
+      }
     }
     if (roots.size > 0) {
       // Activation and gesture lifetime belong to panels even without interaction extensions.
@@ -38,18 +44,29 @@ export class DOMEventListeners {
         { target: "window", type: "pointerup", capture: false, passive: false },
         { target: "window", type: "pointercancel", capture: false, passive: false },
       ];
-      lifecycle.forEach((group) => groups.set([group.target, group.type, group.capture, group.passive].join(":"), group));
+      lifecycle.forEach((group) =>
+        groups.set([group.target, group.type, group.capture, group.passive].join(":"), group),
+      );
     }
     for (const group of groups.values()) {
       const targets = new Set<EventTarget>();
       for (const root of roots) {
         let nativeTarget: EventTarget | null = root;
-        if (group.target === "document") nativeTarget = root.ownerDocument;
-        else if (group.target === "window") nativeTarget = root.ownerDocument.defaultView;
-        if (!nativeTarget || targets.has(nativeTarget)) continue;
+        if (group.target === "document") {
+          nativeTarget = root.ownerDocument;
+        } else if (group.target === "window") {
+          nativeTarget = root.ownerDocument.defaultView;
+        }
+        if (!nativeTarget || targets.has(nativeTarget)) {
+          continue;
+        }
         targets.add(nativeTarget);
-        const listener: EventListener = (event) => this.dispatch(group, event, group.target === "surface" ? root : undefined);
-        nativeTarget.addEventListener(group.type, listener, { capture: group.capture, passive: group.passive });
+        const listener: EventListener = (event) =>
+          this.dispatch(group, event, group.target === "surface" ? root : undefined);
+        nativeTarget.addEventListener(group.type, listener, {
+          capture: group.capture,
+          passive: group.passive,
+        });
         this.connected.push({ ...group, nativeTarget, listener });
       }
     }
@@ -62,5 +79,4 @@ export class DOMEventListeners {
     }
     this.connected.length = 0;
   }
-
 }

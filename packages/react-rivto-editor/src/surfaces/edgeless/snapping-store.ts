@@ -5,6 +5,11 @@ export class EdgelessSnappingStore {
   private value: EdgelessSnappingSnapshot;
   private readonly listeners = new Set<() => void>();
 
+  /**
+   * Initializes snapping preferences, defaulting grid snapping and object alignment to enabled.
+   *
+   * @param initial - Initial grid-snapping and object-alignment flags; missing flags default to true.
+   */
   constructor(initial: Partial<EdgelessSnappingSnapshot> = {}) {
     this.value = {
       snapToGrid: initial.snapToGrid ?? true,
@@ -13,7 +18,9 @@ export class EdgelessSnappingStore {
   }
 
   /** @returns Stable current settings for external-store consumers. */
-  getSnapshot(): EdgelessSnappingSnapshot { return this.value; }
+  getSnapshot(): EdgelessSnappingSnapshot {
+    return this.value;
+  }
 
   /** Subscribes to effective setting changes. */
   subscribe(listener: () => void): () => void {
@@ -24,7 +31,12 @@ export class EdgelessSnappingStore {
   /** Applies a partial setting update and notifies subscribers once. */
   set(patch: Partial<EdgelessSnappingSnapshot>): void {
     const next = { ...this.value, ...patch };
-    if (next.snapToGrid === this.value.snapToGrid && next.alignObjects === this.value.alignObjects) return;
+    if (
+      next.snapToGrid === this.value.snapToGrid &&
+      next.alignObjects === this.value.alignObjects
+    ) {
+      return;
+    }
     this.value = next;
     [...this.listeners].forEach((listener) => listener());
   }

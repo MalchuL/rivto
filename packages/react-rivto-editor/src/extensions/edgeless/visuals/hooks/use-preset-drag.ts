@@ -6,7 +6,10 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
 import type { PresetPayload, VisualFrame } from "../../../../elements/visuals/types";
 import { canvasPoint } from "../../../../elements/visuals/utils/canvas-point";
-import { centeredPlaceFrame, snapPlacedFrame } from "../../../../elements/visuals/utils/creation-geometry";
+import {
+  centeredPlaceFrame,
+  snapPlacedFrame,
+} from "../../../../elements/visuals/utils/creation-geometry";
 import { showSnapGuides } from "../utils/snap-guides";
 
 interface PresetDrag {
@@ -46,10 +49,16 @@ export function usePresetDrag({
   zoom: number;
 }) {
   const presetDrag = useRef<PresetDrag | null>(null);
-  const [preview, setPreview] = useState<{ host: HTMLDivElement; input: CreateElementInput; frame: VisualFrame } | null>(null);
+  const [preview, setPreview] = useState<{
+    host: HTMLDivElement;
+    input: CreateElementInput;
+    frame: VisualFrame;
+  } | null>(null);
 
   const clearPresetGhost = (active: PresetDrag) => {
-    if (active.raf) cancelAnimationFrame(active.raf);
+    if (active.raf) {
+      cancelAnimationFrame(active.raf);
+    }
     active.ghost?.remove();
     active.ghost = null;
     active.raf = 0;
@@ -58,7 +67,9 @@ export function usePresetDrag({
 
   const placePresetGhost = (active: PresetDrag) => {
     active.raf = 0;
-    if (!active.ghost || !active.frame || !plane) return;
+    if (!active.ghost || !active.frame || !plane) {
+      return;
+    }
     const rect = plane.getBoundingClientRect();
     active.ghost.style.width = `${active.frame.width}px`;
     active.ghost.style.height = `${active.frame.height}px`;
@@ -67,7 +78,8 @@ export function usePresetDrag({
 
   const snappedFrame = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const point = canvasPoint(event.nativeEvent, root, zoom);
-    const candidates = edgelessOperation.elements.getElementNodes()
+    const candidates = edgelessOperation.elements
+      .getElementNodes()
       .filter((element) => element.type !== "connector" && element.type !== "group")
       .map((element) => element.frame);
     return snapPlacedFrame(
@@ -85,34 +97,71 @@ export function usePresetDrag({
 
   const cancel = () => {
     const active = presetDrag.current;
-    if (!active) return false;
+    if (!active) {
+      return false;
+    }
     presetDrag.current = null;
     clearPresetGhost(active);
-    if (active.capture.hasPointerCapture(active.pointerId)) active.capture.releasePointerCapture(active.pointerId);
-    if (root) showSnapGuides(root, []);
+    if (active.capture.hasPointerCapture(active.pointerId)) {
+      active.capture.releasePointerCapture(active.pointerId);
+    }
+    if (root) {
+      showSnapGuides(root, []);
+    }
     return true;
   };
 
   useEffect(() => {
-    const stopKeyboard = (edgelessOperation.reactPanel ?? edgelessOperation.runtime).keyboard.register({
-      id: 'edgeless.preset-drag-cancel', keys: ['Escape'], mode: 'edgeless', priority: 50,
-      when: () => Boolean(presetDrag.current),
-    }, cancel);
+    const stopKeyboard = (
+      edgelessOperation.reactPanel ?? edgelessOperation.runtime
+    ).keyboard.register(
+      {
+        id: "edgeless.preset-drag-cancel",
+        keys: ["Escape"],
+        mode: "edgeless",
+        priority: 50,
+        when: () => Boolean(presetDrag.current),
+      },
+      cancel,
+    );
     const stopDeactivate = edgelessOperation.reactPanel?.subscribeDeactivation(cancel);
     const stopTools = edgelessOperation.subscribe(() => {
       const tool = edgelessOperation.getTool();
-      if (tool.tool === 'select' || tool.tool === 'pan') cancel();
+      if (tool.tool === "select" || tool.tool === "pan") {
+        cancel();
+      }
     });
-    return () => { stopKeyboard(); stopDeactivate?.(); stopTools(); cancel(); };
+    return () => {
+      stopKeyboard();
+      stopDeactivate?.();
+      stopTools();
+      cancel();
+    };
   }, [edgelessOperation, root]);
 
   return {
-    preview: preview && createPortal(createElement(ElementCreationPreview, {
-      input: preview.input, frame: preview.frame, operations: edgelessOperation, zoom,
-      style: { left: 0, top: 0, transform: 'none', width: '100%', height: '100%' },
-    }), preview.host),
+    preview:
+      preview &&
+      createPortal(
+        createElement(ElementCreationPreview, {
+          input: preview.input,
+          frame: preview.frame,
+          operations: edgelessOperation,
+          zoom,
+          style: { left: 0, top: 0, transform: "none", width: "100%", height: "100%" },
+        }),
+        preview.host,
+      ),
+    /**
+     * Captures the primary pointer and records the preset drag's starting position.
+     *
+     * @param event - Native or React event supplying the current input.
+     * @param payload - Payload associated with the operation.
+     */
     startPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, payload: PresetPayload) {
-      if (event.button !== 0) return;
+      if (event.button !== 0) {
+        return;
+      }
       event.currentTarget.setPointerCapture(event.pointerId);
       presetDrag.current = {
         pointerId: event.pointerId,
@@ -125,11 +174,25 @@ export function usePresetDrag({
         raf: 0,
       };
     },
+    /**
+     * Starts the place tool after the movement threshold and updates its detached preview and snap guides.
+     *
+     * @param event - Native or React event supplying the current input.
+     */
     movePresetDrag(event: ReactPointerEvent<HTMLButtonElement>) {
       const active = presetDrag.current;
-      if (!active || active.pointerId !== event.pointerId) return;
-      if (!active.moved && Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 4) return;
-      if (!active.moved) edgelessOperation.setPlaceTool(active.payload);
+      if (!active || active.pointerId !== event.pointerId) {
+        return;
+      }
+      if (
+        !active.moved &&
+        Math.hypot(event.clientX - active.startX, event.clientY - active.startY) < 4
+      ) {
+        return;
+      }
+      if (!active.moved) {
+        edgelessOperation.setPlaceTool(active.payload);
+      }
       const snapped = snappedFrame(event);
       active.frame = snapped.frame;
       if (!active.moved) {
@@ -144,20 +207,46 @@ export function usePresetDrag({
         void _frame;
         setPreview({ host: ghost, input: { type: kind, props }, frame: snapped.frame });
       }
-      if (root) showSnapGuides(root, snapped.guides);
-      if (!active.raf) active.raf = requestAnimationFrame(() => placePresetGhost(active));
+      if (root) {
+        showSnapGuides(root, snapped.guides);
+      }
+      if (!active.raf) {
+        active.raf = requestAnimationFrame(() => placePresetGhost(active));
+      }
     },
+    /**
+     * Releases the preset drag preview and capture, creating an element only for a committed drop inside the canvas.
+     *
+     * @param event - Native or React event supplying the current input.
+     * @param commit - Whether to commit the gesture; false cancels without creating or updating document entities.
+     */
     endPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, commit = true) {
       const active = presetDrag.current;
-      if (!active || active.pointerId !== event.pointerId) return;
+      if (!active || active.pointerId !== event.pointerId) {
+        return;
+      }
       clearPresetGhost(active);
       presetDrag.current = null;
-      if (active.capture.hasPointerCapture(active.pointerId)) active.capture.releasePointerCapture(active.pointerId);
-      if (root) showSnapGuides(root, []);
-      if (!commit) return;
+      if (active.capture.hasPointerCapture(active.pointerId)) {
+        active.capture.releasePointerCapture(active.pointerId);
+      }
+      if (root) {
+        showSnapGuides(root, []);
+      }
+      if (!commit) {
+        return;
+      }
       if (active.moved) {
-        const hit = event.currentTarget.ownerDocument.elementFromPoint(event.clientX, event.clientY);
-        if (root && hit instanceof Node && root.contains(hit) && !(hit instanceof Element && hit.closest("[data-edgeless-ui]"))) {
+        const hit = event.currentTarget.ownerDocument.elementFromPoint(
+          event.clientX,
+          event.clientY,
+        );
+        if (
+          root &&
+          hit instanceof Node &&
+          root.contains(hit) &&
+          !(hit instanceof Element && hit.closest("[data-edgeless-ui]"))
+        ) {
           const frame = snappedFrame(event).frame;
           edgelessOperation.create({ ...active.payload, frame });
         }

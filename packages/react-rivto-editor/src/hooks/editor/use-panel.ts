@@ -1,5 +1,5 @@
-import type { PanelAPI } from '@chulane/rivto';
-import { useReactPanel } from './use-react-panel';
+import type { PanelAPI } from "@chulane/rivto";
+import { useReactPanel } from "./use-react-panel";
 
 /**
  * Returns the framework-neutral panel for the nearest EditorPanel or EditorEmbed.
@@ -8,4 +8,6 @@ import { useReactPanel } from './use-react-panel';
  * @returns Bounded block and element operations; browser interaction is available through useReactPanel.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function usePanel(): PanelAPI { return useReactPanel(); }
+export function usePanel(): PanelAPI {
+  return useReactPanel();
+}

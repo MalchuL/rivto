@@ -2,7 +2,16 @@ import type { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
-import type { BlockManagerApi, BlockListPropsManagerApi, BlockRegistryManagerApi, ClipboardManagerApi, CommandRegistryApi, ElementManagerApi, HistoryManagerApi, SelectionManagerApi } from "../managers";
+import type {
+  BlockManagerApi,
+  BlockListPropsManagerApi,
+  BlockRegistryManagerApi,
+  ClipboardManagerApi,
+  CommandRegistryApi,
+  ElementManagerApi,
+  HistoryManagerApi,
+  SelectionManagerApi,
+} from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 

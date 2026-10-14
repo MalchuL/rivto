@@ -34,7 +34,7 @@ export async function createDocumentationPage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, content: `# ${title}\n\n` }),
   });
-  const result = await response.json() as DocumentationPage | { message?: string };
+  const result = (await response.json()) as DocumentationPage | { message?: string };
   if (!response.ok) {
     const message = "message" in result ? result.message : undefined;
     throw new Error(message ?? "Unable to create Markdown document.");
@@ -55,7 +55,7 @@ export async function deleteDocumentationPage(page: DocumentationPage): Promise<
     body: JSON.stringify({ expectedModifiedAt: page.modifiedAt }),
   });
   if (!response.ok) {
-    const result = await response.json() as { message?: string };
+    const result = (await response.json()) as { message?: string };
     throw new Error(result.message ?? "Unable to delete Markdown document.");
   }
 }
@@ -79,7 +79,7 @@ export async function uploadDocumentationImage(
     },
     body: image,
   });
-  const result = await response.json() as DocumentationImage | { message?: string };
+  const result = (await response.json()) as DocumentationImage | { message?: string };
   if (!response.ok) {
     const message = "message" in result ? result.message : undefined;
     throw new Error(message ?? "Unable to save pasted image.");
@@ -99,7 +99,7 @@ export async function loadDocumentationPages(): Promise<DocumentationPage[]> {
     if (!response.ok) {
       throw new Error("Unable to load Markdown documents.");
     }
-    pages = await response.json() as DocumentationPage[];
+    pages = (await response.json()) as DocumentationPage[];
   }
   return pages;
 }
@@ -120,7 +120,7 @@ export async function saveDocumentationPage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, expectedModifiedAt: page.modifiedAt }),
   });
-  const result = await response.json() as DocumentationPage | { message?: string };
+  const result = (await response.json()) as DocumentationPage | { message?: string };
   if (!response.ok) {
     const message = "message" in result ? result.message : undefined;
     throw new Error(message ?? "Unable to save Markdown document.");
@@ -137,7 +137,9 @@ export async function saveDocumentationPage(
  */
 export function downloadDocumentationPage(pagePath: string, content: string): void {
   const link = document.createElement("a");
-  const objectUrl = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
+  const objectUrl = URL.createObjectURL(
+    new Blob([content], { type: "text/markdown;charset=utf-8" }),
+  );
   link.href = objectUrl;
   link.download = pagePath.split("/").at(-1) ?? "document.md";
   link.click();

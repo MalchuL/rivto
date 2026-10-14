@@ -1,7 +1,18 @@
-import type { DocumentEditorAPI } from '../editor/types';
-import type { EditorBlock, EditorBlockInput, EditorBlockNode, EditorBlockPatch, EditorBlockUpdate, EditorElement, EditorElementInput, EditorElementNode, EditorElementPatch, EditorElementUpdate } from '../editor/model';
-import type { BlockPrepareErrorHandler } from '../managers/block-manager/types';
-import type { ImportedBlockForest } from '../managers/types';
+import type { DocumentEditorAPI } from "../editor/types";
+import type {
+  EditorBlock,
+  EditorBlockInput,
+  EditorBlockNode,
+  EditorBlockPatch,
+  EditorBlockUpdate,
+  EditorElement,
+  EditorElementInput,
+  EditorElementNode,
+  EditorElementPatch,
+  EditorElementUpdate,
+} from "../editor/model";
+import type { BlockPrepareErrorHandler } from "../managers/block-manager/types";
+import type { ImportedBlockForest } from "../managers/types";
 
 /** Fixed, independent block and element boundaries; omitted roots select the whole document. */
 export interface PanelOptions {
@@ -362,7 +373,10 @@ export interface PanelBlocksAPI {
   /** @param input - Validated creation input. @param destination - Panel root or local parent. @returns Inserted subtree. @throws Before writes for an invalid destination or input. */
   insertBlock(input: EditorBlockInput, destination?: PanelDestination): EditorBlock;
   /** @param input - Detached forest. @param onError - Optional preparation recovery. @returns Prepared inputs without changing the document. */
-  prepareInput(input: readonly (EditorBlock | EditorBlockInput)[], onError?: BlockPrepareErrorHandler): EditorBlockInput[];
+  prepareInput(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    onError?: BlockPrepareErrorHandler,
+  ): EditorBlockInput[];
   /** @param id - Local block. @param patch - Mutable fields. @returns Updated node. @throws Before writing outside the panel. */
   updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
   /** @param updates - Ordered local patches. @returns Updated nodes. @throws Before writes if any target is outside. */
@@ -370,7 +384,7 @@ export interface PanelBlocksAPI {
   /** @param id - Local block. @param keys - List keys to remove. @returns Whether anything changed. */
   deleteListProps(id: string, keys: readonly string[]): boolean;
   /** @param updates - Local list-property removals. @throws Before writing for any outside target. */
-  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[]; }[]): void;
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]): void;
   /** @param id - Local block whose content is cleared while preserving identity. */
   clearBlock(id: string): void;
   /** @param id - Local block. @param type - Registered destination type. */
@@ -386,9 +400,13 @@ export interface PanelBlocksAPI {
   /** @param targetId - Surviving local block. @param sourceId - Removed local block. @returns Caret offset after merging. */
   mergeBlocks(targetId: string, sourceId: string): number;
   /** @param id - Local subtree. @param targetId - Local destination or panel list start. @param position - Placement relative to target. */
-  moveBlock(id: string, targetId: string | null, position?: 'before' | 'after' | 'inside'): void;
+  moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
   /** @param ids - Local subtrees. @param targetId - Local destination or panel list start. @param position - Placement. @throws Before writes for an outside or protected target. */
-  moveBlocks(ids: readonly string[], targetId: string | null, position?: 'before' | 'after' | 'inside'): void;
+  moveBlocks(
+    ids: readonly string[],
+    targetId: string | null,
+    position?: "before" | "after" | "inside",
+  ): void;
   /** @param id - Local subtree to indent. */
   indentBlock(id: string): void;
   /** @param ids - Local sibling roots. @throws If indent could adopt an outside sibling. */
@@ -398,7 +416,12 @@ export interface PanelBlocksAPI {
   /** @param ids - Local sibling roots. @throws Before mutation if any outdent crosses the boundary. */
   outdentBlocks(ids: readonly string[]): void;
   /** Imports a copied forest directly into a validated panel destination. */
-  importForest(input: readonly (EditorBlock | EditorBlockInput)[], destination?: PanelDestination, onError?: BlockPrepareErrorHandler, ids?: ReadonlyMap<string, string>): ImportedBlockForest;
+  importForest(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    destination?: PanelDestination,
+    onError?: BlockPrepareErrorHandler,
+    ids?: ReadonlyMap<string, string>,
+  ): ImportedBlockForest;
   /** Whether the selected block itself is displayed and protected. */
   readonly includeRoot: boolean;
 }

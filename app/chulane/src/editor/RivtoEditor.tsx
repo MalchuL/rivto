@@ -53,7 +53,9 @@ export function RivtoEditor({
     lastEmitted.current = serializeEditorSnapshot(created.editor.dump());
     const unsubscribe = created.editor.subscribe(() => {
       const next = serializeEditorSnapshot(created.editor.dump());
-      if (next === lastEmitted.current) return;
+      if (next === lastEmitted.current) {
+        return;
+      }
       lastEmitted.current = next;
       onChangeRef.current(next);
     });
@@ -93,6 +95,8 @@ export const DocumentEditor = RivtoEditor;
 /** Renders the explicit surface selected by this panel’s mode manager. */
 function EditorSurface() {
   const { mode } = useEditorMode();
-  if (mode === "edgeless") return <EdgelessSurface />;
+  if (mode === "edgeless") {
+    return <EdgelessSurface />;
+  }
   return <PageSurface />;
 }

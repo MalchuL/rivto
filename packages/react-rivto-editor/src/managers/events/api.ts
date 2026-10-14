@@ -44,5 +44,4 @@ export interface PanelEventsApi {
    * @returns Mounted panel's surface type, or core mode when no recognized surface is mounted.
    */
   getSurfaceType(): EditorMode;
-
 }

@@ -8,7 +8,10 @@ test("composition keeps DOM ownership and commits the final text through bound o
   const controller = new BlockEditingController((content) => {
     editor.editor.blocks.updateBlock(block.id, { content });
   });
-  const element = { textContent: "", ownerDocument: { getSelection: () => null } } as unknown as HTMLDivElement;
+  const element = {
+    textContent: "",
+    ownerDocument: { getSelection: () => null },
+  } as unknown as HTMLDivElement;
   controller.elementRef.current = element;
   controller.synchronize("Before");
   expect(element.textContent).toBe("Before");
@@ -18,7 +21,9 @@ test("composition keeps DOM ownership and commits the final text through bound o
   controller.onInput({ currentTarget: element } as Parameters<typeof controller.onInput>[0]);
   expect(element.textContent).toBe("入力");
   expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("Before");
-  controller.onCompositionEnd({ currentTarget: element } as Parameters<typeof controller.onCompositionEnd>[0]);
+  controller.onCompositionEnd({ currentTarget: element } as Parameters<
+    typeof controller.onCompositionEnd
+  >[0]);
   expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("入力");
   controller.synchronize("After");
   expect(element.textContent).toBe("After");

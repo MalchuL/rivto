@@ -6,7 +6,12 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "../../editor/model";
-import type { DocumentModel, ElementDestination, ElementInput, ElementUpdate } from "@chulane/document-model";
+import type {
+  DocumentModel,
+  ElementDestination,
+  ElementInput,
+  ElementUpdate,
+} from "@chulane/document-model";
 import type { DocumentEditorAPI } from "../../editor/types";
 import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
@@ -29,10 +34,12 @@ export class ElementManager implements ElementManagerApi {
   private readonly processors = new Set<ElementProcessorRegistration>();
   private readonly subscriptions = new Set<() => void>();
 
-  constructor(
-    private readonly editor: DocumentEditorAPI,
-  ) {
-  }
+  /**
+   * Binds element commands to the owning document editor.
+   *
+   * @param editor - Editor that owns this operation and its registrations.
+   */
+  constructor(private readonly editor: DocumentEditorAPI) {}
 
   /**
    * Reads the ordered direct child IDs of an element or document root IDs, excluding descendants.
@@ -41,10 +48,14 @@ export class ElementManager implements ElementManagerApi {
    * @returns Read-only root list, with stable identity while its contents are unchanged;
    * an empty list when the document contains no root elements.
    */
-  getRootIds(): readonly string[] { return this.document.elements.getRootIds(); }
+  getRootIds(): readonly string[] {
+    return this.document.elements.getRootIds();
+  }
 
   /** @param parentId - Actual parent identity. @returns Direct children or empty when absent. */
-  getChildIds(parentId: string): readonly string[] { return this.document.elements.getRootIds(parentId); }
+  getChildIds(parentId: string): readonly string[] {
+    return this.document.elements.getRootIds(parentId);
+  }
 
   /**
    * Resolves an element's direct parent from document roots and child lists.
@@ -52,8 +63,9 @@ export class ElementManager implements ElementManagerApi {
    * @param id - Stable element ID to locate.
    * @returns Parent element ID, null for a document root, or undefined when absent.
    */
-  getParentId(id: string): string | null | undefined { return this.document.elements.getParentId(id); }
-
+  getParentId(id: string): string | null | undefined {
+    return this.document.elements.getParentId(id);
+  }
 
   /**
    * Moves selected subtrees together, preserving IDs and canvas-relative geometry.
@@ -80,7 +92,9 @@ export class ElementManager implements ElementManagerApi {
    * @throws If the parent element does not exist.
    */
   removeElementAndPromoteChildren(id: string): readonly string[] {
-    return this.editor.history.batchUpdates(() => this.document.elements.removeElementAndPromoteChildren(id));
+    return this.editor.history.batchUpdates(() =>
+      this.document.elements.removeElementAndPromoteChildren(id),
+    );
   }
 
   /**
@@ -108,7 +122,9 @@ export class ElementManager implements ElementManagerApi {
     };
     this.processors.add(registration);
     return () => {
-      if (!this.processors.delete(registration)) return;
+      if (!this.processors.delete(registration)) {
+        return;
+      }
       registration.dispose();
     };
   }
@@ -135,7 +151,9 @@ export class ElementManager implements ElementManagerApi {
    * @returns Detached tree with children, or undefined when the ID is absent.
    * Use getElementNode when only this record and its child IDs are needed.
    */
-  getElement(id: string): EditorElement | undefined { return this.document.elements.getElement(id); }
+  getElement(id: string): EditorElement | undefined {
+    return this.document.elements.getElement(id);
+  }
 
   /**
    * Reads the root element trees of the whole document, including their nested children.
@@ -148,7 +166,9 @@ export class ElementManager implements ElementManagerApi {
    * This collection always starts at document roots; use a panel for bounded subtree reads.
    * @returns Detached recursive roots, or an empty array when there are no elements.
    */
-  getElements(): EditorElement[] { return this.document.elements.getElements(); }
+  getElements(): EditorElement[] {
+    return this.document.elements.getElements();
+  }
 
   /**
    * Observes changes to one element and its complete subtree.
@@ -301,18 +321,27 @@ export class ElementManager implements ElementManagerApi {
   insertElement(input: EditorElementInput, destination?: ElementDestination): EditorElement {
     const visiting = new Set<ElementInput>();
     const process = (value: ElementInput): ElementInput => {
-      if (visiting.has(value)) throw new Error("Cyclic element input");
+      if (visiting.has(value)) {
+        throw new Error("Cyclic element input");
+      }
       visiting.add(value);
       const piped = this.pipe.process(value);
-      const processed = { ...piped, props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}) };
-      if (processed !== value && visiting.has(processed)) throw new Error("Cyclic element input");
+      const processed = {
+        ...piped,
+        props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}),
+      };
+      if (processed !== value && visiting.has(processed)) {
+        throw new Error("Cyclic element input");
+      }
       visiting.add(processed);
       const children = processed.children?.map(process);
       visiting.delete(processed);
       visiting.delete(value);
       return { ...processed, children };
     };
-    return this.editor.history.batchUpdates(() => this.document.elements.insertElement(process(input), destination));
+    return this.editor.history.batchUpdates(() =>
+      this.document.elements.insertElement(process(input), destination),
+    );
   }
 
   /**
@@ -367,7 +396,9 @@ export class ElementManager implements ElementManagerApi {
    * @throws Before storage writes if any target is missing or processing or resulting-record validation fails.
    */
   updateElements(updates: readonly EditorElementUpdate[]): EditorElementNode[] {
-    return this.editor.history.batchUpdates(() => this.document.elements.updateElements(this.processUpdates(updates)));
+    return this.editor.history.batchUpdates(() =>
+      this.document.elements.updateElements(this.processUpdates(updates)),
+    );
   }
 
   /**
@@ -403,6 +434,12 @@ export class ElementManager implements ElementManagerApi {
     this.processors.clear();
   }
 
+  /** @returns The explicit document or throws outside a document context. */
+  private get document(): DocumentModel {
+    const document = this.editor.getDocument();
+    return document;
+  }
+
   /**
    * Retains an existing document subscription until explicitly removed or destroyed.
    * Its listener remains bound to the model where the subscription was created.
@@ -412,15 +449,11 @@ export class ElementManager implements ElementManagerApi {
   private retainSubscription(unsubscribe: () => void): () => void {
     this.subscriptions.add(unsubscribe);
     return () => {
-      if (!this.subscriptions.delete(unsubscribe)) return;
+      if (!this.subscriptions.delete(unsubscribe)) {
+        return;
+      }
       unsubscribe();
     };
-  }
-
-  /** @returns The explicit document or throws outside a document context. */
-  private get document(): DocumentModel {
-    const document = this.editor.getDocument();
-    return document;
   }
 
   /**
@@ -434,25 +467,39 @@ export class ElementManager implements ElementManagerApi {
     const simulated = new Map<string, ElementInput & { frame: EditorElementFrame }>();
     return updates.map(({ id, patch }) => {
       const stored = this.getElementNode(id);
-      if (!stored) throw new Error(`Element ${id} not found`);
+      if (!stored) {
+        throw new Error(`Element ${id} not found`);
+      }
       const current = simulated.get(id) ?? stored;
       const frameInput = patch.frame ? { ...current.frame, ...patch.frame } : current.frame;
-      const resize = patch.frame ? this.editor.elementRegistry.get(current.type)?.resize?.({ ...stored, ...current } as EditorElementNode, frameInput) : undefined;
+      const resize = patch.frame
+        ? this.editor.elementRegistry
+            .get(current.type)
+            ?.resize?.({ ...stored, ...current } as EditorElementNode, frameInput)
+        : undefined;
       const piped = this.pipe.process({
         ...current,
         frame: patch.frame ? { ...current.frame, ...patch.frame } : current.frame,
         zIndex: patch.zIndex ?? current.zIndex,
         props: { ...current.props, ...resize, ...patch.props },
       });
-      const processed = { ...piped, props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}) };
-      if (!processed.frame) throw new Error("Updated elements require a frame");
+      const processed = {
+        ...piped,
+        props: this.editor.elementRegistry.validate(piped.type, piped.props ?? {}),
+      };
+      if (!processed.frame) {
+        throw new Error("Updated elements require a frame");
+      }
       simulated.set(id, { ...processed, frame: processed.frame });
       const frame = patch.frame
-        ? Object.fromEntries(Object.keys(patch.frame).map((key) => [key, processed.frame![key as keyof NonNullable<typeof processed.frame>]]))
+        ? Object.fromEntries(
+            Object.keys(patch.frame).map((key) => [
+              key,
+              processed.frame![key as keyof NonNullable<typeof processed.frame>],
+            ]),
+          )
         : undefined;
-      const props = patch.props || resize
-        ? processed.props
-        : undefined;
+      const props = patch.props || resize ? processed.props : undefined;
       return {
         id,
         patch: {
@@ -464,5 +511,4 @@ export class ElementManager implements ElementManagerApi {
       };
     });
   }
-
 }

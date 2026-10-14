@@ -8,7 +8,10 @@
  */
 import { useBlockNode, type UseBlockNodeResult } from "./use-block";
 import { useBlockTextEditing, type BlockTextEditingAttributes } from "./use-block-text-editing";
-import { usePreventTextEditing, type PreventTextEditingAttributes } from "./use-prevent-text-editing";
+import {
+  usePreventTextEditing,
+  type PreventTextEditingAttributes,
+} from "./use-prevent-text-editing";
 
 /**
  * Renderer-facing block state, typed property commands, and text DOM attributes.
@@ -19,7 +22,9 @@ import { usePreventTextEditing, type PreventTextEditingAttributes } from "./use-
  * Current document content excludes uncommitted DOM edits; undefined denotes an
  * unknown/deleted block, while an empty string denotes an existing textless block.
  */
-export interface UseBlockEditingResult<Props extends object = Record<string, unknown>> extends UseBlockNodeResult<Props> {
+export interface UseBlockEditingResult<
+  Props extends object = Record<string, unknown>,
+> extends UseBlockNodeResult<Props> {
   /** DOM props for the single collaborative plain-text editable. */
   readonly attributes: BlockTextEditingAttributes;
   /** Props for controls or nested editors that must not activate raw block editing. */
@@ -62,7 +67,9 @@ export interface UseBlockEditingResult<Props extends object = Record<string, unk
  * a key when the registered schema permits it. Invalid writes throw without mutation.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function useBlockEditing<Props extends object = Record<string, unknown>>(blockId: string): UseBlockEditingResult<Props> {
+export function useBlockEditing<Props extends object = Record<string, unknown>>(
+  blockId: string,
+): UseBlockEditingResult<Props> {
   const result = useBlockNode<Props>(blockId);
   const attributes = useBlockTextEditing(blockId, result.block?.content);
   const preventTextEditingAttributes = usePreventTextEditing();

@@ -8,7 +8,14 @@ import type { ReactEditorApi } from "../../../../../editor/types";
  * @module
  */
 import { createBlockBehaviorContext } from "../../../../../block-behaviors";
-import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, readKeyboardSelection, shouldDeleteSelection } from "../../../../../managers";
+import {
+  BUILTIN_KEYMAP,
+  firstKeyboardTarget,
+  isEditableKeyboardEvent,
+  KEYBOARD_BINDING_IDS,
+  readKeyboardSelection,
+  shouldDeleteSelection,
+} from "../../../../../managers";
 
 /**
  * Registers forward merging at a collapsed block-end caret.
@@ -17,22 +24,34 @@ import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_
  * @returns No value.
  */
 export function registerForwardBlockMerge(reactEditor: ReactEditorApi): void {
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockMergeForward,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ reactPanel, raw: event, blockId }) =>
-      isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)),
-  }, ({ reactPanel, root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId));
-    const block = target?.collapsed ? reactPanel.blocks.getBlockNode(target.blockId) : undefined;
-    if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
-    const context = createBlockBehaviorContext(reactPanel, target.blockId, root, reactPanel.selection.get());
-    if (!context) return false;
-    return reactPanel.editor.blockBehaviors.dispatch(
-      "onMergeForward",
-      context,
-      target,
-    );
-  });
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockMergeForward,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
+      when: ({ reactPanel, raw: event, blockId }) =>
+        isEditableKeyboardEvent(event) &&
+        !shouldDeleteSelection(
+          readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+        ),
+    },
+    ({ reactPanel, root, blockId }) => {
+      const target = firstKeyboardTarget(
+        readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+      );
+      const block = target?.collapsed ? reactPanel.blocks.getBlockNode(target.blockId) : undefined;
+      if (!target?.collapsed || !block || target.offset !== block.content.length) {
+        return false;
+      }
+      const context = createBlockBehaviorContext(
+        reactPanel,
+        target.blockId,
+        root,
+        reactPanel.selection.get(),
+      );
+      if (!context) {
+        return false;
+      }
+      return reactPanel.editor.blockBehaviors.dispatch("onMergeForward", context, target);
+    },
+  );
 }

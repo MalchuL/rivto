@@ -20,7 +20,11 @@
 import { editorControlProps } from "../../constants";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "../../components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../../components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../components/ui/collapsible";
 import {
   TODO_STORAGE_MENU_CLASS,
   TODO_STORAGE_MENU_PANEL_CLASS,
@@ -49,11 +53,15 @@ export function TodoStorageMenu({ label, panelLabel, children }: TodoStorageMenu
 
   useEffect(() => {
     const ownerDocument = root.current?.ownerDocument;
-    if (!open || !ownerDocument) return;
+    if (!open || !ownerDocument) {
+      return;
+    }
     /** Closes the menu when a pointer press lands outside its trigger and panel. */
     const closeOutside = (event: PointerEvent): void => {
       const target = event.target as Node | null;
-      if (target && !root.current?.contains(target)) setOpen(false);
+      if (target && !root.current?.contains(target)) {
+        setOpen(false);
+      }
     };
     // Capture phase runs before block selection or sibling menus handle the
     // press, so opening another menu closes this one in the same gesture.
@@ -70,17 +78,37 @@ export function TodoStorageMenu({ label, panelLabel, children }: TodoStorageMenu
   const closeOnEscape = (event: KeyboardEvent<HTMLDivElement>): void => {
     // dnd-kit cancels an in-flight keyboard sort with Escape and marks the
     // event handled; the menu must stay open so the rows can settle back.
-    if (event.key !== "Escape" || event.defaultPrevented) return;
+    if (event.key !== "Escape" || event.defaultPrevented) {
+      return;
+    }
     event.preventDefault();
     setOpen(false);
   };
 
   return (
-    <Collapsible ref={root} open={open} onOpenChange={setOpen} className={TODO_STORAGE_MENU_CLASS} onKeyDown={closeOnEscape}>
+    <Collapsible
+      ref={root}
+      open={open}
+      onOpenChange={setOpen}
+      className={TODO_STORAGE_MENU_CLASS}
+      onKeyDown={closeOnEscape}
+    >
       <CollapsibleTrigger asChild>
-        <Button {...editorControlProps} variant="outline" size="sm" type="button" className={TODO_STORAGE_MENU_TRIGGER_CLASS}>{label}</Button>
+        <Button
+          {...editorControlProps}
+          variant="outline"
+          size="sm"
+          type="button"
+          className={TODO_STORAGE_MENU_TRIGGER_CLASS}
+        >
+          {label}
+        </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent role="dialog" aria-label={panelLabel} className={TODO_STORAGE_MENU_PANEL_CLASS}>
+      <CollapsibleContent
+        role="dialog"
+        aria-label={panelLabel}
+        className={TODO_STORAGE_MENU_PANEL_CLASS}
+      >
         {children}
       </CollapsibleContent>
     </Collapsible>

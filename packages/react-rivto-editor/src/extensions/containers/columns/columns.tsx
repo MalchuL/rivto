@@ -14,7 +14,12 @@ import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import { useBlockNode, useBlockSelectionAnchor, useEditorRoot, useReactPanel } from "../../../hooks";
+import {
+  useBlockNode,
+  useBlockSelectionAnchor,
+  useEditorRoot,
+  useReactPanel,
+} from "../../../hooks";
 import { type BlockSlotProps, type ReactEditorExtension } from "../../../managers";
 import {
   COLUMNS_BLOCK_TYPE,
@@ -48,7 +53,9 @@ const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
  */
 function columnCount(value: number): number {
   if (!Number.isInteger(value) || value < COLUMNS_MIN_COUNT || value > COLUMNS_MAX_COUNT) {
-    throw new Error(`Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`);
+    throw new Error(
+      `Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`,
+    );
   }
   return value;
 }
@@ -92,27 +99,43 @@ export function createColumnsBlockInput(
  * @param count - Desired column count in the supported range.
  * @returns Whether the board existed and the count could be applied.
  */
-export function setColumnsCount(reactPanel: ReactPanelApi, blockId: string, count: number): boolean {
+export function setColumnsCount(
+  reactPanel: ReactPanelApi,
+  blockId: string,
+  count: number,
+): boolean {
   const board = reactPanel.blocks.getBlock(blockId);
-  if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
+  if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) {
+    return false;
+  }
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
-  if (next === columns.length) return true;
+  if (next === columns.length) {
+    return true;
+  }
   reactPanel.batchUpdates(() => {
     reactPanel.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
-        const insertedId = reactPanel.blocks.insertBlock({
-          type: COLUMNS_COLUMN_BLOCK_TYPE,
-          content: "",
-        }, afterId === board.id ? { parentId: board.id } : reactPanel.blocks.getInsertionDestinationAfter(afterId)).id;
+        const insertedId = reactPanel.blocks.insertBlock(
+          {
+            type: COLUMNS_COLUMN_BLOCK_TYPE,
+            content: "",
+          },
+          afterId === board.id
+            ? { parentId: board.id }
+            : reactPanel.blocks.getInsertionDestinationAfter(afterId),
+        ).id;
         afterId = insertedId;
       }
       return;
     }
     const removed = columns.slice(next);
-    relocateColumnContents(reactPanel, removed.map((column) => column.id));
+    relocateColumnContents(
+      reactPanel,
+      removed.map((column) => column.id),
+    );
     reactPanel.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
@@ -127,14 +150,22 @@ export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   const count = block.childIds.length;
-  return <div {...attributes} className={COLUMNS_CLASS}>
-    {block.listProps.collapsed === true && <>
-      <strong>Columns</strong>
-      <span className={COLUMNS_STATS_CLASS}>{count} {count === 1 ? "column" : "columns"}</span>
-    </>}
-  </div>;
+  return (
+    <div {...attributes} className={COLUMNS_CLASS}>
+      {block.listProps.collapsed === true && (
+        <>
+          <strong>Columns</strong>
+          <span className={COLUMNS_STATS_CLASS}>
+            {count} {count === 1 ? "column" : "columns"}
+          </span>
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -153,12 +184,18 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
    * @returns Nothing; insertion is a single undo step.
    */
   const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) => {
-    if (!empty || event.defaultPrevented) return;
-    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
+    if (!empty || event.defaultPrevented) {
+      return;
+    }
+    if ("key" in event && event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const context = root ? createBlockBehaviorContext(reactPanel, blockId, root) : undefined;
-    if (context) columnsColumnBehavior.appendWritingBlock(context);
+    if (context) {
+      columnsColumnBehavior.appendWritingBlock(context);
+    }
   };
   return (
     <div
@@ -179,25 +216,51 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
  */
 function ColumnsControls({ block }: BlockSlotProps) {
   const reactPanel = useReactPanel();
-  const count = block.childIds.filter((childId) => (
-    reactPanel.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
-  )).length;
+  const count = block.childIds.filter(
+    (childId) => reactPanel.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
+  ).length;
   return (
     <div className={SETTINGS_CLASS}>
       <Popover>
         <PopoverTrigger asChild>
-          <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Columns settings">
+          <Button
+            {...editorControlProps}
+            variant="outline"
+            size="icon-sm"
+            type="button"
+            aria-label="Columns settings"
+          >
             <SettingsIcon />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className={PANEL_CLASS} role="group" aria-label="Column count">
           <strong>Columns</strong>
           <div className={COUNT_CLASS}>
-            <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
-              onClick={() => setColumnsCount(reactPanel, block.id, count - 1)}><MinusIcon /></Button>
-            <output className={COUNT_VALUE_CLASS} aria-live="polite">{count}</output>
-            <Button {...editorControlProps} variant="outline" size="icon-sm" type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
-              onClick={() => setColumnsCount(reactPanel, block.id, count + 1)}><PlusIcon /></Button>
+            <Button
+              {...editorControlProps}
+              variant="outline"
+              size="icon-sm"
+              type="button"
+              aria-label="Remove column"
+              disabled={count <= COLUMNS_MIN_COUNT}
+              onClick={() => setColumnsCount(reactPanel, block.id, count - 1)}
+            >
+              <MinusIcon />
+            </Button>
+            <output className={COUNT_VALUE_CLASS} aria-live="polite">
+              {count}
+            </output>
+            <Button
+              {...editorControlProps}
+              variant="outline"
+              size="icon-sm"
+              type="button"
+              aria-label="Add column"
+              disabled={count >= COLUMNS_MAX_COUNT}
+              onClick={() => setColumnsCount(reactPanel, block.id, count + 1)}
+            >
+              <PlusIcon />
+            </Button>
           </div>
         </PopoverContent>
       </Popover>
@@ -241,7 +304,8 @@ export function columnsExtension(): ReactEditorExtension {
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
+        isAvailable: ({ blockId, reactPanel }) =>
+          reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
         execute: ({ blockId, reactPanel }) => {
           convertLeafToContainer(reactPanel, blockId, createColumnsBlockInput());
         },

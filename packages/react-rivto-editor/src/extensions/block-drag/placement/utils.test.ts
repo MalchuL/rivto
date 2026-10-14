@@ -27,8 +27,9 @@ const blocks: DropBlock[] = [
 ];
 
 test("both neighboring edges resolve to one canonical gap", () => {
-  expect(resolveAfterDropPlacement(blocks, "first", 0))
-    .toEqual(resolveBeforeDropPlacement(blocks, "second"));
+  expect(resolveAfterDropPlacement(blocks, "first", 0)).toEqual(
+    resolveBeforeDropPlacement(blocks, "second"),
+  );
 });
 
 test("both sides of a dragged block resolve to its original gap", () => {
@@ -45,18 +46,30 @@ test("both sides of a dragged block resolve to its original gap", () => {
 });
 
 test("translates start, middle, end, empty, root, and inside placements", () => {
-  expect(dropMoveTarget(resolveBeforeDropPlacement(blocks, "first")!))
-    .toEqual({ targetId: "first", position: "before" });
-  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "first", 0)!))
-    .toEqual({ targetId: "second", position: "before" });
-  expect(dropMoveTarget(resolveSiblingAfterDropPlacement(blocks, "second")!))
-    .toEqual({ targetId: "second", position: "after" });
-  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "second", 1)!))
-    .toEqual({ targetId: "second", position: "inside" });
-  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "last", 0)!))
-    .toEqual({ targetId: "last", position: "after" });
-  expect(dropMoveTarget(resolveInsideDropPlacement("parent")))
-    .toEqual({ targetId: "parent", position: "inside" });
+  expect(dropMoveTarget(resolveBeforeDropPlacement(blocks, "first")!)).toEqual({
+    targetId: "first",
+    position: "before",
+  });
+  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "first", 0)!)).toEqual({
+    targetId: "second",
+    position: "before",
+  });
+  expect(dropMoveTarget(resolveSiblingAfterDropPlacement(blocks, "second")!)).toEqual({
+    targetId: "second",
+    position: "after",
+  });
+  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "second", 1)!)).toEqual({
+    targetId: "second",
+    position: "inside",
+  });
+  expect(dropMoveTarget(resolveAfterDropPlacement(blocks, "last", 0)!)).toEqual({
+    targetId: "last",
+    position: "after",
+  });
+  expect(dropMoveTarget(resolveInsideDropPlacement("parent"))).toEqual({
+    targetId: "parent",
+    position: "inside",
+  });
 });
 
 test("block-view placement values override global defaults", () => {
@@ -65,11 +78,18 @@ test("block-view placement values override global defaults", () => {
     childDropIndent: 24,
     gapDropZone: 8,
   });
-  expect(resolveBlockDropPlacementOptions(24, 8, {
-    allowChildPlacement: true,
-    childDropIndent: 40,
-    gapDropZone: 12,
-  }, false)).toEqual({
+  expect(
+    resolveBlockDropPlacementOptions(
+      24,
+      8,
+      {
+        allowChildPlacement: true,
+        childDropIndent: 40,
+        gapDropZone: 12,
+      },
+      false,
+    ),
+  ).toEqual({
     allowChildPlacement: true,
     childDropIndent: 40,
     gapDropZone: 12,
@@ -82,59 +102,112 @@ test("block-view placement values override global defaults", () => {
 });
 
 test("offers every structurally available depth after a final nested leaf", () => {
-  const document: DropBlock[] = [{
-    id: "A",
-    children: [{ id: "B", children: [{ id: "C", children: [] }] }],
-  }];
+  const document: DropBlock[] = [
+    {
+      id: "A",
+      children: [{ id: "B", children: [{ id: "C", children: [] }] }],
+    },
+  ];
 
   expect(resolveAfterDropPlacement(document, "C", -2)).toEqual({
-    kind: "between", parentId: null, previousId: "A", nextId: null, depth: 0,
+    kind: "between",
+    parentId: null,
+    previousId: "A",
+    nextId: null,
+    depth: 0,
   });
   expect(resolveAfterDropPlacement(document, "C", -1)).toEqual({
-    kind: "between", parentId: "A", previousId: "B", nextId: null, depth: 1,
+    kind: "between",
+    parentId: "A",
+    previousId: "B",
+    nextId: null,
+    depth: 1,
   });
   expect(resolveAfterDropPlacement(document, "C", 0)).toEqual({
-    kind: "between", parentId: "B", previousId: "C", nextId: null, depth: 2,
+    kind: "between",
+    parentId: "B",
+    previousId: "C",
+    nextId: null,
+    depth: 2,
   });
   expect(resolveAfterDropPlacement(document, "C", 1)).toEqual({
-    kind: "between", parentId: "C", previousId: null, nextId: null, depth: 3,
+    kind: "between",
+    parentId: "C",
+    previousId: null,
+    nextId: null,
+    depth: 3,
   });
 });
 
 test("keeps a gap at sibling depth when later siblings prevent outdenting", () => {
-  const document: DropBlock[] = [{
-    id: "A",
-    children: [{
-      id: "B",
-      children: [{ id: "C", children: [] }, { id: "E", children: [] }],
-    }],
-  }];
+  const document: DropBlock[] = [
+    {
+      id: "A",
+      children: [
+        {
+          id: "B",
+          children: [
+            { id: "C", children: [] },
+            { id: "E", children: [] },
+          ],
+        },
+      ],
+    },
+  ];
 
   expect(resolveAfterDropPlacement(document, "C", -10)).toEqual({
-    kind: "between", parentId: "B", previousId: "C", nextId: "E", depth: 2,
+    kind: "between",
+    parentId: "B",
+    previousId: "C",
+    nextId: "E",
+    depth: 2,
   });
 });
 
 test("maps parent gaps to the start of existing or empty child lists", () => {
-  const populated: DropBlock[] = [{
-    id: "A",
-    children: [{ id: "B", children: [] }, { id: "C", children: [] }],
-  }];
+  const populated: DropBlock[] = [
+    {
+      id: "A",
+      children: [
+        { id: "B", children: [] },
+        { id: "C", children: [] },
+      ],
+    },
+  ];
 
   expect(resolveAfterDropPlacement(populated, "A", 1)).toEqual({
-    kind: "between", parentId: "A", previousId: null, nextId: "B", depth: 1,
+    kind: "between",
+    parentId: "A",
+    previousId: null,
+    nextId: "B",
+    depth: 1,
   });
   expect(resolveAfterDropPlacement([{ id: "A", children: [] }], "A", 1)).toEqual({
-    kind: "between", parentId: "A", previousId: null, nextId: null, depth: 1,
+    kind: "between",
+    parentId: "A",
+    previousId: null,
+    nextId: null,
+    depth: 1,
   });
   expect(resolveAfterDropPlacement(populated, "missing", 0)).toBeUndefined();
 });
 
 test("commit refuses a changed gap instead of retargeting its neighbors", () => {
-  const blocks = [{ id: "a", children: [] }, { id: "b", children: [] }];
-  const placement = { kind: "between", parentId: null, previousId: "a", nextId: "b", depth: 0 } as const;
+  const blocks = [
+    { id: "a", children: [] },
+    { id: "b", children: [] },
+  ];
+  const placement = {
+    kind: "between",
+    parentId: null,
+    previousId: "a",
+    nextId: "b",
+    depth: 0,
+  } as const;
   expect(isCurrentDropDestination(blocks, placement)).toBe(true);
-  expect(isCurrentDropDestination([blocks[0]!, { id: "new", children: [] }, blocks[1]!], placement)).toBe(false);
+  expect(
+    isCurrentDropDestination([blocks[0]!, { id: "new", children: [] }, blocks[1]!], placement),
+  ).toBe(false);
   expect(isCurrentDropDestination([blocks[1]!], placement)).toBe(false);
   expect(isCurrentDropDestination(blocks, { kind: "inside", parentId: "missing" })).toBe(false);
 });

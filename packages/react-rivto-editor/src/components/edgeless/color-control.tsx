@@ -35,15 +35,26 @@ export function ColorControl({
   readonly value: string;
   readonly mixed?: boolean;
   readonly disabled?: boolean;
+  /**
+   * Receives the color chosen by the user.
+   *
+   * @param value - Chosen color string.
+   */
   onChange(value: string): void;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
 
   return (
-    <Label className={SWATCH_CLASS} data-mixed={mixed || undefined} data-disabled={disabled || undefined} title={label}>
+    <Label
+      className={SWATCH_CLASS}
+      data-mixed={mixed || undefined}
+      data-disabled={disabled || undefined}
+      title={label}
+    >
       <span className={FACE_CLASS} style={{ backgroundColor: draft }} aria-hidden="true" />
-      <Input {...editorControlProps}
+      <Input
+        {...editorControlProps}
         type="color"
         className={INPUT_CLASS}
         aria-label={label}

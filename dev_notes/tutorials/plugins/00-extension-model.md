@@ -239,4 +239,3 @@ atomic lifecycle внутри `PluginManager`.
 
 Side effects принадлежат `setup`, потому что только тогда manager может связать
 их с lifecycle установленного plugin.
-

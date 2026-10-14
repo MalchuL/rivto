@@ -37,12 +37,22 @@ export function validateClipboardBundle(bundle: unknown): asserts bundle is Clip
   if (!Array.isArray(value.blocks)) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
-  if (value.sourceDocumentId !== undefined && (typeof value.sourceDocumentId !== "string" || !value.sourceDocumentId.trim())) {
+  if (
+    value.sourceDocumentId !== undefined &&
+    (typeof value.sourceDocumentId !== "string" || !value.sourceDocumentId.trim())
+  ) {
     throw new Error("Unsupported Rivto clipboard source document");
   }
   validateBlockForest(value.blocks, { requireComplete: true });
-  if (value.elements !== undefined) validateElementCollection(value.elements);
-  if (value.pluginData !== undefined && (typeof value.pluginData !== "object" || value.pluginData === null || Array.isArray(value.pluginData))) {
+  if (value.elements !== undefined) {
+    validateElementCollection(value.elements);
+  }
+  if (
+    value.pluginData !== undefined &&
+    (typeof value.pluginData !== "object" ||
+      value.pluginData === null ||
+      Array.isArray(value.pluginData))
+  ) {
     throw new Error("Unsupported Rivto clipboard payload");
   }
 }
@@ -76,7 +86,9 @@ export function findBlock(blocks: Block[], id: string): Block | undefined {
       break;
     }
     found = findBlock(block.children, id);
-    if (found) break;
+    if (found) {
+      break;
+    }
   }
   return found;
 }
@@ -133,18 +145,20 @@ export function cloneSelectedTopLevelSubtrees(
     children: block.children.filter((child) => selectedIds.has(child.id)).map(cloneSelection),
   });
 
-  return range.blocks.filter((block) => {
-    // A selected ancestor will clone this block in its own subtree, so only
-    // blocks without a selected ancestor should become clipboard roots.
-    let parent = parents.get(block.id);
-    let isTopLevel = true;
-    while (parent) {
-      if (selectedIds.has(parent)) {
-        isTopLevel = false;
-        break;
+  return range.blocks
+    .filter((block) => {
+      // A selected ancestor will clone this block in its own subtree, so only
+      // blocks without a selected ancestor should become clipboard roots.
+      let parent = parents.get(block.id);
+      let isTopLevel = true;
+      while (parent) {
+        if (selectedIds.has(parent)) {
+          isTopLevel = false;
+          break;
+        }
+        parent = parents.get(parent);
       }
-      parent = parents.get(parent);
-    }
-    return isTopLevel;
-  }).map(wholeBlocks ? (block) => structuredClone(block) : cloneSelection);
+      return isTopLevel;
+    })
+    .map(wholeBlocks ? (block) => structuredClone(block) : cloneSelection);
 }

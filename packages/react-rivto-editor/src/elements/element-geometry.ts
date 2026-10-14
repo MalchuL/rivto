@@ -24,9 +24,13 @@ export class ElementGeometry {
    */
   rotation(id: string): number {
     const node = this.read(id);
-    if (!node) return 0;
+    if (!node) {
+      return 0;
+    }
     const preview = this.previewRotation?.(id);
-    if (preview !== undefined) return normalizeRotation(preview);
+    if (preview !== undefined) {
+      return normalizeRotation(preview);
+    }
     return typeof node.props.rotation === "number" ? normalizeRotation(node.props.rotation) : 0;
   }
 
@@ -40,27 +44,50 @@ export class ElementGeometry {
    */
   frame(id: string): EditorElementFrame | undefined {
     const node = this.read(id);
-    if (!node) return undefined;
-    if (node.type !== "group" || !node.childIds.length) return node.frame;
+    if (!node) {
+      return undefined;
+    }
+    if (node.type !== "group" || !node.childIds.length) {
+      return node.frame;
+    }
     const angle = this.rotation(id);
     const origin = { x: 0, y: 0 };
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    let left = Infinity,
+      top = Infinity,
+      right = -Infinity,
+      bottom = -Infinity;
     const visit = (childId: string) => {
       const child = this.read(childId);
-      if (!child) return;
-      if (child.type === "group" && child.childIds.length) { child.childIds.forEach(visit); return; }
+      if (!child) {
+        return;
+      }
+      if (child.type === "group" && child.childIds.length) {
+        child.childIds.forEach(visit);
+        return;
+      }
       const f = child.frame;
       const center = { x: f.x + f.width / 2, y: f.y + f.height / 2 };
-      for (const x of [f.x, f.x + f.width]) for (const y of [f.y, f.y + f.height]) {
-        const point = rotatePoint(rotatePoint({ x, y }, center, this.rotation(childId)), origin, -angle);
-        left = Math.min(left, point.x); top = Math.min(top, point.y);
-        right = Math.max(right, point.x); bottom = Math.max(bottom, point.y);
+      for (const x of [f.x, f.x + f.width]) {
+        for (const y of [f.y, f.y + f.height]) {
+          const point = rotatePoint(
+            rotatePoint({ x, y }, center, this.rotation(childId)),
+            origin,
+            -angle,
+          );
+          left = Math.min(left, point.x);
+          top = Math.min(top, point.y);
+          right = Math.max(right, point.x);
+          bottom = Math.max(bottom, point.y);
+        }
       }
     };
     node.childIds.forEach(visit);
-    if (!Number.isFinite(left)) return node.frame;
+    if (!Number.isFinite(left)) {
+      return node.frame;
+    }
     const center = rotatePoint({ x: (left + right) / 2, y: (top + bottom) / 2 }, origin, angle);
-    const width = right - left, height = bottom - top;
+    const width = right - left,
+      height = bottom - top;
     return { x: center.x - width / 2, y: center.y - height / 2, width, height };
   }
 

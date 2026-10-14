@@ -14,6 +14,8 @@ import type { ReactPanelContextValue } from "../../components/editor-panel/types
  */
 export function useReactPanelContext(): ReactPanelContextValue {
   const panelContextValue = useContext(ReactPanelContext);
-  if (!panelContextValue) throw new Error("Editor hooks must be used inside EditorPanel or EditorEmbed");
+  if (!panelContextValue) {
+    throw new Error("Editor hooks must be used inside EditorPanel or EditorEmbed");
+  }
   return panelContextValue;
 }

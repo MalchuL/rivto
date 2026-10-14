@@ -42,6 +42,11 @@ export function SizeControl({
   readonly min?: number;
   readonly max?: number;
   readonly preview?: SizePreview;
+  /**
+   * Receives the numeric size chosen by the user.
+   *
+   * @param value - Chosen numeric size.
+   */
   onChange(value: number): void;
 }) {
   const numeric = typeof value === "number" ? value : min;
@@ -54,18 +59,30 @@ export function SizeControl({
   };
 
   const diameter = Math.max(4, Math.min(28, draft));
-  const textSize = Math.max(11, Math.min(30, Math.round(10 + ((draft - min) / Math.max(1, max - min)) * 18)));
+  const textSize = Math.max(
+    11,
+    Math.min(30, Math.round(10 + ((draft - min) / Math.max(1, max - min)) * 18)),
+  );
 
   return (
-    <div role="group" aria-label={label} className={CONTROL_CLASS} data-preview={preview} title={label}>
+    <div
+      role="group"
+      aria-label={label}
+      className={CONTROL_CLASS}
+      data-preview={preview}
+      title={label}
+    >
       <span className={PREVIEW_CLASS} aria-hidden="true">
         {preview === "text" ? (
-          <span className={LETTER_CLASS} style={{ fontSize: textSize }}>T</span>
+          <span className={LETTER_CLASS} style={{ fontSize: textSize }}>
+            T
+          </span>
         ) : (
           <span className={DOT_CLASS} style={{ width: diameter, height: diameter }} />
         )}
       </span>
-      <Slider {...editorControlProps}
+      <Slider
+        {...editorControlProps}
         className={RANGE_CLASS}
         aria-label={label}
         min={min}

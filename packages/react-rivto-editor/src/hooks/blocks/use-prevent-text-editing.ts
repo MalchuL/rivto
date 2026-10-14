@@ -24,11 +24,15 @@ export function usePreventTextEditing(): PreventTextEditingAttributes {
     const onPointerDown: NonNullable<HTMLAttributes<HTMLElement>["onPointerDown"]> = (event) => {
       event.stopPropagation();
       const target = event.currentTarget;
-      if (!target.isContentEditable) return;
+      if (!target.isContentEditable) {
+        return;
+      }
       const document = target.ownerDocument;
       const selection = document.getSelection();
       const anchor = document.caretPositionFromPoint?.(event.clientX, event.clientY);
-      if (!selection || !anchor || !target.contains(anchor.offsetNode)) return;
+      if (!selection || !anchor || !target.contains(anchor.offsetNode)) {
+        return;
+      }
       // This hook owns the editable child's selection gesture. Prevent the
       // browser from running a second rich-content selection over highlighted DOM.
       // If hit-testing resolves the highlighted sibling instead, retain native
@@ -43,30 +47,35 @@ export function usePreventTextEditing(): PreventTextEditingAttributes {
       );
 
       const view = document.defaultView;
-      if (!view) return;
+      if (!view) {
+        return;
+      }
       const pointerId = event.pointerId;
       let focus = anchor;
       pointerCleanup?.();
       const extend = (move: PointerEvent) => {
-        if (move.pointerId !== pointerId) return;
+        if (move.pointerId !== pointerId) {
+          return;
+        }
         const next = document.caretPositionFromPoint?.(move.clientX, move.clientY);
-        if (!next || !target.contains(next.offsetNode)) return;
+        if (!next || !target.contains(next.offsetNode)) {
+          return;
+        }
         focus = next;
-        selection.setBaseAndExtent(
-          anchor.offsetNode,
-          anchor.offset,
-          next.offsetNode,
-          next.offset,
-        );
+        selection.setBaseAndExtent(anchor.offsetNode, anchor.offset, next.offsetNode, next.offset);
       };
       const cleanup = (): void => {
         view.removeEventListener("pointermove", extend);
         view.removeEventListener("pointerup", finish);
         view.removeEventListener("pointercancel", finish);
-        if (pointerCleanup === cleanup) pointerCleanup = undefined;
+        if (pointerCleanup === cleanup) {
+          pointerCleanup = undefined;
+        }
       };
       const finish = (end: PointerEvent) => {
-        if (end.pointerId !== pointerId) return;
+        if (end.pointerId !== pointerId) {
+          return;
+        }
         cleanup();
         target.focus({ preventScroll: true });
         selection.setBaseAndExtent(
@@ -85,7 +94,10 @@ export function usePreventTextEditing(): PreventTextEditingAttributes {
     return {
       attributes: { [PREVENT_TEXT_EDITING_ATTRIBUTE]: "" as const, onPointerDown },
       /** Releases listeners from a nested editable's pointer gesture. */
-      destroy: () => { pointerCleanup?.(); pointerCleanup = undefined; },
+      destroy: () => {
+        pointerCleanup?.();
+        pointerCleanup = undefined;
+      },
     };
   }, []);
   useEffect(() => interaction.destroy, [interaction]);

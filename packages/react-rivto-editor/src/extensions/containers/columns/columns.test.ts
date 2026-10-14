@@ -64,12 +64,18 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   editor.history.clear();
   expect(setColumnsCount(reactPanel, board.id, 1)).toBe(true);
   expect(editor.blocks.getBlock(board.id)?.children).toHaveLength(1);
-  expect(editor.blocks.getBlock(left.id)?.children.map((child) => child.id)).toEqual([keep, moving]);
+  expect(editor.blocks.getBlock(left.id)?.children.map((child) => child.id)).toEqual([
+    keep,
+    moving,
+  ]);
   expect(editor.blocks.getBlock(moving)).toEqual(original);
   expect(editor.blocks.hasBlock(right.id)).toBe(false);
 
   editor.history.undo();
-  expect(editor.blocks.getBlock(board.id)?.children.map((child) => child.id)).toEqual([left.id, right.id]);
+  expect(editor.blocks.getBlock(board.id)?.children.map((child) => child.id)).toEqual([
+    left.id,
+    right.id,
+  ]);
   expect(editor.blocks.getBlock(right.id)?.children.map((child) => child.id)).toEqual([moving]);
 
   expect(setColumnsCount(reactPanel, board.id, 3)).toBe(true);

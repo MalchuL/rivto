@@ -33,11 +33,14 @@ export function splitBlockAt(
     ? reactPanel.blocks.getInsertionDestinationAfter(block.id)
     : { parentId: block.id, beforeId: block.children[0]?.id };
   reactPanel.blocks.updateBlock(block.id, { content: block.content.slice(0, clamped) });
-  const nextBlock = reactPanel.blocks.insertBlock({
-    ...reactPanel.editor.createDefaultBlock(),
-    ...(listProps ? { listProps } : {}),
-    content: block.content.slice(clamped),
-  }, destination);
+  const nextBlock = reactPanel.blocks.insertBlock(
+    {
+      ...reactPanel.editor.createDefaultBlock(),
+      ...(listProps ? { listProps } : {}),
+      content: block.content.slice(clamped),
+    },
+    destination,
+  );
   reactPanel.selection.set(createCaretSelection(nextBlock.id, 0));
   return nextBlock;
 }
@@ -62,11 +65,7 @@ export function convertEmptyToList(reactPanel: ReactPanelApi, blockId: string): 
  * @param sourceId - Block transferred and removed.
  * @returns Target content offset where the source text begins.
  */
-export function mergeBlocks(
-  reactPanel: ReactPanelApi,
-  targetId: string,
-  sourceId: string,
-): number {
+export function mergeBlocks(reactPanel: ReactPanelApi, targetId: string, sourceId: string): number {
   const joinOffset = reactPanel.blocks.mergeBlocks(targetId, sourceId);
   reactPanel.selection.set(createCaretSelection(targetId, joinOffset));
   return joinOffset;

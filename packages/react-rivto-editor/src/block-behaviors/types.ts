@@ -41,16 +41,18 @@ export interface BlockBehaviorContext {
 }
 
 /** A stable destination in one parent's ordered child list. */
-export type BlockDropDestination = {
-  readonly kind: "between";
-  readonly parentId: string | null;
-  readonly previousId: string | null;
-  readonly nextId: string | null;
-  readonly depth: number;
-} | {
-  readonly kind: "inside";
-  readonly parentId: string;
-};
+export type BlockDropDestination =
+  | {
+      readonly kind: "between";
+      readonly parentId: string | null;
+      readonly previousId: string | null;
+      readonly nextId: string | null;
+      readonly depth: number;
+    }
+  | {
+      readonly kind: "inside";
+      readonly parentId: string;
+    };
 
 /** Arguments for a drop-acceptance check against the destination parent. */
 export interface BlockDropContext {
@@ -123,7 +125,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the outdent.
    */
-  onOutdentAtStart(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onOutdentAtStart(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Merges a root block backward into the previous editable sibling.
    *
@@ -131,7 +136,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the merge.
    */
-  onMergeBackward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onMergeBackward(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Merges the next editable sibling into the current block.
    *
@@ -139,7 +147,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at the block end.
    * @returns Whether the behavior handled, refused, or deferred the merge.
    */
-  onMergeForward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onMergeForward(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Converts the first empty custom block to the host writing type.
    *
@@ -147,7 +158,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the reset.
    */
-  onResetEmpty(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onResetEmpty(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Prepares structurally selected blocks immediately before they are deleted.
    *

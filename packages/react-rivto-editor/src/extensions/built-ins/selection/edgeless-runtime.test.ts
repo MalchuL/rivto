@@ -10,7 +10,8 @@ import { EdgelessSelectionRuntime } from "./edgeless-runtime";
  * @returns Stable element ID.
  */
 function element(editor: Awaited<ReturnType<typeof createTestCoreEditor>>): string {
-  return editor.elements.insertElement({ type: "rectangle",
+  return editor.elements.insertElement({
+    type: "rectangle",
     frame: { x: 0, y: 0, width: 10, height: 10 },
     zIndex: editor.elements.getElementNodes().length,
     props: {},

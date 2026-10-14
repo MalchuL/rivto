@@ -15,7 +15,9 @@ import type { ZodType } from "zod";
  * @returns `true` when the value is a mergeable plain record.
  */
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value) as object | null;
   // Checking the prototype chain, rather than identity with this realm's
   // Object.prototype, also recognizes records cloned across test/worker realms.
@@ -32,12 +34,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
  * @param input - Caller properties that override or extend the defaults.
  * @returns A detached recursively merged property record.
  */
-const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unknown>): Record<string, unknown> => {
+const mergeProps = (
+  defaults: Record<string, unknown>,
+  input: Record<string, unknown>,
+): Record<string, unknown> => {
   const result: Record<string, unknown> = structuredClone(defaults);
   for (const [key, value] of Object.entries(input)) {
-    result[key] = isRecord(result[key]) && isRecord(value)
-      ? mergeProps(result[key], value)
-      : value;
+    result[key] = isRecord(result[key]) && isRecord(value) ? mergeProps(result[key], value) : value;
   }
   return result;
 };
@@ -49,9 +52,10 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
  * @returns Defaults evaluated exactly once for the current operation.
  */
 const resolveDefaultProps = (definition: BlockDefinition): Record<string, unknown> => {
-  const defaults = typeof definition.defaultProps === "function"
-    ? definition.defaultProps()
-    : definition.defaultProps;
+  const defaults =
+    typeof definition.defaultProps === "function"
+      ? definition.defaultProps()
+      : definition.defaultProps;
   return defaults ?? {};
 };
 
@@ -71,9 +75,11 @@ const validateProps = (
   definition: BlockDefinition | undefined,
   props: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const schema = definition?.propSchema as (ZodType<Record<string, unknown>> & {
-    loose?: () => ZodType<Record<string, unknown>>;
-  }) | undefined;
+  const schema = definition?.propSchema as
+    | (ZodType<Record<string, unknown>> & {
+        loose?: () => ZodType<Record<string, unknown>>;
+      })
+    | undefined;
   return schema ? (schema.loose?.() ?? schema).parse(props) : props;
 };
 
@@ -104,14 +110,22 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
    * @throws If the type is empty or already registered.
    */
   defineBlock(definition: BlockDefinition): () => void {
-    if (!definition.type) throw new Error("Block definition type is required");
-    if (this.definitions.has(definition.type)) throw new Error(`Block type ${definition.type} is already registered`);
+    if (!definition.type) {
+      throw new Error("Block definition type is required");
+    }
+    if (this.definitions.has(definition.type)) {
+      throw new Error(`Block type ${definition.type} is already registered`);
+    }
     this.definitions.set(definition.type, definition);
     let active = true;
     const dispose = (): void => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
-      if (this.definitions.get(definition.type) === definition) this.definitions.delete(definition.type);
+      if (this.definitions.get(definition.type) === definition) {
+        this.definitions.delete(definition.type);
+      }
       this.removeDefinitions.delete(dispose);
       this.notify();
     };
@@ -242,7 +256,9 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
    */
   private require(type: string): BlockDefinition {
     const definition = this.get(type);
-    if (!definition) throw new Error(`Unknown block type ${type}`);
+    if (!definition) {
+      throw new Error(`Unknown block type ${type}`);
+    }
     return definition;
   }
 }

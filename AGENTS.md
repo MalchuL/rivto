@@ -44,6 +44,8 @@ failing checks; do not describe unverified work as fully validated.
 - `pnpm --filter @chulane/rivto-react test` — run React Jest tests.
 - `pnpm test:e2e` — run Playwright.
 
+Run Playwright behavioral tests with `--workers=12`. Rerun failed tests with `--workers=1` before diagnosing or classifying the failures; report the parallel and serial results separately. Run dedicated performance measurements with `--workers=1` to avoid contention between workers.
+
 Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run checks proportionate to the change; use focused tests first and build when exports or packaging change. Run relevant local checks and fix failures caused by the requested change without asking for approval at each step.
 
 ## Style and Reviews
@@ -53,6 +55,12 @@ Use ES modules and nearby formatting. Use `PascalCase` for types/components, `ca
 Use concrete names that describe the implemented behavior and reuse existing domain terminology. Name functions for what they actually do, including meaningful scope or side effects; name values for what they contain. Avoid vague names such as `processData`, `handleLogic`, or `AbstractManager` when the code has a specific responsibility. Do not imply validation, persistence, synchronization, or completeness unless the implementation provides it. Check the implementation and callers before choosing or changing a name.
 
 Avoid nested or chained ternary operators. Use `if`/`else` or early returns for multiple conditions; a single simple ternary is fine.
+
+Use Prettier's default ternary style (`experimentalTernaries: false`): when a ternary wraps, put `?` and `:` at the beginning of their respective lines. Short ternaries may remain on one line; do not force every ternary onto multiple lines.
+
+Always use braces (`{}`) around the bodies of `if`, `else`, `for`, `for...in`, `for...of`, `while`, and `do...while`, including single statements. ESLint enforces this with `curly: ["error", "all"]`; Prettier controls brace placement and spacing.
+
+Put non-empty block contents on a new line after `{`, and put the closing `}` on a separate line after the contents. This also applies to function bodies, methods, classes, `switch`, and `try`/`catch`/`finally`. Empty blocks may remain `{}`. ESLint enforces the internal line breaks with `@stylistic/curly-newline: ["error", { minElements: 1, consistent: true }]`, configured after `eslint-config-prettier` so it remains enabled. Prettier controls where the opening brace sits relative to declarations and how comments between branches are formatted.
 
 Keep functions and methods within 50 lines, including blank lines and comment-only lines. ESLint reports longer functions as warnings only; warnings do not fail lint or CI.
 

@@ -37,9 +37,14 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
   );
   const draggable = useSyncExternalStore(subscribe, getDraggable, getDraggable);
   const arm = useCallback(() => item?.placements.arm(block.id), [block.id, item]);
-  if (!item) return null;
+  if (!item) {
+    return null;
+  }
   return (
-    <Button variant="ghost" size="icon" {...editorControlProps}
+    <Button
+      variant="ghost"
+      size="icon"
+      {...editorControlProps}
       ref={draggable?.handleRef}
       type="button"
       className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex h-6 w-7 items-center justify-center gap-0 p-0`}

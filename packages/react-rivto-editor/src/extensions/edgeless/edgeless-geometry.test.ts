@@ -1,11 +1,7 @@
 /**
  * Tests for marquee intersection and group-parent lifting used by selection drag.
  */
-import {
-  groupParentByChild,
-  outermostGroupId,
-  rootsInRect,
-} from "./edgeless-geometry";
+import { groupParentByChild, outermostGroupId, rootsInRect } from "./edgeless-geometry";
 
 describe("edgeless marquee geometry", () => {
   test("rootsInRect returns overlapping object IDs", () => {

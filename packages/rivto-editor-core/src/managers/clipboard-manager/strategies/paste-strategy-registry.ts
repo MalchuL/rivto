@@ -21,7 +21,9 @@ export class PasteStrategyRegistry {
     this.items.delete(id);
     this.items.set(id, strategy);
     return () => {
-      if (this.items.get(id) === strategy) this.items.delete(id);
+      if (this.items.get(id) === strategy) {
+        this.items.delete(id);
+      }
     };
   }
 

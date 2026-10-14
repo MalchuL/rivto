@@ -2,13 +2,13 @@
 
 Rivto separates persisted data, document commands, and React presentation:
 
-| API | Owns |
-| --- | --- |
-| `DocumentModel` | Persisted blocks, elements, hierarchy and CRDT transactions |
-| `DocumentEditorAPI` | Document-wide commands, validation, history, portable selection and clipboard |
-| `ReactEditorApi` (`ReactEditor`) | Shared renderers, extensions, surfaces and browser infrastructure |
-| `PanelAPI` (`ChildrenPanel` / `EmbeddingPanel`, core) | Bounded blocks/elements and independent subtree roots |
-| `ReactPanelApi` (`ReactPanel`, React) | Bounded `blocks`/`elements`, shared `editor`, local mode, DOM selection, events, keyboard, clipboard and edgeless actions |
+| API                                                   | Owns                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `DocumentModel`                                       | Persisted blocks, elements, hierarchy and CRDT transactions                                                               |
+| `DocumentEditorAPI`                                   | Document-wide commands, validation, history, portable selection and clipboard                                             |
+| `ReactEditorApi` (`ReactEditor`)                      | Shared renderers, extensions, surfaces and browser infrastructure                                                         |
+| `PanelAPI` (`ChildrenPanel` / `EmbeddingPanel`, core) | Bounded blocks/elements and independent subtree roots                                                                     |
+| `ReactPanelApi` (`ReactPanel`, React)                 | Bounded `blocks`/`elements`, shared `editor`, local mode, DOM selection, events, keyboard, clipboard and edgeless actions |
 
 ## Shared editor and panels
 
@@ -229,19 +229,19 @@ and mode changes. A block edit therefore does not invalidate the whole tree.
 
 Hooks resolve current values through public getters:
 
-| Hook | Value |
-| --- | --- |
-| `useBlock(id)` | One detached recursive block snapshot |
-| `useBlockNode(id)` | One detached node with direct `childIds` and bound operations |
-| `useBlockOperations(id)` | Bound commands without a document subscription |
-| `useBlockTextEditing(id, content)` | Plain-text DOM binding without another subscription |
-| `useBlockSelectionAnchor(id)` | Structural selection marker and pending focus restoration |
-| `useRootBlockIds()` | Ordered root IDs |
-| `usePanel()` | Bounded core operations for the nearest panel |
-| `useReactPanel()` | Browser operations for the nearest rendered occurrence |
-| `useContext(SurfaceContext)` | Current surface kind |
-| `useEditorSelection()` / selection hooks | Detached selection |
-| slash hooks | Slash-command manager |
+| Hook                                     | Value                                                         |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| `useBlock(id)`                           | One detached recursive block snapshot                         |
+| `useBlockNode(id)`                       | One detached node with direct `childIds` and bound operations |
+| `useBlockOperations(id)`                 | Bound commands without a document subscription                |
+| `useBlockTextEditing(id, content)`       | Plain-text DOM binding without another subscription           |
+| `useBlockSelectionAnchor(id)`            | Structural selection marker and pending focus restoration     |
+| `useRootBlockIds()`                      | Ordered root IDs                                              |
+| `usePanel()`                             | Bounded core operations for the nearest panel                 |
+| `useReactPanel()`                        | Browser operations for the nearest rendered occurrence        |
+| `useContext(SurfaceContext)`             | Current surface kind                                          |
+| `useEditorSelection()` / selection hooks | Detached selection                                            |
+| slash hooks                              | Slash-command manager                                         |
 
 Renderer, surface, and extension registries keep independent ownership and
 lifecycle state.
@@ -372,15 +372,15 @@ Recommended reading order:
 
 ## Adding behavior
 
-| Goal | Correct boundary |
-| --- | --- |
-| New persisted field or tree operation | Core `DocumentModel` + `DocumentEditorAPI` method |
-| Custom block | `blockExtension({ definition, render, slashCommand })` |
-| Keyboard/pointer action | Extension `setup` + `events.register` |
-| Block chrome | `surfaces.registerBlockWrapper` |
-| Modal, popup, overlay | `extensions.mount` |
-| New root layout | `surfaces.register` |
-| React hook | Resolve from the stable editor context/global revision |
+| Goal                                  | Correct boundary                                       |
+| ------------------------------------- | ------------------------------------------------------ |
+| New persisted field or tree operation | Core `DocumentModel` + `DocumentEditorAPI` method      |
+| Custom block                          | `blockExtension({ definition, render, slashCommand })` |
+| Keyboard/pointer action               | Extension `setup` + `events.register`                  |
+| Block chrome                          | `surfaces.registerBlockWrapper`                        |
+| Modal, popup, overlay                 | `extensions.mount`                                     |
+| New root layout                       | `surfaces.register`                                    |
+| React hook                            | Resolve from the stable editor context/global revision |
 
 Before adding another manager or state container, check whether a core
 operation or existing capability already owns the concern.

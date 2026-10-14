@@ -1,11 +1,23 @@
 import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
 import type { ElementTypesApi } from "../managers/elements/types";
 import type { DocumentEditorAPI } from "@chulane/rivto";
-import type { BlockRenderer, ClipboardFormatRegistry, ClipboardManager, EventManager, KeyboardManager, KeymapOverrides, ReactEditorExtension, SlashCommandRegistry } from "../managers";
+import type {
+  BlockRenderer,
+  ClipboardFormatRegistry,
+  ClipboardManager,
+  EventManager,
+  KeyboardManager,
+  KeymapOverrides,
+  ReactEditorExtension,
+  SlashCommandRegistry,
+} from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
 import type { BlockReference, BlockResolution } from "../extensions/embedding/types";
 import type { BlockElementProjection } from "../elements/block-element-projection";
-import type { CreateDefaultBlock, IsEmptyBlock } from "../extensions/built-ins/page/default-writing-block/types";
+import type {
+  CreateDefaultBlock,
+  IsEmptyBlock,
+} from "../extensions/built-ins/page/default-writing-block/types";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
@@ -37,9 +49,15 @@ export interface EditorStorageOptions {
    */
   readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
   /** Lists containing document IDs from application metadata without acquiring their content; ordinary edits never invoke it. */
-  readonly lookupDocumentIds?: (blockId: string, options: { readonly signal?: AbortSignal }) => Promise<readonly string[]>;
+  readonly lookupDocumentIds?: (
+    blockId: string,
+    options: { readonly signal?: AbortSignal },
+  ) => Promise<readonly string[]>;
   /** Replaces preferred-document-first resolution; receives the persisted address and never changes its props. */
-  readonly resolveBlock?: (reference: BlockReference, options: { readonly signal?: AbortSignal }) => Promise<BlockResolution>;
+  readonly resolveBlock?: (
+    reference: BlockReference,
+    options: { readonly signal?: AbortSignal },
+  ) => Promise<BlockResolution>;
   /** Optional registry metadata notifications used to retry unresolved embedding locations. */
   readonly subscribeDocumentIds?: (listener: () => void) => () => void;
   /** Reports asynchronous release failures from view cleanup. */

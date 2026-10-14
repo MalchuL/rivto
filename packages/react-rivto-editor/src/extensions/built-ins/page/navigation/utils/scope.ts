@@ -5,11 +5,7 @@
  *
  * @module
  */
-import type {
-  EditorBlock,
-  EditorElementNode,
-  DocumentEditorAPI,
-} from "@chulane/rivto";
+import type { EditorBlock, EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../../../panels/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
 import { findRenderedBlock } from "../../../../../managers/events/block-dom";
@@ -36,9 +32,9 @@ export function owningBlockElement(
 ): EditorElementNode | undefined {
   const rootId = owningRootId(editor, blockId);
   const rootOrder = editor.blocks.getRootIds();
-  return editor.elements.getElementNodes().find(
-    (element) => element.type === "block" && blockIdsOf(element, rootOrder).includes(rootId),
-  );
+  return editor.elements
+    .getElementNodes()
+    .find((element) => element.type === "block" && blockIdsOf(element, rootOrder).includes(rootId));
 }
 
 /**
@@ -49,7 +45,10 @@ export function owningBlockElement(
  * React callers use their rendered view's surface; core-only callers use the
  * document mode because they have no DOM occurrence.
  */
-export function navigationOutlineBlocks(editor: ReactPanelApi | DocumentEditorAPI, blockId: string): EditorBlock[] {
+export function navigationOutlineBlocks(
+  editor: ReactPanelApi | DocumentEditorAPI,
+  blockId: string,
+): EditorBlock[] {
   const roots = editor.blocks.getBlocks();
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
@@ -61,7 +60,12 @@ export function navigationOutlineBlocks(editor: ReactPanelApi | DocumentEditorAP
       const root = roots.find((block) => block.id === owningRootId(editor, blockId));
       outline = root ? [root] : [];
     } else {
-      const allowed = new Set(blockIdsOf(element, roots.map((block) => block.id)));
+      const allowed = new Set(
+        blockIdsOf(
+          element,
+          roots.map((block) => block.id),
+        ),
+      );
       outline = roots.filter((block) => allowed.has(block.id));
     }
   }
@@ -77,6 +81,8 @@ export function navigationOutlineBlocks(editor: ReactPanelApi | DocumentEditorAP
  * host card, so navigation cannot escape into the host's document.
  */
 export function navigationDomRoot(surfaceRoot: HTMLElement, blockId: string): HTMLElement {
-  const card = findRenderedBlock(surfaceRoot, blockId)?.closest<HTMLElement>(EDGELESS_ROOT_SELECTOR);
+  const card = findRenderedBlock(surfaceRoot, blockId)?.closest<HTMLElement>(
+    EDGELESS_ROOT_SELECTOR,
+  );
   return card && surfaceRoot.contains(card) ? card : surfaceRoot;
 }

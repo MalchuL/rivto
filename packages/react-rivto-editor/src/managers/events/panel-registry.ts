@@ -15,32 +15,52 @@ export class PanelRegistry {
   private activeRoot: HTMLElement | null = null;
   private pointerRoot?: HTMLElement;
   private readonly eventPanels = new WeakMap<globalThis.Event, HTMLElement | null>();
-  private readonly panels = new Map<HTMLElement, { document: DocumentModel; rootBlockId?: string; api?: ReactPanelApi; deactivate?: () => void; cancelSelection?: () => void }>();
+  private readonly panels = new Map<
+    HTMLElement,
+    {
+      document: DocumentModel;
+      rootBlockId?: string;
+      api?: ReactPanelApi;
+      deactivate?: () => void;
+      cancelSelection?: () => void;
+    }
+  >();
 
   /**
    * @param reactEditor - Document editor whose selection follows the active panel.
    * Root subscribers reconnect delegated listeners after roots change.
    * @param extensions - Internal registration ownership and destruction guard.
    */
-  constructor(private readonly reactEditor: ReactEditorApi, private readonly extensions: RegistrationOwner) {}
+  constructor(
+    private readonly reactEditor: ReactEditorApi,
+    private readonly extensions: RegistrationOwner,
+  ) {}
   private readonly rootListeners = new Set<() => void>();
   /** Observes root registration changes without observing document edits. */
   subscribeRoots(listener: () => void): () => void {
     this.rootListeners.add(listener);
-    return () => { this.rootListeners.delete(listener); };
+    return () => {
+      this.rootListeners.delete(listener);
+    };
   }
-  private notifyRootsChanged(): void { this.rootListeners.forEach((listener) => listener()); }
   /** Returns the API for the last activated registered panel. The panel remains remembered
    * when focus leaves the editor. Returns undefined before activation, after its root
    * is removed, or when that root was registered without an API. */
-  getActive(): ReactPanelApi | undefined { return this.activeRoot ? this.getApi(this.activeRoot) : undefined; }
+  getActive(): ReactPanelApi | undefined {
+    return this.activeRoot ? this.getApi(this.activeRoot) : undefined;
+  }
   /** Returns the first registered full-document panel, falling back to the first subtree.
    * Returns undefined when no root is registered or the chosen root has no API.
    * This choice does not depend on which panel is active. */
-  getDefault(): ReactPanelApi | undefined { const root = this.getDefaultRoot(); return root ? this.getApi(root) : undefined; }
+  getDefault(): ReactPanelApi | undefined {
+    const root = this.getDefaultRoot();
+    return root ? this.getApi(root) : undefined;
+  }
   /** Returns the last activated registered root without applying a fallback, or null
    * before activation and after that root is removed. */
-  getActiveRoot(): HTMLElement | null { return this.activeRoot; }
+  getActiveRoot(): HTMLElement | null {
+    return this.activeRoot;
+  }
 
   /** @returns A new set of all registered roots, including full-document and subtree panels.
    * Later registrations and removals do not change the returned set. */
@@ -49,18 +69,24 @@ export class PanelRegistry {
   }
 
   /** @returns Whether mounted document panels need focus and pointer lifecycle listeners. */
-  get hasPanels(): boolean { return this.panels.size > 0; }
+  get hasPanels(): boolean {
+    return this.panels.size > 0;
+  }
 
   /** @param root - Registered editor surface.
    * @returns Its API, or undefined for an unknown root or a registration without an API. */
-  getApi(root: HTMLElement): ReactPanelApi | undefined { return this.panels.get(root)?.api; }
+  getApi(root: HTMLElement): ReactPanelApi | undefined {
+    return this.panels.get(root)?.api;
+  }
 
   /** @returns A mounted full-document surface, independent of interaction; falls back to the first subtree when no full document is mounted. */
   getDefaultRoot(): HTMLElement | null {
     // Child refs mount first. Prefer the full document over an embedding until
     // an interaction explicitly activates one of its subtree occurrences.
     for (const [root, panel] of this.panels) {
-      if (panel.rootBlockId === undefined) return root;
+      if (panel.rootBlockId === undefined) {
+        return root;
+      }
     }
     return this.panels.keys().next().value ?? null;
   }
@@ -83,7 +109,9 @@ export class PanelRegistry {
    */
   getSurfaceType(root = this.getActiveRoot() ?? this.getDefaultRoot()): EditorMode {
     const surface = root?.getAttribute("data-rivto-surface");
-    if (surface === "block" || surface === "edgeless") return surface;
+    if (surface === "block" || surface === "edgeless") {
+      return surface;
+    }
     return (root ? this.panels.get(root)?.api?.mode.get() : undefined) ?? "block";
   }
 
@@ -99,30 +127,47 @@ export class PanelRegistry {
    * and returns keyboard focus to an enclosing mounted surface, retaining source undo.
    * Full-document surface changes preserve selection when switching presentation modes.
    */
-  registerPanel(root: HTMLElement, document: DocumentModel, rootBlockId?: string, api?: ReactPanelApi, deactivate?: () => void, cancelSelection?: () => void): () => void {
+  registerPanel(
+    root: HTMLElement,
+    document: DocumentModel,
+    rootBlockId?: string,
+    api?: ReactPanelApi,
+    deactivate?: () => void,
+    cancelSelection?: () => void,
+  ): () => void {
     this.extensions.assertActive();
     const entry = { document, rootBlockId, api, deactivate, cancelSelection };
     this.panels.set(root, entry);
     this.notifyRootsChanged();
     return () => {
-      if (this.panels.get(root) !== entry) return;
+      if (this.panels.get(root) !== entry) {
+        return;
+      }
       this.panels.delete(root);
       entry.cancelSelection?.();
       if (this.pointerRoot === root) {
         this.pointerRoot = undefined;
-        if (pointerRoots.get(root.ownerDocument) === root) pointerRoots.delete(root.ownerDocument);
+        if (pointerRoots.get(root.ownerDocument) === root) {
+          pointerRoots.delete(root.ownerDocument);
+        }
       }
       this.notifyRootsChanged();
       deactivate?.();
-      if (this.activeRoot !== root) return;
+      if (this.activeRoot !== root) {
+        return;
+      }
       this.activeRoot = null;
       // Retain source undo while the target is missing; the next panel interaction chooses its own history again.
       // Replacing a full-document surface (page/canvas) keeps core selection.
       // Removing the active embedded subtree releases its occurrence's selection.
-      if (entry.rootBlockId !== undefined) this.reactEditor.selection.clear();
+      if (entry.rootBlockId !== undefined) {
+        this.reactEditor.selection.clear();
+      }
       if (root.contains(root.ownerDocument.activeElement)) {
         const parent = root.parentElement?.closest<HTMLElement>(PANEL_SELECTOR);
-        if (parent && this.panels.has(parent)) parent.focus({ preventScroll: true });
+        if (parent && this.panels.has(parent)) {
+          parent.focus({ preventScroll: true });
+        }
       }
     };
   }
@@ -137,34 +182,53 @@ export class PanelRegistry {
    */
   resolveEventRoot(raw: Event, attachedRoot?: HTMLElement): HTMLElement | undefined {
     const fallback = this.getActiveRoot() ?? this.getDefaultRoot();
-    if (!fallback) return;
-    const selectionNode = raw.type === "selectionchange" ? fallback.ownerDocument.getSelection()?.anchorNode : undefined;
+    if (!fallback) {
+      return;
+    }
+    const selectionNode =
+      raw.type === "selectionchange"
+        ? fallback.ownerDocument.getSelection()?.anchorNode
+        : undefined;
     const target = selectionNode ?? raw.target;
     const ElementConstructor = fallback.ownerDocument.defaultView!.Element;
-    const element = target instanceof ElementConstructor ? target : (target as Node | null)?.parentElement;
+    const element =
+      target instanceof ElementConstructor ? target : (target as Node | null)?.parentElement;
     const boundary = element?.closest<HTMLElement>(PANEL_SELECTOR);
-    const activatesPanel = raw.type === "focusin" || raw.type === "pointerdown" || raw.type === "input" || raw.type === "keydown";
-    const pointerContinuation = raw.type === "pointermove" || raw.type === "pointerup" || raw.type === "pointercancel";
+    const activatesPanel =
+      raw.type === "focusin" ||
+      raw.type === "pointerdown" ||
+      raw.type === "input" ||
+      raw.type === "keydown";
+    const pointerContinuation =
+      raw.type === "pointermove" || raw.type === "pointerup" || raw.type === "pointercancel";
     const gestureRoot = pointerEventRoots.get(raw) ?? pointerRoots.get(fallback.ownerDocument);
     if (pointerContinuation && gestureRoot) {
       pointerEventRoots.set(raw, gestureRoot);
-      if (!this.panels.has(gestureRoot)) return;
+      if (!this.panels.has(gestureRoot)) {
+        return;
+      }
     }
     // A nested editor owns its nearest panel even when this runtime uses capture listeners.
     if (boundary && !this.panels.has(boundary) && !this.pointerRoot) {
       // Another editor can take focus without discarding this editor's selection.
       // Keep the last occurrence so returning to it can extend that selection.
       if (activatesPanel) {
-        if (this.activeRoot) this.panels.get(this.activeRoot)?.deactivate?.();
+        if (this.activeRoot) {
+          this.panels.get(this.activeRoot)?.deactivate?.();
+        }
       }
       return;
     }
     const candidate = boundary && this.panels.has(boundary) ? boundary : undefined;
     let chosen = this.activeRoot;
-    if (this.eventPanels.has(raw)) chosen = this.eventPanels.get(raw) ?? null;
-    else {
-      if (pointerContinuation && this.pointerRoot && this.panels.has(this.pointerRoot)) chosen = this.pointerRoot;
-      else if (candidate) chosen = candidate;
+    if (this.eventPanels.has(raw)) {
+      chosen = this.eventPanels.get(raw) ?? null;
+    } else {
+      if (pointerContinuation && this.pointerRoot && this.panels.has(this.pointerRoot)) {
+        chosen = this.pointerRoot;
+      } else if (candidate) {
+        chosen = candidate;
+      }
       this.eventPanels.set(raw, chosen);
       if (raw.type === "pointerdown" && chosen) {
         this.pointerRoot = chosen;
@@ -176,7 +240,9 @@ export class PanelRegistry {
       }
     }
     const root = chosen ?? fallback;
-    if (attachedRoot && attachedRoot !== root) return;
+    if (attachedRoot && attachedRoot !== root) {
+      return;
+    }
     const changed = chosen !== this.activeRoot;
     // Hover belongs to the pointed panel's handlers without taking editing focus
     // or clearing the selection in the panel where the user is working.
@@ -194,10 +260,18 @@ export class PanelRegistry {
   cancelPendingSelections(): void {
     const errors: unknown[] = [];
     for (const { cancelSelection } of this.panels.values()) {
-      try { cancelSelection?.(); } catch (error) { errors.push(error); }
+      try {
+        cancelSelection?.();
+      } catch (error) {
+        errors.push(error);
+      }
     }
-    if (errors.length === 1) throw errors[0];
-    if (errors.length) throw new AggregateError(errors, "View selection cleanup failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length) {
+      throw new AggregateError(errors, "View selection cleanup failed");
+    }
   }
 
   /** Releases mounted roots and pointer ownership during runtime teardown. */
@@ -209,5 +283,11 @@ export class PanelRegistry {
       pointerRoots.delete(this.pointerRoot.ownerDocument);
     }
     this.pointerRoot = undefined;
+  }
+  /**
+   * Notifies subscribers that the set of mounted panel roots changed.
+   */
+  private notifyRootsChanged(): void {
+    this.rootListeners.forEach((listener) => listener());
   }
 }

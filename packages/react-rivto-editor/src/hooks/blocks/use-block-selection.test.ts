@@ -1,4 +1,8 @@
-import { createCaretSelection, createStructuralSelection, createTextSelection } from "@chulane/rivto";
+import {
+  createCaretSelection,
+  createStructuralSelection,
+  createTextSelection,
+} from "@chulane/rivto";
 import { createTestReactEditor as createReactEditor } from "../../test-utils";
 /**
  * Regression tests for per-block selection snapshots used by React chrome.
@@ -42,7 +46,10 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId)).id;
+    const secondId = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(firstId),
+    ).id;
     editor.selection.set(createStructuralSelection([firstId]));
     expect(editor.selection.isBlockSelected(firstId)).toBe(true);
     expect(editor.selection.isBlockSelected(secondId)).toBe(false);
@@ -57,7 +64,11 @@ describe("useBlockSelected / useEditorSelection store contract", () => {
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Text" }).id;
     const before = reactPanel.editor.revision;
     reactPanel.selection.set(
-      createTextSelection([{ id, length: 4 }], { blockId: id, offset: 0 }, { blockId: id, offset: 2 })!,
+      createTextSelection(
+        [{ id, length: 4 }],
+        { blockId: id, offset: 0 },
+        { blockId: id, offset: 2 },
+      )!,
     );
     expect(reactPanel.editor.revision).toBe(before);
     reactPanel.editor.destroy();

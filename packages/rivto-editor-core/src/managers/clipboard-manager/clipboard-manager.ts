@@ -2,7 +2,12 @@
  * Copies normalized block ranges and dispatches paste to registered strategies
  * inside one transaction.
  */
-import { isCaretSelection, isStructuralSelection, type EditorPosition, type Selection } from "../selection-manager";
+import {
+  isCaretSelection,
+  isStructuralSelection,
+  type EditorPosition,
+  type Selection,
+} from "../selection-manager";
 import type { ClipboardBundle, ClipboardPasteInput } from "./clipboard-data";
 import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 import {
@@ -11,7 +16,13 @@ import {
   TEXT_PASTE_STRATEGY_ID,
 } from "./constants";
 import { cloneSelectedTopLevelSubtrees, findBlock, validateClipboardBundle } from "./utils";
-import { BlockPasteStrategy, PreserveNewlinesPasteStrategy, TextPasteStrategy, type PasteContext, type PastePlacement } from "./strategies";
+import {
+  BlockPasteStrategy,
+  PreserveNewlinesPasteStrategy,
+  TextPasteStrategy,
+  type PasteContext,
+  type PastePlacement,
+} from "./strategies";
 import { PasteStrategyRegistry } from "./strategies";
 import type { DocumentEditorAPI } from "../../editor/types";
 import type { ClipboardManagerApi } from "../types";
@@ -42,21 +53,32 @@ export class ClipboardManager implements ClipboardManagerApi {
   copy(selection?: Selection): ClipboardBundle | undefined {
     const current = selection ?? this.editor.selection.get();
     const range = this.editor.selection.resolveBlockSelection(current);
-    if (!range) return undefined;
+    if (!range) {
+      return undefined;
+    }
     const structural = isStructuralSelection(current);
     if (!structural && range.ranges.length === 1) {
       const only = range.ranges[0]!;
-      if (!only.invalid && only.startOffset === only.endOffset) return undefined;
+      if (!only.invalid && only.startOffset === only.endOffset) {
+        return undefined;
+      }
     }
     const blocks = cloneSelectedTopLevelSubtrees(this.editor.blocks.getBlocks(), range, structural);
     if (!structural) {
       range.ranges.forEach(({ block, invalid, startOffset, endOffset }) => {
         const copy = findBlock(blocks, block.id);
-        if (!copy) return;
+        if (!copy) {
+          return;
+        }
         copy.content = invalid ? "" : block.content.slice(startOffset, endOffset);
       });
     }
-    return { version: CLIPBOARD_BUNDLE_VERSION, sourceDocumentId: this.editor.getDocument().id, fromTextSelection: range.fromTextSelection || undefined, blocks };
+    return {
+      version: CLIPBOARD_BUNDLE_VERSION,
+      sourceDocumentId: this.editor.getDocument().id,
+      fromTextSelection: range.fromTextSelection || undefined,
+      blocks,
+    };
   }
 
   /**
@@ -74,7 +96,9 @@ export class ClipboardManager implements ClipboardManagerApi {
    */
   cut(): ClipboardBundle | undefined {
     const bundle = this.copy();
-    if (bundle) this.editor.selection.delete();
+    if (bundle) {
+      this.editor.selection.delete();
+    }
     return bundle;
   }
 
@@ -94,9 +118,13 @@ export class ClipboardManager implements ClipboardManagerApi {
     let caret: EditorPosition | undefined;
     this.editor.history.batchUpdates(() => {
       this.pasteStrategies.getPasteStrategies().forEach((strategy) => {
-        if (!strategy.matches(context, placement)) return;
+        if (!strategy.matches(context, placement)) {
+          return;
+        }
         const result = strategy.paste(context, placement);
-        if (!result) return;
+        if (!result) {
+          return;
+        }
         context = {
           ...context,
           blockIdMap: result.blockIdMap ?? context.blockIdMap,
@@ -106,9 +134,10 @@ export class ClipboardManager implements ClipboardManagerApi {
         const selected = result.proposedSelection.blocks[0];
         // Preserve the established paste return contract while selection state
         // itself comes exclusively from the strategy's proposal.
-        caret = isCaretSelection(result.proposedSelection) && selected
-          ? { blockId: selected.id, offset: selected.start }
-          : undefined;
+        caret =
+          isCaretSelection(result.proposedSelection) && selected
+            ? { blockId: selected.id, offset: selected.start }
+            : undefined;
       });
     });
     return caret;
@@ -122,7 +151,8 @@ export class ClipboardManager implements ClipboardManagerApi {
   private createPasteContext(input: ClipboardPasteInput): PasteContext {
     let bundle: ClipboardBundle | undefined;
     try {
-      const candidate = input.bundle ?? (input.structured ? JSON.parse(input.structured) as unknown : undefined);
+      const candidate =
+        input.bundle ?? (input.structured ? (JSON.parse(input.structured) as unknown) : undefined);
       if (candidate !== undefined) {
         validateClipboardBundle(candidate);
         bundle = candidate;

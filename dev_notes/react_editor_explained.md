@@ -27,4 +27,3 @@
 Для подробного алгоритма курсора, cross-block selection и clipboard после главы
 02 перейдите к отдельному
 [курсу selection и clipboard](./tutorials/selection-and-clipboard/README.md).
-

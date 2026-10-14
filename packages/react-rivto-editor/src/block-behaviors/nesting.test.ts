@@ -12,10 +12,22 @@ import { createTestReactEditor as createReactEditor } from "../test-utils";
 import { createTestCoreEditor } from "../test-utils";
 
 import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
-import { BENTO_BLOCK_TYPE, bentoExtension, createBentoBlockInput } from "../extensions/containers/bento/bento";
-import { columnsExtension, createColumnsBlockInput } from "../extensions/containers/columns/columns";
+import {
+  BENTO_BLOCK_TYPE,
+  bentoExtension,
+  createBentoBlockInput,
+} from "../extensions/containers/bento/bento";
+import {
+  columnsExtension,
+  createColumnsBlockInput,
+} from "../extensions/containers/columns/columns";
 import { createKanbanBlockInput, kanbanExtension } from "../extensions/containers/kanban/kanban";
-import { createTableBlockInput, TABLE_BLOCK_TYPE, TABLE_CELL_BLOCK_TYPE, tableExtension } from "../extensions/containers/table/table";
+import {
+  createTableBlockInput,
+  TABLE_BLOCK_TYPE,
+  TABLE_CELL_BLOCK_TYPE,
+  tableExtension,
+} from "../extensions/containers/table/table";
 import { getBlockContainment } from "../managers/blocks/types";
 import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
 
@@ -52,7 +64,10 @@ test("kanban inside bento freezes tiles and floors cards at the column", async (
   indentBlocks(reactPanel, [column.id]);
   expect(editor.blocks.getParentId(column.id)).toBe(kanban);
 
-  const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }, editor.blocks.getInsertionDestinationAfter(card)).id;
+  const sibling = editor.blocks.insertBlock(
+    { type: "paragraph", content: "Sibling" },
+    editor.blocks.getInsertionDestinationAfter(card),
+  ).id;
   indentBlocks(reactPanel, [sibling]);
   expect(editor.blocks.getParentId(sibling)).toBe(card);
   outdentBlocks(reactPanel, [sibling]);
@@ -112,7 +127,10 @@ test("columns inside a kanban column allow indent under the lane only", async ()
 
   indentBlocks(reactPanel, [lane.id]);
   expect(editor.blocks.getParentId(lane.id)).toBe(columns);
-  const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Child" }, editor.blocks.getInsertionDestinationAfter(writing)).id;
+  const nested = editor.blocks.insertBlock(
+    { type: "paragraph", content: "Child" },
+    editor.blocks.getInsertionDestinationAfter(writing),
+  ).id;
   indentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(writing);
   outdentBlocks(reactPanel, [nested]);
@@ -147,7 +165,9 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
   outdentBlocks(reactPanel, [cell.id]);
   expect(editor.blocks.getParentId(cell.id)).toBe(row.id);
   expect(reactPanel.editor.blockBehaviors.resolve(table).dropAxis).toBe("vertical");
-  expect(getBlockContainment(editor.blockRegistry.get(TABLE_CELL_BLOCK_TYPE))?.outlineFloor).toBe(true);
+  expect(getBlockContainment(editor.blockRegistry.get(TABLE_CELL_BLOCK_TYPE))?.outlineFloor).toBe(
+    true,
+  );
   expect(editor.blocks.getBlockNode(bento)?.type).toBe(BENTO_BLOCK_TYPE);
   expect(editor.blocks.getBlockNode(table)?.type).toBe(TABLE_BLOCK_TYPE);
   expect(editor.blocks.getBlockNode(cell.id)?.type).toBe(TABLE_CELL_BLOCK_TYPE);

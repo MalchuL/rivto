@@ -1,4 +1,9 @@
-import type { ClipboardBundle, ClipboardPasteInput, EditorPosition, Selection } from "@chulane/rivto";
+import type {
+  ClipboardBundle,
+  ClipboardPasteInput,
+  EditorPosition,
+  Selection,
+} from "@chulane/rivto";
 
 /** Clipboard operations bound to one rendered editor panel. */
 export interface PanelClipboardApi {

@@ -311,9 +311,7 @@ function seed(): MockDb {
       id: "page-inbox-scratch",
       projectId: SYSTEM_PROJECT_IDS.inbox,
       title: "Scratchpad",
-      content: serializeSeedSnapshot([
-        "Quick thoughts land here before they find a project.",
-      ]),
+      content: serializeSeedSnapshot(["Quick thoughts land here before they find a project."]),
       createdDaysAgo: 2,
     }),
   ];
@@ -324,9 +322,7 @@ function seed(): MockDb {
   seedJournalPage(
     db,
     0,
-    serializeSeedSnapshot([
-      "Started building the Rivto app shell: tabs, sidebar, journal.",
-    ]),
+    serializeSeedSnapshot(["Started building the Rivto app shell: tabs, sidebar, journal."]),
   );
   seedJournalPage(
     db,
@@ -338,9 +334,7 @@ function seed(): MockDb {
   seedJournalPage(
     db,
     2,
-    serializeSeedSnapshot([
-      "Decided journal days are ordinary pages with `kind: journal`.",
-    ]),
+    serializeSeedSnapshot(["Decided journal days are ordinary pages with `kind: journal`."]),
   );
 
   return db;

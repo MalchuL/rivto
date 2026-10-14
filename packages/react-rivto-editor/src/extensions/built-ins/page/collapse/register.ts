@@ -27,10 +27,13 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     keywords: ["fold", "hide"],
     isAvailable: ({ blockId, reactPanel }) => {
       const block = reactPanel.blocks.getBlockNode(blockId);
-      return reactEditor.blockListProps.has("collapse") &&
-        Boolean(block?.childIds.length && block.listProps.collapsed !== true);
+      return (
+        reactEditor.blockListProps.has("collapse") &&
+        Boolean(block?.childIds.length && block.listProps.collapsed !== true)
+      );
     },
-    execute: ({ blockId, reactPanel }) => reactPanel.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
+    execute: ({ blockId, reactPanel }) =>
+      reactPanel.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
   });
 
   reactEditor.slashCommands.register({
@@ -40,10 +43,13 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     keywords: ["unfold", "show"],
     isAvailable: ({ blockId, reactPanel }) => {
       const block = reactPanel.blocks.getBlockNode(blockId);
-      return reactEditor.blockListProps.has("collapse") &&
-        Boolean(block?.childIds.length && block.listProps.collapsed === true);
+      return (
+        reactEditor.blockListProps.has("collapse") &&
+        Boolean(block?.childIds.length && block.listProps.collapsed === true)
+      );
     },
-    execute: ({ blockId, reactPanel }) => reactPanel.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
+    execute: ({ blockId, reactPanel }) =>
+      reactPanel.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
   });
 
   reactEditor.blockListProps.register({
@@ -60,22 +66,29 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
   });
   const reconcile = () => {
     const current = reactEditor.selection.get();
-    if (!current) return;
-    const reactPanel = (reactEditor.panels.getActive() ?? reactEditor.panels.getDefault());
+    if (!current) {
+      return;
+    }
+    const reactPanel = reactEditor.panels.getActive() ?? reactEditor.panels.getDefault();
     const api = reactPanel ?? reactEditor;
     if (!api.selection.get()) {
       // A remote move can put selected blocks outside the active subtree.
-      if (reactPanel) api.selection.clear();
+      if (reactPanel) {
+        api.selection.clear();
+      }
       return;
     }
     const reconcilePanel = () => {
-  const apiDocument = "editor" in api ? api.document : api;
+      const apiDocument = "editor" in api ? api.document : api;
       const root = reactPanel?.events.getRoot();
       const boundary = reactPanel?.rootBlockId;
       const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
       if (next !== current) {
-        if (next) api.selection.set(next);
-        else api.selection.clear();
+        if (next) {
+          api.selection.set(next);
+        } else {
+          api.selection.clear();
+        }
         // A native Range retains detached text nodes after React removes a
         // collapsed subtree. Clear it and focus the page's block-selection owner.
         root?.ownerDocument.getSelection()?.removeAllRanges();
@@ -86,7 +99,10 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
   };
   const unsubscribeDocument = reactEditor.subscribe(reconcile);
   const unsubscribeSelection = reactEditor.selection.subscribe(reconcile);
-  const uninstallReconciliation = () => { unsubscribeSelection(); unsubscribeDocument(); };
+  const uninstallReconciliation = () => {
+    unsubscribeSelection();
+    unsubscribeDocument();
+  };
 
   const setCollapsed = (reactPanel: ReactPanelApi, value: boolean | "toggle"): boolean => {
     const current = reactPanel.selection.get();
@@ -95,37 +111,56 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     const nativeSelection = reactPanel.selection.readDOM();
     const selection = nativeSelection ?? current;
     const ids = collapseTargets(selection);
-    if (!ids.length) return false;
+    if (!ids.length) {
+      return false;
+    }
     const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.some((id) => !reactPanel.blocks.hasBlock(id))) return false;
+    if (uniqueIds.some((id) => !reactPanel.blocks.hasBlock(id))) {
+      return false;
+    }
     const first = reactPanel.blocks.getBlockNode(uniqueIds[0]!);
-    if (!first) return false;
+    if (!first) {
+      return false;
+    }
     const collapsed = value === "toggle" ? first.listProps.collapsed !== true : value;
     const updates = uniqueIds.flatMap((id) => {
       const block = reactPanel.blocks.getBlockNode(id);
-      return block && (!collapsed || block.childIds.length > 0) && block.listProps.collapsed !== collapsed
+      return block &&
+        (!collapsed || block.childIds.length > 0) &&
+        block.listProps.collapsed !== collapsed
         ? [{ id, patch: { listProps: { collapsed } } }]
         : [];
     });
-    if (updates.length) reactPanel.blocks.updateBlocks(updates);
+    if (updates.length) {
+      reactPanel.blocks.updateBlocks(updates);
+    }
     return true;
   };
 
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockCollapse,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
-    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ reactPanel }) => setCollapsed(reactPanel,true));
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockExpand,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
-    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ reactPanel }) => setCollapsed(reactPanel,false));
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
-    when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
-  }, ({ reactPanel }) => setCollapsed(reactPanel,"toggle"));
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockCollapse,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCollapse]!,
+      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+    },
+    ({ reactPanel }) => setCollapsed(reactPanel, true),
+  );
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockExpand,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockExpand]!,
+      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+    },
+    ({ reactPanel }) => setCollapsed(reactPanel, false),
+  );
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockToggleCollapse,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockToggleCollapse]!,
+      when: ({ mode, blockElement }) => mode === "block" || Boolean(blockElement),
+    },
+    ({ reactPanel }) => setCollapsed(reactPanel, "toggle"),
+  );
 
   return () => {
     uninstallReconciliation();

@@ -7,7 +7,7 @@ import type { PageVirtualizationSettings } from "./types";
  *
  * @module
  */
-import { createContext, } from "react";
+import { createContext } from "react";
 
 /** Default number of extra roots mounted above and below the viewport. */
 export const DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN = 8;

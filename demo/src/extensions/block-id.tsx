@@ -1,12 +1,5 @@
-import {
-  type BlockSlotProps,
-  type ReactEditorExtension,
-} from "@chulane/rivto-react";
-import {
-  createContext,
-  useContext,
-  type ReactNode,
-} from "react";
+import { type BlockSlotProps, type ReactEditorExtension } from "@chulane/rivto-react";
+import { createContext, useContext, type ReactNode } from "react";
 
 const BlockIdsVisibleContext = createContext(true);
 
@@ -19,9 +12,7 @@ export function BlockIdsVisibleProvider({
   readonly children: ReactNode;
 }) {
   return (
-    <BlockIdsVisibleContext.Provider value={visible}>
-      {children}
-    </BlockIdsVisibleContext.Provider>
+    <BlockIdsVisibleContext.Provider value={visible}>{children}</BlockIdsVisibleContext.Provider>
   );
 }
 
@@ -29,12 +20,21 @@ export function BlockIdsVisibleProvider({
 function BlockIdSlot({ block }: BlockSlotProps) {
   const visible = useContext(BlockIdsVisibleContext);
   const shortId = block.id.split("-", 1)[0];
-  return visible ? <span className="demo-block-id" title={block.id}>{shortId}</span> : null;
+  return visible ? (
+    <span className="demo-block-id" title={block.id}>
+      {shortId}
+    </span>
+  ) : null;
 }
 
 /** Demo-only extension showing shortened block IDs in page and edgeless rows. */
 export const blockIdExtension = (): ReactEditorExtension => ({
   id: "demo.block-id",
+  /**
+   * Registers the block ID label at the end of each rendered block row.
+   *
+   * @param reactEditor - React editor that owns the extension registrations.
+   */
   setup(reactEditor) {
     reactEditor.surfaces.registerBlockSlot({
       position: "end",

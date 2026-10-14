@@ -14,27 +14,45 @@ import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
 
 test("embedding props validate, snapshots and structured clipboard retain references, and cleanup removes registration", async () => {
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
-  const source = await storage.create("source", [{ id: "target", type: "paragraph", content: "source" }]);
+  const source = await storage.create("source", [
+    { id: "target", type: "paragraph", content: "source" },
+  ]);
   const host = await storage.create("host");
-  const runtime = await createTestMultiEditor([host, source], storage, { extensions: [standardPreset(), embeddingExtension()] });
+  const runtime = await createTestMultiEditor([host, source], storage, {
+    extensions: [standardPreset(), embeddingExtension()],
+  });
   const editor = (await runtime.acquireEditor(host.id)).editor;
   const reactEditor = runtime.getEditor(host.id)!;
-  const reference = reactEditor.blocks.insertBlock({ type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "source", targetBlockId: "target" } });
+  const reference = reactEditor.blocks.insertBlock({
+    type: EMBEDDING_BLOCK_TYPE,
+    props: { targetDocumentId: "source", targetBlockId: "target" },
+  });
   expect(reference.content).toBe("");
   expect(() => reactEditor.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
   editor.selection.set(createStructuralSelection([reference.id], reference.id));
   const copied = editor.clipboard.copy();
   expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
   expect(copied?.blocks[0]?.children).toEqual([]);
-  expect(editor.dump().blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
+  expect(editor.dump().blocks[0]?.props).toEqual({
+    targetDocumentId: "source",
+    targetBlockId: "target",
+  });
   const formats = reactEditor.clipboardFormats.format([reference]);
   expect(formats.plain).toBe("Embedded block: source/target");
   const panel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor));
-  const standalone = renderToStaticMarkup(<TestPanel panel={panel}><PageSurface /></TestPanel>);
+  const standalone = renderToStaticMarkup(
+    <TestPanel panel={panel}>
+      <PageSurface />
+    </TestPanel>,
+  );
   expect(standalone).toContain("Block resolution is unavailable.");
-  const markup = renderToStaticMarkup(<EditorStorageContext.Provider value={runtime}>
-    <TestPanel panel={panel}><PageSurface /></TestPanel>
-  </EditorStorageContext.Provider>);
+  const markup = renderToStaticMarkup(
+    <EditorStorageContext.Provider value={runtime}>
+      <TestPanel panel={panel}>
+        <PageSurface />
+      </TestPanel>
+    </EditorStorageContext.Provider>,
+  );
   expect(markup).toContain("Loading embedded block…");
   expect(markup).not.toContain("Block resolution is unavailable.");
   expect("editorStorage" in reactEditor).toBe(false);
@@ -46,27 +64,52 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(markup).not.toContain(">Embedded block<");
   expect(markup).toContain('data-block-selection-anchor=""');
   expect(markup).toContain('data-slot-position="body"');
-  expect(reactEditor.blockBehaviors.acceptsDrop({ kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 }, [source.blocks.getBlock("target")!])).toBe(true);
+  expect(
+    reactEditor.blockBehaviors.acceptsDrop(
+      { kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 },
+      [source.blocks.getBlock("target")!],
+    ),
+  ).toBe(true);
   const sourceEditor = (await runtime.acquireEditor(source.id)).editor;
-  crossDocumentBlockTransfer(sourceEditor, editor, ["target"], { targetId: null, position: "after" });
+  crossDocumentBlockTransfer(sourceEditor, editor, ["target"], {
+    targetId: null,
+    position: "after",
+  });
   expect(source.blocks.hasBlock("target")).toBe(false);
   expect(host.blocks.hasBlock("target")).toBe(true);
   panel.destroy();
   reactEditor.destroy();
   expect(editor.blockRegistry.has(EMBEDDING_BLOCK_TYPE)).toBe(false);
-  await runtime.destroy(); await storage.destroy();
+  await runtime.destroy();
+  await storage.destroy();
 });
 
 test("clipboard retargets copied internal references and preserves qualified external references in one undo", async () => {
   const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
-  const source = await storage.create("A"); const target = await storage.create("B");
-  const runtime = await createTestMultiEditor([source, target], storage, { extensions: [standardPreset(), embeddingExtension()] });
-  const a = (await runtime.acquireEditor("A")).editor; const b = (await runtime.acquireEditor("B")).editor;
-  a.blocks.insertBlock({ id: "branch", type: "paragraph", children: [
-    { id: "target", type: "paragraph", content: "Copied target" },
-    { id: "internal", type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "A", targetBlockId: "target" } },
-    { id: "external", type: EMBEDDING_BLOCK_TYPE, props: { targetDocumentId: "other", targetBlockId: "target" } },
-  ] });
+  const source = await storage.create("A");
+  const target = await storage.create("B");
+  const runtime = await createTestMultiEditor([source, target], storage, {
+    extensions: [standardPreset(), embeddingExtension()],
+  });
+  const a = (await runtime.acquireEditor("A")).editor;
+  const b = (await runtime.acquireEditor("B")).editor;
+  a.blocks.insertBlock({
+    id: "branch",
+    type: "paragraph",
+    children: [
+      { id: "target", type: "paragraph", content: "Copied target" },
+      {
+        id: "internal",
+        type: EMBEDDING_BLOCK_TYPE,
+        props: { targetDocumentId: "A", targetBlockId: "target" },
+      },
+      {
+        id: "external",
+        type: EMBEDDING_BLOCK_TYPE,
+        props: { targetDocumentId: "other", targetBlockId: "target" },
+      },
+    ],
+  });
   b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
   b.history.clear();
   a.selection.set(createStructuralSelection(["branch"]));
@@ -79,9 +122,15 @@ test("clipboard retargets copied internal references and preserves qualified ext
   expect(copied.id).not.toBe("target");
   expect(branch.children[1]!.props).toEqual({ targetDocumentId: "B", targetBlockId: copied.id });
   expect(branch.children[2]!.props).toEqual({ targetDocumentId: "other", targetBlockId: "target" });
-  expect(bundle.blocks[0]!.children[1]!.props).toEqual({ targetDocumentId: "A", targetBlockId: "target" });
+  expect(bundle.blocks[0]!.children[1]!.props).toEqual({
+    targetDocumentId: "A",
+    targetBlockId: "target",
+  });
   expect(b.blocks.getBlockNode("target")?.content).toBe("Existing target");
-  b.history.undo(); expect(b.blocks.hasBlock("branch")).toBe(false);
-  b.history.redo(); expect(b.blocks.getBlock("branch")!.children[1]!.props.targetBlockId).toBe(copied.id);
-  await runtime.destroy(); await storage.destroy();
+  b.history.undo();
+  expect(b.blocks.hasBlock("branch")).toBe(false);
+  b.history.redo();
+  expect(b.blocks.getBlock("branch")!.children[1]!.props.targetBlockId).toBe(copied.id);
+  await runtime.destroy();
+  await storage.destroy();
 });

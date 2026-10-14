@@ -1,7 +1,12 @@
 import type { CreateElementInput } from "../../../../managers/elements/types";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import type { ConnectorEndpoint, ConnectorRoute, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
+import type {
+  ConnectorEndpoint,
+  ConnectorRoute,
+  EdgelessVisualTool,
+  VisualFrame,
+} from "../../../../elements/visuals/types";
 import { canvasPoint, type CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 import {
   centeredPlaceFrame,
@@ -11,7 +16,14 @@ import {
   type CreationSnapOptions,
 } from "../../../../elements/visuals/utils/creation-geometry";
 import { padDrawingFrame } from "../../../../elements/visuals/utils/drawing-frame";
-import { edgeAnchors, endpointPoint, inflateFrame, nearestAnchor, pointInRotatedFrame, segmentIntersectsRotatedFrame } from "../../../../elements/visuals/utils/geometry";
+import {
+  edgeAnchors,
+  endpointPoint,
+  inflateFrame,
+  nearestAnchor,
+  pointInRotatedFrame,
+  segmentIntersectsRotatedFrame,
+} from "../../../../elements/visuals/utils/geometry";
 import { showSnapGuides } from "../utils/snap-guides";
 
 /** Outside attach halo in canvas units (screen-constant via zoom). */
@@ -76,19 +88,27 @@ export function useDrawingGesture({
   const gesture = useRef<Gesture | null>(null);
   const placement = useRef<{ tool: EdgelessVisualTool; input: CreateElementInput } | null>(null);
   const placementInput = (): CreateElementInput => {
-    if (placement.current?.tool === tool) return placement.current.input;
+    if (placement.current?.tool === tool) {
+      return placement.current.input;
+    }
     let input: CreateElementInput;
-    if (tool.tool === 'element') {
+    if (tool.tool === "element") {
       const creation = edgelessOperation.runtime.elementTypes.get(tool.type)?.creation;
       const panel = edgelessOperation.reactPanel;
-      if (!creation || !panel) throw new Error('Element placement requires a registered factory and panel');
+      if (!creation || !panel) {
+        throw new Error("Element placement requires a registered factory and panel");
+      }
       input = creation.create(panel);
-      if (input.type !== tool.type) throw new Error('Element creation factory returned a different type');
-    } else if (tool.tool === 'place') {
+      if (input.type !== tool.type) {
+        throw new Error("Element creation factory returned a different type");
+      }
+    } else if (tool.tool === "place") {
       const { tool: _tool, kind, ...props } = tool;
       void _tool;
       input = { type: kind, props };
-    } else throw new Error('Current tool does not place an element');
+    } else {
+      throw new Error("Current tool does not place an element");
+    }
     placement.current = { tool, input };
     return input;
   };
@@ -99,9 +119,11 @@ export function useDrawingGesture({
   const [connectorHover, setConnectorHover] = useState<ConnectorHover | null>(null);
   const attachPad = ATTACH_PAD_PX / Math.max(zoom, 0.01);
 
-  const creationCandidates = (): VisualFrame[] => edgelessOperation.elements.getElementNodes()
-    .filter((element) => element.type !== "connector" && element.type !== "group")
-    .map((element) => element.frame);
+  const creationCandidates = (): VisualFrame[] =>
+    edgelessOperation.elements
+      .getElementNodes()
+      .filter((element) => element.type !== "connector" && element.type !== "group")
+      .map((element) => element.frame);
 
   const snapOptions = (altKey = false): CreationSnapOptions => ({
     snapToGrid: root?.dataset.edgelessSnap !== "false",
@@ -111,24 +133,39 @@ export function useDrawingGesture({
     disabled: altKey,
   });
 
-  const placedFrame = (point: CanvasPoint, altKey = false) => snapPlacedFrame(
-    centeredPlaceFrame(point, edgelessOperation.getPlaceSize({
-      width: placementInput().frame?.width ?? DEFAULT_PLACE_SIZE.width,
-      height: placementInput().frame?.height ?? DEFAULT_PLACE_SIZE.height,
-    })),
-    creationCandidates(),
-    snapOptions(altKey),
-  );
+  const placedFrame = (point: CanvasPoint, altKey = false) =>
+    snapPlacedFrame(
+      centeredPlaceFrame(
+        point,
+        edgelessOperation.getPlaceSize({
+          width: placementInput().frame?.width ?? DEFAULT_PLACE_SIZE.width,
+          height: placementInput().frame?.height ?? DEFAULT_PLACE_SIZE.height,
+        }),
+      ),
+      creationCandidates(),
+      snapOptions(altKey),
+    );
 
   const objectAt = (point: CanvasPoint): string | undefined => {
-    const candidates = edgelessOperation.elements.getElementNodes()
-      .filter((element) => element.type !== "connector" && element.type !== "group"
-        && pointInRotatedFrame(point, inflateFrame(element.frame, attachPad), edgelessOperation.getRotation(element.id)))
+    const candidates = edgelessOperation.elements
+      .getElementNodes()
+      .filter(
+        (element) =>
+          element.type !== "connector" &&
+          element.type !== "group" &&
+          pointInRotatedFrame(
+            point,
+            inflateFrame(element.frame, attachPad),
+            edgelessOperation.getRotation(element.id),
+          ),
+      )
       .sort((a, b) => b.zIndex - a.zIndex);
     let id = candidates[0]?.id;
     while (id) {
       const parent = edgelessOperation.getParentId(id);
-      if (!parent) break;
+      if (!parent) {
+        break;
+      }
       id = parent;
     }
     return id;
@@ -138,14 +175,22 @@ export function useDrawingGesture({
     const frame = edgelessOperation.getFrame(id)!;
     const rotation = edgelessOperation.getRotation(id);
     const anchor = nearestAnchor(frame, point, rotation);
-    return { elementId: id, anchor, position: endpointPoint({ anchor, position: point }, frame, rotation) };
+    return {
+      elementId: id,
+      anchor,
+      position: endpointPoint({ anchor, position: point }, frame, rotation),
+    };
   };
 
   const hoverFor = (point: CanvasPoint, excludeId?: string): ConnectorHover | null => {
     const id = objectAt(point);
-    if (!id || id === excludeId) return null;
+    if (!id || id === excludeId) {
+      return null;
+    }
     const frame = edgelessOperation.getFrame(id);
-    if (!frame) return null;
+    if (!frame) {
+      return null;
+    }
     const rotation = edgelessOperation.getRotation(id);
     const nearest = nearestAnchor(frame, point, rotation);
     return {
@@ -160,28 +205,37 @@ export function useDrawingGesture({
     };
   };
 
-  const clearErased = () => root?.querySelectorAll<HTMLElement>("[data-edgeless-erase-target]").forEach((element) => {
-    delete element.dataset.edgelessEraseTarget;
-  });
+  const clearErased = () =>
+    root?.querySelectorAll<HTMLElement>("[data-edgeless-erase-target]").forEach((element) => {
+      delete element.dataset.edgelessEraseTarget;
+    });
 
   const cancelGesture = () => {
     const active = gesture.current;
-    if (!active) return false;
+    if (!active) {
+      return false;
+    }
     const pointerId = active.pointerId;
     gesture.current = null;
     setPreview([]);
     setConnectorPreview(null);
     clearErased();
     const host = captureEl.current;
-    if (host?.hasPointerCapture(pointerId)) host.releasePointerCapture(pointerId);
-    if (root) showSnapGuides(root, []);
+    if (host?.hasPointerCapture(pointerId)) {
+      host.releasePointerCapture(pointerId);
+    }
+    if (root) {
+      showSnapGuides(root, []);
+    }
     placement.current = null;
     setPlacePreview(null);
     return true;
   };
 
   useEffect(() => {
-    if (tool.tool === "connector") return;
+    if (tool.tool === "connector") {
+      return;
+    }
     setConnectorHover(null);
   }, [tool]);
 
@@ -189,17 +243,22 @@ export function useDrawingGesture({
     cancelGesture();
     placement.current = null;
     setPlacePreview(null);
-    if (root) showSnapGuides(root, []);
+    if (root) {
+      showSnapGuides(root, []);
+    }
   }, [root, tool]);
 
   useEffect(() => {
-    const dispose = (edgelessOperation.reactPanel ?? edgelessOperation.runtime).keyboard.register({
-      id: "edgeless.gesture-cancel",
-      keys: ["Escape"],
-      mode: "edgeless",
-      priority: 40,
-      when: () => Boolean(gesture.current),
-    }, () => cancelGesture());
+    const dispose = (edgelessOperation.reactPanel ?? edgelessOperation.runtime).keyboard.register(
+      {
+        id: "edgeless.gesture-cancel",
+        keys: ["Escape"],
+        mode: "edgeless",
+        priority: 40,
+        when: () => Boolean(gesture.current),
+      },
+      () => cancelGesture(),
+    );
     const deactivate = edgelessOperation.reactPanel?.subscribeDeactivation(() => cancelGesture());
     return () => {
       dispose();
@@ -209,24 +268,31 @@ export function useDrawingGesture({
   }, [edgelessOperation, root]);
 
   const pointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (tool.tool === "select" || tool.tool === "pan" || event.button !== 0) return;
+    if (tool.tool === "select" || tool.tool === "pan" || event.button !== 0) {
+      return;
+    }
     const point = canvasPoint(event.nativeEvent, root, zoom);
     const start: Gesture = { pointerId: event.pointerId, points: [point], erased: new Set() };
     if (tool.tool === "connector") {
       const id = objectAt(point);
-      if (!id) return;
+      if (!id) {
+        return;
+      }
       start.source = endpoint(id, point);
       setConnectorHover(hoverFor(point));
     }
     gesture.current = start;
     captureEl.current = event.currentTarget;
     event.currentTarget.setPointerCapture(event.pointerId);
-    if ((tool.tool === "place" || tool.tool === "element")) {
+    if (tool.tool === "place" || tool.tool === "element") {
       const snapped = placedFrame(point, event.altKey);
       setPlacePreview(snapped.frame);
-      if (root) showSnapGuides(root, snapped.guides);
+      if (root) {
+        showSnapGuides(root, snapped.guides);
+      }
+    } else {
+      setPreview([point]);
     }
-    else setPreview([point]);
     event.preventDefault();
   };
 
@@ -240,60 +306,96 @@ export function useDrawingGesture({
       }
       active.points.push(point);
       const targetId = objectAt(point);
-      active.target = targetId && targetId !== active.source?.elementId ? endpoint(targetId, point) : undefined;
+      active.target =
+        targetId && targetId !== active.source?.elementId ? endpoint(targetId, point) : undefined;
       setConnectorPreview({
         source: active.source!.position,
         target: active.target?.position ?? point,
         route: tool.route,
         sourceAnchor: active.source!.anchor,
         targetAnchor: active.target?.anchor,
-        sourceFrame: active.source?.elementId ? edgelessOperation.getBounds(active.source.elementId) : undefined,
-        targetFrame: active.target?.elementId ? edgelessOperation.getBounds(active.target.elementId) : undefined,
+        sourceFrame: active.source?.elementId
+          ? edgelessOperation.getBounds(active.source.elementId)
+          : undefined,
+        targetFrame: active.target?.elementId
+          ? edgelessOperation.getBounds(active.target.elementId)
+          : undefined,
       });
       setConnectorHover(hoverFor(point, active.source?.elementId));
       return;
     }
 
-    if ((tool.tool === "place" || tool.tool === "element")) {
+    if (tool.tool === "place" || tool.tool === "element") {
       const active = gesture.current;
       if (!active || active.pointerId !== event.pointerId) {
         const snapped = placedFrame(point, event.altKey);
         setPlacePreview(snapped.frame);
-        if (root) showSnapGuides(root, snapped.guides);
+        if (root) {
+          showSnapGuides(root, snapped.guides);
+        }
         return;
       }
       const start = active.points[0]!;
       active.points.push(point);
       const moved = Math.hypot(point.x - start.x, point.y - start.y) >= 4;
       const snapped = moved
-        ? snapDraggedFrame(start, point, creationCandidates(), snapOptions(event.altKey), event.shiftKey)
+        ? snapDraggedFrame(
+            start,
+            point,
+            creationCandidates(),
+            snapOptions(event.altKey),
+            event.shiftKey,
+          )
         : placedFrame(start, event.altKey);
       setPlacePreview(snapped.frame);
-      if (root) showSnapGuides(root, snapped.guides);
+      if (root) {
+        showSnapGuides(root, snapped.guides);
+      }
       return;
     }
 
     const active = gesture.current;
-    if (!active || active.pointerId !== event.pointerId) return;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
     const previous = active.points.at(-1)!;
     active.points.push(point);
     if (tool.tool === "eraser") {
-      const elements = edgelessOperation.elements.getElementNodes().filter((element) => element.type !== "group");
+      const elements = edgelessOperation.elements
+        .getElementNodes()
+        .filter((element) => element.type !== "group");
       elements.forEach((element) => {
-        if (!segmentIntersectsRotatedFrame(previous, point, element.frame, edgelessOperation.getRotation(element.id))) return;
+        if (
+          !segmentIntersectsRotatedFrame(
+            previous,
+            point,
+            element.frame,
+            edgelessOperation.getRotation(element.id),
+          )
+        ) {
+          return;
+        }
         let id = element.id;
-        while (edgelessOperation.getParentId(id)) id = edgelessOperation.getParentId(id)!;
+        while (edgelessOperation.getParentId(id)) {
+          id = edgelessOperation.getParentId(id)!;
+        }
         active.erased.add(id);
       });
       root?.querySelectorAll<HTMLElement>("[data-edgeless-object-id]").forEach((element) => {
-        if (active.erased.has(element.dataset.edgelessObjectId ?? "")) element.dataset.edgelessEraseTarget = "true";
+        if (active.erased.has(element.dataset.edgelessObjectId ?? "")) {
+          element.dataset.edgelessEraseTarget = "true";
+        }
       });
-    } else setPreview([...active.points]);
+    } else {
+      setPreview([...active.points]);
+    }
   };
 
   const pointerEnd = (event: ReactPointerEvent<SVGSVGElement>) => {
     const active = gesture.current;
-    if (!active || active.pointerId !== event.pointerId) return;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
     if (event.type === "pointercancel") {
       cancelGesture();
       return;
@@ -303,10 +405,18 @@ export function useDrawingGesture({
     setPlacePreview(null);
     setConnectorPreview(null);
     clearErased();
-    if (root) showSnapGuides(root, []);
-    if (tool.tool === "eraser") edgelessOperation.deleteItems([...active.erased]);
-    else if (tool.tool === "connector" && active.source && active.target) {
-      edgelessOperation.create({ kind: "connector", source: active.source, target: active.target, route: tool.route });
+    if (root) {
+      showSnapGuides(root, []);
+    }
+    if (tool.tool === "eraser") {
+      edgelessOperation.deleteItems([...active.erased]);
+    } else if (tool.tool === "connector" && active.source && active.target) {
+      edgelessOperation.create({
+        kind: "connector",
+        source: active.source,
+        target: active.target,
+        route: tool.route,
+      });
     } else if (tool.tool === "drawing" && active.points.length > 1) {
       const strokeWidth = edgelessOperation.getDefaults().drawing.strokeWidth;
       const padded = padDrawingFrame(active.points, strokeWidth, zoom);
@@ -316,15 +426,23 @@ export function useDrawingGesture({
         frame: padded.frame,
         points: padded.points,
       });
-    } else if ((tool.tool === "place" || tool.tool === "element")) {
+    } else if (tool.tool === "place" || tool.tool === "element") {
       const start = active.points[0]!;
       const end = active.points.at(-1) ?? start;
       const moved = Math.hypot(end.x - start.x, end.y - start.y) >= 4;
       const frame = moved
-        ? snapDraggedFrame(start, end, creationCandidates(), snapOptions(event.altKey), event.shiftKey).frame
+        ? snapDraggedFrame(
+            start,
+            end,
+            creationCandidates(),
+            snapOptions(event.altKey),
+            event.shiftKey,
+          ).frame
         : placedFrame(start, event.altKey).frame;
       edgelessOperation.createElement({ ...placementInput(), frame });
-      if (moved) edgelessOperation.rememberPlaceSize(frame);
+      if (moved) {
+        edgelessOperation.rememberPlaceSize(frame);
+      }
       placement.current = null;
     }
     if (tool.tool === "connector") {
@@ -337,7 +455,11 @@ export function useDrawingGesture({
     preview,
     placePreview,
     placeInput: placement.current?.tool === tool ? placement.current.input : null,
-    hidePlacePreview: () => { if (!gesture.current) setPlacePreview(null); },
+    hidePlacePreview: () => {
+      if (!gesture.current) {
+        setPlacePreview(null);
+      }
+    },
     connectorPreview,
     connectorHover,
     objectAt,

@@ -2,16 +2,9 @@ import type { EditorEventInit } from "./types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import type {
-  EditorMode,
-  Selection,
-} from "@chulane/rivto";
+import type { EditorMode, Selection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-import type {
-  DOMEventMap,
-  DOMEventName,
-  DOMEventTarget,
-} from "./dom-types";
+import type { DOMEventMap, DOMEventName, DOMEventTarget } from "./dom-types";
 
 /**
  * Immutable-by-convention value passed through one editor event dispatch.

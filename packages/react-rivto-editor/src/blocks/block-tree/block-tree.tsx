@@ -33,12 +33,7 @@ export interface BlockTreeProps {
 function BlockTreeShell({ block, isSelected, content, controls, children }: BlockShellProps) {
   const blockElementRef = useBlockElementRef();
   return (
-    <BlockView
-      ref={blockElementRef}
-      block={block}
-      isSelected={isSelected}
-      className="page-block"
-    >
+    <BlockView ref={blockElementRef} block={block} isSelected={isSelected} className="page-block">
       <div className={BLOCK_ROW_CLASS}>
         {controls}
         <BlockSlots block={block} selected={isSelected}>
@@ -78,7 +73,9 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
     () => reactPanel.editor.renderers.revision,
   );
 
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   const childIds = block.childIds;
   const Content = reactPanel.editor.renderers.get(block.type) ?? UnknownBlock;
 
@@ -125,5 +122,11 @@ const MemoBlockTreeNode = memo(BlockTreeNode);
  * @returns Block roots and their expanded descendants without an extra DOM wrapper.
  */
 export const BlockTree = memo(function BlockTree({ blockIds }: BlockTreeProps) {
-  return <>{blockIds.map((blockId) => <MemoBlockTreeNode key={blockId} blockId={blockId} />)}</>;
+  return (
+    <>
+      {blockIds.map((blockId) => (
+        <MemoBlockTreeNode key={blockId} blockId={blockId} />
+      ))}
+    </>
+  );
 });

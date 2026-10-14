@@ -44,7 +44,9 @@ export type PageEditorRuntime = {
  * @returns No value.
  */
 const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
-  if (!/^(?:rivto|chulane):/i.test(href)) return;
+  if (!/^(?:rivto|chulane):/i.test(href)) {
+    return;
+  }
   event.preventDefault();
   window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
 };

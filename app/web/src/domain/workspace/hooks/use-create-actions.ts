@@ -1,10 +1,7 @@
 "use client";
 
 import { todayKey } from "@chulane/app";
-import {
-  useCreatePageMutation,
-  useCreateProjectMutation,
-} from "@chulane/app/client";
+import { useCreatePageMutation, useCreateProjectMutation } from "@chulane/app/client";
 import { useRouter } from "next/navigation";
 import { FRONTEND_ROUTES } from "@/lib/constants/routes";
 

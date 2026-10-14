@@ -16,11 +16,15 @@ export function restoreElementChildren(
 ): void {
   for (const source of sources) {
     const parentId = ids.get(source.id);
-    if (!parentId || !elements.hasElement(parentId)) continue;
+    if (!parentId || !elements.hasElement(parentId)) {
+      continue;
+    }
     const children = source.childIds.flatMap((id) => {
       const mapped = ids.get(id);
       return mapped && elements.hasElement(mapped) ? [mapped] : [];
     });
-    if (children.length) elements.moveElements(children, { parentId });
+    if (children.length) {
+      elements.moveElements(children, { parentId });
+    }
   }
 }

@@ -8,11 +8,7 @@
  * the adapter between those two representations; it does not own selection
  * state or mutate the document.
  */
-import {
-  resolveBlockRange,
-  type EditorPosition,
-  type Selection,
-} from "@chulane/rivto";
+import { resolveBlockRange, type EditorPosition, type Selection } from "@chulane/rivto";
 
 /**
  * Recovers directed UTF-16 endpoints from document-ordered block ranges.
@@ -33,18 +29,19 @@ export function resolveSelectionEndpoints(
 ): { anchor: EditorPosition; head: EditorPosition } | undefined {
   const first = selection.blocks[0];
   const last = selection.blocks.at(-1);
-  if (!first || !last) return undefined;
+  if (!first || !last) {
+    return undefined;
+  }
   const fromStart = resolveBlockRange(lengthOf(first.id), first.start, first.end);
   const toEnd = resolveBlockRange(lengthOf(last.id), last.start, last.end);
   const startPos = { blockId: first.id, offset: fromStart.startOffset };
   const endPos = { blockId: last.id, offset: toEnd.endOffset };
   // Block order cannot express a bottom-up gesture, so recover direction from
   // endpoint IDs. Same-block ranges need their explicit reversal marker.
-  const reverse = selection.blocks.length === 1
-    ? selection.reversed === true
-    : selection.blocks.findIndex((block) => block.id === selection.anchorBlockId)
-      > selection.blocks.findIndex((block) => block.id === selection.focusBlockId);
-  return reverse
-    ? { anchor: endPos, head: startPos }
-    : { anchor: startPos, head: endPos };
+  const reverse =
+    selection.blocks.length === 1
+      ? selection.reversed === true
+      : selection.blocks.findIndex((block) => block.id === selection.anchorBlockId) >
+        selection.blocks.findIndex((block) => block.id === selection.focusBlockId);
+  return reverse ? { anchor: endPos, head: startPos } : { anchor: startPos, head: endPos };
 }

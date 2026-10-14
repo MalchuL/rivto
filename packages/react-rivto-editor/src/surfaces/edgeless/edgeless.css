@@ -38,7 +38,12 @@
   border-radius: 16px;
   background-color: var(--rivto-edgeless-background);
   background-image: radial-gradient(
-    color-mix(in srgb, transparent var(--rivto-edgeless-grid-dot-fade), var(--rivto-edgeless-grid-dot)) 1px,
+    color-mix(
+        in srgb,
+        transparent var(--rivto-edgeless-grid-dot-fade),
+        var(--rivto-edgeless-grid-dot)
+      )
+      1px,
     transparent 1px
   );
   background-repeat: repeat;
@@ -54,8 +59,8 @@
   background-size: inherit;
   background-repeat: repeat;
   mask-image: radial-gradient(
-    circle var(--rivto-edgeless-spotlight-radius)
-      at var(--rivto-edgeless-pointer-x, 50%) var(--rivto-edgeless-pointer-y, 50%),
+    circle var(--rivto-edgeless-spotlight-radius) at var(--rivto-edgeless-pointer-x, 50%)
+      var(--rivto-edgeless-pointer-y, 50%),
     black,
     transparent
   );
@@ -83,7 +88,6 @@
   user-select: none;
 }
 
-
 .edgeless-plane {
   position: absolute;
   inset: 0;
@@ -105,8 +109,6 @@
   box-shadow: 0 8px 24px rgb(42 34 72 / 9%);
   outline: none;
 }
-
-
 
 .edgeless-card-content {
   flex: 1 1 auto;

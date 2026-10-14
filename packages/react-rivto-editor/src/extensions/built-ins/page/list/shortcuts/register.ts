@@ -30,34 +30,47 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
     { type: "start_numbered_list", title: "Start numbered list" },
     { type: "continue_numbered_list", title: "Continue numbered list" },
   ];
-  listCommands.forEach(({ type, title }) => reactEditor.slashCommands.register({
-    id: `list.${type}`,
-    title,
-    group: "Lists",
-    isAvailable: ({ blockId, reactPanel }) => reactEditor.blockListProps.has("list") &&
-      reactPanel.blocks.hasBlock(blockId) &&
-      reactPanel.blocks.getBlockNode(blockId)?.listProps.type !== type,
-    execute: ({ blockId, reactPanel }) => reactPanel.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
-  }));
+  listCommands.forEach(({ type, title }) =>
+    reactEditor.slashCommands.register({
+      id: `list.${type}`,
+      title,
+      group: "Lists",
+      isAvailable: ({ blockId, reactPanel }) =>
+        reactEditor.blockListProps.has("list") &&
+        reactPanel.blocks.hasBlock(blockId) &&
+        reactPanel.blocks.getBlockNode(blockId)?.listProps.type !== type,
+      execute: ({ blockId, reactPanel }) =>
+        reactPanel.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
+    }),
+  );
 
   reactEditor.blockListProps.register({
     id: "list",
     prepareSplit: (block) => {
       let type: BlockListType = "list";
-      if (block.listProps.type === "checkbox") type = "checkbox";
-      else if (isNumberedListType(block.listProps.type)) type = "numbered_list";
+      if (block.listProps.type === "checkbox") {
+        type = "checkbox";
+      } else if (isNumberedListType(block.listProps.type)) {
+        type = "numbered_list";
+      }
       return { type, checked: false };
     },
     onSplit: ({ reactPanel, block, root }) => {
-      if (reactPanel.editor.isEmptyBlock(block) &&
-        (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))) {
+      if (
+        reactPanel.editor.isEmptyBlock(block) &&
+        (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))
+      ) {
         // The first Enter removes only the visible list state; the block keeps
         // its outline position and unrelated properties for the next press.
         reactPanel.blocks.deleteListProps(block.id, ["type", "checked"]);
         focusCaret(reactPanel, root, block.id, 0);
         return true;
       }
-      if (!reactPanel.blocks.getParentId(block.id) && reactPanel.editor.isEmptyBlock(block) && block.listProps.type !== "list") {
+      if (
+        !reactPanel.blocks.getParentId(block.id) &&
+        reactPanel.editor.isEmptyBlock(block) &&
+        block.listProps.type !== "list"
+      ) {
         convertEmptyToList(reactPanel, block.id);
         scheduleBlockFocus(reactPanel, root, block.id, 0);
         return true;
@@ -83,14 +96,16 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
     format: ({ block, siblings, depth }, current) => {
       const type = block.listProps.type;
       const number = resolveBlockListNumbers(siblings).get(block.id);
-      const marker = type === "checkbox"
-        ? `- [${block.listProps.checked === true ? "x" : " "}] `
-        : `${number ?? 1}. `;
+      const marker =
+        type === "checkbox"
+          ? `- [${block.listProps.checked === true ? "x" : " "}] `
+          : `${number ?? 1}. `;
       const indent = "  ".repeat(depth);
       const plain = `${indent}${marker}${current.plain.slice(indent.length)}`;
-      const html = type === "checkbox"
-        ? `<ul><li><input type="checkbox" disabled${block.listProps.checked === true ? " checked" : ""}>${current.html}</li></ul>`
-        : `<ol start="${number ?? 1}"><li value="${number ?? 1}">${current.html}</li></ol>`;
+      const html =
+        type === "checkbox"
+          ? `<ul><li><input type="checkbox" disabled${block.listProps.checked === true ? " checked" : ""}>${current.html}</li></ul>`
+          : `<ol start="${number ?? 1}"><li value="${number ?? 1}">${current.html}</li></ol>`;
       return { plain, markdown: plain, html };
     },
   });
@@ -108,34 +123,51 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
     reactPanel.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
   };
 
-  reactEditor.events.register({
-    id: "list.shortcut.before-input",
-    type: "beforeinput",
-    scope: "content",
-  }, ({ reactPanel, raw: event, blockId, contentElement, root }) => {
-    if (!(event instanceof InputEvent) || event.inputType !== "insertText" || event.data !== " " || !blockId) {
-      return false;
-    }
-    const shortcut = listShortcutPatch(`${contentElement?.textContent ?? ""} `);
-    if (!shortcut) return false;
-    convert(reactPanel, blockId, root, shortcut);
-    return true;
-  });
-
-  reactEditor.events.register({
-    id: "list.shortcut.input",
-    type: "input",
-    scope: "content",
-  }, ({ reactPanel, raw: event, blockId, root }) => {
-    if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
-      return false;
-    }
-    queueMicrotask(() => {
-      const block = reactPanel.blocks.getBlockNode(blockId);
-      const shortcut = block ? listShortcutPatch(block.content.replaceAll("\u00a0", " ")) : undefined;
-      if (!shortcut) return;
+  reactEditor.events.register(
+    {
+      id: "list.shortcut.before-input",
+      type: "beforeinput",
+      scope: "content",
+    },
+    ({ reactPanel, raw: event, blockId, contentElement, root }) => {
+      if (
+        !(event instanceof InputEvent) ||
+        event.inputType !== "insertText" ||
+        event.data !== " " ||
+        !blockId
+      ) {
+        return false;
+      }
+      const shortcut = listShortcutPatch(`${contentElement?.textContent ?? ""} `);
+      if (!shortcut) {
+        return false;
+      }
       convert(reactPanel, blockId, root, shortcut);
-    });
-    return false;
-  });
+      return true;
+    },
+  );
+
+  reactEditor.events.register(
+    {
+      id: "list.shortcut.input",
+      type: "input",
+      scope: "content",
+    },
+    ({ reactPanel, raw: event, blockId, root }) => {
+      if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
+        return false;
+      }
+      queueMicrotask(() => {
+        const block = reactPanel.blocks.getBlockNode(blockId);
+        const shortcut = block
+          ? listShortcutPatch(block.content.replaceAll("\u00a0", " "))
+          : undefined;
+        if (!shortcut) {
+          return;
+        }
+        convert(reactPanel, blockId, root, shortcut);
+      });
+      return false;
+    },
+  );
 }

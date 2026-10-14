@@ -13,9 +13,11 @@ export interface BlockContainment {
 }
 
 /** Known React annotations plus metadata owned by other integrations. */
-export type ReactBlockDefinitionMetadata = Readonly<{
-  containment?: BlockContainment;
-} & Record<string, unknown>>;
+export type ReactBlockDefinitionMetadata = Readonly<
+  {
+    containment?: BlockContainment;
+  } & Record<string, unknown>
+>;
 
 /** Core definition refined with metadata understood by the React runtime. */
 export interface ReactBlockDefinition extends BlockDefinition {
@@ -29,7 +31,9 @@ export interface ReactBlockDefinition extends BlockDefinition {
  * @param definition - Registered definition, possibly supplied outside React.
  * @returns React outline policy, or `undefined` when none was declared.
  */
-export function getBlockContainment(definition: BlockDefinition | undefined): BlockContainment | undefined {
+export function getBlockContainment(
+  definition: BlockDefinition | undefined,
+): BlockContainment | undefined {
   return definition?.metadata?.containment as BlockContainment | undefined;
 }
 

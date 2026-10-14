@@ -8,7 +8,9 @@ async function eventually(assertion: () => void, timeoutMs = 500): Promise<void>
       assertion();
       return;
     } catch (error) {
-      if (Date.now() - started > timeoutMs) throw error;
+      if (Date.now() - started > timeoutMs) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }

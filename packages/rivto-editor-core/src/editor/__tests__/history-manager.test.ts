@@ -38,9 +38,12 @@ describe("DocumentEditor history manager", () => {
 
     const secondId = editor.history.batchUpdates(() => {
       const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-      return editor.history.batchUpdates(() => (
-        editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(firstId))
-      )).id;
+      return editor.history.batchUpdates(() =>
+        editor.blocks.insertBlock(
+          { type: "paragraph", content: "Second" },
+          editor.blocks.getInsertionDestinationAfter(firstId),
+        ),
+      ).id;
     });
 
     expect(editor.blocks.getBlocks().map((block) => block.id)).toEqual([
@@ -92,7 +95,8 @@ describe("DocumentEditor history manager", () => {
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "User change" }).id;
 
     editor.history.batchUpdatesWithoutHistory(() => {
-      editor.elements.insertElement({ id: "derived",
+      editor.elements.insertElement({
+        id: "derived",
         type: "block",
         frame: { x: 0, y: 0, width: 100, height: 100 },
         zIndex: 0,
@@ -110,7 +114,9 @@ describe("DocumentEditor history manager", () => {
     const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "Initial" }).id;
     const calls: string[] = [];
-    const unsubscribe = editor.subscribe(() => calls.push(editor.blocks.getBlocks()[0]?.content ?? ""));
+    const unsubscribe = editor.subscribe(() =>
+      calls.push(editor.blocks.getBlocks()[0]?.content ?? ""),
+    );
 
     editor.blocks.updateBlock(id, { content: "Updated" });
     editor.history.undo();
@@ -128,15 +134,17 @@ describe("DocumentEditor history manager", () => {
     editor.blocks.insertBlock({ type: "paragraph", content: "Before load" });
     editor.load({
       version: 9,
-      blocks: [{
-        id: "loaded",
-        type: "paragraph",
-        listProps: { collapsed: false, type: "list", checked: false },
-        props: {},
-        pluginData: {},
-        content: "Loaded",
-        children: [],
-      }],
+      blocks: [
+        {
+          id: "loaded",
+          type: "paragraph",
+          listProps: { collapsed: false, type: "list", checked: false },
+          props: {},
+          pluginData: {},
+          content: "Loaded",
+          children: [],
+        },
+      ],
     });
 
     editor.history.undo();

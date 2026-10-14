@@ -9,7 +9,14 @@ import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import { BUILTIN_KEYMAP, firstKeyboardTarget, focusBlock, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, type ReactEditorExtension } from "../../../managers";
+import {
+  BUILTIN_KEYMAP,
+  firstKeyboardTarget,
+  focusBlock,
+  isEditableKeyboardEvent,
+  KEYBOARD_BINDING_IDS,
+  type ReactEditorExtension,
+} from "../../../managers";
 import type { CreateDefaultBlock } from "../page/default-writing-block";
 
 /** Persisted native type installed by the built-in separator extension. */
@@ -33,11 +40,20 @@ export function SeparatorBlock() {
       role="separator"
       aria-label="Block element separator"
     >
-      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+      <span
+        className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`}
+        aria-hidden="true"
+      >
         <ArrowUpIcon strokeWidth={2.5} />
       </span>
-      <span className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`} aria-hidden="true" />
-      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+      <span
+        className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`}
+        aria-hidden="true"
+      />
+      <span
+        className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`}
+        aria-hidden="true"
+      >
         <ArrowDownIcon strokeWidth={2.5} />
       </span>
     </div>
@@ -62,7 +78,9 @@ function insertSeparator(
   createDefaultBlock: CreateDefaultBlock,
 ): EditorBlock | undefined {
   const block = reactPanel.blocks.getBlockNode(blockId);
-  if (!block) return undefined;
+  if (!block) {
+    return undefined;
+  }
   let separatorId = "";
   let writing: EditorBlock | undefined;
   reactPanel.batchUpdates(() => {
@@ -73,13 +91,23 @@ function insertSeparator(
         listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
-      separatorId = reactPanel.blocks.insertBlock({
-        type: separatorType,
-        content: "",
-        listProps: { type: "list", checked: false },
-      }, reactPanel.blocks.canRemove(block.id) ? reactPanel.blocks.getInsertionDestinationAfter(block.id) : { parentId: block.id }).id;
+      separatorId = reactPanel.blocks.insertBlock(
+        {
+          type: separatorType,
+          content: "",
+          listProps: { type: "list", checked: false },
+        },
+        reactPanel.blocks.canRemove(block.id)
+          ? reactPanel.blocks.getInsertionDestinationAfter(block.id)
+          : { parentId: block.id },
+      ).id;
     }
-    writing = reactPanel.blocks.insertBlock(createDefaultBlock(), reactPanel.blocks.canRemove(separatorId) ? reactPanel.blocks.getInsertionDestinationAfter(separatorId) : { parentId: separatorId });
+    writing = reactPanel.blocks.insertBlock(
+      createDefaultBlock(),
+      reactPanel.blocks.canRemove(separatorId)
+        ? reactPanel.blocks.getInsertionDestinationAfter(separatorId)
+        : { parentId: separatorId },
+    );
     reactPanel.selection.set(createCaretSelection(writing.id, 0));
   });
   return writing;
@@ -103,7 +131,9 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         createDefaultBlock,
       );
       const root = reactPanel.events.getRoot();
-      if (writing && root) requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      if (writing && root) {
+        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      }
     };
     const disposers = [
       reactEditor.blockTypes.register({
@@ -115,7 +145,8 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         separatesBlockElements: true,
         clipboard: {
           format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
-          parseHTML: element => element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
+          parseHTML: (element) =>
+            element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
         },
       }),
       reactEditor.slashCommands.register({
@@ -125,25 +156,34 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         keywords: ["divider", "split"],
         execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
       }),
-      reactEditor.keyboard.register({
-        id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
-        keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
-        when: ({ raw: event }) => isEditableKeyboardEvent(event),
-      }, ({ reactPanel, root }) => {
-        const nativeSelection = reactPanel.selection.readDOM();
-        if (nativeSelection) reactPanel.selection.set(nativeSelection);
-        const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
-        if (!target) return false;
-        const writing = insertSeparator(
-          reactPanel,
-          target.blockId,
-          SEPARATOR_BLOCK_TYPE,
-          createDefaultBlock,
-        );
-        if (!writing) return false;
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-        return true;
-      }),
+      reactEditor.keyboard.register(
+        {
+          id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
+          keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
+          when: ({ raw: event }) => isEditableKeyboardEvent(event),
+        },
+        ({ reactPanel, root }) => {
+          const nativeSelection = reactPanel.selection.readDOM();
+          if (nativeSelection) {
+            reactPanel.selection.set(nativeSelection);
+          }
+          const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
+          if (!target) {
+            return false;
+          }
+          const writing = insertSeparator(
+            reactPanel,
+            target.blockId,
+            SEPARATOR_BLOCK_TYPE,
+            createDefaultBlock,
+          );
+          if (!writing) {
+            return false;
+          }
+          requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+          return true;
+        },
+      ),
     ];
     return () => disposers.reverse().forEach((dispose) => dispose());
   },

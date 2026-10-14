@@ -7,8 +7,12 @@ type HistoryAction = "undo" | "redo";
 
 /** Resolves history requests emitted directly by a contenteditable element. */
 function inputHistoryAction(event: InputEvent): HistoryAction | undefined {
-  if (event.inputType === "historyUndo") return "undo";
-  if (event.inputType === "historyRedo") return "redo";
+  if (event.inputType === "historyUndo") {
+    return "undo";
+  }
+  if (event.inputType === "historyRedo") {
+    return "redo";
+  }
 }
 
 /**
@@ -61,43 +65,60 @@ export function registerHistory(
 ): void {
   /** Executes one history step and restores focus after React renders it. */
   const run = (reactPanel: ReactPanelApi, root: HTMLElement, action: HistoryAction): void => {
-    if (!root) return;
+    if (!root) {
+      return;
+    }
     reactPanel.document.history[action]();
     // Only restore selection and its focus here; undo/redo has already changed the document.
     reactPanel.selection.scheduleIfSelectionUnchanged(() => {
-      if (reactPanel.selection.restoreDOM()) return;
+      if (reactPanel.selection.restoreDOM()) {
+        return;
+      }
       root.ownerDocument.getSelection()?.removeAllRanges();
       root.focus({ preventScroll: true });
     });
   };
 
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.historyUndo,
-    keys: options.undoKeys ?? ["Primary+z"],
-    composing: "prevent",
-  }, ({ reactPanel, root }) => {
-    run(reactPanel, root, "undo");
-    return true;
-  });
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.historyUndo,
+      keys: options.undoKeys ?? ["Primary+z"],
+      composing: "prevent",
+    },
+    ({ reactPanel, root }) => {
+      run(reactPanel, root, "undo");
+      return true;
+    },
+  );
 
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.historyRedo,
-    keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
-    composing: "prevent",
-  }, ({ reactPanel, root }) => {
-    run(reactPanel, root, "redo");
-    return true;
-  });
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.historyRedo,
+      keys: options.redoKeys ?? ["Primary+Shift+z", "Primary+y"],
+      composing: "prevent",
+    },
+    ({ reactPanel, root }) => {
+      run(reactPanel, root, "redo");
+      return true;
+    },
+  );
 
-  reactEditor.events.register({
-    id: "history.before-input",
-    type: "beforeinput",
-    scope: "surface",
-  }, ({ reactPanel, raw: event, root }) => {
-    const action = inputHistoryAction(event);
-    if (!action) return false;
+  reactEditor.events.register(
+    {
+      id: "history.before-input",
+      type: "beforeinput",
+      scope: "surface",
+    },
+    ({ reactPanel, raw: event, root }) => {
+      const action = inputHistoryAction(event);
+      if (!action) {
+        return false;
+      }
 
-    if (!event.isComposing) run(reactPanel, root, action);
-    return true;
-  });
+      if (!event.isComposing) {
+        run(reactPanel, root, action);
+      }
+      return true;
+    },
+  );
 }

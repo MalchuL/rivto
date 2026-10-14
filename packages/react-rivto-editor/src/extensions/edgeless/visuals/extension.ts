@@ -20,18 +20,34 @@ import { EdgelessVisualLayer } from "./visual-layer";
  * omitted fields use the built-in defaults.
  * @returns Creation-time React editor extension.
  */
-export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): ReactEditorExtension {
+export function edgelessVisualsExtension(
+  options: EdgelessVisualsOptions = {},
+): ReactEditorExtension {
   return {
     id: "edgeless.visuals",
+    /**
+     * Registers visual elements, tools, normalization, commands, and overlays, rolling back registrations on setup failure.
+     *
+     * @param reactEditor - React editor that owns the extension registrations.
+     * @returns Cleanup that releases registrations in reverse order.
+     * @throws If any visual registration fails.
+     */
     setup(reactEditor) {
       const disposers: Array<() => void> = [];
-      const cleanup = () => { disposers.splice(0).reverse().forEach(dispose => dispose()); };
+      const cleanup = () => {
+        disposers
+          .splice(0)
+          .reverse()
+          .forEach((dispose) => dispose());
+      };
       try {
         disposers.push(registerVisualElements(reactEditor));
         disposers.push(registerVisualToolbar(reactEditor, options));
         disposers.push(registerConnectorNormalization(reactEditor, options));
         disposers.push(registerEdgelessCommands(reactEditor));
-        disposers.push(reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, { options })));
+        disposers.push(
+          reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, { options })),
+        );
         return cleanup;
       } catch (error) {
         cleanup();
@@ -40,4 +56,3 @@ export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): 
     },
   };
 }
-

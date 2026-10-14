@@ -4,9 +4,17 @@ import { Pipe } from "./pipe";
 describe("editor Pipe", () => {
   test("orders processors and disposes only the active same-id registration", () => {
     const pipe = new Pipe<number>();
-    const disposeDouble = pipe.register({ id: "double", priority: 0, processor: (value) => value * 2 });
+    const disposeDouble = pipe.register({
+      id: "double",
+      priority: 0,
+      processor: (value) => value * 2,
+    });
     const disposeAdd = pipe.register({ id: "add", priority: 10, processor: (value) => value + 1 });
-    const disposeReplacement = pipe.register({ id: "add", priority: 10, processor: (value) => value + 2 });
+    const disposeReplacement = pipe.register({
+      id: "add",
+      priority: 10,
+      processor: (value) => value + 2,
+    });
 
     expect(pipe.process(2)).toBe(6);
     disposeAdd();
@@ -19,8 +27,9 @@ describe("editor Pipe", () => {
 
   test("rejects empty processor identifiers", () => {
     const pipe = new Pipe<number>();
-    expect(() => pipe.register({ id: "", priority: 0, processor: (value) => value }))
-      .toThrow("Pipe processor id is required");
+    expect(() => pipe.register({ id: "", priority: 0, processor: (value) => value })).toThrow(
+      "Pipe processor id is required",
+    );
   });
 
   test("gets and deletes processors by id", () => {

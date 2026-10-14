@@ -23,15 +23,23 @@ import { normalizeRotation } from "../../elements/visuals/utils/geometry";
  * @returns Ref and style to attach to the same positioned host. Style is undefined
  * when the element is missing. The renderer still owns its class and DOM markers.
  */
-export function useEdgelessElementStyle<Host extends HTMLElement = HTMLElement>(element: EditorElementNode | undefined, absoluteGeometry = false) {
+export function useEdgelessElementStyle<Host extends HTMLElement = HTMLElement>(
+  element: EditorElementNode | undefined,
+  absoluteGeometry = false,
+) {
   const ref = useRef<Host | null>(null);
   const host = ref.current;
   let style: CSSProperties | undefined;
   if (element) {
     const locked = host?.dataset.edgelessGeometryLock === "true";
-    const rotation = typeof element.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
-    let transform = absoluteGeometry ? undefined : `translate(${element.frame.x}px, ${element.frame.y}px) rotate(${rotation}deg)`;
-    if (locked && host.style.transform) transform = host.style.transform;
+    const rotation =
+      typeof element.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+    let transform = absoluteGeometry
+      ? undefined
+      : `translate(${element.frame.x}px, ${element.frame.y}px) rotate(${rotation}deg)`;
+    if (locked && host.style.transform) {
+      transform = host.style.transform;
+    }
     const left = absoluteGeometry ? element.frame.x : 0;
     const top = absoluteGeometry ? element.frame.y : 0;
     style = {

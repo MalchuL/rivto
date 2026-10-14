@@ -33,12 +33,12 @@ owners; do not rely only on this guide:
 
 Then inspect the closest example end to end:
 
-| Need | Primary example |
-| --- | --- |
-| Flat wrapping tiles and per-child resize props | `extensions/bento/` |
-| Horizontal lanes containing ordinary cards | `extensions/kanban/` |
-| Headerless equal-width lanes and safe shell removal | `extensions/columns/` |
-| Multi-level fixed structure, row/column changes, synchronized widths | `extensions/table/` |
+| Need                                                                 | Primary example       |
+| -------------------------------------------------------------------- | --------------------- |
+| Flat wrapping tiles and per-child resize props                       | `extensions/bento/`   |
+| Horizontal lanes containing ordinary cards                           | `extensions/kanban/`  |
+| Headerless equal-width lanes and safe shell removal                  | `extensions/columns/` |
+| Multi-level fixed structure, row/column changes, synchronized widths | `extensions/table/`   |
 
 ## Choose the container shape
 

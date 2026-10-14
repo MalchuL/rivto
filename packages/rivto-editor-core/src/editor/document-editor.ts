@@ -2,10 +2,17 @@ import { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor runtime coordinating document mutations and focused public managers.
  */
-import { BlockListPropsManager, BlockManager, BlockRegistryManager, ClipboardManager, CommandRegistry, ElementManager, HistoryManager, SelectionManager } from "../managers";
 import {
-  type DocumentModel,
-} from "@chulane/document-model";
+  BlockListPropsManager,
+  BlockManager,
+  BlockRegistryManager,
+  ClipboardManager,
+  CommandRegistry,
+  ElementManager,
+  HistoryManager,
+  SelectionManager,
+} from "../managers";
+import { type DocumentModel } from "@chulane/document-model";
 import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 import type { CreateDocumentEditorOptions, DocumentEditorAPI } from "./types";
 import type { Selection } from "../managers/selection-manager";
@@ -53,7 +60,9 @@ export class DocumentEditor implements DocumentEditorAPI {
    * @throws If the document is missing or runtime initialization fails.
    */
   constructor(options: CreateDocumentEditorOptions) {
-    if (!options.document) throw new Error("Document is required");
+    if (!options.document) {
+      throw new Error("Document is required");
+    }
     this.document = options.document;
     this.history = new HistoryManager(this.document.history);
     this.blockRegistry = new BlockRegistryManager();
@@ -79,7 +88,9 @@ export class DocumentEditor implements DocumentEditorAPI {
    *
    * @returns Current editor revision.
    */
-  get revision(): number { return this.currentRevision; }
+  get revision(): number {
+    return this.currentRevision;
+  }
 
   /**
    * Subscribes to runtime revision changes.
@@ -95,7 +106,9 @@ export class DocumentEditor implements DocumentEditorAPI {
   }
 
   /** @returns The model permanently owned by this editor's document operations. */
-  getDocument(): DocumentModel { return this.document; }
+  getDocument(): DocumentModel {
+    return this.document;
+  }
 
   /**
    * Replaces supplied document sections from a snapshot v7 update.
@@ -122,60 +135,6 @@ export class DocumentEditor implements DocumentEditorAPI {
   }
 
   /**
-   * Reconciles local selection with the latest document.
-   *
-   * Direct document edits, remote CRDT updates, and undo/redo can
-   * remove selected blocks. Deleted IDs are filtered, and block selections
-   * are reordered to match the current tree.
-   * When a block-selection endpoint disappeared, its replacement is chosen
-   * from the same directional edge so top-down and bottom-up intent survives.
-   * All reads use the editor's permanently bound document.
-   * @returns No value.
-   */
-  private reconcileDocumentSelection(): void {
-    const selection = this.selection.get();
-    if (!selection) return;
-    const visibleIds = this.blocks.getOrderedIds(selection.blocks.map((block) => block.id));
-    let changed = false;
-    const valid = (() : Selection | undefined => {
-      const item = selection;
-      const selected = new Map(item.blocks.map((block) => [block.id, block]));
-      const blocks = visibleIds.flatMap((id) => {
-        const entry = selected.get(id);
-        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
-      });
-      const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
-      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
-      if (!blocks.length && !elements.length && !hasPluginData) {
-        changed = true;
-        return undefined;
-      }
-      if (!blocks.length) {
-        changed ||= elements.length !== (item.elements?.length ?? 0);
-        return { ...item, blocks, elements };
-      }
-      const forward = item.blocks.findIndex((block) => block.id === item.anchorBlockId)
-        <= item.blocks.findIndex((block) => block.id === item.focusBlockId);
-      const ids = new Set(blocks.map((block) => block.id));
-      let anchorBlockId = item.anchorBlockId;
-      if (!anchorBlockId || !ids.has(anchorBlockId)) anchorBlockId = forward ? blocks[0]!.id : blocks.at(-1)!.id;
-      let focusBlockId = item.focusBlockId;
-      if (!focusBlockId || !ids.has(focusBlockId)) focusBlockId = forward ? blocks.at(-1)!.id : blocks[0]!.id;
-      changed ||= blocks.length !== item.blocks.length
-        || blocks.some((block, index) => block.id !== item.blocks[index]?.id
-          || block.start !== item.blocks[index]?.start
-          || block.end !== item.blocks[index]?.end)
-        || anchorBlockId !== item.anchorBlockId || focusBlockId !== item.focusBlockId;
-      changed ||= elements.length !== (item.elements?.length ?? 0);
-      return { ...item, blocks, elements, anchorBlockId, focusBlockId };
-    })();
-    if (changed) {
-      if (valid) this.selection.set(valid);
-      else this.selection.clear();
-    }
-  }
-
-  /**
    * Releases runtime-owned subscriptions and managers.
    *
    * Registered block definitions are removed in reverse order so callers see a
@@ -184,7 +143,9 @@ export class DocumentEditor implements DocumentEditorAPI {
    * @returns A Promise that resolves after runtime cleanup.
    */
   async destroy(): Promise<void> {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
     const errors: unknown[] = [];
     const run = (operation: () => void): void => {
@@ -202,8 +163,81 @@ export class DocumentEditor implements DocumentEditorAPI {
     run(() => this.blockRegistry.destroy());
     run(() => this.commands.clear());
     run(() => this.listeners.clear());
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Editor teardown failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Editor teardown failed");
+    }
+  }
+
+  /**
+   * Reconciles local selection with the latest document.
+   *
+   * Direct document edits, remote CRDT updates, and undo/redo can
+   * remove selected blocks. Deleted IDs are filtered, and block selections
+   * are reordered to match the current tree.
+   * When a block-selection endpoint disappeared, its replacement is chosen
+   * from the same directional edge so top-down and bottom-up intent survives.
+   * All reads use the editor's permanently bound document.
+   * @returns No value.
+   */
+  private reconcileDocumentSelection(): void {
+    const selection = this.selection.get();
+    if (!selection) {
+      return;
+    }
+    const visibleIds = this.blocks.getOrderedIds(selection.blocks.map((block) => block.id));
+    let changed = false;
+    const valid = ((): Selection | undefined => {
+      const item = selection;
+      const selected = new Map(item.blocks.map((block) => [block.id, block]));
+      const blocks = visibleIds.flatMap((id) => {
+        const entry = selected.get(id);
+        return entry ? [{ id: entry.id, start: entry.start, end: entry.end }] : [];
+      });
+      const elements = (item.elements ?? []).filter((id) => this.elements.hasElement(id));
+      const hasPluginData = Object.keys(item.pluginData ?? {}).length > 0;
+      if (!blocks.length && !elements.length && !hasPluginData) {
+        changed = true;
+        return undefined;
+      }
+      if (!blocks.length) {
+        changed ||= elements.length !== (item.elements?.length ?? 0);
+        return { ...item, blocks, elements };
+      }
+      const forward =
+        item.blocks.findIndex((block) => block.id === item.anchorBlockId) <=
+        item.blocks.findIndex((block) => block.id === item.focusBlockId);
+      const ids = new Set(blocks.map((block) => block.id));
+      let anchorBlockId = item.anchorBlockId;
+      if (!anchorBlockId || !ids.has(anchorBlockId)) {
+        anchorBlockId = forward ? blocks[0]!.id : blocks.at(-1)!.id;
+      }
+      let focusBlockId = item.focusBlockId;
+      if (!focusBlockId || !ids.has(focusBlockId)) {
+        focusBlockId = forward ? blocks.at(-1)!.id : blocks[0]!.id;
+      }
+      changed ||=
+        blocks.length !== item.blocks.length ||
+        blocks.some(
+          (block, index) =>
+            block.id !== item.blocks[index]?.id ||
+            block.start !== item.blocks[index]?.start ||
+            block.end !== item.blocks[index]?.end,
+        ) ||
+        anchorBlockId !== item.anchorBlockId ||
+        focusBlockId !== item.focusBlockId;
+      changed ||= elements.length !== (item.elements?.length ?? 0);
+      return { ...item, blocks, elements, anchorBlockId, focusBlockId };
+    })();
+    if (changed) {
+      if (valid) {
+        this.selection.set(valid);
+      } else {
+        this.selection.clear();
+      }
+    }
   }
 
   /**
@@ -215,8 +249,6 @@ export class DocumentEditor implements DocumentEditorAPI {
     this.currentRevision += 1;
     this.listeners.emit("editorChanged");
   }
-
-
 }
 
 /**

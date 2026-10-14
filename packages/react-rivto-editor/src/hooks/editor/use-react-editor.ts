@@ -28,10 +28,16 @@ export function useReactEditor(options: UseReactEditorOptions): ReactEditorState
       for (const close of [() => editor?.destroy(), () => core?.destroy()]) {
         try {
           const result = close();
-          if (result) void result.catch(error => (options.onError ?? console.error)(error));
-        } catch (error) { errors.push(error); }
+          if (result) {
+            void result.catch((error) => (options.onError ?? console.error)(error));
+          }
+        } catch (error) {
+          errors.push(error);
+        }
       }
-      if (errors.length) (options.onError ?? console.error)(new AggregateError(errors, "Editor cleanup failed"));
+      if (errors.length) {
+        (options.onError ?? console.error)(new AggregateError(errors, "Editor cleanup failed"));
+      }
     };
     try {
       core = createDocumentEditor({ document });

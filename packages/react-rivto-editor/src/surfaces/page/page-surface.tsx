@@ -8,7 +8,11 @@ import { SurfaceBoundary } from "../surface";
  *
  * @module
  */
-import { defaultRangeExtractor, useWindowVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import {
+  defaultRangeExtractor,
+  useWindowVirtualizer,
+  type Virtualizer,
+} from "@tanstack/react-virtual";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { BlockTree } from "../../blocks";
@@ -39,13 +43,17 @@ function MeasuredRoot({
   readonly virtualizer: Virtualizer<Window, Element>;
   readonly counterSeed?: number;
 }) {
-  const measure = useCallback((element: HTMLDivElement | null) => {
-    if (element) {
-      element.dataset.index = String(index);
-      element.style.counterSet = counterSeed === undefined ? "" : `rivto-list-number ${counterSeed}`;
-    }
-    virtualizer.measureElement(element);
-  }, [counterSeed, index, virtualizer]);
+  const measure = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (element) {
+        element.dataset.index = String(index);
+        element.style.counterSet =
+          counterSeed === undefined ? "" : `rivto-list-number ${counterSeed}`;
+      }
+      virtualizer.measureElement(element);
+    },
+    [counterSeed, index, virtualizer],
+  );
   return (
     <BlockElementRefProvider elementRef={measure}>
       <BlockTree blockIds={[blockId]} />
@@ -59,7 +67,11 @@ function MeasuredRoot({
  * @param props - Ordered roots and their owning page surface.
  * @returns Flow layout with space for roots outside the mounted range.
  */
-function VirtualPageRoots({ blockIds, surface, overscan }: {
+function VirtualPageRoots({
+  blockIds,
+  surface,
+  overscan,
+}: {
   readonly blockIds: readonly string[];
   readonly surface: HTMLElement | null;
   readonly overscan: number;
@@ -70,9 +82,15 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   // moves them outside the ordinary viewport range.
   const [pinnedIds, setPinnedIds] = useState<readonly string[]>([]);
   useLayoutEffect(() => {
-    if (!surface) return;
-    const measure = () => setPageTop(surface.getBoundingClientRect().top + window.scrollY
-      + parseFloat(getComputedStyle(surface).paddingTop));
+    if (!surface) {
+      return;
+    }
+    const measure = () =>
+      setPageTop(
+        surface.getBoundingClientRect().top +
+          window.scrollY +
+          parseFloat(getComputedStyle(surface).paddingTop),
+      );
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(surface);
@@ -81,11 +99,18 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   const getItemKey = useCallback((index: number) => blockIds[index]!, [blockIds]);
   // The virtualizer chooses visible indices; pins add blocks needed by DOM
   // focus and keyboard navigation without mounting the whole document.
-  const rangeExtractor = useCallback((range: Parameters<typeof defaultRangeExtractor>[0]) => (
-    [...new Set([...defaultRangeExtractor(range), ...pinnedIds.map((id) => blockIds.indexOf(id))])]
-      .filter((index) => index >= 0 && index < blockIds.length)
-      .sort((left, right) => left - right)
-  ), [blockIds, pinnedIds]);
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) =>
+      [
+        ...new Set([
+          ...defaultRangeExtractor(range),
+          ...pinnedIds.map((id) => blockIds.indexOf(id)),
+        ]),
+      ]
+        .filter((index) => index >= 0 && index < blockIds.length)
+        .sort((left, right) => left - right),
+    [blockIds, pinnedIds],
+  );
   const virtualizer = useWindowVirtualizer({
     count: blockIds.length,
     estimateSize: () => ESTIMATED_ROOT_HEIGHT,
@@ -100,7 +125,9 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
   // jump by hundreds of rows when many roots are reparented at once.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
   useEffect(() => {
-    if (!surface) return;
+    if (!surface) {
+      return;
+    }
     const view = surface.ownerDocument.defaultView;
     let pendingScrollFrame: number | undefined;
     let scrollAdjustmentSuspensions = 0;
@@ -112,7 +139,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const rootId = (blockId: string): string => {
       let id = blockId;
-      for (let parent = reactPanel.blocks.getParentId(id); parent; parent = reactPanel.blocks.getParentId(id)) id = parent;
+      for (
+        let parent = reactPanel.blocks.getParentId(id);
+        parent;
+        parent = reactPanel.blocks.getParentId(id)
+      ) {
+        id = parent;
+      }
       return id;
     };
     /**
@@ -123,11 +156,17 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const mountBlocks = (ids: readonly string[], options?: { readonly scroll?: boolean }): void => {
       const roots = [...new Set(ids.map(rootId).filter((id) => blockIds.includes(id)))];
-      if (!roots.length) return;
+      if (!roots.length) {
+        return;
+      }
       flushSync(() => setPinnedIds(roots));
-      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
+      if (pendingScrollFrame !== undefined) {
+        view?.cancelAnimationFrame(pendingScrollFrame);
+      }
       pendingScrollFrame = undefined;
-      if (options?.scroll === false) return;
+      if (options?.scroll === false) {
+        return;
+      }
       const requestedId = ids.at(-1);
       const requestedElement = requestedId
         ? surface.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(requestedId)}"]`)
@@ -136,7 +175,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       // Structural commands can change which virtual root owns a still-visible
       // block. Mount the new root, but preserve the position of a block partially
       // above the viewport instead of aligning it as if navigation moved offscreen.
-      if (requestedRect && requestedRect.bottom > 0 && requestedRect.top < (view?.innerHeight ?? 0)) return;
+      if (
+        requestedRect &&
+        requestedRect.bottom > 0 &&
+        requestedRect.top < (view?.innerHeight ?? 0)
+      ) {
+        return;
+      }
       const targetIndex = blockIds.indexOf(roots.at(-1)!);
       virtualizer.scrollToIndex(targetIndex, { align: "auto" });
       // A newly pinned root is first positioned from its estimate. Retry after
@@ -148,15 +193,21 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       });
     };
     const onFocus = (event: FocusEvent) => {
-      const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+      const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset
+        .blockId;
       if (id) {
         const root = rootId(id);
-        setPinnedIds((current) => current.length > 1 && current.includes(root) ? current : [root]);
+        setPinnedIds((current) =>
+          current.length > 1 && current.includes(root) ? current : [root],
+        );
       }
     };
     const onPointerDown = (event: PointerEvent) => {
-      const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-      if (id) setPinnedIds([rootId(id)]);
+      const id = (event.target as Element)?.closest<HTMLElement>("[data-block-id]")?.dataset
+        .blockId;
+      if (id) {
+        setPinnedIds([rootId(id)]);
+      }
     };
     surface.addEventListener("focusin", onFocus);
     surface.addEventListener("pointerdown", onPointerDown);
@@ -170,7 +221,9 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       const current = rootId(id);
       const index = blockIds.indexOf(current);
       const next = blockIds[index + direction];
-      if (next) mountBlocks([current, next]);
+      if (next) {
+        mountBlocks([current, next]);
+      }
     };
     /**
      * Mounts the page edge entered from another editor.
@@ -179,7 +232,9 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
      */
     const mountFirstOrLastBlock = (direction: -1 | 1): void => {
       const id = direction < 0 ? blockIds.at(-1) : blockIds[0];
-      if (id) mountBlocks([id]);
+      if (id) {
+        mountBlocks([id]);
+      }
     };
     const unregisterController = registerPageVirtualizationController(surface, {
       mountBlocks,
@@ -191,12 +246,15 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
          * @param blocks - Current sibling forest in canonical order.
          * @returns Visible IDs and text lengths in depth-first page order.
          */
-        const visit = (blocks: ReturnType<typeof reactPanel.blocks.getBlocks>): Array<{ id: string; length: number }> => (
+        const visit = (
+          blocks: ReturnType<typeof reactPanel.blocks.getBlocks>,
+        ): Array<{ id: string; length: number }> =>
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(!reactPanel.editor.blockListProps.childrenVisible(block) ? [] : visit(block.children)),
-          ])
-        );
+            ...(!reactPanel.editor.blockListProps.childrenVisible(block)
+              ? []
+              : visit(block.children)),
+          ]);
         return visit(reactPanel.blocks.getBlocks());
       },
       suspendScrollAdjustments: () => {
@@ -207,7 +265,9 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
         scrollAdjustmentSuspensions += 1;
         let active = true;
         return () => {
-          if (!active) return;
+          if (!active) {
+            return;
+          }
           active = false;
           scrollAdjustmentSuspensions -= 1;
           if (scrollAdjustmentSuspensions === 0) {
@@ -217,7 +277,9 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
       },
     });
     return () => {
-      if (pendingScrollFrame !== undefined) view?.cancelAnimationFrame(pendingScrollFrame);
+      if (pendingScrollFrame !== undefined) {
+        view?.cancelAnimationFrame(pendingScrollFrame);
+      }
       surface.removeEventListener("focusin", onFocus);
       surface.removeEventListener("pointerdown", onPointerDown);
       unregisterController();
@@ -234,13 +296,19 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
    */
   const counterSeed = (index: number): number | undefined => {
     const type = reactPanel.blocks.getBlockNode(blockIds[index]!)?.listProps.type;
-    if (type !== "numbered_list") return undefined;
+    if (type !== "numbered_list") {
+      return undefined;
+    }
     let count = 0;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
       const previousType = reactPanel.blocks.getBlockNode(blockIds[cursor]!)?.listProps.type;
-      if (previousType !== "numbered_list" && previousType !== "start_numbered_list") break;
+      if (previousType !== "numbered_list" && previousType !== "start_numbered_list") {
+        break;
+      }
       count += 1;
-      if (previousType === "start_numbered_list") break;
+      if (previousType === "start_numbered_list") {
+        break;
+      }
     }
     return count;
   };
@@ -251,13 +319,29 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
         const startsWindow = item.index !== previousIndex + 1;
         previousEnd = item.end;
         previousIndex = item.index;
-        return <Fragment key={item.key}>
-          {gap > 0 && <div className={PAGE_VIRTUAL_SPACER_CLASS} style={{ height: gap }} aria-hidden="true" />}
-          <MeasuredRoot blockId={blockIds[item.index]!} index={item.index} virtualizer={virtualizer}
-            counterSeed={startsWindow ? counterSeed(item.index) : undefined} />
-        </Fragment>;
+        return (
+          <Fragment key={item.key}>
+            {gap > 0 && (
+              <div
+                className={PAGE_VIRTUAL_SPACER_CLASS}
+                style={{ height: gap }}
+                aria-hidden="true"
+              />
+            )}
+            <MeasuredRoot
+              blockId={blockIds[item.index]!}
+              index={item.index}
+              virtualizer={virtualizer}
+              counterSeed={startsWindow ? counterSeed(item.index) : undefined}
+            />
+          </Fragment>
+        );
       })}
-      <div className={PAGE_VIRTUAL_SPACER_CLASS} style={{ height: Math.max(0, pageTop + virtualizer.getTotalSize() - previousEnd) }} aria-hidden="true" />
+      <div
+        className={PAGE_VIRTUAL_SPACER_CLASS}
+        style={{ height: Math.max(0, pageTop + virtualizer.getTotalSize() - previousEnd) }}
+        aria-hidden="true"
+      />
     </>
   );
 }
@@ -271,7 +355,13 @@ function VirtualPageRoots({ blockIds, surface, overscan }: {
  * Page-end insertion is available only for complete-document views, because
  * its commands add document roots rather than children of a displayed subtree.
  */
-export function PageSurface() { return <SurfaceBoundary type="block"><PageSurfaceContent /></SurfaceBoundary>; }
+export function PageSurface() {
+  return (
+    <SurfaceBoundary type="block">
+      <PageSurfaceContent />
+    </SurfaceBoundary>
+  );
+}
 
 function PageSurfaceContent() {
   const rootIds = useRootBlockIds();
@@ -279,15 +369,26 @@ function PageSurfaceContent() {
   const { ref } = useEditorRoot();
   const pageVirtualization = usePageVirtualization();
   const [surface, setSurface] = useState<HTMLElement | null>(null);
-  const surfaceRef = useCallback((element: HTMLElement | null) => {
-    ref(element);
-    setSurface(element);
-  }, [ref]);
+  const surfaceRef = useCallback(
+    (element: HTMLElement | null) => {
+      ref(element);
+      setSurface(element);
+    },
+    [ref],
+  );
   let pageRoots: ReactNode;
-  if (pageVirtualization.threshold === true || (
-    typeof pageVirtualization.threshold === "number" && rootIds.length >= pageVirtualization.threshold
-  )) {
-    pageRoots = <VirtualPageRoots blockIds={rootIds} surface={surface} overscan={pageVirtualization.overscan} />;
+  if (
+    pageVirtualization.threshold === true ||
+    (typeof pageVirtualization.threshold === "number" &&
+      rootIds.length >= pageVirtualization.threshold)
+  ) {
+    pageRoots = (
+      <VirtualPageRoots
+        blockIds={rootIds}
+        surface={surface}
+        overscan={pageVirtualization.overscan}
+      />
+    );
   } else {
     pageRoots = <BlockTree blockIds={rootIds} />;
   }
@@ -312,10 +413,12 @@ function PageSurfaceContent() {
       tabIndex={-1}
     >
       {pageRoots}
-      {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target. 
-      * Uses to add "Add block" buttons at the end of the page.
-      */}
-      {(rootBlockId === undefined || (!reactPanel.blocks.hasBlock(rootBlockId) && reactPanel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
+      {/* PAGE_END_SLOT_ATTRIBUTE in constants.ts marks the TrailingBlock portal target.
+       * Uses to add "Add block" buttons at the end of the page.
+       */}
+      {(rootBlockId === undefined ||
+        (!reactPanel.blocks.hasBlock(rootBlockId) &&
+          reactPanel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
     </main>
   );
 }

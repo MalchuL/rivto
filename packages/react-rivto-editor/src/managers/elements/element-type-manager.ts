@@ -1,7 +1,7 @@
-import type { ReactEditorApi } from '../../editor/types';
-import type { RegistrationOwner } from '../extensions/types';
-import type { ElementTypesApi, ReactElementRegistration } from './types';
-import { RevisionStore } from '../../internal-store';
+import type { ReactEditorApi } from "../../editor/types";
+import type { RegistrationOwner } from "../extensions/types";
+import type { ElementTypesApi, ReactElementRegistration } from "./types";
+import { RevisionStore } from "../../internal-store";
 
 /**
  * Installs document definitions and React presentation as one disposable registration.
@@ -20,7 +20,10 @@ export class ElementTypeManager implements ElementTypesApi {
    * @param editor - Shared document and clipboard infrastructure.
    * @param owner - Extension lifecycle and destruction guard.
    */
-  constructor(private readonly editor: ReactEditorApi, private readonly owner: RegistrationOwner) {
+  constructor(
+    private readonly editor: ReactEditorApi,
+    private readonly owner: RegistrationOwner,
+  ) {
     owner.registerCleanup(() => this.store.clear());
   }
   /**
@@ -39,30 +42,48 @@ export class ElementTypeManager implements ElementTypesApi {
   register(registration: ReactElementRegistration): () => void {
     this.owner.assertActive();
     const type = registration.definition.type;
-    if (this.entries.has(type)) throw new Error(`Element renderer ${type} is already registered`);
+    if (this.entries.has(type)) {
+      throw new Error(`Element renderer ${type} is already registered`);
+    }
     const disposers: Array<() => void> = [];
     try {
-      disposers.push(this.editor.elementRegistry.register({ ...registration.definition, ...(registration.behavior?.resize ? { resize: registration.behavior.resize } : {}) }));
+      disposers.push(
+        this.editor.elementRegistry.register({
+          ...registration.definition,
+          ...(registration.behavior?.resize ? { resize: registration.behavior.resize } : {}),
+        }),
+      );
       if (registration.creation) {
         const creation = registration.creation;
-        disposers.push(this.editor.edgelessToolbar.registerTool({
-          id: `element:${type}`, title: creation.title, icon: creation.icon,
-          group: creation.group, order: creation.order,
-          activate: ({ operations }) => operations.setTool({ tool: 'element', type }),
-          isActive: tool => tool.tool === 'element' && tool.type === type,
-        }));
+        disposers.push(
+          this.editor.edgelessToolbar.registerTool({
+            id: `element:${type}`,
+            title: creation.title,
+            icon: creation.icon,
+            group: creation.group,
+            order: creation.order,
+            activate: ({ operations }) => operations.setTool({ tool: "element", type }),
+            isActive: (tool) => tool.tool === "element" && tool.type === type,
+          }),
+        );
       }
-      if (registration.clipboard) disposers.push(this.editor.clipboard.registerElementConverter(type, registration.clipboard));
+      if (registration.clipboard) {
+        disposers.push(
+          this.editor.clipboard.registerElementConverter(type, registration.clipboard),
+        );
+      }
     } catch (error) {
-      disposers.reverse().forEach(dispose => dispose());
+      disposers.reverse().forEach((dispose) => dispose());
       throw error;
     }
     this.entries.set(type, registration);
     this.store.changed();
     return this.owner.registerCleanup(() => {
-      if (this.entries.get(type) !== registration) return;
+      if (this.entries.get(type) !== registration) {
+        return;
+      }
       this.entries.delete(type);
-      disposers.reverse().forEach(dispose => dispose());
+      disposers.reverse().forEach((dispose) => dispose());
       this.store.changed();
     });
   }
@@ -72,25 +93,33 @@ export class ElementTypeManager implements ElementTypesApi {
    * @param type - Persisted type.
    * @returns Registration, or undefined for an unknown type.
    */
-  get(type: string): ReactElementRegistration | undefined { return this.entries.get(type); }
+  get(type: string): ReactElementRegistration | undefined {
+    return this.entries.get(type);
+  }
   /**
    * Lists installed registrations in insertion order.
    *
    * @returns Registrations in installation order, in an array detached from the
    * registry. Individual registration objects are shared with the registry.
    */
-  getAll(): readonly ReactElementRegistration[] { return [...this.entries.values()]; }
+  getAll(): readonly ReactElementRegistration[] {
+    return [...this.entries.values()];
+  }
   /**
    * Observes registry changes without an initial notification.
    *
    * @param listener - Called when a registration is added or removed.
    * @returns Unsubscribe callback.
    */
-  subscribe(listener: () => void): () => void { return this.store.subscribe(listener); }
+  subscribe(listener: () => void): () => void {
+    return this.store.subscribe(listener);
+  }
   /**
    * Reads the current registration revision for external-store subscriptions.
    *
    * @returns Version token that changes when registrations are added or removed.
    */
-  get revision(): number { return this.store.revision; }
+  get revision(): number {
+    return this.store.revision;
+  }
 }

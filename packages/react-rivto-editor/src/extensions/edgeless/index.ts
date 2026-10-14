@@ -80,7 +80,9 @@ export interface EdgelessPresetOptions {
  * @param options - Optional surface configuration.
  * @returns Edgeless extensions in their required registration order.
  */
-export function edgelessPreset(options: EdgelessPresetOptions = {}): readonly ReactEditorExtension[] {
+export function edgelessPreset(
+  options: EdgelessPresetOptions = {},
+): readonly ReactEditorExtension[] {
   return [
     edgelessSurfaceExtension(options.surface),
     edgelessSelectionExtension(),

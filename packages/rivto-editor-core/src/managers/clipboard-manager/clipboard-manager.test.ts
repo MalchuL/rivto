@@ -1,20 +1,32 @@
 /** Clipboard operations retain hierarchy and handle text ranges explicitly. */
-import { createTestEditor as createDocumentEditor, createStructuralSelection, testCaret, testRange } from "../../editor/test-utils";
+import {
+  createTestEditor as createDocumentEditor,
+  createStructuralSelection,
+  testCaret,
+  testRange,
+} from "../../editor/test-utils";
 import { PasteStrategyRegistry } from "./strategies";
 import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 
 describe("core ClipboardManager", () => {
   it("replaces an explicit reverse text range atomically", async () => {
     const editor = await createDocumentEditor();
-    const id = editor.blocks.insertBlock({ type: "paragraph", content: "BeforeAfter",
-      children: [{ type: "paragraph", content: "Keep child" }] }).id;
+    const id = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "BeforeAfter",
+      children: [{ type: "paragraph", content: "Keep child" }],
+    }).id;
     const textTarget = testRange(editor, { blockId: id, offset: 6 }, { blockId: id, offset: 0 });
     const bundle = editor.clipboard.copyText(textTarget)!;
     expect(bundle.blocks[0]?.children).toEqual([]);
     expect(bundle.blocks[0]?.content).toBe("Before");
     const updates = jest.fn();
     editor.subscribe(updates);
-    const caret = editor.clipboard.paste({ textTarget, text: "One\nTwo", defaultBlockType: "paragraph" });
+    const caret = editor.clipboard.paste({
+      textTarget,
+      text: "One\nTwo",
+      defaultBlockType: "paragraph",
+    });
     expect(updates).toHaveBeenCalledTimes(1);
     const roots = editor.blocks.getBlocks();
     expect(roots.map((block) => block.content)).toEqual(["One", "TwoAfter"]);
@@ -24,20 +36,37 @@ describe("core ClipboardManager", () => {
       blocks: [{ id: roots[1]!.id, start: 3, end: 3 }],
     });
     editor.history.undo();
-    expect(editor.blocks.getBlocks()).toMatchObject([{ id, content: "BeforeAfter", children: [{ content: "Keep child" }] }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([
+      { id, content: "BeforeAfter", children: [{ content: "Keep child" }] },
+    ]);
     editor.destroy();
   });
 
   it("copies overlapping offsets as empty text and still pastes at the clamped caret", async () => {
     const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const last = editor.blocks.insertBlock({ type: "paragraph", content: "Last" }, editor.blocks.getInsertionDestinationAfter(first)).id;
-    const crossBlock = testRange(editor, { blockId: first, offset: 2 }, { blockId: last, offset: 1 });
-    expect(editor.clipboard.copyText(crossBlock)?.blocks.map((block) => block.content)).toEqual(["rst", "L"]);
-    const textTarget = testRange(editor, { blockId: first, offset: 0 }, { blockId: first, offset: 99 });
+    const last = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Last" },
+      editor.blocks.getInsertionDestinationAfter(first),
+    ).id;
+    const crossBlock = testRange(
+      editor,
+      { blockId: first, offset: 2 },
+      { blockId: last, offset: 1 },
+    );
+    expect(editor.clipboard.copyText(crossBlock)?.blocks.map((block) => block.content)).toEqual([
+      "rst",
+      "L",
+    ]);
+    const textTarget = testRange(
+      editor,
+      { blockId: first, offset: 0 },
+      { blockId: first, offset: 99 },
+    );
     expect(editor.clipboard.copyText(textTarget)?.blocks[0]?.content).toBe("");
-    expect(editor.clipboard.paste({ textTarget, text: "Replacement", defaultBlockType: "paragraph" }))
-      .toEqual({ blockId: first, offset: 11 });
+    expect(
+      editor.clipboard.paste({ textTarget, text: "Replacement", defaultBlockType: "paragraph" }),
+    ).toEqual({ blockId: first, offset: 11 });
     expect(editor.blocks.getBlockNode(first)?.content).toBe("ReplacementFirst");
     editor.destroy();
   });
@@ -45,9 +74,19 @@ describe("core ClipboardManager", () => {
   it("imports older partial-text bundles with multiple blocks into an explicit target", async () => {
     const editor = await createDocumentEditor();
     const id = editor.blocks.insertBlock({ type: "paragraph", content: "LeftRight" }).id;
-    const bundle = { version: CLIPBOARD_BUNDLE_VERSION, fromTextSelection: true, blocks: ["First", "Middle", "Last"].map((content) => ({
-      id: content, type: "paragraph", content, props: {}, listProps: {}, pluginData: {}, children: [],
-    })) };
+    const bundle = {
+      version: CLIPBOARD_BUNDLE_VERSION,
+      fromTextSelection: true,
+      blocks: ["First", "Middle", "Last"].map((content) => ({
+        id: content,
+        type: "paragraph",
+        content,
+        props: {},
+        listProps: {},
+        pluginData: {},
+        children: [],
+      })),
+    };
     const caret = editor.clipboard.paste({ bundle, textTarget: testCaret(id, 4) });
     const blocks = editor.blocks.getBlocks();
     expect(blocks.map((block) => block.content)).toEqual(["LeftFirst", "Middle", "LastRight"]);
@@ -81,23 +120,31 @@ describe("core ClipboardManager", () => {
     const first = editor.blocks.insertBlock({
       type: "paragraph",
       content: "Root <one>\nline",
-      children: [{
-        type: "paragraph",
-        content: "Child\ncontinuation",
-        children: [{ type: "paragraph", content: "Grandchild" }],
-      }],
+      children: [
+        {
+          type: "paragraph",
+          content: "Child\ncontinuation",
+          children: [{ type: "paragraph", content: "Grandchild" }],
+        },
+      ],
     }).id;
     editor.blocks.updateBlock(first, { listProps: { collapsed: true } });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
+    const second = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(first),
+    ).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
 
     const payload = editor.clipboard.copy()!;
 
-    expect(payload.blocks).toMatchObject([{
-      id: first,
-      listProps: { collapsed: true },
-      children: [{ content: "Child\ncontinuation", children: [{ content: "Grandchild" }] }],
-    }, { id: second }]);
+    expect(payload.blocks).toMatchObject([
+      {
+        id: first,
+        listProps: { collapsed: true },
+        children: [{ content: "Child\ncontinuation", children: [{ content: "Grandchild" }] }],
+      },
+      { id: second },
+    ]);
     editor.destroy();
   });
 
@@ -116,12 +163,30 @@ describe("core ClipboardManager", () => {
 
   it("does not interpret extension-owned list properties", async () => {
     const editor = await createDocumentEditor();
-    const start = editor.blocks.insertBlock({ type: "paragraph", content: "One", listProps: { type: "start_numbered_list" } }).id;
-    const next = editor.blocks.insertBlock({ type: "paragraph", content: "Two", listProps: { type: "numbered_list" } }, editor.blocks.getInsertionDestinationAfter(start)).id;
-    const gap = editor.blocks.insertBlock({ type: "paragraph", content: "Gap" }, editor.blocks.getInsertionDestinationAfter(next)).id;
-    const task = editor.blocks.insertBlock({ type: "paragraph", content: "Done", listProps: { type: "checkbox", checked: true } }, editor.blocks.getInsertionDestinationAfter(gap)).id;
-    const resume = editor.blocks.insertBlock({ type: "paragraph", content: "Three", listProps: { type: "continue_numbered_list" } }, editor.blocks.getInsertionDestinationAfter(task)).id;
-    editor.selection.set(createStructuralSelection([start, next, gap, task, resume], start, resume));
+    const start = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "One",
+      listProps: { type: "start_numbered_list" },
+    }).id;
+    const next = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Two", listProps: { type: "numbered_list" } },
+      editor.blocks.getInsertionDestinationAfter(start),
+    ).id;
+    const gap = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Gap" },
+      editor.blocks.getInsertionDestinationAfter(next),
+    ).id;
+    const task = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Done", listProps: { type: "checkbox", checked: true } },
+      editor.blocks.getInsertionDestinationAfter(gap),
+    ).id;
+    const resume = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Three", listProps: { type: "continue_numbered_list" } },
+      editor.blocks.getInsertionDestinationAfter(task),
+    ).id;
+    editor.selection.set(
+      createStructuralSelection([start, next, gap, task, resume], start, resume),
+    );
 
     const payload = editor.clipboard.copy()!;
     expect(payload.blocks).toMatchObject([
@@ -161,7 +226,6 @@ describe("core ClipboardManager", () => {
     });
     expect(target.blocks.getBlocks().map(({ content }) => content)).toEqual(["", "Structured"]);
 
-
     target.clipboard.paste({ textTarget, text: "plain", defaultBlockType: "paragraph" });
     expect(target.blocks.getBlockNode(targetId)?.content).toBe("plain");
     target.clipboard.paste({
@@ -193,24 +257,28 @@ describe("core ClipboardManager", () => {
     editor.clipboard.paste({
       bundle: {
         version: CLIPBOARD_BUNDLE_VERSION,
-        blocks: [{
-          id: "invalid",
-          type: "missing",
-          listProps: {},
-          props: {},
-          pluginData: {},
-          content: "Original",
-          children: [],
-        }],
+        blocks: [
+          {
+            id: "invalid",
+            type: "missing",
+            listProps: {},
+            props: {},
+            pluginData: {},
+            content: "Original",
+            children: [],
+          },
+        ],
       },
       onPrepareError: (block) => ({ type: "paragraph", content: `Recovered ${block.content}` }),
     });
 
-    expect(editor.blocks.getBlocks()).toMatchObject([{
-      id: "invalid",
-      type: "paragraph",
-      content: "Recovered Original",
-    }]);
+    expect(editor.blocks.getBlocks()).toMatchObject([
+      {
+        id: "invalid",
+        type: "paragraph",
+        content: "Recovered Original",
+      },
+    ]);
     expect(processorRuns).toBe(1);
     editor.destroy();
   });
@@ -223,21 +291,26 @@ describe("core ClipboardManager", () => {
       children: [{ type: "paragraph", content: "Child" }],
     }).id;
     const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
-    const tail = editor.blocks.insertBlock({ type: "paragraph", content: "Tail" }, editor.blocks.getInsertionDestinationAfter(parent)).id;
+    const tail = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Tail" },
+      editor.blocks.getInsertionDestinationAfter(parent),
+    ).id;
     editor.selection.set(createStructuralSelection([parent, child], parent, child));
 
     editor.clipboard.paste({
       bundle: {
         version: CLIPBOARD_BUNDLE_VERSION,
-        blocks: [{
-          id: "clipboard-block",
-          type: "paragraph",
-          listProps: {},
-          props: {},
-          pluginData: {},
-          content: "Pasted",
-          children: [],
-        }],
+        blocks: [
+          {
+            id: "clipboard-block",
+            type: "paragraph",
+            listProps: {},
+            props: {},
+            pluginData: {},
+            content: "Pasted",
+            children: [],
+          },
+        ],
       },
       placement: { parentId: parent, afterId: child, mergeText: false },
     });
@@ -257,7 +330,10 @@ describe("core ClipboardManager", () => {
       children: [{ type: "paragraph", content: "Nested" }],
     }).id;
     const child = editor.blocks.getBlock(first)!.children[0]!.id;
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
+    const second = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(first),
+    ).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
 
     const payload = editor.clipboard.cut()!;
@@ -273,7 +349,10 @@ describe("core ClipboardManager", () => {
   it("remints IDs when originals still exist in the destination", async () => {
     const editor = await createDocumentEditor();
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, editor.blocks.getInsertionDestinationAfter(first)).id;
+    const second = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(first),
+    ).id;
     editor.selection.set(createStructuralSelection([first, second], first, second));
     let importedIds: ReadonlyMap<string, string> | undefined;
     editor.clipboard.pasteStrategies.register("test.observe-import", {
@@ -381,11 +460,9 @@ describe("core ClipboardManager", () => {
   it("marks a prefix range as text and merges it into the destination", async () => {
     const source = await createDocumentEditor();
     const sourceId = source.blocks.insertBlock({ type: "paragraph", content: "Hello" }).id;
-    const bundle = source.clipboard.copyText(testRange(
-      source,
-      { blockId: sourceId, offset: 0 },
-      { blockId: sourceId, offset: 3 },
-    ))!;
+    const bundle = source.clipboard.copyText(
+      testRange(source, { blockId: sourceId, offset: 0 }, { blockId: sourceId, offset: 3 }),
+    )!;
     expect(bundle.fromTextSelection).toBe(true);
 
     const target = await createDocumentEditor();
@@ -427,9 +504,17 @@ describe("core ClipboardManager", () => {
       bundle: {
         version: CLIPBOARD_BUNDLE_VERSION,
         fromTextSelection: true,
-        blocks: [{
-          id: "clip", type: "paragraph", content: "Clip", props: {}, listProps: {}, pluginData: {}, children: [],
-        }],
+        blocks: [
+          {
+            id: "clip",
+            type: "paragraph",
+            content: "Clip",
+            props: {},
+            listProps: {},
+            pluginData: {},
+            children: [],
+          },
+        ],
       },
     });
     expect(editor.blocks.getBlocks().map((block) => block.content)).toEqual(["Host", "Clip"]);
@@ -445,6 +530,8 @@ describe("core ClipboardManager", () => {
 
     disposeFirst();
 
-    expect(registry.findMatchingPasteStrategies({ selection: undefined }, {})).toEqual([replacement]);
+    expect(registry.findMatchingPasteStrategies({ selection: undefined }, {})).toEqual([
+      replacement,
+    ]);
   });
 });

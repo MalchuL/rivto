@@ -17,4 +17,3 @@ export interface Panel {
   /** Null displays document element roots; an element ID displays its descendants, excluding that container. */
   rootElementId: string | null;
 }
-

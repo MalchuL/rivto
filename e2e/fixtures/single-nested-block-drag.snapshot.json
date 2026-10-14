@@ -115,7 +115,5 @@
     }
   ],
   "pluginData": {},
-  "rootElementIds": [
-    "single-nested-block-card"
-  ]
+  "rootElementIds": ["single-nested-block-card"]
 }

@@ -14,10 +14,7 @@ import {
   type BlockUpdate,
   type DocumentModel,
 } from "@chulane/document-model";
-import {
-  createBlockPropsProcessor,
-  type BlockProcessor,
-} from "./block-pipe";
+import { createBlockPropsProcessor, type BlockProcessor } from "./block-pipe";
 import type {
   EditorBlock,
   EditorBlockInput,
@@ -59,14 +56,14 @@ export class BlockManager implements BlockManagerApi {
    *
    * @param editor - Owning editor providing shared runtime capabilities.
    */
-  constructor(
-    private readonly editor: DocumentEditorAPI,
-  ) {
+  constructor(private readonly editor: DocumentEditorAPI) {
     this.registerRequiredProcessors();
   }
 
   /** @returns Monotonic document block revision for derived read caches. */
-  get revision(): number { return this.document.blocks.revision; }
+  get revision(): number {
+    return this.document.blocks.revision;
+  }
 
   /** Registers an editor-owned block processor and returns its disposer. */
   registerProcessor(processor: BlockProcessor): () => void {
@@ -76,7 +73,9 @@ export class BlockManager implements BlockManagerApi {
     };
     this.processors.add(registration);
     return () => {
-      if (!this.processors.delete(registration)) return;
+      if (!this.processors.delete(registration)) {
+        return;
+      }
       registration.dispose();
     };
   }
@@ -143,12 +142,16 @@ export class BlockManager implements BlockManagerApi {
   getOrderedIds(ids: Iterable<string>): string[] {
     // A stored record may be detached from the tree, so check placement too.
     const placed = [...new Set(ids)].filter((id) => this.getBlockNode(id) !== undefined);
-    if (placed.length < 2) return placed;
+    if (placed.length < 2) {
+      return placed;
+    }
     const paths = new Map<string, number[]>();
     const siblings = new Map<string | null, Map<string, number>>();
     const pathOf = (id: string): number[] => {
       const cached = paths.get(id);
-      if (cached) return cached;
+      if (cached) {
+        return cached;
+      }
       const parent = this.getParentId(id) ?? null;
       let positions = siblings.get(parent);
       if (!positions) {
@@ -167,7 +170,9 @@ export class BlockManager implements BlockManagerApi {
       const b = pathOf(right);
       // The first differing position determines which branch comes first.
       for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
-        if (a[index] !== b[index]) return a[index]! - b[index]!;
+        if (a[index] !== b[index]) {
+          return a[index]! - b[index]!;
+        }
       }
       // A shared prefix puts the shorter path (the ancestor) first.
       return a.length - b.length;
@@ -239,11 +244,10 @@ export class BlockManager implements BlockManagerApi {
     // forest invariant handled by validateBlockForest.
     const activeNodes = new Set<BlockInput>();
     /** Applies the complete creation policy recursively to one forest node. */
-    const applyCreationPolicy = (
-      block: EditorBlockInput,
-      canRecover = true,
-    ): EditorBlockInput => {
-      if (activeNodes.has(block)) throw new Error("Block forest must be acyclic");
+    const applyCreationPolicy = (block: EditorBlockInput, canRecover = true): EditorBlockInput => {
+      if (activeNodes.has(block)) {
+        throw new Error("Block forest must be acyclic");
+      }
       activeNodes.add(block);
       let processed: BlockInput | undefined;
       try {
@@ -251,35 +255,46 @@ export class BlockManager implements BlockManagerApi {
           if (!this.editor.blockRegistry.has(block.type)) {
             throw new Error(`Block type ${block.type} is not registered`);
           }
-          processed = this.runProcessors(this.editor.blockRegistry.prepare({
-            ...block,
-            listProps: this.editor.blockListProps.prepare(block.listProps),
-          }));
+          processed = this.runProcessors(
+            this.editor.blockRegistry.prepare({
+              ...block,
+              listProps: this.editor.blockListProps.prepare(block.listProps),
+            }),
+          );
           if (processed !== block) {
-            if (activeNodes.has(processed)) throw new Error("Block forest must be acyclic");
+            if (activeNodes.has(processed)) {
+              throw new Error("Block forest must be acyclic");
+            }
             activeNodes.add(processed);
           }
         } catch (error) {
-          if (!onError || !canRecover) throw error;
+          if (!onError || !canRecover) {
+            throw error;
+          }
           const replacement = onError(block, error);
           // Preserve an assigned import identity and disable recovery so a bad
           // replacement cannot recurse through the callback indefinitely.
-          return applyCreationPolicy({
-            ...replacement,
-            id: replacement.id ?? block.id,
-            listProps: replacement.listProps ?? {},
-            props: replacement.props ?? {},
-            pluginData: replacement.pluginData ?? {},
-            content: replacement.content ?? "",
-            children: replacement.children ?? [],
-          }, false);
+          return applyCreationPolicy(
+            {
+              ...replacement,
+              id: replacement.id ?? block.id,
+              listProps: replacement.listProps ?? {},
+              props: replacement.props ?? {},
+              pluginData: replacement.pluginData ?? {},
+              content: replacement.content ?? "",
+              children: replacement.children ?? [],
+            },
+            false,
+          );
         }
         return {
           ...processed,
           children: processed.children?.map((child) => applyCreationPolicy(child, canRecover)),
         };
       } finally {
-        if (processed && processed !== block) activeNodes.delete(processed);
+        if (processed && processed !== block) {
+          activeNodes.delete(processed);
+        }
         activeNodes.delete(block);
       }
     };
@@ -334,14 +349,20 @@ export class BlockManager implements BlockManagerApi {
     const prepared = this.prepareInput([block])[0]!;
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    return this.editor.history.batchUpdates(() => this.document.blocks.insertBlock(prepared, destination));
+    return this.editor.history.batchUpdates(() =>
+      this.document.blocks.insertBlock(prepared, destination),
+    );
   }
 
   /** @param parentId - Real parent identity. @returns Its direct child IDs or empty when absent. */
-  getChildIds(parentId: string): readonly string[] { return this.document.blocks.getChildIds(parentId); }
+  getChildIds(parentId: string): readonly string[] {
+    return this.document.blocks.getChildIds(parentId);
+  }
 
   /** @param afterId - Sibling to follow, null to prepend, or omitted to append. @returns Real document placement. @throws For a missing sibling. */
-  getInsertionDestinationAfter(afterId?: string | null): BlockDestination { return this.document.blocks.getInsertionDestinationAfter(afterId); }
+  getInsertionDestinationAfter(afterId?: string | null): BlockDestination {
+    return this.document.blocks.getInsertionDestinationAfter(afterId);
+  }
 
   /**
    * Imports a detached forest while preserving every source identity that is
@@ -371,7 +392,9 @@ export class BlockManager implements BlockManagerApi {
     const sourceIds: string[] = [];
     /** Collects stable source identities before destination remapping. */
     const collectIds = (block: EditorBlock | EditorBlockInput): void => {
-      if (block.id !== undefined) sourceIds.push(block.id);
+      if (block.id !== undefined) {
+        sourceIds.push(block.id);
+      }
       block.children?.forEach(collectIds);
     };
     blocks.forEach(collectIds);
@@ -381,7 +404,9 @@ export class BlockManager implements BlockManagerApi {
     /** Rewrites one complete source subtree with its destination identities. */
     const remap = (block: EditorBlock | EditorBlockInput): EditorBlockInput => {
       const id = block.id === undefined ? undefined : idMap.get(block.id);
-      if (block.id !== undefined && !id) throw new Error(`Missing imported block ID: ${block.id}`);
+      if (block.id !== undefined && !id) {
+        throw new Error(`Missing imported block ID: ${block.id}`);
+      }
       return { ...block, id, children: block.children?.map(remap) ?? [] };
     };
     const prepared = this.prepareInput(blocks.map(remap), onError);
@@ -421,7 +446,9 @@ export class BlockManager implements BlockManagerApi {
   /** Deletes list-property keys from one block. */
   deleteListProps(id: string, keys: readonly string[]): boolean {
     const block = this.document.blocks.getBlockNode(id);
-    if (!block) throw new Error(`Block ${id} not found`);
+    if (!block) {
+      throw new Error(`Block ${id} not found`);
+    }
     this.validateListPropsDeletion(block.listProps, keys);
     return this.editor.history.batchUpdates(() => this.document.blocks.deleteListProps(id, keys));
   }
@@ -431,7 +458,9 @@ export class BlockManager implements BlockManagerApi {
     const simulated = new Map<string, Record<string, unknown>>();
     updates.forEach(({ id, keys }) => {
       const block = this.document.blocks.getBlockNode(id);
-      if (!block) throw new Error(`Block ${id} not found`);
+      if (!block) {
+        throw new Error(`Block ${id} not found`);
+      }
       const next = this.validateListPropsDeletion(simulated.get(id) ?? block.listProps, keys);
       simulated.set(id, next);
     });
@@ -447,7 +476,9 @@ export class BlockManager implements BlockManagerApi {
   clearBlock(id: string): void {
     this.editor.history.batchUpdates(() => {
       this.document.blocks.updateBlock(id, { content: "" });
-      (this.document.blocks.getBlockNode(id)?.childIds ?? []).forEach((childId) => this.document.blocks.removeBlock(childId));
+      (this.document.blocks.getBlockNode(id)?.childIds ?? []).forEach((childId) =>
+        this.document.blocks.removeBlock(childId),
+      );
     });
   }
 
@@ -460,12 +491,16 @@ export class BlockManager implements BlockManagerApi {
    */
   setBlockType(id: string, type: string): void {
     const current = this.document.blocks.getBlockNode(id);
-    if (!current) throw new Error(`Block ${id} not found`);
+    if (!current) {
+      throw new Error(`Block ${id} not found`);
+    }
     const props = this.editor.blockRegistry.prepareTypeChange(type, current.props);
     const processed = this.runProcessors({ ...current, type, props, children: undefined });
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    this.editor.history.batchUpdates(() => this.document.blocks.setBlockType(id, type, processed.props));
+    this.editor.history.batchUpdates(() =>
+      this.document.blocks.setBlockType(id, type, processed.props),
+    );
   }
 
   /**
@@ -619,6 +654,12 @@ export class BlockManager implements BlockManagerApi {
     this.processors.clear();
   }
 
+  /** @returns The explicit document or throws outside a document context. */
+  private get document(): DocumentModel {
+    const document = this.editor.getDocument();
+    return document;
+  }
+
   /**
    * Retains an existing document subscription until explicitly removed or destroyed.
    * Its listener remains bound to the model where the subscription was created.
@@ -628,15 +669,11 @@ export class BlockManager implements BlockManagerApi {
   private retainSubscription(unsubscribe: () => void): () => void {
     this.subscriptions.add(unsubscribe);
     return () => {
-      if (!this.subscriptions.delete(unsubscribe)) return;
+      if (!this.subscriptions.delete(unsubscribe)) {
+        return;
+      }
       unsubscribe();
     };
-  }
-
-  /** @returns The explicit document or throws outside a document context. */
-  private get document(): DocumentModel {
-    const document = this.editor.getDocument();
-    return document;
   }
 
   /**
@@ -645,8 +682,9 @@ export class BlockManager implements BlockManagerApi {
    * @returns No value.
    */
   private registerRequiredProcessors(): void {
-    this.registerProcessor(createBlockPropsProcessor((type, props) =>
-      this.editor.blockRegistry.validate(type, props)));
+    this.registerProcessor(
+      createBlockPropsProcessor((type, props) => this.editor.blockRegistry.validate(type, props)),
+    );
   }
 
   /**
@@ -656,17 +694,25 @@ export class BlockManager implements BlockManagerApi {
    * @returns Original target text length for caret restoration.
    */
   private mergeBlockContent(targetId: string, sourceId: string): number {
-    if (targetId === sourceId) throw new Error("Cannot merge a block into itself");
+    if (targetId === sourceId) {
+      throw new Error("Cannot merge a block into itself");
+    }
     const target = this.document.blocks.getBlockNode(targetId);
     const source = this.document.blocks.getBlockNode(sourceId);
-    if (!source) throw new Error(`Block ${sourceId} not found`);
-    if (!target) throw new Error(`Block ${targetId} not found`);
+    if (!source) {
+      throw new Error(`Block ${sourceId} not found`);
+    }
+    if (!target) {
+      throw new Error(`Block ${targetId} not found`);
+    }
     if (this.collectTreeIds(sourceId).includes(targetId)) {
       throw new Error(`Cannot merge block ${sourceId} into its descendant ${targetId}`);
     }
     const blocks = this.document.blocks;
     blocks.moveBlocks(source.childIds.map((id) => ({ id, targetId, position: "inside" })));
-    if (source.content) blocks.insertText(targetId, target.content.length, source.content);
+    if (source.content) {
+      blocks.insertText(targetId, target.content.length, source.content);
+    }
     blocks.removeBlock(sourceId);
     return target.content.length;
   }
@@ -678,9 +724,15 @@ export class BlockManager implements BlockManagerApi {
    * @param position - Placement relative to the anchor.
    * @returns No value.
    */
-  private moveGroupedBlocks(ids: string[], targetId: string | null, position: "before" | "after" | "inside"): void {
+  private moveGroupedBlocks(
+    ids: string[],
+    targetId: string | null,
+    position: "before" | "after" | "inside",
+  ): void {
     const roots = this.topLevelRoots(ids);
-    if (!roots.length) return;
+    if (!roots.length) {
+      return;
+    }
     const parentId = this.getParentId(roots[0]!);
     if (roots.some((id) => this.getParentId(id) !== parentId)) {
       throw new Error("Moved blocks must share the same parent");
@@ -703,10 +755,14 @@ export class BlockManager implements BlockManagerApi {
    */
   private applyIndent(ids: string[]): void {
     const roots = this.topLevelRoots(ids);
-    if (!this.isConsecutiveRange(roots)) return;
+    if (!this.isConsecutiveRange(roots)) {
+      return;
+    }
     const siblings = this.siblingIds(roots[0]!);
     const index = siblings.indexOf(roots[0]!);
-    if (index <= 0) return;
+    if (index <= 0) {
+      return;
+    }
     const targetId = siblings[index - 1]!;
     this.editor.history.batchUpdates(() => {
       this.document.blocks.moveBlocks(roots.map((id) => ({ id, targetId, position: "inside" })));
@@ -727,14 +783,22 @@ export class BlockManager implements BlockManagerApi {
    */
   private applyOutdent(ids: string[]): void {
     const roots = this.topLevelRoots(ids);
-    if (!this.isConsecutiveRange(roots)) return;
+    if (!this.isConsecutiveRange(roots)) {
+      return;
+    }
     const parentId = this.getParentId(roots[0]!);
-    if (!parentId) return;
+    if (!parentId) {
+      return;
+    }
     const destinationParent = this.getParentId(parentId);
     // A range may continue at the destination depth; those blocks stay put.
-    const firstDestinationLevel = roots.findIndex((id) => this.getParentId(id) === destinationParent);
+    const firstDestinationLevel = roots.findIndex(
+      (id) => this.getParentId(id) === destinationParent,
+    );
     const moving = firstDestinationLevel < 0 ? roots : roots.slice(0, firstDestinationLevel);
-    if (!moving.length) return;
+    if (!moving.length) {
+      return;
+    }
     const lastId = moving.at(-1)!;
     // Move the tail before lifting: afterwards lastId no longer shares P's child list,
     // so the old sibling tail cannot be found from its new location.
@@ -742,7 +806,9 @@ export class BlockManager implements BlockManagerApi {
       this.document.blocks.moveFollowingSiblingsInside(lastId);
       this.document.blocks.moveBlocks([
         // Repeated "after parent" inserts reverse order unless roots go last-first.
-        ...[...moving].reverse().map((id) => ({ id, targetId: parentId, position: "after" as const })),
+        ...[...moving]
+          .reverse()
+          .map((id) => ({ id, targetId: parentId, position: "after" as const })),
       ]);
     });
   }
@@ -767,17 +833,25 @@ export class BlockManager implements BlockManagerApi {
     const simulated = new Map<string, BlockInput>();
     return updates.map(({ id, patch }) => {
       const stored = this.document.blocks.getBlockNode(id);
-      if (!stored) throw new Error(`Block ${id} not found`);
+      if (!stored) {
+        throw new Error(`Block ${id} not found`);
+      }
       const current = simulated.get(id) ?? stored;
       const candidate: BlockInput = {
         ...current,
         children: undefined,
-        listProps: patch.listProps ? { ...current.listProps, ...patch.listProps } : current.listProps,
+        listProps: patch.listProps
+          ? { ...current.listProps, ...patch.listProps }
+          : current.listProps,
         props: patch.props ? { ...current.props, ...patch.props } : current.props,
-        pluginData: patch.pluginData ? { ...current.pluginData, ...patch.pluginData } : current.pluginData,
+        pluginData: patch.pluginData
+          ? { ...current.pluginData, ...patch.pluginData }
+          : current.pluginData,
         content: patch.content ?? current.content,
       };
-      if (patch.listProps) this.editor.blockListProps.prepare(candidate.listProps ?? {});
+      if (patch.listProps) {
+        this.editor.blockListProps.prepare(candidate.listProps ?? {});
+      }
       const processed = patch.props ? this.runProcessors(candidate) : candidate;
       simulated.set(id, processed);
       const processedProps = patch.props
@@ -824,17 +898,25 @@ export class BlockManager implements BlockManagerApi {
   private topLevelRoots(ids: string[]): string[] {
     // A single subtree is already an ordered root. Avoid walking every block
     // merely to rediscover its place in the document outline.
-    if (ids.length === 1) return this.getBlockNode(ids[0]!) ? ids : [];
+    if (ids.length === 1) {
+      return this.getBlockNode(ids[0]!) ? ids : [];
+    }
     const listed = new Set(ids);
-    return this.getRootIds().flatMap((id) => this.collectTreeIds(id)).filter((id) => {
-      if (!listed.has(id)) return false;
-      let parentId = this.getParentId(id);
-      while (parentId) {
-        if (listed.has(parentId)) return false;
-        parentId = this.getParentId(parentId);
-      }
-      return true;
-    });
+    return this.getRootIds()
+      .flatMap((id) => this.collectTreeIds(id))
+      .filter((id) => {
+        if (!listed.has(id)) {
+          return false;
+        }
+        let parentId = this.getParentId(id);
+        while (parentId) {
+          if (listed.has(parentId)) {
+            return false;
+          }
+          parentId = this.getParentId(parentId);
+        }
+        return true;
+      });
   }
 
   /**
@@ -843,13 +925,19 @@ export class BlockManager implements BlockManagerApi {
    * @returns Whether every block between the first and last subtree is covered.
    */
   private isConsecutiveRange(roots: string[]): boolean {
-    if (!roots.length) return false;
-    if (roots.length === 1) return true;
+    if (!roots.length) {
+      return false;
+    }
+    if (roots.length === 1) {
+      return true;
+    }
     const visible = this.getRootIds().flatMap((id) => this.collectTreeIds(id));
     const covered = new Set(roots.flatMap((id) => this.collectTreeIds(id)));
     const first = visible.indexOf(roots[0]!);
     const last = visible.indexOf(this.collectTreeIds(roots.at(-1)!).at(-1)!);
-    return first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id));
+    return (
+      first >= 0 && last >= first && visible.slice(first, last + 1).every((id) => covered.has(id))
+    );
   }
 
   /**
@@ -859,9 +947,15 @@ export class BlockManager implements BlockManagerApi {
    * @returns Root and descendants in depth-first document order.
    */
   private collectTreeIds(id: string, visited = new Set<string>()): string[] {
-    if (visited.has(id)) return [];
+    if (visited.has(id)) {
+      return [];
+    }
     visited.add(id);
-    return [id, ...(this.getBlockNode(id)?.childIds ?? []).flatMap((child) => this.collectTreeIds(child, visited))];
+    return [
+      id,
+      ...(this.getBlockNode(id)?.childIds ?? []).flatMap((child) =>
+        this.collectTreeIds(child, visited),
+      ),
+    ];
   }
-
 }

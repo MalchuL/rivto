@@ -48,10 +48,7 @@ import {
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
-import {
-  blockIdExtension,
-  BlockIdsVisibleProvider,
-} from "./extensions/block-id";
+import { blockIdExtension, BlockIdsVisibleProvider } from "./extensions/block-id";
 import { blockNavigationExtension } from "./extensions/block-navigation";
 import { blockNumberExtension } from "./extensions/block-number";
 import {
@@ -63,10 +60,14 @@ import { KeyboardPanel } from "./KeyboardPanel";
 import { RevisionsPanel } from "./RevisionsPanel";
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
-const DEMO_BLOCK_IDS_TOOLTIP = "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
-const DEMO_VIRTUALIZE_PAGE_TOOLTIP = "When on, only page roots near the viewport stay mounted. When off, every root stays mounted.";
-const DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP = "Starts windowing once the page has at least this many root blocks. Only roots in the viewport, plus the extra roots on each side, stay mounted; other roots become spacers. Nested blocks inside a mounted root stay in the document. Leave empty to virtualize at any root count.";
-const DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP = "How many extra root blocks stay mounted above and below the viewport while the page is virtualized.";
+const DEMO_BLOCK_IDS_TOOLTIP =
+  "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
+const DEMO_VIRTUALIZE_PAGE_TOOLTIP =
+  "When on, only page roots near the viewport stay mounted. When off, every root stays mounted.";
+const DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP =
+  "Starts windowing once the page has at least this many root blocks. Only roots in the viewport, plus the extra roots on each side, stay mounted; other roots become spacers. Nested blocks inside a mounted root stay in the document. Leave empty to virtualize at any root count.";
+const DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP =
+  "How many extra root blocks stay mounted above and below the viewport while the page is virtualized.";
 
 /**
  * Persists one Review envelope through the demo-only Vite server adapter.
@@ -80,13 +81,16 @@ async function saveDemoReviewReport(report: ReviewReport): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(report),
   });
-  if (!response.ok) throw new Error((await response.text()) || "Failed to write Review report");
+  if (!response.ok) {
+    throw new Error((await response.text()) || "Failed to write Review report");
+  }
 }
 
 /** @returns A fresh Review extension for one independently owned editor. */
-const demoReviewReports = () => reviewReportExtensions({
-  saveReport: saveDemoReviewReport,
-});
+const demoReviewReports = () =>
+  reviewReportExtensions({
+    saveReport: saveDemoReviewReport,
+  });
 
 /**
  * Intercepts custom Markdown link protocols (`rivto:` / `chulane:`).
@@ -95,7 +99,9 @@ const demoReviewReports = () => reviewReportExtensions({
  * `rivto:markdown-link` for e2e / host listeners.
  */
 const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
-  if (!/^(?:rivto|chulane):/i.test(href)) return;
+  if (!/^(?:rivto|chulane):/i.test(href)) {
+    return;
+  }
   event.preventDefault();
   window.dispatchEvent(new CustomEvent("rivto:markdown-link", { detail: href }));
 };
@@ -125,7 +131,9 @@ const edgelessOptions = {
  */
 function demoRepeatCount(): number {
   const raw = new URLSearchParams(window.location.search).get("repeat");
-  if (raw == null || raw === "") return 0;
+  if (raw == null || raw === "") {
+    return 0;
+  }
   const count = Number.parseInt(raw, 10);
   return Number.isInteger(count) && count > 0 ? count : 0;
 }
@@ -141,7 +149,9 @@ function demoThreadAnchor(block: Element): Element | null {
   const collapse = row?.querySelector(".page-collapse-toggle");
   if (collapse) {
     const rect = collapse.getBoundingClientRect();
-    if (rect.width && rect.height) return collapse;
+    if (rect.width && rect.height) {
+      return collapse;
+    }
   }
   return row?.querySelector(".page-drag-handle") ?? null;
 }
@@ -156,108 +166,151 @@ function demoThreadAnchor(block: Element): Element | null {
 function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
   // Cards grow with their content, including embeddings. Keep the heading
   // above their initial frames so collapsing an outline cannot put it over a row.
-  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
-    text: "Edgeless showcase",
-    frame: { x: 60, y: 0, width: 280, height: 32 },
-    fontSize: 22,
-    fontFamily: "Georgia, Cambria, serif",
-    color: "#212529",
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
-    text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
-    frame: { x: 60, y: 32, width: 560, height: 28 },
-    fontSize: 13,
-    color: "#495057",
-  }) }) as EditorElementNode);
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "text",
+    ...{
+      text: "Edgeless showcase",
+      frame: { x: 60, y: 0, width: 280, height: 32 },
+      fontSize: 22,
+      fontFamily: "Georgia, Cambria, serif",
+      color: "#212529",
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "text",
+    ...{
+      text: "Shapes · sticky · pencil · connector · nested group · align/distribute extras",
+      frame: { x: 60, y: 32, width: 560, height: 28 },
+      fontSize: 13,
+      color: "#495057",
+    },
+  }) as EditorElementNode;
 
-  const rect = (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
-    frame: { x: 60, y: 530, width: 130, height: 90 },
-    fill: "#d0ebff",
-    stroke: "#1c7ed6",
-    strokeWidth: 2,
-    text: "Rect",
-  }) }) as EditorElementNode);
-  const ellipse = (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
-    frame: { x: 240, y: 545, width: 110, height: 80 },
-    fill: "#fff3bf",
-    stroke: "#e67700",
-    strokeWidth: 2,
-    text: "Ellipse",
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
-    route: "orthogonal",
-    source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
-    target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
-    stroke: "#495057",
-    lineStyle: "dashed",
-    endStyle: "arrow",
-    text: "link",
-    textRotation: "along",
-  }) }) as EditorElementNode);
+  const rect = editor.commands.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    ...{
+      frame: { x: 60, y: 530, width: 130, height: 90 },
+      fill: "#d0ebff",
+      stroke: "#1c7ed6",
+      strokeWidth: 2,
+      text: "Rect",
+    },
+  }) as EditorElementNode;
+  const ellipse = editor.commands.execute("edgeless.visual.create", {
+    kind: "ellipse",
+    ...{
+      frame: { x: 240, y: 545, width: 110, height: 80 },
+      fill: "#fff3bf",
+      stroke: "#e67700",
+      strokeWidth: 2,
+      text: "Ellipse",
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "connector",
+    ...{
+      route: "orthogonal",
+      source: { elementId: rect.id, anchor: { x: 1, y: 0.5 }, position: { x: 190, y: 575 } },
+      target: { elementId: ellipse.id, anchor: { x: 0, y: 0.5 }, position: { x: 240, y: 585 } },
+      stroke: "#495057",
+      lineStyle: "dashed",
+      endStyle: "arrow",
+      text: "link",
+      textRotation: "along",
+    },
+  }) as EditorElementNode;
 
   editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
-  const shapeGroup = (editor.commands.execute("edgeless.selection.group") as EditorElementNode);
+  const shapeGroup = editor.commands.execute("edgeless.selection.group") as EditorElementNode;
 
-  const sticky = (editor.commands.execute("edgeless.visual.create", { kind: "sticker", ...({
-    text: "Sticky note\n(double-click to edit)",
-    fill: "#eeeaff",
-    color: "#362b67",
-    frame: { x: 420, y: 530, width: 170, height: 130 },
-  }) }) as EditorElementNode);
+  const sticky = editor.commands.execute("edgeless.visual.create", {
+    kind: "sticker",
+    ...{
+      text: "Sticky note\n(double-click to edit)",
+      fill: "#eeeaff",
+      color: "#362b67",
+      frame: { x: 420, y: 530, width: 170, height: 130 },
+    },
+  }) as EditorElementNode;
 
   // Second connector: animated dashes flow toward the sticky.
-  (editor.commands.execute("edgeless.visual.create", { kind: "connector", ...({
-    route: "curve",
-    source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
-    target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
-    stroke: "#868e96",
-    lineStyle: "dashed-animated",
-    endStyle: "arrow",
-    text: "",
-  }) }) as EditorElementNode);
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "connector",
+    ...{
+      route: "curve",
+      source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
+      target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
+      stroke: "#868e96",
+      lineStyle: "dashed-animated",
+      endStyle: "arrow",
+      text: "",
+    },
+  }) as EditorElementNode;
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
   editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
-  (editor.commands.execute("edgeless.selection.group") as EditorElementNode);
+  editor.commands.execute("edgeless.selection.group") as EditorElementNode;
 
-  (editor.commands.execute("edgeless.visual.create", { kind: "drawing", ...({
-    brush: "pencil",
-    frame: { x: 640, y: 530, width: 150, height: 100 },
-    points: [
-      { x: 8, y: 72 }, { x: 28, y: 18 }, { x: 52, y: 58 },
-      { x: 78, y: 12 }, { x: 108, y: 64 }, { x: 138, y: 28 },
-    ],
-    stroke: "#212529",
-    strokeWidth: 2,
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "text", ...({
-    text: "Free text — resize corners, drag handle, layer arrows",
-    frame: { x: 640, y: 650, width: 260, height: 48 },
-    fontSize: 14,
-    color: "#343a40",
-  }) }) as EditorElementNode);
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "drawing",
+    ...{
+      brush: "pencil",
+      frame: { x: 640, y: 530, width: 150, height: 100 },
+      points: [
+        { x: 8, y: 72 },
+        { x: 28, y: 18 },
+        { x: 52, y: 58 },
+        { x: 78, y: 12 },
+        { x: 108, y: 64 },
+        { x: 138, y: 28 },
+      ],
+      stroke: "#212529",
+      strokeWidth: 2,
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "text",
+    ...{
+      text: "Free text — resize corners, drag handle, layer arrows",
+      frame: { x: 640, y: 650, width: 260, height: 48 },
+      fontSize: 14,
+      color: "#343a40",
+    },
+  }) as EditorElementNode;
 
   // Unrelated siblings for align / distribute / multi-select practice.
-  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
-    frame: { x: 920, y: 530, width: 56, height: 56 },
-    fill: "#d3f9d8",
-    stroke: "#2b8a3e",
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
-    frame: { x: 1020, y: 560, width: 56, height: 56 },
-    fill: "#d3f9d8",
-    stroke: "#2b8a3e",
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "rectangle", ...({
-    frame: { x: 1120, y: 510, width: 56, height: 56 },
-    fill: "#d3f9d8",
-    stroke: "#2b8a3e",
-  }) }) as EditorElementNode);
-  (editor.commands.execute("edgeless.visual.create", { kind: "ellipse", ...({
-    frame: { x: 920, y: 640, width: 70, height: 48 },
-    fill: "#ffd8a8",
-    stroke: "#d9480f",
-  }) }) as EditorElementNode);
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    ...{
+      frame: { x: 920, y: 530, width: 56, height: 56 },
+      fill: "#d3f9d8",
+      stroke: "#2b8a3e",
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    ...{
+      frame: { x: 1020, y: 560, width: 56, height: 56 },
+      fill: "#d3f9d8",
+      stroke: "#2b8a3e",
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "rectangle",
+    ...{
+      frame: { x: 1120, y: 510, width: 56, height: 56 },
+      fill: "#d3f9d8",
+      stroke: "#2b8a3e",
+    },
+  }) as EditorElementNode;
+  editor.commands.execute("edgeless.visual.create", {
+    kind: "ellipse",
+    ...{
+      frame: { x: 920, y: 640, width: 70, height: 48 },
+      fill: "#ffd8a8",
+      stroke: "#d9480f",
+    },
+  }) as EditorElementNode;
 
   editor.commands.execute("edgeless.selection.clear");
 }
@@ -311,12 +364,13 @@ async function destroyDemoEditor(runtime: {
 async function createDemoEditor() {
   const resources = await createDemoDocument();
   // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
-  const alternateKeymap = new URLSearchParams(window.location.search).get("keymap") === "alternate"
-    ? {
-        [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
-        [KEYBOARD_BINDING_IDS.blockOutdent]: [],
-      }
-    : undefined;
+  const alternateKeymap =
+    new URLSearchParams(window.location.search).get("keymap") === "alternate"
+      ? {
+          [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
+          [KEYBOARD_BINDING_IDS.blockOutdent]: [],
+        }
+      : undefined;
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -368,116 +422,191 @@ async function createDemoEditor() {
     type: DEFAULT_WRITING_BLOCK_TYPE,
     content: "**Rivto editor**",
   }).id;
-  const paragraphId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
-  }, editor.blocks.getInsertionDestinationAfter(introId)).id;
+  const paragraphId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content:
+        "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
+    },
+    editor.blocks.getInsertionDestinationAfter(introId),
+  ).id;
 
-  const selectionStartId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
-  }, editor.blocks.getInsertionDestinationAfter(paragraphId)).id;
-  const middleParagraphId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "This complete **Markdown paragraph** should be included between partial selections.",
-  }, editor.blocks.getInsertionDestinationAfter(selectionStartId)).id;
-  const listId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Nested branch one owns several Markdown children.",
-  }, editor.blocks.getInsertionDestinationAfter(middleParagraphId)).id;
-  const childId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Level 2: this child owns another nested branch.",
-  }, editor.blocks.getInsertionDestinationAfter(listId)).id;
+  const selectionStartId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content:
+        "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
+    },
+    editor.blocks.getInsertionDestinationAfter(paragraphId),
+  ).id;
+  const middleParagraphId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content:
+        "This complete **Markdown paragraph** should be included between partial selections.",
+    },
+    editor.blocks.getInsertionDestinationAfter(selectionStartId),
+  ).id;
+  const listId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Nested branch one owns several Markdown children.",
+    },
+    editor.blocks.getInsertionDestinationAfter(middleParagraphId),
+  ).id;
+  const childId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Level 2: this child owns another nested branch.",
+    },
+    editor.blocks.getInsertionDestinationAfter(listId),
+  ).id;
   editor.blocks.indentBlock(childId);
-  const grandchildId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Level 3: selection now crosses two indentation boundaries.",
-  }, editor.blocks.getInsertionDestinationAfter(childId)).id;
+  const grandchildId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Level 3: selection now crosses two indentation boundaries.",
+    },
+    editor.blocks.getInsertionDestinationAfter(childId),
+  ).id;
   editor.blocks.indentBlock(grandchildId);
-  const greatGrandchildId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Level 4: deepest item for recursive rendering and outdent checks.",
-  }, editor.blocks.getInsertionDestinationAfter(grandchildId)).id;
+  const greatGrandchildId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Level 4: deepest item for recursive rendering and outdent checks.",
+    },
+    editor.blocks.getInsertionDestinationAfter(grandchildId),
+  ).id;
   editor.blocks.indentBlock(greatGrandchildId);
-  editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Level 2: sibling after the deep branch.",
-  }, editor.blocks.getInsertionDestinationAfter(childId));
+  editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Level 2: sibling after the deep branch.",
+    },
+    editor.blocks.getInsertionDestinationAfter(childId),
+  );
 
-  const reverseSelectionId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Reverse selection should preserve the browser's anchor and focus direction.",
-  }, editor.blocks.getInsertionDestinationAfter(listId)).id;
-  const secondBranchId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Nested branch two is a second independent structure.",
-  }, editor.blocks.getInsertionDestinationAfter(reverseSelectionId)).id;
-  const numberedChildId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Second branch level 2 child.",
-  }, editor.blocks.getInsertionDestinationAfter(secondBranchId)).id;
+  const reverseSelectionId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Reverse selection should preserve the browser's anchor and focus direction.",
+    },
+    editor.blocks.getInsertionDestinationAfter(listId),
+  ).id;
+  const secondBranchId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Nested branch two is a second independent structure.",
+    },
+    editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
+  ).id;
+  const numberedChildId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Second branch level 2 child.",
+    },
+    editor.blocks.getInsertionDestinationAfter(secondBranchId),
+  ).id;
   editor.blocks.indentBlock(numberedChildId);
-  const numberedGrandchildId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Second branch level 3 descendant.",
-  }, editor.blocks.getInsertionDestinationAfter(numberedChildId)).id;
+  const numberedGrandchildId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Second branch level 3 descendant.",
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedChildId),
+  ).id;
   editor.blocks.indentBlock(numberedGrandchildId);
-  editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Second branch level 2 sibling.",
-  }, editor.blocks.getInsertionDestinationAfter(numberedChildId));
+  editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Second branch level 2 sibling.",
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedChildId),
+  );
 
-  const sliderId = editor.blocks.insertBlock({
-    type: SLIDER_BLOCK_TYPE,
-    content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
-    props: { value: 35 },
-  }, editor.blocks.getInsertionDestinationAfter(secondBranchId)).id;
-  const selectionEndId = editor.blocks.insertBlock({
-    type: COUNTER_BLOCK_TYPE,
-    props: { count: 2 },
-  }, editor.blocks.getInsertionDestinationAfter(sliderId)).id;
-  const finalId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Finish the selection in the middle of this sentence, then try copy or cut.",
-  }, editor.blocks.getInsertionDestinationAfter(selectionEndId)).id;
-  const slashId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Type `/` anywhere here to open searchable slash commands.",
-  }, editor.blocks.getInsertionDestinationAfter(finalId)).id;
-  const uncheckedId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Try the interactive checkbox",
-    listProps: { type: "checkbox", checked: false },
-  }, editor.blocks.getInsertionDestinationAfter(slashId)).id;
-  const checkedId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Completed checkbox item",
-    listProps: { type: "checkbox", checked: true },
-  }, editor.blocks.getInsertionDestinationAfter(uncheckedId)).id;
-  const numberedStartId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Start a numbered sequence",
-    listProps: { type: "start_numbered_list" },
-  }, editor.blocks.getInsertionDestinationAfter(checkedId)).id;
-  const numberedNextId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Continue the adjacent sequence",
-    listProps: { type: "numbered_list" },
-  }, editor.blocks.getInsertionDestinationAfter(numberedStartId)).id;
-  const numberedGapId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Ordinary content between numbered items",
-  }, editor.blocks.getInsertionDestinationAfter(numberedNextId)).id;
-  const numberedContinueId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Continue numbering across the ordinary block",
-    listProps: { type: "continue_numbered_list" },
-  }, editor.blocks.getInsertionDestinationAfter(numberedGapId)).id;
+  const sliderId = editor.blocks.insertBlock(
+    {
+      type: SLIDER_BLOCK_TYPE,
+      content: "const selectedBlocks = selection.filter(item => item.type === 'block');",
+      props: { value: 35 },
+    },
+    editor.blocks.getInsertionDestinationAfter(secondBranchId),
+  ).id;
+  const selectionEndId = editor.blocks.insertBlock(
+    {
+      type: COUNTER_BLOCK_TYPE,
+      props: { count: 2 },
+    },
+    editor.blocks.getInsertionDestinationAfter(sliderId),
+  ).id;
+  const finalId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Finish the selection in the middle of this sentence, then try copy or cut.",
+    },
+    editor.blocks.getInsertionDestinationAfter(selectionEndId),
+  ).id;
+  const slashId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Type `/` anywhere here to open searchable slash commands.",
+    },
+    editor.blocks.getInsertionDestinationAfter(finalId),
+  ).id;
+  const uncheckedId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Try the interactive checkbox",
+      listProps: { type: "checkbox", checked: false },
+    },
+    editor.blocks.getInsertionDestinationAfter(slashId),
+  ).id;
+  const checkedId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Completed checkbox item",
+      listProps: { type: "checkbox", checked: true },
+    },
+    editor.blocks.getInsertionDestinationAfter(uncheckedId),
+  ).id;
+  const numberedStartId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Start a numbered sequence",
+      listProps: { type: "start_numbered_list" },
+    },
+    editor.blocks.getInsertionDestinationAfter(checkedId),
+  ).id;
+  const numberedNextId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Continue the adjacent sequence",
+      listProps: { type: "numbered_list" },
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedStartId),
+  ).id;
+  const numberedGapId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Ordinary content between numbered items",
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedNextId),
+  ).id;
+  const numberedContinueId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Continue numbering across the ordinary block",
+      listProps: { type: "continue_numbered_list" },
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedGapId),
+  ).id;
 
   // The explicit separator is visible in block mode and partitions cards only
   // because its React block plugin declares `separatesBlockElements`.
-  editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(reverseSelectionId));
+  editor.blocks.insertBlock(
+    { type: SEPARATOR_BLOCK_TYPE, content: "" },
+    editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
+  );
   editor.elements.insertElement({
     type: "block",
     frame: { x: 60, y: 60, width: 500, height: 360 },
@@ -490,29 +619,63 @@ async function createDemoEditor() {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
-  editor.blocks.insertBlock({ ...createBentoBlockInput(), children: [
-    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
-    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.", props: { bentoWidth: 400 } },
-    { type: DEFAULT_WRITING_BLOCK_TYPE, content: "Drag blocks between tiles, nest them inside, or move them back into the editor." },
-  ] }, editor.blocks.getInsertionDestinationAfter(numberedContinueId));
-  const tableId = editor.blocks.insertBlock(createTableBlockInput(), editor.blocks.getInsertionDestinationAfter(numberedContinueId)).id;
-  const kanbanId = editor.blocks.insertBlock(createKanbanBlockInput(), editor.blocks.getInsertionDestinationAfter(tableId)).id;
+  editor.blocks.insertBlock(
+    {
+      ...createBentoBlockInput(),
+      children: [
+        { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
+        {
+          type: DEFAULT_WRITING_BLOCK_TYPE,
+          content:
+            "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
+          props: { bentoWidth: 400 },
+        },
+        {
+          type: DEFAULT_WRITING_BLOCK_TYPE,
+          content:
+            "Drag blocks between tiles, nest them inside, or move them back into the editor.",
+        },
+      ],
+    },
+    editor.blocks.getInsertionDestinationAfter(numberedContinueId),
+  );
+  const tableId = editor.blocks.insertBlock(
+    createTableBlockInput(),
+    editor.blocks.getInsertionDestinationAfter(numberedContinueId),
+  ).id;
+  const kanbanId = editor.blocks.insertBlock(
+    createKanbanBlockInput(),
+    editor.blocks.getInsertionDestinationAfter(tableId),
+  ).id;
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
-  const cardId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Drag me between columns or back into the editor",
-  }, editor.blocks.getInsertionDestinationAfter(kanbanId)).id;
+  const cardId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Drag me between columns or back into the editor",
+    },
+    editor.blocks.getInsertionDestinationAfter(kanbanId),
+  ).id;
   editor.blocks.moveBlocks([cardId], column.id, "inside");
-  const columnsId = editor.blocks.insertBlock(createColumnsBlockInput(2), editor.blocks.getInsertionDestinationAfter(kanbanId)).id;
+  const columnsId = editor.blocks.insertBlock(
+    createColumnsBlockInput(2),
+    editor.blocks.getInsertionDestinationAfter(kanbanId),
+  ).id;
   const columnsBoard = editor.blocks.getBlock(columnsId)!;
-  const leftColumnId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Left column. Add more blocks here, or use the settings control to change the column count.",
-  }, editor.blocks.getInsertionDestinationAfter(columnsId)).id;
-  const rightColumnId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
-    content: "Right column. Deleting a column moves its blocks into the remaining column.",
-  }, editor.blocks.getInsertionDestinationAfter(columnsId)).id;
+  const leftColumnId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content:
+        "Left column. Add more blocks here, or use the settings control to change the column count.",
+    },
+    editor.blocks.getInsertionDestinationAfter(columnsId),
+  ).id;
+  const rightColumnId = editor.blocks.insertBlock(
+    {
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Right column. Deleting a column moves its blocks into the remaining column.",
+    },
+    editor.blocks.getInsertionDestinationAfter(columnsId),
+  ).id;
   editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
   editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
   const repeatCount = demoRepeatCount();
@@ -527,8 +690,14 @@ async function createDemoEditor() {
     editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE, content: "" }, editor.blocks.getInsertionDestinationAfter(afterId)).id;
-        afterId = editor.blocks.importForest(template, editor.blocks.getInsertionDestinationAfter(afterId)).roots.at(-1)?.id ?? afterId;
+        afterId = editor.blocks.insertBlock(
+          { type: SEPARATOR_BLOCK_TYPE, content: "" },
+          editor.blocks.getInsertionDestinationAfter(afterId),
+        ).id;
+        afterId =
+          editor.blocks
+            .importForest(template, editor.blocks.getInsertionDestinationAfter(afterId))
+            .roots.at(-1)?.id ?? afterId;
       }
     });
   }
@@ -536,48 +705,62 @@ async function createDemoEditor() {
     type: TODO_STORAGE_BLOCK_TYPE,
     content: "",
   }).id;
-  const todoId = editor.blocks.insertBlock({
-    type: TODO_ITEM_BLOCK_TYPE,
-    content: "Review the project brief",
-    props: {
-      status: "todo",
-      description: "Confirm scope and acceptance criteria.",
-      priority: 2,
-      project: "Planning",
+  const todoId = editor.blocks.insertBlock(
+    {
+      type: TODO_ITEM_BLOCK_TYPE,
+      content: "Review the project brief",
+      props: {
+        status: "todo",
+        description: "Confirm scope and acceptance criteria.",
+        priority: 2,
+        project: "Planning",
+      },
     },
-  }, editor.blocks.getInsertionDestinationAfter(todoStorageId)).id;
+    editor.blocks.getInsertionDestinationAfter(todoStorageId),
+  ).id;
   editor.blocks.indentBlock(todoId);
-  const doingId = editor.blocks.insertBlock({
-    type: TODO_ITEM_BLOCK_TYPE,
-    content: "Build the editor extension",
-    props: {
-      status: "doing",
-      description: "Prompt conversion and task properties are in progress.",
-      priority: 1,
-      project: "Rivto",
+  const doingId = editor.blocks.insertBlock(
+    {
+      type: TODO_ITEM_BLOCK_TYPE,
+      content: "Build the editor extension",
+      props: {
+        status: "doing",
+        description: "Prompt conversion and task properties are in progress.",
+        priority: 1,
+        project: "Rivto",
+      },
     },
-  }, editor.blocks.getInsertionDestinationAfter(todoId)).id;
-  editor.blocks.insertBlock({
-    type: TODO_ITEM_BLOCK_TYPE,
-    content: "Set up the workspace",
-    props: {
-      status: "done",
-      description: "Core packages and demo are ready.",
-      priority: 3,
-      project: "Rivto",
+    editor.blocks.getInsertionDestinationAfter(todoId),
+  ).id;
+  editor.blocks.insertBlock(
+    {
+      type: TODO_ITEM_BLOCK_TYPE,
+      content: "Set up the workspace",
+      props: {
+        status: "done",
+        description: "Core packages and demo are ready.",
+        priority: 3,
+        project: "Rivto",
+      },
     },
-  }, editor.blocks.getInsertionDestinationAfter(doingId));
+    editor.blocks.getInsertionDestinationAfter(doingId),
+  );
   seedEdgelessShowcase(editor);
-  editor.elements.insertElement(createReviewElementInput({
-    id: "demo-review-element",
-    frame: { x: 920, y: 730, width: 420, height: 260 },
-    zIndex: Math.max(0, ...editor.elements.getElementNodes().map(({ zIndex }) => zIndex)) + 1,
-    problem: "Ошибка структуры на холсте",
-  }));
-  editor.blocks.insertBlock({
-    type: EMBEDDING_BLOCK_TYPE,
-    props: { targetDocumentId: editor.getDocument().id, targetBlockId: listId },
-  }, editor.blocks.getInsertionDestinationAfter(paragraphId));
+  editor.elements.insertElement(
+    createReviewElementInput({
+      id: "demo-review-element",
+      frame: { x: 920, y: 730, width: 420, height: 260 },
+      zIndex: Math.max(0, ...editor.elements.getElementNodes().map(({ zIndex }) => zIndex)) + 1,
+      problem: "Ошибка структуры на холсте",
+    }),
+  );
+  editor.blocks.insertBlock(
+    {
+      type: EMBEDDING_BLOCK_TYPE,
+      props: { targetDocumentId: editor.getDocument().id, targetBlockId: listId },
+    },
+    editor.blocks.getInsertionDestinationAfter(paragraphId),
+  );
   editor.history.clear();
 
   return { ...resources, editor, reactEditor, editorStorage };
@@ -668,7 +851,9 @@ function DemoToolbar({
   }
   /** No-ops when already in `next` so repeated clicks do not thrash mode. */
   const switchMode = (next: "block" | "edgeless") => {
-    if (next === mode) return;
+    if (next === mode) {
+      return;
+    }
     setMode(next);
   };
 
@@ -676,7 +861,9 @@ function DemoToolbar({
   const restoreReport = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     setReportError(null);
     try {
       const report = JSON.parse(await file.text()) as Partial<ReviewReport>;
@@ -716,32 +903,74 @@ function DemoToolbar({
           />
           Block IDs
         </label>
-        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
-          <input type="checkbox" checked={virtualizePageThreshold !== false} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}
-            onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)} />
-          Virtualize page
-        </label>}
-        {onVirtualizePageThresholdChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}>
-          Virtualize after roots count
-          <input type="number" min={0} step={1} placeholder="Always"
-            disabled={virtualizePageThreshold === false}
-            value={thresholdInputValue}
-            title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}
-            onChange={changeVirtualizationThreshold} />
-        </label>}
-        {onVirtualizePageOverscanChange && <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}>
-          Extra roots per side
-          <input type="number" min={0} step={1} value={virtualizePageOverscan}
-            title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}
-            onChange={(event) => onVirtualizePageOverscanChange(Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)))} />
-        </label>}
+        {onVirtualizePageThresholdChange && (
+          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
+            <input
+              type="checkbox"
+              checked={virtualizePageThreshold !== false}
+              title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}
+              onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)}
+            />
+            Virtualize page
+          </label>
+        )}
+        {onVirtualizePageThresholdChange && (
+          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}>
+            Virtualize after roots count
+            <input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="Always"
+              disabled={virtualizePageThreshold === false}
+              value={thresholdInputValue}
+              title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}
+              onChange={changeVirtualizationThreshold}
+            />
+          </label>
+        )}
+        {onVirtualizePageOverscanChange && (
+          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}>
+            Extra roots per side
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={virtualizePageOverscan}
+              title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}
+              onChange={(event) =>
+                onVirtualizePageOverscanChange(
+                  Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)),
+                )
+              }
+            />
+          </label>
+        )}
         <div className="demo-mode-switch" role="group" aria-label="Editor mode">
           {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
-          <button type="button" data-editor-mode="block" aria-pressed={mode === "block"} onClick={() => switchMode("block")}>Page</button>
-          <button type="button" data-editor-mode="edgeless" aria-pressed={mode === "edgeless"} onClick={() => switchMode("edgeless")}>Edgeless</button>
+          <button
+            type="button"
+            data-editor-mode="block"
+            aria-pressed={mode === "block"}
+            onClick={() => switchMode("block")}
+          >
+            Page
+          </button>
+          <button
+            type="button"
+            data-editor-mode="edgeless"
+            aria-pressed={mode === "edgeless"}
+            onClick={() => switchMode("edgeless")}
+          >
+            Edgeless
+          </button>
         </div>
-        <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>Delete</button>
-        <button type="button" data-editor-action="undo" onClick={() => editor.history.undo()}>Undo</button>
+        <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>
+          Delete
+        </button>
+        <button type="button" data-editor-action="undo" onClick={() => editor.history.undo()}>
+          Undo
+        </button>
         <label>
           Restore report
           <input
@@ -764,7 +993,10 @@ function DemoToolbar({
  * patterns, and lifecycle cleanup when the page unmounts.
  */
 function JournalDemoApp() {
-  const [runtime, setRuntime] = useState<{ today: Awaited<ReturnType<typeof createDemoEditor>>; yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>> }>();
+  const [runtime, setRuntime] = useState<{
+    today: Awaited<ReturnType<typeof createDemoEditor>>;
+    yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>>;
+  }>();
   const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(true);
   const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
@@ -782,19 +1014,39 @@ function JournalDemoApp() {
   useEffect(() => {
     let active = true;
     const created: Parameters<typeof destroyDemoEditor>[0][] = [];
-    const retain = async <Runtime extends Parameters<typeof destroyDemoEditor>[0],>(factory: Promise<Runtime>): Promise<Runtime> => {
+    const retain = async <Runtime extends Parameters<typeof destroyDemoEditor>[0]>(
+      factory: Promise<Runtime>,
+    ): Promise<Runtime> => {
       const resource = await factory;
-      if (active) created.push(resource);
-      else await destroyDemoEditor(resource);
+      if (active) {
+        created.push(resource);
+      } else {
+        await destroyDemoEditor(resource);
+      }
       return resource;
     };
-    void Promise.all([retain(createDemoEditor()), retain(createEmptyDemoEditor())]).then(([today, yesterday]) => {
-      if (active) setRuntime({ today, yesterday });
-    }).catch((failure) => { if (active) setError(String(failure)); });
-    return () => { active = false; created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+    void Promise.all([retain(createDemoEditor()), retain(createEmptyDemoEditor())])
+      .then(([today, yesterday]) => {
+        if (active) {
+          setRuntime({ today, yesterday });
+        }
+      })
+      .catch((failure) => {
+        if (active) {
+          setError(String(failure));
+        }
+      });
+    return () => {
+      active = false;
+      created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
+    };
   }, []);
-  if (error) return <p role="alert">{error}</p>;
-  if (!runtime) return <p>Loading documents…</p>;
+  if (error) {
+    return <p role="alert">{error}</p>;
+  }
+  if (!runtime) {
+    return <p>Loading documents…</p>;
+  }
   const { today: todayEditor, yesterday: yesterdayEditor } = runtime;
 
   return (
@@ -803,8 +1055,11 @@ function JournalDemoApp() {
         {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
         <section className="journal-document" data-journal-document="today">
           <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-            <DemoEditorPanels editor={todayEditor.reactEditor}
-              virtualizePageThreshold={virtualizePageThreshold} virtualizePageOverscan={virtualizePageOverscan}>
+            <DemoEditorPanels
+              editor={todayEditor.reactEditor}
+              virtualizePageThreshold={virtualizePageThreshold}
+              virtualizePageOverscan={virtualizePageOverscan}
+            >
               <DemoToolbar
                 editor={todayEditor.editor}
                 showBlockIds={showBlockIds}
@@ -865,11 +1120,13 @@ async function createMultiEditor(
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "Movable parent",
       listProps: { collapsed: true },
-      children: [{
-        id: "left-child",
-        type: DEFAULT_WRITING_BLOCK_TYPE,
-        content: "Nested child",
-      }],
+      children: [
+        {
+          id: "left-child",
+          type: DEFAULT_WRITING_BLOCK_TYPE,
+          content: "Nested child",
+        },
+      ],
     }).id;
     editor.elements.insertElement({
       type: "block",
@@ -882,7 +1139,11 @@ async function createMultiEditor(
       type: COUNTER_BLOCK_TYPE,
       props: { count: 7 },
     });
-    editor.blocks.insertBlock({ id: "left-stay", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Stays in the source" });
+    editor.blocks.insertBlock({
+      id: "left-stay",
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      content: "Stays in the source",
+    });
   } else if (!options.empty) {
     editor.blocks.insertBlock({
       id: "right-target",
@@ -896,7 +1157,11 @@ async function createMultiEditor(
           : []),
       ],
     });
-    editor.blocks.insertBlock({ id: "right-counter", type: COUNTER_BLOCK_TYPE, props: { count: 20 } });
+    editor.blocks.insertBlock({
+      id: "right-counter",
+      type: COUNTER_BLOCK_TYPE,
+      props: { count: 20 },
+    });
   }
   editor.history.clear();
   return { ...resources, editor, reactEditor };
@@ -909,7 +1174,11 @@ function DocumentStateDump({ editor }: { readonly editor: DocumentEditorAPI }) {
     () => JSON.stringify(editor.dump()),
     () => JSON.stringify(editor.dump()),
   );
-  return <output data-document-state hidden>{snapshot}</output>;
+  return (
+    <output data-document-state hidden>
+      {snapshot}
+    </output>
+  );
 }
 
 /** One pane of `?editors=2` (toolbar + document dump for e2e). */
@@ -926,7 +1195,11 @@ function MultiEditorPane({
     <section className="multi-editor-pane" data-multi-editor={side}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
         <EditorPanel editor={runtime.reactEditor}>
-          <DemoToolbar editor={runtime.editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+          <DemoToolbar
+            editor={runtime.editor}
+            showBlockIds={showBlockIds}
+            onShowBlockIdsChange={setShowBlockIds}
+          />
           <RevisionsPanel />
           <DocumentStateDump editor={runtime.editor} />
           <DemoEditorSurface />
@@ -946,22 +1219,49 @@ function MultiEditorApp() {
   const emptyDestination = params.get("emptyDestination") === "1";
   const conflictParam = params.get("conflict");
   const conflict = conflictParam === "block" ? conflictParam : undefined;
-  const [runtime, setRuntime] = useState<{ left: Awaited<ReturnType<typeof createMultiEditor>>; right: Awaited<ReturnType<typeof createMultiEditor>> }>();
+  const [runtime, setRuntime] = useState<{
+    left: Awaited<ReturnType<typeof createMultiEditor>>;
+    right: Awaited<ReturnType<typeof createMultiEditor>>;
+  }>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     let active = true;
     const created: Awaited<ReturnType<typeof createMultiEditor>>[] = [];
-    void Promise.all([createMultiEditor("left"), createMultiEditor("right", { empty: emptyDestination, conflict })].map(async (factory) => {
-      const resource = await factory;
-      if (active) created.push(resource);
-      else await destroyDemoEditor(resource);
-      return resource;
-    })).then(([left, right]) => { if (active) setRuntime({ left, right }); })
-      .catch((failure) => { if (active) setError(String(failure)); });
-    return () => { active = false; created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+    void Promise.all(
+      [
+        createMultiEditor("left"),
+        createMultiEditor("right", { empty: emptyDestination, conflict }),
+      ].map(async (factory) => {
+        const resource = await factory;
+        if (active) {
+          created.push(resource);
+        } else {
+          await destroyDemoEditor(resource);
+        }
+        return resource;
+      }),
+    )
+      .then(([left, right]) => {
+        if (active) {
+          setRuntime({ left, right });
+        }
+      })
+      .catch((failure) => {
+        if (active) {
+          setError(String(failure));
+        }
+      });
+    return () => {
+      active = false;
+      created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
+    };
   }, [emptyDestination, conflict]);
-  if (error) return <p role="alert">{error}</p>;
-  if (!runtime) return <p>Loading documents…</p>;
+  if (error) {
+    return <p role="alert">{error}</p>;
+  }
+  if (!runtime) {
+    return <p>Loading documents…</p>;
+  }
   const { left, right } = runtime;
 
   return (
@@ -985,7 +1285,12 @@ function MultiEditorApp() {
  * @param signal - Cancels pending registry discovery and document acquisition when the demo unmounts.
  * @returns Editor runtime and provider resources for one peer.
  */
-async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCount: number, signal: AbortSignal) {
+async function createSyncedPeer(
+  side: "left" | "right",
+  roomId: string,
+  repeatCount: number,
+  signal: AbortSignal,
+) {
   const database = new DemoDatabase();
   const storage = new DocumentStorage({
     registry: new YjsDocumentRegistry(roomId),
@@ -999,19 +1304,33 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
     signal.throwIfAborted();
     if (side === "right" && !storage.getDocumentIds().includes("shared")) {
       await new Promise<void>((resolve, reject) => {
-        const finish = () => { unsubscribe(); signal.removeEventListener("abort", abort); };
-        const refresh = () => {
-          if (!storage.getDocumentIds().includes("shared")) return;
-          finish(); resolve();
+        const finish = () => {
+          unsubscribe();
+          signal.removeEventListener("abort", abort);
         };
-        const abort = () => { finish(); reject(signal.reason); };
+        const refresh = () => {
+          if (!storage.getDocumentIds().includes("shared")) {
+            return;
+          }
+          finish();
+          resolve();
+        };
+        const abort = () => {
+          finish();
+          reject(signal.reason);
+        };
         const unsubscribe = storage.subscribe(refresh);
         signal.addEventListener("abort", abort, { once: true });
-        if (signal.aborted) abort();
-        else refresh();
+        if (signal.aborted) {
+          abort();
+        } else {
+          refresh();
+        }
       });
     }
-    if (!storage.getDocumentIds().includes("shared")) storage.registerDocument("shared");
+    if (!storage.getDocumentIds().includes("shared")) {
+      storage.registerDocument("shared");
+    }
     document = await storage.openDocument("shared");
     signal.throwIfAborted();
   } catch (failure) {
@@ -1038,17 +1357,23 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
       type: DEFAULT_WRITING_BLOCK_TYPE,
       content: "**Synced demo** — edit here or in the other pane.",
     }).id;
-    editor.blocks.insertBlock({
-      type: DEFAULT_WRITING_BLOCK_TYPE,
-      content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
-    }, editor.blocks.getInsertionDestinationAfter(introId));
+    editor.blocks.insertBlock(
+      {
+        type: DEFAULT_WRITING_BLOCK_TYPE,
+        content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
+      },
+      editor.blocks.getInsertionDestinationAfter(introId),
+    );
     editor.history.batchUpdates(() => {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock({
-          type: DEFAULT_WRITING_BLOCK_TYPE,
-          content: `Synced repeated block ${index + 1}`,
-        }, editor.blocks.getInsertionDestinationAfter(afterId)).id;
+        afterId = editor.blocks.insertBlock(
+          {
+            type: DEFAULT_WRITING_BLOCK_TYPE,
+            content: `Synced repeated block ${index + 1}`,
+          },
+          editor.blocks.getInsertionDestinationAfter(afterId),
+        ).id;
       }
     });
     editor.history.clear();
@@ -1065,7 +1390,10 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
   const repeatCount = demoRepeatCount();
-  const [peers, setPeers] = useState<{ left: Awaited<ReturnType<typeof createSyncedPeer>>; right: Awaited<ReturnType<typeof createSyncedPeer>> }>();
+  const [peers, setPeers] = useState<{
+    left: Awaited<ReturnType<typeof createSyncedPeer>>;
+    right: Awaited<ReturnType<typeof createSyncedPeer>>;
+  }>();
   const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(true);
   useEffect(() => {
@@ -1074,17 +1402,35 @@ function SyncEditorsApp() {
     const created: Awaited<ReturnType<typeof createSyncedPeer>>[] = [];
     void (async () => {
       const left = await createSyncedPeer("left", roomId, repeatCount, request.signal);
-      if (!active) { await destroyDemoEditor(left); return; }
+      if (!active) {
+        await destroyDemoEditor(left);
+        return;
+      }
       created.push(left);
       const right = await createSyncedPeer("right", roomId, repeatCount, request.signal);
-      if (!active) { await destroyDemoEditor(right); return; }
+      if (!active) {
+        await destroyDemoEditor(right);
+        return;
+      }
       created.push(right);
       setPeers({ left, right });
-    })().catch((failure) => { if (active) setError(String(failure)); });
-    return () => { active = false; request.abort(); created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error)); };
+    })().catch((failure) => {
+      if (active) {
+        setError(String(failure));
+      }
+    });
+    return () => {
+      active = false;
+      request.abort();
+      created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
+    };
   }, [roomId, repeatCount]);
-  if (error) return <p role="alert">{error}</p>;
-  if (!peers) return <p>Loading synchronized documents…</p>;
+  if (error) {
+    return <p role="alert">{error}</p>;
+  }
+  if (!peers) {
+    return <p>Loading synchronized documents…</p>;
+  }
 
   return (
     <div className="sync-editor-page">
@@ -1099,7 +1445,11 @@ function SyncEditorsApp() {
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
             <BlockIdsVisibleProvider visible={showBlockIds}>
               <EditorPanel editor={peers[side].reactEditor}>
-                <DemoToolbar editor={peers[side].editor} showBlockIds={showBlockIds} onShowBlockIdsChange={setShowBlockIds} />
+                <DemoToolbar
+                  editor={peers[side].editor}
+                  showBlockIds={showBlockIds}
+                  onShowBlockIdsChange={setShowBlockIds}
+                />
                 <RevisionsPanel />
                 <DemoEditorSurface />
               </EditorPanel>
@@ -1125,10 +1475,20 @@ function SyncEditorsApp() {
  */
 export function App() {
   const params = new URLSearchParams(window.location.search);
-  if (params.has("elementRegistration")) return <ElementRegistrationTest />;
-  if (params.get("editorLifecycle") === "1") return <EditorLifecycleTest />;
-  if (params.get("embeddings") === "1") return <DocumentsDemo />;
-  if (params.get("editors") === "2") return <MultiEditorApp />;
-  if (params.get("sync") === "1") return <SyncEditorsApp />;
+  if (params.has("elementRegistration")) {
+    return <ElementRegistrationTest />;
+  }
+  if (params.get("editorLifecycle") === "1") {
+    return <EditorLifecycleTest />;
+  }
+  if (params.get("embeddings") === "1") {
+    return <DocumentsDemo />;
+  }
+  if (params.get("editors") === "2") {
+    return <MultiEditorApp />;
+  }
+  if (params.get("sync") === "1") {
+    return <SyncEditorsApp />;
+  }
   return <JournalDemoApp />;
 }

@@ -54,12 +54,10 @@ interface SurfaceAdapter {
 
 Implementations:
 
-
 | Implementation           | Responsibilities                                                                                           |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `PageSurfaceAdapter`     | Page block lookup, virtualized mounting, selection order, caret operations, and outline drop measurements. |
 | `EdgelessSurfaceAdapter` | Canvas block lookup and measurement; routes text operations to the appropriate editable card.              |
-
 
 Both reuse shared DOM selection functions. They should not duplicate `TreeWalker`, range restoration, or caret conversion algorithms.
 

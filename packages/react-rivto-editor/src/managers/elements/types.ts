@@ -1,13 +1,22 @@
-import type { EdgelessOperations } from './edgeless-operations';
-import type { EditableLabelFocusPoint } from '../../components';
-import type { ComponentType, ReactNode, RefObject } from 'react';
-import type { PanelAPI, ElementDefinition, EditorElementInput, EditorElementNode } from '@chulane/rivto';
-import type { EdgelessAlignment, EdgelessReorder, EdgelessVisualTool } from '../../elements/visuals/types';
-import type { ReactPanelApi } from '../../panels/types';
-import type { ElementClipboardConverter } from '../clipboard/types';
+import type { EdgelessOperations } from "./edgeless-operations";
+import type { EditableLabelFocusPoint } from "../../components";
+import type { ComponentType, ReactNode, RefObject } from "react";
+import type {
+  PanelAPI,
+  ElementDefinition,
+  EditorElementInput,
+  EditorElementNode,
+} from "@chulane/rivto";
+import type {
+  EdgelessAlignment,
+  EdgelessReorder,
+  EdgelessVisualTool,
+} from "../../elements/visuals/types";
+import type { ReactPanelApi } from "../../panels/types";
+import type { ElementClipboardConverter } from "../clipboard/types";
 
 /** Interactive element input; omitted stacking places the element above the panel's current elements. */
-export type CreateElementInput = Omit<EditorElementInput, 'zIndex'> & { readonly zIndex?: number };
+export type CreateElementInput = Omit<EditorElementInput, "zIndex"> & { readonly zIndex?: number };
 
 /** Props for registered element content; the surface owns position, DOM identity and selection. */
 export interface ElementRenderProps {
@@ -72,7 +81,7 @@ export interface ReactElementRegistration {
   /** Human-readable title used by the shared property panel. Defaults to the persisted type. */
   readonly title?: string;
   /** Optional interaction and creation policies; resize overrides definition.resize when supplied. */
-  readonly behavior?: Pick<ElementDefinition, 'resize'> & {
+  readonly behavior?: Pick<ElementDefinition, "resize"> & {
     /** Enables the common double-click label editing lifecycle for this renderer. */
     readonly editableLabel?: boolean;
     /** Uses an axis-aligned host for world-space geometry and disables ordinary resize/rotate controls; the renderer supplies its own geometry controls. */
@@ -83,7 +92,10 @@ export interface ReactElementRegistration {
      * @param input - Creation request with complete frame and stacking; treat it as read-only.
      * @returns Defaults to merge with remembered values and explicit input properties.
      */
-    readonly creationDefaults?: (defaults: Readonly<Record<string, unknown>>, input: EditorElementInput) => Record<string, unknown>;
+    readonly creationDefaults?: (
+      defaults: Readonly<Record<string, unknown>>,
+      input: EditorElementInput,
+    ) => Record<string, unknown>;
     /** Optional session-default group shared by related registered types, such as the two shapes. Independent of creation.group, which controls toolbar placement. */
     readonly defaultsGroup?: string;
     /**
@@ -201,7 +213,7 @@ export interface EdgelessAPI {
    * @param tool - Tool configuration, or select to return to selection mode.
    * @throws If the requested element creation tool is unregistered or the tool configuration is unsupported.
    */
-  setTool(tool: EdgelessVisualTool | 'select'): void;
+  setTool(tool: EdgelessVisualTool | "select"): void;
   /**
    * Moves the complete active selection by a canvas delta.
    *
@@ -262,7 +274,7 @@ export interface EdgelessAPI {
    *
    * @param axis - Canvas axis along which elements are sorted and spaced.
    */
-  distribute(axis: 'horizontal' | 'vertical'): void;
+  distribute(axis: "horizontal" | "vertical"): void;
   /**
    * Reorders selected leaves in the shared element layer.
    *

@@ -190,7 +190,7 @@ function copyBlockForReport(
   block: EditorBlock,
   excludedBlockId?: string,
 ): EditorBlock | null {
-  if (block.id === excludedBlockId) return null;
+  if (block.id === excludedBlockId) {return null;}
   const copy = structuredClone(block);
   copy.children = copy.children.flatMap((child) => {
     const childCopy = copyBlockForReport(child, excludedBlockId);
@@ -249,7 +249,7 @@ export function captureBlockReview(
     : (editor.blocks.getBlockNode(parentReportId)?.childIds ?? []);
   const siblingIndex = siblingIds.indexOf(reviewId);
   const anchorIndex = rootIds.indexOf(anchorRootId);
-  if (anchorIndex < 0) throw new Error(`Review block ${reviewId} is not in the document`);
+  if (anchorIndex < 0) {throw new Error(`Review block ${reviewId} is not in the document`);}
   const selectedIds = rootIds.slice(
     Math.max(0, anchorIndex - blocksAbove),
     Math.min(rootIds.length, anchorIndex + 1 + blocksBelow),
@@ -257,14 +257,14 @@ export function captureBlockReview(
   const selected = new Set(selectedIds.filter((id) => includeReportBlock || id !== reviewId));
   const blocks = selectedIds.flatMap((id): EditorBlock[] => {
     const block = editor.blocks.getBlock(id);
-    if (!block) throw new Error(`Captured root block ${id} is missing`);
+    if (!block) {throw new Error(`Captured root block ${id} is missing`);}
     const copy = copyBlockForReport(block, includeReportBlock ? undefined : reviewId);
     return copy ? [copy] : [];
   });
   const elements = editor.elements.getElementNodes().flatMap((element): EditorElementNode[] => {
-    if (element.type !== "block") return [];
+    if (element.type !== "block") {return [];}
     const overlap = blockCardRootIds(element, rootIds).filter((id) => selected.has(id));
-    if (!overlap.length) return [];
+    if (!overlap.length) {return [];}
     const copy = copyElementForReport(element);
     copy.props = {
       ...copy.props,
@@ -306,7 +306,7 @@ export function captureElementReviewSnapshot(
     (left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id),
   );
   const anchorIndex = ordered.findIndex(({ id }) => id === reviewId);
-  if (anchorIndex < 0) throw new Error(`Review element ${reviewId} is not in the document`);
+  if (anchorIndex < 0) {throw new Error(`Review element ${reviewId} is not in the document`);}
   const included = new Set(ordered.slice(
     Math.max(0, anchorIndex - elementsAbove),
     Math.min(ordered.length, anchorIndex + 1 + elementsBelow),
@@ -316,9 +316,9 @@ export function captureElementReviewSnapshot(
   /** Adds existing group descendants until the included set is closed. */
   const includeChildren = (id: string): void => {
     const element = byId.get(id);
-    if (element?.type !== "group" || !Array.isArray(element.childIds)) return;
+    if (element?.type !== "group" || !Array.isArray(element.childIds)) {return;}
     element.childIds.forEach((child) => {
-      if (typeof child !== "string" || !byId.has(child) || included.has(child)) return;
+      if (typeof child !== "string" || !byId.has(child) || included.has(child)) {return;}
       included.add(child);
       includeChildren(child);
     });
@@ -335,7 +335,7 @@ export function captureElementReviewSnapshot(
     if (copy.type === "connector") {
       for (const key of ["source", "target"] as const) {
         const endpoint = copy.props[key];
-        if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) continue;
+        if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) {continue;}
         const detached = { ...endpoint } as Record<string, unknown>;
         if (typeof detached.elementId === "string" && !included.has(detached.elementId)) {
           delete detached.elementId;
@@ -351,9 +351,9 @@ export function captureElementReviewSnapshot(
   )));
   const blocks = rootIds.filter((id) => capturedRoots.has(id)).map((id) => {
     const block = editor.blocks.getBlock(id);
-    if (!block) throw new Error(`Captured root block ${id} is missing`);
+    if (!block) {throw new Error(`Captured root block ${id} is missing`);}
     const copy = copyBlockForReport(block);
-    if (!copy) throw new Error(`Captured root block ${id} is missing`);
+    if (!copy) {throw new Error(`Captured root block ${id} is missing`);}
     return copy;
   });
   return createReviewSnapshot(editor, blocks, elements);

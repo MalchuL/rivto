@@ -1,6 +1,4 @@
-import {
-	createContext,
-	} from "react";
+import { createContext } from "react";
 import type { EditorRootContextValue } from "./types";
 
 /**

@@ -2,11 +2,14 @@
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-test("keeps nested blocks when settings remove a column and does not scroll horizontally", async ({ page }) => {
+test("keeps nested blocks when settings remove a column and does not scroll horizontally", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
   });
@@ -15,20 +18,28 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   const lanes = board.locator(":scope > .page-block-children");
   const columns = page.locator('[data-block-type="columns-column"]');
   await expect(columns).toHaveCount(2);
-  await expect.poll(() => columns.nth(1).evaluate((element) => {
-    const separator = getComputedStyle(element, "::before");
-    return [separator.content, separator.top, separator.bottom];
-  })).toEqual(['\"\"', "12px", "12px"]);
+  await expect
+    .poll(() =>
+      columns.nth(1).evaluate((element) => {
+        const separator = getComputedStyle(element, "::before");
+        return [separator.content, separator.top, separator.bottom];
+      }),
+    )
+    .toEqual(['""', "12px", "12px"]);
   await expect(board).toContainText("Left column");
   await expect(board).toContainText("Right column");
-  await expect.poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await expect
+    .poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth))
+    .toBeLessThanOrEqual(1);
 
   await board.getByRole("button", { name: "Columns settings" }).click();
   await page.getByRole("button", { name: "Remove column" }).click();
   await expect(columns).toHaveCount(1);
   await expect(columns.first()).toContainText("Left column");
   await expect(columns.first()).toContainText("Right column");
-  await expect.poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await expect
+    .poll(() => lanes.evaluate((element) => element.scrollWidth - element.clientWidth))
+    .toBeLessThanOrEqual(1);
 
   await page.getByRole("button", { name: "Add column" }).click();
   await expect(columns).toHaveCount(2);
@@ -36,13 +47,23 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   await expect(columns.first()).toContainText("Right column");
 });
 
-test("creates a writing block on empty-column click and then wraps its content", async ({ page }) => {
+test("creates a writing block on empty-column click and then wraps its content", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
-    editor.blocks.removeBlocks(board.children.flatMap((column) => column.children.map((child) => child.id)));
-    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.blocks.removeBlocks(
+      board.children.flatMap((column) => column.children.map((child) => child.id)),
+    );
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(board.id)!],
+      elements: [],
+    });
   });
   const columns = page.locator('[data-block-type="columns-column"]');
   const first = columns.first();
@@ -56,11 +77,17 @@ test("creates a writing block on empty-column click and then wraps its content",
 test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
     // Measure column feedback in one layout, away from outer-page scroll edges.
-    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(board.id)!],
+      elements: [],
+    });
   });
 
   const board = page.locator('[data-block-type="columns"]').first();
@@ -93,9 +120,11 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
 test("aligns sibling drag handles when only one block has a collapse toggle", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: DocumentEditorAPI };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
     const column = board.children[0]!;
     editor.blocks.removeBlocks(column.children.map((child) => child.id));
@@ -107,7 +136,12 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
     const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
     editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
     editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
-    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [editor.blocks.getBlock(board.id)!], elements: [] });
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(board.id)!],
+      elements: [],
+    });
   });
 
   const column = page.locator('[data-block-type="columns-column"]').first();
@@ -117,7 +151,10 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
   const collapsibleBox = (await collapsibleHandle.boundingBox())!;
   const siblingBox = (await siblingHandle.boundingBox())!;
   const siblingRowBox = (await children.nth(1).locator(":scope > .page-block-row").boundingBox())!;
-  const siblingContentBox = (await children.nth(1).locator(":scope > .page-block-row > .rivto-block-content-flow").boundingBox())!;
+  const siblingContentBox = (await children
+    .nth(1)
+    .locator(":scope > .page-block-row > .rivto-block-content-flow")
+    .boundingBox())!;
   expect(siblingBox.x).toBeCloseTo(collapsibleBox.x, 0);
   expect(siblingContentBox.x - siblingRowBox.x).toBeCloseTo(0, 0);
 

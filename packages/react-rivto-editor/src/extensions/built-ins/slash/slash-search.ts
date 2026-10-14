@@ -14,9 +14,15 @@ export function normalizeSlashText(value: string): string {
 
 /** Maximum typo distance used by the command search. */
 export function slashSearchDistance(queryLength: number): number {
-  if (queryLength <= 2) return 0;
-  if (queryLength <= 5) return 1;
-  if (queryLength <= 9) return 2;
+  if (queryLength <= 2) {
+    return 0;
+  }
+  if (queryLength <= 5) {
+    return 1;
+  }
+  if (queryLength <= 9) {
+    return 2;
+  }
   return 3;
 }
 
@@ -39,8 +45,12 @@ export function levenshtein(left: string, right: string): number {
 
 /** Scores one term: prefix, substring, then a bounded typo match. */
 function scoreTerm(term: string, query: string): number | undefined {
-  if (term.startsWith(query)) return 0;
-  if (term.includes(query)) return 100;
+  if (term.startsWith(query)) {
+    return 0;
+  }
+  if (term.includes(query)) {
+    return 100;
+  }
 
   const distance = Math.min(
     levenshtein(query, term),
@@ -61,17 +71,25 @@ export function rankSlashCommands(
   rawQuery: string,
 ): RankedSlashCommand[] {
   const query = normalizeSlashText(rawQuery);
-  if (!query) return commands.map((command, order) => ({ command, score: 0, order }));
+  if (!query) {
+    return commands.map((command, order) => ({ command, score: 0, order }));
+  }
 
-  return commands.flatMap((command, order) => {
-    const title = normalizeSlashText(command.title);
-    const terms = [title, ...title.split(/\s+/), ...(command.keywords ?? []).map(normalizeSlashText)];
-    const scores = terms.flatMap((term) => {
-      const score = scoreTerm(term, query);
-      return score === undefined ? [] : [score];
-    });
-    return scores.length ? [{ command, order, score: Math.min(...scores) }] : [];
-  }).sort((left, right) => left.score - right.score || left.order - right.order);
+  return commands
+    .flatMap((command, order) => {
+      const title = normalizeSlashText(command.title);
+      const terms = [
+        title,
+        ...title.split(/\s+/),
+        ...(command.keywords ?? []).map(normalizeSlashText),
+      ];
+      const scores = terms.flatMap((term) => {
+        const score = scoreTerm(term, query);
+        return score === undefined ? [] : [score];
+      });
+      return scores.length ? [{ command, order, score: Math.min(...scores) }] : [];
+    })
+    .sort((left, right) => left.score - right.score || left.order - right.order);
 }
 
 /** True while the two-character no-result grace window remains open. */

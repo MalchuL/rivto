@@ -20,11 +20,7 @@ describe("React block DOM constants", () => {
   it.each([
     [BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR, "data-block-id"],
     [BLOCK_CONTENT_ATTRIBUTE, BLOCK_CONTENT_SELECTOR, "data-block-content"],
-    [
-      PREVENT_TEXT_EDITING_ATTRIBUTE,
-      PREVENT_TEXT_EDITING_SELECTOR,
-      "data-prevent-text-editing",
-    ],
+    [PREVENT_TEXT_EDITING_ATTRIBUTE, PREVENT_TEXT_EDITING_SELECTOR, "data-prevent-text-editing"],
     [
       BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
       BLOCK_SELECTION_ANCHOR_SELECTOR,

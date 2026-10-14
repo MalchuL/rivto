@@ -1,9 +1,64 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ESLint } from "eslint";
+import * as prettier from "prettier";
 
 const eslint = new ESLint();
 const filePath = "demo/src/lint-rules.ts";
+
+test("non-empty blocks require line breaks inside their braces", async () => {
+  const cases = [
+    "if (Math.random()) { void 0; }",
+    "for (const item of []) { void item; }",
+    "export function run() { void 0; }",
+    "export const run = () => { void 0; };",
+    "export class Example {\n/** Runs the example. */\nrun() { void 0; }\n}",
+    "export class LongArrayWrapperNameForMultilineClassHeaderFormatting extends Array<number> implements Iterable<number> { value = 1; }",
+    "export function run(value: boolean) { if (value) { return 1; }\n// Preserve the branch explanation.\nelse { return 2; } }",
+  ];
+  const fixingEslint = new ESLint({ fix: true });
+  for (const code of cases) {
+    const [result] = await eslint.lintText(code, { filePath });
+    assert.ok(
+      result.messages.some(
+        (message) => message.ruleId === "@stylistic/curly-newline" && message.severity === 2,
+      ),
+    );
+    const [fixed] = await fixingEslint.lintText(code, { filePath });
+    assert.equal(fixed.errorCount, 0);
+    assert.match(fixed.output, /\{\n/);
+    const formatted = await prettier.format(fixed.output, {
+      ...(await prettier.resolveConfig(filePath)),
+      filepath: filePath,
+    });
+    const [afterFormatting] = await eslint.lintText(formatted, { filePath });
+    assert.equal(afterFormatting.errorCount, 0);
+  }
+  const [empty] = await eslint.lintText("export function run() {}", { filePath });
+  assert.deepEqual(empty.messages, []);
+});
+
+test("control-flow bodies require braces even for a single statement", async () => {
+  const bodies = [
+    "if (Math.random()) void 0;",
+    "if (Math.random()) { void 1; } else void 0;",
+    "for (let i = 0; i < 2; i++) void i;",
+    "for (const key in {}) void key;",
+    "for (const item of []) void item;",
+    "while (Math.random()) void 0;",
+    "do void 0; while (Math.random());",
+  ];
+  const fixingEslint = new ESLint({ fix: true });
+  for (const code of bodies) {
+    const [result] = await eslint.lintText(code, { filePath });
+    assert.ok(
+      result.messages.some((message) => message.ruleId === "curly" && message.severity === 2),
+    );
+    const [fixed] = await fixingEslint.lintText(code, { filePath });
+    assert.equal(fixed.errorCount, 0);
+    assert.match(fixed.output, /\{\s*void/);
+  }
+});
 
 test("functions over 50 lines produce warnings only", async () => {
   for (const lines of [50, 51]) {
@@ -70,7 +125,9 @@ test("repository lint rules enforce method order, documentation, and ternaries",
       const [result] = await eslint.lintText(
         `export class Example {
         /** Runs the example. */
-        run() { this.helper(); }
+        run() {
+          this.helper();
+        }
         value = Math.random() ? 1 : 2;
         /** Provides the internal operation. */
         private helper() {}

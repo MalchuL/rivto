@@ -1,5 +1,3 @@
-
-
 /** Persisted address of a block; block IDs are unique only within their document. */
 export interface BlockReference {
   readonly documentId: string;

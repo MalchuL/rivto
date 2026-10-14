@@ -36,22 +36,52 @@ export function SelectionToolbar({
   readonly items: readonly string[];
 }) {
   return (
-    <div className={SELECTION_TOOLBAR_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Selected objects">
-      {items.length > 1 && <EdgelessToolButton label="Group" icon="group" onClick={() => edgelessOperation.group()} />}
-      {items.some((id) => edgelessOperation.elements.getElementNode(id)?.type === "group") && (
-        <EdgelessToolButton label="Ungroup" icon="ungroup" onClick={() => edgelessOperation.ungroup()} />
+    <div
+      className={SELECTION_TOOLBAR_CLASS}
+      data-edgeless-ui="true"
+      role="toolbar"
+      aria-label="Selected objects"
+    >
+      {items.length > 1 && (
+        <EdgelessToolButton label="Group" icon="group" onClick={() => edgelessOperation.group()} />
       )}
-      {items.length > 1 && alignments.map(([alignment, label, icon]) => (
-        <EdgelessToolButton key={alignment} label={label} icon={icon} onClick={() => edgelessOperation.align(alignment)} />
-      ))}
+      {items.some((id) => edgelessOperation.elements.getElementNode(id)?.type === "group") && (
+        <EdgelessToolButton
+          label="Ungroup"
+          icon="ungroup"
+          onClick={() => edgelessOperation.ungroup()}
+        />
+      )}
+      {items.length > 1 &&
+        alignments.map(([alignment, label, icon]) => (
+          <EdgelessToolButton
+            key={alignment}
+            label={label}
+            icon={icon}
+            onClick={() => edgelessOperation.align(alignment)}
+          />
+        ))}
       {items.length > 2 && (
         <>
-          <EdgelessToolButton label="Distribute horizontally" icon="distribute-h" onClick={() => edgelessOperation.distribute("horizontal")} />
-          <EdgelessToolButton label="Distribute vertically" icon="distribute-v" onClick={() => edgelessOperation.distribute("vertical")} />
+          <EdgelessToolButton
+            label="Distribute horizontally"
+            icon="distribute-h"
+            onClick={() => edgelessOperation.distribute("horizontal")}
+          />
+          <EdgelessToolButton
+            label="Distribute vertically"
+            icon="distribute-v"
+            onClick={() => edgelessOperation.distribute("vertical")}
+          />
         </>
       )}
       {(["front", "forward", "backward", "back"] as const).map((direction) => (
-        <EdgelessToolButton key={direction} label={`Move ${direction}`} icon={direction} onClick={() => edgelessOperation.reorder(direction)} />
+        <EdgelessToolButton
+          key={direction}
+          label={`Move ${direction}`}
+          icon={direction}
+          onClick={() => edgelessOperation.reorder(direction)}
+        />
       ))}
     </div>
   );

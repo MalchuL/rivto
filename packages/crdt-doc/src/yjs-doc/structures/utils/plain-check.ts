@@ -7,31 +7,35 @@
  */
 export function isDeepPlainRecord(
   value: unknown,
-  visited = new WeakSet<object>()
+  visited = new WeakSet<object>(),
 ): value is Record<string, any> {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
 
   // prevent circular references
-  if (visited.has(value)) return false;
+  if (visited.has(value)) {
+    return false;
+  }
   visited.add(value);
 
   // allow arrays, but check their contents
   if (Array.isArray(value)) {
-    return value.every(v => isDeepPlainRecord(v, visited) || isPrimitive(v));
+    return value.every((v) => isDeepPlainRecord(v, visited) || isPrimitive(v));
   }
 
   // must be plain object
   const proto = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) return false;
+  if (proto !== Object.prototype && proto !== null) {
+    return false;
+  }
 
   for (const v of Object.values(value)) {
-    if (typeof v === "function") return false;
+    if (typeof v === "function") {
+      return false;
+    }
 
-    if (
-      typeof v === "object" &&
-      v !== null &&
-      !isDeepPlainRecord(v, visited)
-    ) {
+    if (typeof v === "object" && v !== null && !isDeepPlainRecord(v, visited)) {
       return false;
     }
   }
@@ -45,10 +49,5 @@ export function isDeepPlainRecord(
  * @returns True if the value is a primitive, false otherwise.
  */
 function isPrimitive(v: unknown): boolean {
-  return (
-    v === null ||
-    typeof v === "string" ||
-    typeof v === "number" ||
-    typeof v === "boolean"
-  );
+  return v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }

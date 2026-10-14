@@ -68,18 +68,26 @@ export class SelectionManager implements SelectionManagerApi {
    * @param selection - Optional selection override.
    * @returns Resolved selection, or undefined when no block members survive lookup.
    */
-  resolveBlockSelection(selection: Selection | undefined = this.value): ResolvedSelection | undefined {
-    if (!selection?.blocks.length) return undefined;
+  resolveBlockSelection(
+    selection: Selection | undefined = this.value,
+  ): ResolvedSelection | undefined {
+    if (!selection?.blocks.length) {
+      return undefined;
+    }
 
     const members = selection.blocks.flatMap((entry) => {
       const block = this.editor.blocks.getBlock(entry.id);
-      if (!block) return [];
+      if (!block) {
+        return [];
+      }
       // `end: -1` becomes the live length. Invalid offsets become an empty
       // slice at a clamped caret instead of throwing.
       const range = resolveBlockRange(block.content.length, entry.start, entry.end);
       return [{ entry, block, range }];
     });
-    if (!members.length) return undefined;
+    if (!members.length) {
+      return undefined;
+    }
     const first = members[0]!;
     const last = members.at(-1)!;
     const ranges = members.map(({ block, range }) => ({
@@ -108,10 +116,15 @@ export class SelectionManager implements SelectionManagerApi {
    */
   set(selection: Selection): void {
     const item = selection;
-    if (!item || item.type !== "selection" || !Array.isArray(item.blocks)) throw new Error("Invalid selection");
+    if (!item || item.type !== "selection" || !Array.isArray(item.blocks)) {
+      throw new Error("Invalid selection");
+    }
     if (item.blocks.length) {
       assertBlockRangeEndpoints(item);
-      if (!this.editor.blocks.hasBlock(item.anchorBlockId) || !this.editor.blocks.hasBlock(item.focusBlockId)) {
+      if (
+        !this.editor.blocks.hasBlock(item.anchorBlockId) ||
+        !this.editor.blocks.hasBlock(item.focusBlockId)
+      ) {
         throw new Error(`Selection block ${item.anchorBlockId} not found`);
       }
       const ids = getSelectedBlockIds(item);
@@ -120,23 +133,33 @@ export class SelectionManager implements SelectionManagerApi {
       }
     }
     item.blocks.forEach((block) => {
-      if (!this.editor.blocks.hasBlock(block.id)) throw new Error(`Selection block ${block.id} not found`);
+      if (!this.editor.blocks.hasBlock(block.id)) {
+        throw new Error(`Selection block ${block.id} not found`);
+      }
     });
     const byId = new Map(item.blocks.map((block) => [block.id, block]));
-    const blocks = this.editor.blocks.getOrderedIds(byId.keys()).map((id) => ({ ...byId.get(id)! }));
+    const blocks = this.editor.blocks
+      .getOrderedIds(byId.keys())
+      .map((id) => ({ ...byId.get(id)! }));
     (item.elements ?? []).forEach((id) => {
-      if (!this.editor.elements.hasElement(id)) throw new Error(`Selection element ${id} not found`);
+      if (!this.editor.elements.hasElement(id)) {
+        throw new Error(`Selection element ${id} not found`);
+      }
     });
     const elements = [...(item.elements ?? [])];
     if (!blocks.length && !elements.length && !Object.keys(item.pluginData ?? {}).length) {
       throw new Error("Selection requires blocks, elements, or plugin data");
     }
     const normalized = this.cloneSelection({ ...item, blocks, elements });
-    if (this.sameSelection(this.value, normalized)) return;
+    if (this.sameSelection(this.value, normalized)) {
+      return;
+    }
     this.value = this.cloneSelection(normalized);
-    this.selectedBlockIds = new Set(this.value.blocks.flatMap((block) => (
-      block.start === 0 && block.end === -1 ? [block.id] : []
-    )));
+    this.selectedBlockIds = new Set(
+      this.value.blocks.flatMap((block) =>
+        block.start === 0 && block.end === -1 ? [block.id] : [],
+      ),
+    );
     this.selectedElementIds = new Set(this.value.elements ?? []);
     this.notify();
   }
@@ -150,11 +173,12 @@ export class SelectionManager implements SelectionManagerApi {
    * @returns No value.
    */
   delete(): void {
-
     const current = this.get();
     const range = this.resolveBlockSelection(current);
     const elementIds = [...new Set(current?.elements ?? [])];
-    if (!range && !elementIds.length) return;
+    if (!range && !elementIds.length) {
+      return;
+    }
     // Whole-block coverage, or elements with no surviving blocks, must drop
     // those entities rather than splice characters. Element IDs travel with
     // either branch so mixed canvas+page selections stay one undo step.
@@ -183,7 +207,9 @@ export class SelectionManager implements SelectionManagerApi {
 
   /** Clears selection without notifying when already empty. */
   clear(): void {
-    if (!this.value) return;
+    if (!this.value) {
+      return;
+    }
     this.value = undefined;
     this.selectedBlockIds = new Set();
     this.selectedElementIds = new Set();

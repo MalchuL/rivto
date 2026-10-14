@@ -16,31 +16,9 @@ export { createCaretSelection, createTextSelection } from "@chulane/rivto";
 
 /** DOM adapter over the core selection manager. */
 export class PanelSelectionManager implements PanelSelectionApi {
-
   private checkedSelection: Selection | undefined;
   private checkedRevision = -1;
   private contained = false;
-
-  private containsSelection(selection: Selection): boolean {
-    if (selection.elements?.some((id) => !this.reactPanel.elements.hasElement(id))) return false;
-    return selection.blocks.every(({ id }) => this.reactPanel.blocks.hasBlock(id));
-  }
-
-  private ownsSelection(): boolean {
-    const root = this.reactPanel.events.getRoot();
-    if ((this.reactPanel.editor.panels.getActiveRoot() ?? this.reactPanel.editor.panels.getDefaultRoot()) !== root) return false;
-    const value = this.coreSelection.snapshot();
-    if (!value) return false;
-    if (!this.reactPanel.rootBlockId) return this.containsSelection(value);
-    const revision = this.reactPanel.document.getDocument().blocks.revision;
-    // Rows reuse the immutable snapshot; check subtree membership once per revision.
-    if (value !== this.checkedSelection || revision !== this.checkedRevision) {
-      this.checkedSelection = value;
-      this.checkedRevision = revision;
-      this.contained = this.containsSelection(value);
-    }
-    return this.contained;
-  }
 
   /** One pending frame per DOM root, cancelled by any effective core selection change. */
   private readonly pendingSelectionCallbacks = new Map<HTMLElement, PendingSelectionCallback>();
@@ -80,7 +58,10 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @returns No value.
    */
   set(selection: Selection): void {
-    if (!this.containsSelection(selection)) { this.clear(); return; }
+    if (!this.containsSelection(selection)) {
+      this.clear();
+      return;
+    }
     this.coreSelection.set(selection);
   }
 
@@ -101,21 +82,35 @@ export class PanelSelectionManager implements PanelSelectionApi {
   /** Deletes selected content through core only when this panel owns the selection.
    * Does nothing when the selection is empty, outside this subtree, or owned by another panel. */
   delete(): void {
-    if (!this.ownsSelection()) return;
+    if (!this.ownsSelection()) {
+      return;
+    }
     const selection = this.coreSelection.get();
-    if (selection && isStructuralSelection(selection) && selection.blocks.some(({ id }) => !this.reactPanel.blocks.canRemove(id))) return;
+    if (
+      selection &&
+      isStructuralSelection(selection) &&
+      selection.blocks.some(({ id }) => !this.reactPanel.blocks.canRemove(id))
+    ) {
+      return;
+    }
     this.coreSelection.delete();
   }
 
   /** @returns Immutable core selection snapshot with stable identity until selection changes,
    * or undefined when empty, outside this subtree, or owned by another panel. */
-  snapshot(): Selection | undefined { return this.ownsSelection() ? this.coreSelection.snapshot() : undefined; }
+  snapshot(): Selection | undefined {
+    return this.ownsSelection() ? this.coreSelection.snapshot() : undefined;
+  }
 
   /** @returns Whether a block has structural selection coverage. */
-  isBlockSelected(id: string): boolean { return this.ownsSelection() && this.coreSelection.isBlockSelected(id); }
+  isBlockSelected(id: string): boolean {
+    return this.ownsSelection() && this.coreSelection.isBlockSelected(id);
+  }
 
   /** @returns Whether an element belongs to the current selection. */
-  isElementSelected(id: string): boolean { return this.ownsSelection() && this.coreSelection.isElementSelected(id); }
+  isElementSelected(id: string): boolean {
+    return this.ownsSelection() && this.coreSelection.isElementSelected(id);
+  }
 
   /**
    * Reads current native endpoints.
@@ -181,7 +176,14 @@ export class PanelSelectionManager implements PanelSelectionApi {
       return () => {};
     }
     // Capture the mounted occurrence, not whichever panel is active next frame.
-    const pending: PendingSelectionCallback = { root, events, view, callback, onCancel, active: true };
+    const pending: PendingSelectionCallback = {
+      root,
+      events,
+      view,
+      callback,
+      onCancel,
+      active: true,
+    };
     /**
      * Cancels only this request, even after newer work replaces it.
      * @returns No value.
@@ -196,7 +198,9 @@ export class PanelSelectionManager implements PanelSelectionApi {
     const unsubscribe = this.subscribe(cancel);
     // An undo in one editor must not steal focus back after another is focused.
     const leaveRoot = (event: FocusEvent) => {
-      if (event.relatedTarget && !root.contains(event.relatedTarget as Node)) cancel();
+      if (event.relatedTarget && !root.contains(event.relatedTarget as Node)) {
+        cancel();
+      }
     };
     root.addEventListener("beforeinput", cancel);
     root.addEventListener("pointerdown", cancel);
@@ -231,19 +235,83 @@ export class PanelSelectionManager implements PanelSelectionApi {
   }
 
   /**
+   * Releases the pending callback before the owning runtime tears down extensions.
+   * Cancelling removes the frame and core subscription and releases caller-owned
+   * resources exactly once, including when destruction is repeated.
+   * Requests for every mounted panel are cancelled here, including shared work
+   * scheduled by their cancellation callbacks while cleanup is running.
+   * Panels own separate DOM adapters, but never independent core selection state.
+   * @returns No value.
+   */
+  destroy(): void {
+    for (const pending of this.pendingSelectionCallbacks.values()) {
+      this.cancelSelectionCallback(pending);
+    }
+  }
+
+  /**
+   * Checks that every selected element and block belongs to this panel.
+   *
+   * @param selection - Selection to inspect or copy; copy methods default to the panel's current selection when omitted.
+   * @returns Whether the complete selection is contained in the panel.
+   */
+  private containsSelection(selection: Selection): boolean {
+    if (selection.elements?.some((id) => !this.reactPanel.elements.hasElement(id))) {
+      return false;
+    }
+    return selection.blocks.every(({ id }) => this.reactPanel.blocks.hasBlock(id));
+  }
+
+  /**
+   * Checks active-root ownership and caches subtree containment by selection identity and block revision.
+   *
+   * @returns Whether this panel owns the current core selection.
+   */
+  private ownsSelection(): boolean {
+    const root = this.reactPanel.events.getRoot();
+    if (
+      (this.reactPanel.editor.panels.getActiveRoot() ??
+        this.reactPanel.editor.panels.getDefaultRoot()) !== root
+    ) {
+      return false;
+    }
+    const value = this.coreSelection.snapshot();
+    if (!value) {
+      return false;
+    }
+    if (!this.reactPanel.rootBlockId) {
+      return this.containsSelection(value);
+    }
+    const revision = this.reactPanel.document.getDocument().blocks.revision;
+    // Rows reuse the immutable snapshot; check subtree membership once per revision.
+    if (value !== this.checkedSelection || revision !== this.checkedRevision) {
+      this.checkedSelection = value;
+      this.checkedRevision = revision;
+      this.contained = this.containsSelection(value);
+    }
+    return this.contained;
+  }
+
+  /**
    * Cancels a request's frame and releases caller resources exactly once.
    * @param pending - Request to cancel; missing or inactive requests are harmless.
    * @returns No value.
    */
   private cancelSelectionCallback(pending: PendingSelectionCallback | undefined): void {
-    if (!pending?.active) return;
+    if (!pending?.active) {
+      return;
+    }
     // Mark inactive before cleanup: onCancel may cancel again or schedule another
     // callback. Neither path may release this callback's resources a second time.
     pending.active = false;
-    if (pending.frame !== undefined) pending.view.cancelAnimationFrame(pending.frame);
+    if (pending.frame !== undefined) {
+      pending.view.cancelAnimationFrame(pending.frame);
+    }
     pending.unsubscribe?.();
     // Clear only our own entry; an old cancellation must never erase newer work.
-    if (this.pendingSelectionCallbacks.get(pending.root) === pending) this.pendingSelectionCallbacks.delete(pending.root);
+    if (this.pendingSelectionCallbacks.get(pending.root) === pending) {
+      this.pendingSelectionCallbacks.delete(pending.root);
+    }
     pending.onCancel?.();
   }
 
@@ -253,7 +321,9 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @returns No value.
    */
   private runSelectionCallback(pending: PendingSelectionCallback): void {
-    if (!pending.active) return;
+    if (!pending.active) {
+      return;
+    }
     // The same model selection can outlive its DOM surface. A replacement root
     // invalidates work prepared for the old surface even without a selection update.
     if (pending.events.getRoot() !== pending.root) {
@@ -268,18 +338,5 @@ export class PanelSelectionManager implements PanelSelectionApi {
       // only guards invocation; it does not restore anything after the callback runs.
       pending.callback();
     }
-  }
-
-  /**
-   * Releases the pending callback before the owning runtime tears down extensions.
-   * Cancelling removes the frame and core subscription and releases caller-owned
-   * resources exactly once, including when destruction is repeated.
-   * Requests for every mounted panel are cancelled here, including shared work
-   * scheduled by their cancellation callbacks while cleanup is running.
-   * Panels own separate DOM adapters, but never independent core selection state.
-   * @returns No value.
-   */
-  destroy(): void {
-    for (const pending of this.pendingSelectionCallbacks.values()) this.cancelSelectionCallback(pending);
   }
 }

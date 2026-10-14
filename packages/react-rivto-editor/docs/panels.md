@@ -160,14 +160,14 @@ const group = usePanel().elements.insertElement({
 `DocumentElement` / `EditorElement` contains recursive `children`.
 `ElementNode` / `EditorElementNode` contains direct `childIds` instead.
 
-| Operation | Result |
-|---|---|
-| `getElement(id)` | Cached complete subtree, or undefined |
-| `getElements()` | Cached array of root trees; unchanged branches retain identity |
-| `getElementNode(id)` | Cached flat node, or undefined; does not materialize descendant snapshots |
-| `getElementNodes()` | Stable flat collection containing roots and descendants |
-| `subscribeElement(id, listener)` | Changes to the element or its descendants |
-| `subscribeElementNode(id, listener)` | Changes to that node's fields or child list |
+| Operation                            | Result                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `getElement(id)`                     | Cached complete subtree, or undefined                                     |
+| `getElements()`                      | Cached array of root trees; unchanged branches retain identity            |
+| `getElementNode(id)`                 | Cached flat node, or undefined; does not materialize descendant snapshots |
+| `getElementNodes()`                  | Stable flat collection containing roots and descendants                   |
+| `subscribeElement(id, listener)`     | Changes to the element or its descendants                                 |
+| `subscribeElementNode(id, listener)` | Changes to that node's fields or child list                               |
 
 Rendering and interaction managers use flat reads. Recursive snapshots invalidate
 changed nodes and their old/current ancestors; unrelated branches retain identity.

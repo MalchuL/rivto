@@ -6,18 +6,9 @@ import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./typ
  * panel and its selection; document mutations still go through core managers.
  */
 import type { EditorMode } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../constants";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
 import type { ReactEditorApi } from "../../editor/types";
-import type {
-  DOMEventDefinition,
-  DOMEventName,
-  DOMEventScope,
-  DOMEventTarget,
-} from "./dom-types";
+import type { DOMEventDefinition, DOMEventName, DOMEventScope, DOMEventTarget } from "./dom-types";
 import { EditorEvent } from "./editor-event";
 import type { PanelRegistry } from "./panel-registry";
 import type { PanelRegistration, EditorEventHandler } from "./types";
@@ -35,7 +26,9 @@ export class EventManager {
   private readonly registrations: DOMRegistration[] = [];
   private readonly registrationIds = new Set<string>();
   private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly listeners = new DOMEventListeners((group, event, root) => this.dispatch(group, event, root));
+  private readonly listeners = new DOMEventListeners((group, event, root) =>
+    this.dispatch(group, event, root),
+  );
   private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
   private readonly panels: PanelRegistry;
@@ -47,7 +40,10 @@ export class EventManager {
    * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
    * @param extensions - Internal registration ownership and destruction guard.
    */
-  constructor(reactEditor: ReactEditorApi, private readonly extensions: RegistrationOwner) {
+  constructor(
+    reactEditor: ReactEditorApi,
+    private readonly extensions: RegistrationOwner,
+  ) {
     this.panels = reactEditor.panels;
     this.unsubscribeRoots = this.panels.subscribeRoots(() => this.reconnectListeners());
   }
@@ -75,6 +71,15 @@ export class EventManager {
     owner?: PanelRegistration,
   ): () => void;
 
+  /**
+   * Registers a DOM handler with optional panel ownership and reconnects native listeners.
+   *
+   * @param definition - Registration definition with its stable ID, filters, and options.
+   * @param listener - DOM event handler; a truthy result claims the event.
+   * @param owner - Optional panel registration that scopes the handler to one mounted root.
+   * @returns Idempotent cleanup owned by the extension runtime.
+   * @throws If the runtime is inactive, the ID is blank, or its scoped registration already exists.
+   */
   register(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
@@ -82,7 +87,9 @@ export class EventManager {
   ): () => void {
     this.assertActive();
     const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();
-    if (!definition.id.trim()) throw new Error("Event registration ID is required");
+    if (!definition.id.trim()) {
+      throw new Error("Event registration ID is required");
+    }
     if (this.registrationIds.has(id)) {
       throw new Error(`Event registration ${id} is already registered`);
     }
@@ -95,10 +102,14 @@ export class EventManager {
     let active = true;
     let dispose: () => void = () => undefined;
     dispose = this.extensions.registerCleanup(() => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
       const index = this.registrations.indexOf(registration);
-      if (index >= 0) this.registrations.splice(index, 1);
+      if (index >= 0) {
+        this.registrations.splice(index, 1);
+      }
       this.registrationIds.delete(id);
       if (this.registrationDisposers.get(id) === dispose) {
         this.registrationDisposers.delete(id);
@@ -117,7 +128,9 @@ export class EventManager {
    */
   delete(id: string): boolean {
     const dispose = this.registrationDisposers.get(id);
-    if (!dispose) return false;
+    if (!dispose) {
+      return false;
+    }
     dispose();
     return true;
   }
@@ -125,7 +138,9 @@ export class EventManager {
   /** Disconnects native listeners and root notifications, then disposes registrations
    * in reverse order. Repeated calls do nothing. */
   destroy(): void {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
     this.listeners.disconnect();
     this.unsubscribeRoots();
@@ -137,10 +152,19 @@ export class EventManager {
 
   /** Throws when a registration is attempted after runtime destruction. */
   assertActive(): void {
-    if (this.destroyed) throw new Error("Editor event runtime is destroyed");
+    if (this.destroyed) {
+      throw new Error("Editor event runtime is destroyed");
+    }
     this.extensions.assertActive();
   }
 
+  /**
+   * Normalizes a DOM event definition, including surface targeting and listener option defaults.
+   *
+   * @param definition - Registration definition with its stable ID, filters, and options.
+   * @param listener - Handler to store in the normalized DOM registration.
+   * @returns Internal registration used for native event dispatch.
+   */
   private createRegistration(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
@@ -159,9 +183,15 @@ export class EventManager {
     };
   }
 
+  /**
+   * Connects current registrations to panel roots, or disconnects listeners after destruction.
+   */
   private reconnectListeners(): void {
-    if (this.destroyed) this.listeners.disconnect();
-    else this.listeners.connect(this.registrations, this.panels.getRoots());
+    if (this.destroyed) {
+      this.listeners.disconnect();
+    } else {
+      this.listeners.connect(this.registrations, this.panels.getRoots());
+    }
   }
 
   /**
@@ -172,21 +202,44 @@ export class EventManager {
    * @param attachedRoot - Surface listener root; omitted for document/window listeners.
    * @returns Nothing.
    */
-  private dispatch(group: NativeListenerGroup, raw: globalThis.Event, attachedRoot?: HTMLElement): void {
-    if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
+  private dispatch(
+    group: NativeListenerGroup,
+    raw: globalThis.Event,
+    attachedRoot?: HTMLElement,
+  ): void {
+    if (raw.defaultPrevented || this.claimedEvents.has(raw)) {
+      return;
+    }
     const root = this.panels.resolveEventRoot(raw, attachedRoot);
-    if (root) this.dispatchRegistrations(group, raw, root);
+    if (root) {
+      this.dispatchRegistrations(group, raw, root);
+    }
   }
 
-  private dispatchRegistrations(group: NativeListenerGroup, raw: globalThis.Event, root: HTMLElement): void {
+  /**
+   * Dispatches a native event to matching panel, scope, mode, and listener-option registrations until handled.
+   *
+   * @param group - Native listener group defining target, event type, capture, and passive options.
+   * @param raw - Original browser event being dispatched.
+   * @param root - Mounted surface root, or null when clearing its registration.
+   */
+  private dispatchRegistrations(
+    group: NativeListenerGroup,
+    raw: globalThis.Event,
+    root: HTMLElement,
+  ): void {
     const event = this.createEditorEvent(group.target, raw, root);
-    if (!event) return;
+    if (!event) {
+      return;
+    }
     // Iterate in place: pointermove fires hundreds of times per gesture and
     // these handlers do not splice `registrations` while dispatch is running.
     for (const registration of this.registrations) {
-      if (raw.defaultPrevented || this.claimedEvents.has(raw)) return;
+      if (raw.defaultPrevented || this.claimedEvents.has(raw)) {
+        return;
+      }
       if (
-        registration.owner && registration.owner.getRoot() !== root ||
+        (registration.owner && registration.owner.getRoot() !== root) ||
         registration.type !== group.type ||
         registration.target !== group.target ||
         registration.capture !== group.capture ||
@@ -194,7 +247,9 @@ export class EventManager {
         !modeMatches(registration.mode, event.mode) ||
         !scopeMatches(registration.scope, event) ||
         (registration.when && !registration.when(event))
-      ) continue;
+      ) {
+        continue;
+      }
       if (registration.listener(event)) {
         this.markHandled(raw, registration.preventDefault && !registration.passive);
         return;
@@ -202,6 +257,14 @@ export class EventManager {
     }
   }
 
+  /**
+   * Builds an editor event using the receiving panel's mode, selection, root, and block markers.
+   *
+   * @param eventTarget - Native listener target category used to build the editor event.
+   * @param raw - Original browser event being dispatched.
+   * @param root - Mounted surface root, or null when clearing its registration.
+   * @returns Editor event, or undefined if the root has no registered panel API.
+   */
   private createEditorEvent(
     eventTarget: DOMEventTarget,
     raw: globalThis.Event,
@@ -209,26 +272,21 @@ export class EventManager {
   ): AnyEditorEvent | undefined {
     const nativeTarget = raw.target;
     const ElementConstructor = root.ownerDocument.defaultView?.Element;
-    const element = ElementConstructor && nativeTarget instanceof ElementConstructor
-      ? nativeTarget
-      : null;
-    const insideRoot = Boolean(
-      element && (element === root || root.contains(element)),
-    );
+    const element =
+      ElementConstructor && nativeTarget instanceof ElementConstructor ? nativeTarget : null;
+    const insideRoot = Boolean(element && (element === root || root.contains(element)));
     const closestBlock = insideRoot
-      ? element?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null
+      ? (element?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null)
       : null;
     const closestContent = insideRoot
-      ? element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR) ?? null
+      ? (element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR) ?? null)
       : null;
-    const blockElement = closestBlock && root.contains(closestBlock)
-      ? closestBlock
-      : null;
-    const contentElement = closestContent && root.contains(closestContent)
-      ? closestContent
-      : null;
+    const blockElement = closestBlock && root.contains(closestBlock) ? closestBlock : null;
+    const contentElement = closestContent && root.contains(closestContent) ? closestContent : null;
     const reactPanel = this.panels.getApi(root);
-    if (!reactPanel) return;
+    if (!reactPanel) {
+      return;
+    }
     return new EditorEvent({
       raw: raw as never,
       reactPanel,
@@ -245,8 +303,16 @@ export class EventManager {
     });
   }
 
+  /**
+   * Marks a native event claimed and optionally prevents its default when cancellation is supported.
+   *
+   * @param raw - Original browser event being dispatched.
+   * @param preventDefault - Whether to prevent the native default when the event is cancelable.
+   */
   private markHandled(raw: globalThis.Event, preventDefault: boolean): void {
-    if (preventDefault && raw.cancelable) raw.preventDefault();
+    if (preventDefault && raw.cancelable) {
+      raw.preventDefault();
+    }
     this.claimedEvents.add(raw);
   }
 }
@@ -254,18 +320,21 @@ export class EventManager {
 export const modeMatches = (
   expected: EditorMode | readonly EditorMode[] | undefined,
   actual: EditorMode,
-): boolean => !expected ||
-  (Array.isArray(expected) ? expected.includes(actual) : expected === actual);
+): boolean =>
+  !expected || (Array.isArray(expected) ? expected.includes(actual) : expected === actual);
 
 export const scopeMatches = (
   scope: DOMEventScope | undefined,
-  event: Pick<
-    AnyEditorEvent,
-    "insideRoot" | "blockElement" | "contentElement"
-  >,
+  event: Pick<AnyEditorEvent, "insideRoot" | "blockElement" | "contentElement">,
 ): boolean => {
-  if (!scope) return true;
-  if (scope === "surface") return event.insideRoot;
-  if (scope === "block") return Boolean(event.blockElement);
+  if (!scope) {
+    return true;
+  }
+  if (scope === "surface") {
+    return event.insideRoot;
+  }
+  if (scope === "block") {
+    return Boolean(event.blockElement);
+  }
   return Boolean(event.contentElement);
 };

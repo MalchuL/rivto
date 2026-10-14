@@ -1,5 +1,12 @@
 import type { ReactPanelApi } from "../../panels/types";
-import { TODO_ITEM_BLOCK_TYPE, nextStatus, nextTimestamp, todoItemPropsSchema, type TodoItemPropertiesPatch, type TodoItemStatus } from "./todo-item-model";
+import {
+  TODO_ITEM_BLOCK_TYPE,
+  nextStatus,
+  nextTimestamp,
+  todoItemPropsSchema,
+  type TodoItemPropertiesPatch,
+  type TodoItemStatus,
+} from "./todo-item-model";
 
 /** ID-bound TODO operations; every action reads current document state. */
 export class TodoItemActions {
@@ -7,12 +14,17 @@ export class TodoItemActions {
    * @param reactPanel - Editor view containing the current block.
    * @param blockId - Stable TODO block identity.
    */
-  constructor(private readonly reactPanel: ReactPanelApi, private readonly blockId: string) {}
+  constructor(
+    private readonly reactPanel: ReactPanelApi,
+    private readonly blockId: string,
+  ) {}
 
   /** Runs a native input/composition commit and timestamp update in one undo batch. */
   commitText(commit: () => void): void {
     const block = this.reactPanel.blocks.getBlockNode(this.blockId);
-    if (!block) return;
+    if (!block) {
+      return;
+    }
     const updatedAt = nextTimestamp(String(block.props.updatedAt));
     this.reactPanel.batchUpdates(() => {
       commit();
@@ -23,7 +35,9 @@ export class TodoItemActions {
   /** Cycles workflow state and its timestamp atomically through the validated dialog path. */
   cycleStatus = (): void => {
     const block = this.reactPanel.blocks.getBlockNode(this.blockId);
-    if (block) this.commitProperties({ status: nextStatus(block.props.status as TodoItemStatus) });
+    if (block) {
+      this.commitProperties({ status: nextStatus(block.props.status as TodoItemStatus) });
+    }
   };
 
   /**
@@ -34,14 +48,20 @@ export class TodoItemActions {
    */
   commitProperties = (patch?: TodoItemPropertiesPatch): boolean => {
     const block = this.reactPanel.blocks.getBlockNode(this.blockId);
-    if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) return false;
+    if (!block || block.type !== TODO_ITEM_BLOCK_TYPE || !patch) {
+      return false;
+    }
     const changed = Object.fromEntries(
       Object.entries(patch).filter(([key, value]) => block.props[key] !== value),
     );
-    if (!Object.keys(changed).length) return false;
+    if (!Object.keys(changed).length) {
+      return false;
+    }
     const updatedAt = nextTimestamp(String(block.props.updatedAt));
     const result = todoItemPropsSchema.loose().safeParse({ ...block.props, ...changed, updatedAt });
-    if (!result.success) return false;
+    if (!result.success) {
+      return false;
+    }
     this.reactPanel.batchUpdates(() => {
       this.reactPanel.blocks.updateBlock(this.blockId, { props: { ...changed, updatedAt } });
     });

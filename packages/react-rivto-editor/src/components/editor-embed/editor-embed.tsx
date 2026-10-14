@@ -6,7 +6,9 @@ import type { ReactEditorApi } from "../../editor/types";
 /** Creates core boundaries that include and protect the required source block root. */
 function createEmbeddingPanel(editor: ReactEditorApi, options: PanelOptions) {
   const { rootBlockId } = options;
-  if (!rootBlockId) throw new Error("Embedding panel requires a block root");
+  if (!rootBlockId) {
+    throw new Error("Embedding panel requires a block root");
+  }
   return new EmbeddingPanel(editor, { ...options, rootBlockId });
 }
 

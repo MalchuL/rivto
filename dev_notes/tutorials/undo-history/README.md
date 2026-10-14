@@ -14,12 +14,12 @@
 
 ## Как проходить курс
 
-| Глава | Что изучаем | Главные файлы |
-| --- | --- | --- |
-| [00](./00-mental-model.md) | Простая модель истории и отличие от snapshots | сначала без кода |
-| [01](./01-runtime-path.md) | Полный путь от кнопки до Yjs | `rivto-editor.ts`, `undo-manager.ts` |
-| [02](./02-transactions-and-origin.md) | scopes, transactions, origin, grouping | `document-model.ts`, `yjs-doc.ts` |
-| [03](./03-lifecycle-testing-debugging.md) | очистка, destroy, тесты и диагностика | runtime tests и demo |
+| Глава                                     | Что изучаем                                   | Главные файлы                        |
+| ----------------------------------------- | --------------------------------------------- | ------------------------------------ |
+| [00](./00-mental-model.md)                | Простая модель истории и отличие от snapshots | сначала без кода                     |
+| [01](./01-runtime-path.md)                | Полный путь от кнопки до Yjs                  | `rivto-editor.ts`, `undo-manager.ts` |
+| [02](./02-transactions-and-origin.md)     | scopes, transactions, origin, grouping        | `document-model.ts`, `yjs-doc.ts`    |
+| [03](./03-lifecycle-testing-debugging.md) | очистка, destroy, тесты и диагностика         | runtime tests и demo                 |
 
 ## Одна мысль, которую нужно запомнить
 
@@ -57,4 +57,3 @@ src/store/
     │   └── undo.ts              CRDTUndoManager contract
     └── yjs-doc/yjs-doc.ts       адаптация к Y.UndoManager
 ```
-

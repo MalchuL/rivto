@@ -61,8 +61,10 @@ export interface ElementNode<Props extends Record<string, unknown> = Record<stri
  * the entire value as read-only. The Props parameter describes this node's props;
  * descendants may use other element types and property shapes.
  */
-export type DocumentElement<Props extends Record<string, unknown> = Record<string, unknown>> =
-  Omit<ElementNode<Props>, "childIds"> & { children: DocumentElement[] };
+export type DocumentElement<Props extends Record<string, unknown> = Record<string, unknown>> = Omit<
+  ElementNode<Props>,
+  "childIds"
+> & { children: DocumentElement[] };
 
 /**
  * Creation data for an element and optional new child subtrees.
@@ -247,11 +249,13 @@ export interface DocumentBlockManagerApi {
   /** @param id - Block to move. @param targetId - Placement anchor. @param position - Placement relative to the anchor. @returns No value. */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
   /** @param moves - Ordered block placements. @returns No value. */
-  moveBlocks(moves: readonly {
-    id: string;
-    targetId: string | null;
-    position: "before" | "after" | "inside";
-  }[]): void;
+  moveBlocks(
+    moves: readonly {
+      id: string;
+      targetId: string | null;
+      position: "before" | "after" | "inside";
+    }[],
+  ): void;
   /**
    * Appends all later siblings of this block to its children, in their current
    * order. Used before outdent so later outline items remain below the lifted

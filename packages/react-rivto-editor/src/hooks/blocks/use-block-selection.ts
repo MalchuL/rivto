@@ -47,7 +47,9 @@ export function useBlockSelected(blockId: string): boolean {
  */
 export function useBlockSelection(blockId: string): Selection | null {
   const selection = useEditorSelection();
-  return selection && hasBlockRanges(selection)
-    && selection.blocks.some((block) => block.id === blockId && block.start === 0 && block.end === -1)
-    ? selection : null;
+  return selection &&
+    hasBlockRanges(selection) &&
+    selection.blocks.some((block) => block.id === blockId && block.start === 0 && block.end === -1)
+    ? selection
+    : null;
 }

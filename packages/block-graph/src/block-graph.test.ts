@@ -4,8 +4,12 @@ import { BlockGraph, blockPropertyId, runInMemoryExample } from ".";
 describe("BlockGraph", () => {
   test("formats supported top-level block addresses", () => {
     expect(blockPropertyId({ blockId: "a", field: "content" })).toBe("block:a:content");
-    expect(blockPropertyId({ blockId: "a", field: "props", key: "x:y" })).toBe("block:a:props:x%3Ay");
-    expect(blockPropertyId({ blockId: "a", field: "pluginData", namespace: "graph" })).toBe("block:a:pluginData:graph");
+    expect(blockPropertyId({ blockId: "a", field: "props", key: "x:y" })).toBe(
+      "block:a:props:x%3Ay",
+    );
+    expect(blockPropertyId({ blockId: "a", field: "pluginData", namespace: "graph" })).toBe(
+      "block:a:pluginData:graph",
+    );
   });
 
   test("runs the in-memory value and slot example", async () => {
@@ -17,8 +21,12 @@ describe("BlockGraph", () => {
     const values = new Map<string, unknown>();
     const graph = new BlockGraph({
       read: (address) => values.get(blockPropertyId(address)),
-      write: (address, value) => { values.set(blockPropertyId(address), value); },
+      write: (address, value) => {
+        values.set(blockPropertyId(address), value);
+      },
     });
-    expect(graph.registerProperty("content", { blockId: "a", field: "content" })).toEqual(expect.any(Function));
+    expect(graph.registerProperty("content", { blockId: "a", field: "content" })).toEqual(
+      expect.any(Function),
+    );
   });
 });

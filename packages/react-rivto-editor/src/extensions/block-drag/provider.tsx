@@ -13,7 +13,13 @@
  *
  * @module
  */
-import { Accessibility, AutoScroller, KeyboardSensor, PointerActivationConstraints, PointerSensor } from "@dnd-kit/dom";
+import {
+  Accessibility,
+  AutoScroller,
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from "@dnd-kit/dom";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useContext, useLayoutEffect, useMemo, useState } from "react";
 import { useEditorRoot, useReactPanel } from "../../hooks";
@@ -63,20 +69,40 @@ export function PageDragProvider({
   const { element: root } = useEditorRoot();
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const placements = useMemo(createDropPlacementStore, []);
-  const controller = useMemo(() => new PageDragController(
-    reactPanel, root, mode, placements, setActiveIds,
-    { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement },
-  ), [reactPanel, root, mode, placements, childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement]);
+  const controller = useMemo(
+    () =>
+      new PageDragController(reactPanel, root, mode, placements, setActiveIds, {
+        childDropIndent,
+        gapDropZone,
+        outerEdgeDropZone,
+        allowChildPlacement,
+      }),
+    [
+      reactPanel,
+      root,
+      mode,
+      placements,
+      childDropIndent,
+      gapDropZone,
+      outerEdgeDropZone,
+      allowChildPlacement,
+    ],
+  );
   useLayoutEffect(() => controller.mount(), [controller]);
   // A plain sensor array replaces dnd-kit's defaults, so the keyboard sensor
   // is listed explicitly. Constraints are instantiated per activation because
   // each instance owns the controller of one pending gesture.
-  const sensors = useMemo(() => [
-    PointerSensor.configure({
-      activationConstraints: () => [new PointerActivationConstraints.Distance({ value: activationDistance })],
-    }),
-    KeyboardSensor.configure({ offset: KEYBOARD_STEP }),
-  ], [activationDistance]);
+  const sensors = useMemo(
+    () => [
+      PointerSensor.configure({
+        activationConstraints: () => [
+          new PointerActivationConstraints.Distance({ value: activationDistance }),
+        ],
+      }),
+      KeyboardSensor.configure({ offset: KEYBOARD_STEP }),
+    ],
+    [activationDistance],
+  );
   const activeBlocks = activeIds.flatMap((id) => {
     const block = reactPanel.blocks.getBlock(id);
     return block ? [block] : [];
@@ -95,8 +121,12 @@ export function PageDragProvider({
       >
         <PageDragAutoScrollPolicy getPointer={controller.getDragPointer} />
         {children}
-        <PageDragOverlay root={root} controller={controller} blocks={activeBlocks}
-          childrenVisible={(block) => reactPanel.editor.blockListProps.childrenVisible(block)} />
+        <PageDragOverlay
+          root={root}
+          controller={controller}
+          blocks={activeBlocks}
+          childrenVisible={(block) => reactPanel.editor.blockListProps.childrenVisible(block)}
+        />
       </DragDropProvider>
     </PageDragStateContext.Provider>
   );

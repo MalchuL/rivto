@@ -39,7 +39,6 @@
   /* Block geometry shared by the page and edgeless block trees. */
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;
-
 }
 
 @theme inline {

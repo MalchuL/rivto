@@ -75,7 +75,7 @@ unless that behavior change is authorized.
    reuse an existing server, including a development server on the same port.
    Set `PLAYWRIGHT_BASE_URL` to a dedicated preview URL when necessary.
 3. Run focused Playwright files with `pnpm exec playwright test <files>
-   --project=chromium --project=firefox --workers=1`. Keep performance runs serial
+--project=chromium --project=firefox --workers=1`. Keep performance runs serial
    and avoid concurrent builds, profilers, or another browser test run. Do not edit
    sources during a development-server test run; HMR invalidates the measurement.
 4. Run behavior checks in both browsers. Apply browser-specific timing limits only

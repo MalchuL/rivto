@@ -1,16 +1,40 @@
-import type { ElementRenderProps } from '../../managers/elements/types';
-import { EditableLabel } from '../../components';
-import type { ShapeVisual, TextVisual, StickerVisual, DrawingVisual, ConnectorVisual } from './types';
-import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from './utils/geometry';
-import { shapeStrokePad } from './utils/shape-stroke';
-import { ConnectorEndpoints, useConnectorPreview } from './connector-endpoints';
+import type { ElementRenderProps } from "../../managers/elements/types";
+import { EditableLabel } from "../../components";
+import type {
+  ShapeVisual,
+  TextVisual,
+  StickerVisual,
+  DrawingVisual,
+  ConnectorVisual,
+} from "./types";
+import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "./utils/geometry";
+import { shapeStrokePad } from "./utils/shape-stroke";
+import { ConnectorEndpoints, useConnectorPreview } from "./connector-endpoints";
 
 /** Shared label control; editing state belongs to the receiving canvas host. */
-function labelControl({ element, operations, editing, setEditing, focusPointRef, preview }: ElementRenderProps) {
-  return (text: string) => <EditableLabel className="edgeless-label-editor" editing={editing}
-    onEditingChange={setEditing} text={text}
-    onCommit={next => { if (!preview) operations.updateProperties(element.id, { text: next }); }}
-    focusPointRef={focusPointRef} stopPointerWhileEditing />;
+function labelControl({
+  element,
+  operations,
+  editing,
+  setEditing,
+  focusPointRef,
+  preview,
+}: ElementRenderProps) {
+  return (text: string) => (
+    <EditableLabel
+      className="edgeless-label-editor"
+      editing={editing}
+      onEditingChange={setEditing}
+      text={text}
+      onCommit={(next) => {
+        if (!preview) {
+          operations.updateProperties(element.id, { text: next });
+        }
+      }}
+      focusPointRef={focusPointRef}
+      stopPointerWhileEditing
+    />
+  );
 }
 
 /**
@@ -20,9 +44,15 @@ function labelControl({ element, operations, editing, setEditing, focusPointRef,
  */
 export function DrawingContent(props: ElementRenderProps) {
   const visual = { ...props.element.props, frame: props.element.frame } as unknown as DrawingVisual;
-  const d = visual.points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
+  const d = visual.points
+    .map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`)
+    .join(" ");
   return (
-    <svg className="edgeless-drawing" viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`} preserveAspectRatio="none">
+    <svg
+      className="edgeless-drawing"
+      viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`}
+      preserveAspectRatio="none"
+    >
       {/* Wide invisible stroke: select only near the ink, not the frame AABB. */}
       <path className="edgeless-drawing-hit" d={d} />
       <path
@@ -38,7 +68,6 @@ export function DrawingContent(props: ElementRenderProps) {
       />
     </svg>
   );
-
 }
 /**
  * Renders routed connector geometry, its editable label, and selected endpoint controls.
@@ -49,7 +78,11 @@ export function ConnectorContent(props: ElementRenderProps) {
   const preview = useConnectorPreview(props);
   const { source, target } = preview;
   const { operations: edgelessOperation, editing } = props;
-  const visual = { ...props.element.props, id: props.element.id, frame: props.element.frame } as unknown as ConnectorVisual;
+  const visual = {
+    ...props.element.props,
+    id: props.element.id,
+    frame: props.element.frame,
+  } as unknown as ConnectorVisual;
   const labelFor = labelControl(props);
   const sourceBound = source.elementId ? edgelessOperation.getBounds(source.elementId) : undefined;
   const targetBound = target.elementId ? edgelessOperation.getBounds(target.elementId) : undefined;
@@ -62,9 +95,10 @@ export function ConnectorContent(props: ElementRenderProps) {
     sourceBound,
     targetBound,
   ).map((point) => ({ x: point.x - visual.frame.x, y: point.y - visual.frame.y }));
-  const path = visual.route === "curve"
-    ? `M ${points[0]!.x} ${points[0]!.y} C ${points[1]!.x} ${points[1]!.y}, ${points[2]!.x} ${points[2]!.y}, ${points[3]!.x} ${points[3]!.y}`
-    : points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+  const path =
+    visual.route === "curve"
+      ? `M ${points[0]!.x} ${points[0]!.y} C ${points[1]!.x} ${points[1]!.y}, ${points[2]!.x} ${points[2]!.y}, ${points[3]!.x} ${points[3]!.y}`
+      : points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
   const markerEnd = `connector-arrow-end-${visual.id}`;
   const markerStart = `connector-arrow-start-${visual.id}`;
   const labelAt = connectorLabelPoint(points, visual.route);
@@ -72,12 +106,24 @@ export function ConnectorContent(props: ElementRenderProps) {
   return (
     <>
       <ConnectorEndpoints {...props} preview={preview} />
-      <svg data-edgeless-connector-route={visual.route} className="edgeless-connector" viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`} preserveAspectRatio="none">
+      <svg
+        data-edgeless-connector-route={visual.route}
+        className="edgeless-connector"
+        viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`}
+        preserveAspectRatio="none"
+      >
         <defs>
           <marker id={markerEnd} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
             <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
           </marker>
-          <marker id={markerStart} markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto-start-reverse">
+          <marker
+            id={markerStart}
+            markerWidth="8"
+            markerHeight="8"
+            refX="1"
+            refY="4"
+            orient="auto-start-reverse"
+          >
             <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
           </marker>
         </defs>
@@ -117,12 +163,12 @@ export function ConnectorContent(props: ElementRenderProps) {
       )}
     </>
   );
-
 }
 /** Text and sticky content share label layout; each registration supplies its own presentation. */
 function TextLabel(props: ElementRenderProps & { sticky: boolean }) {
   const { editing, sticky } = props;
-  const visual = props.element.props as unknown as Omit<TextVisual, 'kind'> & Pick<StickerVisual, 'fill'>;
+  const visual = props.element.props as unknown as Omit<TextVisual, "kind"> &
+    Pick<StickerVisual, "fill">;
   const labelFor = labelControl(props);
   return (
     <div
@@ -140,20 +186,23 @@ function TextLabel(props: ElementRenderProps & { sticky: boolean }) {
       {labelFor(visual.text)}
     </div>
   );
-
 }
 /**
  * Renders a standalone text element.
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
-export function TextContent(props: ElementRenderProps) { return <TextLabel {...props} sticky={false} />; }
+export function TextContent(props: ElementRenderProps) {
+  return <TextLabel {...props} sticky={false} />;
+}
 /**
  * Renders a sticky note with its own fill.
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
-export function StickerContent(props: ElementRenderProps) { return <TextLabel {...props} sticky />; }
+export function StickerContent(props: ElementRenderProps) {
+  return <TextLabel {...props} sticky />;
+}
 /** Shared shape geometry and label layout, selected explicitly by the registration. */
 function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
   const { zoom, editing, ellipse } = props;
@@ -212,17 +261,20 @@ function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
       )}
     </>
   );
-
 }
 /**
  * Renders a rectangular shape.
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
-export function RectangleContent(props: ElementRenderProps) { return <ShapeContent {...props} ellipse={false} />; }
+export function RectangleContent(props: ElementRenderProps) {
+  return <ShapeContent {...props} ellipse={false} />;
+}
 /**
  * Renders an elliptical shape.
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
-export function EllipseContent(props: ElementRenderProps) { return <ShapeContent {...props} ellipse />; }
+export function EllipseContent(props: ElementRenderProps) {
+  return <ShapeContent {...props} ellipse />;
+}

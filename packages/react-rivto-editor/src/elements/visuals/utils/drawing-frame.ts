@@ -36,13 +36,21 @@ export function drawingResizeProps(
   element: Pick<EditorElementNode, "type" | "frame" | "props">,
   frame: Partial<VisualFrame>,
 ): { points?: DrawingVisual["points"] } {
-  if (element.type !== "drawing" || !Array.isArray(element.props.points)) return {};
+  if (element.type !== "drawing" || !Array.isArray(element.props.points)) {
+    return {};
+  }
   const width = frame.width ?? element.frame.width;
   const height = frame.height ?? element.frame.height;
-  if (width === element.frame.width && height === element.frame.height) return {};
+  if (width === element.frame.width && height === element.frame.height) {
+    return {};
+  }
   const scaleX = width / element.frame.width;
   const scaleY = height / element.frame.height;
-  return { points: (element.props.points as DrawingVisual["points"]).map(point => ({
-    ...point, x: point.x * scaleX, y: point.y * scaleY,
-  })) };
+  return {
+    points: (element.props.points as DrawingVisual["points"]).map((point) => ({
+      ...point,
+      x: point.x * scaleX,
+      y: point.y * scaleY,
+    })),
+  };
 }

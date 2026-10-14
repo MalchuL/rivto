@@ -1,6 +1,6 @@
 # Selection reconciliation и revision
 
-Selection является local runtime state. Remote updates, undo, direct document calls  могут сделать её endpoints недействительными, поэтому `ReactEditor` reconciles selection с актуальным block tree.
+Selection является local runtime state. Remote updates, undo, direct document calls могут сделать её endpoints недействительными, поэтому `ReactEditor` reconciles selection с актуальным block tree.
 
 ## Приватный `reconcileDocumentSelection()`
 

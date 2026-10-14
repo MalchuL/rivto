@@ -35,7 +35,13 @@ const ROW_CONTROLS_CLASS = "edgeless-properties-panel-row-controls";
  * @param props - Group title and element-specific controls.
  * @returns One labeled property section.
  */
-export function PropertyGroup({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+export function PropertyGroup({
+  title,
+  children,
+}: {
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
   return (
     <section className={GROUP_CLASS} aria-label={title}>
       <header className={GROUP_TITLE_CLASS}>{title}</header>
@@ -50,7 +56,13 @@ export function PropertyGroup({ title, children }: { readonly title: string; rea
  * @param props - Row label and its controls.
  * @returns One consistently aligned property row.
  */
-export function PropertyRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function PropertyRow({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}) {
   return (
     <div className={ROW_CLASS}>
       <span className={ROW_LABEL_CLASS}>{label}</span>
@@ -82,7 +94,9 @@ export function EdgelessPropertiesPanel({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
-    <Collapsible open={!collapsed} onOpenChange={open => setCollapsed(!open)}
+    <Collapsible
+      open={!collapsed}
+      onOpenChange={(open) => setCollapsed(!open)}
       ref={panelRef}
       className={PANEL_CLASS}
       data-edgeless-ui="true"
@@ -97,12 +111,14 @@ export function EdgelessPropertiesPanel({
           {count > 1 && <span className={COUNT_CLASS}>{count} selected</span>}
         </div>
         <div className={ACTIONS_CLASS}>
-          <CollapsibleTrigger asChild><EdgelessToolButton
-            label={collapsed ? "Expand properties" : "Collapse properties"}
-            icon={collapsed ? "chevron-down" : "chevron-up"}
-            className={ACTION_CLASS}
-            aria-expanded={!collapsed}
-          /></CollapsibleTrigger>
+          <CollapsibleTrigger asChild>
+            <EdgelessToolButton
+              label={collapsed ? "Expand properties" : "Collapse properties"}
+              icon={collapsed ? "chevron-down" : "chevron-up"}
+              className={ACTION_CLASS}
+              aria-expanded={!collapsed}
+            />
+          </CollapsibleTrigger>
           <EdgelessToolButton
             label="Close properties"
             icon="close"

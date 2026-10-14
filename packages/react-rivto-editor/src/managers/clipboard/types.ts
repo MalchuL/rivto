@@ -1,8 +1,18 @@
-import type { EditorBlock, EditorBlockInput, EditorBlockNode, EditorElementInput, EditorElementNode, PasteStrategy } from "@chulane/rivto";
+import type {
+  EditorBlock,
+  EditorBlockInput,
+  EditorBlockNode,
+  EditorElementInput,
+  EditorElementNode,
+  PasteStrategy,
+} from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
 
 /** Fields owned by a block converter; identity, type and children belong to clipboard. */
-export type BlockClipboardFields = Pick<EditorBlock, "content" | "props" | "listProps" | "pluginData">;
+export type BlockClipboardFields = Pick<
+  EditorBlock,
+  "content" | "props" | "listProps" | "pluginData"
+>;
 
 /** Fields owned by an element converter; clipboard places and identifies the resulting element. */
 export type ElementClipboardFields = Pick<EditorElementNode, "props">;
@@ -52,9 +62,15 @@ export interface ClipboardParsers {
    * undefined lets the next parser try it; an empty result deliberately consumes it.
    * Page parsers must return blocks. Edgeless parsers may also return elements.
    */
-  readonly parseHTML?: (element: Element, context: ClipboardParseContext) => ClipboardContent | undefined;
+  readonly parseHTML?: (
+    element: Element,
+    context: ClipboardParseContext,
+  ) => ClipboardContent | undefined;
   /** Accepts a complete plain-text value, or returns undefined to keep the normal fallback. */
-  readonly parseText?: (text: string, context: ClipboardParseContext) => ClipboardContent | undefined;
+  readonly parseText?: (
+    text: string,
+    context: ClipboardParseContext,
+  ) => ClipboardContent | undefined;
 }
 
 /**
@@ -66,11 +82,20 @@ export interface ClipboardParsers {
  */
 export interface BlockClipboardConverter extends ClipboardParsers {
   /** Returns replacement fields on a detached copy. Omitted fields retain their source value. */
-  readonly copy?: (block: EditorBlockNode, context: ClipboardCopyContext) => Partial<BlockClipboardFields>;
+  readonly copy?: (
+    block: EditorBlockNode,
+    context: ClipboardCopyContext,
+  ) => Partial<BlockClipboardFields>;
   /** Rewrites type-specific data using complete destination maps, before validation and insertion. */
-  readonly paste?: (block: EditorBlockNode, context: ClipboardPasteContext) => Partial<BlockClipboardFields>;
+  readonly paste?: (
+    block: EditorBlockNode,
+    context: ClipboardPasteContext,
+  ) => Partial<BlockClipboardFields>;
   /** Formats this block and its already formatted descendants; common list formatters run afterwards. */
-  readonly format?: (context: ClipboardFormatContext, current: PortableBlockFormats) => PortableBlockFormats;
+  readonly format?: (
+    context: ClipboardFormatContext,
+    current: PortableBlockFormats,
+  ) => PortableBlockFormats;
 }
 
 /** Context for formatting one canvas element without reading the live document. */
@@ -90,18 +115,30 @@ export interface ElementClipboardFormatContext {
  */
 export interface ElementClipboardConverter extends ClipboardParsers {
   /** Replaces props in the copied payload without changing the source element. */
-  readonly copy?: (element: EditorElementNode, context: ClipboardCopyContext) => Partial<ElementClipboardFields>;
+  readonly copy?: (
+    element: EditorElementNode,
+    context: ClipboardCopyContext,
+  ) => Partial<ElementClipboardFields>;
   /** Rewrites props with destination IDs before element processors and validation run. */
-  readonly paste?: (element: EditorElementNode, context: ClipboardPasteContext) => Partial<ElementClipboardFields>;
+  readonly paste?: (
+    element: EditorElementNode,
+    context: ClipboardPasteContext,
+  ) => Partial<ElementClipboardFields>;
   /** Produces portable text from this element, formatted children and referenced blocks. */
-  readonly format?: (context: ElementClipboardFormatContext, current: PortableBlockFormats) => PortableBlockFormats;
+  readonly format?: (
+    context: ElementClipboardFormatContext,
+    current: PortableBlockFormats,
+  ) => PortableBlockFormats;
   /**
    * Returns source block IDs to transfer with these elements; missing blocks are ignored.
    * Canvas Cut removes these original blocks after export, so ordinary external links
    * should stay in props instead of being declared here. Root IDs are ordered siblings
    * from the source panel, allowing a block card to resolve its inclusive range.
    */
-  readonly getReferencedBlockIds?: (element: EditorElementNode, rootBlockIds: readonly string[]) => readonly string[];
+  readonly getReferencedBlockIds?: (
+    element: EditorElementNode,
+    rootBlockIds: readonly string[],
+  ) => readonly string[];
 }
 
 /** Portable text representations produced for one block forest. */
@@ -135,7 +172,10 @@ export interface ClipboardFormatter {
   /** Optional predicate; returning `false` skips this formatter for the block. */
   readonly matches?: (context: ClipboardFormatContext) => boolean;
   /** Produces the next formats from structural context and preceding output. */
-  readonly format: (context: ClipboardFormatContext, current: PortableBlockFormats) => PortableBlockFormats;
+  readonly format: (
+    context: ClipboardFormatContext,
+    current: PortableBlockFormats,
+  ) => PortableBlockFormats;
 }
 
 /** Candidate parser consulted in registration order for external clipboard data. */
@@ -143,7 +183,10 @@ export interface ClipboardParser {
   /** Stable ID used to prevent duplicate parser registration. */
   readonly id: string;
   /** Returns parsed block inputs on a match or `undefined` to try the next parser. */
-  readonly parse: (data: { readonly html: string; readonly text: string }) => EditorBlockInput[] | undefined;
+  readonly parse: (data: {
+    readonly html: string;
+    readonly text: string;
+  }) => EditorBlockInput[] | undefined;
 }
 
 /** Detached canvas records with converted props, destination IDs and source references. */

@@ -53,7 +53,9 @@ export interface UseBlockResult {
 }
 
 /** Node properties use the renderer's declared schema; the generic does not validate reads. */
-export type TypedBlockNode<Props extends object> = Omit<BlockNode, "props"> & { readonly props: Readonly<Props> };
+export type TypedBlockNode<Props extends object> = Omit<BlockNode, "props"> & {
+  readonly props: Readonly<Props>;
+};
 
 /** Reactive node snapshot and stable commands returned by useBlockNode. */
 export interface UseBlockNodeResult<Props extends object = Record<string, unknown>> {
@@ -71,23 +73,29 @@ export interface UseBlockNodeResult<Props extends object = Record<string, unknow
  * validate through the registered block definition; invalid writes throw without mutation.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function useBlockOperations<Props extends object = Record<string, unknown>>(blockId: string): BlockOperations<Props> {
+export function useBlockOperations<Props extends object = Record<string, unknown>>(
+  blockId: string,
+): BlockOperations<Props> {
   const panel = usePanel();
-  return useMemo<BlockOperations<Props>>(() => ({
-    update: (patch) => panel.blocks.updateBlock(blockId, patch),
-    setContent: (content) => panel.blocks.updateBlock(blockId, { content }),
-    setType: (type) => panel.blocks.setBlockType(blockId, type),
-    setProps: (props) => panel.blocks.updateBlock(blockId, { props: props as Record<string, unknown> }),
-    setProp: (key, value) => panel.blocks.setBlockProp(blockId, String(key), value),
-    setPluginData: (pluginId, value) => panel.blocks.setBlockPluginData(blockId, pluginId, value),
-    remove: () => panel.blocks.removeBlock(blockId),
-    mergeInto: (targetId) => panel.blocks.mergeBlocks(targetId, blockId),
-    moveAfter: (afterId) => panel.blocks.moveBlock(blockId, afterId),
-    moveBefore: (beforeId) => panel.blocks.moveBlock(blockId, beforeId, "before"),
-    moveInside: (parentId) => panel.blocks.moveBlock(blockId, parentId, "inside"),
-    indent: () => panel.blocks.indentBlock(blockId),
-    outdent: () => panel.blocks.outdentBlock(blockId),
-  }), [blockId, panel]);
+  return useMemo<BlockOperations<Props>>(
+    () => ({
+      update: (patch) => panel.blocks.updateBlock(blockId, patch),
+      setContent: (content) => panel.blocks.updateBlock(blockId, { content }),
+      setType: (type) => panel.blocks.setBlockType(blockId, type),
+      setProps: (props) =>
+        panel.blocks.updateBlock(blockId, { props: props as Record<string, unknown> }),
+      setProp: (key, value) => panel.blocks.setBlockProp(blockId, String(key), value),
+      setPluginData: (pluginId, value) => panel.blocks.setBlockPluginData(blockId, pluginId, value),
+      remove: () => panel.blocks.removeBlock(blockId),
+      mergeInto: (targetId) => panel.blocks.mergeBlocks(targetId, blockId),
+      moveAfter: (afterId) => panel.blocks.moveBlock(blockId, afterId),
+      moveBefore: (beforeId) => panel.blocks.moveBlock(blockId, beforeId, "before"),
+      moveInside: (parentId) => panel.blocks.moveBlock(blockId, parentId, "inside"),
+      indent: () => panel.blocks.indentBlock(blockId),
+      outdent: () => panel.blocks.outdentBlock(blockId),
+    }),
+    [blockId, panel],
+  );
 }
 
 /**
@@ -103,10 +111,7 @@ export function useBlock(blockId: string): UseBlockResult {
     (listener: () => void) => panel.blocks.subscribeBlock(blockId, listener),
     [blockId, panel],
   );
-  const getSnapshot = useCallback(
-    () => panel.blocks.getBlock(blockId),
-    [blockId, panel],
-  );
+  const getSnapshot = useCallback(() => panel.blocks.getBlock(blockId), [blockId, panel]);
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return { block, operations: useBlockOperations(blockId) };
 }
@@ -117,16 +122,18 @@ export function useBlock(blockId: string): UseBlockResult {
  * @returns Current node snapshot and commands bound to its ID.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function useBlockNode<Props extends object = Record<string, unknown>>(blockId: string): UseBlockNodeResult<Props> {
+export function useBlockNode<Props extends object = Record<string, unknown>>(
+  blockId: string,
+): UseBlockNodeResult<Props> {
   const panel = usePanel();
   const subscribe = useCallback(
     (listener: () => void) => panel.blocks.subscribeBlockNode(blockId, listener),
     [blockId, panel],
   );
-  const getSnapshot = useCallback(
-    () => panel.blocks.getBlockNode(blockId),
-    [blockId, panel],
-  );
+  const getSnapshot = useCallback(() => panel.blocks.getBlockNode(blockId), [blockId, panel]);
   const block = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return { block: block as TypedBlockNode<Props> | undefined, operations: useBlockOperations<Props>(blockId) };
+  return {
+    block: block as TypedBlockNode<Props> | undefined,
+    operations: useBlockOperations<Props>(blockId),
+  };
 }

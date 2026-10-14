@@ -10,24 +10,38 @@ import * as Y from "yjs";
 import { DocumentModelImpl } from "../document-model";
 
 describe("document reactivity", () => {
-  test.each([10, 2000])("appends without materializing the existing %i sibling IDs", async (count) => {
-    const doc = new YjsDoc("append-reactivity");
-    const model = new DocumentModelImpl(doc);
-    model.loadSnapshot({ version: 9, blocks: Array.from({ length: count }, (_, index) => ({
-      id: `block-${index}`, type: "paragraph", content: "", props: {}, listProps: {}, pluginData: {}, children: [],
-    })), elements: [], pluginData: {} });
-    const roots = doc.doc.getArray<string>("rivto.editor.roots");
-    const read = jest.spyOn(roots, "toArray");
-    doc.transact(() => {
-      read.mockClear();
-      model.blocks.insertBlock({ id: "appended", type: "paragraph" }, { parentId: null });
-      expect(read).not.toHaveBeenCalled();
-    });
-    read.mockRestore();
-    expect(model.blocks.getRootIds()).toHaveLength(count + 1);
-    expect(model.blocks.getRootIds().at(-1)).toBe("appended");
-    await model.destroy();
-  });
+  test.each([10, 2000])(
+    "appends without materializing the existing %i sibling IDs",
+    async (count) => {
+      const doc = new YjsDoc("append-reactivity");
+      const model = new DocumentModelImpl(doc);
+      model.loadSnapshot({
+        version: 9,
+        blocks: Array.from({ length: count }, (_, index) => ({
+          id: `block-${index}`,
+          type: "paragraph",
+          content: "",
+          props: {},
+          listProps: {},
+          pluginData: {},
+          children: [],
+        })),
+        elements: [],
+        pluginData: {},
+      });
+      const roots = doc.doc.getArray<string>("rivto.editor.roots");
+      const read = jest.spyOn(roots, "toArray");
+      doc.transact(() => {
+        read.mockClear();
+        model.blocks.insertBlock({ id: "appended", type: "paragraph" }, { parentId: null });
+        expect(read).not.toHaveBeenCalled();
+      });
+      read.mockRestore();
+      expect(model.blocks.getRootIds()).toHaveLength(count + 1);
+      expect(model.blocks.getRootIds().at(-1)).toBe("appended");
+      await model.destroy();
+    },
+  );
 
   test("checks child presence for placed blocks", () => {
     const doc = new YjsDoc("has-children-reactivity");
@@ -73,17 +87,30 @@ describe("document reactivity", () => {
       type: "paragraph",
       children: [{ id: "child", type: "paragraph", content: "before" }],
     });
-    model.blocks.insertBlock({ id: "sibling", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("parent"));
+    model.blocks.insertBlock(
+      { id: "sibling", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("parent"),
+    );
     const parent = model.blocks.getBlock("parent");
     const sibling = model.blocks.getBlock("sibling");
     const roots = model.blocks.getRootIds();
     const calls = { parent: 0, child: 0, sibling: 0, roots: 0, structure: 0 };
     const disposers = [
-      model.blocks.subscribeBlock("parent", () => { calls.parent += 1; }),
-      model.blocks.subscribeBlock("child", () => { calls.child += 1; }),
-      model.blocks.subscribeBlock("sibling", () => { calls.sibling += 1; }),
-      model.blocks.subscribeRootIds(() => { calls.roots += 1; }),
-      model.blocks.subscribeStructure(() => { calls.structure += 1; }),
+      model.blocks.subscribeBlock("parent", () => {
+        calls.parent += 1;
+      }),
+      model.blocks.subscribeBlock("child", () => {
+        calls.child += 1;
+      }),
+      model.blocks.subscribeBlock("sibling", () => {
+        calls.sibling += 1;
+      }),
+      model.blocks.subscribeRootIds(() => {
+        calls.roots += 1;
+      }),
+      model.blocks.subscribeStructure(() => {
+        calls.structure += 1;
+      }),
     ];
 
     model.blocks.updateBlock("child", { content: "after" });
@@ -103,11 +130,13 @@ describe("document reactivity", () => {
     model.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
-      children: [{
-        id: "child",
-        type: "paragraph",
-        children: [{ id: "grandchild", type: "paragraph" }],
-      }],
+      children: [
+        {
+          id: "child",
+          type: "paragraph",
+          children: [{ id: "grandchild", type: "paragraph" }],
+        },
+      ],
     });
 
     const parent = model.blocks.getBlock("parent")!;
@@ -122,11 +151,18 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("structure-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
-    model.blocks.insertBlock({ id: "child", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("parent"));
+    model.blocks.insertBlock(
+      { id: "child", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("parent"),
+    );
     let structure = 0;
     let roots = 0;
-    model.blocks.subscribeStructure(() => { structure += 1; });
-    model.blocks.subscribeRootIds(() => { roots += 1; });
+    model.blocks.subscribeStructure(() => {
+      structure += 1;
+    });
+    model.blocks.subscribeRootIds(() => {
+      roots += 1;
+    });
 
     model.blocks.updateBlock("parent", { listProps: { checked: true } });
     expect({ structure, roots }).toEqual({ structure: 0, roots: 0 });
@@ -141,14 +177,23 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("root-reorder-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "first", type: "paragraph" });
-    model.blocks.insertBlock({ id: "second", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("first"));
+    model.blocks.insertBlock(
+      { id: "second", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("first"),
+    );
     const first = model.blocks.getBlock("first");
     const second = model.blocks.getBlock("second");
     let blockChanges = 0;
     let rootChanges = 0;
-    model.blocks.subscribeBlock("first", () => { blockChanges += 1; });
-    model.blocks.subscribeBlock("second", () => { blockChanges += 1; });
-    model.blocks.subscribeRootIds(() => { rootChanges += 1; });
+    model.blocks.subscribeBlock("first", () => {
+      blockChanges += 1;
+    });
+    model.blocks.subscribeBlock("second", () => {
+      blockChanges += 1;
+    });
+    model.blocks.subscribeRootIds(() => {
+      rootChanges += 1;
+    });
 
     model.blocks.moveBlock("second", "first", "before");
 
@@ -203,8 +248,12 @@ describe("document reactivity", () => {
     // rebuild an ancestor while another descendant is awaiting invalidation.
     model.blocks.getBlocks();
     const disposers = [
-      model.blocks.subscribeBlock("container", () => { model.blocks.getBlocks(); }),
-      model.blocks.subscribeBlock("first", () => { model.blocks.getBlocks(); }),
+      model.blocks.subscribeBlock("container", () => {
+        model.blocks.getBlocks();
+      }),
+      model.blocks.subscribeBlock("first", () => {
+        model.blocks.getBlocks();
+      }),
     ];
 
     model.blocks.moveBlock("second", "first", "inside");
@@ -222,14 +271,17 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("element-reactivity");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "block", type: "paragraph" });
-    model.elements.insertElement({ id: "card",
+    model.elements.insertElement({
+      id: "card",
       type: "block",
       frame: { x: 0, y: 0, width: 100, height: 100 },
       zIndex: 0,
     });
     const elements = model.elements.getElementNodes();
     let changes = 0;
-    model.elements.subscribe(() => { changes += 1; });
+    model.elements.subscribe(() => {
+      changes += 1;
+    });
 
     model.blocks.updateBlock("block", { content: "changed" });
     expect(model.elements.getElementNodes()).toBe(elements);
@@ -263,7 +315,9 @@ describe("document reactivity", () => {
     expect(model.blocks.getBlockNode("child")).not.toBe(childNode);
     expect(model.blocks.getBlockNode("child")?.content).toBe("after");
     expect(model.blocks.getBlockNode("child")).toBe(model.blocks.getBlockNode("child"));
-    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(model.blocks.getBlockNode("parent")?.childIds);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(
+      model.blocks.getBlockNode("parent")?.childIds,
+    );
     void doc.destroy();
   });
 
@@ -277,15 +331,22 @@ describe("document reactivity", () => {
     });
     const calls = { tree: 0, node: 0 };
     const disposers = [
-      model.blocks.subscribeBlock("parent", () => { calls.tree += 1; }),
-      model.blocks.subscribeBlockNode("parent", () => { calls.node += 1; }),
+      model.blocks.subscribeBlock("parent", () => {
+        calls.tree += 1;
+      }),
+      model.blocks.subscribeBlockNode("parent", () => {
+        calls.node += 1;
+      }),
     ];
 
     model.blocks.updateBlock("child", { content: "after" });
     expect(calls).toEqual({ tree: 1, node: 0 });
     model.blocks.updateBlock("parent", { content: "parent" });
     expect(calls).toEqual({ tree: 2, node: 1 });
-    model.blocks.insertBlock({ id: "extra", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("child"));
+    model.blocks.insertBlock(
+      { id: "extra", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("child"),
+    );
     expect(calls).toEqual({ tree: 3, node: 2 });
 
     disposers.forEach((dispose) => dispose());
@@ -295,10 +356,16 @@ describe("document reactivity", () => {
   test("notifies focused listeners when a placed block is removed", () => {
     const doc = new YjsDoc("focused-block-removal");
     const model = new DocumentModelImpl(doc);
-    model.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
     const calls = { node: 0 };
     const disposers = [
-      model.blocks.subscribeBlockNode("child", () => { calls.node += 1; }),
+      model.blocks.subscribeBlockNode("child", () => {
+        calls.node += 1;
+      }),
     ];
 
     model.blocks.removeBlock("child");
@@ -322,12 +389,17 @@ describe("document reactivity", () => {
     expect(parentNode?.childIds).toEqual(["child"]);
     const emptyLeaf = model.blocks.getBlockNode("child")?.childIds;
 
-    model.blocks.insertBlock({ id: "extra", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("child"));
+    model.blocks.insertBlock(
+      { id: "extra", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("child"),
+    );
 
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
     expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(parentChildren);
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["child", "extra"]);
-    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(model.blocks.getBlockNode("parent")?.childIds);
+    expect(model.blocks.getBlockNode("parent")?.childIds).toBe(
+      model.blocks.getBlockNode("parent")?.childIds,
+    );
     expect(emptyLeaf).toEqual([]);
     expect(model.blocks.getBlockNode("child")?.childIds).toBe(emptyLeaf);
     expect(model.blocks.getBlockNode("extra")?.childIds).toEqual([]);
@@ -371,19 +443,29 @@ describe("document reactivity", () => {
     const roots = model.blocks.getRootIds();
     let blockChanges = 0;
     let structureChanges = 0;
-    model.blocks.subscribeBlock("parent", () => { blockChanges += 1; });
-    model.blocks.subscribeStructure(() => { structureChanges += 1; });
+    model.blocks.subscribeBlock("parent", () => {
+      blockChanges += 1;
+    });
+    model.blocks.subscribeStructure(() => {
+      structureChanges += 1;
+    });
 
     doc.transact(() => {
       model.blocks.setBlockType("parent", "heading");
-      model.blocks.insertBlock({ id: "second", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("first"));
+      model.blocks.insertBlock(
+        { id: "second", type: "paragraph" },
+        model.blocks.getInsertionDestinationAfter("first"),
+      );
     });
 
     expect(model.blocks.getBlockNode("parent")).not.toBe(node);
     expect(model.blocks.getBlockNode("parent")?.type).toBe("heading");
     expect(model.blocks.getBlockNode("parent")?.childIds).not.toBe(children);
     expect(model.blocks.getBlockNode("parent")?.childIds).toEqual(["first", "second"]);
-    expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["first", "second"]);
+    expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual([
+      "first",
+      "second",
+    ]);
     expect(model.blocks.getRootIds()).toBe(roots);
     expect({ blockChanges, structureChanges }).toEqual({ blockChanges: 1, structureChanges: 1 });
     void doc.destroy();
@@ -422,7 +504,9 @@ describe("document reactivity", () => {
     const children = model.blocks.getBlockNode("block")?.childIds;
     let node = model.blocks.getBlockNode("block");
     let structureChanges = 0;
-    model.blocks.subscribeStructure(() => { structureChanges += 1; });
+    model.blocks.subscribeStructure(() => {
+      structureChanges += 1;
+    });
 
     model.blocks.setBlockProp("block", "color", "red");
     expect(model.blocks.getBlockNode("block")).not.toBe(node);
@@ -448,7 +532,10 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("root-child-transfer");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
-    model.blocks.insertBlock({ id: "moving", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("parent"));
+    model.blocks.insertBlock(
+      { id: "moving", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("parent"),
+    );
     const parentNode = model.blocks.getBlockNode("parent");
     const movingNode = model.blocks.getBlockNode("moving");
     const emptyChildren = model.blocks.getBlockNode("parent")?.childIds;
@@ -475,13 +562,23 @@ describe("document reactivity", () => {
   test("notifies changed parents without waking the moved child's node listener", () => {
     const doc = new YjsDoc("child-placement-notification");
     const model = new DocumentModelImpl(doc);
-    model.blocks.insertBlock({ id: "left", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+    model.blocks.insertBlock({
+      id: "left",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
     model.blocks.insertBlock({ id: "right", type: "paragraph" });
     const calls = { left: 0, right: 0, child: 0 };
     const disposers = [
-      model.blocks.subscribeBlockNode("left", () => { calls.left += 1; }),
-      model.blocks.subscribeBlockNode("right", () => { calls.right += 1; }),
-      model.blocks.subscribeBlockNode("child", () => { calls.child += 1; }),
+      model.blocks.subscribeBlockNode("left", () => {
+        calls.left += 1;
+      }),
+      model.blocks.subscribeBlockNode("right", () => {
+        calls.right += 1;
+      }),
+      model.blocks.subscribeBlockNode("child", () => {
+        calls.child += 1;
+      }),
     ];
 
     model.blocks.moveBlock("child", "right", "inside");
@@ -495,13 +592,27 @@ describe("document reactivity", () => {
   test("updates parent links without reading unrelated block records", () => {
     const doc = new YjsDoc("local-parent-refresh");
     const model = new DocumentModelImpl(doc);
-    model.blocks.insertBlock({ id: "source", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+    model.blocks.insertBlock({
+      id: "source",
+      type: "paragraph",
+      children: [{ id: "child", type: "paragraph" }],
+    });
     model.blocks.insertBlock({ id: "target", type: "paragraph" });
     model.blocks.insertBlock({ id: "unrelated", type: "paragraph" });
     const stored = doc.doc.getMap("rivto.editor.blocks");
     const source = (stored.get("source") as Y.Map<unknown>).get("children") as Y.Array<string>;
     const target = (stored.get("target") as Y.Map<unknown>).get("children") as Y.Array<string>;
-    const manager = model.blocks as unknown as { storage: { get(id: string): unknown } };
+    const manager = model.blocks as unknown as {
+      storage: {
+        /**
+         * Reads a raw storage record for the reactivity assertion.
+         *
+         * @param id - Stable ID of the record or registration to access.
+         * @returns The value stored under the requested ID.
+         */
+        get(id: string): unknown;
+      };
+    };
     const get = jest.spyOn(manager.storage, "get");
 
     doc.transact(() => {
@@ -519,7 +630,17 @@ describe("document reactivity", () => {
     const doc = new YjsDoc("local-root-refresh");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "unrelated", type: "paragraph" });
-    const manager = model.blocks as unknown as { storage: { get(id: string): unknown } };
+    const manager = model.blocks as unknown as {
+      storage: {
+        /**
+         * Reads a raw storage record for the reactivity assertion.
+         *
+         * @param id - Stable ID of the record or registration to access.
+         * @returns The value stored under the requested ID.
+         */
+        get(id: string): unknown;
+      };
+    };
     const get = jest.spyOn(manager.storage, "get");
 
     model.blocks.insertBlock({
@@ -589,11 +710,15 @@ describe("document reactivity", () => {
     const node = model.blocks.getBlockNode("block")!;
     const nested = node.props.nested as { values: string[] };
 
-    expect(() => { node.type = "heading"; }).toThrow();
+    expect(() => {
+      node.type = "heading";
+    }).toThrow();
     expect(() => nested.values.push("poison")).toThrow();
     expect(model.blocks.getBlockNode("block")?.type).toBe("paragraph");
     expect(model.blocks.getBlockNode("block")?.props.nested).toEqual({ values: ["stored"] });
-    const updated = model.blocks.updateBlock("block", { props: { nested: { values: ["updated"] } } });
+    const updated = model.blocks.updateBlock("block", {
+      props: { nested: { values: ["updated"] } },
+    });
     (updated.props.nested as { values: string[] }).values.push("local-only");
     expect(model.blocks.getBlockNode("block")?.props.nested).toEqual({ values: ["updated"] });
     void doc.destroy();
@@ -612,7 +737,9 @@ describe("document reactivity", () => {
 
     expect(() => roots.push("poison")).toThrow();
     expect(() => tree.children.push(tree)).toThrow();
-    expect(() => { tree.type = "heading"; }).toThrow();
+    expect(() => {
+      tree.type = "heading";
+    }).toThrow();
     expect(model.blocks.getRootIds()).toEqual(["parent"]);
     expect(model.blocks.getBlock("parent")?.children.map(({ id }) => id)).toEqual(["child"]);
     void doc.destroy();
@@ -627,7 +754,9 @@ describe("document reactivity", () => {
     const right = new DocumentModelImpl(rightDoc);
     const before = right.blocks.getBlock("remote");
     let calls = 0;
-    right.blocks.subscribeBlock("remote", () => { calls += 1; });
+    right.blocks.subscribeBlock("remote", () => {
+      calls += 1;
+    });
 
     left.blocks.updateBlock("remote", { content: "after" });
     Y.applyUpdate(
@@ -657,7 +786,10 @@ describe("document reactivity", () => {
     const node = right.blocks.getBlockNode("parent");
     const children = right.blocks.getBlockNode("parent")?.childIds;
 
-    left.blocks.insertBlock({ id: "second", type: "paragraph" }, left.blocks.getInsertionDestinationAfter("first"));
+    left.blocks.insertBlock(
+      { id: "second", type: "paragraph" },
+      left.blocks.getInsertionDestinationAfter("first"),
+    );
     Y.applyUpdate(
       rightDoc.doc,
       Y.encodeStateAsUpdate(leftDoc.doc, Y.encodeStateVector(rightDoc.doc)),

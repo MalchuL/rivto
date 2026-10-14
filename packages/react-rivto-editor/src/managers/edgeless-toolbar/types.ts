@@ -1,8 +1,8 @@
-import type { ComponentType, ReactNode, PointerEvent } from 'react';
-import type { EdgelessToolButtonProps } from '../../components/edgeless/tool-button';
-import type { EdgelessOperations } from '../elements/edgeless-operations';
-import type { EdgelessVisualTool, PresetPayload } from '../../elements/visuals/types';
-import type { ReactPanelApi } from '../../panels/types';
+import type { ComponentType, ReactNode, PointerEvent } from "react";
+import type { EdgelessToolButtonProps } from "../../components/edgeless/tool-button";
+import type { EdgelessOperations } from "../elements/edgeless-operations";
+import type { EdgelessVisualTool, PresetPayload } from "../../elements/visuals/types";
+import type { ReactPanelApi } from "../../panels/types";
 
 /** Context of the receiving canvas; registrations must not retain it across panel lifetimes. */
 export interface EdgelessToolbarContext {
@@ -19,7 +19,7 @@ export interface EdgelessToolbarTool {
   /** Accessible name and native tooltip, also available to custom group layouts. */
   readonly title: string;
   /** Built-in icon name or custom content; standalone controls show their title when absent. */
-  readonly icon?: EdgelessToolButtonProps['icon'];
+  readonly icon?: EdgelessToolButtonProps["icon"];
   /** Omit to show an individual toolbar button. Unknown groups defer presentation until installed. */
   readonly group?: string;
   /** Ascending presentation order; defaults to zero, with registration order breaking ties. */
@@ -40,7 +40,12 @@ export interface EdgelessToolbarTool {
    * @param context - Receiving panel, shared operations and mounted preset-drag services.
    * @returns Native pointer handlers and optional button class for the common renderer.
    */
-  readonly getButtonProps?: (context: EdgelessToolbarRenderContext) => Pick<EdgelessToolButtonProps, 'onClick' | 'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'className'>;
+  readonly getButtonProps?: (
+    context: EdgelessToolbarRenderContext,
+  ) => Pick<
+    EdgelessToolButtonProps,
+    "onClick" | "onPointerDown" | "onPointerMove" | "onPointerUp" | "onPointerCancel" | "className"
+  >;
 }
 
 /** Pointer placement services available while the toolbar is mounted. */
@@ -50,7 +55,10 @@ export interface EdgelessToolbarRenderContext extends EdgelessToolbarContext {
    * @param event - Pointer-down event from the shared tool button.
    * @param payload - Built-in preset retained until release; movement starts the detached preview.
    */
-  readonly startPresetDrag: (event: PointerEvent<HTMLButtonElement>, payload: PresetPayload) => void;
+  readonly startPresetDrag: (
+    event: PointerEvent<HTMLButtonElement>,
+    payload: PresetPayload,
+  ) => void;
   /**
    * Moves the captured preview and snap guides without document writes.
    * @param event - Pointer-move event; events for another pointer are ignored.
@@ -96,7 +104,7 @@ export interface EdgelessToolbarGroup {
   /** Accessible name and native tooltip, also available to custom group layouts. */
   readonly title: string;
   /** Built-in icon name or custom content; standalone controls show their title when absent. */
-  readonly icon?: EdgelessToolButtonProps['icon'];
+  readonly icon?: EdgelessToolButtonProps["icon"];
   /** Ascending toolbar order, default zero; ties preserve registration order. */
   readonly order?: number;
   /** First activation chooses this member; missing members fall back to the first available tool. Later activations prefer the last used member in this panel. */
@@ -107,8 +115,8 @@ export interface EdgelessToolbarGroup {
 
 /** Top-level toolbar entry; group members are read through getTools instead. */
 export type EdgelessToolbarEntry =
-  | { readonly kind: 'group'; readonly registration: EdgelessToolbarGroup }
-  | { readonly kind: 'tool'; readonly registration: EdgelessToolbarTool };
+  | { readonly kind: "group"; readonly registration: EdgelessToolbarGroup }
+  | { readonly kind: "tool"; readonly registration: EdgelessToolbarTool };
 
 /** Shared presentation registrations; open menus and last-used tools remain panel-local. */
 export interface EdgelessToolbarApi {

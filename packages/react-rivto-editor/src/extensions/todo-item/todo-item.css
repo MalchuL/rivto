@@ -54,7 +54,9 @@
   border: 1px solid var(--rivto-todo-storage-border);
   border-radius: 10px;
   background: var(--rivto-todo-storage-background);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .rivto-todo-storage > .page-block > .page-block-row {
@@ -63,7 +65,9 @@
   min-height: auto;
 }
 
-[data-block-type="todo-storage"]:not(:has(> .page-block-children)):has(.rivto-todo-storage-content) {
+[data-block-type="todo-storage"]:not(:has(> .page-block-children)):has(
+    .rivto-todo-storage-content
+  ) {
   /* Keep the empty field outside fixed-outline title-row hit testing while
      enclosing its positioned height inside the storage BlockView. */
   min-height: 100px;

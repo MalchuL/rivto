@@ -20,14 +20,20 @@ for (const mode of ["Page", "Edgeless"] as const) {
     await expect(left.locator(selector).nth(1)).toHaveText("New paragraph");
     await expect(right.locator(selector).nth(1)).toHaveText("New paragraph");
     await expect(left.locator(selector).nth(1)).toHaveCSS("position", "static");
-    await expect(left.locator(selector).nth(1).locator("..")).toHaveCSS("content-visibility", "visible");
-    await expect(right.locator('.markdown-preview').nth(1)).toHaveText("New paragraph");
+    await expect(left.locator(selector).nth(1).locator("..")).toHaveCSS(
+      "content-visibility",
+      "visible",
+    );
+    await expect(right.locator(".markdown-preview").nth(1)).toHaveText("New paragraph");
     await left.locator(selector).last().click();
     await page.keyboard.press("Control+End");
     await page.keyboard.type(" existing");
     await expect(left.locator(selector).last()).toContainText(" existing");
     await expect(right.locator(selector).last()).toContainText(" existing");
-    await expect(left.locator(selector).last().locator("..")).toHaveCSS("content-visibility", "visible");
+    await expect(left.locator(selector).last().locator("..")).toHaveCSS(
+      "content-visibility",
+      "visible",
+    );
     await right.locator(selector).nth(1).click();
     await page.keyboard.press("Control+End");
     await page.keyboard.type(" remote");
@@ -38,6 +44,9 @@ for (const mode of ["Page", "Edgeless"] as const) {
     await page.keyboard.type("Right paragraph");
     await expect(right.locator(selector).nth(2)).toHaveText("Right paragraph");
     await expect(left.locator(selector).nth(2)).toHaveText("Right paragraph");
-    await expect(right.locator(selector).nth(2).locator("..")).toHaveCSS("content-visibility", "visible");
+    await expect(right.locator(selector).nth(2).locator("..")).toHaveCSS(
+      "content-visibility",
+      "visible",
+    );
   });
 }

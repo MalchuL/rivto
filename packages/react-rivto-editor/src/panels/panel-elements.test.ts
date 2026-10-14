@@ -6,12 +6,15 @@ it("restricts commands to a selected root and observes descendants entering or l
   const editor = await createTestCoreEditor();
   const shape = { type: "shape", frame: { x: 0, y: 0, width: 20, height: 30 }, zIndex: 0 };
   const root = editor.elements.insertElement({ ...shape, type: "group" });
-  const other = editor.elements.insertElement({ ...shape, type: "group", children: [
-    { ...shape, id: "nested", children: [{ ...shape, id: "leaf" }] },
-  ] });
+  const other = editor.elements.insertElement({
+    ...shape,
+    type: "group",
+    children: [{ ...shape, id: "nested", children: [{ ...shape, id: "leaf" }] }],
+  });
   const elements = new PanelElements(editor.elements, editor.getDocument(), root.id);
   expect(elements.getElementNode(root.id)).toBeUndefined();
-  const nodeChanged = jest.fn(); const treeChanged = jest.fn();
+  const nodeChanged = jest.fn();
+  const treeChanged = jest.fn();
   elements.subscribeElementNode("leaf", nodeChanged);
   elements.subscribeElement("leaf", treeChanged);
   editor.elements.moveElements(["nested"], { parentId: root.id });
@@ -30,18 +33,33 @@ it("restricts commands to a selected root and observes descendants entering or l
   await editor.destroy();
 });
 
-it.each([10, 2000])("notifies only the changed node among %i scoped subscriptions", async (count) => {
-  const editor = await createTestCoreEditor();
-  const root = editor.elements.insertElement({ type: "group", zIndex: 0, children:
-    Array.from({ length: count }, (_, i) => ({ id: `node-${i}`, type: "shape", zIndex: 0, frame: { x: i, y: 0, width: 1, height: 1 } })) });
-  const scoped = new PanelElements(editor.elements, editor.getDocument(), root.id);
-  const listeners = Array.from({ length: count }, () => jest.fn());
-  const dispose = listeners.map((listener, i) => scoped.subscribeElementNode(`node-${i}`, listener));
-  const lookup = jest.spyOn(editor.elements, "getElementNode");
-  scoped.updateElement("node-0", { frame: { x: 42 } });
-  expect(scoped.getElementNode("node-0")!.frame.x).toBe(42);
-  expect(listeners[0]).toHaveBeenCalledTimes(1);
-  expect(listeners.slice(1).every((listener) => listener.mock.calls.length === 0)).toBe(true);
-  expect(lookup.mock.calls.length).toBeLessThan(8);
-  lookup.mockRestore(); dispose.forEach((unsubscribe) => unsubscribe()); await editor.destroy();
-});
+it.each([10, 2000])(
+  "notifies only the changed node among %i scoped subscriptions",
+  async (count) => {
+    const editor = await createTestCoreEditor();
+    const root = editor.elements.insertElement({
+      type: "group",
+      zIndex: 0,
+      children: Array.from({ length: count }, (_, i) => ({
+        id: `node-${i}`,
+        type: "shape",
+        zIndex: 0,
+        frame: { x: i, y: 0, width: 1, height: 1 },
+      })),
+    });
+    const scoped = new PanelElements(editor.elements, editor.getDocument(), root.id);
+    const listeners = Array.from({ length: count }, () => jest.fn());
+    const dispose = listeners.map((listener, i) =>
+      scoped.subscribeElementNode(`node-${i}`, listener),
+    );
+    const lookup = jest.spyOn(editor.elements, "getElementNode");
+    scoped.updateElement("node-0", { frame: { x: 42 } });
+    expect(scoped.getElementNode("node-0")!.frame.x).toBe(42);
+    expect(listeners[0]).toHaveBeenCalledTimes(1);
+    expect(listeners.slice(1).every((listener) => listener.mock.calls.length === 0)).toBe(true);
+    expect(lookup.mock.calls.length).toBeLessThan(8);
+    lookup.mockRestore();
+    dispose.forEach((unsubscribe) => unsubscribe());
+    await editor.destroy();
+  },
+);

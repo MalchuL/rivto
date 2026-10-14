@@ -50,7 +50,7 @@ Typed manager mutations создают собственные capture steps. `hi
 5. `blockRegistry.destroy()`.
 6. `commands.clear()`.
 7. `listeners.clear()`.
-Document model не уничтожается. Метод возвращает `Promise<void>` только для совместимости lifecycle API; после destroy runtime непригоден, а caller-owned document остаётся доступен.
+   Document model не уничтожается. Метод возвращает `Promise<void>` только для совместимости lifecycle API; после destroy runtime непригоден, а caller-owned document остаётся доступен.
 
 ## CRDT ownership
 

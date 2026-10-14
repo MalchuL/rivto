@@ -22,7 +22,8 @@ const today = (page: Page): Locator => page.locator('[data-journal-document="tod
 
 /** @returns Root block IDs of one editor in document order. */
 function rootIds(editor: Locator): Promise<string[]> {
-  return editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
+  return editor
+    .locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.blockId ?? ""));
 }
 
@@ -37,7 +38,9 @@ function rootIds(editor: Locator): Promise<string[]> {
  */
 function dropFeedbackOwner(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const decorated = document.querySelector(".page-drop-indicator") ?? document.querySelector("[data-drop-inside]");
+    const decorated =
+      document.querySelector(".page-drop-indicator") ??
+      document.querySelector("[data-drop-inside]");
     const block = decorated?.closest<HTMLElement>("[data-block-id]");
     return block?.dataset.blockId ?? null;
   });
@@ -56,7 +59,8 @@ function dropFeedbackOwner(page: Page): Promise<string | null> {
  */
 function blockUnderCursor(page: Page, point: { x: number; y: number }): Promise<string | null> {
   return page.evaluate(({ x, y }) => {
-    const block = document.elementsFromPoint(x, y)
+    const block = document
+      .elementsFromPoint(x, y)
       .map((element) => element.closest<HTMLElement>("[data-block-id]"))
       .find((element) => element?.closest(".page-surface"));
     return block?.dataset.blockId ?? null;
@@ -111,12 +115,16 @@ async function scrollRowToCursor(page: Page, row: Locator, cursorY: number): Pro
   await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(200);
   // A large wheel event need not consume its entire delta. Align the actual row,
   // rather than assuming the browser moved it by the requested pixel count.
-  await expect.poll(async () => {
-    const box = (await row.boundingBox())!;
-    const remaining = Math.round(box.y + box.height / 2 - cursorY);
-    if (Math.abs(remaining) > 1) await page.mouse.wheel(0, remaining);
-    return Math.abs(remaining);
-  }).toBeLessThanOrEqual(1);
+  await expect
+    .poll(async () => {
+      const box = (await row.boundingBox())!;
+      const remaining = Math.round(box.y + box.height / 2 - cursorY);
+      if (Math.abs(remaining) > 1) {
+        await page.mouse.wheel(0, remaining);
+      }
+      return Math.abs(remaining);
+    })
+    .toBeLessThanOrEqual(1);
 }
 
 test.describe("page drag with a scrolling window", () => {
@@ -128,7 +136,8 @@ test.describe("page drag with a scrolling window", () => {
     const editor = today(page);
     const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
     const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-    const target = editor.locator("[data-block-content]")
+    const target = editor
+      .locator("[data-block-content]")
       .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
       .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
     const targetRow = target.locator(":scope > .page-block-row");
@@ -137,7 +146,11 @@ test.describe("page drag with a scrolling window", () => {
     await scrollRowToCursor(page, targetRow, cursor.y);
 
     const afterScroll = (await targetRow.boundingBox())!;
-    await page.mouse.move(afterScroll.x + afterScroll.width / 2, afterScroll.y + afterScroll.height / 2, { steps: 5 });
+    await page.mouse.move(
+      afterScroll.x + afterScroll.width / 2,
+      afterScroll.y + afterScroll.height / 2,
+      { steps: 5 },
+    );
     await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
     await expect(page.locator("[data-drop-inside]")).toHaveCount(1);
 
@@ -149,7 +162,8 @@ test.describe("page drag with a scrolling window", () => {
     const editor = today(page);
     const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
     const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-    const target = editor.locator("[data-block-content]")
+    const target = editor
+      .locator("[data-block-content]")
       .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
       .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
     const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
@@ -187,7 +201,7 @@ test.describe("page drag with a scrolling window", () => {
     expect(expected).not.toBeNull();
     const indicator = page.locator(".page-drop-indicator");
     await expect(indicator).toBeVisible();
-    if (await indicator.getAttribute("data-kind") === "inside") {
+    if ((await indicator.getAttribute("data-kind")) === "inside") {
       await expect.poll(() => dropFeedbackOwner(page)).toBe(expected);
     } else {
       // A canonical gap can be owned by the preceding subtree at the selected
@@ -203,11 +217,14 @@ test.describe("page drag with a scrolling window", () => {
   // The gap under a leaf row spans every depth its cursor distance allows, so
   // a drifting cursor would corrupt the chosen level as well as the chosen row.
   for (const depth of [0, 1] as const) {
-    test(`resolves gap depth ${depth} from the cursor after scrolling mid-drag`, async ({ page }) => {
+    test(`resolves gap depth ${depth} from the cursor after scrolling mid-drag`, async ({
+      page,
+    }) => {
       const editor = today(page);
       const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
       const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-      const target = editor.locator("[data-block-content]")
+      const target = editor
+        .locator("[data-block-content]")
         .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
         .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
       const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
@@ -234,8 +251,9 @@ test.describe("page drag with a scrolling window", () => {
         const ids = await rootIds(editor);
         expect(ids[ids.indexOf(targetId) + 1]).toBe(sourceId);
       } else {
-        await expect(target.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`).first())
-          .toHaveAttribute(BLOCK_ID_ATTRIBUTE, sourceId);
+        await expect(
+          target.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`).first(),
+        ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, sourceId);
       }
     });
   }
@@ -250,9 +268,9 @@ test.describe("cross-document drag with a scrolling window", () => {
     const left = page.locator('[data-multi-editor="left"]');
     const right = page.locator('[data-multi-editor="right"]');
     await expect(right.locator('[data-block-id="right-nested"]')).toBeVisible();
-    const scrollable = await page.evaluate(() => (
-      document.documentElement.scrollHeight - document.documentElement.clientHeight
-    ));
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    );
     expect(scrollable).toBeGreaterThan(100);
 
     const targetRow = right.locator(`${blockIdSelector("right-nested")} > .page-block-row`);
@@ -262,11 +280,17 @@ test.describe("cross-document drag with a scrolling window", () => {
     await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollable);
 
     const afterScroll = (await targetRow.boundingBox())!;
-    await page.mouse.move(afterScroll.x + afterScroll.width / 2, afterScroll.y + afterScroll.height / 2, { steps: 5 });
+    await page.mouse.move(
+      afterScroll.x + afterScroll.width / 2,
+      afterScroll.y + afterScroll.height / 2,
+      { steps: 5 },
+    );
     await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
 
     await page.mouse.up();
-    await expect(right.locator(`${blockIdSelector("right-nested")} ${blockIdSelector("left-counter")}`)).toHaveCount(1);
+    await expect(
+      right.locator(`${blockIdSelector("right-nested")} ${blockIdSelector("left-counter")}`),
+    ).toHaveCount(1);
     await expect(left.locator(blockIdSelector("left-counter"))).toHaveCount(0);
   });
 });

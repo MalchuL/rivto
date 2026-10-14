@@ -1,13 +1,12 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createTestReactEditor as createReactEditor, createTestCoreEditor as createDocumentEditor } from "../../../test-utils";
+import {
+  createTestReactEditor as createReactEditor,
+  createTestCoreEditor as createDocumentEditor,
+} from "../../../test-utils";
 
 import { defaultWritingBlockExtension } from "../built-ins";
-import {
-  SEPARATOR_BLOCK_TYPE,
-  SeparatorBlock,
-  separatorBlockExtension,
-} from "./separator-block";
+import { SEPARATOR_BLOCK_TYPE, SeparatorBlock, separatorBlockExtension } from "./separator-block";
 
 describe("separator block extension", () => {
   test("registers a contentless accessible separator renderer", async () => {

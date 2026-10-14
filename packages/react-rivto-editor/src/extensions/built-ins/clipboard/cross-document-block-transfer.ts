@@ -1,8 +1,4 @@
-import type {
-  DocumentEditorAPI,
-  EditorBlock,
-  EditorBlockInput,
-} from "@chulane/rivto";
+import type { DocumentEditorAPI, EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
 import type { BlockDestination } from "@chulane/document-model";
 
@@ -24,7 +20,9 @@ export interface CrossDocumentBlockTransferPlacement {
  * @returns No value.
  */
 function collectBlockIds(block: EditorBlockInput, ids: Set<string>): void {
-  if (!block.id) throw new Error("Transfer preparation must preserve block IDs");
+  if (!block.id) {
+    throw new Error("Transfer preparation must preserve block IDs");
+  }
   ids.add(block.id);
   block.children?.forEach((child) => collectBlockIds(child, ids));
 }
@@ -50,20 +48,26 @@ function getTransferBlocks(
   rootIds: readonly string[],
   placement: CrossDocumentBlockTransferPlacement,
 ): EditorBlock[] {
-  if (source.getDocument() === destination.getDocument()) throw new Error("Cross-document transfer requires different documents");
+  if (source.getDocument() === destination.getDocument()) {
+    throw new Error("Cross-document transfer requires different documents");
+  }
   if (placement.targetId !== null && !destination.blocks.hasBlock(placement.targetId!)) {
     throw new Error(`Destination block ${placement.targetId} does not exist`);
   }
 
   const roots = rootIds.map((id) => {
     const block = source.blocks.getBlock(id);
-    if (!block) throw new Error(`Source block ${id} does not exist`);
+    if (!block) {
+      throw new Error(`Source block ${id} does not exist`);
+    }
     return block;
   });
   const blockIds = new Set<string>();
   roots.forEach((block) => collectBlockIds(block, blockIds));
   for (const id of blockIds) {
-    if (destination.blocks.hasBlock(id)) throw new Error(`Destination already contains block ${id}`);
+    if (destination.blocks.hasBlock(id)) {
+      throw new Error(`Destination already contains block ${id}`);
+    }
   }
 
   return roots.map(cloneBlock);
@@ -89,18 +93,29 @@ export function crossDocumentBlockTransfer(
   placement: CrossDocumentBlockTransferPlacement,
 ): void {
   const source = "getDocument" in sourceInput ? sourceInput : sourceInput.document;
-  const destination = "getDocument" in destinationInput ? destinationInput : destinationInput.document;
+  const destination =
+    "getDocument" in destinationInput ? destinationInput : destinationInput.document;
   const sourcePanel = "editor" in sourceInput ? sourceInput : undefined;
   const destinationPanel = "editor" in destinationInput ? destinationInput : undefined;
-  if (sourcePanel && rootIds.some(id => !sourcePanel.blocks.canRemove(id))) throw new Error("Source block is outside panel or protected");
+  if (sourcePanel && rootIds.some((id) => !sourcePanel.blocks.canRemove(id))) {
+    throw new Error("Source block is outside panel or protected");
+  }
   if (destinationPanel && placement.targetId !== null) {
-    const container = placement.position === "inside" && placement.targetId === destinationPanel.rootBlockId;
-    if (!container && (!destinationPanel.blocks.hasBlock(placement.targetId) || (placement.position !== "inside" && !destinationPanel.blocks.canRemove(placement.targetId)))) throw new Error("Destination is outside panel or protected");
+    const container =
+      placement.position === "inside" && placement.targetId === destinationPanel.rootBlockId;
+    if (
+      !container &&
+      (!destinationPanel.blocks.hasBlock(placement.targetId) ||
+        (placement.position !== "inside" && !destinationPanel.blocks.canRemove(placement.targetId)))
+    ) {
+      throw new Error("Destination is outside panel or protected");
+    }
   }
   const destinationDocument = destination.getDocument();
   const blocks = getTransferBlocks(source, destination, rootIds, placement);
   const prepared = destination.blocks.prepareInput(blocks);
-  const sourceIds = new Set<string>(); const preparedIds = new Set<string>();
+  const sourceIds = new Set<string>();
+  const preparedIds = new Set<string>();
   blocks.forEach((block) => collectBlockIds(block, sourceIds));
   prepared.forEach((block) => collectBlockIds(block, preparedIds));
   if (sourceIds.size !== preparedIds.size || [...sourceIds].some((id) => !preparedIds.has(id))) {
@@ -108,12 +123,19 @@ export function crossDocumentBlockTransfer(
   }
   let insertion = { parentId: destinationPanel?.rootBlockId ?? null } as BlockDestination;
   if (placement.targetId !== null) {
-    if (placement.position === "inside") insertion = { parentId: placement.targetId };
-    else if (placement.position === "before") insertion = { parentId: destination.blocks.getParentId(placement.targetId)!, beforeId: placement.targetId };
-    else insertion = destination.blocks.getInsertionDestinationAfter(placement.targetId);
+    if (placement.position === "inside") {
+      insertion = { parentId: placement.targetId };
+    } else if (placement.position === "before") {
+      insertion = {
+        parentId: destination.blocks.getParentId(placement.targetId)!,
+        beforeId: placement.targetId,
+      };
+    } else {
+      insertion = destination.blocks.getInsertionDestinationAfter(placement.targetId);
+    }
   }
   destination.history.batchUpdates(() => {
-    prepared.forEach(block => destinationDocument.blocks.insertBlock(block, insertion));
+    prepared.forEach((block) => destinationDocument.blocks.insertBlock(block, insertion));
   });
   source.history.batchUpdates(() => {
     rootIds.forEach((id) => source.blocks.removeBlock(id));

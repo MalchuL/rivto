@@ -1,4 +1,8 @@
-import type { EdgelessFontOption, EdgelessStickerOption, OrphanConnectorBehavior } from "../../../elements/visuals/types";
+import type {
+  EdgelessFontOption,
+  EdgelessStickerOption,
+  OrphanConnectorBehavior,
+} from "../../../elements/visuals/types";
 
 /** Configuration accepted by {@link edgelessVisualsExtension}. */
 export interface EdgelessVisualsOptions {

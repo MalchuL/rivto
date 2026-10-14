@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  BookOpen,
-  Database,
-  FilePlus,
-  FolderPlus,
-  Import,
-  Shapes,
-} from "lucide-react";
+import { BookOpen, Database, FilePlus, FolderPlus, Import, Shapes } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,

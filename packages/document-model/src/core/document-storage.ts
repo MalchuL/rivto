@@ -9,7 +9,10 @@ export interface DocumentStorageOptions {
   /** Constructs a model before providers attach, allowing application persistence to restore CRDT state. */
   readonly createDocumentModel?: (crdt: CRDTDoc) => DocumentModel;
   /** Application search for an unloaded source. Returns its current registered document IDs; does not acquire it. The signal cancels this search request. */
-  readonly lookupDocumentIds?: (blockId: string, options: { readonly signal?: AbortSignal }) => Promise<readonly string[]>;
+  readonly lookupDocumentIds?: (
+    blockId: string,
+    options: { readonly signal?: AbortSignal },
+  ) => Promise<readonly string[]>;
   /** @param channel - Workspace-qualified registry or document channel. @returns Fresh provider instances for one connection. */
   readonly createProviders?: (channel: string) => readonly Provider[];
   /** Receives registry initialization and provider cleanup failures that occur outside a successful openDocument result. */
@@ -25,16 +28,22 @@ export class DocumentStorage {
 
   /** @param options - Registry, application source lookup, fresh provider factory, and optional asynchronous error reporting. */
   constructor(private readonly options: DocumentStorageOptions) {
-    this.ready = this.connect(options.registry.root, options.registry.root.id).catch(async (error) => {
-      await options.registry.root.destroy().catch((cleanupError) => this.reportError(cleanupError));
-      throw error;
-    });
+    this.ready = this.connect(options.registry.root, options.registry.root.id).catch(
+      async (error) => {
+        await options.registry.root
+          .destroy()
+          .catch((cleanupError) => this.reportError(cleanupError));
+        throw error;
+      },
+    );
     // Consumers observe the original rejected promise through openDocument/ready.
     void this.ready.catch((error) => this.reportError(error));
   }
 
   /** @returns Registered IDs, including documents whose session content was discarded. */
-  getDocumentIds(): string[] { return this.options.registry.getDocumentIds(); }
+  getDocumentIds(): string[] {
+    return this.options.registry.getDocumentIds();
+  }
 
   /**
    * Opens a registered subdocument and attaches only its providers.
@@ -45,18 +54,23 @@ export class DocumentStorage {
    * @throws When unknown, destroyed, or provider attachment fails.
    */
   async openDocument(documentId: string): Promise<DocumentModel> {
-    await this.ready; this.assertActive();
+    await this.ready;
+    this.assertActive();
     const crdt = this.options.registry.openDocument(documentId);
     let document: DocumentModel | undefined;
     try {
       document = this.options.createDocumentModel?.(crdt) ?? new DocumentModelImpl(crdt);
-      if (document.id !== documentId) throw new Error(`Expected document ${documentId}, received ${document.id}`);
+      if (document.id !== documentId) {
+        throw new Error(`Expected document ${documentId}, received ${document.id}`);
+      }
       await this.connect(crdt, JSON.stringify([this.options.registry.root.id, documentId]));
       this.assertActive();
       return document;
     } catch (error) {
       await (document ?? crdt).destroy().catch((failure) => this.reportError(failure));
-      if (document && document.id !== documentId) await crdt.destroy().catch((failure) => this.reportError(failure));
+      if (document && document.id !== documentId) {
+        await crdt.destroy().catch((failure) => this.reportError(failure));
+      }
       throw error;
     }
   }
@@ -69,18 +83,28 @@ export class DocumentStorage {
    * @returns Application's registered identities, or an empty list when unresolved.
    * @throws If destroyed, cancelled, or application search fails.
    */
-  async findDocumentIdsWithBlock(blockId: string, options: { readonly signal?: AbortSignal } = {}): Promise<readonly string[]> {
-    this.assertActive(); options.signal?.throwIfAborted();
-    const ids = await this.options.lookupDocumentIds?.(blockId, options) ?? [];
-    this.assertActive(); options.signal?.throwIfAborted();
+  async findDocumentIdsWithBlock(
+    blockId: string,
+    options: { readonly signal?: AbortSignal } = {},
+  ): Promise<readonly string[]> {
+    this.assertActive();
+    options.signal?.throwIfAborted();
+    const ids = (await this.options.lookupDocumentIds?.(blockId, options)) ?? [];
+    this.assertActive();
+    options.signal?.throwIfAborted();
     return ids;
   }
 
   /** @param listener - Registry metadata callback; text edits do not notify it. @returns Unsubscribe callback. */
-  subscribe(listener: () => void): () => void { return this.options.registry.subscribe(listener); }
+  subscribe(listener: () => void): () => void {
+    return this.options.registry.subscribe(listener);
+  }
 
   /** @param documentId - New nonempty identity. @returns Nothing; registers metadata without loading content. */
-  registerDocument(documentId: string): void { this.assertActive(); this.options.registry.registerDocument(documentId); }
+  registerDocument(documentId: string): void {
+    this.assertActive();
+    this.options.registry.registerDocument(documentId);
+  }
 
   /**
    * Registers a new document and inserts its initial forest before transferring the model to its caller.
@@ -90,14 +114,21 @@ export class DocumentStorage {
    * @throws If storage is destroyed, the ID is registered, or the initial forest is invalid.
    */
   async create(documentId: string, blocks: readonly BlockInput[] = []): Promise<DocumentModel> {
-    await this.ready; this.assertActive(); validateBlockForest(blocks);
+    await this.ready;
+    this.assertActive();
+    validateBlockForest(blocks);
     this.registerDocument(documentId);
     const document = await this.openDocument(documentId);
     try {
-      document.history.batchUpdatesWithoutHistory(() => blocks.forEach((block) => document.blocks.insertBlock(block)));
+      document.history.batchUpdatesWithoutHistory(() =>
+        blocks.forEach((block) => document.blocks.insertBlock(block)),
+      );
       document.history.clear();
       return document;
-    } catch (error) { await document.destroy(); throw error; }
+    } catch (error) {
+      await document.destroy();
+      throw error;
+    }
   }
 
   /**
@@ -105,20 +136,33 @@ export class DocumentStorage {
    * @returns Idempotent cleanup promise. Content-model lifetime is managed by the caller, including failed or cancelled editor acquisitions.
    */
   destroy(): Promise<void> {
-    if (this.destruction) return this.destruction;
+    if (this.destruction) {
+      return this.destruction;
+    }
     this.destroyed = true;
-    this.destruction = (async () => { await this.ready.catch(() => undefined); await this.options.registry.root.destroy(); })();
+    this.destruction = (async () => {
+      await this.ready.catch(() => undefined);
+      await this.options.registry.root.destroy();
+    })();
     return this.destruction;
   }
 
   /** Attaches fresh providers sequentially so partial failures have a deterministic cleanup owner. */
   private async connect(doc: CRDTDoc, channel: string): Promise<void> {
-    for (const provider of this.options.createProviders?.(channel) ?? []) await doc.attachProvider(provider);
+    for (const provider of this.options.createProviders?.(channel) ?? []) {
+      await doc.attachProvider(provider);
+    }
   }
 
   /** Rejects new operations after shutdown starts. */
-  private assertActive(): void { if (this.destroyed) throw new Error("Document storage is destroyed"); }
+  private assertActive(): void {
+    if (this.destroyed) {
+      throw new Error("Document storage is destroyed");
+    }
+  }
 
   /** Reports asynchronous cleanup failures to the host. */
-  private reportError(error: unknown): void { (this.options.onError ?? console.error)(error); }
+  private reportError(error: unknown): void {
+    (this.options.onError ?? console.error)(error);
+  }
 }

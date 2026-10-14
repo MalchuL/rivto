@@ -7,11 +7,22 @@ export class ClipboardConverters {
   private readonly elementTypes = new Map<string, ElementClipboardConverter>();
   private readonly parsers: ClipboardParsers[] = [];
   /** Current block registrations; callers cannot change registry membership. */
-  get blocks(): ReadonlyMap<string, BlockClipboardConverter> { return this.blockTypes; }
+  get blocks(): ReadonlyMap<string, BlockClipboardConverter> {
+    return this.blockTypes;
+  }
   /** Current element registrations; callers cannot change registry membership. */
-  get elements(): ReadonlyMap<string, ElementClipboardConverter> { return this.elementTypes; }
+  get elements(): ReadonlyMap<string, ElementClipboardConverter> {
+    return this.elementTypes;
+  }
   /** Returns parser contributions in registration order across both kinds of type. */
-  getParsers(): readonly ClipboardParsers[] { return this.parsers; }
+  getParsers(): readonly ClipboardParsers[] {
+    return this.parsers;
+  }
+  /**
+   * Binds converter registrations to their cleanup owner.
+   *
+   * @param registrations - Registration owner providing active-state checks and destruction cleanup.
+   */
   constructor(private readonly registrations: RegistrationOwner) {}
 
   /**
@@ -34,16 +45,35 @@ export class ClipboardConverters {
   registerElement(type: string, converter: ElementClipboardConverter): () => void {
     return this.register(this.elementTypes, type, converter);
   }
-  private register<T extends ClipboardParsers>(map: Map<string, T>, type: string, converter: T): () => void {
+  /**
+   * Registers a typed converter and adds it to parser order under the registration owner.
+   *
+   * @param map - Type-indexed converter registry to update.
+   * @param type - Native event or registered editor type name.
+   * @param converter - Clipboard converter to register for the type.
+   * @returns Cleanup that removes only this registration.
+   * @throws If the owner is inactive, the type is blank, or the type is already registered.
+   */
+  private register<T extends ClipboardParsers>(
+    map: Map<string, T>,
+    type: string,
+    converter: T,
+  ): () => void {
     this.registrations.assertActive();
-    if (!type.trim() || map.has(type)) throw new Error(`Clipboard converter ${type || "<empty>"} is already registered`);
+    if (!type.trim() || map.has(type)) {
+      throw new Error(`Clipboard converter ${type || "<empty>"} is already registered`);
+    }
     map.set(type, converter);
     this.parsers.push(converter);
     return this.registrations.registerCleanup(() => {
-      if (map.get(type) !== converter) return;
+      if (map.get(type) !== converter) {
+        return;
+      }
       map.delete(type);
       const index = this.parsers.indexOf(converter);
-      if (index >= 0) this.parsers.splice(index, 1);
+      if (index >= 0) {
+        this.parsers.splice(index, 1);
+      }
     });
   }
 }

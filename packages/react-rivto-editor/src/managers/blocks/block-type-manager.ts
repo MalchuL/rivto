@@ -48,31 +48,51 @@ export class BlockTypeManager implements BlockTypesApi {
       if (existing) {
         const containment = getBlockContainment(definition);
         const previous = getBlockContainment(existing);
-        if (containment && (previous?.childOutline !== containment.childOutline || previous?.outlineFloor !== containment.outlineFloor)) {
-          throw new Error(`Block containment ${definition.type} does not match its existing definition`);
+        if (
+          containment &&
+          (previous?.childOutline !== containment.childOutline ||
+            previous?.outlineFloor !== containment.outlineFloor)
+        ) {
+          throw new Error(
+            `Block containment ${definition.type} does not match its existing definition`,
+          );
         }
-      } else disposers.push(this.editor.blockRegistry.defineBlock(definition));
+      } else {
+        disposers.push(this.editor.blockRegistry.defineBlock(definition));
+      }
       disposers.push(renderers.register(definition.type, render));
-      if (registration.clipboard) disposers.push(this.reactEditor.clipboard.registerBlockConverter(definition.type, registration.clipboard));
-      if (behavior) disposers.push(blockBehaviors.register(definition.type, behavior));
+      if (registration.clipboard) {
+        disposers.push(
+          this.reactEditor.clipboard.registerBlockConverter(
+            definition.type,
+            registration.clipboard,
+          ),
+        );
+      }
+      if (behavior) {
+        disposers.push(blockBehaviors.register(definition.type, behavior));
+      }
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
         disposers.push(() => this.blockElementSeparatorTypes.delete(definition.type));
       }
       if (slashCommand) {
-        disposers.push(slashCommands.register({
-          ...slashCommand,
-          id: slashCommand.id ?? `type.${definition.type}`,
-          isAvailable: (context) => {
-            const block = context.reactPanel.blocks.getBlockNode(context.blockId);
-            return Boolean(
-              block
-              && block.type !== definition.type
-              && slashCommand.isAvailable?.(context) !== false
-            );
-          },
-          execute: ({ blockId, reactPanel }) => reactPanel.blocks.setBlockType(blockId, definition.type),
-        }));
+        disposers.push(
+          slashCommands.register({
+            ...slashCommand,
+            id: slashCommand.id ?? `type.${definition.type}`,
+            isAvailable: (context) => {
+              const block = context.reactPanel.blocks.getBlockNode(context.blockId);
+              return Boolean(
+                block &&
+                block.type !== definition.type &&
+                slashCommand.isAvailable?.(context) !== false,
+              );
+            },
+            execute: ({ blockId, reactPanel }) =>
+              reactPanel.blocks.setBlockType(blockId, definition.type),
+          }),
+        );
       }
     } catch (error) {
       disposers.reverse().forEach((dispose) => dispose());
@@ -98,7 +118,9 @@ export class BlockTypeManager implements BlockTypesApi {
   delete(type: string): boolean {
     this.extensions.assertActive();
     const dispose = this.registrations.get(type);
-    if (!dispose) return false;
+    if (!dispose) {
+      return false;
+    }
     dispose();
     return true;
   }

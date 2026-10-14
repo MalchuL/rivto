@@ -1,11 +1,11 @@
-import { useId, useRef, type CSSProperties } from 'react';
-import type { EditableLabelFocusPoint } from '../../components';
-import type { CreateElementInput } from '../../managers/elements/types';
-import type { EdgelessOperations } from '../../managers/elements/edgeless-operations';
-import type { VisualFrame } from './types';
-import { useEdgelessElementStyle } from '../../hooks/elements/use-edgeless-element-style';
+import { useId, useRef, type CSSProperties } from "react";
+import type { EditableLabelFocusPoint } from "../../components";
+import type { CreateElementInput } from "../../managers/elements/types";
+import type { EdgelessOperations } from "../../managers/elements/edgeless-operations";
+import type { VisualFrame } from "./types";
+import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
 
-const ignoreEditing = () => { };
+const ignoreEditing = () => {};
 
 /**
  * Renders the registered element content from detached creation data without document insertion.
@@ -18,7 +18,14 @@ const ignoreEditing = () => { };
  * @returns Positioned preview using the normal content renderer, or null if its type was removed or operations have no receiving React panel.
  * @throws If registered creation preparation or validation rejects the draft.
  */
-export function ElementCreationPreview({ input, frame, operations, zoom, className = '', style: hostStyle }: {
+export function ElementCreationPreview({
+  input,
+  frame,
+  operations,
+  zoom,
+  className = "",
+  style: hostStyle,
+}: {
   readonly input: CreateElementInput;
   readonly frame: VisualFrame;
   readonly operations: EdgelessOperations;
@@ -30,18 +37,41 @@ export function ElementCreationPreview({ input, frame, operations, zoom, classNa
   const id = useId();
   const focusPointRef = useRef<EditableLabelFocusPoint | null>(null);
   const registration = operations.runtime.elementTypes.get(input.type);
-  const prepared = registration ? operations.prepareElementCreation({ ...input, frame }) : undefined;
+  const prepared = registration
+    ? operations.prepareElementCreation({ ...input, frame })
+    : undefined;
   const element = prepared && { ...prepared, id, childIds: [...(prepared.childIds ?? [])] };
-  const { ref, style } = useEdgelessElementStyle<HTMLDivElement>(element, registration?.behavior?.absoluteGeometry);
-  if (!registration || !element || !operations.reactPanel) return null;
+  const { ref, style } = useEdgelessElementStyle<HTMLDivElement>(
+    element,
+    registration?.behavior?.absoluteGeometry,
+  );
+  if (!registration || !element || !operations.reactPanel) {
+    return null;
+  }
   const Renderer = registration.render;
-  return <div ref={host => {
-    ref.current = host;
-    // Set the native attribute directly: React 18 does not support the boolean inert prop.
-    host?.setAttribute('inert', '');
-  }} className={`edgeless-visual ${className}`} data-edgeless-creation-preview={element.type}
-    aria-hidden="true" style={{ ...style, zIndex: 2147483640, opacity: 0.7, ...hostStyle }}>
-    <Renderer element={element} preview reactPanel={operations.reactPanel} operations={operations}
-      zoom={zoom} selected={false} editing={false} setEditing={ignoreEditing} focusPointRef={focusPointRef} />
-  </div>;
+  return (
+    <div
+      ref={(host) => {
+        ref.current = host;
+        // Set the native attribute directly: React 18 does not support the boolean inert prop.
+        host?.setAttribute("inert", "");
+      }}
+      className={`edgeless-visual ${className}`}
+      data-edgeless-creation-preview={element.type}
+      aria-hidden="true"
+      style={{ ...style, zIndex: 2147483640, opacity: 0.7, ...hostStyle }}
+    >
+      <Renderer
+        element={element}
+        preview
+        reactPanel={operations.reactPanel}
+        operations={operations}
+        zoom={zoom}
+        selected={false}
+        editing={false}
+        setEditing={ignoreEditing}
+        focusPointRef={focusPointRef}
+      />
+    </div>
+  );
 }

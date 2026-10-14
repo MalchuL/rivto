@@ -2,16 +2,30 @@ import { createStructuralSelection, type EditorMode } from "@chulane/rivto";
 import { DOMRectangle } from "@dnd-kit/dom/utilities";
 import type { DragDropManager, DragEndEvent, DragStartEvent } from "@dnd-kit/react";
 import type { ReactPanelApi } from "../../panels/types";
-import { crossDocumentBlockTransfer, type CrossDocumentBlockTransferPlacement } from "../built-ins/clipboard/cross-document-block-transfer";
+import {
+  crossDocumentBlockTransfer,
+  type CrossDocumentBlockTransferPlacement,
+} from "../built-ins/clipboard/cross-document-block-transfer";
 import { selectedMoveRoots, type SelectedMoveRoots } from "../built-ins/page/navigation";
 import { resolveCrossDocumentPageRootPlacement } from "./cross-document/placement";
-import { CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE, crossDocumentPageRootControllers, findCrossDocumentPageController } from "./cross-document/target";
+import {
+  CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE,
+  crossDocumentPageRootControllers,
+  findCrossDocumentPageController,
+} from "./cross-document/target";
 import type { DropLayoutOptions } from "./placement/resolver";
 import type { CanonicalDropPlacement } from "./placement/types";
 import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
 import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
 import { trackGesturePointer } from "./pointer/tracker";
-import type { CrossDocumentPageRootController, DropPlacement, DropPlacementStore, PageDragOperation, PointerCoordinates, PointerTracker } from "./types";
+import type {
+  CrossDocumentPageRootController,
+  DropPlacement,
+  DropPlacementStore,
+  PageDragOperation,
+  PointerCoordinates,
+  PointerTracker,
+} from "./types";
 
 /**
  * Stops native text selection while a block handle owns a drag gesture.
@@ -70,27 +84,33 @@ export class PageDragController {
     const { reactPanel, root, placements } = this;
     const { childDropIndent, gapDropZone, allowChildPlacement, outerEdgeDropZone } = this.options;
     this.disposed = false;
-    if (!root) return () => this.destroy();
+    if (!root) {
+      return () => this.destroy();
+    }
     const controller: CrossDocumentPageRootController = {
       reactPanel,
       root,
       setPlacement: (placement, empty = false) => {
         placements.set(placement);
-        if (empty) root.setAttribute("data-drop-empty", "true");
-        else root.removeAttribute("data-drop-empty");
+        if (empty) {
+          root.setAttribute("data-drop-empty", "true");
+        } else {
+          root.removeAttribute("data-drop-empty");
+        }
       },
-      resolvePlacement: (x, y, sources, sourceDocumentId) => resolveCrossDocumentPageRootPlacement(
-        reactPanel,
-        root,
-        x,
-        y,
-        childDropIndent * (Number(root.dataset.edgelessZoom) || 1),
-        gapDropZone,
-        allowChildPlacement,
-        sources,
-        outerEdgeDropZone,
-        sourceDocumentId,
-      ),
+      resolvePlacement: (x, y, sources, sourceDocumentId) =>
+        resolveCrossDocumentPageRootPlacement(
+          reactPanel,
+          root,
+          x,
+          y,
+          childDropIndent * (Number(root.dataset.edgelessZoom) || 1),
+          gapDropZone,
+          allowChildPlacement,
+          sources,
+          outerEdgeDropZone,
+          sourceDocumentId,
+        ),
     };
     crossDocumentPageRootControllers.set(root, controller);
     root.setAttribute(CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE, "true");
@@ -104,12 +124,228 @@ export class PageDragController {
     };
   }
 
-  /** Releases gesture listeners and feedback when its view or configuration is removed. */
-  private destroy(): void {
-    this.disposed = true;
+  /**
+   * Freezes the eligible move roots when activation begins.
+   *
+   * Selection can otherwise change while the pointer is moving. Capturing the
+   * roots once keeps the preview and final atomic move consistent.
+   *
+   * @param event - dnd-kit start event containing the handle's block ID.
+   * @param manager - Manager whose live operation is re-read after scrolling.
+   */
+  handleDragStart = ({ operation, nativeEvent }: DragStartEvent, manager: DragDropManager) => {
+    const { reactPanel, root, placements, setActiveIds } = this;
+    const source = operation.source;
+    if (!source) {
+      return;
+    }
+    this.clearCrossDocumentTarget();
+    this.stopPointerTracking();
+    const activatorEvent = nativeEvent ?? operation.activatorEvent;
+    // Scrolling slides rows under a stationary cursor; dnd-kit only recomputes
+    // collisions, and pointer drags register no droppables, so retarget here.
+    this.pointerTracker = activatorEvent
+      ? trackGesturePointer(
+          activatorEvent,
+          () => {
+            if (!this.disposed && manager.dragOperation.status.dragging) {
+              this.updatePlacement(manager.dragOperation);
+            }
+          },
+          (point) => this.positionPreview({ x: point.x + 12, y: point.y + 12 }),
+        )
+      : null;
+    const pointer = this.pointerTracker?.get();
+    const sourceRect = source.element?.getBoundingClientRect();
+    if (pointer) {
+      this.positionPreview({ x: pointer.x + 12, y: pointer.y + 12 });
+    } else if (sourceRect) {
+      this.positionPreview({ x: sourceRect.left, y: sourceRect.top });
+    }
+    const ownerDocument = root?.ownerDocument;
+    if (ownerDocument) {
+      const clearSelection = () => {
+        const selection = ownerDocument.getSelection();
+        if (selection?.rangeCount) {
+          selection.removeAllRanges();
+        }
+      };
+      clearSelection();
+      ownerDocument.addEventListener("selectstart", preventDragSelection, true);
+      ownerDocument.addEventListener("selectionchange", clearSelection, true);
+      this.stopSelectionGuard = () => {
+        ownerDocument.removeEventListener("selectstart", preventDragSelection, true);
+        ownerDocument.removeEventListener("selectionchange", clearSelection, true);
+      };
+    }
+    const blocks = getDropBlocks(reactPanel);
+    const move = selectedMoveRoots(
+      blocks,
+      reactPanel.selection.get(),
+      String(source.id),
+      (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
+    );
+    this.activeMove = move;
+    const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
+    const keyboardDragging = Boolean(
+      KeyboardEventType && activatorEvent instanceof KeyboardEventType,
+    );
+    if (keyboardDragging && source.element) {
+      this.keyboardSourceRect = new DOMRectangle(source.element);
+      manager.dragOperation.shape = this.keyboardSourceRect;
+    }
+    placements.setKeyboardDragging(keyboardDragging);
+    placements.setDragged(move.ids);
+    setActiveIds(move.ids);
+  };
+
+  /**
+   * Publishes feedback for one movement step.
+   *
+   * dnd-kit dispatches `dragmove` before committing the new position, and
+   * keyboard targets and the stand-in rectangle are derived from that
+   * position. The keyboard path therefore waits for the provider's render
+   * pass and re-reads the live operation; the pointer path already has the
+   * cursor and resolves immediately.
+   *
+   * @param manager - Manager owning the live operation.
+   */
+  handleDragMove = (_event: unknown, manager: DragDropManager) => {
+    if (this.pointerTracker) {
+      this.updatePlacement(manager.dragOperation);
+    } else {
+      // dnd-kit queues its position update after dispatching dragmove. Attach
+      // the rendering continuation in a microtask so it cannot read the old
+      // position when the renderer's promise is already resolved.
+      queueMicrotask(() => {
+        void manager.renderer.rendering.then(() => {
+          if (!this.disposed && manager.dragOperation.status.dragging) {
+            const sourceRect = this.keyboardSourceRect;
+            const { x, y } = manager.dragOperation.position.delta;
+            if (sourceRect) {
+              manager.dragOperation.shape = sourceRect.translate(x, y);
+            }
+            const rect = manager.dragOperation.shape?.current.boundingRectangle;
+            if (rect) {
+              this.positionPreview({ x: rect.left, y: rect.top });
+            }
+            void manager.renderer.rendering.then(() => {
+              if (!this.disposed && manager.dragOperation.status.dragging) {
+                this.updatePlacement(manager.dragOperation);
+              }
+            });
+          }
+        });
+      });
+    }
+  };
+
+  /**
+   * Commits the last valid structural destination and reconciles selection.
+   *
+   * Cancellation arrives on the same event; a canceled gesture never commits
+   * the last valid placement.
+   *
+   * @param event - Final operation state and cancellation flag supplied by dnd-kit.
+   */
+  handleDragEnd = (event: DragEndEvent) => {
+    const { reactPanel, root } = this;
+    const move = this.activeMove;
+    const crossDocument = this.crossDocumentTarget;
+    const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
+    const sources = (move?.ids ?? []).flatMap((id) => {
+      const block = reactPanel.blocks.getBlock(id);
+      return block ? [block] : [];
+    });
+    const valid =
+      placement &&
+      sources.length === move?.ids.length &&
+      reactPanel.editor.blockBehaviors.acceptsDrop(placement, sources) &&
+      isCurrentDropDestination(
+        excludeDropSubtrees(getDropBlocks(reactPanel), new Set(move.ids)),
+        placement,
+      );
+    const validCrossDocument =
+      crossDocument &&
+      sources.length === move?.ids.length &&
+      crossDocument.controller.reactPanel.editor.blockBehaviors.acceptsDrop(
+        crossDocument.destination,
+        sources,
+      ) &&
+      isCurrentDropDestination(
+        excludeDropSubtrees(
+          getDropBlocks(crossDocument.controller.reactPanel),
+          new Set(
+            crossDocument.controller.reactPanel.document.getDocument() ===
+              reactPanel.document.getDocument()
+              ? move.ids
+              : [],
+          ),
+        ),
+        crossDocument.destination,
+      );
     this.resetGesture();
-    this.previewElement = null;
-  }
+    if (event.canceled || !move) {
+      // Nothing to commit; teardown above already removed every indicator.
+    } else if (crossDocument && validCrossDocument) {
+      let transferred = false;
+      try {
+        const destination = crossDocument.controller;
+        const destinationDocument = destination.reactPanel.document.getDocument();
+        if (destinationDocument === reactPanel.document.getDocument()) {
+          if (move.ids.some((id) => !reactPanel.blocks.canRemove(id))) {
+            throw new Error("Source is outside panel or protected");
+          }
+          const { targetId, position } = crossDocument.placement;
+          const destinationPanel = destination.reactPanel;
+          const container = position === "inside" && targetId === destinationPanel.rootBlockId;
+          if (
+            targetId !== null &&
+            !container &&
+            (!destinationPanel.blocks.hasBlock(targetId) ||
+              (position !== "inside" && !destinationPanel.blocks.canRemove(targetId)))
+          ) {
+            throw new Error("Destination is outside panel or protected");
+          }
+          reactPanel.document.blocks.moveBlocks(move.ids, targetId, position);
+        } else {
+          crossDocumentBlockTransfer(
+            reactPanel,
+            destination.reactPanel,
+            move.ids,
+            crossDocument.placement,
+          );
+        }
+        transferred = true;
+      } catch {
+        transferred = false;
+      }
+      if (transferred) {
+        reactPanel.selection.clear();
+        const firstId = move.ids[0]!;
+        const lastId = move.ids.at(-1)!;
+        crossDocument.controller.reactPanel.selection.set(
+          createStructuralSelection([...move.ids], firstId, lastId),
+        );
+        requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
+      }
+    } else if (placement && valid) {
+      const { targetId, position } = dropMoveTarget(placement);
+      // Persisted parent constraints can reject a structural destination.
+      // Refuse the drop instead of leaving an uncaught gesture error.
+      try {
+        reactPanel.blocks.moveBlocks(move.ids, targetId, position);
+        const selection =
+          move.grouped && move.selection
+            ? move.selection
+            : createStructuralSelection([move.ids[0]!]);
+        reactPanel.selection.set(selection);
+        requestAnimationFrame(() => root?.focus({ preventScroll: true }));
+      } catch {
+        requestAnimationFrame(() => root?.focus({ preventScroll: true }));
+      }
+    }
+  };
 
   /**
    * Moves the detached preview without rerendering the block tree.
@@ -119,9 +355,14 @@ export class PageDragController {
    */
   private positionPreview = (point: PointerCoordinates): void => {
     this.previewPosition = point;
-    if (this.previewElement) this.previewElement.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+    if (this.previewElement) {
+      this.previewElement.style.transform = `translate3d(${point.x}px, ${point.y}px, 0)`;
+    }
   };
 
+  /**
+   * Clears the previous document's drop indicator and forgets its drag target.
+   */
   private clearCrossDocumentTarget = () => {
     this.crossDocumentTarget?.controller.setPlacement(null);
     this.crossDocumentTarget = null;
@@ -155,27 +396,49 @@ export class PageDragController {
     this.clearCrossDocumentTarget();
   };
 
+  /**
+   * Resolves and displays a cross-document drop target at the tracked pointer position.
+   *
+   * @returns Whether a destination controller handled the pointer, even when no valid placement exists.
+   */
   private updateCrossDocumentTarget = (): boolean => {
     const { reactPanel, root } = this;
     const { outerEdgeDropZone } = this.options;
     const pointer = this.pointerTracker?.get() ?? null;
-    const controller = pointer ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone) : null;
+    const controller = pointer
+      ? findCrossDocumentPageController(root, pointer, outerEdgeDropZone)
+      : null;
     let handled = false;
     if (!pointer || !controller) {
       this.clearCrossDocumentTarget();
     } else {
-      if (this.crossDocumentTarget?.controller !== controller) this.clearCrossDocumentTarget();
+      if (this.crossDocumentTarget?.controller !== controller) {
+        this.clearCrossDocumentTarget();
+      }
       const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
         const block = reactPanel.blocks.getBlock(id);
         return block ? [block] : [];
       });
-      const placement = controller.resolvePlacement(pointer.x, pointer.y, sources, reactPanel.document.getDocument().id);
+      const placement = controller.resolvePlacement(
+        pointer.x,
+        pointer.y,
+        sources,
+        reactPanel.document.getDocument().id,
+      );
       controller.setPlacement(placement?.indicator ?? null, placement?.targetId === null);
-      this.crossDocumentTarget = placement ? {
-        controller,
-        placement: { targetId: placement.targetId, position: placement.position },
-        destination: placement.indicator ?? { kind: "between", parentId: null, previousId: null, nextId: null, depth: 0 },
-      } : null;
+      this.crossDocumentTarget = placement
+        ? {
+            controller,
+            placement: { targetId: placement.targetId, position: placement.position },
+            destination: placement.indicator ?? {
+              kind: "between",
+              parentId: null,
+              previousId: null,
+              nextId: null,
+              depth: 0,
+            },
+          }
+        : null;
       handled = true;
     }
     return handled;
@@ -191,21 +454,29 @@ export class PageDragController {
   private validPlacement = (operation: PageDragOperation): DropPlacement | null => {
     const { reactPanel, root, mode } = this;
     const { childDropIndent, gapDropZone, outerEdgeDropZone, allowChildPlacement } = this.options;
-    const zoom = mode === "edgeless"
-      ? Number(root?.dataset.edgelessZoom) || 1
-      : 1;
-    const blocks = excludeDropSubtrees(getDropBlocks(reactPanel), new Set(this.activeMove?.ids ?? []));
+    const zoom = mode === "edgeless" ? Number(root?.dataset.edgelessZoom) || 1 : 1;
+    const blocks = excludeDropSubtrees(
+      getDropBlocks(reactPanel),
+      new Set(this.activeMove?.ids ?? []),
+    );
     const livePointer = this.pointerTracker?.get() ?? null;
     const rect = operation.shape?.current.boundingRectangle;
-    const pointer = livePointer ?? (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
-    if (!pointer) return null;
+    const pointer =
+      livePointer ??
+      (rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
+    if (!pointer) {
+      return null;
+    }
     const sources = (this.activeMove?.ids ?? []).flatMap((id) => {
       const block = reactPanel.blocks.getBlock(id);
       return block ? [block] : [];
     });
     return resolveSurfaceDrop(root, reactPanel, sources, blocks, pointer, {
-      childDropIndent: childDropIndent * zoom, gapDropZone, allowChildPlacement,
-      outerEdgeDropZone, keyboard: !livePointer,
+      childDropIndent: childDropIndent * zoom,
+      gapDropZone,
+      allowChildPlacement,
+      outerEdgeDropZone,
+      keyboard: !livePointer,
     });
   };
 
@@ -217,175 +488,16 @@ export class PageDragController {
    */
   private updatePlacement = (operation: PageDragOperation): void => {
     const { placements } = this;
-    this.displayedPlacement = this.updateCrossDocumentTarget() ? null : this.validPlacement(operation);
+    this.displayedPlacement = this.updateCrossDocumentTarget()
+      ? null
+      : this.validPlacement(operation);
     placements.set(this.displayedPlacement);
   };
 
-  /**
-   * Freezes the eligible move roots when activation begins.
-   *
-   * Selection can otherwise change while the pointer is moving. Capturing the
-   * roots once keeps the preview and final atomic move consistent.
-   *
-   * @param event - dnd-kit start event containing the handle's block ID.
-   * @param manager - Manager whose live operation is re-read after scrolling.
-   */
-  handleDragStart = ({ operation, nativeEvent }: DragStartEvent, manager: DragDropManager) => {
-    const { reactPanel, root, placements, setActiveIds } = this;
-    const source = operation.source;
-    if (!source) return;
-    this.clearCrossDocumentTarget();
-    this.stopPointerTracking();
-    const activatorEvent = nativeEvent ?? operation.activatorEvent;
-    // Scrolling slides rows under a stationary cursor; dnd-kit only recomputes
-    // collisions, and pointer drags register no droppables, so retarget here.
-    this.pointerTracker = activatorEvent
-      ? trackGesturePointer(activatorEvent, () => {
-        if (!this.disposed && manager.dragOperation.status.dragging) this.updatePlacement(manager.dragOperation);
-      }, (point) => this.positionPreview({ x: point.x + 12, y: point.y + 12 }))
-      : null;
-    const pointer = this.pointerTracker?.get();
-    const sourceRect = source.element?.getBoundingClientRect();
-    if (pointer) this.positionPreview({ x: pointer.x + 12, y: pointer.y + 12 });
-    else if (sourceRect) this.positionPreview({ x: sourceRect.left, y: sourceRect.top });
-    const ownerDocument = root?.ownerDocument;
-    if (ownerDocument) {
-      const clearSelection = () => {
-        const selection = ownerDocument.getSelection();
-        if (selection?.rangeCount) selection.removeAllRanges();
-      };
-      clearSelection();
-      ownerDocument.addEventListener("selectstart", preventDragSelection, true);
-      ownerDocument.addEventListener("selectionchange", clearSelection, true);
-      this.stopSelectionGuard = () => {
-        ownerDocument.removeEventListener("selectstart", preventDragSelection, true);
-        ownerDocument.removeEventListener("selectionchange", clearSelection, true);
-      };
-    }
-    const blocks = getDropBlocks(reactPanel);
-    const move = selectedMoveRoots(
-      blocks,
-      reactPanel.selection.get(),
-      String(source.id),
-      (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
-    );
-    this.activeMove = move;
-    const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
-    const keyboardDragging = Boolean(KeyboardEventType && activatorEvent instanceof KeyboardEventType);
-    if (keyboardDragging && source.element) {
-      this.keyboardSourceRect = new DOMRectangle(source.element);
-      manager.dragOperation.shape = this.keyboardSourceRect;
-    }
-    placements.setKeyboardDragging(keyboardDragging);
-    placements.setDragged(move.ids);
-    setActiveIds(move.ids);
-  };
-
-  /**
-   * Publishes feedback for one movement step.
-   *
-   * dnd-kit dispatches `dragmove` before committing the new position, and
-   * keyboard targets and the stand-in rectangle are derived from that
-   * position. The keyboard path therefore waits for the provider's render
-   * pass and re-reads the live operation; the pointer path already has the
-   * cursor and resolves immediately.
-   *
-   * @param manager - Manager owning the live operation.
-   */
-  handleDragMove = (_event: unknown, manager: DragDropManager) => {
-    if (this.pointerTracker) {
-      this.updatePlacement(manager.dragOperation);
-    } else {
-      // dnd-kit queues its position update after dispatching dragmove. Attach
-      // the rendering continuation in a microtask so it cannot read the old
-      // position when the renderer's promise is already resolved.
-      queueMicrotask(() => {
-        void manager.renderer.rendering.then(() => {
-          if (!this.disposed && manager.dragOperation.status.dragging) {
-            const sourceRect = this.keyboardSourceRect;
-            const { x, y } = manager.dragOperation.position.delta;
-            if (sourceRect) manager.dragOperation.shape = sourceRect.translate(x, y);
-            const rect = manager.dragOperation.shape?.current.boundingRectangle;
-            if (rect) this.positionPreview({ x: rect.left, y: rect.top });
-            void manager.renderer.rendering.then(() => {
-              if (!this.disposed && manager.dragOperation.status.dragging) this.updatePlacement(manager.dragOperation);
-            });
-          }
-        });
-      });
-    }
-  };
-
-  /**
-   * Commits the last valid structural destination and reconciles selection.
-   *
-   * Cancellation arrives on the same event; a canceled gesture never commits
-   * the last valid placement.
-   *
-   * @param event - Final operation state and cancellation flag supplied by dnd-kit.
-   */
-  handleDragEnd = (event: DragEndEvent) => {
-    const { reactPanel, root } = this;
-    const move = this.activeMove;
-    const crossDocument = this.crossDocumentTarget;
-    const placement = event.canceled || crossDocument ? null : this.displayedPlacement;
-    const sources = (move?.ids ?? []).flatMap((id) => {
-      const block = reactPanel.blocks.getBlock(id);
-      return block ? [block] : [];
-    });
-    const valid = placement && sources.length === move?.ids.length
-      && reactPanel.editor.blockBehaviors.acceptsDrop(placement, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(getDropBlocks(reactPanel), new Set(move.ids)), placement);
-    const validCrossDocument = crossDocument && sources.length === move?.ids.length
-      && crossDocument.controller.reactPanel.editor.blockBehaviors.acceptsDrop(crossDocument.destination, sources)
-      && isCurrentDropDestination(excludeDropSubtrees(
-        getDropBlocks(crossDocument.controller.reactPanel),
-        new Set(crossDocument.controller.reactPanel.document.getDocument() === reactPanel.document.getDocument() ? move.ids : []),
-      ), crossDocument.destination);
+  /** Releases gesture listeners and feedback when its view or configuration is removed. */
+  private destroy(): void {
+    this.disposed = true;
     this.resetGesture();
-    if (event.canceled || !move) {
-      // Nothing to commit; teardown above already removed every indicator.
-    } else if (crossDocument && validCrossDocument) {
-      let transferred = false;
-      try {
-        const destination = crossDocument.controller;
-        const destinationDocument = destination.reactPanel.document.getDocument();
-        if (destinationDocument === reactPanel.document.getDocument()) {
-          if (move.ids.some(id => !reactPanel.blocks.canRemove(id))) throw new Error("Source is outside panel or protected");
-          const { targetId, position } = crossDocument.placement;
-          const destinationPanel = destination.reactPanel;
-          const container = position === "inside" && targetId === destinationPanel.rootBlockId;
-          if (targetId !== null && !container && (!destinationPanel.blocks.hasBlock(targetId) || (position !== "inside" && !destinationPanel.blocks.canRemove(targetId)))) throw new Error("Destination is outside panel or protected");
-          reactPanel.document.blocks.moveBlocks(move.ids, targetId, position);
-        } else {
-          crossDocumentBlockTransfer(reactPanel, destination.reactPanel, move.ids, crossDocument.placement);
-        }
-        transferred = true;
-      } catch {
-        transferred = false;
-      }
-      if (transferred) {
-        reactPanel.selection.clear();
-        const firstId = move.ids[0]!;
-        const lastId = move.ids.at(-1)!;
-        crossDocument.controller.reactPanel.selection.set(createStructuralSelection([...move.ids], firstId, lastId));
-        requestAnimationFrame(() => crossDocument.controller.root.focus({ preventScroll: true }));
-      }
-    } else if (placement && valid) {
-      const { targetId, position } = dropMoveTarget(placement);
-      // Persisted parent constraints can reject a structural destination.
-      // Refuse the drop instead of leaving an uncaught gesture error.
-      try {
-        reactPanel.blocks.moveBlocks(move.ids, targetId, position);
-        const selection = move.grouped && move.selection
-          ? move.selection
-          : createStructuralSelection([move.ids[0]!]);
-        reactPanel.selection.set(selection);
-        requestAnimationFrame(() => root?.focus({ preventScroll: true }));
-      } catch {
-        requestAnimationFrame(() => root?.focus({ preventScroll: true }));
-      }
-    }
-  };
-
+    this.previewElement = null;
+  }
 }

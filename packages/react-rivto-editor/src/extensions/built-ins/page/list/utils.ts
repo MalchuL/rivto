@@ -28,7 +28,9 @@ export const DEFAULT_BLOCK_LIST_PROPS = { type: "list", checked: false } as cons
  * @returns Whether the value is a numbered-list mode.
  */
 export const isNumberedListType = (value: unknown): value is BlockListType =>
-  value === "numbered_list" || value === "start_numbered_list" || value === "continue_numbered_list";
+  value === "numbered_list" ||
+  value === "start_numbered_list" ||
+  value === "continue_numbered_list";
 
 /**
  * Computes displayed numbering for one ordered sibling group.
@@ -45,10 +47,14 @@ export function resolveBlockListNumbers(
   let last: number | undefined;
   for (const block of blocks) {
     const type = block.listProps.type;
-    const number = type === "start_numbered_list" ? 1
-      : type === "numbered_list" ? (previous ?? 0) + 1
-      : type === "continue_numbered_list" ? (last ?? 0) + 1
-      : undefined;
+    let number: number | undefined;
+    if (type === "start_numbered_list") {
+      number = 1;
+    } else if (type === "numbered_list") {
+      number = (previous ?? 0) + 1;
+    } else if (type === "continue_numbered_list") {
+      number = (last ?? 0) + 1;
+    }
     previous = number;
     if (number !== undefined) {
       last = number;

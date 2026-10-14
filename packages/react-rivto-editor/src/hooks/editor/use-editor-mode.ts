@@ -41,11 +41,12 @@ export function useEditorMode(): UseEditorModeResult {
     (listener: () => void) => reactPanel.mode.subscribe(listener),
     [reactPanel],
   );
-  const mode = useSyncExternalStore(subscribe, () => reactPanel.mode.get(), () => reactPanel.mode.get());
-  const setMode = useCallback(
-    (mode: EditorMode) => reactPanel.mode.set(mode),
-    [reactPanel],
+  const mode = useSyncExternalStore(
+    subscribe,
+    () => reactPanel.mode.get(),
+    () => reactPanel.mode.get(),
   );
+  const setMode = useCallback((mode: EditorMode) => reactPanel.mode.set(mode), [reactPanel]);
 
   return {
     mode,

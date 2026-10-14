@@ -23,13 +23,13 @@ export function dispatchBlockAction<Action extends BlockBehaviorAction>(
   action: Action,
   ...args: Parameters<BlockBehavior[Action]>
 ): boolean {
-  const outcome = (behavior[action] as (...values: Parameters<BlockBehavior[Action]>) => BlockBehaviorOutcome)(
-    ...args,
-  );
+  const outcome = (
+    behavior[action] as (...values: Parameters<BlockBehavior[Action]>) => BlockBehaviorOutcome
+  )(...args);
   if (outcome === "default" && behavior !== fallback) {
-    const fallbackOutcome = (fallback[action] as (
-      ...values: Parameters<BlockBehavior[Action]>
-    ) => BlockBehaviorOutcome)(...args);
+    const fallbackOutcome = (
+      fallback[action] as (...values: Parameters<BlockBehavior[Action]>) => BlockBehaviorOutcome
+    )(...args);
     return fallbackOutcome === "handled" || fallbackOutcome === "rejected";
   }
   return outcome === "handled" || outcome === "rejected";

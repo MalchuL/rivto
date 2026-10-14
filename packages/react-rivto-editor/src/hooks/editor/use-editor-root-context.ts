@@ -10,6 +10,8 @@ import type { EditorRootContextValue } from "../../components/editor-panel/types
  */
 export function useEditorRootContext(): EditorRootContextValue {
   const context = useContext(EditorRootContext);
-  if (!context) throw new Error("Editor root hooks must be used inside EditorPanel or EditorEmbed");
+  if (!context) {
+    throw new Error("Editor root hooks must be used inside EditorPanel or EditorEmbed");
+  }
   return context;
 }

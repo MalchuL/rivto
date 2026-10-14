@@ -16,7 +16,13 @@ export * from "./extensions/built-ins/separator/separator-block";
 export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/edgeless";
 export * from "./extensions/todo-item/todo-item";
-export type { ReactBlockRegistration, ReactBlockSlashCommand, ReactEditorExtension, SlashCommand, SlashCommandContext } from "./managers";
+export type {
+  ReactBlockRegistration,
+  ReactBlockSlashCommand,
+  ReactEditorExtension,
+  SlashCommand,
+  SlashCommandContext,
+} from "./managers";
 
 export {
   KANBAN_BLOCK_TYPE,
@@ -36,7 +42,12 @@ export type {
   DropAxis,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
-export { BENTO_BLOCK_TYPE, Bento, bentoExtension, createBentoBlockInput } from "./extensions/containers/bento/bento";
+export {
+  BENTO_BLOCK_TYPE,
+  Bento,
+  bentoExtension,
+  createBentoBlockInput,
+} from "./extensions/containers/bento/bento";
 export {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
@@ -61,4 +72,8 @@ export {
   type TableCellProps,
 } from "./extensions/containers/table/table";
 
-export { EMBEDDING_BLOCK_TYPE, embeddingExtension, type EmbeddingProps } from "./extensions/embedding/embedding";
+export {
+  EMBEDDING_BLOCK_TYPE,
+  embeddingExtension,
+  type EmbeddingProps,
+} from "./extensions/embedding/embedding";

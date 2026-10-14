@@ -1,18 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  BLOCK_CONTENT_ATTRIBUTE,
-  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
-} from "../../constants";
+import { BLOCK_CONTENT_ATTRIBUTE, BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
 import { TestPanel } from "../../test-utils";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 import { useBlockNode, type UseBlockNodeResult } from "./use-block";
 import { useBlockSelectionAnchor } from "./use-block-selection-anchor";
 
-import {
-  useBlockEditing,
-  type UseBlockEditingResult,
-} from "./use-block-editing";
+import { useBlockEditing, type UseBlockEditingResult } from "./use-block-editing";
 
 interface TestProps extends Record<string, unknown> {
   count: number;
@@ -26,9 +23,18 @@ describe("useBlockEditing", () => {
       type: "test.editing",
       defaultProps: { count: 1, label: "Initial" },
       propSchema: {
+        /**
+         * Validates the fixture's non-negative integer count and optional string label.
+         *
+         * @param value - Unknown fixture properties to validate.
+         * @returns The unchanged fixture properties.
+         * @throws If either property is invalid.
+         */
         parse(value: unknown) {
           const props = value as TestProps;
-          if (!Number.isInteger(props.count) || props.count < 0) throw new Error("count must be non-negative");
+          if (!Number.isInteger(props.count) || props.count < 0) {
+            throw new Error("count must be non-negative");
+          }
           if (props.label !== undefined && typeof props.label !== "string") {
             throw new Error("label must be a string");
           }

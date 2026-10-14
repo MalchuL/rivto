@@ -10,32 +10,45 @@ export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
 
   const move = (reactPanel: ReactPanelApi, dx: number, dy: number): boolean => {
     const items = getEdgelessRuntime(reactPanel).get().items;
-    if (!items.length) return false;
+    if (!items.length) {
+      return false;
+    }
     if (reactEditor.commands.has("edgeless.selection.move")) {
       reactEditor.commands.execute("edgeless.selection.move", { reactPanel, payload: { dx, dy } });
     } else {
       const updates = items.flatMap((id) => {
         const element = reactPanel.elements.getElementNode(id);
-        return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
+        return element
+          ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }]
+          : [];
       });
-      if (updates.length) reactPanel.elements.updateElements(updates);
+      if (updates.length) {
+        reactPanel.elements.updateElements(updates);
+      }
     }
     return true;
   };
 
-  const bind = (id: string, dx: number, dy: number) => reactEditor.keyboard.register({
-    id,
-    keys: BUILTIN_KEYMAP[id],
-    mode: "edgeless",
-    when: ({ raw: event }) => {
-      const target = event.target;
-      return selection.get().active && selection.get().items.length > 0 &&
-        target instanceof HTMLElement &&
-        !target.isContentEditable &&
-        !target.closest(EDITOR_CONTROL_SELECTOR) &&
-        !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
-    },
-  }, ({ reactPanel }) => move(reactPanel, dx, dy));
+  const bind = (id: string, dx: number, dy: number) =>
+    reactEditor.keyboard.register(
+      {
+        id,
+        keys: BUILTIN_KEYMAP[id],
+        mode: "edgeless",
+        when: ({ raw: event }) => {
+          const target = event.target;
+          return (
+            selection.get().active &&
+            selection.get().items.length > 0 &&
+            target instanceof HTMLElement &&
+            !target.isContentEditable &&
+            !target.closest(EDITOR_CONTROL_SELECTOR) &&
+            !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName)
+          );
+        },
+      },
+      ({ reactPanel }) => move(reactPanel, dx, dy),
+    );
 
   bind(KEYBOARD_BINDING_IDS.edgelessMoveLeft, -1, 0);
   bind(KEYBOARD_BINDING_IDS.edgelessMoveRight, 1, 0);

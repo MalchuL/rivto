@@ -16,25 +16,38 @@ export {
   pointAlongPolyline,
   polylineCutsNodes,
 } from "./connector-path";
-export {
-  anchorNormal,
-  inflateFrame,
-  pointInFrame,
-  segmentIntersectsFrame,
-} from "./geometry-core";
+export { anchorNormal, inflateFrame, pointInFrame, segmentIntersectsFrame } from "./geometry-core";
 export type { Point } from "./geometry-core";
 
-export interface SnapGuide { readonly axis: "x" | "y"; readonly position: number; readonly from: number; readonly to: number; readonly kind: "align" | "spacing" }
-export interface SnapResult { readonly dx: number; readonly dy: number; readonly guides: readonly SnapGuide[] }
+export interface SnapGuide {
+  readonly axis: "x" | "y";
+  readonly position: number;
+  readonly from: number;
+  readonly to: number;
+  readonly kind: "align" | "spacing";
+}
+export interface SnapResult {
+  readonly dx: number;
+  readonly dy: number;
+  readonly guides: readonly SnapGuide[];
+}
 
 /** Default canvas grid step in document units (matches the viewport background). */
 export const EDGELESS_GRID_SIZE = 20;
 
-type RankedSnap = { delta: number; position: number; frame: VisualFrame; kind: SnapGuide["kind"]; rank: number };
+type RankedSnap = {
+  delta: number;
+  position: number;
+  frame: VisualFrame;
+  kind: SnapGuide["kind"];
+  rank: number;
+};
 
 /** Returns the smallest frame containing every supplied frame. */
 export function unionFrames(frames: readonly VisualFrame[]): VisualFrame | undefined {
-  if (!frames.length) return undefined;
+  if (!frames.length) {
+    return undefined;
+  }
   const x = Math.min(...frames.map((frame) => frame.x));
   const y = Math.min(...frames.map((frame) => frame.y));
   const right = Math.max(...frames.map((frame) => frame.x + frame.width));
@@ -61,7 +74,7 @@ export function normalizeRotation(rotation: number): number {
  * @returns The rotated canvas point.
  */
 export function rotatePoint(point: Point, center: Point, rotation: number): Point {
-  const radians = normalizeRotation(rotation) * Math.PI / 180;
+  const radians = (normalizeRotation(rotation) * Math.PI) / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
   const x = point.x - center.x;
@@ -77,7 +90,9 @@ export function rotatePoint(point: Point, center: Point, rotation: number): Poin
  * @returns Axis-aligned bounds containing all rotated corners.
  */
 export function rotatedFrameBounds(frame: VisualFrame, rotation = 0): VisualFrame {
-  if (!normalizeRotation(rotation)) return { ...frame };
+  if (!normalizeRotation(rotation)) {
+    return { ...frame };
+  }
   const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
   const points = [
     { x: frame.x, y: frame.y },
@@ -103,7 +118,12 @@ export function rotatedFrameBounds(frame: VisualFrame, rotation = 0): VisualFram
 export function pointInRotatedFrame(point: Point, frame: VisualFrame, rotation = 0): boolean {
   const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
   const local = rotatePoint(point, center, -rotation);
-  return local.x >= frame.x && local.x <= frame.x + frame.width && local.y >= frame.y && local.y <= frame.y + frame.height;
+  return (
+    local.x >= frame.x &&
+    local.x <= frame.x + frame.width &&
+    local.y >= frame.y &&
+    local.y <= frame.y + frame.height
+  );
 }
 
 /**
@@ -115,9 +135,18 @@ export function pointInRotatedFrame(point: Point, frame: VisualFrame, rotation =
  * @param rotation - Clockwise visual rotation in degrees.
  * @returns Whether the segment crosses or touches the rotated frame.
  */
-export function segmentIntersectsRotatedFrame(a: Point, b: Point, frame: VisualFrame, rotation = 0): boolean {
+export function segmentIntersectsRotatedFrame(
+  a: Point,
+  b: Point,
+  frame: VisualFrame,
+  rotation = 0,
+): boolean {
   const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
-  return segmentIntersectsFrame(rotatePoint(a, center, -rotation), rotatePoint(b, center, -rotation), frame);
+  return segmentIntersectsFrame(
+    rotatePoint(a, center, -rotation),
+    rotatePoint(b, center, -rotation),
+    frame,
+  );
 }
 
 /**
@@ -128,10 +157,23 @@ export function segmentIntersectsRotatedFrame(a: Point, b: Point, frame: VisualF
  * @param rotation - Clockwise visual rotation in degrees.
  * @returns The endpoint's current canvas position.
  */
-export function endpointPoint(endpoint: ConnectorEndpoint, frame?: VisualFrame, rotation = 0): Point {
-  if (!frame) return endpoint.position;
-  const point = { x: frame.x + frame.width * endpoint.anchor.x, y: frame.y + frame.height * endpoint.anchor.y };
-  return rotatePoint(point, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 }, rotation);
+export function endpointPoint(
+  endpoint: ConnectorEndpoint,
+  frame?: VisualFrame,
+  rotation = 0,
+): Point {
+  if (!frame) {
+    return endpoint.position;
+  }
+  const point = {
+    x: frame.x + frame.width * endpoint.anchor.x,
+    y: frame.y + frame.height * endpoint.anchor.y,
+  };
+  return rotatePoint(
+    point,
+    { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 },
+    rotation,
+  );
 }
 
 /**
@@ -141,13 +183,16 @@ export function endpointPoint(endpoint: ConnectorEndpoint, frame?: VisualFrame, 
  * @param rotation - Clockwise visual rotation in degrees.
  * @returns Rotated canvas positions paired with normalized anchor coordinates.
  */
-export function edgeAnchors(frame: VisualFrame, rotation = 0): Array<{ x: number; y: number; ax: number; ay: number }> {
+export function edgeAnchors(
+  frame: VisualFrame,
+  rotation = 0,
+): Array<{ x: number; y: number; ax: number; ay: number }> {
   const center = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
   return [
-    { ax: .5, ay: 0, x: frame.x + frame.width * .5, y: frame.y },
-    { ax: 1, ay: .5, x: frame.x + frame.width, y: frame.y + frame.height * .5 },
-    { ax: .5, ay: 1, x: frame.x + frame.width * .5, y: frame.y + frame.height },
-    { ax: 0, ay: .5, x: frame.x, y: frame.y + frame.height * .5 },
+    { ax: 0.5, ay: 0, x: frame.x + frame.width * 0.5, y: frame.y },
+    { ax: 1, ay: 0.5, x: frame.x + frame.width, y: frame.y + frame.height * 0.5 },
+    { ax: 0.5, ay: 1, x: frame.x + frame.width * 0.5, y: frame.y + frame.height },
+    { ax: 0, ay: 0.5, x: frame.x, y: frame.y + frame.height * 0.5 },
   ].map((anchor) => ({ ...anchor, ...rotatePoint(anchor, center, rotation) }));
 }
 
@@ -161,24 +206,39 @@ export function edgeAnchors(frame: VisualFrame, rotation = 0): Array<{ x: number
  */
 export function nearestAnchor(frame: VisualFrame, point: Point, rotation = 0): Point {
   const anchors = edgeAnchors(frame, rotation);
-  return anchors.reduce((best, anchor) => {
-    const distance = Math.hypot(anchor.x - point.x, anchor.y - point.y);
-    const current = anchors.find((candidate) => candidate.ax === best.x && candidate.ay === best.y)!;
-    const bestDistance = Math.hypot(current.x - point.x, current.y - point.y);
-    return distance < bestDistance ? { x: anchor.ax, y: anchor.ay } : best;
-  }, { x: .5, y: 0 });
+  return anchors.reduce(
+    (best, anchor) => {
+      const distance = Math.hypot(anchor.x - point.x, anchor.y - point.y);
+      const current = anchors.find(
+        (candidate) => candidate.ax === best.x && candidate.ay === best.y,
+      )!;
+      const bestDistance = Math.hypot(current.x - point.x, current.y - point.y);
+      return distance < bestDistance ? { x: anchor.ax, y: anchor.ay } : best;
+    },
+    { x: 0.5, y: 0 },
+  );
 }
 
 const betterSnap = (current: RankedSnap | undefined, next: RankedSnap): boolean => {
-  if (!current) return true;
+  if (!current) {
+    return true;
+  }
   const d = Math.abs(next.delta) - Math.abs(current.delta);
-  if (d < -1e-9) return true;
-  if (d > 1e-9) return false;
+  if (d < -1e-9) {
+    return true;
+  }
+  if (d > 1e-9) {
+    return false;
+  }
   return next.rank > current.rank;
 };
 
 /** Finds the nearest edge/center snap on each axis and returns canvas-space guides. */
-export function snapFrame(moving: VisualFrame, candidates: readonly VisualFrame[], threshold: number): SnapResult {
+export function snapFrame(
+  moving: VisualFrame,
+  candidates: readonly VisualFrame[],
+  threshold: number,
+): SnapResult {
   const movingFeaturesX = [
     { value: moving.x, rank: 0 },
     { value: moving.x + moving.width / 2, rank: 1 },
@@ -202,20 +262,41 @@ export function snapFrame(moving: VisualFrame, candidates: readonly VisualFrame[
       { position: frame.y + frame.height / 2, rank: 1 },
       { position: frame.y + frame.height, rank: 0 },
     ];
-    targetX.forEach((target) => movingFeaturesX.forEach((feature) => {
-      const delta = target.position - feature.value;
-      const next = { delta, position: target.position, frame, kind: "align" as const, rank: target.rank + feature.rank };
-      if (Math.abs(delta) <= threshold && betterSnap(x, next)) x = next;
-    }));
-    targetY.forEach((target) => movingFeaturesY.forEach((feature) => {
-      const delta = target.position - feature.value;
-      const next = { delta, position: target.position, frame, kind: "align" as const, rank: target.rank + feature.rank };
-      if (Math.abs(delta) <= threshold && betterSnap(y, next)) y = next;
-    }));
+    targetX.forEach((target) =>
+      movingFeaturesX.forEach((feature) => {
+        const delta = target.position - feature.value;
+        const next = {
+          delta,
+          position: target.position,
+          frame,
+          kind: "align" as const,
+          rank: target.rank + feature.rank,
+        };
+        if (Math.abs(delta) <= threshold && betterSnap(x, next)) {
+          x = next;
+        }
+      }),
+    );
+    targetY.forEach((target) =>
+      movingFeaturesY.forEach((feature) => {
+        const delta = target.position - feature.value;
+        const next = {
+          delta,
+          position: target.position,
+          frame,
+          kind: "align" as const,
+          rank: target.rank + feature.rank,
+        };
+        if (Math.abs(delta) <= threshold && betterSnap(y, next)) {
+          y = next;
+        }
+      }),
+    );
   });
   const horizontal = [...candidates].sort((a, b) => a.x - b.x);
   for (let index = 0; index < horizontal.length - 1; index += 1) {
-    const left = horizontal[index]!, right = horizontal[index + 1]!;
+    const left = horizontal[index]!,
+      right = horizontal[index + 1]!;
     const target = left.x + left.width + (right.x - left.x - left.width - moving.width) / 2;
     const delta = target - moving.x;
     const next: RankedSnap = {
@@ -223,13 +304,21 @@ export function snapFrame(moving: VisualFrame, candidates: readonly VisualFrame[
       position: target + moving.width / 2,
       kind: "spacing",
       rank: 0,
-      frame: { x: left.x, y: Math.min(left.y, right.y), width: right.x + right.width - left.x, height: Math.max(left.y + left.height, right.y + right.height) - Math.min(left.y, right.y) },
+      frame: {
+        x: left.x,
+        y: Math.min(left.y, right.y),
+        width: right.x + right.width - left.x,
+        height: Math.max(left.y + left.height, right.y + right.height) - Math.min(left.y, right.y),
+      },
     };
-    if (Math.abs(delta) <= threshold && betterSnap(x, next)) x = next;
+    if (Math.abs(delta) <= threshold && betterSnap(x, next)) {
+      x = next;
+    }
   }
   const vertical = [...candidates].sort((a, b) => a.y - b.y);
   for (let index = 0; index < vertical.length - 1; index += 1) {
-    const top = vertical[index]!, bottom = vertical[index + 1]!;
+    const top = vertical[index]!,
+      bottom = vertical[index + 1]!;
     const target = top.y + top.height + (bottom.y - top.y - top.height - moving.height) / 2;
     const delta = target - moving.y;
     const next: RankedSnap = {
@@ -237,16 +326,39 @@ export function snapFrame(moving: VisualFrame, candidates: readonly VisualFrame[
       position: target + moving.height / 2,
       kind: "spacing",
       rank: 0,
-      frame: { x: Math.min(top.x, bottom.x), y: top.y, width: Math.max(top.x + top.width, bottom.x + bottom.width) - Math.min(top.x, bottom.x), height: bottom.y + bottom.height - top.y },
+      frame: {
+        x: Math.min(top.x, bottom.x),
+        y: top.y,
+        width: Math.max(top.x + top.width, bottom.x + bottom.width) - Math.min(top.x, bottom.x),
+        height: bottom.y + bottom.height - top.y,
+      },
     };
-    if (Math.abs(delta) <= threshold && betterSnap(y, next)) y = next;
+    if (Math.abs(delta) <= threshold && betterSnap(y, next)) {
+      y = next;
+    }
   }
   const dx = x?.delta ?? 0;
   const dy = y?.delta ?? 0;
   const snapped = { ...moving, x: moving.x + dx, y: moving.y + dy };
   const guides: SnapGuide[] = [];
-  if (x) guides.push({ axis: "x", position: x.position, from: Math.min(snapped.y, x.frame.y), to: Math.max(snapped.y + snapped.height, x.frame.y + x.frame.height), kind: x.kind });
-  if (y) guides.push({ axis: "y", position: y.position, from: Math.min(snapped.x, y.frame.x), to: Math.max(snapped.x + snapped.width, y.frame.x + y.frame.width), kind: y.kind });
+  if (x) {
+    guides.push({
+      axis: "x",
+      position: x.position,
+      from: Math.min(snapped.y, x.frame.y),
+      to: Math.max(snapped.y + snapped.height, x.frame.y + x.frame.height),
+      kind: x.kind,
+    });
+  }
+  if (y) {
+    guides.push({
+      axis: "y",
+      position: y.position,
+      from: Math.min(snapped.x, y.frame.x),
+      to: Math.max(snapped.x + snapped.width, y.frame.x + y.frame.width),
+      kind: y.kind,
+    });
+  }
   return { dx, dy, guides };
 }
 
@@ -278,12 +390,16 @@ export function applyCornerResize(
   let y = frame.y;
   let width = frame.width;
   let height = frame.height;
-  if (corner.includes("e")) width = Math.max(minWidth, frame.width + dx);
+  if (corner.includes("e")) {
+    width = Math.max(minWidth, frame.width + dx);
+  }
   if (corner.includes("w")) {
     width = Math.max(minWidth, frame.width - dx);
     x = right - width;
   }
-  if (corner.includes("s")) height = Math.max(minHeight, frame.height + dy);
+  if (corner.includes("s")) {
+    height = Math.max(minHeight, frame.height + dy);
+  }
   if (corner.includes("n")) {
     height = Math.max(minHeight, frame.height - dy);
     y = bottom - height;
@@ -316,9 +432,17 @@ export function snapResize(
       { position: candidate.x + candidate.width, rank: 0 },
     ].forEach((target) => {
       const delta = target.position - edgeX;
-      const ranked = { delta, position: target.position, frame: candidate, kind: "align" as const, rank: target.rank };
+      const ranked = {
+        delta,
+        position: target.position,
+        frame: candidate,
+        kind: "align" as const,
+        rank: target.rank,
+      };
       if (corner.includes("e") || corner.includes("w")) {
-        if (Math.abs(delta) <= threshold && betterSnap(bestX, ranked)) bestX = ranked;
+        if (Math.abs(delta) <= threshold && betterSnap(bestX, ranked)) {
+          bestX = ranked;
+        }
       }
     });
     [
@@ -327,9 +451,17 @@ export function snapResize(
       { position: candidate.y + candidate.height, rank: 0 },
     ].forEach((target) => {
       const delta = target.position - edgeY;
-      const ranked = { delta, position: target.position, frame: candidate, kind: "align" as const, rank: target.rank };
+      const ranked = {
+        delta,
+        position: target.position,
+        frame: candidate,
+        kind: "align" as const,
+        rank: target.rank,
+      };
       if (corner.includes("n") || corner.includes("s")) {
-        if (Math.abs(delta) <= threshold && betterSnap(bestY, ranked)) bestY = ranked;
+        if (Math.abs(delta) <= threshold && betterSnap(bestY, ranked)) {
+          bestY = ranked;
+        }
       }
     });
   });

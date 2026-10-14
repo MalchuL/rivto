@@ -1,6 +1,9 @@
 import type { ComponentType, ReactNode } from "react";
 import type { BlockWrapperProps } from "../../blocks";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 import {
   BLOCK_FLOW_SLOT_POSITIONS,
   SLOT_POSITIONS,
@@ -47,7 +50,8 @@ describe("SurfaceManager", () => {
     const manager = reactPanel.editor.surfaces;
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Slot owner" }).id;
     const block = editor.blocks.getBlockNode(blockId)!;
-    const elementResult = editor.elements.insertElement({ type: "rectangle",
+    const elementResult = editor.elements.insertElement({
+      type: "rectangle",
       frame: { x: 0, y: 0, width: 100, height: 80 },
       zIndex: 1,
     });
@@ -82,27 +86,36 @@ describe("SurfaceManager", () => {
     expect(manager.getBlockSlots("body", blockProps)).toEqual([HighBlockSlot]);
     disposeBody();
     expect(manager.getBlockSlots("body", blockProps)).toEqual([]);
-    expect(manager.getElementSlots("top-left", { element, mode: "edgeless", selected: true }))
-      .toEqual([ElementSlot]);
-    expect(manager.getElementSlots("top-left", { element, mode: "edgeless", selected: false }))
-      .toEqual([]);
+    expect(
+      manager.getElementSlots("top-left", { element, mode: "edgeless", selected: true }),
+    ).toEqual([ElementSlot]);
+    expect(
+      manager.getElementSlots("top-left", { element, mode: "edgeless", selected: false }),
+    ).toEqual([]);
     disposeElement();
-    expect(manager.getElementSlots("top-left", { element, mode: "edgeless", selected: true }))
-      .toEqual([]);
+    expect(
+      manager.getElementSlots("top-left", { element, mode: "edgeless", selected: true }),
+    ).toEqual([]);
 
-    expect(() => manager.registerBlockSlot({
-      position: "middle" as BlockSlotPosition,
-      component: LowBlockSlot,
-    })).toThrow(/Unsupported slot position/);
-    expect(() => manager.registerElementSlot({
-      position: "start" as SlotPosition,
-      component: ElementSlot,
-    })).toThrow(/Unsupported slot position/);
-    expect(() => manager.registerElementSlot({
-      position: "left",
-      priority: Number.POSITIVE_INFINITY,
-      component: ElementSlot,
-    })).toThrow(/priority must be finite/);
+    expect(() =>
+      manager.registerBlockSlot({
+        position: "middle" as BlockSlotPosition,
+        component: LowBlockSlot,
+      }),
+    ).toThrow(/Unsupported slot position/);
+    expect(() =>
+      manager.registerElementSlot({
+        position: "start" as SlotPosition,
+        component: ElementSlot,
+      }),
+    ).toThrow(/Unsupported slot position/);
+    expect(() =>
+      manager.registerElementSlot({
+        position: "left",
+        priority: Number.POSITIVE_INFINITY,
+        component: ElementSlot,
+      }),
+    ).toThrow(/priority must be finite/);
     reactPanel.editor.destroy();
     editor.destroy();
   });
@@ -112,15 +125,24 @@ test("slot identities survive priority insertions and distinguish repeated compo
   const editor = await createEditor();
   const reactPanel = createReactEditor({ editor });
   const block = editor.blocks.insertBlock({ type: "paragraph" });
-  const props: BlockSlotProps = { block: editor.blocks.getBlockNode(block.id)!, mode: "block", selected: false };
+  const props: BlockSlotProps = {
+    block: editor.blocks.getBlockNode(block.id)!,
+    mode: "block",
+    selected: false,
+  };
   const manager = reactPanel.editor.surfaces;
   manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
   manager.registerBlockSlot({ position: "left", component: LowBlockSlot });
   const original = manager.getBlockSlotEntries("left", props);
   expect(original[0]!.id).not.toBe(original[1]!.id);
-  const remove = manager.registerBlockSlot({ position: "left", component: HighBlockSlot, priority: 10 });
+  const remove = manager.registerBlockSlot({
+    position: "left",
+    component: HighBlockSlot,
+    priority: 10,
+  });
   expect(manager.getBlockSlotEntries("left", props).slice(1)).toEqual(original);
   remove();
   expect(manager.getBlockSlotEntries("left", props)).toEqual(original);
-  reactPanel.editor.destroy(); editor.destroy();
+  reactPanel.editor.destroy();
+  editor.destroy();
 });

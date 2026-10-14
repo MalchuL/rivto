@@ -13,10 +13,7 @@ export * from "./capabilities";
 export * from "./components";
 export * from "./constants";
 export { EditorStorageContext } from "./editor/editor-storage-context";
-export {
-  ReactEditor,
-  createReactEditor,
-} from "./editor/react-editor";
+export { ReactEditor, createReactEditor } from "./editor/react-editor";
 export type { BlockElementProps } from "./elements/types";
 export { pageDragExtension } from "./extensions/block-drag";
 export type { PageDragOptions } from "./extensions/block-drag";
@@ -25,16 +22,34 @@ export {
   defaultWritingBlockExtension,
   standardPreset,
 } from "./extensions/built-ins/built-ins";
-export type { SlashMenuPositionOptions, StandardPresetOptions } from "./extensions/built-ins/built-ins";
+export type {
+  SlashMenuPositionOptions,
+  StandardPresetOptions,
+} from "./extensions/built-ins/built-ins";
 export {
   ERROR_BLOCK_TYPE,
   ErrorBlock,
   createErrorBlockInput,
   errorBlockExtension,
 } from "./extensions/built-ins/error/error-block";
-export { DEFAULT_WRITING_BLOCK_TYPE, createIsEmptyDefaultBlock, resolveIsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
-export type { CreateDefaultBlock, DefaultWritingBlockOptions, EmptyBlockCandidate, IsEmptyBlock } from "./extensions/built-ins/page/default-writing-block";
-export { BLOCK_LIST_TYPES, DEFAULT_BLOCK_LIST_PROPS, isNumberedListType, resolveBlockListNumbers, type BlockListType } from "./extensions/built-ins/page/list";
+export {
+  DEFAULT_WRITING_BLOCK_TYPE,
+  createIsEmptyDefaultBlock,
+  resolveIsEmptyBlock,
+} from "./extensions/built-ins/page/default-writing-block";
+export type {
+  CreateDefaultBlock,
+  DefaultWritingBlockOptions,
+  EmptyBlockCandidate,
+  IsEmptyBlock,
+} from "./extensions/built-ins/page/default-writing-block";
+export {
+  BLOCK_LIST_TYPES,
+  DEFAULT_BLOCK_LIST_PROPS,
+  isNumberedListType,
+  resolveBlockListNumbers,
+  type BlockListType,
+} from "./extensions/built-ins/page/list";
 export type { EdgelessSelectionSnapshot } from "./extensions/built-ins/selection/types";
 export {
   SEPARATOR_BLOCK_TYPE,
@@ -42,13 +57,42 @@ export {
   separatorBlockExtension,
 } from "./extensions/built-ins/separator/separator-block";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
-export type { BulletThreadingAnchor, BulletThreadingOptions } from "./extensions/bullet-threading/bullet-threading";
-export { edgelessPreset, edgelessSurfaceExtension, edgelessVisualsExtension } from "./extensions/edgeless";
+export type {
+  BulletThreadingAnchor,
+  BulletThreadingOptions,
+} from "./extensions/bullet-threading/bullet-threading";
+export {
+  edgelessPreset,
+  edgelessSurfaceExtension,
+  edgelessVisualsExtension,
+} from "./extensions/edgeless";
 export { useEdgelessElementStyle } from "./hooks/elements/use-edgeless-element-style";
 export type { EdgelessPresetOptions } from "./extensions/edgeless";
 export { EdgelessSnappingStore } from "./surfaces/edgeless";
 export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./surfaces/edgeless";
-export type { ConnectorEndpoint, ConnectorEndpointStyle, ConnectorLineStyle, ConnectorRoute, ConnectorTextRotation, ConnectorVisual, CreateVisualPayload, EdgelessAlignment, EdgelessBrush, EdgelessFontOption, EdgelessReorder, EdgelessSelectionRef, EdgelessStickerOption, EdgelessVisual, EdgelessVisualCommandMap, EdgelessVisualTool, OrphanConnectorBehavior, StickerVisual, UpdateVisualPayload, VisualFrame, VisualGroup } from "./elements/visuals/types";
+export type {
+  ConnectorEndpoint,
+  ConnectorEndpointStyle,
+  ConnectorLineStyle,
+  ConnectorRoute,
+  ConnectorTextRotation,
+  ConnectorVisual,
+  CreateVisualPayload,
+  EdgelessAlignment,
+  EdgelessBrush,
+  EdgelessFontOption,
+  EdgelessReorder,
+  EdgelessSelectionRef,
+  EdgelessStickerOption,
+  EdgelessVisual,
+  EdgelessVisualCommandMap,
+  EdgelessVisualTool,
+  OrphanConnectorBehavior,
+  StickerVisual,
+  UpdateVisualPayload,
+  VisualFrame,
+  VisualGroup,
+} from "./elements/visuals/types";
 export type { EdgelessVisualsOptions } from "./extensions/edgeless/visuals/types";
 export {
   DefaultTodoItemPropertiesModal,
@@ -71,12 +115,59 @@ export type {
   TodoStorageProps,
 } from "./extensions/todo-item/todo-item";
 export * from "./hooks";
-export { BLOCK_FLOW_SLOT_POSITIONS, BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, SLOT_POSITIONS, parseShortcut, readEditorDOMSelection, restoreEditorDOMSelection, shortcutFromKeyboardEvent } from "./managers";
-export type { BlockClipboardConverter, BlockClipboardFields, BlockContainment, BlockRenderer, BlockSlotPosition, BlockSlotProps, BlockSlotRegistration, ClipboardContent, ClipboardCopyContext, ClipboardFormatContext, ClipboardFormatter, ClipboardParseContext, ClipboardParser, ClipboardPasteContext, DOMEventDefinition, DOMEventName, DOMEventScope, DOMEventTarget, EditorEventHandler, ElementClipboardConverter, ElementClipboardFields, ElementClipboardFormatContext, ElementSlotProps, ElementSlotRegistration, ExtensionMountPosition, KeyboardBindingSnapshot, KeyboardEventDefinition, KeyboardShortcut, KeymapOverrides, PortableBlockFormats, ReactBlockDefinition, ReactBlockDefinitionMetadata, ReactBlockRegistration, ReactBlockSlashCommand, ReactEditorExtension, SlashCommand, SlashCommandContext, SlotPosition, SurfaceComponent, PanelPasteStrategy } from "./managers";
+export {
+  BLOCK_FLOW_SLOT_POSITIONS,
+  BUILTIN_KEYMAP,
+  KEYBOARD_BINDING_IDS,
+  SLOT_POSITIONS,
+  parseShortcut,
+  readEditorDOMSelection,
+  restoreEditorDOMSelection,
+  shortcutFromKeyboardEvent,
+} from "./managers";
 export type {
-  CreateReactEditorOptions,
-  MarkdownLinkClick,
-} from "./types";
+  BlockClipboardConverter,
+  BlockClipboardFields,
+  BlockContainment,
+  BlockRenderer,
+  BlockSlotPosition,
+  BlockSlotProps,
+  BlockSlotRegistration,
+  ClipboardContent,
+  ClipboardCopyContext,
+  ClipboardFormatContext,
+  ClipboardFormatter,
+  ClipboardParseContext,
+  ClipboardParser,
+  ClipboardPasteContext,
+  DOMEventDefinition,
+  DOMEventName,
+  DOMEventScope,
+  DOMEventTarget,
+  EditorEventHandler,
+  ElementClipboardConverter,
+  ElementClipboardFields,
+  ElementClipboardFormatContext,
+  ElementSlotProps,
+  ElementSlotRegistration,
+  ExtensionMountPosition,
+  KeyboardBindingSnapshot,
+  KeyboardEventDefinition,
+  KeyboardShortcut,
+  KeymapOverrides,
+  PortableBlockFormats,
+  ReactBlockDefinition,
+  ReactBlockDefinitionMetadata,
+  ReactBlockRegistration,
+  ReactBlockSlashCommand,
+  ReactEditorExtension,
+  SlashCommand,
+  SlashCommandContext,
+  SlotPosition,
+  SurfaceComponent,
+  PanelPasteStrategy,
+} from "./managers";
+export type { CreateReactEditorOptions, MarkdownLinkClick } from "./types";
 export { isReactPanelApi, isRivtoEditor } from "./utils";
 
 export {
@@ -98,7 +189,12 @@ export type {
   DropAxis,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
-export { BENTO_BLOCK_TYPE, Bento, bentoExtension, createBentoBlockInput } from "./extensions/containers/bento/bento";
+export {
+  BENTO_BLOCK_TYPE,
+  Bento,
+  bentoExtension,
+  createBentoBlockInput,
+} from "./extensions/containers/bento/bento";
 export {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
@@ -123,7 +219,11 @@ export {
   type TableCellProps,
 } from "./extensions/containers/table/table";
 
-export { EMBEDDING_BLOCK_TYPE, embeddingExtension, type EmbeddingProps } from "./extensions/embedding/embedding";
+export {
+  EMBEDDING_BLOCK_TYPE,
+  embeddingExtension,
+  type EmbeddingProps,
+} from "./extensions/embedding/embedding";
 
 export { EdgelessSurface } from "./surfaces/edgeless/edgeless-surface";
 export { PageSurface } from "./surfaces/page/page-surface";
@@ -144,12 +244,27 @@ export type { ReactPanelApi } from "./types";
 export { EditorEmbed } from "./components/editor-embed/editor-embed";
 export type { EditorEmbedProps } from "./components/editor-embed/types";
 
-export type { CreateElementInput, ElementTypesApi, ReactElementRegistration, ElementRenderProps, ElementPropertiesProps } from "./managers/elements/types";
+export type {
+  CreateElementInput,
+  ElementTypesApi,
+  ReactElementRegistration,
+  ElementRenderProps,
+  ElementPropertiesProps,
+} from "./managers/elements/types";
 export type { PanelAPI } from "@chulane/rivto";
 export type { EdgelessAPI } from "./managers/elements/types";
 
 export { useEdgelessOperations } from "./hooks/elements/use-edgeless-operations";
 
-export type { EdgelessToolbarApi, EdgelessToolbarEntry, EdgelessToolbarGroup, EdgelessToolbarTool, EdgelessToolbarContext, EdgelessToolbarRenderContext, EdgelessToolbarGroupProps, EdgelessToolbarItem } from "./managers/edgeless-toolbar/types";
+export type {
+  EdgelessToolbarApi,
+  EdgelessToolbarEntry,
+  EdgelessToolbarGroup,
+  EdgelessToolbarTool,
+  EdgelessToolbarContext,
+  EdgelessToolbarRenderContext,
+  EdgelessToolbarGroupProps,
+  EdgelessToolbarItem,
+} from "./managers/edgeless-toolbar/types";
 export { EdgelessToolButton } from "./components/edgeless/tool-button";
 export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/tool-button";

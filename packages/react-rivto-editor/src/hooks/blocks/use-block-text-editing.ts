@@ -2,7 +2,10 @@ import { useCallback, useLayoutEffect, useMemo, type HTMLAttributes, type RefObj
 import { BLOCK_CONTENT_ATTRIBUTE, BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../constants";
 import { usePanel } from "../editor/use-panel";
 import { BlockEditingController } from "./block-editing-controller";
-import { useRestoreBlockFocus, type BlockSelectionAnchorAttributes } from "./use-block-selection-anchor";
+import {
+  useRestoreBlockFocus,
+  type BlockSelectionAnchorAttributes,
+} from "./use-block-selection-anchor";
 
 /** Props spread onto a collaborative plain-text contenteditable element. */
 export interface BlockTextEditingAttributes extends BlockSelectionAnchorAttributes {
@@ -32,25 +35,34 @@ export interface BlockTextEditingAttributes extends BlockSelectionAnchorAttribut
  * @returns Stable DOM attributes to spread on exactly one editable div.
  * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
-export function useBlockTextEditing(blockId: string, content: string | undefined): BlockTextEditingAttributes {
+export function useBlockTextEditing(
+  blockId: string,
+  content: string | undefined,
+): BlockTextEditingAttributes {
   const panel = usePanel();
-  const setContent = useCallback((value: string) => {
-    panel.blocks.updateBlock(blockId, { content: value });
-  }, [panel, blockId]);
+  const setContent = useCallback(
+    (value: string) => {
+      panel.blocks.updateBlock(blockId, { content: value });
+    },
+    [panel, blockId],
+  );
   const controller = useMemo(() => new BlockEditingController(setContent), [setContent]);
   // Reconcile command-driven or remote content without treating the detached
   // block snapshot as mutable React state. Run after each commit so replacing
   // the editable DOM node also synchronizes unchanged document text.
   useLayoutEffect(() => controller.synchronize(content ?? ""));
   useRestoreBlockFocus(blockId, controller.elementRef);
-  return useMemo(() => ({
-    ref: controller.elementRef,
-    contentEditable: "plaintext-only" as const,
-    suppressContentEditableWarning: true as const,
-    [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" as const,
-    [BLOCK_CONTENT_ATTRIBUTE]: "" as const,
-    onInput: controller.onInput,
-    onCompositionStart: controller.onCompositionStart,
-    onCompositionEnd: controller.onCompositionEnd,
-  }), [controller]);
+  return useMemo(
+    () => ({
+      ref: controller.elementRef,
+      contentEditable: "plaintext-only" as const,
+      suppressContentEditableWarning: true as const,
+      [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" as const,
+      [BLOCK_CONTENT_ATTRIBUTE]: "" as const,
+      onInput: controller.onInput,
+      onCompositionStart: controller.onCompositionStart,
+      onCompositionEnd: controller.onCompositionEnd,
+    }),
+    [controller],
+  );
 }

@@ -46,7 +46,9 @@ export function snapPlacedFrame(
   candidates: readonly VisualFrame[],
   options: CreationSnapOptions,
 ): SnappedCreationFrame {
-  if (options.disabled) return { frame, guides: [] };
+  if (options.disabled) {
+    return { frame, guides: [] };
+  }
   let dx = 0;
   let dy = 0;
   let guides: readonly SnapGuide[] = [];
@@ -144,7 +146,8 @@ export function snapDraggedFrame(
     const changes = [
       { axis: "x" as const, change: Math.abs(dx) - rawSide },
       { axis: "y" as const, change: Math.abs(dy) - rawSide },
-    ].filter(({ change }) => change !== 0)
+    ]
+      .filter(({ change }) => change !== 0)
       .sort((left, right) => Math.abs(left.change) - Math.abs(right.change));
     const chosen = changes[0];
     const side = Math.max(MIN_PLACE_SIZE, rawSide + (chosen?.change ?? 0));

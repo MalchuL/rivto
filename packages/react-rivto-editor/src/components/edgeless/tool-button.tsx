@@ -55,12 +55,42 @@ import { Toggle } from "../ui/toggle";
 
 /** Icon names supported by the built-in edgeless tool button. */
 export type EdgelessToolIcon =
-  | "align-bottom" | "align-center" | "align-left" | "align-middle"
-  | "align-right" | "align-top" | "back" | "backward" | "distribute-h"
-  | "distribute-v" | "draw" | "ellipse" | "forward" | "front" | "group"
-  | "connector" | "connector-curve" | "connector-orthogonal" | "connector-straight"
-  | "align-objects" | "chevron-down" | "chevron-up" | "close" | "eraser" | "marker" | "pan" | "pen" | "pencil" | "rectangle" | "select" | "snap" | "sticker" | "text"
-  | "ungroup" | "zoom-in" | "zoom-out";
+  | "align-bottom"
+  | "align-center"
+  | "align-left"
+  | "align-middle"
+  | "align-right"
+  | "align-top"
+  | "back"
+  | "backward"
+  | "distribute-h"
+  | "distribute-v"
+  | "draw"
+  | "ellipse"
+  | "forward"
+  | "front"
+  | "group"
+  | "connector"
+  | "connector-curve"
+  | "connector-orthogonal"
+  | "connector-straight"
+  | "align-objects"
+  | "chevron-down"
+  | "chevron-up"
+  | "close"
+  | "eraser"
+  | "marker"
+  | "pan"
+  | "pen"
+  | "pencil"
+  | "rectangle"
+  | "select"
+  | "snap"
+  | "sticker"
+  | "text"
+  | "ungroup"
+  | "zoom-in"
+  | "zoom-out";
 
 const icons: Record<EdgelessToolIcon, LucideIcon> = {
   "align-bottom": AlignEndHorizontal,
@@ -146,7 +176,10 @@ export function EdgelessToolButton({
   className,
   ...button
 }: EdgelessToolButtonProps) {
-  const Icon = typeof icon === "string" && Object.prototype.hasOwnProperty.call(icons, icon) ? icons[icon as EdgelessToolIcon] : null;
+  const Icon =
+    typeof icon === "string" && Object.prototype.hasOwnProperty.call(icons, icon)
+      ? icons[icon as EdgelessToolIcon]
+      : null;
   const content = (
     <>
       {Icon ? <Icon {...iconProps} /> : icon}

@@ -3,14 +3,15 @@
  * The manager preserves shared child-map identities during snapshot loads and
  * exposes only detached portable values.
  */
-import type {
-  CRDTType,
-  CRDTDoc,
-  CRDTMap,
-  CRDTUndoScope,
-} from "@chulane/crdt-doc";
+import type { CRDTType, CRDTDoc, CRDTMap, CRDTUndoScope } from "@chulane/crdt-doc";
 import type { DocumentPluginDataManagerApi } from "../../types";
-import { assignMap, assertPortableRecord, assertPortableValue, clone, isCRDTMap } from "../../utils";
+import {
+  assignMap,
+  assertPortableRecord,
+  assertPortableValue,
+  clone,
+  isCRDTMap,
+} from "../../utils";
 
 const PLUGINS_KEY = "rivto.editor.plugins";
 /**
@@ -43,7 +44,9 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
    */
   get<Value = unknown>(pluginId: string): Value | undefined {
     const value = this.root.get(this.requireId(pluginId));
-    if (value === undefined) return undefined;
+    if (value === undefined) {
+      return undefined;
+    }
     return clone(isCRDTMap(value) ? value.toObject() : value) as Value;
   }
 
@@ -68,12 +71,13 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   getField<Value = unknown>(pluginId: string, key: string): Value | undefined {
     const id = this.requireId(pluginId);
     const current = this.root.get(id);
-    const value = isCRDTMap(current)
-      ? current.get(key)
-      : current && typeof current === "object" && !Array.isArray(current)
-        ? (current as Record<string, unknown>)[key]
-        : undefined;
-    return value === undefined ? undefined : clone(value) as Value;
+    let value: unknown;
+    if (isCRDTMap(current)) {
+      value = current.get(key);
+    } else if (current && typeof current === "object" && !Array.isArray(current)) {
+      value = (current as Record<string, unknown>)[key];
+    }
+    return value === undefined ? undefined : (clone(value) as Value);
   }
 
   /**
@@ -100,26 +104,13 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
     const current = this.root.get(id);
     const existed = isCRDTMap(current)
       ? current.has(key)
-      : Boolean(current && typeof current === "object" && !Array.isArray(current) && key in current);
-    if (existed) this.crdt.transact(() => this.requireMap(id).delete(key));
-    return existed;
-  }
-
-  /**
-   * Materializes an object namespace as an internal collaborative map.
-   * @param id - Validated namespace identifier.
-   * @returns Attached collaborative namespace map.
-   */
-  private requireMap(id: string): CRDTMap<Record<string, CRDTType>> {
-    const current = this.root.get(id);
-    if (isCRDTMap(current)) return current;
-    if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
-      throw new Error(`Plugin data ${id} is not an object namespace`);
+      : Boolean(
+          current && typeof current === "object" && !Array.isArray(current) && key in current,
+        );
+    if (existed) {
+      this.crdt.transact(() => this.requireMap(id).delete(key));
     }
-    const map = this.crdt.createDetachedMap<Record<string, CRDTType>>();
-    if (current) assignMap(map, current as Record<string, unknown>);
-    this.root.set(id, map);
-    return map;
+    return existed;
   }
 
   /**
@@ -131,7 +122,9 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   delete(pluginId: string): boolean {
     const id = this.requireId(pluginId);
     const existed = this.root.has(id);
-    if (existed) this.crdt.transact(() => this.root.delete(id));
+    if (existed) {
+      this.crdt.transact(() => this.root.delete(id));
+    }
     return existed;
   }
 
@@ -152,6 +145,30 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   }
 
   /**
+   * Materializes an object namespace as an internal collaborative map.
+   * @param id - Validated namespace identifier.
+   * @returns Attached collaborative namespace map.
+   */
+  private requireMap(id: string): CRDTMap<Record<string, CRDTType>> {
+    const current = this.root.get(id);
+    if (isCRDTMap(current)) {
+      return current;
+    }
+    if (
+      current !== undefined &&
+      (!current || typeof current !== "object" || Array.isArray(current))
+    ) {
+      throw new Error(`Plugin data ${id} is not an object namespace`);
+    }
+    const map = this.crdt.createDetachedMap<Record<string, CRDTType>>();
+    if (current) {
+      assignMap(map, current as Record<string, unknown>);
+    }
+    this.root.set(id, map);
+    return map;
+  }
+
+  /**
    * Validates and normalizes one namespace identifier.
    *
    * @param pluginId - Candidate plugin namespace identifier.
@@ -159,7 +176,9 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
    */
   private requireId(pluginId: string): string {
     const id = pluginId.trim();
-    if (!id) throw new Error("Plugin data ID is required");
+    if (!id) {
+      throw new Error("Plugin data ID is required");
+    }
     return id;
   }
 
@@ -175,7 +194,10 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
     Object.entries(values).forEach(([key, value]) => {
       const current = map.get(key);
       if (isCRDTMap(current) && value && typeof value === "object" && !Array.isArray(value)) {
-        this.mergeMap(current as CRDTMap<Record<string, CRDTType>>, value as Record<string, unknown>);
+        this.mergeMap(
+          current as CRDTMap<Record<string, CRDTType>>,
+          value as Record<string, unknown>,
+        );
       } else if (value !== undefined) {
         map.set(key, clone(value) as CRDTType);
       }

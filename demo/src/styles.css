@@ -11,7 +11,9 @@ html {
   overflow-y: scroll;
 }
 
-body { margin: 0; }
+body {
+  margin: 0;
+}
 
 .demo-header {
   display: flex;
@@ -22,7 +24,10 @@ body { margin: 0; }
   font-size: 14px;
 }
 
-.demo-mode-switch { display: flex; gap: 4px; }
+.demo-mode-switch {
+  display: flex;
+  gap: 4px;
+}
 
 .demo-toolbar-controls {
   display: flex;
@@ -160,12 +165,20 @@ body { margin: 0; }
   padding: 10px 12px;
 }
 
-.multi-editor-pane .demo-toolbar-controls { gap: 6px; }
-.multi-editor-pane .demo-block-id-toggle { display: none; }
-.multi-editor-pane > .page-surface { min-height: 360px; }
+.multi-editor-pane .demo-toolbar-controls {
+  gap: 6px;
+}
+.multi-editor-pane .demo-block-id-toggle {
+  display: none;
+}
+.multi-editor-pane > .page-surface {
+  min-height: 360px;
+}
 
 @media (max-width: 900px) {
-  .multi-editor-page { grid-template-columns: 1fr; }
+  .multi-editor-page {
+    grid-template-columns: 1fr;
+  }
 }
 
 .demo-mode-switch button[aria-pressed="true"] {
@@ -188,29 +201,42 @@ body { margin: 0; }
   padding-right: 6px;
   transform: translateX(calc(-1 * var(--demo-block-depth, 0) * 32px));
   color: #999;
-  font: 11px/var(--rivto-default-block-height) ui-monospace, monospace;
+  font:
+    11px/var(--rivto-default-block-height) ui-monospace,
+    monospace;
   font-variant-numeric: tabular-nums;
   text-align: right;
   pointer-events: none;
   user-select: none;
 }
 
-
 .rivto-slot > .demo-block-id {
   padding-left: 12px;
   color: #999;
   background: linear-gradient(to right, transparent, white 12px);
-  font: 11px/1 ui-monospace, monospace;
+  font:
+    11px/1 ui-monospace,
+    monospace;
   pointer-events: none;
   user-select: none;
 }
 
 .edgeless-card .rivto-slot > .demo-block-id {
-  background: linear-gradient(to right, transparent, var(--rivto-edgeless-card-background, white) 12px);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--rivto-edgeless-card-background, white) 12px
+  );
 }
 
-.custom-slider-block { display: grid; gap: 6px; }
-.custom-slider-block input { width: min(320px, 100%); accent-color: var(--rivto-accent); }
+.custom-slider-block {
+  display: grid;
+  gap: 6px;
+}
+.custom-slider-block input {
+  width: min(320px, 100%);
+  accent-color: var(--rivto-accent);
+}
 
 .custom-counter-selection-region {
   width: 100%;

@@ -65,15 +65,15 @@ document.getLayout(...)
 
 Но он не должен решать:
 
-* какой блок сейчас выбран;
-* открыт ли slash menu;
-* какой drag сейчас активен;
-* что делает `Enter`;
-* какие actions показывать в toolbar;
-* как переключиться между Block Mode и Edgeless Mode;
-* как обработать paste;
-* как применить AI patch;
-* какой renderer использовать.
+- какой блок сейчас выбран;
+- открыт ли slash menu;
+- какой drag сейчас активен;
+- что делает `Enter`;
+- какие actions показывать в toolbar;
+- как переключиться между Block Mode и Edgeless Mode;
+- как обработать paste;
+- как применить AI patch;
+- какой renderer использовать.
 
 Это уже не ответственность `DocumentModel`.
 
@@ -189,14 +189,14 @@ button.onClick = () => {
 
 Почему это важно:
 
-* undo/redo;
-* plugins;
-* AI;
-* analytics;
-* validation;
-* selection update;
-* collaboration в будущем;
-* одинаковая логика для toolbar, slash, hotkeys, drag-n-drop.
+- undo/redo;
+- plugins;
+- AI;
+- analytics;
+- validation;
+- selection update;
+- collaboration в будущем;
+- одинаковая логика для toolbar, slash, hotkeys, drag-n-drop.
 
 ---
 
@@ -242,12 +242,12 @@ editor.mode.get()
 
 Mode влияет на:
 
-* какие blocks доступны;
-* какие renderers используются;
-* какие plugins активны;
-* как работает selection;
-* как работает drag-n-drop;
-* какие toolbar actions видны.
+- какие blocks доступны;
+- какие renderers используются;
+- какие plugins активны;
+- как работает selection;
+- как работает drag-n-drop;
+- какие toolbar actions видны.
 
 ---
 

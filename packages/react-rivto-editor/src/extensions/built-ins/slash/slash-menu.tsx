@@ -3,21 +3,16 @@
  */
 import type { DocumentModel } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "../../../components/ui/command";
 import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../../constants";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "../../../components/ui/command";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../../constants";
 import { useDOMEvent, useEditorRoot, useReactPanel, useKeyboardEvent } from "../../../hooks";
 import { BUILTIN_KEYMAP, findRenderedBlock, KEYBOARD_BINDING_IDS } from "../../../managers";
 import type { SlashCommand } from "../../../managers/slash";
@@ -28,7 +23,8 @@ import { keepNoResultMenuOpen, rankSlashCommands } from "./slash-search";
  * scroll while the highlighted item stays visible; cmdk's own list keeps no
  * height limit of its own.
  */
-const SLASH_MENU_CLASS = "slash-menu fixed z-[1000] h-auto overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg";
+const SLASH_MENU_CLASS =
+  "slash-menu fixed z-[1000] h-auto overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg";
 
 /** Host-adjustable dimensions used by the floating slash menu. */
 export interface SlashMenuPositionOptions {
@@ -59,10 +55,15 @@ interface SlashSession {
 }
 
 /** Returns the last valid slash trigger ending at a collapsed caret. */
-function findSlash(source: string, caret: number): { slashOffset: number; query: string } | undefined {
+function findSlash(
+  source: string,
+  caret: number,
+): { slashOffset: number; query: string } | undefined {
   const prefix = source.slice(0, caret);
   const slashOffset = prefix.lastIndexOf("/");
-  if (slashOffset < 0 || /\s/.test(prefix.slice(slashOffset + 1))) return;
+  if (slashOffset < 0 || /\s/.test(prefix.slice(slashOffset + 1))) {
+    return;
+  }
   return { slashOffset, query: prefix.slice(slashOffset + 1) };
 }
 
@@ -85,14 +86,19 @@ export function popupPosition(
   const fallback = content.getBoundingClientRect();
   const viewport = content.ownerDocument.defaultView;
   const desiredTop = (rect?.bottom || fallback.bottom) + options.gap;
-  const above = Boolean(viewport && desiredTop + options.maxHeight > viewport.innerHeight - options.viewportPadding);
+  const above = Boolean(
+    viewport && desiredTop + options.maxHeight > viewport.innerHeight - options.viewportPadding,
+  );
   const top = above ? (rect?.top || fallback.top) - options.gap : desiredTop;
   return {
     left: viewport
-      ? Math.max(options.viewportPadding, Math.min(
-        rect?.left || fallback.left,
-        viewport.innerWidth - options.width - options.viewportPadding,
-      ))
+      ? Math.max(
+          options.viewportPadding,
+          Math.min(
+            rect?.left || fallback.left,
+            viewport.innerWidth - options.width - options.viewportPadding,
+          ),
+        )
       : rect?.left || fallback.left,
     top,
     above,
@@ -102,7 +108,14 @@ export function popupPosition(
 /** Reads a collapsed native caret owned by the supplied editable element. */
 function caretOffset(content: HTMLElement): number | undefined {
   const selection = content.ownerDocument.getSelection();
-  if (!selection?.rangeCount || !selection.isCollapsed || !selection.focusNode || !content.contains(selection.focusNode)) return;
+  if (
+    !selection?.rangeCount ||
+    !selection.isCollapsed ||
+    !selection.focusNode ||
+    !content.contains(selection.focusNode)
+  ) {
+    return;
+  }
   const range = content.ownerDocument.createRange();
   range.selectNodeContents(content);
   let offset: number | undefined;
@@ -116,7 +129,9 @@ function caretOffset(content: HTMLElement): number | undefined {
 }
 
 /** Groups already-ranked commands without changing their search order. */
-function groupCommands(commands: readonly SlashCommand[]): Array<{ group: string; commands: SlashCommand[] }> {
+function groupCommands(
+  commands: readonly SlashCommand[],
+): Array<{ group: string; commands: SlashCommand[] }> {
   const groups = new Map<string, SlashCommand[]>();
   commands.forEach((command) => {
     const group = command.group ?? "Commands";
@@ -149,13 +164,31 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
   const ignoredTrigger = useRef<string | undefined>(undefined);
   sessionRef.current = session;
 
-  const subscribe = useCallback((listener: () => void) => slashCommands.subscribe(listener), [slashCommands]);
-  useSyncExternalStore(subscribe, () => slashCommands.revision, () => slashCommands.revision);
+  const subscribe = useCallback(
+    (listener: () => void) => slashCommands.subscribe(listener),
+    [slashCommands],
+  );
+  useSyncExternalStore(
+    subscribe,
+    () => slashCommands.revision,
+    () => slashCommands.revision,
+  );
 
-  const available = useMemo(() => session
-    ? slashCommands.getAll({ blockId: session.blockId })
-    : [], [reactPanel, slashCommands, slashCommands.revision, session?.blockId, session?.document, session?.rootBlockId]);
-  const ranked = useMemo(() => rankSlashCommands(available, session?.query ?? ""), [available, session?.query]);
+  const available = useMemo(
+    () => (session ? slashCommands.getAll({ blockId: session.blockId }) : []),
+    [
+      reactPanel,
+      slashCommands,
+      slashCommands.revision,
+      session?.blockId,
+      session?.document,
+      session?.rootBlockId,
+    ],
+  );
+  const ranked = useMemo(
+    () => rankSlashCommands(available, session?.query ?? ""),
+    [available, session?.query],
+  );
   const groups = useMemo(() => groupCommands(ranked.map(({ command }) => command)), [ranked]);
 
   useEffect(() => {
@@ -164,193 +197,267 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
 
   const close = useCallback((ignore = false) => {
     const current = sessionRef.current;
-    if (ignore && current) ignoredTrigger.current = `${current.blockId}:${current.slashOffset}`;
+    if (ignore && current) {
+      ignoredTrigger.current = `${current.blockId}:${current.slashOffset}`;
+    }
     setSession(null);
   }, []);
 
   useEffect(() => reactPanel.subscribeDeactivation(close), [reactPanel, close]);
 
   /** Validates the current caret and optionally discovers a freshly typed slash. */
-  const refresh = useCallback((content: HTMLElement, blockId: string, discover: boolean) => {
-    const offset = caretOffset(content);
-    const source = content.textContent ?? "";
-    const trigger = offset === undefined ? undefined : findSlash(source, offset);
-    const current = sessionRef.current;
-    const triggerChanged = Boolean(
-      current && trigger && (current.blockId !== blockId || current.slashOffset !== trigger.slashOffset),
-    );
+  const refresh = useCallback(
+    (content: HTMLElement, blockId: string, discover: boolean) => {
+      const offset = caretOffset(content);
+      const source = content.textContent ?? "";
+      const trigger = offset === undefined ? undefined : findSlash(source, offset);
+      const current = sessionRef.current;
+      const triggerChanged = Boolean(
+        current &&
+        trigger &&
+        (current.blockId !== blockId || current.slashOffset !== trigger.slashOffset),
+      );
 
-    if (!trigger || triggerChanged) {
-      if (current) setSession(null);
-      if (!trigger) ignoredTrigger.current = undefined;
-    }
-
-    const key = trigger ? `${blockId}:${trigger.slashOffset}` : undefined;
-    if (
-      trigger && key &&
-      (discover || !triggerChanged) &&
-      (current || (discover && ignoredTrigger.current !== key))
-    ) {
-      const commands = slashCommands.getAll({ blockId });
-      const matches = rankSlashCommands(commands, trigger.query);
-      const lastMatchedLength = matches.length
-        ? trigger.query.length
-        : current?.lastMatchedLength ?? 0;
-      if (!matches.length && !keepNoResultMenuOpen(trigger.query.length, lastMatchedLength)) {
-        ignoredTrigger.current = key;
-        setSession(null);
-      } else {
-        const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
-        const panelRoot = reactPanel.events.getRoot();
-        if (!panelRoot) return;
-        setSession({
-          document: reactPanel.document.getDocument(),
-          rootBlockId: reactPanel.rootBlockId,
-          panelRoot,
-          blockId,
-          slashOffset: trigger.slashOffset,
-          query: trigger.query,
-          lastMatchedLength,
-          ...position,
-          activeIndex: matches.length
-            ? Math.min(current?.activeIndex ?? 0, matches.length - 1)
-            : 0,
-        });
+      if (!trigger || triggerChanged) {
+        if (current) {
+          setSession(null);
+        }
+        if (!trigger) {
+          ignoredTrigger.current = undefined;
+        }
       }
-    }
-  }, [reactPanel, slashCommands, width, maxHeight, gap, viewportPadding]);
 
-  useDOMEvent({
-    id: "slash.input",
-    type: "input",
-    scope: "content",
-  }, ({ raw: event }) => {
-    const content = event.target instanceof Element
-      ? event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR)
-      : null;
-    const blockId = content?.closest<HTMLElement>(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!content || !blockId || !root?.contains(content)) return;
-    // Counter is contentless; Markdown and Slider both expose the same marker.
-    // Discover only a slash inserted by this input event. Once open, ordinary
-    // query edits continue refreshing it; old URL/path slashes never reopen.
-    const discover = Boolean(sessionRef.current) || (
-      event instanceof InputEvent && event.inputType === "insertText" && event.data === "/"
-    );
-    queueMicrotask(() => refresh(content, blockId, discover));
-  });
+      const key = trigger ? `${blockId}:${trigger.slashOffset}` : undefined;
+      if (
+        trigger &&
+        key &&
+        (discover || !triggerChanged) &&
+        (current || (discover && ignoredTrigger.current !== key))
+      ) {
+        const commands = slashCommands.getAll({ blockId });
+        const matches = rankSlashCommands(commands, trigger.query);
+        const lastMatchedLength = matches.length
+          ? trigger.query.length
+          : (current?.lastMatchedLength ?? 0);
+        if (!matches.length && !keepNoResultMenuOpen(trigger.query.length, lastMatchedLength)) {
+          ignoredTrigger.current = key;
+          setSession(null);
+        } else {
+          const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
+          const panelRoot = reactPanel.events.getRoot();
+          if (!panelRoot) {
+            return;
+          }
+          setSession({
+            document: reactPanel.document.getDocument(),
+            rootBlockId: reactPanel.rootBlockId,
+            panelRoot,
+            blockId,
+            slashOffset: trigger.slashOffset,
+            query: trigger.query,
+            lastMatchedLength,
+            ...position,
+            activeIndex: matches.length
+              ? Math.min(current?.activeIndex ?? 0, matches.length - 1)
+              : 0,
+          });
+        }
+      }
+    },
+    [reactPanel, slashCommands, width, maxHeight, gap, viewportPadding],
+  );
+
+  useDOMEvent(
+    {
+      id: "slash.input",
+      type: "input",
+      scope: "content",
+    },
+    ({ raw: event }) => {
+      const content =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR)
+          : null;
+      const blockId = content
+        ?.closest<HTMLElement>(BLOCK_ID_SELECTOR)
+        ?.getAttribute(BLOCK_ID_ATTRIBUTE);
+      if (!content || !blockId || !root?.contains(content)) {
+        return;
+      }
+      // Counter is contentless; Markdown and Slider both expose the same marker.
+      // Discover only a slash inserted by this input event. Once open, ordinary
+      // query edits continue refreshing it; old URL/path slashes never reopen.
+      const discover =
+        Boolean(sessionRef.current) ||
+        (event instanceof InputEvent && event.inputType === "insertText" && event.data === "/");
+      queueMicrotask(() => refresh(content, blockId, discover));
+    },
+  );
 
   useEffect(() => {
-    if (session && (!session.panelRoot.isConnected || !reactPanel.blocks.hasBlock(session.blockId))) close();
+    if (
+      session &&
+      (!session.panelRoot.isConnected || !reactPanel.blocks.hasBlock(session.blockId))
+    ) {
+      close();
+    }
   }, [close, reactPanel, roots, session]);
 
-  useDOMEvent({
-    id: "slash.selection-change",
-    type: "selectionchange",
-    target: "document",
-  }, () => {
-    const current = sessionRef.current;
-    if (root && current) {
-      const block = findRenderedBlock(current.panelRoot, current.blockId);
-      const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-      if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) return close();
-      refresh(content, current.blockId, false);
-    }
-  });
+  useDOMEvent(
+    {
+      id: "slash.selection-change",
+      type: "selectionchange",
+      target: "document",
+    },
+    () => {
+      const current = sessionRef.current;
+      if (root && current) {
+        const block = findRenderedBlock(current.panelRoot, current.blockId);
+        const content = block?.querySelector<HTMLElement>(BLOCK_CONTENT_SELECTOR);
+        if (!content || content.closest(BLOCK_ID_SELECTOR) !== block) {
+          return close();
+        }
+        refresh(content, current.blockId, false);
+      }
+    },
+  );
 
-  const execute = useCallback((command: SlashCommand) => {
-    const current = sessionRef.current;
-    if (!current || !root) return;
+  const execute = useCallback(
+    (command: SlashCommand) => {
+      const current = sessionRef.current;
+      if (!current || !root) {
+        return;
+      }
 
-    const block = reactPanel.blocks.getBlockNode(current.blockId);
-    if (!block) return close();
-    const caret = current.slashOffset + current.query.length + 1;
-    if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) return close();
+      const block = reactPanel.blocks.getBlockNode(current.blockId);
+      if (!block) {
+        return close();
+      }
+      const caret = current.slashOffset + current.query.length + 1;
+      if (block.content.slice(current.slashOffset, caret) !== `/${current.query}`) {
+        return close();
+      }
 
-    reactPanel.batchUpdates(() => {
-      const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
-      reactPanel.blocks.updateBlock(current.blockId, { content: next });
-      reactPanel.selection.set(createCaretSelection(current.blockId, current.slashOffset));
-      slashCommands.execute(command.id, { blockId: current.blockId });
-    });
-    setSession(null);
+      reactPanel.batchUpdates(() => {
+        const next = block.content.slice(0, current.slashOffset) + block.content.slice(caret);
+        reactPanel.blocks.updateBlock(current.blockId, { content: next });
+        reactPanel.selection.set(createCaretSelection(current.blockId, current.slashOffset));
+        slashCommands.execute(command.id, { blockId: current.blockId });
+      });
+      setSession(null);
 
-    reactPanel.selection.scheduleIfSelectionUnchanged(() => {
-      if (reactPanel.selection.restoreDOM()) return;
-      current.panelRoot.ownerDocument.getSelection()?.removeAllRanges();
-      current.panelRoot.focus({ preventScroll: true });
-    });
-
-  }, [close, reactPanel, root, slashCommands]);
+      reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+        if (reactPanel.selection.restoreDOM()) {
+          return;
+        }
+        current.panelRoot.ownerDocument.getSelection()?.removeAllRanges();
+        current.panelRoot.focus({ preventScroll: true });
+      });
+    },
+    [close, reactPanel, root, slashCommands],
+  );
 
   const currentResults = useCallback(() => {
     const current = sessionRef.current;
     return current
-      ? groupCommands(rankSlashCommands(
-        slashCommands.getAll({ blockId: current.blockId }),
-        current.query,
-      ).map(({ command }) => command)).flatMap(({ commands }) => commands)
+      ? groupCommands(
+          rankSlashCommands(slashCommands.getAll({ blockId: current.blockId }), current.query).map(
+            ({ command }) => command,
+          ),
+        ).flatMap(({ commands }) => commands)
       : [];
   }, [slashCommands]);
 
-  const moveActive = useCallback((delta: number) => {
-    const results = currentResults();
-    if (!results.length) return false;
-    setSession((value) => value && ({
-      ...value,
-      activeIndex: (value.activeIndex + delta + results.length) % results.length,
-    }));
-    return true;
-  }, [currentResults]);
+  const moveActive = useCallback(
+    (delta: number) => {
+      const results = currentResults();
+      if (!results.length) {
+        return false;
+      }
+      setSession(
+        (value) =>
+          value && {
+            ...value,
+            activeIndex: (value.activeIndex + delta + results.length) % results.length,
+          },
+      );
+      return true;
+    },
+    [currentResults],
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.slashClose,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashClose],
-    priority: 100,
-    when: () => Boolean(sessionRef.current),
-  }, () => {
-    close(true);
-    return true;
-  });
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.slashClose,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashClose],
+      priority: 100,
+      when: () => Boolean(sessionRef.current),
+    },
+    () => {
+      close(true);
+      return true;
+    },
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.slashPrevious,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashPrevious],
-    priority: 100,
-    when: () => Boolean(sessionRef.current),
-  }, () => moveActive(-1));
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.slashPrevious,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashPrevious],
+      priority: 100,
+      when: () => Boolean(sessionRef.current),
+    },
+    () => moveActive(-1),
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.slashNext,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashNext],
-    priority: 100,
-    when: () => Boolean(sessionRef.current),
-  }, () => moveActive(1));
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.slashNext,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashNext],
+      priority: 100,
+      when: () => Boolean(sessionRef.current),
+    },
+    () => moveActive(1),
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.slashExecute,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashExecute],
-    priority: 100,
-    when: () => Boolean(sessionRef.current),
-  }, () => {
-    const current = sessionRef.current;
-    if (!current) return false;
-    const results = currentResults();
-    const command = results[current.activeIndex] ?? results[0];
-    if (!command) return false;
-    execute(command);
-    return true;
-  });
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.slashExecute,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.slashExecute],
+      priority: 100,
+      when: () => Boolean(sessionRef.current),
+    },
+    () => {
+      const current = sessionRef.current;
+      if (!current) {
+        return false;
+      }
+      const results = currentResults();
+      const command = results[current.activeIndex] ?? results[0];
+      if (!command) {
+        return false;
+      }
+      execute(command);
+      return true;
+    },
+  );
 
   /** Syncs cmdk pointer highlighting back into the session's active index. */
-  const selectByValue = useCallback((value: string) => {
-    const index = currentResults().findIndex((command) => command.id === value);
-    if (index < 0) return;
-    setSession((current) => current && current.activeIndex !== index
-      ? { ...current, activeIndex: index }
-      : current);
-  }, [currentResults]);
+  const selectByValue = useCallback(
+    (value: string) => {
+      const index = currentResults().findIndex((command) => command.id === value);
+      if (index < 0) {
+        return;
+      }
+      setSession((current) =>
+        current && current.activeIndex !== index ? { ...current, activeIndex: index } : current,
+      );
+    },
+    [currentResults],
+  );
 
-  if (!root || !session) return null;
+  if (!root || !session) {
+    return null;
+  }
   const flat = groups.flatMap(({ commands }) => commands);
   const activeCommand = flat[session.activeIndex] ?? flat[0];
   let resultIndex = 0;
@@ -370,32 +477,46 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
         top: session.top,
         transform: session.above ? "translateY(-100%)" : undefined,
         width: `min(${width}px, calc(100vw - ${viewportPadding * 2}px))`,
-        maxHeight: Math.min(maxHeight, Math.max(0, session.above
-          ? session.top - viewportPadding
-          : (root.ownerDocument.defaultView?.innerHeight ?? maxHeight) - session.top - viewportPadding)),
+        maxHeight: Math.min(
+          maxHeight,
+          Math.max(
+            0,
+            session.above
+              ? session.top - viewportPadding
+              : (root.ownerDocument.defaultView?.innerHeight ?? maxHeight) -
+                  session.top -
+                  viewportPadding,
+          ),
+        ),
       }}
       onPointerDown={(event) => event.preventDefault()}
     >
       <CommandList className="max-h-none overflow-visible">
-        {ranked.length ? groups.map(({ group, commands }) => (
-          <CommandGroup key={group} heading={group}>
-            {commands.map((command) => {
-              const index = resultIndex++;
-              return (
-                <CommandItem
-                  key={command.id}
-                  value={command.id}
-                  data-slash-command={command.id}
-                  data-active={index === session.activeIndex || undefined}
-                  ref={index === session.activeIndex ? activeItemRef : undefined}
-                  onSelect={() => execute(command)}
-                >
-                  {command.title}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        )) : <CommandEmpty className="px-2 py-2.5 text-sm text-muted-foreground">No matching commands</CommandEmpty>}
+        {ranked.length ? (
+          groups.map(({ group, commands }) => (
+            <CommandGroup key={group} heading={group}>
+              {commands.map((command) => {
+                const index = resultIndex++;
+                return (
+                  <CommandItem
+                    key={command.id}
+                    value={command.id}
+                    data-slash-command={command.id}
+                    data-active={index === session.activeIndex || undefined}
+                    ref={index === session.activeIndex ? activeItemRef : undefined}
+                    onSelect={() => execute(command)}
+                  >
+                    {command.title}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          ))
+        ) : (
+          <CommandEmpty className="px-2 py-2.5 text-sm text-muted-foreground">
+            No matching commands
+          </CommandEmpty>
+        )}
       </CommandList>
     </Command>,
     root.ownerDocument.body,

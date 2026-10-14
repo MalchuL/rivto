@@ -8,12 +8,15 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore
+  useSyncExternalStore,
 } from "react";
 import { BlockElementRefBoundary } from "../../blocks/block-wrapper/block-wrapper";
 import type { PanelAPI, PanelOptions } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";
-import { DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN, PageVirtualizationContext } from "../../surfaces/page/page-virtualization-context";
+import {
+  DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
+  PageVirtualizationContext,
+} from "../../surfaces/page/page-virtualization-context";
 import { ReactPanelContext } from "./react-panel-context";
 import { EditorRootContext } from "./editor-root-context";
 import type { PanelSnapshot } from "../../panels/types";
@@ -84,9 +87,14 @@ export function ReactPanelProvider({
   const documentId = hostEditor.getDocument().id;
   const parent = useContext(ReactPanelContext);
   const enabled = active && parent?.enabled !== false;
-  const configuration = useMemo(() => ({ hostEditor, rootBlockId, rootElementId, createPanel, mode }),
-    [hostEditor, rootBlockId, rootElementId, createPanel, mode]);
-  const [current, setCurrent] = useState<{ configuration: typeof configuration; instance: ReactPanel }>();
+  const configuration = useMemo(
+    () => ({ hostEditor, rootBlockId, rootElementId, createPanel, mode }),
+    [hostEditor, rootBlockId, rootElementId, createPanel, mode],
+  );
+  const [current, setCurrent] = useState<{
+    configuration: typeof configuration;
+    instance: ReactPanel;
+  }>();
   useEffect(() => {
     const { hostEditor, rootBlockId, rootElementId, createPanel, mode } = configuration;
     const corePanel = createPanel(hostEditor, { rootBlockId, rootElementId });
@@ -97,14 +105,24 @@ export function ReactPanelProvider({
   // A changed editor or root must not render children against the previous panel before its replacement effect runs.
   const instance = current?.configuration === configuration ? current.instance : undefined;
   useLayoutEffect(() => instance?.setEnabled(enabled), [instance, enabled]);
-  const subscribeAvailability = useCallback((listener: () => void) => {
-    if (!instance) return () => {};
-    return instance.subscribeAvailability(listener);
-  }, [instance]);
-  const getSnapshot = useCallback(() => instance?.getSnapshot() ?? LOADING_PANEL_SNAPSHOT, [instance]);
+  const subscribeAvailability = useCallback(
+    (listener: () => void) => {
+      if (!instance) {
+        return () => {};
+      }
+      return instance.subscribeAvailability(listener);
+    },
+    [instance],
+  );
+  const getSnapshot = useCallback(
+    () => instance?.getSnapshot() ?? LOADING_PANEL_SNAPSHOT,
+    [instance],
+  );
   const snapshot = useSyncExternalStore(subscribeAvailability, getSnapshot, getSnapshot);
   useEffect(() => {
-    if (snapshot.retained && snapshot.document) onReady?.(snapshot.document);
+    if (snapshot.retained && snapshot.document) {
+      onReady?.(snapshot.document);
+    }
   }, [snapshot.retained, snapshot.document, onReady]);
   const reactPanel = snapshot.api;
   const domIdPrefix = useId();
@@ -128,34 +146,48 @@ export function ReactPanelProvider({
     () => hostEditor.extensions.revision,
     () => hostEditor.extensions.revision,
   );
-  const panelContextValue = useMemo(() => reactPanel ? ({ reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }) : null,
-    [reactPanel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled]);
+  const panelContextValue = useMemo(
+    () =>
+      reactPanel
+        ? { reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }
+        : null,
+    [reactPanel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled],
+  );
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
     if (typeof threshold === "number") {
-      if (Number.isFinite(threshold)) threshold = normalizeVirtualizationCount(threshold, 0);
-      else threshold = false;
+      if (Number.isFinite(threshold)) {
+        threshold = normalizeVirtualizationCount(threshold, 0);
+      } else {
+        threshold = false;
+      }
     }
     return {
       threshold,
-      overscan: normalizeVirtualizationCount(virtualizePageOverscan, DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN),
+      overscan: normalizeVirtualizationCount(
+        virtualizePageOverscan,
+        DEFAULT_PAGE_VIRTUALIZATION_OVERSCAN,
+      ),
     };
   }, [virtualizePageThreshold, virtualizePageOverscan]);
   // The callback ref identity never changes, preventing React from unregistering
   // and registering the same surface root on ordinary editor renders.
   const restoreRootFocus = useRef(false);
-  const rootRef = useCallback((element: HTMLElement | null) => {
-    const previous = instance?.getRoot();
-    if (!element && previous) {
-      restoreRootFocus.current = previous.contains(previous.ownerDocument.activeElement);
-    }
-    instance?.setRoot(element);
-    setRoot(element);
-    if (element && restoreRootFocus.current) {
-      restoreRootFocus.current = false;
-      element.focus({ preventScroll: true });
-    }
-  }, [instance]);
+  const rootRef = useCallback(
+    (element: HTMLElement | null) => {
+      const previous = instance?.getRoot();
+      if (!element && previous) {
+        restoreRootFocus.current = previous.contains(previous.ownerDocument.activeElement);
+      }
+      instance?.setRoot(element);
+      setRoot(element);
+      if (element && restoreRootFocus.current) {
+        restoreRootFocus.current = false;
+        element.focus({ preventScroll: true });
+      }
+    },
+    [instance],
+  );
   const rootContext = useMemo(() => ({ element: root, ref: rootRef }), [root, rootRef]);
 
   if (!panelContextValue) {
@@ -164,9 +196,14 @@ export function ReactPanelProvider({
 
   // A deleted subtree still needs a registered keyboard root for its document's undo.
   // Transfer focus only from the replaced surface; other panels keep their focus.
-  const content = snapshot.status === "missing"
-    ? <div ref={rootRef} tabIndex={-1}><div role="status">Referenced block was deleted.</div></div>
-    : children;
+  const content =
+    snapshot.status === "missing" ? (
+      <div ref={rootRef} tabIndex={-1}>
+        <div role="status">Referenced block was deleted.</div>
+      </div>
+    ) : (
+      children
+    );
 
   return (
     <ReactPanelContext.Provider value={panelContextValue}>

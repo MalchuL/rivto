@@ -20,5 +20,4 @@ describe("ModeManager", () => {
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(2);
   });
-
 });

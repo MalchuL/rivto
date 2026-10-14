@@ -57,7 +57,7 @@ export interface BlockPastePlacement {
    * Set a block ID for sibling insertion. Set `null` with a non-null `parentId`
    * for first-child insertion; with `parentId: null`, `null` appends at the
    * document root. Omit it only when no explicit anchor is needed.
-  */
+   */
   readonly afterId?: string | null;
   /**
    * Parent receiving inserted roots; `null` denotes the document root.

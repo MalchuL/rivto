@@ -1,5 +1,12 @@
 import type { BlockDestination } from "@chulane/document-model";
-import type { BlockPrepareErrorHandler, EditorBlock, EditorBlockInput, EditorBlockNode, EditorBlockPatch, EditorBlockUpdate } from "@chulane/rivto";
+import type {
+  BlockPrepareErrorHandler,
+  EditorBlock,
+  EditorBlockInput,
+  EditorBlockNode,
+  EditorBlockPatch,
+  EditorBlockUpdate,
+} from "@chulane/rivto";
 
 /** Document block operations exposed to React consumers without core lifecycle methods. */
 export interface BlocksApi {
@@ -214,7 +221,11 @@ export interface BlocksApi {
    * @param position - Relationship to the destination.
    * @returns No value.
    */
-  moveBlocks(ids: readonly string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
+  moveBlocks(
+    ids: readonly string[],
+    targetId: string | null,
+    position?: "before" | "after" | "inside",
+  ): void;
   /** Indents one block when eligible.
    *
    * @param id - Block identifier to indent. @returns No value.

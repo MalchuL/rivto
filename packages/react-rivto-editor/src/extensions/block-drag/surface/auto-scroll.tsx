@@ -27,11 +27,17 @@ import type { PointerCoordinates } from "../types";
  * coordinates while dnd-kit adjusts its position for scrolling.
  * @returns Nothing; the effect patches the manager's scroller in place.
  */
-export function PageDragAutoScrollPolicy({ getPointer }: { readonly getPointer: () => PointerCoordinates | null }) {
+export function PageDragAutoScrollPolicy({
+  getPointer,
+}: {
+  readonly getPointer: () => PointerCoordinates | null;
+}) {
   const manager = useDragDropManager();
   useLayoutEffect(() => {
     const scroller = manager?.registry.plugins.get(Scroller);
-    if (!manager || !scroller) return;
+    if (!manager || !scroller) {
+      return;
+    }
     const unfiltered = scroller.getScrollableElements;
     const originalScroll = scroller.scroll;
     let lastScrolledAt = -Infinity;
@@ -57,29 +63,43 @@ export function PageDragAutoScrollPolicy({ getPointer }: { readonly getPointer: 
       const document = manager.dragOperation.source?.element?.ownerDocument;
       const scrollElement = document?.scrollingElement;
       const elements = pointer && scrollElement ? scroller.getScrollableElements() : null;
-      if (!pointer || isKeyboardEvent(manager.dragOperation.activatorEvent)
-        || options?.by || !scrollElement || !document?.defaultView
-        || elements?.size !== 1 || !elements.has(scrollElement)
-        || scrollElement.scrollWidth > scrollElement.clientWidth
-        || scrollElement.scrollHeight <= document.defaultView.innerHeight * 10) {
+      if (
+        !pointer ||
+        isKeyboardEvent(manager.dragOperation.activatorEvent) ||
+        options?.by ||
+        !scrollElement ||
+        !document?.defaultView ||
+        elements?.size !== 1 ||
+        !elements.has(scrollElement) ||
+        scrollElement.scrollWidth > scrollElement.clientWidth ||
+        scrollElement.scrollHeight <= document.defaultView.innerHeight * 10
+      ) {
         return originalScroll(options, scrollOptions);
       }
       const viewportHeight = document.defaultView.innerHeight;
       const threshold = viewportHeight * (scrollOptions?.threshold?.y ?? 0.2);
-      if (threshold <= 0) return originalScroll(options, scrollOptions);
+      if (threshold <= 0) {
+        return originalScroll(options, scrollOptions);
+      }
       // The library updates its position after scroll and may call us before
       // the pointer tracker sees the newest event. Use its position to arm the
       // interval, then the raw pointer so the edge zone never drifts.
-      const currentY = scroller.autoScrolling ? pointer.y : manager.dragOperation.position.current.y;
-      const distance = currentY < threshold
-        ? currentY - threshold
-        : currentY > viewportHeight - threshold
-          ? currentY - (viewportHeight - threshold)
-          : 0;
-      const delta = Math.sign(distance) * Math.min(20, Math.ceil(Math.abs(distance) / threshold * 20));
+      const currentY = scroller.autoScrolling
+        ? pointer.y
+        : manager.dragOperation.position.current.y;
+      let distance = 0;
+      if (currentY < threshold) {
+        distance = currentY - threshold;
+      } else if (currentY > viewportHeight - threshold) {
+        distance = currentY - (viewportHeight - threshold);
+      }
+      const delta =
+        Math.sign(distance) * Math.min(20, Math.ceil((Math.abs(distance) / threshold) * 20));
       // One write per ~two frames leaves time for the preview to paint while
       // preserving roughly the same scroll distance per second.
-      if (delta && performance.now() - lastScrolledAt < 32) return true;
+      if (delta && performance.now() - lastScrolledAt < 32) {
+        return true;
+      }
       const before = scrollElement.scrollTop;
       if (delta) {
         scrollElement.scrollTop += delta;

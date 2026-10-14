@@ -19,20 +19,33 @@ interface AcquiredEditor {
  * @param documentId - Source to retain; undefined disables acquisition.
  * @returns Acquired editor or load error; both are absent during loading.
  */
-export function useAcquiredEditor(storage: EditorStorage | undefined, documentId: string | undefined): AcquiredEditor {
+export function useAcquiredEditor(
+  storage: EditorStorage | undefined,
+  documentId: string | undefined,
+): AcquiredEditor {
   const [result, setResult] = useState<AcquiredEditor>({});
   useEffect(() => {
     setResult({});
-    if (!storage || !documentId) return;
+    if (!storage || !documentId) {
+      return;
+    }
     const controller = new AbortController();
     let release: (() => Promise<void>) | undefined;
-    void storage.acquireEditor(documentId, { signal: controller.signal }).then((acquisition) => {
-      release = acquisition.release;
-      if (controller.signal.aborted) void release().catch(console.error);
-      else setResult({ editor: acquisition.editor });
-    }).catch((error) => {
-      if (!controller.signal.aborted) setResult({ error });
-    });
+    void storage
+      .acquireEditor(documentId, { signal: controller.signal })
+      .then((acquisition) => {
+        release = acquisition.release;
+        if (controller.signal.aborted) {
+          void release().catch(console.error);
+        } else {
+          setResult({ editor: acquisition.editor });
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setResult({ error });
+        }
+      });
     return () => {
       controller.abort();
       void release?.().catch(console.error);

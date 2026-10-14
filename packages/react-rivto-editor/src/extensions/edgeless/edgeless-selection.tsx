@@ -58,7 +58,9 @@ function snapshotObjectHits(root: HTMLElement): EdgelessObjectHit[] {
   const objects: EdgelessObjectHit[] = [];
   for (const element of root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)) {
     const id = element.dataset.edgelessObjectId;
-    if (!id || seen.has(id)) continue;
+    if (!id || seen.has(id)) {
+      continue;
+    }
     seen.add(id);
     const box = element.getBoundingClientRect();
     objects.push({
@@ -77,7 +79,9 @@ function snapshotObjectHits(root: HTMLElement): EdgelessObjectHit[] {
  * @returns Live marquee element, hidden until painted.
  */
 function ensureRectangle(doc: Document, node: HTMLElement | null): HTMLElement {
-  if (node) return node;
+  if (node) {
+    return node;
+  }
   const next = doc.createElement("div");
   next.className = RECTANGLE_CLASS;
   next.dataset.edgelessSelectionRectangle = "true";
@@ -108,7 +112,9 @@ function paintRectangle(node: HTMLElement, rect: EdgelessRect): void {
  * @returns Nothing.
  */
 function hideRectangle(node: HTMLElement | null): void {
-  if (!node) return;
+  if (!node) {
+    return;
+  }
   node.style.display = "none";
 }
 
@@ -138,100 +144,138 @@ export function EdgelessInteractionOverlay() {
   }, []);
 
   useEffect(() => {
-    if (mode === "edgeless") return;
+    if (mode === "edgeless") {
+      return;
+    }
     gesture.current = null;
     hideRectangle(rectangleRef.current);
   }, [mode]);
 
-  useDOMEvent({
-    id: "edgeless.selection.pointer-start",
-    type: "pointerdown",
-    capture: true,
-    mode: "edgeless",
-  }, ({ raw: event }) => {
-    if (event.button !== 0 || !(event.target instanceof Element) || !root) return false;
-    if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
-    if (event.target.closest(HANDLE_SELECTOR)) return false;
-    const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
-    const elementId = card?.dataset.edgelessRoot;
-    const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
-    const objectId = object?.dataset.edgelessObjectId;
-    const primary = event.ctrlKey || event.metaKey;
-    let handled = true;
-
-    if (object && objectId && !card) {
-      const current = selection.get().items;
-      const exists = current.includes(objectId);
-      selection.set(primary
-        ? exists ? current.filter((item) => item !== objectId) : [...current, objectId]
-        : exists ? current : [objectId]);
-      root.ownerDocument.getSelection()?.removeAllRanges();
-      if (primary) event.stopPropagation();
-      handled = primary;
-    } else if (card && elementId && primary && !isInteractive(event.target)) {
-      const current = selection.get().items;
-      const exists = current.includes(elementId);
-      selection.set(exists
-        ? current.filter((item) => item !== elementId)
-        : [...current, elementId]);
-      root.ownerDocument.getSelection()?.removeAllRanges();
-      card.focus({ preventScroll: true });
-    } else if (card) {
-      if (isInteractive(event.target)) handled = false;
-      else {
-        const current = selection.get().items;
-        selection.set(elementId ? current.includes(elementId) ? current : [elementId] : []);
-        card.focus({ preventScroll: true });
+  useDOMEvent(
+    {
+      id: "edgeless.selection.pointer-start",
+      type: "pointerdown",
+      capture: true,
+      mode: "edgeless",
+    },
+    ({ raw: event }) => {
+      if (event.button !== 0 || !(event.target instanceof Element) || !root) {
+        return false;
       }
-    } else if (event.target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")) {
-      handled = false;
-    } else {
-      root.focus({ preventScroll: true });
-      if (!primary) selection.clear();
-      gesture.current = {
-        x: event.clientX,
-        y: event.clientY,
-        base: primary ? selection.get().items : [],
-        moved: false,
-        objects: [],
-        parentByChild: new Map(),
-      };
-    }
-    return handled;
-  });
+      if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") {
+        return false;
+      }
+      if (event.target.closest(HANDLE_SELECTOR)) {
+        return false;
+      }
+      const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
+      const elementId = card?.dataset.edgelessRoot;
+      const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
+      const objectId = object?.dataset.edgelessObjectId;
+      const primary = event.ctrlKey || event.metaKey;
+      let handled = true;
 
-  useDOMEvent({
-    id: "edgeless.selection.pointer-move",
-    type: "pointermove",
-    target: "window",
-    mode: "edgeless",
-    passive: false,
-  }, ({ raw: event }) => {
-    const start = gesture.current;
-    if (!start || !root || root.dataset.panning === "true") return false;
-    if (!start.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) < MARQUEE_SLOP_PX) return false;
-    if (!start.moved) {
-      start.moved = true;
-      start.objects = snapshotObjectHits(root);
-      start.parentByChild = groupParentByChild(reactPanel.elements.getElementNodes());
-    }
-    const next = {
-      left: Math.min(start.x, event.clientX),
-      top: Math.min(start.y, event.clientY),
-      right: Math.max(start.x, event.clientX),
-      bottom: Math.max(start.y, event.clientY),
-    };
-    const node = ensureRectangle(root.ownerDocument, rectangleRef.current);
-    rectangleRef.current = node;
-    paintRectangle(node, next);
-    // Dedupe DOM hits (group hit + outline share an id) and lift children to their
-    // outermost group so marquee can select an existing group + siblings to re-group.
-    const intersecting = [...new Set(
-      rootsInRect(start.objects, next).map((id) => outermostGroupId(id, start.parentByChild)),
-    )];
-    selection.set([...start.base, ...intersecting]);
-    return true;
-  });
+      if (object && objectId && !card) {
+        const current = selection.get().items;
+        const exists = current.includes(objectId);
+        let next = current;
+        if (primary) {
+          next = exists ? current.filter((item) => item !== objectId) : [...current, objectId];
+        } else if (!exists) {
+          next = [objectId];
+        }
+        selection.set(next);
+        root.ownerDocument.getSelection()?.removeAllRanges();
+        if (primary) {
+          event.stopPropagation();
+        }
+        handled = primary;
+      } else if (card && elementId && primary && !isInteractive(event.target)) {
+        const current = selection.get().items;
+        const exists = current.includes(elementId);
+        selection.set(
+          exists ? current.filter((item) => item !== elementId) : [...current, elementId],
+        );
+        root.ownerDocument.getSelection()?.removeAllRanges();
+        card.focus({ preventScroll: true });
+      } else if (card) {
+        if (isInteractive(event.target)) {
+          handled = false;
+        } else {
+          const current = selection.get().items;
+          let next: readonly string[] = [];
+          if (elementId) {
+            next = current.includes(elementId) ? current : [elementId];
+          }
+          selection.set(next);
+          card.focus({ preventScroll: true });
+        }
+      } else if (
+        event.target.closest("[data-edgeless-ui], .edgeless-drawing-capture[data-active]")
+      ) {
+        handled = false;
+      } else {
+        root.focus({ preventScroll: true });
+        if (!primary) {
+          selection.clear();
+        }
+        gesture.current = {
+          x: event.clientX,
+          y: event.clientY,
+          base: primary ? selection.get().items : [],
+          moved: false,
+          objects: [],
+          parentByChild: new Map(),
+        };
+      }
+      return handled;
+    },
+  );
+
+  useDOMEvent(
+    {
+      id: "edgeless.selection.pointer-move",
+      type: "pointermove",
+      target: "window",
+      mode: "edgeless",
+      passive: false,
+    },
+    ({ raw: event }) => {
+      const start = gesture.current;
+      if (!start || !root || root.dataset.panning === "true") {
+        return false;
+      }
+      if (
+        !start.moved &&
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) < MARQUEE_SLOP_PX
+      ) {
+        return false;
+      }
+      if (!start.moved) {
+        start.moved = true;
+        start.objects = snapshotObjectHits(root);
+        start.parentByChild = groupParentByChild(reactPanel.elements.getElementNodes());
+      }
+      const next = {
+        left: Math.min(start.x, event.clientX),
+        top: Math.min(start.y, event.clientY),
+        right: Math.max(start.x, event.clientX),
+        bottom: Math.max(start.y, event.clientY),
+      };
+      const node = ensureRectangle(root.ownerDocument, rectangleRef.current);
+      rectangleRef.current = node;
+      paintRectangle(node, next);
+      // Dedupe DOM hits (group hit + outline share an id) and lift children to their
+      // outermost group so marquee can select an existing group + siblings to re-group.
+      const intersecting = [
+        ...new Set(
+          rootsInRect(start.objects, next).map((id) => outermostGroupId(id, start.parentByChild)),
+        ),
+      ];
+      selection.set([...start.base, ...intersecting]);
+      return true;
+    },
+  );
 
   /**
    * Ends an in-progress marquee without claiming the pointerup for other handlers.
@@ -239,38 +283,52 @@ export function EdgelessInteractionOverlay() {
    * @returns False so later listeners still see the event.
    */
   const stopRectangle = (): boolean => {
-    if (!gesture.current) return false;
+    if (!gesture.current) {
+      return false;
+    }
     gesture.current = null;
     hideRectangle(rectangleRef.current);
     return false;
   };
-  useDOMEvent({
-    id: "edgeless.selection.pointer-end",
-    type: "pointerup",
-    target: "window",
-    mode: "edgeless",
-  }, stopRectangle);
-  useDOMEvent({
-    id: "edgeless.selection.pointer-cancel",
-    type: "pointercancel",
-    target: "window",
-    mode: "edgeless",
-  }, stopRectangle);
+  useDOMEvent(
+    {
+      id: "edgeless.selection.pointer-end",
+      type: "pointerup",
+      target: "window",
+      mode: "edgeless",
+    },
+    stopRectangle,
+  );
+  useDOMEvent(
+    {
+      id: "edgeless.selection.pointer-cancel",
+      type: "pointercancel",
+      target: "window",
+      mode: "edgeless",
+    },
+    stopRectangle,
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
-    mode: "edgeless",
-    when: ({ root }) =>
-      !root.dataset.transforming &&
-      selection.get().active && selection.get().items.length > 0,
-  }, () => {
-    if (!root) return false;
-    if (!selection.get().items.length) return false;
-    selection.clear();
-    root.focus({ preventScroll: true });
-    return true;
-  });
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
+      mode: "edgeless",
+      when: ({ root }) =>
+        !root.dataset.transforming && selection.get().active && selection.get().items.length > 0,
+    },
+    () => {
+      if (!root) {
+        return false;
+      }
+      if (!selection.get().items.length) {
+        return false;
+      }
+      selection.clear();
+      root.focus({ preventScroll: true });
+      return true;
+    },
+  );
 
   return null;
 }

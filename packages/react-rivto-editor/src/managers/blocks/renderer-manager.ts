@@ -13,10 +13,13 @@ import type { RenderersApi } from "./renderers-api";
  */
 export class RendererManager implements RenderersApi {
   private readonly store = new RevisionStore();
-  private readonly renderers = new Map<string, {
-    readonly renderer: BlockRenderer;
-    dispose: () => void;
-  }>();
+  private readonly renderers = new Map<
+    string,
+    {
+      readonly renderer: BlockRenderer;
+      dispose: () => void;
+    }
+  >();
 
   /**
    * Creates a renderer registry.
@@ -38,8 +41,12 @@ export class RendererManager implements RenderersApi {
    */
   register(type: string, renderer: BlockRenderer): () => void {
     this.registrations.assertActive();
-    if (!type.trim()) throw new Error("Block renderer type is required");
-    if (this.renderers.has(type)) throw new Error(`Block renderer ${type} is already registered`);
+    if (!type.trim()) {
+      throw new Error("Block renderer type is required");
+    }
+    if (this.renderers.has(type)) {
+      throw new Error(`Block renderer ${type} is already registered`);
+    }
     const registration: {
       readonly renderer: BlockRenderer;
       dispose: () => void;
@@ -50,7 +57,9 @@ export class RendererManager implements RenderersApi {
     this.renderers.set(type, registration);
     this.store.changed();
     registration.dispose = this.registrations.registerCleanup(() => {
-      if (this.renderers.get(type) !== registration) return;
+      if (this.renderers.get(type) !== registration) {
+        return;
+      }
       this.renderers.delete(type);
       this.store.changed();
     });
@@ -66,7 +75,9 @@ export class RendererManager implements RenderersApi {
   delete(type: string): boolean {
     this.registrations.assertActive();
     const registration = this.renderers.get(type);
-    if (!registration) return false;
+    if (!registration) {
+      return false;
+    }
     registration.dispose();
     return true;
   }
@@ -81,10 +92,21 @@ export class RendererManager implements RenderersApi {
     return this.renderers.has(type);
   }
 
+  /**
+   * Reads the renderer registry's observable revision.
+   *
+   * @returns Current revision number.
+   */
   get revision(): number {
     return this.store.revision;
   }
 
+  /**
+   * Observes renderer registration changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe(listener: () => void): () => void {
     return this.store.subscribe(listener);
   }

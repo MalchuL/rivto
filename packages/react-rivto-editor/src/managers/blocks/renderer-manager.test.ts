@@ -1,5 +1,8 @@
 import type { ComponentType } from "react";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 const renderer: ComponentType<{ blockId: string }> = () => null;
 const fallback: ComponentType<{ blockId: string }> = () => null;

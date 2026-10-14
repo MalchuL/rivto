@@ -1,4 +1,7 @@
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 describe("SlashCommandRegistry", () => {
   test("owns storage, execution, revision, and disposal", async () => {
@@ -11,7 +14,9 @@ describe("SlashCommandRegistry", () => {
     const dispose = reactPanel.editor.slashCommands.register({
       id: "test.command",
       title: "Test",
-      execute: () => { executed = true; },
+      execute: () => {
+        executed = true;
+      },
     });
 
     expect(manager.revision).toBeGreaterThan(revision);
@@ -31,15 +36,45 @@ describe("SlashCommandRegistry", () => {
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
     const reactPanel = createReactEditor({ editor });
     const manager = reactPanel.slashCommands;
-    expect(() => reactPanel.editor.slashCommands.register({ id: "", title: "Missing", execute() {} })).toThrow("ID");
-    expect(() => reactPanel.editor.slashCommands.register({ id: "missing", title: "", execute() {} })).toThrow("title");
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "",
+        title: "Missing",
+        /**
+         * Provides a no-op executor for slash-command registration validation.
+         */
+        execute() {},
+      }),
+    ).toThrow("ID");
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "missing",
+        title: "",
+        /**
+         * Provides a no-op executor for slash-command registration validation.
+         */
+        execute() {},
+      }),
+    ).toThrow("title");
     reactPanel.editor.slashCommands.register({
       id: "conditional",
       title: "Conditional",
       isAvailable: ({ blockId: current }) => current === blockId,
+      /**
+       * Provides a no-op executor because this fixture tests command lookup only.
+       */
       execute() {},
     });
-    expect(() => reactPanel.editor.slashCommands.register({ id: "conditional", title: "Again", execute() {} })).toThrow("already registered");
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "conditional",
+        title: "Again",
+        /**
+         * Provides a no-op executor for the duplicate slash-command registration fixture.
+         */
+        execute() {},
+      }),
+    ).toThrow("already registered");
     expect(manager.getAll({ blockId: "other" })).toEqual([]);
     expect(() => manager.execute("conditional", { blockId: "other" })).toThrow("unavailable");
     expect(() => manager.execute("unknown", { blockId })).toThrow("Unknown");

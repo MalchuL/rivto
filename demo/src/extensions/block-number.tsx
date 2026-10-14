@@ -8,11 +8,7 @@
  */
 import type { PanelAPI } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
-import {
-  usePanel,
-  type BlockSlotProps,
-  type ReactEditorExtension,
-} from "@chulane/rivto-react";
+import { usePanel, type BlockSlotProps, type ReactEditorExtension } from "@chulane/rivto-react";
 import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
 
 const DEMO_BLOCK_NUMBER_CLASS = "demo-block-number";
@@ -62,7 +58,9 @@ function buildOrdinals(
     for (const node of nodes) {
       map.set(node.id, { number, depth });
       number += 1;
-      if (!LAYOUT_CONTAINER_TYPES.has(node.type)) visit(node.children, depth + 1);
+      if (!LAYOUT_CONTAINER_TYPES.has(node.type)) {
+        visit(node.children, depth + 1);
+      }
     }
   };
   visit(blocks, 0);
@@ -77,7 +75,9 @@ function buildOrdinals(
  */
 function blockOrderSnapshot(panel: PanelAPI): ReadonlyMap<string, BlockOrdinal> {
   const document = panel.document.getDocument();
-  if (!document) throw new Error("Document context is required for gutter numbering");
+  if (!document) {
+    throw new Error("Document context is required for gutter numbering");
+  }
   let cache = blockOrders.get(document);
   if (!cache) {
     cache = { map: buildOrdinals(panel.document.blocks.getBlocks()) };
@@ -111,7 +111,10 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   const getBlockOrderSnapshot = useCallback(() => {
     const current = blockOrderSnapshot(panel).get(block.id);
     // Unchanged labels keep their snapshot and skip a render.
-    if (current?.number !== previous.current?.number || current?.depth !== previous.current?.depth) {
+    if (
+      current?.number !== previous.current?.number ||
+      current?.depth !== previous.current?.depth
+    ) {
       previous.current = current;
     }
     return previous.current;
@@ -122,9 +125,15 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
 /** Draws the block's document-order number in the page's left gutter. */
 function BlockNumberSlot({ block }: BlockSlotProps) {
   const ordinal = useBlockOrdinal(block);
-  if (!ordinal) return null;
+  if (!ordinal) {
+    return null;
+  }
   const style = { "--demo-block-depth": ordinal.depth } as CSSProperties;
-  return <span className={DEMO_BLOCK_NUMBER_CLASS} style={style}>{ordinal.number}</span>;
+  return (
+    <span className={DEMO_BLOCK_NUMBER_CLASS} style={style}>
+      {ordinal.number}
+    </span>
+  );
 }
 
 /**

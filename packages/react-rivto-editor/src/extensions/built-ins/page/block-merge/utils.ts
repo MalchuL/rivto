@@ -14,8 +14,9 @@ import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
-  return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR))
-    .some((content) => content.closest(BLOCK_ID_SELECTOR) === block);
+  return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)).some(
+    (content) => content.closest(BLOCK_ID_SELECTOR) === block,
+  );
 }
 
 /** Resolves the current BlockView's immediately preceding sibling BlockView. */
@@ -25,7 +26,9 @@ function previousSiblingBlock(
 ): { readonly element: HTMLElement; readonly id: string } | undefined {
   const current = findRenderedBlock(root, blockId);
   const previous = current?.previousElementSibling;
-  if (!(previous instanceof HTMLElement) || !previous.matches(BLOCK_ID_SELECTOR)) return;
+  if (!(previous instanceof HTMLElement) || !previous.matches(BLOCK_ID_SELECTOR)) {
+    return;
+  }
   const id = previous.getAttribute(BLOCK_ID_ATTRIBUTE);
   return id ? { element: previous, id } : undefined;
 }
@@ -51,14 +54,20 @@ export function removeEmptyBlockAfterStructuralPredecessor(
     !reactPanel.blocks.canRemove(block.id) ||
     block.listProps.collapsed === true ||
     !reactPanel.blocks.getRootIds().includes(block.id)
-  ) return false;
+  ) {
+    return false;
+  }
 
   const previous = previousSiblingBlock(root, block.id);
-  if (!previous || hasOwnedEditableContent(previous.element)) return false;
+  if (!previous || hasOwnedEditableContent(previous.element)) {
+    return false;
+  }
 
   reactPanel.batchUpdates(() => {
     const firstChildId = reactPanel.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) reactPanel.blocks.outdentBlock(firstChildId);
+    if (firstChildId) {
+      reactPanel.blocks.outdentBlock(firstChildId);
+    }
     reactPanel.blocks.removeBlock(block.id);
     reactPanel.selection.set(createStructuralSelection([previous.id]));
   });

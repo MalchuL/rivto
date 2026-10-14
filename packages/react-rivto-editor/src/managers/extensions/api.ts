@@ -11,15 +11,29 @@ export interface ExtensionsApi {
    * @throws If manager destruction has started, or if the returned disposer's cleanup fails.
    */
   registerCleanup(release: () => void): () => void;
-  mount(
-    component: ExtensionComponent,
-    position?: ExtensionMountPosition,
-  ): () => void;
-  getComponents(
-    position?: ExtensionMountPosition,
-  ): readonly ExtensionComponent[];
+  /**
+   * Mounts an extension component at the requested editor position.
+   *
+   * @param component - Extension component to mount.
+   * @param position - Extension mount position; defaults to beforeSurface.
+   * @returns Owned cleanup that unmounts the component.
+   */
+  mount(component: ExtensionComponent, position?: ExtensionMountPosition): () => void;
+  /**
+   * Reads mounted extension components, optionally filtered by their surface position.
+   *
+   * @param position - Extension mount position to filter; omitted values include every mount.
+   * @returns A defensive list of components in registration order for the requested scope.
+   */
+  getComponents(position?: ExtensionMountPosition): readonly ExtensionComponent[];
   /** Installs one extension after creation and returns its disposer. */
   install(extension: ReactEditorExtension): () => void;
   readonly revision: number;
+  /**
+   * Observes extension component mount changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe(listener: () => void): () => void;
 }

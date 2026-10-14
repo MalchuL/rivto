@@ -47,22 +47,22 @@ component registrations are valid.
 
 ## Manager map
 
-| Property | Owns |
-| --- | --- |
-| `blocks` | Guarded mutations and delegated core block operations |
-| `blockTypes` | Atomic core definition + renderer/behavior + optional slash conversion |
-| `blockListProps` | React lifecycle adapter for the core list-property policy registry |
-| `renderers` | Renderer lookup, duplicate checks, and unknown fallback |
-| `mode` | Core editor presentation state: `get`, `set`, and `subscribe`; never persisted |
-| `surfaces` | One root per mode plus ordered block/editor wrappers |
-| `extensions` | Extension setup/rollback, reverse cleanup, and mounted visual UI |
-| `events` | Delegated event registrations, filtering, and dispatch |
-| `panels` | Mounted roots, explicit active/default lookup, and pointer ownership |
-| `clipboardFormats` | Portable formatters and parsers |
-| `pasteStrategies` | Shared ordered paste algorithms |
-| `keyboard` | Semantic bindings, shortcut matching, and dynamic keymaps |
-| `selection` | Shared portable document selection; DOM synchronization belongs to reactPanel.selection |
-| `slashCommands` | React-owned slash-command registry and lifecycle |
+| Property           | Owns                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `blocks`           | Guarded mutations and delegated core block operations                                   |
+| `blockTypes`       | Atomic core definition + renderer/behavior + optional slash conversion                  |
+| `blockListProps`   | React lifecycle adapter for the core list-property policy registry                      |
+| `renderers`        | Renderer lookup, duplicate checks, and unknown fallback                                 |
+| `mode`             | Core editor presentation state: `get`, `set`, and `subscribe`; never persisted          |
+| `surfaces`         | One root per mode plus ordered block/editor wrappers                                    |
+| `extensions`       | Extension setup/rollback, reverse cleanup, and mounted visual UI                        |
+| `events`           | Delegated event registrations, filtering, and dispatch                                  |
+| `panels`           | Mounted roots, explicit active/default lookup, and pointer ownership                    |
+| `clipboardFormats` | Portable formatters and parsers                                                         |
+| `pasteStrategies`  | Shared ordered paste algorithms                                                         |
+| `keyboard`         | Semantic bindings, shortcut matching, and dynamic keymaps                               |
+| `selection`        | Shared portable document selection; DOM synchronization belongs to reactPanel.selection |
+| `slashCommands`    | React-owned slash-command registry and lifecycle                                        |
 
 `extensions.mount` has no mode argument. A mounted component is present beside
 every surface. Its DOM/keyboard registrations declare `mode`, and any React

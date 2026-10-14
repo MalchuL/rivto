@@ -3,10 +3,15 @@ import { DocumentModelImpl } from "../document-model";
 import type { ElementInput } from "../types";
 
 const shape = { type: "shape", frame: { x: 10, y: 20, width: 30, height: 40 }, zIndex: 0 };
-const tree: ElementInput = { id: "group", type: "container", zIndex: 0, children: [
-  { id: "inner", type: "container", zIndex: 0, children: [{ ...shape, id: "leaf" }] },
-  { ...shape, id: "sibling" },
-] };
+const tree: ElementInput = {
+  id: "group",
+  type: "container",
+  zIndex: 0,
+  children: [
+    { id: "inner", type: "container", zIndex: 0, children: [{ ...shape, id: "leaf" }] },
+    { ...shape, id: "sibling" },
+  ],
+};
 
 it("inserts a recursive tree, derives parent frames, and round-trips through flat snapshots and undo", async () => {
   const model = new DocumentModelImpl(new YjsDoc("element-tree"));
@@ -26,18 +31,38 @@ it("inserts a recursive tree, derives parent frames, and round-trips through fla
   expect(model.elements.getElementNodes()).toEqual([]);
   model.history.redo();
   expect(model.elements.getElement("group")).toEqual(inserted);
-  await model.destroy(); await copy.destroy(); await fresh.destroy();
+  await model.destroy();
+  await copy.destroy();
+  await fresh.destroy();
 });
 
 it("rejects invalid descendants, duplicate identities, and cyclic inputs before writing", async () => {
   const model = new DocumentModelImpl(new YjsDoc("tree-validation"));
   const snapshot = model.getSnapshot();
-  expect(() => model.elements.insertElement({ ...tree, children: [shape, { ...shape, frame: { ...shape.frame, width: 0 } }] })).toThrow();
-  expect(() => model.elements.insertElement({ ...tree, children: [{ ...shape, id: "same" }, { ...shape, id: "same" }] })).toThrow("already exists");
-  expect(() => model.elements.insertElement({ ...shape, childIds: "leaf" } as unknown as ElementInput)).toThrow("must be an array");
-  const cyclic: ElementInput = { ...tree, children: [] }; cyclic.children!.push(cyclic);
+  expect(() =>
+    model.elements.insertElement({
+      ...tree,
+      children: [shape, { ...shape, frame: { ...shape.frame, width: 0 } }],
+    }),
+  ).toThrow();
+  expect(() =>
+    model.elements.insertElement({
+      ...tree,
+      children: [
+        { ...shape, id: "same" },
+        { ...shape, id: "same" },
+      ],
+    }),
+  ).toThrow("already exists");
+  expect(() =>
+    model.elements.insertElement({ ...shape, childIds: "leaf" } as unknown as ElementInput),
+  ).toThrow("must be an array");
+  const cyclic: ElementInput = { ...tree, children: [] };
+  cyclic.children!.push(cyclic);
   expect(() => model.elements.insertElement(cyclic)).toThrow("Cyclic");
-  expect(() => model.elements.insertElement({ type: "container", zIndex: 0 })).toThrow("without children");
+  expect(() => model.elements.insertElement({ type: "container", zIndex: 0 })).toThrow(
+    "without children",
+  );
   expect(model.getSnapshot()).toEqual(snapshot);
   await model.destroy();
 });
@@ -48,7 +73,9 @@ it("invalidates only the changed recursive branch and observes both parents afte
   const before = model.elements.getElement("group")!;
   expect(model.elements.getElement("group")).toBe(before);
   expect(before.children[0]).toBe(model.elements.getElement("inner"));
-  const outerChanged = jest.fn(); const innerChanged = jest.fn(); const siblingChanged = jest.fn();
+  const outerChanged = jest.fn();
+  const innerChanged = jest.fn();
+  const siblingChanged = jest.fn();
   model.elements.subscribeElement("group", outerChanged);
   model.elements.subscribeElement("inner", innerChanged);
   model.elements.subscribeElement("sibling", siblingChanged);
@@ -68,35 +95,48 @@ it("invalidates only the changed recursive branch and observes both parents afte
 });
 
 it("refreshes cached ancestors after remote edits and subtree removal", async () => {
-  const a = new YjsDoc("tree-peers"); const b = new YjsDoc("tree-peers");
-  const left = new DocumentModelImpl(a); const right = new DocumentModelImpl(b);
-  left.elements.insertElement(tree); b.applySnapshot(a.getSnapshot());
+  const a = new YjsDoc("tree-peers");
+  const b = new YjsDoc("tree-peers");
+  const left = new DocumentModelImpl(a);
+  const right = new DocumentModelImpl(b);
+  left.elements.insertElement(tree);
+  b.applySnapshot(a.getSnapshot());
   const previous = right.elements.getElement("group")!;
   left.elements.updateElement("leaf", { frame: { x: 99 } });
   b.applySnapshot(a.getSnapshot());
   expect(right.elements.getElement("group")!.children[0]!.children[0]!.frame.x).toBe(99);
   expect(right.elements.getElement("group")!.children[1]).toBe(previous.children[1]);
-  left.elements.removeElement("inner"); b.applySnapshot(a.getSnapshot());
+  left.elements.removeElement("inner");
+  b.applySnapshot(a.getSnapshot());
   expect(right.elements.getElement("group")!.children.map(({ id }) => id)).toEqual(["sibling"]);
-  await left.destroy(); await right.destroy();
+  await left.destroy();
+  await right.destroy();
 });
 
-it.each([10, 2000])("materializes only changed recursive nodes among %i children", async (count) => {
-  const doc = new YjsDoc(`tree-size-${count}`);
-  const model = new DocumentModelImpl(doc);
-  model.elements.insertElement({ type: "container", id: "root", zIndex: 0,
-    children: Array.from({ length: count }, (_, i) => ({ ...shape, id: `child-${i}` })) });
-  const before = model.elements.getElement("root")!;
-  const reads = jest.spyOn(model.elements, "getElementNode");
-  model.elements.updateElement("child-0", { props: { text: "updated" } });
-  const after = model.elements.getElement("root")!;
-  expect(after.children[0]!.props.text).toBe("updated");
-  expect(after.children[1]).toBe(before.children[1]);
-  expect(reads).toHaveBeenCalledTimes(2);
-  expect(model.elements.getElement("root")).toBe(after);
-  expect(reads).toHaveBeenCalledTimes(2);
-  reads.mockRestore(); await model.destroy();
-});
+it.each([10, 2000])(
+  "materializes only changed recursive nodes among %i children",
+  async (count) => {
+    const doc = new YjsDoc(`tree-size-${count}`);
+    const model = new DocumentModelImpl(doc);
+    model.elements.insertElement({
+      type: "container",
+      id: "root",
+      zIndex: 0,
+      children: Array.from({ length: count }, (_, i) => ({ ...shape, id: `child-${i}` })),
+    });
+    const before = model.elements.getElement("root")!;
+    const reads = jest.spyOn(model.elements, "getElementNode");
+    model.elements.updateElement("child-0", { props: { text: "updated" } });
+    const after = model.elements.getElement("root")!;
+    expect(after.children[0]!.props.text).toBe("updated");
+    expect(after.children[1]).toBe(before.children[1]);
+    expect(reads).toHaveBeenCalledTimes(2);
+    expect(model.elements.getElement("root")).toBe(after);
+    expect(reads).toHaveBeenCalledTimes(2);
+    reads.mockRestore();
+    await model.destroy();
+  },
+);
 
 it("caches root arrays per subtree and updates their order without changing subtree values", async () => {
   const model = new DocumentModelImpl(new YjsDoc("tree-forest-cache"));
@@ -121,27 +161,37 @@ it("caches root arrays per subtree and updates their order without changing subt
   await model.destroy();
 });
 
-it.each([10, 2000])("invalidates cached ancestors in preloaded storage with %i siblings", async (count) => {
-  const sourceDoc = new YjsDoc("preloaded-tree");
-  const source = new DocumentModelImpl(sourceDoc);
-  source.elements.insertElement({ ...tree, children: [tree.children![0]!,
-    ...Array.from({ length: count }, (_, i) => ({ ...shape, id: `sibling-${i}` })),
-  ] });
-  const doc = new YjsDoc("preloaded-tree");
-  doc.applySnapshot(sourceDoc.getSnapshot());
-  const model = new DocumentModelImpl(doc);
-  const before = model.elements.getElement("group")!;
-  const changed: string[] = [];
-  for (const id of ["group", "inner", "sibling-0"]) {
-    model.elements.subscribeElement(id, () => { changed.push(id); });
-  }
-  const reads = jest.spyOn(model.elements, "getElementNode");
-  model.elements.updateElement("leaf", { frame: { x: 99 } });
-  const after = model.elements.getElement("group")!;
-  expect(after.children[0]!.children[0]!.frame.x).toBe(99);
-  expect(after.children[1]).toBe(before.children[1]);
-  expect(changed.sort()).toEqual(["group", "inner"]);
-  expect(reads).toHaveBeenCalledTimes(3);
-  reads.mockRestore();
-  await model.destroy(); await source.destroy();
-});
+it.each([10, 2000])(
+  "invalidates cached ancestors in preloaded storage with %i siblings",
+  async (count) => {
+    const sourceDoc = new YjsDoc("preloaded-tree");
+    const source = new DocumentModelImpl(sourceDoc);
+    source.elements.insertElement({
+      ...tree,
+      children: [
+        tree.children![0]!,
+        ...Array.from({ length: count }, (_, i) => ({ ...shape, id: `sibling-${i}` })),
+      ],
+    });
+    const doc = new YjsDoc("preloaded-tree");
+    doc.applySnapshot(sourceDoc.getSnapshot());
+    const model = new DocumentModelImpl(doc);
+    const before = model.elements.getElement("group")!;
+    const changed: string[] = [];
+    for (const id of ["group", "inner", "sibling-0"]) {
+      model.elements.subscribeElement(id, () => {
+        changed.push(id);
+      });
+    }
+    const reads = jest.spyOn(model.elements, "getElementNode");
+    model.elements.updateElement("leaf", { frame: { x: 99 } });
+    const after = model.elements.getElement("group")!;
+    expect(after.children[0]!.children[0]!.frame.x).toBe(99);
+    expect(after.children[1]).toBe(before.children[1]);
+    expect(changed.sort()).toEqual(["group", "inner"]);
+    expect(reads).toHaveBeenCalledTimes(3);
+    reads.mockRestore();
+    await model.destroy();
+    await source.destroy();
+  },
+);

@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import stylistic from "@stylistic/eslint-plugin";
 import jsdoc from "eslint-plugin-jsdoc";
 import prettier from "eslint-config-prettier/flat";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -200,4 +201,11 @@ export default tseslint.config(
     },
   },
   prettier,
+  {
+    plugins: { "@stylistic": stylistic },
+    rules: {
+      curly: ["error", "all"],
+      "@stylistic/curly-newline": ["error", { minElements: 1, consistent: true }],
+    },
+  },
 );

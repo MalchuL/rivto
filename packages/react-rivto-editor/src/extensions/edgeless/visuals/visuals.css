@@ -60,7 +60,8 @@
 [data-edgeless-creation-preview] {
   outline: 1.5px dashed var(--rivto-accent);
 }
-[data-edgeless-creation-preview], [data-edgeless-creation-preview] * {
+[data-edgeless-creation-preview],
+[data-edgeless-creation-preview] * {
   pointer-events: none !important;
 }
 

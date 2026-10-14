@@ -136,7 +136,11 @@ export interface BlockManagerApi {
   /** @param id - Moving block. @param targetId - Destination. @param position - Placement. @returns No value. */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
   /** @param ids - Moving roots. @param targetId - Destination. @param position - Placement. @returns No value. */
-  moveBlocks(ids: string[], targetId: string | null, position?: "before" | "after" | "inside"): void;
+  moveBlocks(
+    ids: string[],
+    targetId: string | null,
+    position?: "before" | "after" | "inside",
+  ): void;
   /** @param id - Block ID. @returns No value. */
   indentBlock(id: string): void;
   /** @param ids - Block IDs. @returns No value. */

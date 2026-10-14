@@ -5,7 +5,10 @@ import type { CanonicalDropPlacement, DropBlock, ResolvedDropPlacementOptions } 
 import { resolveAfterDropPlacement, resolveBlockDropPlacementOptions } from "./utils";
 
 /** Numeric viewport geometry; callers need no DOM object or drag-library type. */
-export type DropRect = Pick<DOMRectReadOnly, "top" | "bottom" | "left" | "right" | "width" | "height">;
+export type DropRect = Pick<
+  DOMRectReadOnly,
+  "top" | "bottom" | "left" | "right" | "width" | "height"
+>;
 
 /** Visible block geometry and the behavior of its child layout. */
 export interface DropLayoutBlock {
@@ -28,7 +31,9 @@ export interface DropLayoutOptions extends ResolvedDropPlacementOptions {
 }
 
 function contains(rect: DropRect, point: PointerCoordinates): boolean {
-  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+  return (
+    point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+  );
 }
 
 /**
@@ -61,7 +66,9 @@ export function resolveDropPlacement(
   const visit = (list: readonly DropBlock[], parentId: string | null, depth: number): void => {
     const visible = list.flatMap((block) => {
       const item = byId.get(block.id);
-      if (!item) return [];
+      if (!item) {
+        return [];
+      }
       depths.set(item.id, depth);
       visit(block.children, block.id, depth + 1);
       return [item];
@@ -69,25 +76,34 @@ export function resolveDropPlacement(
     children.set(parentId, visible);
   };
   visit(blocks, null, 0);
-  const visibleTree = (parentId: string | null): DropBlock[] => (children.get(parentId) ?? [])
-    .map(({ id }) => ({ id, children: visibleTree(id) }));
+  const visibleTree = (parentId: string | null): DropBlock[] =>
+    (children.get(parentId) ?? []).map(({ id }) => ({ id, children: visibleTree(id) }));
   const outlineBlocks = visibleTree(null);
-  const options = (item?: DropLayoutBlock): ResolvedDropPlacementOptions => resolveBlockDropPlacementOptions(
-    defaults.childDropIndent, defaults.gapDropZone, item?.options, defaults.allowChildPlacement,
-  );
+  const options = (item?: DropLayoutBlock): ResolvedDropPlacementOptions =>
+    resolveBlockDropPlacementOptions(
+      defaults.childDropIndent,
+      defaults.gapDropZone,
+      item?.options,
+      defaults.allowChildPlacement,
+    );
   // When all children are being moved, an ordinary parent's exposed boundary
   // is its row. Container bodies keep their explicit empty-field geometry.
   const bounds = (item: DropLayoutBlock): DropRect =>
-    !item.acceptsBody && !item.fixed && item.hasRenderedChildren && !children.get(item.id)?.length ? item.row : item.rect;
+    !item.acceptsBody && !item.fixed && item.hasRenderedChildren && !children.get(item.id)?.length
+      ? item.row
+      : item.rect;
   const finish = (destination: CanonicalDropPlacement): DropPlacement | null => {
-    if (!accepts(destination)) return null;
-    const indicatorId = destination.kind === "inside"
-      ? destination.parentId
-      : destination.nextId ?? destination.previousId ?? destination.parentId;
+    if (!accepts(destination)) {
+      return null;
+    }
+    const indicatorId =
+      destination.kind === "inside"
+        ? destination.parentId
+        : (destination.nextId ?? destination.previousId ?? destination.parentId);
     return indicatorId ? { ...destination, indicatorId } : null;
   };
-  const inside = (item: DropLayoutBlock): DropPlacement | null => options(item).allowChildPlacement
-    ? finish({ kind: "inside", parentId: item.id }) : null;
+  const inside = (item: DropLayoutBlock): DropPlacement | null =>
+    options(item).allowChildPlacement ? finish({ kind: "inside", parentId: item.id }) : null;
 
   const gap = (
     parent: DropLayoutBlock | undefined,
@@ -99,8 +115,10 @@ export function resolveDropPlacement(
     const previous = list[index - 1];
     const next = list[index];
     let destination: CanonicalDropPlacement = {
-      kind: "between", parentId: parent?.id ?? null,
-      previousId: previous?.id ?? null, nextId: next?.id ?? null,
+      kind: "between",
+      parentId: parent?.id ?? null,
+      previousId: previous?.id ?? null,
+      nextId: next?.id ?? null,
       depth: parent ? (depths.get(parent.id) ?? 0) + 1 : 0,
     };
     // The gap's indentation belongs to the preceding outline, regardless of
@@ -121,31 +139,47 @@ export function resolveDropPlacement(
       const mayNest = options(parent).allowChildPlacement && options(last).allowChildPlacement;
       // Indentation may suggest nesting under a block that rejects children,
       // such as a constrained structural shell. Keep the original sibling gap in that case.
-      if (projected && projected.depth >= floor && (mayNest || projected.depth <= (depths.get(last.id) ?? 0)) && accepts(projected)) {
+      if (
+        projected &&
+        projected.depth >= floor &&
+        (mayNest || projected.depth <= (depths.get(last.id) ?? 0)) &&
+        accepts(projected)
+      ) {
         destination = projected;
       }
     }
     const owner = destination.parentId ? byId.get(destination.parentId) : undefined;
     const axis = owner?.axis ?? "vertical";
     const result = finish(destination);
-    if (!result || destination.kind !== "between") return result;
+    if (!result || destination.kind !== "between") {
+      return result;
+    }
     const before = destination.previousId ? byId.get(destination.previousId) : undefined;
     const after = destination.nextId ? byId.get(destination.nextId) : undefined;
     const a = before ? bounds(before) : undefined;
     const b = after ? bounds(after) : undefined;
-    const horizontal = axis === "horizontal" || (axis === "grid" && (a && b
-      ? Math.max(a.top, b.top) < Math.min(a.bottom, b.bottom)
-      : boundaryAxis === "vertical"));
+    const horizontal =
+      axis === "horizontal" ||
+      (axis === "grid" &&
+        (a && b
+          ? Math.max(a.top, b.top) < Math.min(a.bottom, b.bottom)
+          : boundaryAxis === "vertical"));
     const ownerRect = owner ? bounds(owner) : undefined;
     const anchor = b ?? a ?? ownerRect;
-    if (!anchor) return result;
+    if (!anchor) {
+      return result;
+    }
     const start = horizontal ? a?.right : a?.bottom;
     const end = horizontal ? b?.left : b?.top;
     const cursor = horizontal ? pointer.x : pointer.y;
-    const coordinate = start !== undefined && end !== undefined
-      ? end - start <= defaults.childDropIndent ? (start + end) / 2
-        : Math.abs(cursor - start) <= Math.abs(cursor - end) ? start : end
-      : start ?? end ?? anchor.bottom;
+    let coordinate = start ?? end ?? anchor.bottom;
+    if (start !== undefined && end !== undefined) {
+      if (end - start <= defaults.childDropIndent) {
+        coordinate = (start + end) / 2;
+      } else {
+        coordinate = Math.abs(cursor - start) <= Math.abs(cursor - end) ? start : end;
+      }
+    }
     const emptyChildren = !before && !after && owner;
     const indent = emptyChildren ? options(owner).childDropIndent : 0;
     return {
@@ -153,7 +187,12 @@ export function resolveDropPlacement(
       indicatorId: before && start === coordinate ? before.id : result.indicatorId,
       line: horizontal
         ? { axis: "vertical", x: coordinate, y: anchor.top, length: anchor.height }
-        : { axis: "horizontal", x: anchor.left + indent, y: coordinate, length: Math.max(0, anchor.width - indent) },
+        : {
+            axis: "horizontal",
+            x: anchor.left + indent,
+            y: coordinate,
+            length: Math.max(0, anchor.width - indent),
+          },
     };
   };
 
@@ -161,12 +200,16 @@ export function resolveDropPlacement(
     const list = children.get(parent?.id ?? null) ?? [];
     // An empty list has no sibling anchor; only an explicit container body
     // can offer an inside placement.
-    if (!list.length) return parent ? (parent.acceptsBody ? inside(parent) : null) : null;
+    if (!list.length) {
+      return parent?.acceptsBody ? inside(parent) : null;
+    }
     const axis = parent?.axis ?? "vertical";
     const horizontal = axis === "horizontal";
     const coordinate = horizontal ? pointer.x : pointer.y;
-    const start = (item: DropLayoutBlock): number => horizontal ? bounds(item).left : bounds(item).top;
-    const end = (item: DropLayoutBlock): number => horizontal ? bounds(item).right : bounds(item).bottom;
+    const start = (item: DropLayoutBlock): number =>
+      horizontal ? bounds(item).left : bounds(item).top;
+    const end = (item: DropLayoutBlock): number =>
+      horizontal ? bounds(item).right : bounds(item).bottom;
     const item = list.find((entry) => contains(bounds(entry), pointer));
     if (!item) {
       // Only direct-child gaps belong to this layout. Background never falls
@@ -179,10 +222,14 @@ export function resolveDropPlacement(
           const b = bounds(list[index]!);
           const sameRow = Math.max(a.top, b.top) < Math.min(a.bottom, b.bottom);
           const inGap = sameRow
-            ? pointer.x >= a.right && pointer.x <= b.left
-              && pointer.y >= Math.max(a.top, b.top) && pointer.y <= Math.min(a.bottom, b.bottom)
+            ? pointer.x >= a.right &&
+              pointer.x <= b.left &&
+              pointer.y >= Math.max(a.top, b.top) &&
+              pointer.y <= Math.min(a.bottom, b.bottom)
             : pointer.y >= a.bottom && pointer.y <= b.top;
-          if (inGap) return gap(parent, index);
+          if (inGap) {
+            return gap(parent, index);
+          }
         }
         const rim = options(parent).gapDropZone;
         // Near an exposed item edge, preserve the same sibling destination.
@@ -190,12 +237,20 @@ export function resolveDropPlacement(
         for (let index = 0; index < list.length; index++) {
           const rect = bounds(list[index]!);
           if (pointer.x >= rect.left && pointer.x <= rect.right) {
-            if (pointer.y >= rect.bottom && pointer.y <= rect.bottom + rim) return gap(parent, index + 1);
-            if (pointer.y <= rect.top && pointer.y >= rect.top - rim) return gap(parent, index);
+            if (pointer.y >= rect.bottom && pointer.y <= rect.bottom + rim) {
+              return gap(parent, index + 1);
+            }
+            if (pointer.y <= rect.top && pointer.y >= rect.top - rim) {
+              return gap(parent, index);
+            }
           }
           if (pointer.y >= rect.top && pointer.y <= rect.bottom) {
-            if (pointer.x >= rect.right && pointer.x <= rect.right + rim) return gap(parent, index + 1, false, "vertical");
-            if (pointer.x <= rect.left && pointer.x >= rect.left - rim) return gap(parent, index, false, "vertical");
+            if (pointer.x >= rect.right && pointer.x <= rect.right + rim) {
+              return gap(parent, index + 1, false, "vertical");
+            }
+            if (pointer.x <= rect.left && pointer.x >= rect.left - rim) {
+              return gap(parent, index, false, "vertical");
+            }
           }
         }
         return parent?.acceptsBody ? inside(parent) : null;
@@ -209,10 +264,19 @@ export function resolveDropPlacement(
       const across = horizontal
         ? list.some((entry) => pointer.y >= bounds(entry).top && pointer.y <= bounds(entry).bottom)
         : true;
-      if (across && previous && next && coordinate >= end(previous)) return gap(parent, insertion, axis === "vertical");
-      if (!parent) return gap(parent, insertion, true);
-      const distance = Math.min(previous ? Math.abs(coordinate - end(previous)) : Infinity, next ? Math.abs(start(next) - coordinate) : Infinity);
-      if (across && distance <= options(parent).gapDropZone) return gap(parent, insertion, !parent.fixed);
+      if (across && previous && next && coordinate >= end(previous)) {
+        return gap(parent, insertion, axis === "vertical");
+      }
+      if (!parent) {
+        return gap(parent, insertion, true);
+      }
+      const distance = Math.min(
+        previous ? Math.abs(coordinate - end(previous)) : Infinity,
+        next ? Math.abs(start(next) - coordinate) : Infinity,
+      );
+      if (across && distance <= options(parent).gapDropZone) {
+        return gap(parent, insertion, !parent.fixed);
+      }
       return parent.acceptsBody ? inside(parent) : null;
     }
     const index = list.indexOf(item);
@@ -220,12 +284,19 @@ export function resolveDropPlacement(
     const size = horizontal ? rect.width : rect.height;
     // Reserve narrow outer edges for sorting containers as siblings, leaving
     // their interior available for child layouts. Small items cap the zone.
-    const edge = Math.min(item.acceptsBody || item.fixed ? defaults.outerEdgeDropZone ?? 8 : options(parent).gapDropZone, size / 3);
+    const edge = Math.min(
+      item.acceptsBody || item.fixed
+        ? (defaults.outerEdgeDropZone ?? 8)
+        : options(parent).gapDropZone,
+      size / 3,
+    );
     const before = coordinate <= start(item) + edge;
     const after = coordinate >= end(item) - edge;
     if (before || after) {
       const boundary = gap(parent, index + (after ? 1 : 0), axis === "vertical");
-      if (boundary) return boundary;
+      if (boundary) {
+        return boundary;
+      }
     }
     if (axis === "grid") {
       // Grid side edges sort within the owning list before the item's body
@@ -237,17 +308,24 @@ export function resolveDropPlacement(
     }
     // A shell that cannot enter this item can still sort in its owning list.
     // This is destination acceptance, not a comparison of the source's axis.
-    const sortsShell = parent?.fixed && axis !== "grid" && !accepts({ kind: "inside", parentId: item.id });
+    const sortsShell =
+      parent?.fixed && axis !== "grid" && !accepts({ kind: "inside", parentId: item.id });
     if (defaults.keyboard || sortsShell) {
       const boundary = gap(parent, index + (coordinate >= (start(item) + end(item)) / 2 ? 1 : 0));
-      if (boundary) return boundary;
+      if (boundary) {
+        return boundary;
+      }
     }
     if (contains(item.row, pointer)) {
       // Fixed rows sort by halves. Ordinary row edges expose outline gaps;
       // a lower edge with visible children targets the start of that child list.
-      if (item.fixed) return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
+      if (item.fixed) {
+        return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
+      }
       const rowEdge = Math.min(options(parent).gapDropZone, item.row.height / 3);
-      if (pointer.y < item.row.top + rowEdge) return gap(parent, index, true);
+      if (pointer.y < item.row.top + rowEdge) {
+        return gap(parent, index, true);
+      }
       if (pointer.y > item.row.bottom - rowEdge) {
         return children.get(item.id)?.length ? gap(item, 0) : gap(parent, index + 1, true);
       }
@@ -267,7 +345,9 @@ export function resolveDropPlacement(
     }
     // Beyond the row, enter the item's own child layout. An empty grid item
     // can instead expose its body directly as an inside destination.
-    if (axis === "grid" && !children.get(item.id)?.length) return inside(item);
+    if (axis === "grid" && !children.get(item.id)?.length) {
+      return inside(item);
+    }
     return resolveList(item);
   };
   return resolveList();

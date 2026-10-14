@@ -2,7 +2,11 @@ import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
-import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } from "../placement/resolver";
+import {
+  resolveDropPlacement,
+  type DropLayoutBlock,
+  type DropLayoutOptions,
+} from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
 import { resolveBeforeDropPlacement, resolveSiblingAfterDropPlacement } from "../placement/utils";
 import type { DropPlacement, PointerCoordinates } from "../types";
@@ -34,17 +38,30 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
   return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
     const row = dom.getRow(element);
-    if (!id || !row || !element.getClientRects().length) return [];
+    if (!id || !row || !element.getClientRects().length) {
+      return [];
+    }
     const parent = dom.getParent(element);
     const behavior = reactPanel.editor.blockBehaviors.resolve(id);
-    return [{
-      id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,
-      get row() { return row.getBoundingClientRect(); },
-      get rect() { return element.getBoundingClientRect(); },
-      axis: behavior.dropAxis, fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
-      acceptsBody: Boolean(behavior.acceptsDropContainer), options: behavior.dropPlacement,
-      hasRenderedChildren: Boolean(element.querySelector(":scope > .page-block-children > [data-block-id]")),
-    }];
+    return [
+      {
+        id,
+        parentId: parent && root.contains(parent) ? (parent.dataset.blockId ?? null) : null,
+        get row() {
+          return row.getBoundingClientRect();
+        },
+        get rect() {
+          return element.getBoundingClientRect();
+        },
+        axis: behavior.dropAxis,
+        fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
+        acceptsBody: Boolean(behavior.acceptsDropContainer),
+        options: behavior.dropPlacement,
+        hasRenderedChildren: Boolean(
+          element.querySelector(":scope > .page-block-children > [data-block-id]"),
+        ),
+      },
+    ];
   });
 }
 
@@ -76,28 +93,56 @@ export function resolveSurfaceDrop(
   pointer: PointerCoordinates,
   options: DropLayoutOptions,
 ): DropPlacement | null {
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   // Canvas cards may overlap. Hit-testing selects the visible owning layout;
   // resolving all cards together can choose a hidden block from another card.
-  const card = !options.keyboard ? root.ownerDocument?.elementFromPoint(pointer.x, pointer.y)
-    ?.closest<HTMLElement>("[data-edgeless-card-content]") : null;
+  const card = !options.keyboard
+    ? root.ownerDocument
+        ?.elementFromPoint(pointer.x, pointer.y)
+        ?.closest<HTMLElement>("[data-edgeless-card-content]")
+    : null;
   // Blank canvas has no outline destination; only the card under the pointer
   // contributes blocks. Keyboard movement still uses its supplied geometry.
-  if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) return null;
+  if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) {
+    return null;
+  }
   const layoutRoot = card && root.contains(card) && isInPanel(root, card) ? card : root;
   const measured = collectDropLayout(layoutRoot, reactPanel);
-  const panelRoot = reactPanel.rootBlockId && !reactPanel.blocks.hasBlock(reactPanel.rootBlockId) && reactPanel.document.blocks.hasBlock(reactPanel.rootBlockId) ? reactPanel.rootBlockId : undefined;
-  const placement = resolveDropPlacement(measured, blocks, pointer, options,
-    (destination) => (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null)
-      && reactPanel.editor.blockBehaviors.acceptsDrop(panelRoot && destination.parentId === null ? { ...destination, parentId: panelRoot } : destination, sources));
-  if (placement?.kind !== "between") return placement;
+  const panelRoot =
+    reactPanel.rootBlockId &&
+    !reactPanel.blocks.hasBlock(reactPanel.rootBlockId) &&
+    reactPanel.document.blocks.hasBlock(reactPanel.rootBlockId)
+      ? reactPanel.rootBlockId
+      : undefined;
+  const placement = resolveDropPlacement(
+    measured,
+    blocks,
+    pointer,
+    options,
+    (destination) =>
+      (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null) &&
+      reactPanel.editor.blockBehaviors.acceptsDrop(
+        panelRoot && destination.parentId === null
+          ? { ...destination, parentId: panelRoot }
+          : destination,
+        sources,
+      ),
+  );
+  if (placement?.kind !== "between") {
+    return placement;
+  }
   // A card boundary is a document gap, not necessarily the document's edge.
   // Keep the visible indicator, but include hidden separators or other cards
   // in its canonical neighbors for the final adjacency check.
   // Filtered containers likewise need their hidden siblings in the stored gap.
   let destination;
-  if (placement.nextId) destination = resolveBeforeDropPlacement(blocks, placement.nextId);
-  else if (placement.previousId) destination = resolveSiblingAfterDropPlacement(blocks, placement.previousId);
+  if (placement.nextId) {
+    destination = resolveBeforeDropPlacement(blocks, placement.nextId);
+  } else if (placement.previousId) {
+    destination = resolveSiblingAfterDropPlacement(blocks, placement.previousId);
+  }
   const resolved = destination ? { ...placement, ...destination } : placement;
   return panelRoot && resolved.parentId === null ? { ...resolved, parentId: panelRoot } : resolved;
 }

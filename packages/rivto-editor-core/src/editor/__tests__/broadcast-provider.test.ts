@@ -9,7 +9,9 @@ async function eventually(assertion: () => void, timeoutMs = 500): Promise<void>
       assertion();
       return;
     } catch (error) {
-      if (Date.now() - started > timeoutMs) throw error;
+      if (Date.now() - started > timeoutMs) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
@@ -54,8 +56,10 @@ describe("BroadcastChannelProvider editor sync", () => {
     } finally {
       await leftDoc.detachProvider().catch(() => undefined);
       await rightDoc.detachProvider().catch(() => undefined);
-      leftFixture.destroy(); void leftDoc.destroy();
-      rightFixture.destroy(); void rightDoc.destroy();
+      leftFixture.destroy();
+      void leftDoc.destroy();
+      rightFixture.destroy();
+      void rightDoc.destroy();
     }
   });
 });

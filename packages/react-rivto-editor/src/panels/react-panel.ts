@@ -76,8 +76,17 @@ export class ReactPanel implements ReactPanelApi {
    * @param options - Optional shared presentation mode for this displayed occurrence, independent of document ownership.
    * @throws If the core panel belongs to another editor, the shared editor is destroyed, or resource setup fails.
    */
-  constructor(readonly editor: ReactEditorApi, private readonly corePanel: PanelAPI, options: PanelOptions = {}) {
-    if (corePanel.document.getDocument() !== editor.getDocument() || corePanel.document.blocks !== editor.blocks) throw new Error("Panel and React editor must use the same document editor");
+  constructor(
+    readonly editor: ReactEditorApi,
+    private readonly corePanel: PanelAPI,
+    options: PanelOptions = {},
+  ) {
+    if (
+      corePanel.document.getDocument() !== editor.getDocument() ||
+      corePanel.document.blocks !== editor.blocks
+    ) {
+      throw new Error("Panel and React editor must use the same document editor");
+    }
     this.mode = options.mode ?? new ModeManager();
     this.events = new PanelEventManager(editor.events, this, editor.panels);
     this.keyboard = new PanelKeyboardManager(editor.keyboard, this);
@@ -86,40 +95,73 @@ export class ReactPanel implements ReactPanelApi {
     this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
     try {
       /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
-      this.registrations.add(editor.blockElements.maintainBlockCards(corePanel instanceof EmbeddingPanel ? null : corePanel.rootBlockId ?? null, corePanel.rootElementId));
+      this.registrations.add(
+        editor.blockElements.maintainBlockCards(
+          corePanel instanceof EmbeddingPanel ? null : (corePanel.rootBlockId ?? null),
+          corePanel.rootElementId,
+        ),
+      );
       this.updateSnapshot(this.corePanel.document.getDocument(), true);
       // A subtree root can disappear and return through undo while its document remains retained.
-      if (this.corePanel.rootBlockId) this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(this.corePanel.rootBlockId, () => this.updateSnapshot(this.corePanel.document.getDocument(), true));
+      if (this.corePanel.rootBlockId) {
+        this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(
+          this.corePanel.rootBlockId,
+          () => this.updateSnapshot(this.corePanel.document.getDocument(), true),
+        );
+      }
       // Keep edits made in different presentation modes out of the same undo capture.
-      this.unsubscribeMode = this.mode.subscribe(() => this.corePanel.document.history.stopCapturing());
+      this.unsubscribeMode = this.mode.subscribe(() =>
+        this.corePanel.document.history.stopCapturing(),
+      );
     } catch (error) {
-      try { this.destroy(); }
-      catch (cleanupError) { throw new AggregateError([error, cleanupError], "Panel construction and cleanup failed"); }
+      try {
+        this.destroy();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Panel construction and cleanup failed");
+      }
       throw error;
     }
   }
 
   /** @inheritdoc PanelAPI.document */
-  get document(): PanelAPI["document"] { return this.corePanel.document; }
+  get document(): PanelAPI["document"] {
+    return this.corePanel.document;
+  }
   /** @inheritdoc PanelAPI.documentId */
-  get documentId(): PanelAPI["documentId"] { return this.corePanel.documentId; }
+  get documentId(): PanelAPI["documentId"] {
+    return this.corePanel.documentId;
+  }
   /** @inheritdoc PanelAPI.rootBlockId */
-  get rootBlockId(): PanelAPI["rootBlockId"] { return this.corePanel.rootBlockId; }
+  get rootBlockId(): PanelAPI["rootBlockId"] {
+    return this.corePanel.rootBlockId;
+  }
   /** @inheritdoc PanelAPI.rootElementId */
-  get rootElementId(): PanelAPI["rootElementId"] { return this.corePanel.rootElementId; }
+  get rootElementId(): PanelAPI["rootElementId"] {
+    return this.corePanel.rootElementId;
+  }
   /** @inheritdoc PanelAPI.blocks */
-  get blocks(): PanelAPI["blocks"] { return this.corePanel.blocks; }
+  get blocks(): PanelAPI["blocks"] {
+    return this.corePanel.blocks;
+  }
   /** @inheritdoc PanelAPI.elements */
-  get elements(): PanelAPI["elements"] { return this.corePanel.elements; }
+  get elements(): PanelAPI["elements"] {
+    return this.corePanel.elements;
+  }
   /** @inheritdoc PanelAPI.subscribe */
   readonly subscribe = (listener: () => void): (() => void) => this.corePanel.subscribe(listener);
   /** @inheritdoc PanelAPI.batchUpdates */
-  batchUpdates<Result>(operation: () => Result): Result { return this.corePanel.batchUpdates(operation); }
+  batchUpdates<Result>(operation: () => Result): Result {
+    return this.corePanel.batchUpdates(operation);
+  }
   /** @inheritdoc PanelAPI.batchUpdatesWithoutHistory */
-  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result { return this.corePanel.batchUpdatesWithoutHistory(operation); }
+  batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
+    return this.corePanel.batchUpdatesWithoutHistory(operation);
+  }
 
   /** Selection operations for this occurrence; lifecycle remains internal to this panel instance. */
-  get selection(): PanelSelectionApi { return this.selectionManager; }
+  get selection(): PanelSelectionApi {
+    return this.selectionManager;
+  }
 
   /**
    * Returns the current snapshot without allocating a new object on each read.
@@ -131,16 +173,15 @@ export class ReactPanel implements ReactPanelApi {
    * Returns the DOM root currently available to this panel's interaction handlers.
    * @returns The assigned root, or null when no root is assigned or the panel is disabled.
    */
-  readonly getRoot = (): HTMLElement | null => this.enabled ? this.root : null;
+  readonly getRoot = (): HTMLElement | null => (this.enabled ? this.root : null);
 
   /** Observes availability changes. @param listener - Loading-state observer. @returns Unsubscribe callback. */
   readonly subscribeAvailability = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   };
-
-  /** @returns Nothing after notifying local transient UI that this panel lost focus. */
-  private readonly deactivate = (): void => { this.deactivationListeners.forEach((listener) => listener()); };
 
   /**
    * Replaces the DOM root used by this panel's events and selection operations.
@@ -153,8 +194,11 @@ export class ReactPanel implements ReactPanelApi {
    * @returns Nothing; other panels keep their own roots and registrations.
    */
   readonly setRoot = (nextRoot: HTMLElement | null): void => {
-    if (nextRoot === this.root) return;
-    this.unregisterRoot?.(); this.unregisterRoot = undefined;
+    if (nextRoot === this.root) {
+      return;
+    }
+    this.unregisterRoot?.();
+    this.unregisterRoot = undefined;
     this.root = nextRoot;
     if (this.root) {
       this.root.inert = !this.enabled;
@@ -168,9 +212,11 @@ export class ReactPanel implements ReactPanelApi {
   };
 
   /** @param listener - Closes transient UI when another panel becomes active. @returns Unsubscribe callback. */
-  readonly subscribeDeactivation = (listener: () => void): () => void => {
+  readonly subscribeDeactivation = (listener: () => void): (() => void) => {
     this.deactivationListeners.add(listener);
-    return () => { this.deactivationListeners.delete(listener); };
+    return () => {
+      this.deactivationListeners.delete(listener);
+    };
   };
 
   /**
@@ -179,11 +225,15 @@ export class ReactPanel implements ReactPanelApi {
    * @returns An idempotent disposer; destroy() also calls it if it is still retained.
    * @throws If panel destruction has started, or if the returned disposer's cleanup fails.
    */
-  readonly registerCleanup = (dispose: () => void): () => void => {
-    if (this.destroyed) throw new Error("React panel is destroyed");
+  readonly registerCleanup = (dispose: () => void): (() => void) => {
+    if (this.destroyed) {
+      throw new Error("React panel is destroyed");
+    }
     let active = true;
     const release = () => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
       this.registrations.delete(release);
       dispose();
@@ -213,7 +263,9 @@ export class ReactPanel implements ReactPanelApi {
    * @throws After all cleanup has run if one or more retained cleanup callbacks fail.
    */
   readonly destroy = (): void => {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
     const errors: unknown[] = [];
     const cleanups = [
@@ -228,16 +280,26 @@ export class ReactPanel implements ReactPanelApi {
     this.unregisterRoot = undefined;
     this.root = null;
     for (const cleanup of cleanups) {
-      try { cleanup?.(); }
-      catch (error) { errors.push(error); }
+      try {
+        cleanup?.();
+      } catch (error) {
+        errors.push(error);
+      }
     }
     this.registrations.clear();
     this.deactivationListeners.clear();
-    try { this.publishSnapshot({ status: "loading" }); }
-    catch (error) { errors.push(error); }
+    try {
+      this.publishSnapshot({ status: "loading" });
+    } catch (error) {
+      errors.push(error);
+    }
     this.listeners.clear();
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Panel cleanup failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Panel cleanup failed");
+    }
   };
 
   /**
@@ -246,13 +308,25 @@ export class ReactPanel implements ReactPanelApi {
    * @returns Nothing; reacquiring the model is never necessary for activation.
    */
   readonly setEnabled = (nextEnabled: boolean): void => {
-    if (nextEnabled === this.enabled) return;
+    if (nextEnabled === this.enabled) {
+      return;
+    }
     this.enabled = nextEnabled;
-    if (this.root) this.root.inert = !this.enabled;
+    if (this.root) {
+      this.root.inert = !this.enabled;
+    }
     if (!this.enabled) {
-      this.unregisterRoot?.(); this.unregisterRoot = undefined;
+      this.unregisterRoot?.();
+      this.unregisterRoot = undefined;
       this.deactivate();
-    } else this.registerCurrentDOMRoot();
+    } else {
+      this.registerCurrentDOMRoot();
+    }
+  };
+
+  /** @returns Nothing after notifying local transient UI that this panel lost focus. */
+  private readonly deactivate = (): void => {
+    this.deactivationListeners.forEach((listener) => listener());
   };
 
   /**
@@ -275,10 +349,22 @@ export class ReactPanel implements ReactPanelApi {
    */
   private readonly registerCurrentDOMRoot = (): void => {
     // Root assignment and reactivation can arrive separately; register only when ready and only once.
-    if (this.destroyed || !this.enabled || !this.root || !this.snapshot.document || this.unregisterRoot) return;
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      !this.root ||
+      !this.snapshot.document ||
+      this.unregisterRoot
+    ) {
+      return;
+    }
     // Route events to this occurrence and retain cleanup for root replacement, deactivation, or unmount.
     this.unregisterRoot = this.editor.panels.registerPanel(
-      this.root, this.snapshot.document, this.corePanel.rootBlockId, this.snapshot.api, this.deactivate,
+      this.root,
+      this.snapshot.document,
+      this.corePanel.rootBlockId,
+      this.snapshot.api,
+      this.deactivate,
       // Cancels pending caret work for this occurrence, including runtime shutdown and root removal.
       () => this.selectionManager.destroy(),
     );
@@ -301,13 +387,23 @@ export class ReactPanel implements ReactPanelApi {
     const sameDocument = this.snapshot.document === document;
     let status: PanelSnapshot["status"] = "available";
     if (this.corePanel.rootBlockId) {
-      if (document.blocks.hasBlock(this.corePanel.rootBlockId)) this.hasSeenRootBlock = true;
-      else status = this.hasSeenRootBlock ? "missing" : "loading";
+      if (document.blocks.hasBlock(this.corePanel.rootBlockId)) {
+        this.hasSeenRootBlock = true;
+      } else {
+        status = this.hasSeenRootBlock ? "missing" : "loading";
+      }
     }
-    if (sameDocument && this.snapshot.status === status && this.snapshot.retained === retained) return;
+    if (sameDocument && this.snapshot.status === status && this.snapshot.retained === retained) {
+      return;
+    }
     this.publishSnapshot({ status, document, api: this, retained });
   };
 
+  /**
+   * Replaces the panel snapshot and notifies subscribers synchronously.
+   *
+   * @param nextSnapshot - Immutable panel snapshot received from the core panel subscription.
+   */
   private readonly publishSnapshot = (nextSnapshot: PanelSnapshot): void => {
     this.snapshot = nextSnapshot;
     this.listeners.forEach((listener) => listener());

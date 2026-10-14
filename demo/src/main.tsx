@@ -14,4 +14,12 @@ if (!root) {
 // Lifecycle and custom element fixtures exercise root StrictMode effect replay in development.
 const params = new URLSearchParams(window.location.search);
 const lifecycleTest = params.has("editorLifecycle") || params.has("elementRegistration");
-createRoot(root).render(lifecycleTest ? <StrictMode><App /></StrictMode> : <App />);
+createRoot(root).render(
+  lifecycleTest ? (
+    <StrictMode>
+      <App />
+    </StrictMode>
+  ) : (
+    <App />
+  ),
+);

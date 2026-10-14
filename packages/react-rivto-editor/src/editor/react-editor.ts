@@ -13,11 +13,12 @@ import type { ReactEditorApi } from "./types";
  *
  * @module
  */
-import type {
-  DocumentEditorAPI,
-} from "@chulane/rivto";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
-import type { CreateDefaultBlock, IsEmptyBlock } from "../extensions/built-ins/page/default-writing-block/types";
+import type {
+  CreateDefaultBlock,
+  IsEmptyBlock,
+} from "../extensions/built-ins/page/default-writing-block/types";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
@@ -74,29 +75,51 @@ export class ReactEditor implements ReactEditorApi {
    */
   private readonly core: DocumentEditorAPI;
   /** @inheritdoc DocumentEditorAPI.blocks */
-  get blocks(): DocumentEditorAPI["blocks"] { return this.core.blocks; }
+  get blocks(): DocumentEditorAPI["blocks"] {
+    return this.core.blocks;
+  }
   /** @inheritdoc DocumentEditorAPI.elements */
-  get elements(): DocumentEditorAPI["elements"] { return this.core.elements; }
+  get elements(): DocumentEditorAPI["elements"] {
+    return this.core.elements;
+  }
   /** @inheritdoc DocumentEditorAPI.commands */
-  get commands(): DocumentEditorAPI["commands"] { return this.core.commands; }
+  get commands(): DocumentEditorAPI["commands"] {
+    return this.core.commands;
+  }
   /** @inheritdoc DocumentEditorAPI.selection */
-  get selection(): DocumentEditorAPI["selection"] { return this.core.selection; }
+  get selection(): DocumentEditorAPI["selection"] {
+    return this.core.selection;
+  }
   /** @inheritdoc DocumentEditorAPI.history */
-  get history(): DocumentEditorAPI["history"] { return this.core.history; }
+  get history(): DocumentEditorAPI["history"] {
+    return this.core.history;
+  }
   /** @inheritdoc DocumentEditorAPI.blockRegistry */
-  get blockRegistry(): DocumentEditorAPI["blockRegistry"] { return this.core.blockRegistry; }
+  get blockRegistry(): DocumentEditorAPI["blockRegistry"] {
+    return this.core.blockRegistry;
+  }
   /** @inheritdoc DocumentEditorAPI.elementRegistry */
-  get elementRegistry(): DocumentEditorAPI["elementRegistry"] { return this.core.elementRegistry; }
+  get elementRegistry(): DocumentEditorAPI["elementRegistry"] {
+    return this.core.elementRegistry;
+  }
   /** @inheritdoc DocumentEditorAPI.revision */
-  get revision(): number { return this.core.revision; }
+  get revision(): number {
+    return this.core.revision;
+  }
   /** @inheritdoc DocumentEditorAPI.subscribe */
   readonly subscribe = (listener: () => void): (() => void) => this.core.subscribe(listener);
   /** @inheritdoc DocumentEditorAPI.getDocument */
-  getDocument(): ReturnType<DocumentEditorAPI["getDocument"]> { return this.core.getDocument(); }
+  getDocument(): ReturnType<DocumentEditorAPI["getDocument"]> {
+    return this.core.getDocument();
+  }
   /** @inheritdoc DocumentEditorAPI.load */
-  load(snapshot: Parameters<DocumentEditorAPI["load"]>[0]): void { this.core.load(snapshot); }
+  load(snapshot: Parameters<DocumentEditorAPI["load"]>[0]): void {
+    this.core.load(snapshot);
+  }
   /** @inheritdoc DocumentEditorAPI.dump */
-  dump(): ReturnType<DocumentEditorAPI["dump"]> { return this.core.dump(); }
+  dump(): ReturnType<DocumentEditorAPI["dump"]> {
+    return this.core.dump();
+  }
 
   /** Creates input for an empty writing block using the installed writing extension.
    *
@@ -244,13 +267,19 @@ export class ReactEditor implements ReactEditorApi {
    * @throws If destruction has started, or if the returned disposer's cleanup fails.
    */
   registerCleanup(release: () => void): () => void {
-    if (this.destroyed) throw new Error("React editor is destroyed");
+    if (this.destroyed) {
+      throw new Error("React editor is destroyed");
+    }
     let active = true;
     const dispose = () => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
       const index = this.disposers.indexOf(dispose);
-      if (index >= 0) this.disposers.splice(index, 1);
+      if (index >= 0) {
+        this.disposers.splice(index, 1);
+      }
       release();
     };
     this.disposers.push(dispose);
@@ -271,7 +300,9 @@ export class ReactEditor implements ReactEditorApi {
    * @throws Synchronously if cleanup fails, after all React disposers have run.
    */
   destroy(): Promise<void> {
-    if (this.destroyed) return Promise.resolve();
+    if (this.destroyed) {
+      return Promise.resolve();
+    }
     this.destroyed = true;
     const errors: unknown[] = [];
     for (const dispose of this.disposers.splice(0).reverse()) {
@@ -282,8 +313,12 @@ export class ReactEditor implements ReactEditorApi {
         errors.push(error);
       }
     }
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "React editor teardown failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "React editor teardown failed");
+    }
     return Promise.resolve();
   }
 }
@@ -298,6 +333,5 @@ export class ReactEditor implements ReactEditorApi {
  * @returns Connected runtime whose owner must destroy it before disposing its borrowed core.
  * @throws If manager or extension setup fails; completed registrations are released before rethrowing.
  */
-export const createReactEditor = (
-  options: CreateReactEditorOptions,
-): ReactEditor => new ReactEditor(options);
+export const createReactEditor = (options: CreateReactEditorOptions): ReactEditor =>
+  new ReactEditor(options);

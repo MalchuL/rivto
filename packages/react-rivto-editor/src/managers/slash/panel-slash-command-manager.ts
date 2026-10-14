@@ -5,8 +5,24 @@ import type { SlashCommandRegistry } from "./slash-command-registry";
 /** Executes commands in one occurrence while sharing the document command registry. */
 export class PanelSlashCommandManager implements PanelSlashCommandsApi {
   /** @param commands - Document command registrations. @param reactPanel - Invoking occurrence. */
-  constructor(private readonly commands: SlashCommandRegistry, private readonly reactPanel: ReactPanelApi) {}
-  get revision() { return this.commands.revision; }
+  constructor(
+    private readonly commands: SlashCommandRegistry,
+    private readonly reactPanel: ReactPanelApi,
+  ) {}
+  /**
+   * Reads the slash-command registry's observable revision.
+   *
+   * @returns Current revision number.
+   */
+  get revision() {
+    return this.commands.revision;
+  }
+  /**
+   * Observes slash-command registration changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe: PanelSlashCommandsApi["subscribe"] = (listener) => this.commands.subscribe(listener);
   /**
    * Returns contextually available commands in declaration order.
@@ -15,7 +31,9 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
    */
   getAll: PanelSlashCommandsApi["getAll"] = (context) => {
     const commandContext = { ...context, reactPanel: this.reactPanel };
-    return this.commands.getAll().filter((command) => command.isAvailable?.(commandContext) !== false);
+    return this.commands
+      .getAll()
+      .filter((command) => command.isAvailable?.(commandContext) !== false);
   };
 
   /**
@@ -26,9 +44,13 @@ export class PanelSlashCommandManager implements PanelSlashCommandsApi {
    */
   execute: PanelSlashCommandsApi["execute"] = (id, context) => {
     const command = this.commands.get(id);
-    if (!command) throw new Error(`Unknown slash command ${id}`);
+    if (!command) {
+      throw new Error(`Unknown slash command ${id}`);
+    }
     const commandContext = { ...context, reactPanel: this.reactPanel };
-    if (command.isAvailable?.(commandContext) === false) throw new Error(`Slash command ${id} is unavailable`);
+    if (command.isAvailable?.(commandContext) === false) {
+      throw new Error(`Slash command ${id} is unavailable`);
+    }
     command.execute(commandContext);
   };
 }

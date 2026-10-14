@@ -1,5 +1,10 @@
 import type { EditorEventHandler } from "../events/types";
-import type { KeyboardBindingSnapshot, KeyboardEventDefinition, KeyboardShortcut, KeymapOverrides } from "./keyboard-types";
+import type {
+  KeyboardBindingSnapshot,
+  KeyboardEventDefinition,
+  KeyboardShortcut,
+  KeymapOverrides,
+} from "./keyboard-types";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 
 /** Semantic keyboard registrations, inventory, and shared keymap settings. */
@@ -20,8 +25,5 @@ export interface KeyboardApi {
   /** Replaces every override, restoring defaults for omitted IDs. */
   replaceKeymap(keymap: KeymapOverrides): void;
   /** Sets one override; an empty array disables it and undefined restores defaults. */
-  setKeymapOverride(
-    id: string,
-    keys: readonly KeyboardShortcut[] | undefined,
-  ): void;
+  setKeymapOverride(id: string, keys: readonly KeyboardShortcut[] | undefined): void;
 }

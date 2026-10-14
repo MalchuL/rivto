@@ -10,7 +10,13 @@ import type { ReactEditorApi } from "../../../../editor/types";
  * @module
  */
 import { createBlockBehaviorContext } from "../../../../block-behaviors";
-import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, shouldDeleteSelection } from "../../../../managers";
+import {
+  BUILTIN_KEYMAP,
+  firstKeyboardTarget,
+  isEditableKeyboardEvent,
+  KEYBOARD_BINDING_IDS,
+  shouldDeleteSelection,
+} from "../../../../managers";
 
 /**
  * Installs outline block splitting for Page and Edgeless surfaces.
@@ -23,38 +29,52 @@ import { BUILTIN_KEYMAP, firstKeyboardTarget, isEditableKeyboardEvent, KEYBOARD_
  * @returns Nothing; the binding is owned by the extension lifecycle.
  */
 export function registerBlockCreation(reactEditor: ReactEditorApi): void {
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockCreate,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
-  }, ({ reactPanel, raw: event, root }) => {
-    if (!isEditableKeyboardEvent(event)) return false;
-    // Read the key event's native caret synchronously. A newly focused editor
-    // can receive Enter before the browser's deferred selectionchange event.
-    const nativeSelection = reactPanel.selection.readDOM();
-    if (nativeSelection) reactPanel.selection.set(nativeSelection);
-    const selection = nativeSelection ?? reactPanel.selection.get();
-    const initialTarget = firstKeyboardTarget(selection);
-    if (!initialTarget) return false;
-
-    let claimed = false;
-    // Selection deletion, text splitting, insertion, and nesting share one CRDT
-    // transaction, so Enter is one collaborative update and one undo step.
-    reactPanel.batchUpdates(() => {
-      let target = initialTarget;
-      if (shouldDeleteSelection(selection)) {
-        reactPanel.selection.delete();
-        const collapsed = firstKeyboardTarget(reactPanel.selection.get());
-        if (!collapsed?.collapsed) return;
-        target = collapsed;
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockCreate,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockCreate]!,
+    },
+    ({ reactPanel, raw: event, root }) => {
+      if (!isEditableKeyboardEvent(event)) {
+        return false;
       }
-      const context = createBlockBehaviorContext(reactPanel, target.blockId, root, reactPanel.selection.get());
-      if (!context) return;
-      claimed = reactPanel.editor.blockBehaviors.dispatch(
-        "onSplit",
-        context,
-        target,
-      );
-    });
-    return claimed;
-  });
+      // Read the key event's native caret synchronously. A newly focused editor
+      // can receive Enter before the browser's deferred selectionchange event.
+      const nativeSelection = reactPanel.selection.readDOM();
+      if (nativeSelection) {
+        reactPanel.selection.set(nativeSelection);
+      }
+      const selection = nativeSelection ?? reactPanel.selection.get();
+      const initialTarget = firstKeyboardTarget(selection);
+      if (!initialTarget) {
+        return false;
+      }
+
+      let claimed = false;
+      // Selection deletion, text splitting, insertion, and nesting share one CRDT
+      // transaction, so Enter is one collaborative update and one undo step.
+      reactPanel.batchUpdates(() => {
+        let target = initialTarget;
+        if (shouldDeleteSelection(selection)) {
+          reactPanel.selection.delete();
+          const collapsed = firstKeyboardTarget(reactPanel.selection.get());
+          if (!collapsed?.collapsed) {
+            return;
+          }
+          target = collapsed;
+        }
+        const context = createBlockBehaviorContext(
+          reactPanel,
+          target.blockId,
+          root,
+          reactPanel.selection.get(),
+        );
+        if (!context) {
+          return;
+        }
+        claimed = reactPanel.editor.blockBehaviors.dispatch("onSplit", context, target);
+      });
+      return claimed;
+    },
+  );
 }

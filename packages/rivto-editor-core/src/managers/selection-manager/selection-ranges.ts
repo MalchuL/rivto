@@ -59,9 +59,11 @@ export function getSelectedBlockIds(selection: Selection): string[] {
 export function hasBlockRanges(
   selection: Selection,
 ): selection is Selection & Required<Pick<Selection, "anchorBlockId" | "focusBlockId">> {
-  return selection.blocks.length > 0
-    && typeof selection.anchorBlockId === "string"
-    && typeof selection.focusBlockId === "string";
+  return (
+    selection.blocks.length > 0 &&
+    typeof selection.anchorBlockId === "string" &&
+    typeof selection.focusBlockId === "string"
+  );
 }
 
 /**
@@ -73,7 +75,9 @@ export function hasBlockRanges(
 export function assertBlockRangeEndpoints(
   selection: Selection,
 ): asserts selection is Selection & Required<Pick<Selection, "anchorBlockId" | "focusBlockId">> {
-  if (!hasBlockRanges(selection)) throw new Error("Block selection endpoints are required");
+  if (!hasBlockRanges(selection)) {
+    throw new Error("Block selection endpoints are required");
+  }
 }
 
 /**
@@ -93,13 +97,16 @@ export function resolveBlockRange(
   end: number,
 ): { startOffset: number; endOffset: number; invalid: boolean } {
   const endOffset = end === -1 ? length : end;
-  const invalid = !Number.isInteger(start) || !Number.isInteger(end)
-    || start < 0 || end < -1 || endOffset < start || endOffset > length;
+  const invalid =
+    !Number.isInteger(start) ||
+    !Number.isInteger(end) ||
+    start < 0 ||
+    end < -1 ||
+    endOffset < start ||
+    endOffset > length;
   if (invalid) {
     // Invalid markers become an empty slice at a clamped caret, not a throw.
-    const caret = Number.isFinite(start)
-      ? Math.min(Math.max(0, start), Math.max(0, length))
-      : 0;
+    const caret = Number.isFinite(start) ? Math.min(Math.max(0, start), Math.max(0, length)) : 0;
     return { startOffset: caret, endOffset: caret, invalid: true };
   }
   return { startOffset: start, endOffset, invalid: false };
@@ -123,7 +130,9 @@ export function sliceBlockRange(content: string, start: number, end: number): st
  * @returns Whether the covered slice is empty inside a single block.
  */
 export function isCaretSelection(selection: Selection): boolean {
-  if (selection.blocks.length !== 1) return false;
+  if (selection.blocks.length !== 1) {
+    return false;
+  }
   const only = selection.blocks[0]!;
   return only.start === only.end;
 }
@@ -134,13 +143,15 @@ export function isCaretSelection(selection: Selection): boolean {
  * @returns Whether structural copy/delete/paste should run.
  */
 export function isStructuralSelection(selection: Selection | undefined): boolean {
-  return Boolean(selection?.blocks.length
-    && selection.blocks.every((block) => block.start === 0 && block.end === -1));
+  return Boolean(
+    selection?.blocks.length &&
+    selection.blocks.every((block) => block.start === 0 && block.end === -1),
+  );
 }
 
 /**
  * Builds a block selection from two directed UTF-16 endpoints.
- * 
+ *
  * Example:
  * Blocks:
  * - The fox
@@ -186,7 +197,9 @@ export function createTextSelection(
 ): Selection | undefined {
   const anchorIndex = ordered.findIndex((block) => block.id === anchor.blockId);
   const headIndex = ordered.findIndex((block) => block.id === head.blockId);
-  if (anchorIndex < 0 || headIndex < 0) return undefined;
+  if (anchorIndex < 0 || headIndex < 0) {
+    return undefined;
+  }
   // Find the lower and higher index of the ordered blocks.
   const lo = Math.min(anchorIndex, headIndex);
   const hi = Math.max(anchorIndex, headIndex);
@@ -219,10 +232,14 @@ export function createTextSelection(
     // Index zero is the first block of the selected slice, which may be any
     // block in the document. Its range begins at the earlier boundary offset
     // and covers the remainder of that block.
-    if (index === 0) return { id: block.id, start: start.offset, end: block.length };
+    if (index === 0) {
+      return { id: block.id, start: start.offset, end: block.length };
+    }
     // The last slice index is the later boundary block, not necessarily the
     // document's last block. Its range covers text from zero to that endpoint.
-    if (index === slice.length - 1) return { id: block.id, start: 0, end: stop.offset };
+    if (index === slice.length - 1) {
+      return { id: block.id, start: 0, end: stop.offset };
+    }
     // Full text coverage is still part of one text range; the selection as a
     // whole remains non-structural when either boundary is partial.
     return { id: block.id, start: 0, end: block.length };

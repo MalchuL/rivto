@@ -31,8 +31,13 @@ export class ContainerBlockBehavior extends DefaultBlockBehavior {
    * @param _target - Keyboard target; unused once emptiness is confirmed.
    * @returns `"handled"` when a child was inserted, otherwise `"default"`.
    */
-  override onSplit(context: BlockBehaviorContext, _target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    if (context.block.children.length > 0) return "default";
+  override onSplit(
+    context: BlockBehaviorContext,
+    _target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome {
+    if (context.block.children.length > 0) {
+      return "default";
+    }
     return this.appendWritingBlock(context);
   }
 

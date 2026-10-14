@@ -1,9 +1,4 @@
-import type {
-  CRDTType,
-  CRDTArray,
-  CRDTMap,
-  CRDTText,
-} from "@chulane/crdt-doc";
+import type { CRDTType, CRDTArray, CRDTMap, CRDTText } from "@chulane/crdt-doc";
 import type { BlockListProps, ElementFrame } from "./document";
 
 /** Collaborative geometry stored inside each first-class element record. */

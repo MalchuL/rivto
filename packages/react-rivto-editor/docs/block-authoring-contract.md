@@ -9,12 +9,12 @@ names, classes, or block types to shared selection and drag code.
 
 A block feature has four owners:
 
-| Concern | Owner |
-| --- | --- |
-| Persisted type, content, props, children, and parent restrictions | Core block definition |
-| Content markup and local controls | User renderer |
-| Selection, native range repair, clipboard, and structural commands | Shared editor runtime |
-| Tree shell, descendants, slots, drag handle, and drop feedback | `BlockTree` and extensions |
+| Concern                                                            | Owner                      |
+| ------------------------------------------------------------------ | -------------------------- |
+| Persisted type, content, props, children, and parent restrictions  | Core block definition      |
+| Content markup and local controls                                  | User renderer              |
+| Selection, native range repair, clipboard, and structural commands | Shared editor runtime      |
+| Tree shell, descendants, slots, drag handle, and drop feedback     | `BlockTree` and extensions |
 
 A renderer returns only its content. It must not recreate `BlockView`, render
 its children, install another block-reordering system, or store document state
@@ -75,11 +75,11 @@ runtime should execute that role. It should not infer the role from the HTML tag
 
 Use four roles:
 
-| Role | Meaning |
-| --- | --- |
-| `text` | Native caret and text-range gestures owned by one persisted block content field |
-| `structural` | Empty or non-interactive renderer space may start whole-block selection |
-| `control` | The component owns the full gesture; block selection does not start here |
+| Role                  | Meaning                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| `text`                | Native caret and text-range gestures owned by one persisted block content field             |
+| `structural`          | Empty or non-interactive renderer space may start whole-block selection                     |
+| `control`             | The component owns the full gesture; block selection does not start here                    |
 | `selection-activator` | Click remains native, but movement beyond the shared threshold becomes structural selection |
 
 The nearest declared role to the event target wins. This gives nested
@@ -344,15 +344,15 @@ the heuristics in the same change.
 
 The contract is complete when these behaviors pass in real browser tests:
 
-| Component | Click | Drag |
-| --- | --- | --- |
-| Editable text | caret/edit | native or cross-block text selection |
-| Structural blank space | select block | structural range selection |
-| Counter activator | increment | select block without incrementing |
-| Slider/input control | native action | native control gesture only |
-| TODO status sorter | native activation | sorter reorder only |
-| Page drag handle | no content action | reorder selected block roots |
-| Empty container control | insert/focus child | component-declared behavior only |
+| Component               | Click              | Drag                                 |
+| ----------------------- | ------------------ | ------------------------------------ |
+| Editable text           | caret/edit         | native or cross-block text selection |
+| Structural blank space  | select block       | structural range selection           |
+| Counter activator       | increment          | select block without incrementing    |
+| Slider/input control    | native action      | native control gesture only          |
+| TODO status sorter      | native activation  | sorter reorder only                  |
+| Page drag handle        | no content action  | reorder selected block roots         |
+| Empty container control | insert/focus child | component-declared behavior only     |
 
 Also verify keyboard activation, `defaultPrevented` handling, page and edgeless
 surfaces, narrow container layout, and one-step undo for compound mutations.

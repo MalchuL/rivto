@@ -29,7 +29,14 @@ import {
   insertBlockElementSeparator,
   nonOverlappingBlockFrame,
 } from "../../elements/block-element-projection";
-import { useDOMEvent, useEditorRoot, useReactPanel, useElements, useKeyboardEvent, useRootBlockIds } from "../../hooks";
+import {
+  useDOMEvent,
+  useEditorRoot,
+  useReactPanel,
+  useElements,
+  useKeyboardEvent,
+  useRootBlockIds,
+} from "../../hooks";
 import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
 import { ToolBarDivider } from "../../components/edgeless/tool-bar-divider";
 import { EdgelessToolButton } from "../../components/edgeless/tool-button";
@@ -77,12 +84,25 @@ function gridDotFade(zoom: number): string {
  * listeners move together instead of leaving global listeners behind.
  */
 /** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
-export function EdgelessSurface(props: { readonly snapping?: EdgelessSnappingStore; readonly avoidBlockElementOverlap?: boolean; readonly blockElementWidth?: number } = {}) {
+export function EdgelessSurface(
+  props: {
+    readonly snapping?: EdgelessSnappingStore;
+    readonly avoidBlockElementOverlap?: boolean;
+    readonly blockElementWidth?: number;
+  } = {},
+) {
   const editor = useReactPanel();
   const configured = getEdgelessSurfaceOptions(editor);
   const suppliedSnapping = props.snapping ?? configured.snapping;
-  const snapping = useMemo(() => suppliedSnapping ?? new EdgelessSnappingStore(), [suppliedSnapping]);
-  return <SurfaceBoundary type="edgeless"><EdgelessSurfaceContent {...configured} {...props} snapping={snapping} /></SurfaceBoundary>;
+  const snapping = useMemo(
+    () => suppliedSnapping ?? new EdgelessSnappingStore(),
+    [suppliedSnapping],
+  );
+  return (
+    <SurfaceBoundary type="edgeless">
+      <EdgelessSurfaceContent {...configured} {...props} snapping={snapping} />
+    </SurfaceBoundary>
+  );
 }
 
 function EdgelessSurfaceContent({
@@ -96,8 +116,11 @@ function EdgelessSurfaceContent({
 }) {
   const reactPanel = useReactPanel();
   const rootIds = useRootBlockIds();
-  const blockElements = useElements().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE
-    && blockElementRoot(element, reactPanel.blocks) === null);
+  const blockElements = useElements().filter(
+    (element) =>
+      element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
+      blockElementRoot(element, reactPanel.blocks) === null,
+  );
   const { ref: registerRoot } = useEditorRoot();
   const viewport = useRef<HTMLElement | null>(null);
   const spotlightOverlay = useRef<HTMLDivElement | null>(null);
@@ -114,10 +137,13 @@ function EdgelessSurfaceContent({
     () => snapping.getSnapshot(),
   );
 
-  const rootRef = useCallback((element: HTMLElement | null) => {
-    viewport.current = element;
-    registerRoot(element);
-  }, [registerRoot]);
+  const rootRef = useCallback(
+    (element: HTMLElement | null) => {
+      viewport.current = element;
+      registerRoot(element);
+    },
+    [registerRoot],
+  );
 
   const clearSpace = () => {
     spaceHeld.current = false;
@@ -133,7 +159,9 @@ function EdgelessSurfaceContent({
    */
   const refreshViewportOrigin = (): void => {
     const root = viewport.current;
-    if (!root) return;
+    if (!root) {
+      return;
+    }
     const bounds = root.getBoundingClientRect();
     viewportOrigin.current = { left: bounds.left, top: bounds.top };
   };
@@ -153,15 +181,27 @@ function EdgelessSurfaceContent({
       x: event.clientX,
       y: event.clientY,
     };
-    if (spotlightFrame.current !== null) return;
+    if (spotlightFrame.current !== null) {
+      return;
+    }
     spotlightFrame.current = requestAnimationFrame(() => {
       const root = viewport.current;
       const overlay = spotlightOverlay.current;
       spotlightFrame.current = null;
-      if (!root || !overlay) return;
-      if (root.dataset.transforming || root.dataset.panning === "true") return;
-      overlay.style.setProperty("--rivto-edgeless-pointer-x", `${spotlightPoint.current.x - viewportOrigin.current.left}px`);
-      overlay.style.setProperty("--rivto-edgeless-pointer-y", `${spotlightPoint.current.y - viewportOrigin.current.top}px`);
+      if (!root || !overlay) {
+        return;
+      }
+      if (root.dataset.transforming || root.dataset.panning === "true") {
+        return;
+      }
+      overlay.style.setProperty(
+        "--rivto-edgeless-pointer-x",
+        `${spotlightPoint.current.x - viewportOrigin.current.left}px`,
+      );
+      overlay.style.setProperty(
+        "--rivto-edgeless-pointer-y",
+        `${spotlightPoint.current.y - viewportOrigin.current.top}px`,
+      );
     });
   };
 
@@ -171,7 +211,9 @@ function EdgelessSurfaceContent({
    * @returns Nothing.
    */
   const cancelPointerSpotlight = (): void => {
-    if (spotlightFrame.current === null) return;
+    if (spotlightFrame.current === null) {
+      return;
+    }
     cancelAnimationFrame(spotlightFrame.current);
     spotlightFrame.current = null;
   };
@@ -180,7 +222,9 @@ function EdgelessSurfaceContent({
 
   useEffect(() => {
     const root = viewport.current;
-    if (!root || typeof ResizeObserver === "undefined") return;
+    if (!root || typeof ResizeObserver === "undefined") {
+      return;
+    }
     refreshViewportOrigin();
     const observer = new ResizeObserver(() => refreshViewportOrigin());
     observer.observe(root);
@@ -191,87 +235,130 @@ function EdgelessSurfaceContent({
     refreshViewportOrigin();
   }, [pan, zoom]);
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.edgelessPanStart,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStart],
-    mode: "edgeless",
-    when: ({ raw: event }) => {
-      const target = event.target;
-      return target instanceof HTMLElement &&
-        !target.isContentEditable &&
-        !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName);
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.edgelessPanStart,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStart],
+      mode: "edgeless",
+      when: ({ raw: event }) => {
+        const target = event.target;
+        return (
+          target instanceof HTMLElement &&
+          !target.isContentEditable &&
+          !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName)
+        );
+      },
     },
-  }, () => {
-    spaceHeld.current = true;
-    viewport.current?.setAttribute("data-panning-ready", "true");
-    return true;
-  });
+    () => {
+      spaceHeld.current = true;
+      viewport.current?.setAttribute("data-panning-ready", "true");
+      return true;
+    },
+  );
 
-  useKeyboardEvent({
-    id: KEYBOARD_BINDING_IDS.edgelessPanStop,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStop],
-    phase: "keyup",
-    target: "window",
-    mode: "edgeless",
-  }, () => {
-    clearSpace();
-    return false;
-  });
-
-  useDOMEvent({
-    id: "edgeless.pan.blur",
-    type: "blur",
-    target: "window",
-  }, () => {
-    clearSpace();
-    panGesture.current = null;
-    viewport.current?.removeAttribute("data-panning");
-  });
-
-  useDOMEvent({
-    id: "edgeless.pan.pointer-start",
-    type: "pointerdown",
-    capture: true,
-  }, ({ raw: event }) => {
-    const root = viewport.current;
-    const allowed = event.button === 1 || (event.button === 0 && panReady());
-    if (!root || !allowed) return false;
-    // Pan tool: ignore chrome controls so zoom/snap toggles still work.
-    if (event.button === 0 && root.dataset.edgelessTool === "pan" && event.target instanceof Element && event.target.closest("[data-edgeless-ui]")) {
+  useKeyboardEvent(
+    {
+      id: KEYBOARD_BINDING_IDS.edgelessPanStop,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStop],
+      phase: "keyup",
+      target: "window",
+      mode: "edgeless",
+    },
+    () => {
+      clearSpace();
       return false;
-    }
-    panGesture.current = {
-      x: event.clientX,
-      y: event.clientY,
-      panX: pan.x,
-      panY: pan.y,
-    };
-    root.dataset.panning = "true";
-    return true;
-  });
+    },
+  );
+
+  useDOMEvent(
+    {
+      id: "edgeless.pan.blur",
+      type: "blur",
+      target: "window",
+    },
+    () => {
+      clearSpace();
+      panGesture.current = null;
+      viewport.current?.removeAttribute("data-panning");
+    },
+  );
+
+  useDOMEvent(
+    {
+      id: "edgeless.pan.pointer-start",
+      type: "pointerdown",
+      capture: true,
+    },
+    ({ raw: event }) => {
+      const root = viewport.current;
+      const allowed = event.button === 1 || (event.button === 0 && panReady());
+      if (!root || !allowed) {
+        return false;
+      }
+      // Pan tool: ignore chrome controls so zoom/snap toggles still work.
+      if (
+        event.button === 0 &&
+        root.dataset.edgelessTool === "pan" &&
+        event.target instanceof Element &&
+        event.target.closest("[data-edgeless-ui]")
+      ) {
+        return false;
+      }
+      panGesture.current = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: pan.x,
+        panY: pan.y,
+      };
+      root.dataset.panning = "true";
+      return true;
+    },
+  );
 
   /** Appends and focuses one default root card at an empty canvas point. */
   const createBlockAt = (event: ReactMouseEvent<HTMLElement>): void => {
     const root = viewport.current;
     const target = event.target;
-    if (!root || !(target instanceof Element) || event.button !== 0) return;
-    if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") return;
-    if (target.closest(`[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`) ||
-      target.closest(".edgeless-drawing-capture[data-active]")) return;
+    if (!root || !(target instanceof Element) || event.button !== 0) {
+      return;
+    }
+    if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") {
+      return;
+    }
+    if (
+      target.closest(
+        `[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`,
+      ) ||
+      target.closest(".edgeless-drawing-capture[data-active]")
+    ) {
+      return;
+    }
     const rect = root.getBoundingClientRect();
     const x = (event.clientX - rect.left - pan.x) / zoom;
     const y = (event.clientY - rect.top - pan.y) / zoom;
     const preferredFrame = {
       ...EDGELESS_CARD_DEFAULT_FRAME,
-      width: Number.isFinite(blockElementWidth) && blockElementWidth > 0 ? blockElementWidth : EDGELESS_CARD_DEFAULT_FRAME.width,
+      width:
+        Number.isFinite(blockElementWidth) && blockElementWidth > 0
+          ? blockElementWidth
+          : EDGELESS_CARD_DEFAULT_FRAME.width,
       x,
       y,
     };
     const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(preferredFrame, reactPanel.elements.getElementNodes().filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE).map((element) => element.frame))
+      ? nonOverlappingBlockFrame(
+          preferredFrame,
+          reactPanel.elements
+            .getElementNodes()
+            .filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE)
+            .map((element) => element.frame),
+        )
       : preferredFrame;
-    const roots = reactPanel.blocks.getRootIds().flatMap((id) => reactPanel.blocks.getBlockNode(id) ?? []);
-    const zIndex = Math.max(0, ...reactPanel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
+    const roots = reactPanel.blocks
+      .getRootIds()
+      .flatMap((id) => reactPanel.blocks.getBlockNode(id) ?? []);
+    const zIndex =
+      Math.max(0, ...reactPanel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     let id = "";
     reactPanel.batchUpdates(() => {
       let afterId = roots.at(-1)?.id;
@@ -279,7 +366,10 @@ function EdgelessSurfaceContent({
       if (last && !reactPanel.editor.blockTypes.separatesBlockElements(last.type)) {
         afterId = insertBlockElementSeparator(reactPanel, last.id).id;
       }
-      id = reactPanel.blocks.insertBlock(reactPanel.editor.createDefaultBlock(), reactPanel.blocks.getInsertionDestinationAfter(afterId)).id;
+      id = reactPanel.blocks.insertBlock(
+        reactPanel.editor.createDefaultBlock(),
+        reactPanel.blocks.getInsertionDestinationAfter(afterId),
+      ).id;
       reactPanel.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,
         frame,
@@ -291,49 +381,67 @@ function EdgelessSurfaceContent({
     requestAnimationFrame(() => focusBlock(root, id, 0));
   };
 
-  useDOMEvent({
-    id: "edgeless.pan.pointer-move",
-    type: "pointermove",
-    target: "window",
-    passive: false,
-  }, ({ raw: event }) => {
-    const root = viewport.current;
-    const start = panGesture.current;
-    if (!root || !start) return false;
-    setPan({
-      x: start.panX + event.clientX - start.x,
-      y: start.panY + event.clientY - start.y,
-    });
-    return true;
-  });
+  useDOMEvent(
+    {
+      id: "edgeless.pan.pointer-move",
+      type: "pointermove",
+      target: "window",
+      passive: false,
+    },
+    ({ raw: event }) => {
+      const root = viewport.current;
+      const start = panGesture.current;
+      if (!root || !start) {
+        return false;
+      }
+      setPan({
+        x: start.panX + event.clientX - start.x,
+        y: start.panY + event.clientY - start.y,
+      });
+      return true;
+    },
+  );
 
   const stopPan = () => {
-    if (!panGesture.current) return false;
+    if (!panGesture.current) {
+      return false;
+    }
     panGesture.current = null;
     viewport.current?.removeAttribute("data-panning");
     return true;
   };
-  useDOMEvent({
-    id: "edgeless.pan.pointer-end",
-    type: "pointerup",
-    target: "window",
-  }, stopPan);
-  useDOMEvent({
-    id: "edgeless.pan.pointer-cancel",
-    type: "pointercancel",
-    target: "window",
-  }, stopPan);
+  useDOMEvent(
+    {
+      id: "edgeless.pan.pointer-end",
+      type: "pointerup",
+      target: "window",
+    },
+    stopPan,
+  );
+  useDOMEvent(
+    {
+      id: "edgeless.pan.pointer-cancel",
+      type: "pointercancel",
+      target: "window",
+    },
+    stopPan,
+  );
 
-  useDOMEvent({
-    id: "edgeless.pan.middle-auxclick",
-    type: "auxclick",
-    mode: "edgeless",
-  }, ({ raw: event }) => event.button === 1);
+  useDOMEvent(
+    {
+      id: "edgeless.pan.middle-auxclick",
+      type: "auxclick",
+      mode: "edgeless",
+    },
+    ({ raw: event }) => event.button === 1,
+  );
 
   const zoomAt = (nextZoom: number, clientX?: number, clientY?: number): void => {
     const root = viewport.current;
     const next = clampZoom(nextZoom);
-    if (!root || next === zoom) return setZoom(next);
+    if (!root || next === zoom) {
+      return setZoom(next);
+    }
     const rect = root.getBoundingClientRect();
     const x = (clientX ?? rect.left + root.clientWidth / 2) - rect.left;
     const y = (clientY ?? rect.top + root.clientHeight / 2) - rect.top;
@@ -343,21 +451,27 @@ function EdgelessSurfaceContent({
     setPan({ x: x - canvasX * next, y: y - canvasY * next });
   };
 
-  useDOMEvent({
-    id: "edgeless.zoom.wheel",
-    type: "wheel",
-    passive: false,
-  }, ({ raw: event }) => {
-    // Wheel modifier policy is a pointer gesture rather than a key binding.
-    if (!event.ctrlKey && !event.metaKey) return false;
-    zoomAt(zoom * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
-    return true;
-  });
+  useDOMEvent(
+    {
+      id: "edgeless.zoom.wheel",
+      type: "wheel",
+      passive: false,
+    },
+    ({ raw: event }) => {
+      // Wheel modifier policy is a pointer gesture rather than a key binding.
+      if (!event.ctrlKey && !event.metaKey) {
+        return false;
+      }
+      zoomAt(zoom * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
+      return true;
+    },
+  );
 
   return (
     <main
       ref={rootRef}
-      data-rivto-surface="edgeless" className="edgeless-viewport"
+      data-rivto-surface="edgeless"
+      className="edgeless-viewport"
       data-edgeless-zoom={zoom}
       data-edgeless-pan-x={pan.x}
       data-edgeless-pan-y={pan.y}
@@ -369,17 +483,30 @@ function EdgelessSurfaceContent({
       onDoubleClick={createBlockAt}
       onPointerMove={updatePointerSpotlight}
       onPointerEnter={refreshViewportOrigin}
-      style={{
-        backgroundPosition: `${pan.x}px ${pan.y}px`,
-        backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
-        "--rivto-edgeless-zoom": String(zoom),
-        "--rivto-edgeless-grid-dot-fade": gridDotFade(zoom),
-      } as CSSProperties}
+      style={
+        {
+          backgroundPosition: `${pan.x}px ${pan.y}px`,
+          backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
+          "--rivto-edgeless-zoom": String(zoom),
+          "--rivto-edgeless-grid-dot-fade": gridDotFade(zoom),
+        } as CSSProperties
+      }
     >
       <div ref={spotlightOverlay} className={GRID_SPOTLIGHT_CLASS} aria-hidden="true" />
-      <div className={ZOOM_CONTROLS_CLASS} data-edgeless-ui="true" role="toolbar" aria-label="Canvas zoom">
+      <div
+        className={ZOOM_CONTROLS_CLASS}
+        data-edgeless-ui="true"
+        role="toolbar"
+        aria-label="Canvas zoom"
+      >
         <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
-        <EdgelessToolButton label="Reset zoom" className={ZOOM_VALUE_CLASS} onClick={() => zoomAt(1)}>{Math.round(zoom * 100)}%</EdgelessToolButton>
+        <EdgelessToolButton
+          label="Reset zoom"
+          className={ZOOM_VALUE_CLASS}
+          onClick={() => zoomAt(1)}
+        >
+          {Math.round(zoom * 100)}%
+        </EdgelessToolButton>
         <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
         <ToolBarDivider />
         <EdgelessToolButton
@@ -398,26 +525,30 @@ function EdgelessSurfaceContent({
       <div
         className="edgeless-plane"
         data-edgeless-plane="true"
-        style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          // Move and size the capture box against the plane transform so it
-          // continues covering the viewport after any pan or zoom. The offset
-          // variables below restore absolute canvas coordinates inside that box.
-          "--edgeless-capture-left": `${-pan.x / zoom}px`,
-          "--edgeless-capture-top": `${-pan.y / zoom}px`,
-          "--edgeless-capture-width": `${100 / zoom}%`,
-          "--edgeless-capture-height": `${100 / zoom}%`,
-          "--edgeless-capture-offset-x": `${pan.x / zoom}px`,
-          "--edgeless-capture-offset-y": `${pan.y / zoom}px`,
-        } as CSSProperties}
+        style={
+          {
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            // Move and size the capture box against the plane transform so it
+            // continues covering the viewport after any pan or zoom. The offset
+            // variables below restore absolute canvas coordinates inside that box.
+            "--edgeless-capture-left": `${-pan.x / zoom}px`,
+            "--edgeless-capture-top": `${-pan.y / zoom}px`,
+            "--edgeless-capture-width": `${100 / zoom}%`,
+            "--edgeless-capture-height": `${100 / zoom}%`,
+            "--edgeless-capture-offset-x": `${pan.x / zoom}px`,
+            "--edgeless-capture-offset-y": `${pan.y / zoom}px`,
+          } as CSSProperties
+        }
       >
         {/* Element boundary IDs resolve against current root order; inserted
             roots between them render without rewriting element props. */}
-        {blockElements.map((element) => <EdgelessBlockElement
-          key={element.id}
-          element={element}
-          blockIds={blockIdsOf(element, rootIds)}
-        />)}
+        {blockElements.map((element) => (
+          <EdgelessBlockElement
+            key={element.id}
+            element={element}
+            blockIds={blockIdsOf(element, rootIds)}
+          />
+        ))}
       </div>
     </main>
   );

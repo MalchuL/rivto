@@ -19,13 +19,17 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
   const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
   const slot = root?.querySelector<HTMLElement>(PAGE_END_SLOT_SELECTOR);
-  if (!root || !slot) return null;
+  if (!root || !slot) {
+    return null;
+  }
 
   return createPortal(
     Array.from({ length: count }, (_, index) => {
       const amount = index + 1;
       return (
-        <Button variant="ghost" {...editorControlProps}
+        <Button
+          variant="ghost"
+          {...editorControlProps}
           key={amount}
           type="button"
           className={`${TRAILING_BLOCK_CLASS} my-1 box-border flex h-(--rivto-default-block-height) w-full cursor-text items-center justify-start gap-1 rounded border-0 bg-transparent px-2 py-0 text-left [font:inherit] leading-normal text-transparent transition-colors outline-none hover:bg-primary/5 hover:text-primary focus-visible:bg-primary/5 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5`}
@@ -40,7 +44,9 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
                 ).id;
               }
             });
-            if (!id) return;
+            if (!id) {
+              return;
+            }
             reactPanel.selection.set(createCaretSelection(id, 0));
             requestAnimationFrame(() => focusBlock(root, id, 0));
           }}

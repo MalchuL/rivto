@@ -32,14 +32,21 @@ import {
  * @returns No value.
  */
 export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): void {
-  const isCollapsed = (block: EditorBlock) => (
-    !reactEditor.blockListProps.childrenVisible(block)
-  );
-  const move = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection, extend: boolean): boolean => {
+  const isCollapsed = (block: EditorBlock) => !reactEditor.blockListProps.childrenVisible(block);
+  const move = (
+    reactPanel: ReactPanelApi,
+    root: HTMLElement,
+    direction: VerticalDirection,
+    extend: boolean,
+  ): boolean => {
     const selection = currentNavigationSelection(reactPanel.selection);
-    if (!isStructuralSelection(selection)) return false;
+    if (!isStructuralSelection(selection)) {
+      return false;
+    }
     const item = selection;
-    if (!item || !hasBlockRanges(item)) return false;
+    if (!item || !hasBlockRanges(item)) {
+      return false;
+    }
     const outline = navigationOutlineBlocks(reactPanel, item.focusBlockId);
     const next = extend
       ? extendBlockSelection(outline, item, direction, isCollapsed)
@@ -50,15 +57,23 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): v
     return true;
   };
 
-  const grow = (reactPanel: ReactPanelApi, root: HTMLElement, direction: VerticalDirection): boolean => {
+  const grow = (
+    reactPanel: ReactPanelApi,
+    root: HTMLElement,
+    direction: VerticalDirection,
+  ): boolean => {
     const selection = currentNavigationSelection(reactPanel.selection);
     const item = selection;
-    if (!item || !hasBlockRanges(item)) return false;
+    if (!item || !hasBlockRanges(item)) {
+      return false;
+    }
     const outline = navigationOutlineBlocks(reactPanel, item.focusBlockId);
     const next = isStructuralSelection(selection)
       ? extendBlockSelection(outline, item, direction, isCollapsed)
       : blockSelection(outline, item.focusBlockId, item.focusBlockId, isCollapsed);
-    if (!next) return false;
+    if (!next) {
+      return false;
+    }
     assertBlockRangeEndpoints(next);
     reactPanel.selection.set(next);
     focusBlockSelection(root, next.focusBlockId);
@@ -67,24 +82,35 @@ export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): v
 
   const enterText = (reactPanel: ReactPanelApi, root: HTMLElement): boolean => {
     const blocks = currentNavigationSelection(reactPanel.selection);
-    if (!blocks || !isStructuralSelection(blocks) || !hasBlockRanges(blocks)) return false;
+    if (!blocks || !isStructuralSelection(blocks) || !hasBlockRanges(blocks)) {
+      return false;
+    }
     setNavigationCaret(root, reactPanel, { blockId: blocks.focusBlockId, offset: 0 });
     return true;
   };
 
-  const binding = (
-    id: string,
-    action: (reactPanel: ReactPanelApi, root: HTMLElement) => boolean,
-  ) => reactEditor.keyboard.register({
-    id,
-    keys: BUILTIN_KEYMAP[id],
-  }, ({ reactPanel, root }) => action(reactPanel, root));
+  const binding = (id: string, action: (reactPanel: ReactPanelApi, root: HTMLElement) => boolean) =>
+    reactEditor.keyboard.register(
+      {
+        id,
+        keys: BUILTIN_KEYMAP[id],
+      },
+      ({ reactPanel, root }) => action(reactPanel, root),
+    );
   binding(KEYBOARD_BINDING_IDS.blockSelectionUp, (editor, root) => move(editor, root, "up", false));
-  binding(KEYBOARD_BINDING_IDS.blockSelectionDown, (editor, root) => move(editor, root, "down", false));
-  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendUp, (editor, root) => move(editor, root, "up", true));
-  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendDown, (editor, root) => move(editor, root, "down", true));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionDown, (editor, root) =>
+    move(editor, root, "down", false),
+  );
+  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendUp, (editor, root) =>
+    move(editor, root, "up", true),
+  );
+  binding(KEYBOARD_BINDING_IDS.blockSelectionExtendDown, (editor, root) =>
+    move(editor, root, "down", true),
+  );
   binding(KEYBOARD_BINDING_IDS.blockSelectionGrowUp, (editor, root) => grow(editor, root, "up"));
-  binding(KEYBOARD_BINDING_IDS.blockSelectionGrowDown, (editor, root) => grow(editor, root, "down"));
+  binding(KEYBOARD_BINDING_IDS.blockSelectionGrowDown, (editor, root) =>
+    grow(editor, root, "down"),
+  );
   binding(KEYBOARD_BINDING_IDS.blockSelectionCaretLeft, enterText);
   binding(KEYBOARD_BINDING_IDS.blockSelectionCaretRight, enterText);
 }

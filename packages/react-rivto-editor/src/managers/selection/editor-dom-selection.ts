@@ -49,10 +49,7 @@ import { PANEL_SELECTOR, PanelDOM, isInPanel } from "../events/panel-dom";
  *         └── Text ("hello")   ← Selection often points here
  * ```
  */
-import type {
-  EditorPosition,
-  Selection,
-} from "@chulane/rivto";
+import type { EditorPosition, Selection } from "@chulane/rivto";
 import {
   createStructuralSelection,
   createTextSelection,
@@ -112,7 +109,9 @@ export interface DOMSelectionPoint {
  * @returns The nearest ancestor's `data-block-id`, or `undefined` if missing.
  */
 function blockIdForContent(content: HTMLElement): string | undefined {
-  return content.closest<HTMLElement>(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+  return (
+    content.closest<HTMLElement>(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined
+  );
 }
 
 /**
@@ -122,9 +121,9 @@ function blockIdForContent(content: HTMLElement): string | undefined {
  * @returns HTMLElements matching `[data-block-content]` that have a block ID.
  */
 function orderedContents(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter((content) => (
-    Boolean(blockIdForContent(content)) && isInPanel(root, content)
-  ));
+  return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter(
+    (content) => Boolean(blockIdForContent(content)) && isInPanel(root, content),
+  );
 }
 
 /**
@@ -142,7 +141,9 @@ export function createVisibleStructuralSelection(
 ): Selection | undefined {
   const anchorIndex = blockIds.indexOf(anchorBlockId);
   const focusIndex = blockIds.indexOf(focusBlockId);
-  if (anchorIndex < 0 || focusIndex < 0) return undefined;
+  if (anchorIndex < 0 || focusIndex < 0) {
+    return undefined;
+  }
   return createStructuralSelection(
     blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
     anchorBlockId,
@@ -188,7 +189,11 @@ export function orderedBlockIds(root: HTMLElement): string[] {
  *   editor, has no block content host, or the Range API rejects a stale node
  *   (common right after React replaces Text nodes).
  */
-function readPosition(root: HTMLElement, node: Node | null, offset: number): EditorPosition | undefined {
+function readPosition(
+  root: HTMLElement,
+  node: Node | null,
+  offset: number,
+): EditorPosition | undefined {
   // node is Node|null. Text ("hello") is a Node but not an Element — only
   // Elements have closest()/querySelector. Climb to a tag Element first:
   //   <div contenteditable>          ← Element / HTMLElement
@@ -196,7 +201,9 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
   const element = isElementNode(node) ? node : node?.parentElement;
   const content = element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
   const blockId = content ? blockIdForContent(content) : undefined;
-  if (!node || !content || !blockId || !root.contains(content) || !isInPanel(root, content)) return;
+  if (!node || !content || !blockId || !root.contains(content) || !isInPanel(root, content)) {
+    return;
+  }
 
   // Measure "how many characters from content start to (node, offset)".
   // setEnd accepts a Node (Text or Element), matching Selection's model.
@@ -218,7 +225,10 @@ function readPosition(root: HTMLElement, node: Node | null, offset: number): Edi
  * @param root - EditorPanel root that must own `point.content`.
  * @param point - Live DOM endpoint (node + offset + content host).
  */
-export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint): EditorPosition | undefined {
+export function readDOMPointPosition(
+  root: HTMLElement,
+  point: DOMSelectionPoint,
+): EditorPosition | undefined {
   return readPosition(root, point.node, point.offset);
 }
 
@@ -248,25 +258,25 @@ export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint
  * @param y - Vertical viewport coordinate from a pointer event.
  * @returns Stable block ID under the pointer, or undefined outside a block.
  */
-export function readBlockIdAtPoint(
-  root: HTMLElement,
-  x: number,
-  y: number,
-): string | undefined {
+export function readBlockIdAtPoint(root: HTMLElement, x: number, y: number): string | undefined {
   const hit = root.ownerDocument.elementFromPoint(x, y);
   const dom = new PanelDOM(root);
   // A nested panel is one block in the originating surface. Its source rows
   // must not turn a host selection endpoint into a nearby editable sibling.
   const block = dom.getBlock(isElementNode(hit) ? hit : null);
-  if (!block || !root.contains(block)) return undefined;
+  if (!block || !root.contains(block)) {
+    return undefined;
+  }
 
   const ownRow = dom.getRow(block);
   // Keep the closest block when the pointer is in its own row, or when a
   // custom shell has no row to distinguish wrapping descendants from chrome.
   // Body slots belong to that block even when it also has outline children.
   const ownBody = dom.getBody(block);
-  const nestedHit = ownRow && !ownRow.contains(hit) && !ownBody?.contains(hit)
-    ? nearestNestedBlock(block, x, y) : undefined;
+  const nestedHit =
+    ownRow && !ownRow.contains(hit) && !ownBody?.contains(hit)
+      ? nearestNestedBlock(block, x, y)
+      : undefined;
   const target = nestedHit ?? block;
   return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
 }
@@ -299,7 +309,9 @@ function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElem
     .filter((candidate) => !root || isInPanel(root, candidate))
     .map((candidate) => {
       const row = ownedBlockRow(candidate);
-      return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
+      return row
+        ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) }
+        : undefined;
     })
     .filter((entry): entry is { candidate: HTMLElement; distance: number } => Boolean(entry))
     .sort((left, right) => left.distance - right.distance)[0]?.candidate;
@@ -322,30 +334,35 @@ export function createDOMSelection(
   if (anchor.blockId === head.blockId) {
     const content = new PanelDOM(root).findContent(anchor.blockId);
     if (content) {
-      return createTextSelection([{ id: anchor.blockId, length: content.textContent?.length ?? 0 }], anchor, head);
+      return createTextSelection(
+        [{ id: anchor.blockId, length: content.textContent?.length ?? 0 }],
+        anchor,
+        head,
+      );
     }
   }
   // Index content once; nested blocks must not rescan their descendants.
   const contents = new Map<Element | null, HTMLElement>();
   for (const content of orderedContents(root)) {
     const block = content.closest(BLOCK_ID_SELECTOR);
-    if (!contents.has(block)) contents.set(block, content);
+    if (!contents.has(block)) {
+      contents.set(block, content);
+    }
   }
   // Start from every BlockView, not only editable hosts. Otherwise a
   // contentless renderer such as Counter disappears from a Shift+Alt range.
   const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
     const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!id || !isInPanel(root, block)) return [];
+    if (!id || !isInPanel(root, block)) {
+      return [];
+    }
     const content = contents.get(block);
     return [{ id, content }];
   });
-  const selectionBlocks = getPageVirtualizationControllerForElement(root)?.getSelectionBlocks()
-    ?? rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 }));
-  const selection = createTextSelection(
-    selectionBlocks,
-    anchor,
-    head,
-  );
+  const selectionBlocks =
+    getPageVirtualizationControllerForElement(root)?.getSelectionBlocks() ??
+    rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 }));
+  const selection = createTextSelection(selectionBlocks, anchor, head);
   if (selection) {
     const contentless = new Set(rendered.filter(({ content }) => !content).map(({ id }) => id));
     selection.blocks.forEach((block) => {
@@ -373,7 +390,9 @@ export function createDOMSelection(
  */
 export function readEditorDOMSelection(root: HTMLElement): Selection | undefined {
   const selection = root.ownerDocument.getSelection();
-  if (!selection?.rangeCount) return;
+  if (!selection?.rangeCount) {
+    return;
+  }
   // anchorNode / focusNode are Node|null — typically Text nodes inside a
   // contenteditable HTMLElement, not the Element itself.
   const anchor = readPosition(root, selection.anchorNode, selection.anchorOffset);
@@ -404,10 +423,17 @@ function distanceToRect(rect: DOMRect, x: number, y: number): number {
  * @returns The hit `[data-block-content]` Element, or the closest one by distance.
  */
 function contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
-  const hit = root.ownerDocument.elementFromPoint(x, y)?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  if (hit && root.contains(hit) && isInPanel(root, hit)) return hit;
+  const hit = root.ownerDocument
+    .elementFromPoint(x, y)
+    ?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
+  if (hit && root.contains(hit) && isInPanel(root, hit)) {
+    return hit;
+  }
   return orderedContents(root)
-    .map((content) => ({ content, distance: distanceToRect(content.getBoundingClientRect(), x, y) }))
+    .map((content) => ({
+      content,
+      distance: distanceToRect(content.getBoundingClientRect(), x, y),
+    }))
     .sort((left, right) => left.distance - right.distance)[0]?.content;
 }
 
@@ -466,13 +492,20 @@ function nearestTextPoint(content: HTMLElement, x: number, y: number): DOMSelect
  * @param y - Client Y in viewport pixels.
  * @returns Live `{ node, offset, content }`, or `undefined` if no content host exists.
  */
-export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): DOMSelectionPoint | undefined {
+export function readDOMSelectionPoint(
+  root: HTMLElement,
+  x: number,
+  y: number,
+): DOMSelectionPoint | undefined {
   const content = contentNearPoint(root, x, y);
-  if (!content) return;
+  if (!content) {
+    return;
+  }
   const document = root.ownerDocument;
   const caret = document.caretPositionFromPoint?.(x, y);
-  const fallback = (document as Document & { caretRangeFromPoint?: (left: number, top: number) => Range | null })
-    .caretRangeFromPoint?.(x, y);
+  const fallback = (
+    document as Document & { caretRangeFromPoint?: (left: number, top: number) => Range | null }
+  ).caretRangeFromPoint?.(x, y);
   const node = caret?.offsetNode ?? fallback?.startContainer;
   const offset = caret?.offset ?? fallback?.startOffset;
   let point: DOMSelectionPoint;
@@ -497,7 +530,9 @@ export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): 
  */
 export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelectionPoint): void {
   const selection = anchor.content.ownerDocument.getSelection();
-  if (!selection) return;
+  if (!selection) {
+    return;
+  }
   let restored = false;
   try {
     // Ends are Nodes (usually Text), not HTMLElements — same model as getSelection().
@@ -510,9 +545,12 @@ export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelection
   if (!restored) {
     // Range requires document order; compareDocumentPosition works on any Node
     // (Text or Element), which is why endpoints stay typed as Node.
-    const anchorBeforeHead = anchor.node === head.node
-      ? anchor.offset <= head.offset
-      : Boolean(anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const anchorBeforeHead =
+      anchor.node === head.node
+        ? anchor.offset <= head.offset
+        : Boolean(
+            anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING,
+          );
     const start = anchorBeforeHead ? anchor : head;
     const end = anchorBeforeHead ? head : anchor;
     const range = anchor.content.ownerDocument.createRange();
@@ -539,7 +577,10 @@ export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelection
  * @param requestedOffset - UTF-16 offset from the start of that content's text.
  * @returns A Node (usually Text) plus offset inside it.
  */
-function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: Node; offset: number } {
+function pointAtOffset(
+  content: HTMLElement,
+  requestedOffset: number,
+): { node: Node; offset: number } {
   // SHOW_TEXT → only Text nodes ("hello"), skipping Element tags in between.
   const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
   let remaining = Math.max(0, requestedOffset);
@@ -573,7 +614,10 @@ function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: N
  * @param position - Stable `{ blockId, offset }` from the editor model.
  * @returns Live {@link DOMSelectionPoint}, or `undefined` if that block is not rendered.
  */
-export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
+export function resolveDOMSelectionPoint(
+  root: HTMLElement,
+  position: EditorPosition,
+): DOMSelectionPoint | undefined {
   getPageVirtualizationControllerForElement(root)?.mountBlocks([position.blockId]);
   const content = new PanelDOM(root).findContent(position.blockId);
   return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
@@ -608,27 +652,32 @@ export function restoreEditorDOMSelection(
       options,
     );
   }
-  if (isStructuralSelection(selection)) return false;
+  if (isStructuralSelection(selection)) {
+    return false;
+  }
   const dom = new PanelDOM(root);
   const contents = new Map<string, HTMLElement | null>();
   const contentOf = (id: string): HTMLElement | null => {
-    if (!contents.has(id)) contents.set(id, dom.findContent(id));
+    if (!contents.has(id)) {
+      contents.set(id, dom.findContent(id));
+    }
     return contents.get(id)!;
   };
   const lengthOf = (id: string): number => contentOf(id)?.textContent?.length ?? 0;
   const ends = resolveSelectionEndpoints(selection, lengthOf);
-  if (!ends) return false;
+  if (!ends) {
+    return false;
+  }
 
   const anchorContent = contentOf(ends.anchor.blockId);
   const headContent = contentOf(ends.head.blockId);
-  if (!anchorContent || !headContent) return false;
+  if (!anchorContent || !headContent) {
+    return false;
+  }
 
   const anchor = pointAtOffset(anchorContent, ends.anchor.offset);
   const head = pointAtOffset(headContent, ends.head.offset);
   headContent.focus({ preventScroll: true });
-  setNativeSelection(
-    { ...anchor, content: anchorContent },
-    { ...head, content: headContent },
-  );
+  setNativeSelection({ ...anchor, content: anchorContent }, { ...head, content: headContent });
   return true;
 }

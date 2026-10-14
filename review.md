@@ -32,8 +32,6 @@ demo App                  wires presets, seeds data, custom blocks
 
 ---
 
-
-
 ## 1. Boot path (demo → editor)
 
 **Read in order**
@@ -49,12 +47,10 @@ demo App                  wires presets, seeds data, custom blocks
 - Three factories in App; only some use `edgelessVisualsExtension`.
 - Seed uses `editor.commands.execute("edgeless.visual.*")` and `editor.elements.insertElement` for cards — different APIs, different layers.
 - `standardPreset` = page + selection/history/slash/…; drag and edgeless are opt-in
-Visual toolbar/controller = separate extension.
+  Visual toolbar/controller = separate extension.
 - Ask: what dies if you remove each extension from the array?
 
 ---
-
-
 
 ## 2. ReactEditor architecture
 
@@ -79,8 +75,6 @@ Visual toolbar/controller = separate extension.
 
 ---
 
-
-
 ## 3. Blocks rendering (page)
 
 **Read**
@@ -99,8 +93,6 @@ Visual toolbar/controller = separate extension.
 - Custom demo blocks (`demo/src/blocks/custom-blocks.tsx`): how `blockExtension` plugs renderer + slash.
 
 ---
-
-
 
 ## 4. Edgeless surface (cards, not visuals)
 
@@ -123,8 +115,6 @@ Visual toolbar/controller = separate extension.
 - Progressive groups live in transform pointer-start, not in selection overlay.
 
 ---
-
-
 
 ## 5. Visuals extension (shapes / draw / connectors)
 
@@ -151,18 +141,14 @@ Visual toolbar/controller = separate extension.
 
 ---
 
-
-
 ## 6. Commands vs managers vs controller
 
-
-| Layer                                   | Use for                                      |
-| --------------------------------------- | -------------------------------------------- |
-| `editor.blocks.*` / `editor.elements.*` | Raw document CRUD                            |
+| Layer                                    | Use for                                      |
+| ---------------------------------------- | -------------------------------------------- |
+| `editor.blocks.*` / `editor.elements.*`  | Raw document CRUD                            |
 | `editor.commands.execute(name, payload)` | Named behaviors (history-aware when wrapped) |
-| `EdgelessVisualController`              | Visual domain inside React extension         |
-| Event/keyboard managers                 | Input routing                                |
-
+| `EdgelessVisualController`               | Visual domain inside React extension         |
+| Event/keyboard managers                  | Input routing                                |
 
 **Attention**
 
@@ -171,8 +157,6 @@ Visual toolbar/controller = separate extension.
 - Ask for each call site: who owns defaults, selection side effects, undo?
 
 ---
-
-
 
 ## 7. Selection (deep)
 
@@ -192,8 +176,6 @@ Visual toolbar/controller = separate extension.
 
 ---
 
-
-
 ## 8. Demo-specific layer
 
 **Read**
@@ -210,8 +192,6 @@ Visual toolbar/controller = separate extension.
 - Block id wrapper: `surfaces.registerBlockWrapper` — see `docs/block-wrappers.md`.
 
 ---
-
-
 
 ## 9. Cross-cutting CSS / hit testing
 
@@ -231,8 +211,6 @@ Visual toolbar/controller = separate extension.
 
 ---
 
-
-
 ## 10. Verification loops (do these while reading)
 
 For each subsystem, answer:
@@ -245,18 +223,15 @@ For each subsystem, answer:
 
 Concrete traces to walk:
 
-- Enter in page → new block id → focus  
-- Edgeless: click Shapes → place → rubber-band → create → selected  
-- Resize NW on card → mid-drag zoom → geometry lock  
-- Click drawing empty bbox vs stroke  
+- Enter in page → new block id → focus
+- Edgeless: click Shapes → place → rubber-band → create → selected
+- Resize NW on card → mid-drag zoom → geometry lock
+- Click drawing empty bbox vs stroke
 - Group two shapes → progressive click into child
 
 ---
 
-
-
 ## 11. Suggested order (1–2 day deep pass)
-
 
 | Pass | Focus                         | Done when you can explain…             |
 | ---- | ----------------------------- | -------------------------------------- |
@@ -268,21 +243,16 @@ Concrete traces to walk:
 | F    | Selection matrix              | text/block/edgeless interactions       |
 | G    | Demo customs                  | wrappers, seed, fixture vs main        |
 
-
 ---
-
-
 
 ## 12. Files you can skip initially
 
-- Large pure geometry tests until after `geometry.ts` API  
-- Slash UI chrome details until block registry is clear  
-- Conflict fixture UI until main journal path is clear  
+- Large pure geometry tests until after `geometry.ts` API
+- Slash UI chrome details until block registry is clear
+- Conflict fixture UI until main journal path is clear
 - Markdown tokenization internals until edit/preview toggle is clear
 
 ---
-
-
 
 ## One-line north star
 
@@ -290,15 +260,11 @@ Concrete traces to walk:
 
 ---
 
-
-
 # Quiz pack (tricky)
 
 Use after each pass. Answers at the bottom — don’t peek.
 
 ---
-
-
 
 ## A. Boot / presets / demo
 
@@ -312,8 +278,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 ---
 
-
-
 ## B. ReactEditor / managers / events
 
 **B1.** Two keyboard handlers bind Escape. One returns `true`, one would clear selection. What decides which runs, and does the second run?
@@ -326,8 +290,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 ---
 
-
-
 ## C. Blocks (page)
 
 **C1.** `insertBlock({ type, content })` without `id`. What is the return value used for immediately after Enter-split?
@@ -339,8 +301,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 **C4.** Custom demo counter block: is its state in block `content`, `props`, or React-only state? What survives dump/load?
 
 ---
-
-
 
 ## D. Edgeless cards / transform
 
@@ -356,8 +316,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 ---
 
-
-
 ## E. Visuals controller / gestures
 
 **E1.** Gesture code calls `controller.create(...)` and ignores the return value. How does the new shape appear selected?
@@ -372,8 +330,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 ---
 
-
-
 ## F. Hit testing / CSS
 
 **F1.** Drawing host has `pointer-events: none`; hit path has `pointer-events: stroke`. Click empty bbox over a block card. What receives the event?
@@ -383,8 +339,6 @@ Use after each pass. Answers at the bottom — don’t peek.
 **F3.** `.edgeless-drawing-capture[data-active]` has huge z-index. In Select tool, is capture receiving clicks?
 
 ---
-
-
 
 ## G. Commands / layers
 
@@ -397,11 +351,7 @@ Use after each pass. Answers at the bottom — don’t peek.
 
 ---
 
-
-
 # Answers
-
-
 
 ## A
 

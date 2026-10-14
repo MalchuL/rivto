@@ -58,7 +58,9 @@ export function EditorModeToggle() {
    * @returns No value.
    */
   const switchMode = (next: EditorMode) => {
-    if (next === mode) return;
+    if (next === mode) {
+      return;
+    }
     setMode(next);
   };
 

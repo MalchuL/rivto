@@ -21,5 +21,8 @@ test("registry replication keeps content lazy and recreates destroyed subdocumen
   expect(fresh.doc).not.toBe(opened.doc);
   expect(fresh.doc.guid).toBe(opened.doc.guid);
   expect(fresh.getText("test").toString()).toBe("");
-  await fresh.destroy(); await source.destroy(); await left.root.destroy(); await right.root.destroy();
+  await fresh.destroy();
+  await source.destroy();
+  await left.root.destroy();
+  await right.root.destroy();
 });

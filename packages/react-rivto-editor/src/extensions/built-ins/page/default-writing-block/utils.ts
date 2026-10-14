@@ -7,11 +7,7 @@
  */
 import type { IsEmptyBlock } from "./types";
 
-export type {
-  CreateDefaultBlock,
-  EmptyBlockCandidate,
-  IsEmptyBlock,
-} from "./types";
+export type { CreateDefaultBlock, EmptyBlockCandidate, IsEmptyBlock } from "./types";
 
 /**
  * Builds an empty-block predicate for a host-supplied writing type.

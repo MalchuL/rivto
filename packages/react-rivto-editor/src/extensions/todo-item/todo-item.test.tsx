@@ -37,7 +37,9 @@ describe("todoItemExtension", () => {
     expect(secondProps).not.toBe(firstProps);
     expect(String(firstProps?.createdAt)).toMatch(/Z$/);
     expect(() => editor.blocks.updateBlock(first, { props: { priority: 5 } })).toThrow();
-    expect(() => editor.blocks.updateBlock(first, { props: { updatedAt: "2026-01-01" } })).toThrow();
+    expect(() =>
+      editor.blocks.updateBlock(first, { props: { updatedAt: "2026-01-01" } }),
+    ).toThrow();
 
     reactPanel.editor.destroy();
     editor.destroy();
@@ -57,13 +59,17 @@ describe("todoItemExtension", () => {
     reactPanel.slashCommands.execute("type.todo-storage", { blockId: empty });
     expect(editor.blocks.getBlockNode(empty)?.type).toBe(TODO_STORAGE_BLOCK_TYPE);
 
-    const populated = editor.blocks.insertBlock({
-      type: "paragraph",
-      content: "Keep me",
-      children: [{ type: "paragraph", content: "Keep child" }],
-    }, editor.blocks.getInsertionDestinationAfter(empty)).id;
-    expect(() => reactPanel.slashCommands.execute("type.todo-storage", { blockId: populated }))
-      .toThrow(/unavailable/);
+    const populated = editor.blocks.insertBlock(
+      {
+        type: "paragraph",
+        content: "Keep me",
+        children: [{ type: "paragraph", content: "Keep child" }],
+      },
+      editor.blocks.getInsertionDestinationAfter(empty),
+    ).id;
+    expect(() =>
+      reactPanel.slashCommands.execute("type.todo-storage", { blockId: populated }),
+    ).toThrow(/unavailable/);
     expect(editor.blocks.getBlock(populated)).toMatchObject({
       type: "paragraph",
       content: "Keep me",
@@ -78,8 +84,14 @@ describe("todoItemExtension", () => {
       containment: { childOutline: "free", outlineFloor: true },
     });
 
-    const firstTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "First" }).id;
-    const nestedTodo = editor.blocks.insertBlock({ type: TODO_ITEM_BLOCK_TYPE, content: "Nested" }, editor.blocks.getInsertionDestinationAfter(firstTodo)).id;
+    const firstTodo = editor.blocks.insertBlock({
+      type: TODO_ITEM_BLOCK_TYPE,
+      content: "First",
+    }).id;
+    const nestedTodo = editor.blocks.insertBlock(
+      { type: TODO_ITEM_BLOCK_TYPE, content: "Nested" },
+      editor.blocks.getInsertionDestinationAfter(firstTodo),
+    ).id;
     editor.blocks.moveBlocks([firstTodo, nestedTodo], empty, "inside");
     indentBlocks(reactPanel, [nestedTodo]);
     expect(editor.blocks.getParentId(nestedTodo)).toBe(firstTodo);
@@ -95,9 +107,9 @@ describe("todoItemExtension", () => {
       editor,
       extensions: [todoItemExtension({ propertiesModal: CustomModal })],
     });
-    const Renderer = reactPanel.editor.renderers.get(TODO_ITEM_BLOCK_TYPE) as (
-      props: { readonly blockId: string },
-    ) => ReactElement<{ readonly propertiesModal: unknown }>;
+    const Renderer = reactPanel.editor.renderers.get(TODO_ITEM_BLOCK_TYPE) as (props: {
+      readonly blockId: string;
+    }) => ReactElement<{ readonly propertiesModal: unknown }>;
 
     expect(Renderer({ blockId: "todo" }).props.propertiesModal).toBe(CustomModal);
 

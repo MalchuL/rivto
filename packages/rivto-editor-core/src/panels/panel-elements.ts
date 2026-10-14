@@ -1,7 +1,12 @@
 import type { DocumentModel } from "@chulane/document-model";
-import type { EditorElementInput, EditorElementPatch, EditorElementUpdate, ElementManagerApi } from "..";
-import type { PanelDestination } from './types';
-import type { PanelElementsAPI } from './types';
+import type {
+  EditorElementInput,
+  EditorElementPatch,
+  EditorElementUpdate,
+  ElementManagerApi,
+} from "..";
+import type { PanelDestination } from "./types";
+import type { PanelElementsAPI } from "./types";
 
 /** Applies element operations to one element subtree while reusing the editor's processing pipeline. */
 export class PanelElements implements PanelElementsAPI {
@@ -15,7 +20,11 @@ export class PanelElements implements PanelElementsAPI {
    * @param document - Model containing the shared element hierarchy.
    * @param rootElementId - Fixed container ID, or null for the complete document tree.
    */
-  constructor(private readonly elements: ElementManagerApi, private readonly document: DocumentModel, readonly rootElementId: string | null) {}
+  constructor(
+    private readonly elements: ElementManagerApi,
+    private readonly document: DocumentModel,
+    readonly rootElementId: string | null,
+  ) {}
 
   /**
    * Reads this element subtree's root IDs, excluding nested children.
@@ -23,7 +32,9 @@ export class PanelElements implements PanelElementsAPI {
    * @returns Ordered read-only IDs with stable identity while unchanged, or an empty
    * list when the root is missing or has no roots.
    */
-  getRootIds(): readonly string[] { return this.document.elements.getRootIds(this.rootElementId); }
+  getRootIds(): readonly string[] {
+    return this.document.elements.getRootIds(this.rootElementId);
+  }
   /**
    * Finds the direct parent of an element belonging to this element subtree.
    *
@@ -31,7 +42,9 @@ export class PanelElements implements PanelElementsAPI {
    * @returns Panel-relative parent ID, null at the panel root, or undefined when missing or outside this subtree.
    */
   getParentId(id: string): string | null | undefined {
-    if (!this.hasElement(id)) return undefined;
+    if (!this.hasElement(id)) {
+      return undefined;
+    }
     const parentId = this.elements.getParentId(id);
     return parentId === this.rootElementId ? null : parentId;
   }
@@ -50,9 +63,15 @@ export class PanelElements implements PanelElementsAPI {
    */
   moveElements(ids: readonly string[], destination: PanelDestination = { root: true }): void {
     ids.forEach((id) => this.requireElement(id));
-    if ("root" in destination ? destination.root !== true : typeof destination.parentId !== "string") throw new Error("Panel destination requires root: true or a parent ID");
+    if (
+      "root" in destination ? destination.root !== true : typeof destination.parentId !== "string"
+    ) {
+      throw new Error("Panel destination requires root: true or a parent ID");
+    }
     const parentId = "root" in destination ? this.rootElementId : destination.parentId;
-    if (parentId !== this.rootElementId && parentId !== null) this.requireElement(parentId);
+    if (parentId !== this.rootElementId && parentId !== null) {
+      this.requireElement(parentId);
+    }
     this.requireRoot();
     this.elements.moveElements(ids, { parentId, beforeId: destination.beforeId });
   }
@@ -80,7 +99,9 @@ export class PanelElements implements PanelElementsAPI {
    *
    * @returns Detached nodes, or an empty array for a missing or empty subtree.
    */
-  getElementNodes() { return this.document.elements.getElementNodes(this.rootElementId); }
+  getElementNodes() {
+    return this.document.elements.getElementNodes(this.rootElementId);
+  }
   /**
    * Reads this element subtree's recursive root trees, with descendants nested under parents.
    *
@@ -89,7 +110,9 @@ export class PanelElements implements PanelElementsAPI {
    *
    * @returns Recursive roots, or an empty array for a missing or empty subtree.
    */
-  getElements() { return this.document.elements.getElements(this.rootElementId); }
+  getElements() {
+    return this.document.elements.getElements(this.rootElementId);
+  }
   /**
    * Reads a complete subtree only if its root belongs to this element subtree.
    *
@@ -101,7 +124,9 @@ export class PanelElements implements PanelElementsAPI {
    * @returns Recursive element with children, or undefined when missing or outside this element subtree.
    */
   getElement(id: string) {
-    if (!this.hasElement(id)) return undefined;
+    if (!this.hasElement(id)) {
+      return undefined;
+    }
     return this.elements.getElement(id);
   }
   /**
@@ -116,8 +141,12 @@ export class PanelElements implements PanelElementsAPI {
    * @returns Function that removes this listener.
    */
   subscribeElement(id: string, listener: () => void) {
-    if (this.rootElementId === null) return this.elements.subscribeElement(id, listener);
-    return this.observeElement(id, listener, (notify) => this.elements.subscribeElement(id, notify));
+    if (this.rootElementId === null) {
+      return this.elements.subscribeElement(id, listener);
+    }
+    return this.observeElement(id, listener, (notify) =>
+      this.elements.subscribeElement(id, notify),
+    );
   }
   /**
    * Reads one local flat record without assembling descendants.
@@ -130,11 +159,17 @@ export class PanelElements implements PanelElementsAPI {
    */
   getElementNode(id: string) {
     const element = this.elements.getElementNode(id);
-    if (!element || id === this.rootElementId) return undefined;
-    if (this.rootElementId === null) return element;
+    if (!element || id === this.rootElementId) {
+      return undefined;
+    }
+    if (this.rootElementId === null) {
+      return element;
+    }
     let parent = this.elements.getParentId(id);
     while (parent) {
-      if (parent === this.rootElementId) return element;
+      if (parent === this.rootElementId) {
+        return element;
+      }
       parent = this.elements.getParentId(parent);
     }
     return undefined;
@@ -145,7 +180,9 @@ export class PanelElements implements PanelElementsAPI {
    * @param id - Stable element ID to inspect.
    * @returns True only when the element exists and belongs to this element subtree.
    */
-  hasElement(id: string) { return this.getElementNode(id) !== undefined; }
+  hasElement(id: string) {
+    return this.getElementNode(id) !== undefined;
+  }
   /**
    * Observes changes to records, roots, or descendant placement in this element subtree.
    *
@@ -156,7 +193,11 @@ export class PanelElements implements PanelElementsAPI {
    * @param listener - Callback invoked after affected subtree snapshots are invalidated.
    * @returns Function that removes this listener.
    */
-  subscribe(listener: () => void) { return this.rootElementId === null ? this.elements.subscribe(listener) : this.elements.subscribeElement(this.rootElementId, listener); }
+  subscribe(listener: () => void) {
+    return this.rootElementId === null
+      ? this.elements.subscribe(listener)
+      : this.elements.subscribeElement(this.rootElementId, listener);
+  }
   /**
    * Observes a local flat record, including its child IDs and parent placement.
    *
@@ -170,8 +211,12 @@ export class PanelElements implements PanelElementsAPI {
    * @returns Function that removes this listener.
    */
   subscribeElementNode(id: string, listener: () => void) {
-    if (this.rootElementId === null) return this.elements.subscribeElementNode(id, listener);
-    return this.observeElement(id, listener, (notify) => this.elements.subscribeElementNode(id, notify));
+    if (this.rootElementId === null) {
+      return this.elements.subscribeElementNode(id, listener);
+    }
+    return this.observeElement(id, listener, (notify) =>
+      this.elements.subscribeElementNode(id, notify),
+    );
   }
   /**
    * Observes changes to the ordered list of element IDs in this element subtree.
@@ -187,7 +232,10 @@ export class PanelElements implements PanelElementsAPI {
     let ids = this.getElementNodes().map((element) => element.id);
     return this.subscribe(() => {
       const next = this.getElementNodes().map((element) => element.id);
-      if (next.length !== ids.length || next.some((id, index) => id !== ids[index])) { ids = next; listener(); }
+      if (next.length !== ids.length || next.some((id, index) => id !== ids[index])) {
+        ids = next;
+        listener();
+      }
     });
   }
   /**
@@ -215,16 +263,24 @@ export class PanelElements implements PanelElementsAPI {
     this.requireRoot();
     const visiting = new Set<EditorElementInput>();
     const checkChildren = (value: EditorElementInput) => {
-      if (visiting.has(value)) throw new Error("Cyclic element input");
+      if (visiting.has(value)) {
+        throw new Error("Cyclic element input");
+      }
       visiting.add(value);
       value.childIds?.forEach((id) => this.requireElement(id));
       value.children?.forEach(checkChildren);
       visiting.delete(value);
     };
     checkChildren(input);
-    if ("root" in destination ? destination.root !== true : typeof destination.parentId !== "string") throw new Error("Panel destination requires root: true or a parent ID");
+    if (
+      "root" in destination ? destination.root !== true : typeof destination.parentId !== "string"
+    ) {
+      throw new Error("Panel destination requires root: true or a parent ID");
+    }
     const parentId = "root" in destination ? this.rootElementId : destination.parentId;
-    if (parentId !== this.rootElementId && parentId !== null) this.requireElement(parentId);
+    if (parentId !== this.rootElementId && parentId !== null) {
+      this.requireElement(parentId);
+    }
     return this.elements.insertElement(input, { parentId, beforeId: destination.beforeId });
   }
   /**
@@ -239,7 +295,9 @@ export class PanelElements implements PanelElementsAPI {
    * @throws Before writing if the root or element is absent, the target is
    * outside this subtree, or processing or resulting-record validation fails.
    */
-  updateElement(id: string, patch: EditorElementPatch) { return this.updateElements([{ id, patch }])[0]!; }
+  updateElement(id: string, patch: EditorElementPatch) {
+    return this.updateElements([{ id, patch }])[0]!;
+  }
   /**
    * Checks all targets belong to this element subtree, then processes and writes patches atomically.
    *
@@ -266,7 +324,9 @@ export class PanelElements implements PanelElementsAPI {
    * @param id - Subtree root to remove; a missing element is ignored.
    * @throws If the root is missing or an existing target is outside this subtree.
    */
-  removeElement(id: string) { this.removeElements([id]); }
+  removeElement(id: string) {
+    this.removeElements([id]);
+  }
   /**
    * Deletes local subtrees together after checking the entire selection's ownership.
    *
@@ -280,8 +340,17 @@ export class PanelElements implements PanelElementsAPI {
    */
   removeElements(ids: readonly string[]) {
     this.requireRoot();
-    ids.forEach((id) => { if (this.elements.hasElement(id)) this.requireElement(id); });
+    ids.forEach((id) => {
+      if (this.elements.hasElement(id)) {
+        this.requireElement(id);
+      }
+    });
     this.elements.removeElements(ids);
+  }
+
+  /** @param parentId - Local parent. @returns Its children without descendants, empty outside the panel. */
+  getChildIds(parentId: string): readonly string[] {
+    return this.getElementNode(parentId)?.childIds ?? [];
   }
   /**
    * Combines record notifications with entry/exit checks after structural changes.
@@ -289,31 +358,54 @@ export class PanelElements implements PanelElementsAPI {
    * geometry edit. Placement checks run only for structure changes, including moves
    * of an ancestor whose descendants' own records remain untouched.
    */
-  private observeElement(id: string, listener: () => void, subscribeRecord: (notify: () => void) => () => void): () => void {
+  private observeElement(
+    id: string,
+    listener: () => void,
+    subscribeRecord: (notify: () => void) => () => void,
+  ): () => void {
     let present = this.hasElement(id);
     const unsubscribeRecord = subscribeRecord(() => {
       const next = this.hasElement(id);
       const notify = present || next;
       present = next;
-      if (notify) listener();
+      if (notify) {
+        listener();
+      }
     });
     const unsubscribeStructure = this.elements.subscribeStructure(() => {
       const next = this.hasElement(id);
-      if (next === present) return;
+      if (next === present) {
+        return;
+      }
       present = next;
       listener();
     });
-    return () => { unsubscribeRecord(); unsubscribeStructure(); };
+    return () => {
+      unsubscribeRecord();
+      unsubscribeStructure();
+    };
   }
 
-  /** @param parentId - Local parent. @returns Its children without descendants, empty outside the panel. */
-  getChildIds(parentId: string): readonly string[] { return this.getElementNode(parentId)?.childIds ?? []; }
-
+  /**
+   * Checks that the panel's configured element root still exists.
+   *
+   * @throws If the non-null root element was deleted.
+   */
   private requireRoot(): void {
-    if (this.rootElementId !== null && !this.elements.hasElement(this.rootElementId)) throw new Error(`Root element ${this.rootElementId} not found`);
+    if (this.rootElementId !== null && !this.elements.hasElement(this.rootElementId)) {
+      throw new Error(`Root element ${this.rootElementId} not found`);
+    }
   }
+  /**
+   * Checks that an element is accessible within the panel's existing root.
+   *
+   * @param id - Stable element ID that must lie under this panel's root.
+   * @throws If the root is missing or the element lies outside it.
+   */
   private requireElement(id: string): void {
     this.requireRoot();
-    if (!this.hasElement(id)) throw new Error(`Element ${id} is outside root ${this.rootElementId}`);
+    if (!this.hasElement(id)) {
+      throw new Error(`Element ${id} is outside root ${this.rootElementId}`);
+    }
   }
 }

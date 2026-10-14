@@ -1,7 +1,4 @@
-import {
-  isEditableNewlineInput,
-  readEditablePlainText,
-} from "./editable-label-text";
+import { isEditableNewlineInput, readEditablePlainText } from "./editable-label-text";
 
 describe("readEditablePlainText", () => {
   test("keeps innerText newlines that textContent would drop", () => {

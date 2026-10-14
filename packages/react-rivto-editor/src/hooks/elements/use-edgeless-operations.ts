@@ -16,7 +16,10 @@ import { EdgelessOperations } from "../../managers/elements/edgeless-operations"
  */
 export function useEdgelessOperations(): EdgelessOperations {
   const reactPanel = useReactPanel();
-  const operations = useMemo(() => new EdgelessOperations(reactPanel.editor, reactPanel), [reactPanel]);
+  const operations = useMemo(
+    () => new EdgelessOperations(reactPanel.editor, reactPanel),
+    [reactPanel],
+  );
   useEffect(() => operations.observeChanges(), [operations]);
   return operations;
 }

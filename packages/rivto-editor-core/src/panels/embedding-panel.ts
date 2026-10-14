@@ -9,5 +9,4 @@ export class EmbeddingPanel extends Panel {
   constructor(editor: DocumentEditorAPI, options: PanelOptions & { readonly rootBlockId: string }) {
     super(editor, options, new PanelBlocks(editor, options.rootBlockId, true));
   }
-
 }

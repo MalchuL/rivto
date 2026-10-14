@@ -117,13 +117,14 @@ const LANGUAGE_TITLES: Readonly<Record<string, string>> = {
  */
 export function resolveCodeFenceInfo(value: string | undefined): CodeFenceInfo | undefined {
   const label = value?.trim();
-  if (!label) return;
+  if (!label) {
+    return;
+  }
 
   const basename = label.split(/[\\/]/).at(-1) ?? label;
   const extensionIndex = basename.lastIndexOf(".");
-  const extension = extensionIndex > 0
-    ? basename.slice(extensionIndex + 1).toLowerCase()
-    : undefined;
+  const extension =
+    extensionIndex > 0 ? basename.slice(extensionIndex + 1).toLowerCase() : undefined;
   const extensionLanguage = extension ? EXTENSION_LANGUAGES[extension] : undefined;
   const filename = label.includes("/") || label.includes("\\") || Boolean(extensionLanguage);
 
@@ -131,7 +132,7 @@ export function resolveCodeFenceInfo(value: string | undefined): CodeFenceInfo |
     label,
     language: filename
       ? extensionLanguage
-      : LANGUAGE_ALIASES[label.toLowerCase()] ?? label.toLowerCase(),
+      : (LANGUAGE_ALIASES[label.toLowerCase()] ?? label.toLowerCase()),
     filename,
   };
 }
@@ -145,17 +146,17 @@ export function rehypeCodeFenceMetadata() {
   return (tree: SyntaxNode): void => {
     const visit = (node: SyntaxNode, parent?: SyntaxNode): void => {
       if (node.tagName === "code" && parent?.tagName === "pre") {
-        const properties = node.properties ??= {};
-        const classes = Array.isArray(properties.className)
-          ? properties.className.map(String)
-          : [];
+        const properties = (node.properties ??= {});
+        const classes = Array.isArray(properties.className) ? properties.className.map(String) : [];
         const languageClass = classes.find((name) => name.startsWith("language-"));
         const info = resolveCodeFenceInfo(languageClass?.slice("language-".length));
 
         if (info) {
           properties.dataCodeLabel = info.label;
           properties.dataCodeFilename = info.filename ? "true" : "false";
-          if (info.language) properties.dataCodeLanguage = info.language;
+          if (info.language) {
+            properties.dataCodeLanguage = info.language;
+          }
           properties.className = [
             ...classes.filter((name) => !name.startsWith("language-")),
             ...(info.language ? [`language-${info.language}`] : []),
@@ -183,29 +184,31 @@ export interface PositionedNode {
 }
 
 /** Replaces one rendered code body's source while preserving its Markdown wrapper. */
-export function replaceMarkdownCode(
-  source: string,
-  node: PositionedNode,
-  value: string,
-): string {
+export function replaceMarkdownCode(source: string, node: PositionedNode, value: string): string {
   const start = node.position?.start.offset;
   const end = node.position?.end.offset;
-  if (start === undefined || end === undefined) return source;
+  if (start === undefined || end === undefined) {
+    return source;
+  }
   const block = source.slice(start, end);
   const opening = block.match(/^([ \t]*)(`{3,}|~{3,})[^\r\n]*(\r?\n)/);
   const normalized = value.replace(/\r\n?/g, "\n").replace(/\n$/, "");
   const closingStart = opening ? block.lastIndexOf("\n") : -1;
   let result: string;
   if (opening && closingStart >= opening[0].length) {
-    result = source.slice(0, start)
-      + block.slice(0, opening[0].length)
-      + normalized
-      + block.slice(closingStart)
-      + source.slice(end);
+    result =
+      source.slice(0, start) +
+      block.slice(0, opening[0].length) +
+      normalized +
+      block.slice(closingStart) +
+      source.slice(end);
   } else {
     const newline = block.includes("\r\n") ? "\r\n" : "\n";
     const indent = block.match(/^(?: {4}|\t)/)?.[0] ?? "";
-    const replacement = normalized.split("\n").map((line) => indent + line).join(newline);
+    const replacement = normalized
+      .split("\n")
+      .map((line) => indent + line)
+      .join(newline);
     result = source.slice(0, start) + replacement + source.slice(end);
   }
   return result;
@@ -225,15 +228,17 @@ export interface MarkdownCodeBlockProps extends HTMLAttributes<HTMLPreElement> {
 }
 
 function textContent(node: ReactNode): string {
-  return Children.toArray(node).map((child) => {
-    let text = "";
-    if (typeof child === "string" || typeof child === "number" || typeof child === "bigint") {
-      text = String(child);
-    } else if (isValidElement<{ readonly children?: ReactNode }>(child)) {
-      text = textContent(child.props.children);
-    }
-    return text;
-  }).join("");
+  return Children.toArray(node)
+    .map((child) => {
+      let text = "";
+      if (typeof child === "string" || typeof child === "number" || typeof child === "bigint") {
+        text = String(child);
+      } else if (isValidElement<{ readonly children?: ReactNode }>(child)) {
+        text = textContent(child.props.children);
+      }
+      return text;
+    })
+    .join("");
 }
 
 function EditableCode({
@@ -252,7 +257,9 @@ function EditableCode({
   // editor. Only reconcile external changes; local input already matches value.
   useLayoutEffect(() => {
     const element = ref.current;
-    if (!element || element.textContent === value) return;
+    if (!element || element.textContent === value) {
+      return;
+    }
     element.textContent = value;
   }, [value]);
 
@@ -280,44 +287,39 @@ export function MarkdownCodeBlock({
 }: MarkdownCodeBlockProps) {
   const code = Children.toArray(children)[0];
   const codeElement = isValidElement<AnnotatedCodeProps>(code)
-    ? code as ReactElement<AnnotatedCodeProps & HTMLAttributes<HTMLElement>>
+    ? (code as ReactElement<AnnotatedCodeProps & HTMLAttributes<HTMLElement>>)
     : undefined;
-  const metadata = codeElement
-    ? codeElement.props
-    : undefined;
+  const metadata = codeElement ? codeElement.props : undefined;
   const label = metadata?.["data-code-label"];
   const language = metadata?.["data-code-language"];
-  const languageTitle = language
-    ? LANGUAGE_TITLES[language] ?? language
-    : undefined;
+  const languageTitle = language ? (LANGUAGE_TITLES[language] ?? language) : undefined;
   const showLanguage = Boolean(
     languageTitle && languageTitle.toLowerCase() !== label?.toLowerCase(),
   );
-  const codeContent = codeElement && node && onCodeChange
-    ? (
-        <span className="markdown-code-content">
-          {cloneElement(codeElement, {
-            "aria-hidden": true,
-            className: `${codeElement.props.className ?? ""} markdown-code-preview`.trim(),
-          })}
-          <EditableCode
-            preventTextEditingAttributes={preventTextEditingAttributes}
-            onChange={(value) => onCodeChange(node, value)}
-          >
-            {codeElement.props.children}
-          </EditableCode>
-        </span>
-      )
-    : code;
+  const codeContent =
+    codeElement && node && onCodeChange ? (
+      <span className="markdown-code-content">
+        {cloneElement(codeElement, {
+          "aria-hidden": true,
+          className: `${codeElement.props.className ?? ""} markdown-code-preview`.trim(),
+        })}
+        <EditableCode
+          preventTextEditingAttributes={preventTextEditingAttributes}
+          onChange={(value) => onCodeChange(node, value)}
+        >
+          {codeElement.props.children}
+        </EditableCode>
+      </span>
+    ) : (
+      code
+    );
 
   return (
     <figure className="markdown-code-block">
       {(label || showLanguage) && (
         <figcaption className="markdown-code-header">
           {label && <span className="markdown-code-label">{label}</span>}
-          {showLanguage && (
-            <span className="markdown-code-language">{languageTitle}</span>
-          )}
+          {showLanguage && <span className="markdown-code-language">{languageTitle}</span>}
         </figcaption>
       )}
       <pre {...attributes}>{codeContent}</pre>

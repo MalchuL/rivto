@@ -9,16 +9,42 @@ import { EmbeddingPanel } from "@chulane/rivto";
 async function fixture() {
   const document = await createTestCoreEditor();
   document.blocks.insertBlock({ id: "outside", type: "paragraph" });
-  document.blocks.insertBlock({ id: "root", type: "paragraph", content: "Root", children: [
-    { id: "a", type: "paragraph" }, { id: "b", type: "paragraph" },
-  ] });
+  document.blocks.insertBlock({
+    id: "root",
+    type: "paragraph",
+    content: "Root",
+    children: [
+      { id: "a", type: "paragraph" },
+      { id: "b", type: "paragraph" },
+    ],
+  });
   const shape = { type: "shape", zIndex: 0, frame: { x: 0, y: 0, width: 10, height: 10 } };
-  document.elements.insertElement({ ...shape, id: "container", children: [{ ...shape, id: "inside" }] });
+  document.elements.insertElement({
+    ...shape,
+    id: "container",
+    children: [{ ...shape, id: "inside" }],
+  });
   document.elements.insertElement({ ...shape, id: "outside-element" });
   const editor = createReactEditor({ editor: document });
-  const children = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: "root", rootElementId: "container" }), {  });
-  const embedding = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: "root", rootElementId: "container" }), {  });
-  return { document, children, embedding, close: async () => { editor.destroy(); await document.destroy(); } };
+  const children = new ReactPanel(
+    editor,
+    new ChildrenPanel(editor, { rootBlockId: "root", rootElementId: "container" }),
+    {},
+  );
+  const embedding = new ReactPanel(
+    editor,
+    new EmbeddingPanel(editor, { rootBlockId: "root", rootElementId: "container" }),
+    {},
+  );
+  return {
+    document,
+    children,
+    embedding,
+    close: async () => {
+      editor.destroy();
+      await document.destroy();
+    },
+  };
 }
 
 test("panel roots and parents are relative while document hierarchy stays absolute", async () => {
@@ -35,7 +61,11 @@ test("panel roots and parents are relative while document hierarchy stays absolu
     expect(reactPanel.elements.getParentId("inside")).toBeNull();
     expect(reactPanel.elements.getElementNode("container")).toBeUndefined();
     expect(reactPanel.elements.getElementNode("outside-element")).toBeUndefined();
-    const inserted = reactPanel.elements.insertElement({ type: "shape", zIndex: 1, frame: { x: 0, y: 0, width: 10, height: 10 } });
+    const inserted = reactPanel.elements.insertElement({
+      type: "shape",
+      zIndex: 1,
+      frame: { x: 0, y: 0, width: 10, height: 10 },
+    });
     expect(f.document.elements.getParentId(inserted.id)).toBe("container");
   }
   await f.close();
@@ -44,14 +74,28 @@ test("panel roots and parents are relative while document hierarchy stays absolu
 test("rejects outside targets and protected root operations before any batch mutation", async () => {
   const f = await fixture();
   const before = f.document.dump();
-  expect(() => f.children.blocks.updateBlocks([{ id: "a", patch: { content: "changed" } }, { id: "outside", patch: { content: "bad" } }])).toThrow();
+  expect(() =>
+    f.children.blocks.updateBlocks([
+      { id: "a", patch: { content: "changed" } },
+      { id: "outside", patch: { content: "bad" } },
+    ]),
+  ).toThrow();
   expect(() => f.embedding.blocks.removeBlocks(["a", "root"])).toThrow();
   expect(() => f.embedding.blocks.moveBlocks(["a", "root"], "b")).toThrow();
   expect(() => f.embedding.blocks.mergeBlocks("a", "root")).toThrow();
   expect(() => f.children.blocks.outdentBlocks(["a", "b"])).toThrow();
-  expect(() => f.children.blocks.insertBlock({ type: "paragraph" }, { parentId: "outside" })).toThrow();
-  expect(() => f.children.elements.updateElements([{ id: "inside", patch: { zIndex: 5 } }, { id: "outside-element", patch: { zIndex: 6 } }])).toThrow();
-  expect(() => f.children.elements.moveElements(["inside"], { root: true, beforeId: "outside-element" })).toThrow();
+  expect(() =>
+    f.children.blocks.insertBlock({ type: "paragraph" }, { parentId: "outside" }),
+  ).toThrow();
+  expect(() =>
+    f.children.elements.updateElements([
+      { id: "inside", patch: { zIndex: 5 } },
+      { id: "outside-element", patch: { zIndex: 6 } },
+    ]),
+  ).toThrow();
+  expect(() =>
+    f.children.elements.moveElements(["inside"], { root: true, beforeId: "outside-element" }),
+  ).toThrow();
   expect(() => f.children.elements.removeElements(["inside", "container"])).toThrow();
   expect(f.document.dump()).toEqual(before);
   f.embedding.blocks.updateBlock("root", { content: "Editable root" });
@@ -69,26 +113,45 @@ test("direct insertion into an empty panel is observed only under its real paren
   f.document.history.clear();
   const parents: (string | null | undefined)[] = [];
   const stop = f.document.blocks.subscribeStructure(() => {
-    if (f.document.blocks.hasBlock("new")) parents.push(f.document.blocks.getParentId("new"));
+    if (f.document.blocks.hasBlock("new")) {
+      parents.push(f.document.blocks.getParentId("new"));
+    }
   });
   f.children.blocks.insertBlock({ id: "new", type: "paragraph" });
   expect(parents.length).toBeGreaterThan(0);
-  expect(parents.every(parent => parent === "root")).toBe(true);
+  expect(parents.every((parent) => parent === "root")).toBe(true);
   expect(f.document.blocks.getRootIds()).toEqual(["outside", "root"]);
   f.document.history.undo();
   expect(f.children.blocks.getRootIds()).toEqual([]);
   f.document.history.redo();
   expect(f.children.blocks.getRootIds()).toEqual(["new"]);
-  stop(); await f.close();
+  stop();
+  await f.close();
 });
 
 test("paste keeps protected root text editable and inserts following lines inside the embedding", async () => {
   const f = await fixture();
   const before = f.document.dump();
-  expect(() => f.embedding.clipboard.paste({ text: "bad", defaultBlockType: "paragraph", placement: { afterId: "outside" } })).toThrow();
-  expect(() => f.children.clipboard.paste({ text: "bad", defaultBlockType: "paragraph", textTarget: createCaretSelection("outside", 0) })).toThrow();
+  expect(() =>
+    f.embedding.clipboard.paste({
+      text: "bad",
+      defaultBlockType: "paragraph",
+      placement: { afterId: "outside" },
+    }),
+  ).toThrow();
+  expect(() =>
+    f.children.clipboard.paste({
+      text: "bad",
+      defaultBlockType: "paragraph",
+      textTarget: createCaretSelection("outside", 0),
+    }),
+  ).toThrow();
   expect(f.document.dump()).toEqual(before);
-  f.embedding.clipboard.paste({ text: "First\nSecond", defaultBlockType: "paragraph", textTarget: createCaretSelection("root", 4) });
+  f.embedding.clipboard.paste({
+    text: "First\nSecond",
+    defaultBlockType: "paragraph",
+    textTarget: createCaretSelection("root", 4),
+  });
   expect(f.document.blocks.getBlockNode("root")?.content).toBe("RootFirst");
   expect(f.document.blocks.getRootIds()).toEqual(["outside", "root"]);
   expect(f.document.blocks.getBlock("root")?.children[0]?.content).toBe("Second");
@@ -113,10 +176,22 @@ test("container conversion preserves the protected root identity without a sibli
   f.embedding.blocks.removeBlocks(["a", "b"]);
   f.document.blockRegistry.defineBlock({ type: "container" });
   f.document.history.clear();
-  convertLeafToContainer(f.embedding, "root", { type: "container", children: [{ id: "shell", type: "paragraph" }] });
+  convertLeafToContainer(f.embedding, "root", {
+    type: "container",
+    children: [{ id: "shell", type: "paragraph" }],
+  });
   expect(f.document.blocks.getRootIds()).toEqual(["outside", "root"]);
-  expect(f.embedding.blocks.getBlock("root")).toMatchObject({ id: "root", type: "container", content: "Root", children: [{ id: "shell" }] });
+  expect(f.embedding.blocks.getBlock("root")).toMatchObject({
+    id: "root",
+    type: "container",
+    content: "Root",
+    children: [{ id: "shell" }],
+  });
   f.document.history.undo();
-  expect(f.embedding.blocks.getBlock("root")).toMatchObject({ id: "root", type: "paragraph", children: [] });
+  expect(f.embedding.blocks.getBlock("root")).toMatchObject({
+    id: "root",
+    type: "paragraph",
+    children: [],
+  });
   await f.close();
 });

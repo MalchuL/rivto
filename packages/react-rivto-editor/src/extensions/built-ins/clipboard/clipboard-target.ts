@@ -37,7 +37,9 @@ export function isNonBlockEditableClipboardEvent(event: Event): boolean {
  */
 function isNonBlockEditableHost(origin: { closest: Element["closest"] }): boolean {
   // Input/textarea expose selectionStart; buttons share the pointer marker but not text editing.
-  if (origin.closest(EDITOR_CONTROL_SELECTOR) && "selectionStart" in origin) return true;
+  if (origin.closest(EDITOR_CONTROL_SELECTOR) && "selectionStart" in origin) {
+    return true;
+  }
   const editable = origin.closest<HTMLElement>(CONTENT_EDITABLE_SELECTOR);
   return Boolean(editable?.isContentEditable && !editable.closest(BLOCK_CONTENT_SELECTOR));
 }
@@ -50,8 +52,12 @@ function isNonBlockEditableHost(origin: { closest: Element["closest"] }): boolea
  */
 function eventElement(event: Event): { closest: Element["closest"] } | null {
   const target = event.target;
-  if (isClosestHost(target)) return target;
-  if (isNodeHost(target) && isClosestHost(target.parentElement)) return target.parentElement;
+  if (isClosestHost(target)) {
+    return target;
+  }
+  if (isNodeHost(target) && isClosestHost(target.parentElement)) {
+    return target.parentElement;
+  }
   return null;
 }
 

@@ -10,9 +10,12 @@ import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
 import { createBlockBehaviorContext } from "../../../block-behaviors/context";
 import type { BlockBehavior } from "../../../block-behaviors/types";
 import {
-  BUILTIN_KEYMAP, focusSelectionCaret,
-  isEditableKeyboardEvent, KEYBOARD_BINDING_IDS, readKeyboardSelection,
-  shouldDeleteSelection
+  BUILTIN_KEYMAP,
+  focusSelectionCaret,
+  isEditableKeyboardEvent,
+  KEYBOARD_BINDING_IDS,
+  readKeyboardSelection,
+  shouldDeleteSelection,
 } from "../../../managers";
 
 /**
@@ -24,50 +27,65 @@ import {
  * Delete/Backspace behavior.
  */
 export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.selectionDelete,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
-    when: ({ reactPanel, selection, raw: event, blockId }) => {
-      const root = reactPanel.events.getRoot();
-      if (!root) return false;
-      const editableEvent = isEditableKeyboardEvent(event);
-      const current = editableEvent
-        ? readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)
-        : selection;
-      if (!shouldDeleteSelection(current)) return false;
-      const rootBlockSelection = root.ownerDocument.activeElement === root &&
-        isStructuralSelection(current);
-      return rootBlockSelection || editableEvent;
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.selectionDelete,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
+      when: ({ reactPanel, selection, raw: event, blockId }) => {
+        const root = reactPanel.events.getRoot();
+        if (!root) {
+          return false;
+        }
+        const editableEvent = isEditableKeyboardEvent(event);
+        const current = editableEvent
+          ? readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId)
+          : selection;
+        if (!shouldDeleteSelection(current)) {
+          return false;
+        }
+        const rootBlockSelection =
+          root.ownerDocument.activeElement === root && isStructuralSelection(current);
+        return rootBlockSelection || editableEvent;
+      },
     },
-  }, ({ reactPanel, root }) => {
-    const current = reactPanel.selection.get();
-    reactPanel.batchUpdates(() => {
-      if (current && isStructuralSelection(current)) {
-        const ids = getSelectedBlockIds(current);
-        const seen = new Set<BlockBehavior>();
-        // A non-default outcome claims the whole selection and skips generic deletion.
-        let claimed = false;
-        for (const id of ids) {
-          const behavior = reactPanel.editor.blockBehaviors.resolve(id);
-          if (seen.has(behavior)) continue;
-          seen.add(behavior);
-          const context = createBlockBehaviorContext(reactPanel, id, root, current);
-          if (context && behavior.onStructuralDelete(context, ids) !== "default") {
-            claimed = true;
-            break;
+    ({ reactPanel, root }) => {
+      const current = reactPanel.selection.get();
+      reactPanel.batchUpdates(() => {
+        if (current && isStructuralSelection(current)) {
+          const ids = getSelectedBlockIds(current);
+          const seen = new Set<BlockBehavior>();
+          // A non-default outcome claims the whole selection and skips generic deletion.
+          let claimed = false;
+          for (const id of ids) {
+            const behavior = reactPanel.editor.blockBehaviors.resolve(id);
+            if (seen.has(behavior)) {
+              continue;
+            }
+            seen.add(behavior);
+            const context = createBlockBehaviorContext(reactPanel, id, root, current);
+            if (context && behavior.onStructuralDelete(context, ids) !== "default") {
+              claimed = true;
+              break;
+            }
+          }
+          if (claimed) {
+            return;
           }
         }
-        if (claimed) return;
+        reactPanel.selection.delete();
+      });
+      // Keep keyboard ownership inside Rivto immediately when a normal browser
+      // briefly focuses a block deletion just removed. This does not address
+      // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
+      // the known-host limitation documented in the history extension.
+      if (!focusSelectionCaret(root, reactPanel.selection)) {
+        root.focus({ preventScroll: true });
       }
-      reactPanel.selection.delete();
-    });
-    // Keep keyboard ownership inside Rivto immediately when a normal browser
-    // briefly focuses a block deletion just removed. This does not address
-    // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
-    // the known-host limitation documented in the history extension.
-    if (!focusSelectionCaret(root, reactPanel.selection)) root.focus({ preventScroll: true });
-    // Only restore the caret and its editing focus; document deletion has already completed.
-    reactPanel.selection.scheduleIfSelectionUnchanged(() => focusSelectionCaret(root, reactPanel.selection));
-    return true;
-  });
+      // Only restore the caret and its editing focus; document deletion has already completed.
+      reactPanel.selection.scheduleIfSelectionUnchanged(() =>
+        focusSelectionCaret(root, reactPanel.selection),
+      );
+      return true;
+    },
+  );
 }

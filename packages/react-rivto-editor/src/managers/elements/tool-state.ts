@@ -1,14 +1,19 @@
 import { RevisionStore } from "../../internal-store";
 import type { EdgelessToolbarApi, EdgelessToolbarTool } from "../edgeless-toolbar/types";
-import type { EdgelessPlaceKind, EdgelessVisualTool, PresetPayload, VisualFrame } from "../../elements/visuals/types";
+import type {
+  EdgelessPlaceKind,
+  EdgelessVisualTool,
+  PresetPayload,
+  VisualFrame,
+} from "../../elements/visuals/types";
 import { DEFAULT_PLACE_SIZE } from "../../elements/visuals/utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
 /** Built-in brush presets; stroke widths are canvas units and opacity ranges from zero to one. */
 export const drawingDefaults = {
-  pencil: { stroke: "#3f3f46", strokeWidth: 2, opacity: .68 },
+  pencil: { stroke: "#3f3f46", strokeWidth: 2, opacity: 0.68 },
   pen: { stroke: "#18181b", strokeWidth: 3, opacity: 1 },
-  marker: { stroke: "#facc15", strokeWidth: 16, opacity: .34 },
+  marker: { stroke: "#facc15", strokeWidth: 16, opacity: 0.34 },
 } as const;
 
 /**
@@ -18,11 +23,51 @@ export const drawingDefaults = {
  */
 export function createEdgelessDefaults() {
   return {
-    shape: { fill: "#eeeaff", stroke: "#6c5ce7", strokeWidth: 2, filled: true, stroked: true, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 16, align: "center" as const, verticalAlign: "middle" as const },
-    text: { color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 24, align: "left" as const, verticalAlign: "top" as const },
-    sticker: { fill: "#fff2a8", color: "#3f3515", fontFamily: DEFAULT_FONT, fontSize: 22, align: "left" as const, verticalAlign: "top" as const },
+    shape: {
+      fill: "#eeeaff",
+      stroke: "#6c5ce7",
+      strokeWidth: 2,
+      filled: true,
+      stroked: true,
+      text: "",
+      color: "#222222",
+      fontFamily: DEFAULT_FONT,
+      fontSize: 16,
+      align: "center" as const,
+      verticalAlign: "middle" as const,
+    },
+    text: {
+      color: "#222222",
+      fontFamily: DEFAULT_FONT,
+      fontSize: 24,
+      align: "left" as const,
+      verticalAlign: "top" as const,
+    },
+    sticker: {
+      fill: "#fff2a8",
+      color: "#3f3515",
+      fontFamily: DEFAULT_FONT,
+      fontSize: 22,
+      align: "left" as const,
+      verticalAlign: "top" as const,
+    },
     drawing: { brush: "pen" as const, ...drawingDefaults.pen },
-    connector: { route: "straight" as const, stroke: "#52525b", strokeWidth: 2, opacity: 1, lineStyle: "solid" as const, startStyle: "none" as const, endStyle: "arrow" as const, text: "", textRotation: "horizontal" as const, color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 14, align: "center" as const, verticalAlign: "middle" as const },
+    connector: {
+      route: "straight" as const,
+      stroke: "#52525b",
+      strokeWidth: 2,
+      opacity: 1,
+      lineStyle: "solid" as const,
+      startStyle: "none" as const,
+      endStyle: "arrow" as const,
+      text: "",
+      textRotation: "horizontal" as const,
+      color: "#222222",
+      fontFamily: DEFAULT_FONT,
+      fontSize: 14,
+      align: "center" as const,
+      verticalAlign: "middle" as const,
+    },
   };
 }
 
@@ -43,7 +88,6 @@ export class EdgelessToolState {
    * @returns Idempotent unsubscribe callback.
    */
   readonly subscribe = (listener: () => void): (() => void) => this.store.subscribe(listener);
-  private emit(): void { this.store.changed(); }
 
   private currentTool: EdgelessVisualTool = { tool: "select" };
 
@@ -61,21 +105,33 @@ export class EdgelessToolState {
   /** Removes stale remembered entries and resets a removed active tool without changing document content. */
   reconcileToolbar(): void {
     for (const [group, id] of this.lastByGroup) {
-      if (!this.toolbar.getGroup(group) || this.toolbar.getTool(id)?.group !== group) this.lastByGroup.delete(group);
+      if (!this.toolbar.getGroup(group) || this.toolbar.getTool(id)?.group !== group) {
+        this.lastByGroup.delete(group);
+      }
     }
-    if (this.activeEntryId && !this.toolbar.getTool(this.activeEntryId)) this.setTool('select');
-    this.activeEntryId = this.toolbar.getTools().find(item => item.isActive(this.currentTool))?.id;
+    if (this.activeEntryId && !this.toolbar.getTool(this.activeEntryId)) {
+      this.setTool("select");
+    }
+    this.activeEntryId = this.toolbar
+      .getTools()
+      .find((item) => item.isActive(this.currentTool))?.id;
   }
 
   /** @returns Current local creation tool object; treat it as read-only. */
-  getTool(): EdgelessVisualTool { return this.currentTool; }
+  getTool(): EdgelessVisualTool {
+    return this.currentTool;
+  }
 
   /**
    * Reads the remembered size for the active placement tool without changing it.
    * @param fallback - Initial factory size in canvas units; defaults to 160 by 120.
    * @returns A detached size, using the fallback until a gesture remembers its final dimensions.
    */
-  getPlaceSize(fallback: Pick<VisualFrame, "width" | "height"> = DEFAULT_PLACE_SIZE): Pick<VisualFrame, "width" | "height"> { return { ...(this.placeSize ?? fallback) }; }
+  getPlaceSize(
+    fallback: Pick<VisualFrame, "width" | "height"> = DEFAULT_PLACE_SIZE,
+  ): Pick<VisualFrame, "width" | "height"> {
+    return { ...(this.placeSize ?? fallback) };
+  }
 
   /**
    * Remembers the final interactive drag size for the active place preset without notifying observers.
@@ -86,7 +142,9 @@ export class EdgelessToolState {
   }
 
   /** @returns Detached session defaults used by creation menus. */
-  getDefaults() { return copy(this.defaults); }
+  getDefaults() {
+    return copy(this.defaults);
+  }
 
   /**
    * Resolves a group's remembered tool or its default without activating it.
@@ -95,11 +153,15 @@ export class EdgelessToolState {
    */
   getGroupTool(groupId: string): EdgelessToolbarTool | undefined {
     const group = this.toolbar.getGroup(groupId);
-    if (!group) return undefined;
-    const items = this.toolbar.getTools().filter(item => item.group === groupId);
-    return items.find(item => item.id === this.lastByGroup.get(groupId))
-      ?? items.find(item => item.id === group.defaultToolId)
-      ?? items[0];
+    if (!group) {
+      return undefined;
+    }
+    const items = this.toolbar.getTools().filter((item) => item.group === groupId);
+    return (
+      items.find((item) => item.id === this.lastByGroup.get(groupId)) ??
+      items.find((item) => item.id === group.defaultToolId) ??
+      items[0]
+    );
   }
 
   /**
@@ -116,9 +178,16 @@ export class EdgelessToolState {
    * @param kind - Built-in defaults category to update.
    * @param patch - Values to copy; this method does not run element validation.
    */
-  setCreationDefaults(kind: "shape" | "drawing" | "text" | "sticker" | "connector", patch: Record<string, unknown>): void {
+  setCreationDefaults(
+    kind: "shape" | "drawing" | "text" | "sticker" | "connector",
+    patch: Record<string, unknown>,
+  ): void {
     const target = this.defaults[kind];
-    Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
+    Object.keys(target).forEach((key) => {
+      if (key in patch) {
+        Object.assign(target, { [key]: copy(patch[key]) });
+      }
+    });
     this.emit();
   }
 
@@ -137,7 +206,56 @@ export class EdgelessToolState {
     this.setTool({ tool: "drawing", brush });
   }
 
-  private placeToolFromPreset(payload: PresetPayload): Extract<EdgelessVisualTool, { tool: "place" }> {
+  /**
+   * Activates one canvas interaction tool and remembers its first matching toolbar entry.
+   * Copies the configuration and notifies synchronously even when unchanged. A changed configuration
+   * clears remembered placement size. Custom type registration is checked by EdgelessOperations.
+   * @param value - Tool configuration or the select shorthand.
+   * @throws For unsupported tools, placement kinds, brushes or connector routes.
+   */
+  setTool(value: EdgelessVisualTool | "select"): void {
+    const tool = value === "select" ? ({ tool: "select" } as const) : value;
+    if (
+      !tool ||
+      !["select", "pan", "place", "element", "drawing", "eraser", "connector"].includes(tool.tool)
+    ) {
+      throw new Error("Unsupported edgeless visual tool");
+    }
+    if (
+      tool.tool === "place" &&
+      !(["rectangle", "ellipse", "text", "sticker"] as EdgelessPlaceKind[]).includes(tool.kind)
+    ) {
+      throw new Error("Unsupported place kind");
+    }
+    if (tool.tool === "drawing" && !["pencil", "pen", "marker"].includes(tool.brush)) {
+      throw new Error("Unsupported drawing brush");
+    }
+    if (tool.tool === "connector" && !["straight", "orthogonal", "curve"].includes(tool.route)) {
+      throw new Error("Unsupported connector route");
+    }
+    if (JSON.stringify(tool) !== JSON.stringify(this.currentTool)) {
+      this.placeSize = undefined;
+    }
+    this.currentTool = copy(tool);
+    this.rememberTool(tool);
+    this.emit();
+  }
+  /**
+   * Publishes a tool-state revision change to subscribers.
+   */
+  private emit(): void {
+    this.store.changed();
+  }
+
+  /**
+   * Converts a preset to a place tool, retaining sticker appearance properties.
+   *
+   * @param payload - Payload associated with the operation.
+   * @returns Place tool for the preset kind.
+   */
+  private placeToolFromPreset(
+    payload: PresetPayload,
+  ): Extract<EdgelessVisualTool, { tool: "place" }> {
     if (payload.kind === "sticker") {
       return {
         tool: "place",
@@ -150,33 +268,16 @@ export class EdgelessToolState {
     return { tool: "place", kind: payload.kind };
   }
 
-  private rememberTool(tool: EdgelessVisualTool): void {
-    const entry = this.toolbar.getTools().find(item => item.isActive(tool));
-    this.activeEntryId = entry?.id;
-    if (entry?.group) this.lastByGroup.set(entry.group, entry.id);
-  }
-
   /**
-   * Activates one canvas interaction tool and remembers its first matching toolbar entry.
-   * Copies the configuration and notifies synchronously even when unchanged. A changed configuration
-   * clears remembered placement size. Custom type registration is checked by EdgelessOperations.
-   * @param value - Tool configuration or the select shorthand.
-   * @throws For unsupported tools, placement kinds, brushes or connector routes.
+   * Remembers the active toolbar entry and its group's most recently used tool.
+   *
+   * @param tool - Tool whose matching toolbar entry should be remembered.
    */
-  setTool(value: EdgelessVisualTool | "select"): void {
-    const tool = value === "select" ? { tool: "select" } as const : value;
-    if (!tool || !["select", "pan", "place", "element", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");
-    if (tool.tool === "place" && !(["rectangle", "ellipse", "text", "sticker"] as EdgelessPlaceKind[]).includes(tool.kind)) {
-      throw new Error("Unsupported place kind");
+  private rememberTool(tool: EdgelessVisualTool): void {
+    const entry = this.toolbar.getTools().find((item) => item.isActive(tool));
+    this.activeEntryId = entry?.id;
+    if (entry?.group) {
+      this.lastByGroup.set(entry.group, entry.id);
     }
-    if (tool.tool === "drawing" && !["pencil", "pen", "marker"].includes(tool.brush)) throw new Error("Unsupported drawing brush");
-    if (tool.tool === "connector" && !["straight", "orthogonal", "curve"].includes(tool.route)) throw new Error("Unsupported connector route");
-    if (JSON.stringify(tool) !== JSON.stringify(this.currentTool)) {
-      this.placeSize = undefined;
-    }
-    this.currentTool = copy(tool);
-    this.rememberTool(tool);
-    this.emit();
   }
-
 }

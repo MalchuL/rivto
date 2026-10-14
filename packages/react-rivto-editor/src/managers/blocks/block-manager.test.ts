@@ -1,5 +1,8 @@
 import type { ComponentType } from "react";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 import { DefaultBlockBehavior } from "../../block-behaviors";
 
@@ -21,7 +24,9 @@ describe("BlockManager", () => {
     expect(editor.blocks.getBlockNode(id)?.type).toBe("test.manager-block");
     expect(reactPanel.editor.renderers.get("test.manager-block")).toBe(Renderer);
     expect(reactPanel.editor.blockTypes.separatesBlockElements("test.manager-block")).toBe(true);
-    expect(reactPanel.editor.blockTypes.getDefaultBlockElementSeparatorType()).toBe("test.manager-block");
+    expect(reactPanel.editor.blockTypes.getDefaultBlockElementSeparatorType()).toBe(
+      "test.manager-block",
+    );
     expect(editor.blockRegistry.get("test.manager-block")?.metadata).toEqual({ owner: "test" });
 
     expect(reactPanel.editor.blockTypes.delete("test.manager-block")).toBe(true);
@@ -42,11 +47,13 @@ describe("BlockManager", () => {
     });
     const reactPanel = createReactEditor({ editor });
 
-    expect(() => reactPanel.editor.blockTypes.register({
-      definition: { type: "test.existing", metadata: { containment: { childOutline: "free" } } },
-      render: Renderer,
-      behavior: new DefaultBlockBehavior(),
-    })).toThrow(/containment.*does not match/);
+    expect(() =>
+      reactPanel.editor.blockTypes.register({
+        definition: { type: "test.existing", metadata: { containment: { childOutline: "free" } } },
+        render: Renderer,
+        behavior: new DefaultBlockBehavior(),
+      }),
+    ).toThrow(/containment.*does not match/);
     expect(reactPanel.editor.renderers.has("test.existing")).toBe(false);
 
     reactPanel.editor.destroy();
@@ -62,10 +69,12 @@ describe("BlockManager", () => {
       isValid: (candidate) => typeof candidate.collapsed === "boolean",
     });
 
-    const prepared = reactPanel.editor.blocks.prepareInput([{
-      type: "paragraph",
-      children: [{ type: "paragraph", listProps: { custom: "kept" } }],
-    }])[0]!;
+    const prepared = reactPanel.editor.blocks.prepareInput([
+      {
+        type: "paragraph",
+        children: [{ type: "paragraph", listProps: { custom: "kept" } }],
+      },
+    ])[0]!;
     expect(prepared.listProps).toEqual({ collapsed: false });
     expect(prepared.children?.[0]?.listProps).toEqual({ collapsed: false, custom: "kept" });
     expect(editor.blocks.getBlocks()).toEqual([]);
@@ -73,22 +82,31 @@ describe("BlockManager", () => {
     const parent = reactPanel.editor.blocks.insertBlock(prepared).id;
     const child = editor.blocks.getBlockNode(parent)!.childIds[0]!;
     expect(editor.blocks.getBlockNode(parent)?.listProps).toEqual({ collapsed: false });
-    expect(editor.blocks.getBlockNode(child)?.listProps).toEqual({ collapsed: false, custom: "kept" });
+    expect(editor.blocks.getBlockNode(child)?.listProps).toEqual({
+      collapsed: false,
+      custom: "kept",
+    });
 
-    expect(() => reactPanel.editor.blocks.updateBlocks([
-      { id: parent, patch: { listProps: { collapsed: true } } },
-      { id: child, patch: { listProps: { collapsed: "invalid" } } },
-      { id: "missing", patch: { listProps: { collapsed: true } } },
-      { id: child, patch: { listProps: { custom: Number.POSITIVE_INFINITY } } },
-    ])).toThrow("Invalid block list properties");
+    expect(() =>
+      reactPanel.editor.blocks.updateBlocks([
+        { id: parent, patch: { listProps: { collapsed: true } } },
+        { id: child, patch: { listProps: { collapsed: "invalid" } } },
+        { id: "missing", patch: { listProps: { collapsed: true } } },
+        { id: child, patch: { listProps: { custom: Number.POSITIVE_INFINITY } } },
+      ]),
+    ).toThrow("Invalid block list properties");
     expect(editor.blocks.getBlockNode(parent)?.listProps.collapsed).toBe(false);
-    expect(() => reactPanel.editor.blocks.updateBlock("missing", {})).toThrow("Block missing not found");
+    expect(() => reactPanel.editor.blocks.updateBlock("missing", {})).toThrow(
+      "Block missing not found",
+    );
     expect(reactPanel.editor.blocks.deleteListProps(parent, ["collapsed"])).toBe(true);
     expect(editor.blocks.getBlockNode(parent)?.listProps).toEqual({});
 
     reactPanel.editor.destroy();
     expect(editor.blockListProps.has("collapse")).toBe(false);
-    expect(() => reactPanel.editor.blockListProps.register({ id: "late" })).toThrow("React editor is destroyed");
+    expect(() => reactPanel.editor.blockListProps.register({ id: "late" })).toThrow(
+      "React editor is destroyed",
+    );
     expect(editor.blockListProps.has("late")).toBe(false);
     editor.destroy();
   });
@@ -105,18 +123,24 @@ describe("BlockManager", () => {
       type: "paragraph",
       children: [{ type: "paragraph", listProps: { left: false, right: false } }],
     };
-    expect(() => reactPanel.editor.blocks.prepareInput([invalid])).toThrow("Invalid block list properties");
-    expect(() => reactPanel.editor.blocks.insertBlock(invalid)).toThrow("Invalid block list properties");
+    expect(() => reactPanel.editor.blocks.prepareInput([invalid])).toThrow(
+      "Invalid block list properties",
+    );
+    expect(() => reactPanel.editor.blocks.insertBlock(invalid)).toThrow(
+      "Invalid block list properties",
+    );
     expect(editor.blocks.getBlocks()).toEqual([]);
 
     const id = reactPanel.editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { left: true, right: true },
     }).id;
-    expect(() => reactPanel.editor.blocks.deleteListPropsBatch([
-      { id, keys: ["left"] },
-      { id, keys: ["right"] },
-    ])).toThrow("Invalid block list properties");
+    expect(() =>
+      reactPanel.editor.blocks.deleteListPropsBatch([
+        { id, keys: ["left"] },
+        { id, keys: ["right"] },
+      ]),
+    ).toThrow("Invalid block list properties");
     expect(editor.blocks.getBlockNode(id)?.listProps).toEqual({ left: true, right: true });
 
     reactPanel.editor.destroy();

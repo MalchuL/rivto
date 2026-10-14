@@ -22,7 +22,9 @@ import { getBlockContainment } from "../../managers/blocks/types";
 function parentContainment(reactPanel: ReactPanelApi, id: string) {
   const parentId = reactPanel.blocks.getParentId(id);
   const parentType = parentId ? reactPanel.blocks.getBlockNode(parentId)?.type : undefined;
-  return parentType ? getBlockContainment(reactPanel.editor.blockTypes.getDefinition(parentType)) : undefined;
+  return parentType
+    ? getBlockContainment(reactPanel.editor.blockTypes.getDefinition(parentType))
+    : undefined;
 }
 
 /**
@@ -33,7 +35,13 @@ function parentContainment(reactPanel: ReactPanelApi, id: string) {
  * @returns Nothing; an ineligible range is unchanged.
  */
 export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  if (!ids.length || ids.some(id => !reactPanel.blocks.canRemove(id)) || parentContainment(reactPanel, ids[0]!)?.childOutline === "fixed") return;
+  if (
+    !ids.length ||
+    ids.some((id) => !reactPanel.blocks.canRemove(id)) ||
+    parentContainment(reactPanel, ids[0]!)?.childOutline === "fixed"
+  ) {
+    return;
+  }
   reactPanel.blocks.indentBlocks([...ids]);
 }
 
@@ -46,9 +54,13 @@ export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]):
  * childOutline: "fixed" remain unchanged.
  */
 export function outdentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  if (!ids.length || ids.some(id => !reactPanel.blocks.canOutdent(id))) return;
+  if (!ids.length || ids.some((id) => !reactPanel.blocks.canOutdent(id))) {
+    return;
+  }
   const containment = parentContainment(reactPanel, ids[0]!);
-  if (containment?.childOutline === "fixed" || containment?.outlineFloor) return;
+  if (containment?.childOutline === "fixed" || containment?.outlineFloor) {
+    return;
+  }
   reactPanel.blocks.outdentBlocks([...ids]);
 }
 
@@ -67,7 +79,9 @@ export function outdentUntilBoundary(reactPanel: ReactPanelApi, id: string): voi
   while (parentId) {
     outdentBlocks(reactPanel, [id]);
     const next = reactPanel.blocks.getParentId(id);
-    if (next === parentId) break;
+    if (next === parentId) {
+      break;
+    }
     parentId = next;
   }
 }
@@ -112,13 +126,19 @@ export function convertLeafToContainer(
   input: EditorBlockInput,
 ): void {
   const block = reactPanel.blocks.getBlockNode(blockId);
-  if (!block || reactPanel.blocks.hasChildren(blockId)) return;
+  if (!block || reactPanel.blocks.hasChildren(blockId)) {
+    return;
+  }
   reactPanel.batchUpdates(() => {
-    const destination = reactPanel.blocks.canRemove(blockId) ? reactPanel.blocks.getInsertionDestinationAfter(blockId) : { parentId: blockId };
+    const destination = reactPanel.blocks.canRemove(blockId)
+      ? reactPanel.blocks.getInsertionDestinationAfter(blockId)
+      : { parentId: blockId };
     const templateId = reactPanel.blocks.insertBlock(input, destination).id;
     const childIds = reactPanel.blocks.getBlockNode(templateId)?.childIds ?? [];
     reactPanel.blocks.setBlockType(blockId, input.type);
-    if (childIds.length) reactPanel.blocks.moveBlocks([...childIds], blockId, "inside");
+    if (childIds.length) {
+      reactPanel.blocks.moveBlocks([...childIds], blockId, "inside");
+    }
     reactPanel.blocks.removeBlock(templateId);
   });
 }

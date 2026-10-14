@@ -20,13 +20,28 @@ describe("cross-document block transfer", () => {
       pluginData: { test: { retained: true } },
       children: [{ id: "child", type: "test.counter", props: { count: 4 } }],
     }).id;
-    const second = source.blocks.insertBlock({ id: "second", type: "paragraph", content: "Second" }).id;
-    const outside = source.blocks.insertBlock({ id: "outside", type: "paragraph", content: "Outside" }).id;
-    const target = destination.blocks.insertBlock({ id: "target", type: "paragraph", content: "Target" }).id;
+    const second = source.blocks.insertBlock({
+      id: "second",
+      type: "paragraph",
+      content: "Second",
+    }).id;
+    const outside = source.blocks.insertBlock({
+      id: "outside",
+      type: "paragraph",
+      content: "Outside",
+    }).id;
+    const target = destination.blocks.insertBlock({
+      id: "target",
+      type: "paragraph",
+      content: "Target",
+    }).id;
     source.history.clear();
     destination.history.clear();
 
-    crossDocumentBlockTransfer(source, destination, [first, second], { targetId: target, position: "inside" });
+    crossDocumentBlockTransfer(source, destination, [first, second], {
+      targetId: target,
+      position: "inside",
+    });
 
     expect(source.blocks.getRootIds()).toEqual([outside]);
     expect(destination.blocks.getBlockNode(target)?.childIds).toEqual([first, second]);
@@ -52,7 +67,10 @@ describe("cross-document block transfer", () => {
     const destination = await createEditor();
     source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
 
-    crossDocumentBlockTransfer(source, destination, ["moved"], { targetId: null, position: "after" });
+    crossDocumentBlockTransfer(source, destination, ["moved"], {
+      targetId: null,
+      position: "after",
+    });
 
     expect(source.blocks.getBlocks()).toEqual([]);
     expect(destination.blocks.getRootIds()).toEqual(["moved"]);
@@ -72,10 +90,12 @@ describe("cross-document block transfer", () => {
     const sourceBefore = source.dump();
     const destinationBefore = destination.dump();
 
-    expect(() => crossDocumentBlockTransfer(source, destination, ["moved"], {
-      targetId: null,
-      position: "after",
-    })).toThrow("Destination already contains block");
+    expect(() =>
+      crossDocumentBlockTransfer(source, destination, ["moved"], {
+        targetId: null,
+        position: "after",
+      }),
+    ).toThrow("Destination already contains block");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.dump()).toEqual(destinationBefore);
     source.destroy();
@@ -88,10 +108,12 @@ describe("cross-document block transfer", () => {
     source.blocks.insertBlock({ id: "custom", type: "test.counter", props: { count: 9 } });
     const sourceBefore = source.dump();
 
-    expect(() => crossDocumentBlockTransfer(source, destination, ["custom"], {
-      targetId: null,
-      position: "after",
-    })).toThrow("Block type test.counter is not registered");
+    expect(() =>
+      crossDocumentBlockTransfer(source, destination, ["custom"], {
+        targetId: null,
+        position: "after",
+      }),
+    ).toThrow("Block type test.counter is not registered");
     expect(source.dump()).toEqual(sourceBefore);
     expect(destination.blocks.getBlocks()).toEqual([]);
     source.destroy();
@@ -107,28 +129,58 @@ test("transfers between two source models using one editor runtime", async () =>
   const source = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
   const destination = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
   source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
-  source.history.clear(); destination.history.clear();
+  source.history.clear();
+  destination.history.clear();
   const { createTestMultiEditor } = await import("../../../test-utils");
   const { createReactEditor } = await import("../../../editor/react-editor");
   const runtime = await createTestMultiEditor([source, destination]);
-  crossDocumentBlockTransfer(runtime.getEditor(source.id)!, runtime.getEditor(destination.id)!, ["moved"], { targetId: null, position: "after" });
+  crossDocumentBlockTransfer(
+    runtime.getEditor(source.id)!,
+    runtime.getEditor(destination.id)!,
+    ["moved"],
+    { targetId: null, position: "after" },
+  );
   expect(source.blocks.hasBlock("moved")).toBe(false);
   expect(destination.blocks.getBlockNode("moved")?.content).toBe("Moved");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
-  destination.history.undo(); source.history.undo();
+  destination.history.undo();
+  source.history.undo();
   expect(source.blocks.getBlockNode("moved")?.content).toBe("Moved");
   expect(destination.blocks.getRootIds()).toEqual([]);
-  await runtime.destroy(); await editor.destroy();
+  await runtime.destroy();
+  await editor.destroy();
 });
 
 test("rejects overlapping roots and processor-changed identities before writing either document", async () => {
-  const source = await createEditor(); const destination = await createEditor();
-  source.blocks.insertBlock({ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] });
+  const source = await createEditor();
+  const destination = await createEditor();
+  source.blocks.insertBlock({
+    id: "parent",
+    type: "paragraph",
+    children: [{ id: "child", type: "paragraph" }],
+  });
   const before = source.dump();
-  expect(() => crossDocumentBlockTransfer(source, destination, ["parent", "child"], { targetId: null, position: "after" })).toThrow();
+  expect(() =>
+    crossDocumentBlockTransfer(source, destination, ["parent", "child"], {
+      targetId: null,
+      position: "after",
+    }),
+  ).toThrow();
   expect(destination.blocks.getRootIds()).toEqual([]);
-  const stop = destination.blocks.registerProcessor({ id: "rewrite", priority: 0, processor: (block) => ({ ...block, id: `${block.id}-changed` }) });
-  expect(() => crossDocumentBlockTransfer(source, destination, ["parent"], { targetId: null, position: "after" })).toThrow("preserve block IDs");
-  expect(source.dump()).toEqual(before); expect(destination.blocks.getRootIds()).toEqual([]);
-  stop(); await source.destroy(); await destination.destroy();
+  const stop = destination.blocks.registerProcessor({
+    id: "rewrite",
+    priority: 0,
+    processor: (block) => ({ ...block, id: `${block.id}-changed` }),
+  });
+  expect(() =>
+    crossDocumentBlockTransfer(source, destination, ["parent"], {
+      targetId: null,
+      position: "after",
+    }),
+  ).toThrow("preserve block IDs");
+  expect(source.dump()).toEqual(before);
+  expect(destination.blocks.getRootIds()).toEqual([]);
+  stop();
+  await source.destroy();
+  await destination.destroy();
 });

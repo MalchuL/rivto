@@ -1,4 +1,7 @@
-import { createTestEditor as createDocumentEditor, createStructuralSelection } from "../../editor/test-utils";
+import {
+  createTestEditor as createDocumentEditor,
+  createStructuralSelection,
+} from "../../editor/test-utils";
 
 describe("editor block managers", () => {
   it("exposes separate registry and block managers", async () => {
@@ -11,7 +14,10 @@ describe("editor block managers", () => {
     expect("createLink" in editor).toBe(false);
 
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Source" }).id;
-    const targetId = editor.blocks.insertBlock({ type: "paragraph", content: "Target" }, editor.blocks.getInsertionDestinationAfter(sourceId)).id;
+    const targetId = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Target" },
+      editor.blocks.getInsertionDestinationAfter(sourceId),
+    ).id;
     editor.blocks.updateBlock(sourceId, { props: { tone: "info" } });
 
     expect(editor.blocks.getBlockNode(sourceId)?.props).toEqual({ tone: "info" });
@@ -24,7 +30,10 @@ describe("editor block managers", () => {
   it("removes only the requested blocks and ignores an unrelated selection", async () => {
     const editor = await createDocumentEditor();
     const firstId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    const secondId = editor.blocks.insertBlock({ type: "paragraph" }, editor.blocks.getInsertionDestinationAfter(firstId)).id;
+    const secondId = editor.blocks.insertBlock(
+      { type: "paragraph" },
+      editor.blocks.getInsertionDestinationAfter(firstId),
+    ).id;
 
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.removeBlock(firstId);

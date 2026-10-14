@@ -1,2 +1,2 @@
-export * from './types';
-export * from './element-registry';
+export * from "./types";
+export * from "./element-registry";

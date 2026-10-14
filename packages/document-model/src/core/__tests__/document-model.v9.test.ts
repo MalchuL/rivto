@@ -19,25 +19,71 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
 describe("DocumentModelImpl schema v9 Markdown storage", () => {
   it("includes subclass-created block and element managers in snapshots and undo history", async () => {
     class ApplicationBlocks extends DocumentBlockManager {
-      protected override generateId(): string { return "application-block"; }
+      /**
+       * Returns the fixture's deterministic application block ID.
+       *
+       * @returns The application-block ID.
+       */
+      protected override generateId(): string {
+        return "application-block";
+      }
+      /**
+       * Adds the fixture's prepared marker to a block input.
+       *
+       * @param block - Block snapshot or input used by this operation.
+       * @returns Input with the application preparation marker.
+       */
       protected override prepareBlock(block: BlockInput): BlockInput {
         return { ...block, props: { prepared: true } };
       }
     }
     class ApplicationElements extends DocumentElementManager {
-      protected override generateId(): string { return "application-element"; }
+      /**
+       * Returns the fixture's deterministic application element ID.
+       *
+       * @returns The application-element ID.
+       */
+      protected override generateId(): string {
+        return "application-element";
+      }
+      /**
+       * Adds the fixture's prepared marker to an element input.
+       *
+       * @param input - Creation or update fields for this operation.
+       * @returns Input with the application preparation marker.
+       */
       protected override prepareElement(input: ElementInput): ElementInput {
         return { ...input, props: { prepared: true } };
       }
     }
     class ApplicationDocument extends DocumentModelImpl {
-      protected override createBlockManager(crdt: CRDTDoc): DocumentBlockManager { return new ApplicationBlocks(crdt); }
-      protected override createElementManager(crdt: CRDTDoc): DocumentElementManager { return new ApplicationElements(crdt); }
+      /**
+       * Creates the fixture's application-specific block manager.
+       *
+       * @param crdt - CRDT document backing the manager.
+       * @returns A block manager bound to the supplied CRDT document.
+       */
+      protected override createBlockManager(crdt: CRDTDoc): DocumentBlockManager {
+        return new ApplicationBlocks(crdt);
+      }
+      /**
+       * Creates the fixture's application-specific element manager.
+       *
+       * @param crdt - CRDT document backing the manager.
+       * @returns An element manager bound to the supplied CRDT document.
+       */
+      protected override createElementManager(crdt: CRDTDoc): DocumentElementManager {
+        return new ApplicationElements(crdt);
+      }
     }
     const model = new ApplicationDocument(new YjsDoc("application-managers"));
     model.history.batchUpdates(() => {
       model.blocks.insertBlock({ type: "paragraph", content: "Created by application" });
-      model.elements.insertElement({ type: "shape", frame: { x: 0, y: 0, width: 10, height: 10 }, zIndex: 0 });
+      model.elements.insertElement({
+        type: "shape",
+        frame: { x: 0, y: 0, width: 10, height: 10 },
+        zIndex: 0,
+      });
     });
     const snapshot = model.getSnapshot();
     expect(snapshot.blocks[0]?.id).toBe("application-block");
@@ -88,22 +134,32 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const source = new DocumentModelImpl(sourceDoc);
     source.loadSnapshot({
       version: 9,
-      blocks: [{
-        id: "listed",
-        type: "paragraph",
-        listProps: { collapsed: false, type: "checkbox", checked: true },
-        props: {},
-        pluginData: {},
-        content: "Task",
-        children: [],
-      }],
+      blocks: [
+        {
+          id: "listed",
+          type: "paragraph",
+          listProps: { collapsed: false, type: "checkbox", checked: true },
+          props: {},
+          pluginData: {},
+          content: "Task",
+          children: [],
+        },
+      ],
     });
-    expect(source.blocks.getBlockNode("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
+    expect(source.blocks.getBlockNode("listed")?.listProps).toEqual({
+      collapsed: false,
+      type: "checkbox",
+      checked: true,
+    });
 
     const targetDoc = new YjsDoc("list-snapshot-target");
     const target = new DocumentModelImpl(targetDoc);
     target.loadSnapshot(source.getSnapshot());
-    expect(target.blocks.getBlockNode("listed")?.listProps).toEqual({ collapsed: false, type: "checkbox", checked: true });
+    expect(target.blocks.getBlockNode("listed")?.listProps).toEqual({
+      collapsed: false,
+      type: "checkbox",
+      checked: true,
+    });
     sourceDoc.destroy();
     targetDoc.destroy();
   });
@@ -112,7 +168,8 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const sourceDoc = new YjsDoc("element-snapshot-source");
     const source = new DocumentModelImpl(sourceDoc);
     source.blocks.insertBlock({ id: "content", type: "paragraph", content: "Card" });
-    source.elements.insertElement({ id: "card",
+    source.elements.insertElement({
+      id: "card",
       type: "block",
       frame: { x: -20, y: 30, width: 320, height: 140 },
       zIndex: 2,
@@ -170,6 +227,12 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     });
     model.blocks.insertBlock({ id: "target", type: "paragraph" });
     const blockManager = model.blocks as unknown as {
+      /**
+       * Finds a block's structural path for this hierarchy assertion.
+       *
+       * @param id - Stable ID of the record or registration to access.
+       * @returns Child indexes from the root, or undefined when absent.
+       */
       findPath(id: string): readonly number[] | undefined;
     };
     const findPath = jest.spyOn(blockManager, "findPath");
@@ -202,9 +265,15 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
     modelA.blocks.insertBlock({ id: "left", type: "paragraph" });
-    modelA.blocks.insertBlock({ id: "child", type: "paragraph" }, modelA.blocks.getInsertionDestinationAfter("left"));
+    modelA.blocks.insertBlock(
+      { id: "child", type: "paragraph" },
+      modelA.blocks.getInsertionDestinationAfter("left"),
+    );
     modelA.blocks.moveBlock("child", "left", "inside");
-    modelA.blocks.insertBlock({ id: "right", type: "paragraph" }, modelA.blocks.getInsertionDestinationAfter("left"));
+    modelA.blocks.insertBlock(
+      { id: "right", type: "paragraph" },
+      modelA.blocks.getInsertionDestinationAfter("left"),
+    );
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
     expect(modelA.blocks.getParentId("child")).toBe("left");
@@ -221,7 +290,10 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const doc = new YjsDoc("lazy-path-history");
     const model = new DocumentModelImpl(doc);
     model.blocks.insertBlock({ id: "parent", type: "paragraph" });
-    model.blocks.insertBlock({ id: "child", type: "paragraph" }, model.blocks.getInsertionDestinationAfter("parent"));
+    model.blocks.insertBlock(
+      { id: "child", type: "paragraph" },
+      model.blocks.getInsertionDestinationAfter("parent"),
+    );
     const history = model.history;
     history.clear();
 
@@ -254,15 +326,19 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     model.blocks.insertBlock({ id: "left", type: "paragraph" });
     model.blocks.insertBlock({ id: "right", type: "paragraph" });
     const before = model.getSnapshot();
-    expect(() => model.blocks.moveBlocks([
-      { id: "left", targetId: "right", position: "inside" },
-      { id: "right", targetId: "left", position: "inside" },
-    ])).toThrow(/descendant/);
+    expect(() =>
+      model.blocks.moveBlocks([
+        { id: "left", targetId: "right", position: "inside" },
+        { id: "right", targetId: "left", position: "inside" },
+      ]),
+    ).toThrow(/descendant/);
     expect(model.getSnapshot()).toEqual(before);
-    expect(() => model.blocks.moveBlocks([
-      { id: "left", targetId: "right", position: "inside" },
-      { id: "right", targetId: "missing", position: "after" },
-    ])).toThrow("Target block missing not found");
+    expect(() =>
+      model.blocks.moveBlocks([
+        { id: "left", targetId: "right", position: "inside" },
+        { id: "right", targetId: "missing", position: "after" },
+      ]),
+    ).toThrow("Target block missing not found");
     expect(model.getSnapshot()).toEqual(before);
     doc.destroy();
   });
@@ -294,9 +370,15 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const insertion = jest.spyOn(roots, "insert");
 
     // An open transaction exercises live parent indexing for the large batch.
-    doc.transact(() => model.blocks.moveBlocks([...ids].reverse().map((id) => ({
-      id, targetId: "tail", position: "after" as const,
-    }))));
+    doc.transact(() =>
+      model.blocks.moveBlocks(
+        [...ids].reverse().map((id) => ({
+          id,
+          targetId: "tail",
+          position: "after" as const,
+        })),
+      ),
+    );
 
     expect(model.blocks.getRootIds()).toEqual(["target", "tail", ...ids]);
     expect(deletion).toHaveBeenCalledTimes(1);
@@ -321,7 +403,11 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
   it("applies portable property patches atomically in batch order", () => {
     const doc = new YjsDoc("property-patches");
     const model = new DocumentModelImpl(doc);
-    model.blocks.insertBlock({ id: "target", type: "paragraph", props: { keep: true, remove: "me" } });
+    model.blocks.insertBlock({
+      id: "target",
+      type: "paragraph",
+      props: { keep: true, remove: "me" },
+    });
 
     model.blocks.updateBlocks([
       { id: "target", patch: { props: { count: 1, remove: undefined } } },
@@ -329,10 +415,12 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     ]);
     expect(model.blocks.getBlockNode("target")?.props).toEqual({ keep: true, count: 2 });
 
-    expect(() => model.blocks.updateBlocks([
-      { id: "target", patch: { props: { keep: false } } },
-      { id: "target", patch: { props: { invalid: 1n } } },
-    ])).toThrow("block.props.invalid");
+    expect(() =>
+      model.blocks.updateBlocks([
+        { id: "target", patch: { props: { keep: false } } },
+        { id: "target", patch: { props: { invalid: 1n } } },
+      ]),
+    ).toThrow("block.props.invalid");
     expect(model.blocks.getBlockNode("target")?.props).toEqual({ keep: true, count: 2 });
     doc.destroy();
   });
@@ -343,7 +431,12 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const modelA = new DocumentModelImpl(docA);
     const modelB = new DocumentModelImpl(docB);
 
-    modelA.blocks.insertBlock({ id: "image", type: "image", content: "Hello", props: { url: "old.png", width: 300 } });
+    modelA.blocks.insertBlock({
+      id: "image",
+      type: "image",
+      content: "Hello",
+      props: { url: "old.png", width: 300 },
+    });
     Y.applyUpdate(docB.doc, Y.encodeStateAsUpdate(docA.doc));
 
     modelA.blocks.setBlockProp("image", "width", 600);
@@ -372,7 +465,11 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const doc = new YjsDoc("canonical-tree");
     const model = new DocumentModelImpl(doc);
 
-    model.blocks.insertBlock({ id: "parent", type: "group", children: [{ id: "child", type: "paragraph", content: "Nested" }] });
+    model.blocks.insertBlock({
+      id: "parent",
+      type: "group",
+      children: [{ id: "child", type: "paragraph", content: "Nested" }],
+    });
     model.blocks.insertBlock({ id: "target", type: "paragraph" });
     model.blocks.removeBlock("parent");
 
@@ -399,7 +496,9 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     const doc = new YjsDoc("canonical-types");
     const model = new DocumentModelImpl(doc);
 
-    expect(() => model.blocks.insertBlock({ id: "missing" } as BlockInput)).toThrow("Block type is required");
+    expect(() => model.blocks.insertBlock({ id: "missing" } as BlockInput)).toThrow(
+      "Block type is required",
+    );
     model.blocks.insertBlock({ id: "custom", type: "acme.chart" });
     model.blocks.updateBlock("custom", { type: "paragraph" } as unknown as BlockPatch);
 

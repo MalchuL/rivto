@@ -29,9 +29,14 @@ export interface EmbeddingProps extends Record<string, unknown> {
 function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<EmbeddingProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   return (
-    <div {...attributes} className={`${EMBEDDING_CLASS} w-full min-w-0 max-w-full box-border min-h-(--rivto-default-block-height)`} />
+    <div
+      {...attributes}
+      className={`${EMBEDDING_CLASS} w-full min-w-0 max-w-full box-border min-h-(--rivto-default-block-height)`}
+    />
   );
 }
 
@@ -43,33 +48,61 @@ function EmbeddingControls({ block }: BlockSlotProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button {...editorControlProps} type="button" variant="ghost" size="icon-xs" aria-label="Edit embedding" title="Edit embedding">
+        <Button
+          {...editorControlProps}
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Edit embedding"
+          title="Edit embedding"
+        >
           <Link2Icon aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" role="dialog" aria-label="Embedding settings">
-        <form className="flex flex-col gap-3" onSubmit={(event) => {
-          event.preventDefault();
-          const fields = new FormData(event.currentTarget);
-          panel.blocks.updateBlock(block.id, { props: {
-            targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
-            targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
-          } });
-          setOpen(false);
-        }}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            panel.blocks.updateBlock(block.id, {
+              props: {
+                targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
+                targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
+              },
+            });
+            setOpen(false);
+          }}
+        >
           <div>
             <div className="text-sm font-medium">Embedding settings</div>
-            <p className="mt-1 text-xs text-muted-foreground">Choose the document and block to show here.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose the document and block to show here.
+            </p>
           </div>
           <label className="flex flex-col gap-1.5 text-sm">
             Document ID
-            <Input {...editorControlProps} name="targetDocumentId" aria-label="Target document ID" defaultValue={props.targetDocumentId} placeholder="Document ID" />
+            <Input
+              {...editorControlProps}
+              name="targetDocumentId"
+              aria-label="Target document ID"
+              defaultValue={props.targetDocumentId}
+              placeholder="Document ID"
+            />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             Block ID
-            <Input {...editorControlProps} name="targetBlockId" aria-label="Target block ID" defaultValue={props.targetBlockId} placeholder="Block ID" />
+            <Input
+              {...editorControlProps}
+              name="targetBlockId"
+              aria-label="Target block ID"
+              defaultValue={props.targetBlockId}
+              placeholder="Block ID"
+            />
           </label>
-          <Button {...editorControlProps} type="submit" size="sm" className="self-end">Save embedding</Button>
+          <Button {...editorControlProps} type="submit" size="sm" className="self-end">
+            Save embedding
+          </Button>
         </form>
       </PopoverContent>
     </Popover>
@@ -85,42 +118,78 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
   const ownAddress = JSON.stringify([panel.document.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
-  const [location, setLocation] = useState<BlockResolution & { targetAddress: string; error?: unknown }>({ targetAddress: "", ambiguous: false });
+  const [location, setLocation] = useState<
+    BlockResolution & { targetAddress: string; error?: unknown }
+  >({ targetAddress: "", ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
   const locationIsCurrent = location.targetAddress === targetAddress;
-  const cycle = locationIsCurrent && (ancestors.includes(resolvedAddress) || resolvedAddress === ownAddress);
-  const ancestry = useMemo(() => [...ancestors, ownAddress, resolvedAddress], [ancestors, ownAddress, resolvedAddress]);
+  const cycle =
+    locationIsCurrent && (ancestors.includes(resolvedAddress) || resolvedAddress === ownAddress);
+  const ancestry = useMemo(
+    () => [...ancestors, ownAddress, resolvedAddress],
+    [ancestors, ownAddress, resolvedAddress],
+  );
   useEffect(() => {
     setLocation({ targetAddress, ambiguous: false });
-    if (!targetDocumentId || !targetBlockId || !references) return;
-    return references.blockReferences.subscribeBlockLocation({ documentId: targetDocumentId, blockId: targetBlockId }, (resolution, error) => {
-      setLocation((previous) => {
-        if (previous.targetAddress === targetAddress
-          && previous.documentId === resolution.documentId
-          && previous.ambiguous === resolution.ambiguous
-          && previous.error === error) return previous;
-        return { targetAddress, ...resolution, error };
-      });
-    });
+    if (!targetDocumentId || !targetBlockId || !references) {
+      return;
+    }
+    return references.blockReferences.subscribeBlockLocation(
+      { documentId: targetDocumentId, blockId: targetBlockId },
+      (resolution, error) => {
+        setLocation((previous) => {
+          if (
+            previous.targetAddress === targetAddress &&
+            previous.documentId === resolution.documentId &&
+            previous.ambiguous === resolution.ambiguous &&
+            previous.error === error
+          ) {
+            return previous;
+          }
+          return { targetAddress, ...resolution, error };
+        });
+      },
+    );
   }, [targetAddress, targetDocumentId, targetBlockId, references]);
-  const { editor: source, error: sourceError } = useAcquiredEditor(references, cycle ? undefined : location.documentId);
+  const { editor: source, error: sourceError } = useAcquiredEditor(
+    references,
+    cycle ? undefined : location.documentId,
+  );
   const error = location.error ?? sourceError;
   let message = "Loading embedded block…";
-  if (!targetDocumentId || !targetBlockId) message = "Choose a target document and block.";
-  else if (cycle) message = "Recursive block reference.";
-  else if (!references) message = "Block resolution is unavailable.";
-  else if (error) message = "Unable to load referenced block.";
+  if (!targetDocumentId || !targetBlockId) {
+    message = "Choose a target document and block.";
+  } else if (cycle) {
+    message = "Recursive block reference.";
+  } else if (!references) {
+    message = "Block resolution is unavailable.";
+  } else if (error) {
+    message = "Unable to load referenced block.";
+  }
   return (
     <>
-      {locationIsCurrent && location.ambiguous && <div role="status">Multiple documents contain this block; showing the first match.</div>}
-      {!cycle && targetBlockId && locationIsCurrent && location.documentId && source && source.getDocument().id === location.documentId ? (
+      {locationIsCurrent && location.ambiguous && (
+        <div role="status">Multiple documents contain this block; showing the first match.</div>
+      )}
+      {!cycle &&
+      targetBlockId &&
+      locationIsCurrent &&
+      location.documentId &&
+      source &&
+      source.getDocument().id === location.documentId ? (
         <ancestryContext.Provider value={ancestry}>
           {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
-            <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}><PageSurface /></EditorEmbed>
+            <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}>
+              <PageSurface />
+            </EditorEmbed>
           </div>
         </ancestryContext.Provider>
-      ) : <div role="status" className="px-2 pb-2">{message}</div>}
+      ) : (
+        <div role="status" className="px-2 pb-2">
+          {message}
+        </div>
+      )}
     </>
   );
 }
@@ -157,15 +226,41 @@ export function embeddingExtension(): ReactEditorExtension {
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
       const clipboard = reactEditor.clipboard.registerBlockConverter(EMBEDDING_BLOCK_TYPE, {
-        format: ({ block }, current) => ({ ...current, plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`, markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}` }),
+        format: ({ block }, current) => ({
+          ...current,
+          plain: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`,
+          markdown: `Embedded block: ${String(block.props.targetDocumentId)}/${String(block.props.targetBlockId)}`,
+        }),
+        /**
+         * Remaps references to copied blocks from the source document when their destination IDs are available.
+         *
+         * @param block - Block snapshot or input used by this operation.
+         * @param context - Operation metadata, including propagation or clipboard identity mappings.
+         * @returns Reference property patch, or an empty patch for external or unmapped targets.
+         */
         paste(block, context) {
-          if (block.props.targetDocumentId !== context.sourceDocumentId) return {};
+          if (block.props.targetDocumentId !== context.sourceDocumentId) {
+            return {};
+          }
           const targetBlockId = context.blockIdMap.get(String(block.props.targetBlockId));
-          if (!targetBlockId) return {};
-          return { props: { ...block.props, targetDocumentId: context.destinationDocumentId, targetBlockId } };
+          if (!targetBlockId) {
+            return {};
+          }
+          return {
+            props: {
+              ...block.props,
+              targetDocumentId: context.destinationDocumentId,
+              targetBlockId,
+            },
+          };
         },
       });
-      return () => { clipboard(); controls(); body(); dispose(); };
+      return () => {
+        clipboard();
+        controls();
+        body();
+        dispose();
+      };
     },
   };
 }

@@ -25,11 +25,16 @@ export const EDGELESS_BLOCK_PLACEMENT_STEP = 20;
  * @param right - Second candidate frame.
  * @returns Whether their intersection has positive width and height.
  */
-export function blockFramesOverlap(left: EditorElementNode["frame"], right: EditorElementNode["frame"]): boolean {
-  return left.x < right.x + right.width
-    && left.x + left.width > right.x
-    && left.y < right.y + right.height
-    && left.y + left.height > right.y;
+export function blockFramesOverlap(
+  left: EditorElementNode["frame"],
+  right: EditorElementNode["frame"],
+): boolean {
+  return (
+    left.x < right.x + right.width &&
+    left.x + left.width > right.x &&
+    left.y < right.y + right.height &&
+    left.y + left.height > right.y
+  );
 }
 
 /**
@@ -48,8 +53,14 @@ export function nonOverlappingBlockFrame(
   const offset = Math.max(1, step);
   for (let shell = 0; ; shell += 1) {
     for (let xStep = shell; xStep >= 0; xStep -= 1) {
-      const candidate = { ...preferred, x: preferred.x + xStep * offset, y: preferred.y + (shell - xStep) * offset };
-      if (!occupied.some((frame) => blockFramesOverlap(candidate, frame))) return candidate;
+      const candidate = {
+        ...preferred,
+        x: preferred.x + xStep * offset,
+        y: preferred.y + (shell - xStep) * offset,
+      };
+      if (!occupied.some((frame) => blockFramesOverlap(candidate, frame))) {
+        return candidate;
+      }
     }
   }
 }
@@ -68,9 +79,14 @@ export function nonOverlappingBlockFrame(
 function maximumWeightMatching(weights: readonly (readonly number[])[]): number[] {
   const rows = weights.length;
   const columns = weights[0]?.length ?? 0;
-  if (!rows || !columns) return Array(rows).fill(-1);
+  if (!rows || !columns) {
+    return Array(rows).fill(-1);
+  }
   const size = Math.max(rows, columns);
-  const maximum = weights.reduce((max, row) => row.reduce((value, weight) => Math.max(value, weight), max), 0);
+  const maximum = weights.reduce(
+    (max, row) => row.reduce((value, weight) => Math.max(value, weight), max),
+    0,
+  );
   const potentialsByRow = Array(size + 1).fill(0) as number[];
   const potentialsByColumn = Array(size + 1).fill(0) as number[];
   const columnRows = Array(size + 1).fill(0) as number[];
@@ -87,11 +103,13 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
       let delta = Number.POSITIVE_INFINITY;
       let nextColumn = 0;
       for (let candidate = 1; candidate <= size; candidate += 1) {
-        if (used[candidate]) continue;
-        const weight = currentRow <= rows && candidate <= columns
-          ? weights[currentRow - 1]![candidate - 1]!
-          : 0;
-        const cost = maximum - weight - potentialsByRow[currentRow]! - potentialsByColumn[candidate]!;
+        if (used[candidate]) {
+          continue;
+        }
+        const weight =
+          currentRow <= rows && candidate <= columns ? weights[currentRow - 1]![candidate - 1]! : 0;
+        const cost =
+          maximum - weight - potentialsByRow[currentRow]! - potentialsByColumn[candidate]!;
         if (cost < minimums[candidate]!) {
           minimums[candidate] = cost;
           previousColumns[candidate] = column;
@@ -105,7 +123,9 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
         if (used[candidate]) {
           potentialsByRow[columnRows[candidate]!] += delta;
           potentialsByColumn[candidate] -= delta;
-        } else minimums[candidate] -= delta;
+        } else {
+          minimums[candidate] -= delta;
+        }
       }
       column = nextColumn;
     } while (columnRows[column] !== 0);
@@ -119,7 +139,9 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
   const result = Array(rows).fill(-1) as number[];
   for (let column = 1; column <= columns; column += 1) {
     const row = columnRows[column]! - 1;
-    if (row >= 0 && row < rows && weights[row]![column - 1]! > 0) result[row] = column - 1;
+    if (row >= 0 && row < rows && weights[row]![column - 1]! > 0) {
+      result[row] = column - 1;
+    }
   }
   return result;
 }
@@ -131,39 +153,53 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
  */
 function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]): number[] {
   const rowsByCard = new Map<number, number[]>();
-  scores.forEach((row, index) => row.forEach((_, card) => {
-    const rows = rowsByCard.get(card) ?? [];
-    rows.push(index);
-    rowsByCard.set(card, rows);
-  }));
+  scores.forEach((row, index) =>
+    row.forEach((_, card) => {
+      const rows = rowsByCard.get(card) ?? [];
+      rows.push(index);
+      rowsByCard.set(card, rows);
+    }),
+  );
   const result = Array<number>(scores.length).fill(-1);
   const visited = new Set<number>();
   scores.forEach((_, start) => {
-    if (visited.has(start)) return;
+    if (visited.has(start)) {
+      return;
+    }
     const rows = [start];
     const cards = new Set<number>();
     visited.add(start);
     for (const row of rows) {
       scores[row]!.forEach((_, card) => {
-        if (cards.has(card)) return;
+        if (cards.has(card)) {
+          return;
+        }
         cards.add(card);
         for (const neighbor of rowsByCard.get(card)!) {
-          if (visited.has(neighbor)) continue;
+          if (visited.has(neighbor)) {
+            continue;
+          }
           visited.add(neighbor);
           rows.push(neighbor);
         }
       });
     }
-    if (!cards.size) return;
+    if (!cards.size) {
+      return;
+    }
     rows.sort((a, b) => a - b);
     const columns = [...cards].sort((a, b) => a - b);
     if (rows.length === 1 && columns.length === 1) {
       result[start] = columns[0]!;
       return;
     }
-    const matches = maximumWeightMatching(rows.map((row) => columns.map((card) => scores[row]!.get(card) ?? 0)));
+    const matches = maximumWeightMatching(
+      rows.map((row) => columns.map((card) => scores[row]!.get(card) ?? 0)),
+    );
     matches.forEach((column, index) => {
-      if (column >= 0) result[rows[index]!] = columns[column]!;
+      if (column >= 0) {
+        result[rows[index]!] = columns[column]!;
+      }
     });
   });
   return result;
@@ -177,8 +213,12 @@ function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]):
  * @returns Every root between valid start/end boundaries, or an empty array.
  */
 export function blockIdsOf(element: EditorElementNode, rootIds: readonly string[]): string[] {
-  const start = typeof element.props.startBlockId === "string" ? rootIds.indexOf(element.props.startBlockId) : -1;
-  const end = typeof element.props.endBlockId === "string" ? rootIds.indexOf(element.props.endBlockId) : -1;
+  const start =
+    typeof element.props.startBlockId === "string"
+      ? rootIds.indexOf(element.props.startBlockId)
+      : -1;
+  const end =
+    typeof element.props.endBlockId === "string" ? rootIds.indexOf(element.props.endBlockId) : -1;
   return start >= 0 && end >= 0
     ? rootIds.slice(Math.min(start, end), Math.max(start, end) + 1)
     : [];
@@ -193,10 +233,20 @@ export function blockIdsOf(element: EditorElementNode, rootIds: readonly string[
  * @param blocks - Current document hierarchy used to locate the boundaries.
  * @returns Parent ID, null for document roots, or undefined when neither boundary exists.
  */
-export function blockElementRoot(element: EditorElementNode, blocks: Pick<BlocksApi, "getParentId">): string | null | undefined {
-  const start = typeof element.props.startBlockId === "string" ? blocks.getParentId(element.props.startBlockId) : undefined;
-  if (start !== undefined) return start;
-  return typeof element.props.endBlockId === "string" ? blocks.getParentId(element.props.endBlockId) : undefined;
+export function blockElementRoot(
+  element: EditorElementNode,
+  blocks: Pick<BlocksApi, "getParentId">,
+): string | null | undefined {
+  const start =
+    typeof element.props.startBlockId === "string"
+      ? blocks.getParentId(element.props.startBlockId)
+      : undefined;
+  if (start !== undefined) {
+    return start;
+  }
+  return typeof element.props.endBlockId === "string"
+    ? blocks.getParentId(element.props.endBlockId)
+    : undefined;
 }
 
 /**
@@ -231,7 +281,9 @@ export function elementContainsBlock(
 
 /** @returns Inclusive persisted boundaries for one non-empty ordered root range. */
 export function blockRangeProps(blockIds: readonly string[]): BlockElementProps {
-  if (!blockIds.length) throw new Error("Block element range cannot be empty");
+  if (!blockIds.length) {
+    throw new Error("Block element range cannot be empty");
+  }
   return { startBlockId: blockIds[0]!, endBlockId: blockIds.at(-1)! };
 }
 
@@ -244,17 +296,25 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @returns Complete inserted separator block.
  * @throws When the active preset provides no separator block plugin.
  */
-export function insertBlockElementSeparator(editor: ReactEditorApi | ReactPanelApi, afterId: string): EditorBlock {
+export function insertBlockElementSeparator(
+  editor: ReactEditorApi | ReactPanelApi,
+  afterId: string,
+): EditorBlock {
   const shared = "editor" in editor ? editor.editor : editor;
   const type = shared.blockTypes.getDefaultBlockElementSeparatorType();
-  if (!type) throw new Error("No block element separator type is registered");
+  if (!type) {
+    throw new Error("No block element separator type is registered");
+  }
   if ("editor" in editor) {
     const destination = editor.blocks.canRemove(afterId)
       ? editor.blocks.getInsertionDestinationAfter(afterId)
       : { parentId: afterId };
     return editor.blocks.insertBlock({ type, content: "" }, destination);
   }
-  return editor.blocks.insertBlock({ type, content: "" }, editor.blocks.getInsertionDestinationAfter(afterId));
+  return editor.blocks.insertBlock(
+    { type, content: "" },
+    editor.blocks.getInsertionDestinationAfter(afterId),
+  );
 }
 
 /** Owns the document's block-card projection, settings, and deferred reconciliation. */
@@ -275,7 +335,11 @@ export class BlockElementProjection {
    * @param rootBlockId - Parent whose children form card ranges; null means document roots.
    * @param rootElementId - Container for projected cards; null means document element roots.
    */
-  constructor(private readonly reactEditor: ReactEditorApi, readonly rootBlockId: string | null = null, readonly rootElementId: string | null = null) {}
+  constructor(
+    private readonly reactEditor: ReactEditorApi,
+    readonly rootBlockId: string | null = null,
+    readonly rootElementId: string | null = null,
+  ) {}
 
   /**
    * Maintains canvas block cards while panels display the same pair of roots.
@@ -295,7 +359,9 @@ export class BlockElementProjection {
    * @throws If the owner is destroyed or initial card reconciliation fails.
    */
   maintainBlockCards(rootBlockId: string | null, rootElementId: string | null): () => void {
-    if (this.destroyed) throw new Error("Block card maintenance is destroyed");
+    if (this.destroyed) {
+      throw new Error("Block card maintenance is destroyed");
+    }
     if (rootBlockId === null && rootElementId === null) {
       return () => undefined;
     }
@@ -304,18 +370,36 @@ export class BlockElementProjection {
     if (!entry) {
       const projection = this.createPanelProjection(rootBlockId, rootElementId);
       const unsubscribeBlocks = this.reactEditor.blocks.subscribeStructure(projection.schedule);
-      const unsubscribeElements = new PanelElements(this.reactEditor.elements, this.reactEditor.getDocument(), rootElementId).subscribe(projection.schedule);
-      entry = { consumers: 0, release: () => { unsubscribeBlocks(); unsubscribeElements(); projection.destroy(); } };
+      const unsubscribeElements = new PanelElements(
+        this.reactEditor.elements,
+        this.reactEditor.getDocument(),
+        rootElementId,
+      ).subscribe(projection.schedule);
+      entry = {
+        consumers: 0,
+        release: () => {
+          unsubscribeBlocks();
+          unsubscribeElements();
+          projection.destroy();
+        },
+      };
       this.panelProjections.set(key, entry);
       projection.reconcile();
     }
     entry.consumers++;
     let active = true;
     return () => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
-      if (this.destroyed) return;
-      if (--entry.consumers === 0) { entry.release(); this.panelProjections.delete(key); }
+      if (this.destroyed) {
+        return;
+      }
+      if (--entry.consumers === 0) {
+        entry.release();
+        this.panelProjections.delete(key);
+      }
     };
   }
 
@@ -325,7 +409,10 @@ export class BlockElementProjection {
    * @param rootElementId - Element container for cards, or null for document element roots.
    * @returns Unsubscribed projection; its owner must reconcile, subscribe, and destroy it.
    */
-  createPanelProjection(rootBlockId: string | null, rootElementId: string | null): BlockElementProjection {
+  createPanelProjection(
+    rootBlockId: string | null,
+    rootElementId: string | null,
+  ): BlockElementProjection {
     const projection = new BlockElementProjection(this.reactEditor, rootBlockId, rootElementId);
     projection.setDefaultWidth(this.defaultWidth);
     projection.setOverlapAvoidance(this.avoidOverlap);
@@ -333,22 +420,13 @@ export class BlockElementProjection {
   }
 
   /**
-   * Keeps the ordinary document-card ID deterministic while avoiding collisions
-   * when another element subtree already displays the same block. Existing cards
-   * are matched before this method, so their identities and geometry remain stable.
-   */
-  private availableElementId(blockId: string): string {
-    const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
-    if (!this.reactEditor.elements.hasElement(base)) return base;
-    return crypto.randomUUID();
-  }
-
-  /**
    * Configures whether future reconciled block cards avoid existing cards.
    * The setting belongs to this document runtime, independent of mounted views.
    * @param enabled - Whether new cards should search for a free frame.
    */
-  setOverlapAvoidance(enabled: boolean): void { this.avoidOverlap = enabled; }
+  setOverlapAvoidance(enabled: boolean): void {
+    this.avoidOverlap = enabled;
+  }
 
   /**
    * Configures the width used only when the reconciler creates a new block card.
@@ -356,7 +434,8 @@ export class BlockElementProjection {
    * @param width - Positive finite width in canvas units; invalid values use 720.
    */
   setDefaultWidth(width: number): void {
-    this.defaultWidth = Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width;
+    this.defaultWidth =
+      Number.isFinite(width) && width > 0 ? width : EDGELESS_CARD_DEFAULT_FRAME.width;
   }
 
   /**
@@ -365,11 +444,15 @@ export class BlockElementProjection {
    * bursts deterministic without coupling the projection to a mounted surface.
    */
   schedule = (): void => {
-    if (this.queued || this.destroyed) return;
+    if (this.queued || this.destroyed) {
+      return;
+    }
     this.queued = true;
     queueMicrotask(() => {
       this.queued = false;
-      if (!this.destroyed) this.reconcile();
+      if (!this.destroyed) {
+        this.reconcile();
+      }
     });
   };
 
@@ -379,9 +462,11 @@ export class BlockElementProjection {
    * reconcilers without deleting persisted cards. Later consumer cleanup is harmless.
    */
   destroy(): void {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
-    this.panelProjections.forEach(entry => entry.release());
+    this.panelProjections.forEach((entry) => entry.release());
     this.panelProjections.clear();
     this.memberships = new Map();
   }
@@ -397,19 +482,30 @@ export class BlockElementProjection {
    * @returns No value; required element changes are committed synchronously.
    */
   reconcile(): void {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     const reactEditor = this.reactEditor;
 
     // Build the two sides of the projection: current document roots and the
     // persisted canvas elements that render ranges of those roots as cards.
     // A deleted root is not an instruction to use document roots. Keep the
     // projection inactive until undo or a remote update restores its container.
-    if (this.rootBlockId !== null && !reactEditor.blocks.hasBlock(this.rootBlockId)) return;
-    if (this.rootElementId !== null && !reactEditor.elements.hasElement(this.rootElementId)) return;
-    const elements = new PanelElements(reactEditor.elements, reactEditor.getDocument(), this.rootElementId);
-    const rootIds = this.rootBlockId !== null
-      ? reactEditor.blocks.getBlockNode(this.rootBlockId)!.childIds
-      : reactEditor.blocks.getRootIds();
+    if (this.rootBlockId !== null && !reactEditor.blocks.hasBlock(this.rootBlockId)) {
+      return;
+    }
+    if (this.rootElementId !== null && !reactEditor.elements.hasElement(this.rootElementId)) {
+      return;
+    }
+    const elements = new PanelElements(
+      reactEditor.elements,
+      reactEditor.getDocument(),
+      this.rootElementId,
+    );
+    const rootIds =
+      this.rootBlockId !== null
+        ? reactEditor.blocks.getBlockNode(this.rootBlockId)!.childIds
+        : reactEditor.blocks.getRootIds();
     const roots = rootIds.flatMap((id) => {
       const node = reactEditor.blocks.getBlockNode(id);
       return node ? [node] : [];
@@ -419,20 +515,29 @@ export class BlockElementProjection {
     // Element roots limit the search; surviving block boundaries identify which
     // block scope can update the element. Fully deleted ranges can be removed.
     const existing = elements.getElementNodes().filter((element) => {
-      if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) return false;
+      if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) {
+        return false;
+      }
       const parent = blockElementRoot(element, reactEditor.blocks);
       return parent === undefined || parent === this.rootBlockId;
     });
-    const currentRanges = new Map(existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]));
+    const currentRanges = new Map(
+      existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]),
+    );
 
     // A moved range endpoint can temporarily make its persisted start/end pair
     // describe the wrong run. Prefer the last known membership in that case so
     // the same card keeps its identity and canvas geometry through the move.
     const previousRangesById = this.memberships;
-    const previousRanges = new Map(existing.map((element) => {
-      const cached = previousRangesById.get(element.id);
-      return [element.id, cached ? cached.filter((id) => rootSet.has(id)) : currentRanges.get(element.id) ?? []] as const;
-    }));
+    const previousRanges = new Map(
+      existing.map((element) => {
+        const cached = previousRangesById.get(element.id);
+        return [
+          element.id,
+          cached ? cached.filter((id) => rootSet.has(id)) : (currentRanges.get(element.id) ?? []),
+        ] as const;
+      }),
+    );
 
     // Root separator blocks are boundaries, not card content. Every non-empty
     // run between them must be represented by exactly one block element.
@@ -440,11 +545,17 @@ export class BlockElementProjection {
     let segment: EditorBlockNode[] = [];
     roots.forEach((block) => {
       if (reactEditor.blockTypes.separatesBlockElements(block.type)) {
-        if (segment.length) segments.push(segment);
+        if (segment.length) {
+          segments.push(segment);
+        }
         segment = [];
-      } else segment.push(block);
+      } else {
+        segment.push(block);
+      }
     });
-    if (segment.length) segments.push(segment);
+    if (segment.length) {
+      segments.push(segment);
+    }
 
     const continuityBase = rootOrder.length + 1;
     const anchorBonus = continuityBase ** 3;
@@ -452,7 +563,9 @@ export class BlockElementProjection {
 
     // Index block membership once to find candidate cards.
     const segmentByBlock = new Map<string, number>();
-    segments.forEach((blocks, index) => blocks.forEach((block) => segmentByBlock.set(block.id, index)));
+    segments.forEach((blocks, index) =>
+      blocks.forEach((block) => segmentByBlock.set(block.id, index)),
+    );
     const scores = segments.map(() => new Map<number, number>());
     existing.forEach((element, card) => {
       const previous = previousRanges.get(element.id) ?? [];
@@ -461,7 +574,9 @@ export class BlockElementProjection {
       const count = (ids: readonly string[], field: "previous" | "current") => {
         ids.forEach((id) => {
           const index = segmentByBlock.get(id);
-          if (index === undefined) return;
+          if (index === undefined) {
+            return;
+          }
           const overlap = overlaps.get(index) ?? { previous: 0, current: 0 };
           overlap[field] += 1;
           overlaps.set(index, overlap);
@@ -472,7 +587,11 @@ export class BlockElementProjection {
       // A valid start can retain a card whose end temporarily disappeared.
       const start = element.props.startBlockId;
       const startSegment = typeof start === "string" ? segmentByBlock.get(start) : undefined;
-      if (startSegment !== undefined && segments[startSegment]![0]!.id === start && !overlaps.has(startSegment)) {
+      if (
+        startSegment !== undefined &&
+        segments[startSegment]![0]!.id === start &&
+        !overlaps.has(startSegment)
+      ) {
         overlaps.set(startSegment, { previous: 0, current: 0 });
       }
       overlaps.forEach((overlap, index) => {
@@ -480,8 +599,13 @@ export class BlockElementProjection {
         const first = segments[index]![0]!.id;
         const ownsFirst = previous[0] === first || element.props.startBlockId === first;
         const canReuse = overlap.previous > 0 || overlap.current > 0;
-        scores[index]!.set(card, (canReuse ? retentionBonus : 0) + (ownsFirst ? anchorBonus : 0)
-          + overlap.previous * continuityBase + overlap.current);
+        scores[index]!.set(
+          card,
+          (canReuse ? retentionBonus : 0) +
+            (ownsFirst ? anchorBonus : 0) +
+            overlap.previous * continuityBase +
+            overlap.current,
+        );
       });
     });
 
@@ -495,9 +619,18 @@ export class BlockElementProjection {
     // presentation state; only new cards receive default placement and sizing.
     const desired = segments.map((blocks, index): EditorElementNode => {
       const existingElement = existing[matches[index] ?? -1];
-      const preferred = { ...EDGELESS_CARD_DEFAULT_FRAME, width: defaultWidth, x: 60 + index * 24, y: 60 + index * 24 };
-      const frame = existingElement?.frame ?? (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
-      if (!existingElement) occupied.push(frame);
+      const preferred = {
+        ...EDGELESS_CARD_DEFAULT_FRAME,
+        width: defaultWidth,
+        x: 60 + index * 24,
+        y: 60 + index * 24,
+      };
+      const frame =
+        existingElement?.frame ??
+        (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
+      if (!existingElement) {
+        occupied.push(frame);
+      }
       return {
         id: existingElement?.id ?? this.availableElementId(blocks[0]!.id),
         childIds: existingElement?.childIds ?? [],
@@ -511,33 +644,58 @@ export class BlockElementProjection {
     // Diff the desired projection against persisted elements. Updates are
     // limited to range boundaries so reconciliation never resets card geometry.
     const desiredIds = new Set(desired.map((element) => element.id));
-    const validRanges = new Map(desired.map((element) => [element.props.startBlockId, element.props.endBlockId]));
+    const validRanges = new Map(
+      desired.map((element) => [element.props.startBlockId, element.props.endBlockId]),
+    );
     // Overlapping areas can contain more than one valid presentation of a range.
     // Removing one would make its narrower Panel recreate it and lose its geometry.
-    const remove = existing.filter((element) => !desiredIds.has(element.id)
-      && (!validRanges.has(element.props.startBlockId) || validRanges.get(element.props.startBlockId) !== element.props.endBlockId))
+    const remove = existing
+      .filter(
+        (element) =>
+          !desiredIds.has(element.id) &&
+          (!validRanges.has(element.props.startBlockId) ||
+            validRanges.get(element.props.startBlockId) !== element.props.endBlockId),
+      )
       .map((element) => element.id);
     const insert = desired.filter((element) => !elements.hasElement(element.id));
     const update = desired.flatMap((element) => {
       const current = elements.getElementNode(element.id);
-      return current && (current.props.startBlockId !== element.props.startBlockId || current.props.endBlockId !== element.props.endBlockId)
+      return current &&
+        (current.props.startBlockId !== element.props.startBlockId ||
+          current.props.endBlockId !== element.props.endBlockId)
         ? [{ id: element.id, patch: { props: element.props } }]
         : [];
     });
 
     // Save exact membership before publishing writes; a following structural
     // change can then match cards even when persisted endpoints are ambiguous.
-    const desiredMemberships = new Map(desired.map((element, index) => [
-      element.id,
-      segments[index]!.map((block) => block.id),
-    ]));
+    const desiredMemberships = new Map(
+      desired.map((element, index) => [element.id, segments[index]!.map((block) => block.id)]),
+    );
     this.memberships = desiredMemberships;
-    if (!remove.length && !insert.length && !update.length) return;
+    if (!remove.length && !insert.length && !update.length) {
+      return;
+    }
 
     reactEditor.history.batchUpdatesWithoutHistory(() => {
       remove.forEach((id) => elements.removeElementAndPromoteChildren(id));
       insert.forEach((element) => elements.insertElement(element));
-      if (update.length) elements.updateElements(update);
+      if (update.length) {
+        elements.updateElements(update);
+      }
     });
+  }
+
+  /**
+   * Keeps the ordinary document-card ID deterministic while avoiding collisions
+   * when another element subtree already displays the same block. Existing cards
+   * are matched before this method, so their identities and geometry remain stable.
+   */
+  private availableElementId(blockId: string): string {
+    const base = `${EDGELESS_BLOCK_ELEMENT_ID_PREFIX}${this.rootElementId === null ? "" : `${this.rootElementId}:`}${blockId}`;
+    if (!this.reactEditor.elements.hasElement(base)) {
+      return base;
+    }
+    return crypto.randomUUID();
   }
 }

@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useReactPanel } from "./use-react-panel";
-import type { DOMEventDefinition, DOMEventName, DOMEventTarget, EditorEvent, EditorEventHandler } from "../../managers";
+import type {
+  DOMEventDefinition,
+  DOMEventName,
+  DOMEventTarget,
+  EditorEvent,
+  EditorEventHandler,
+} from "../../managers";
 
 /**
  * Registers one typed native event through the editor's unified DOM runtime.
@@ -29,19 +35,15 @@ export function useDOMEvent<
   const passive = definition.passive;
   const type = definition.type;
 
-  useEffect(() => reactPanel.events.register({
-    ...definitionRef.current,
-    when: (event) => definitionRef.current.when?.(event) ?? true,
-  },
-    (event) => listenerRef.current(event),
-  ), [
-    capture,
-    definition.id,
-    reactPanel,
-    modeKey,
-    passive,
-    scope,
-    target,
-    type,
-  ]);
+  useEffect(
+    () =>
+      reactPanel.events.register(
+        {
+          ...definitionRef.current,
+          when: (event) => definitionRef.current.when?.(event) ?? true,
+        },
+        (event) => listenerRef.current(event),
+      ),
+    [capture, definition.id, reactPanel, modeKey, passive, scope, target, type],
+  );
 }

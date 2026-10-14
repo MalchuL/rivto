@@ -11,15 +11,22 @@ const almost = (a: number, b: number) => Math.abs(a - b) < 0.5;
 export function pathLength(points: readonly Point[]): number {
   let total = 0;
   for (let index = 1; index < points.length; index += 1) {
-    total += Math.hypot(points[index]!.x - points[index - 1]!.x, points[index]!.y - points[index - 1]!.y);
+    total += Math.hypot(
+      points[index]!.x - points[index - 1]!.x,
+      points[index]!.y - points[index - 1]!.y,
+    );
   }
   return total;
 }
 
 /** Point at fraction `t` (0–1) along a polyline. */
 export function pointAlongPolyline(points: readonly Point[], t: number): Point {
-  if (!points.length) return { x: 0, y: 0 };
-  if (points.length === 1) return { ...points[0]! };
+  if (!points.length) {
+    return { x: 0, y: 0 };
+  }
+  if (points.length === 1) {
+    return { ...points[0]! };
+  }
   const total = pathLength(points);
   let remaining = total * Math.min(1, Math.max(0, t));
   for (let index = 1; index < points.length; index += 1) {
@@ -59,8 +66,12 @@ export function connectorLabelPoint(points: readonly Point[], route: ConnectorRo
  */
 export function normalizeUprightLabelAngle(degrees: number): number {
   let angle = ((degrees % 360) + 360) % 360;
-  if (angle > 90 && angle < 270) angle -= 180;
-  if (Math.abs(angle) < 1e-6 || Math.abs(Math.abs(angle) - 180) < 1e-6) return 0;
+  if (angle > 90 && angle < 270) {
+    angle -= 180;
+  }
+  if (Math.abs(angle) < 1e-6 || Math.abs(Math.abs(angle) - 180) < 1e-6) {
+    return 0;
+  }
   return angle;
 }
 
@@ -74,7 +85,9 @@ export function connectorLabelTangent(points: readonly Point[], route: Connector
       y: 0.75 * (p1!.y - p0!.y) + 1.5 * (p2!.y - p1!.y) + 0.75 * (p3!.y - p2!.y),
     };
   }
-  if (points.length < 2) return { x: 1, y: 0 };
+  if (points.length < 2) {
+    return { x: 1, y: 0 };
+  }
   const total = pathLength(points);
   let remaining = total * 0.5;
   for (let index = 1; index < points.length; index += 1) {
@@ -95,44 +108,69 @@ export function connectorLabelCssDegrees(
   route: ConnectorRoute,
   rotation: ConnectorTextRotation = "horizontal",
 ): number {
-  if (rotation === "horizontal") return 0;
-  if (rotation === "90") return 90;
-  if (rotation === "180") return 180;
-  if (rotation === "270") return 270;
+  if (rotation === "horizontal") {
+    return 0;
+  }
+  if (rotation === "90") {
+    return 90;
+  }
+  if (rotation === "180") {
+    return 180;
+  }
+  if (rotation === "270") {
+    return 270;
+  }
   const tangent = connectorLabelTangent(points, route);
-  if (!tangent.x && !tangent.y) return 0;
+  if (!tangent.x && !tangent.y) {
+    return 0;
+  }
   return normalizeUprightLabelAngle((Math.atan2(tangent.y, tangent.x) * 180) / Math.PI);
 }
 
 /** Drops colinear intermediate vertices. */
 export function mergeColinear(points: readonly Point[]): Point[] {
-  if (points.length < 3) return [...points];
+  if (points.length < 3) {
+    return [...points];
+  }
   const result: Point[] = [points[0]!];
   for (let index = 1; index < points.length - 1; index += 1) {
     const prev = result[result.length - 1]!;
     const cur = points[index]!;
     const next = points[index + 1]!;
-    if (almost(prev.x, cur.x) && almost(cur.x, next.x)) continue;
-    if (almost(prev.y, cur.y) && almost(cur.y, next.y)) continue;
+    if (almost(prev.x, cur.x) && almost(cur.x, next.x)) {
+      continue;
+    }
+    if (almost(prev.y, cur.y) && almost(cur.y, next.y)) {
+      continue;
+    }
     result.push(cur);
   }
   result.push(points[points.length - 1]!);
   return result;
 }
 
-function exitPoint(point: Point, anchor: Point | undefined, other: Point): { point: Point; dir: Point } {
+function exitPoint(
+  point: Point,
+  anchor: Point | undefined,
+  other: Point,
+): { point: Point; dir: Point } {
   let dir = anchor ? anchorNormal(anchor) : { x: 0, y: 0 };
   if (!dir.x && !dir.y) {
     const dx = other.x - point.x;
     const dy = other.y - point.y;
-    dir = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+    dir =
+      Math.abs(dx) >= Math.abs(dy)
+        ? { x: Math.sign(dx) || 1, y: 0 }
+        : { x: 0, y: Math.sign(dy) || 1 };
   }
   return { point: { x: point.x + dir.x * OFFSET, y: point.y + dir.y * OFFSET }, dir };
 }
 
 function segmentCutsInterior(a: Point, b: Point, frame: VisualFrame): boolean {
   const inset = inflateFrame(frame, -1);
-  if (inset.width <= 0 || inset.height <= 0) return false;
+  if (inset.width <= 0 || inset.height <= 0) {
+    return false;
+  }
   const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   return pointInFrame(mid, inset) || segmentIntersectsFrame(a, b, inset);
 }
@@ -146,8 +184,12 @@ export function polylineCutsNodes(
   for (let index = 0; index < points.length - 1; index += 1) {
     const a = points[index]!;
     const b = points[index + 1]!;
-    if (sourceFrame && segmentCutsInterior(a, b, sourceFrame)) return true;
-    if (targetFrame && segmentCutsInterior(a, b, targetFrame)) return true;
+    if (sourceFrame && segmentCutsInterior(a, b, sourceFrame)) {
+      return true;
+    }
+    if (targetFrame && segmentCutsInterior(a, b, targetFrame)) {
+      return true;
+    }
   }
   return false;
 }
@@ -172,9 +214,11 @@ function orthogonalCandidates(
   if (sourceFrame && targetFrame) {
     const pad = OFFSET;
     const left = Math.min(sourceFrame.x, targetFrame.x) - pad;
-    const right = Math.max(sourceFrame.x + sourceFrame.width, targetFrame.x + targetFrame.width) + pad;
+    const right =
+      Math.max(sourceFrame.x + sourceFrame.width, targetFrame.x + targetFrame.width) + pad;
     const top = Math.min(sourceFrame.y, targetFrame.y) - pad;
-    const bottom = Math.max(sourceFrame.y + sourceFrame.height, targetFrame.y + targetFrame.height) + pad;
+    const bottom =
+      Math.max(sourceFrame.y + sourceFrame.height, targetFrame.y + targetFrame.height) + pad;
     candidates.push(
       [source, exit, { x: exit.x, y: top }, { x: entry.x, y: top }, entry, target],
       [source, exit, { x: exit.x, y: bottom }, { x: entry.x, y: bottom }, entry, target],
@@ -192,8 +236,12 @@ function centerBreakCost(points: readonly Point[], exit: Point, entry: Point): n
   for (let index = 0; index < points.length - 1; index += 1) {
     const a = points[index]!;
     const b = points[index + 1]!;
-    if (almost(a.x, b.x) && almost(a.x, midX)) return 0;
-    if (almost(a.y, b.y) && almost(a.y, midY)) return 0;
+    if (almost(a.x, b.x) && almost(a.x, midX)) {
+      return 0;
+    }
+    if (almost(a.y, b.y) && almost(a.y, midY)) {
+      return 0;
+    }
   }
   const along = pointAlongPolyline(points, 0.5);
   return Math.hypot(along.x - midX, along.y - midY);
@@ -214,10 +262,12 @@ function pickBest(
       center: centerBreakCost(points, exit, entry),
     }))
     .filter((candidate) => !candidate.cuts)
-    .sort((left, right) =>
-      left.center - right.center
-      || left.length - right.length
-      || left.points.length - right.points.length);
+    .sort(
+      (left, right) =>
+        left.center - right.center ||
+        left.length - right.length ||
+        left.points.length - right.points.length,
+    );
   return viable[0]?.points ?? candidates[0]!;
 }
 
@@ -252,11 +302,28 @@ export function connectorPoints(
 
   if (route === "straight") {
     const direct = [source, target];
-    if (!polylineCutsNodes(direct, sourceFrame, targetFrame)) return direct;
-    return pickBest([[source, exit, entry, target], ...orthogonalCandidates(source, target, exit, entry, sourceFrame, targetFrame)], exit, entry, sourceFrame, targetFrame);
+    if (!polylineCutsNodes(direct, sourceFrame, targetFrame)) {
+      return direct;
+    }
+    return pickBest(
+      [
+        [source, exit, entry, target],
+        ...orthogonalCandidates(source, target, exit, entry, sourceFrame, targetFrame),
+      ],
+      exit,
+      entry,
+      sourceFrame,
+      targetFrame,
+    );
   }
 
-  return pickBest(orthogonalCandidates(source, target, exit, entry, sourceFrame, targetFrame), exit, entry, sourceFrame, targetFrame);
+  return pickBest(
+    orthogonalCandidates(source, target, exit, entry, sourceFrame, targetFrame),
+    exit,
+    entry,
+    sourceFrame,
+    targetFrame,
+  );
 }
 
 /** SVG path `d` from absolute or local waypoints. */
@@ -269,7 +336,15 @@ export function connectorPath(
   sourceFrame?: VisualFrame,
   targetFrame?: VisualFrame,
 ): string {
-  const points = connectorPoints(source, target, route, sourceAnchor, targetAnchor, sourceFrame, targetFrame);
+  const points = connectorPoints(
+    source,
+    target,
+    route,
+    sourceAnchor,
+    targetAnchor,
+    sourceFrame,
+    targetFrame,
+  );
   if (route === "curve") {
     const c1 = points[1]!;
     const c2 = points[2]!;
@@ -288,7 +363,15 @@ export function connectorFrame(
   sourceFrame?: VisualFrame,
   targetFrame?: VisualFrame,
 ): VisualFrame {
-  const points = connectorPoints(source, target, route, sourceAnchor, targetAnchor, sourceFrame, targetFrame);
+  const points = connectorPoints(
+    source,
+    target,
+    route,
+    sourceAnchor,
+    targetAnchor,
+    sourceFrame,
+    targetFrame,
+  );
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   const left = Math.min(...xs);

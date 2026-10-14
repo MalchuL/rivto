@@ -27,7 +27,8 @@ import { normalizeRotation, unionFrames } from "../../elements/visuals/utils/geo
 
 const DEFAULT_FRAME: VisualFrame = { x: 120, y: 120, width: 160, height: 120 };
 const copy = <Value>(value: Value): Value => structuredClone(value);
-const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
 /**
  * Implements panel-bound canvas operations; definitions, commands and connector
  * maintenance have separate owners.
@@ -39,16 +40,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(v
  */
 export class EdgelessOperations {
   private readonly documentPanel: ChildrenPanel;
-  private rootIds() { return this.reactPanel ? this.reactPanel.blocks.getRootIds() : this.runtime.blocks.getRootIds(); }
   /**
    * Resolves element operations for the receiving occurrence.
    *
    * @returns Element operations bound to this panel; shared maintenance without
    * a receiving panel uses the whole document.
    */
-  get elements() { return this.reactPanel ? this.reactPanel.elements : this.runtime.elements; }
+  get elements() {
+    return this.reactPanel ? this.reactPanel.elements : this.runtime.elements;
+  }
 
-  private get defaults() { return this.tools.defaults; }
+  /**
+   * Reads the tool state's shared creation defaults.
+   *
+   * @returns Current palette defaults.
+   */
+  private get defaults() {
+    return this.tools.defaults;
+  }
   private readonly selection;
   private readonly listeners = new Set<() => void>();
   private unsubscribeDocument?: () => void;
@@ -68,8 +77,14 @@ export class EdgelessOperations {
    * @param reactPanel - Fixed receiving occurrence; omitted only for document-level named commands.
    * @throws If the panel belongs to another React editor.
    */
-  constructor(readonly runtime: ReactEditorApi, readonly reactPanel?: ReactPanelApi, private readonly tools = new EdgelessToolState(runtime.edgelessToolbar)) {
-    if (reactPanel && reactPanel.editor !== runtime) throw new Error("Canvas operations require a panel from the same React editor");
+  constructor(
+    readonly runtime: ReactEditorApi,
+    readonly reactPanel?: ReactPanelApi,
+    private readonly tools = new EdgelessToolState(runtime.edgelessToolbar),
+  ) {
+    if (reactPanel && reactPanel.editor !== runtime) {
+      throw new Error("Canvas operations require a panel from the same React editor");
+    }
     this.documentPanel = new ChildrenPanel(runtime);
     this.selection = new EdgelessSelectionRuntime(reactPanel ?? runtime);
   }
@@ -82,7 +97,9 @@ export class EdgelessOperations {
   observeChanges(): () => void {
     const onTypesChange = () => {
       const tool = this.tools.getTool();
-      if (tool.tool === "element" && !this.runtime.elementTypes.get(tool.type)?.creation) this.tools.setTool("select");
+      if (tool.tool === "element" && !this.runtime.elementTypes.get(tool.type)?.creation) {
+        this.tools.setTool("select");
+      }
       this.emit();
     };
     onTypesChange();
@@ -99,17 +116,14 @@ export class EdgelessOperations {
     return () => this.destroy();
   }
 
-  private emit(): void {
-    this.revision += 1;
-    [...this.listeners].forEach((listener) => listener());
-  }
-
   /**
    * Snapshot token for React external-store subscriptions.
    *
    * @returns Version incremented by document, type, tool, and preview notifications.
    */
-  getRevision(): number { return this.revision; }
+  getRevision(): number {
+    return this.revision;
+  }
 
   /**
    * Reads visual elements with registered defaults and local property previews.
@@ -122,8 +136,16 @@ export class EdgelessOperations {
    * @returns Detached visual panels backed by first-class elements, within this
    * instance's element scope; an empty array when no visual elements exist.
    */
-  getVisuals(): Array<Record<string, unknown> & { id: string; kind: string; frame: VisualFrame; zIndex: number }> {
-    return this.getRenderedElements().map(element => ({ ...element.props, id: element.id, kind: element.type, frame: element.frame, zIndex: element.zIndex }));
+  getVisuals(): Array<
+    Record<string, unknown> & { id: string; kind: string; frame: VisualFrame; zIndex: number }
+  > {
+    return this.getRenderedElements().map((element) => ({
+      ...element.props,
+      id: element.id,
+      kind: element.type,
+      frame: element.frame,
+      zIndex: element.zIndex,
+    }));
   }
 
   /**
@@ -132,7 +154,10 @@ export class EdgelessOperations {
    * @returns Detached element records for this panel; block cards and groups have their own surface hosts.
    */
   getRenderedElements(): EditorElementNode[] {
-    return this.elements.getElementNodes().filter(element => element.type !== 'block' && element.type !== 'group').map(element => this.renderedElement(element));
+    return this.elements
+      .getElementNodes()
+      .filter((element) => element.type !== "block" && element.type !== "group")
+      .map((element) => this.renderedElement(element));
   }
 
   /**
@@ -142,23 +167,10 @@ export class EdgelessOperations {
    */
   getRenderedElement(id: string): EditorElementNode | undefined {
     const element = this.elements.getElementNode(id);
-    if (!element) return undefined;
-    return this.renderedElement(element);
-  }
-
-  private renderedElement(element: EditorElementNode): EditorElementNode {
-    const definition = this.runtime.elementRegistry.get(element.type);
-    const preview = this.propertyPreview.get(element.id);
-    let props = { ...definition?.defaults, ...element.props, ...preview };
-    if (preview && definition?.validate) {
-      try {
-        props = definition.validate(copy(props));
-      } catch {
-        // Concurrent document changes can invalidate an otherwise valid local preview.
-        props = { ...definition.defaults, ...element.props };
-      }
+    if (!element) {
+      return undefined;
     }
-    return { ...element, frame: { ...element.frame }, props };
+    return this.renderedElement(element);
   }
 
   /**
@@ -172,9 +184,14 @@ export class EdgelessOperations {
    * All targets are checked before any pending preview is changed.
    */
   previewProperties(ids: readonly string[], patch: Record<string, unknown>): void {
-    const targets = ids.map(id => this.getRenderedElement(id));
-    if (!targets.length || targets.some(element => !element || element.type !== targets[0]!.type)) throw new Error('Property preview requires existing elements of one type');
-    const prepared = targets.map(element => {
+    const targets = ids.map((id) => this.getRenderedElement(id));
+    if (
+      !targets.length ||
+      targets.some((element) => !element || element.type !== targets[0]!.type)
+    ) {
+      throw new Error("Property preview requires existing elements of one type");
+    }
+    const prepared = targets.map((element) => {
       const props = copy({ ...element!.props, ...this.propertyPreview.get(element!.id), ...patch });
       this.runtime.elementRegistry.get(element!.type)?.validate?.(props);
       return element!.id;
@@ -199,9 +216,11 @@ export class EdgelessOperations {
       this.emit();
       return;
     }
-    const updates = entries.filter(([id]) => this.elements.hasElement(id)).map(([id, props]) => ({ id, patch: { props } }));
+    const updates = entries
+      .filter(([id]) => this.elements.hasElement(id))
+      .map(([id, props]) => ({ id, patch: { props } }));
     const updated = this.elements.updateElements(updates);
-    updated.forEach(element => this.remember(element.type, element.props));
+    updated.forEach((element) => this.remember(element.type, element.props));
     this.propertyPreview.clear();
     this.emit();
   }
@@ -212,7 +231,9 @@ export class EdgelessOperations {
    * Notifies local subscribers only when pending preview values were present.
    */
   discardPropertyPreview(): void {
-    if (!this.propertyPreview.size) return;
+    if (!this.propertyPreview.size) {
+      return;
+    }
     this.propertyPreview.clear();
     this.emit();
   }
@@ -222,7 +243,9 @@ export class EdgelessOperations {
    *
    * @returns Whether any element has pending preview properties.
    */
-  hasPropertyPreview(): boolean { return this.propertyPreview.size > 0; }
+  hasPropertyPreview(): boolean {
+    return this.propertyPreview.size > 0;
+  }
 
   /**
    * Reads logical groups within this instance's element scope.
@@ -232,9 +255,17 @@ export class EdgelessOperations {
    */
   getGroups(): VisualGroup[] {
     return this.elements.getElementNodes().flatMap((element) => {
-      if (element.type !== "group") return [];
+      if (element.type !== "group") {
+        return [];
+      }
       const children = element.childIds;
-      return [{ id: element.id, title: typeof element.props.title === "string" ? element.props.title : "Group", children }];
+      return [
+        {
+          id: element.id,
+          title: typeof element.props.title === "string" ? element.props.title : "Group",
+          children,
+        },
+      ];
     });
   }
 
@@ -244,7 +275,9 @@ export class EdgelessOperations {
    * @param item - Element ID.
    * @returns Derived outer geometry, or undefined when geometry is unavailable.
    */
-  getBounds(item: EdgelessSelectionRef): VisualFrame | undefined { return this.bounds(item); }
+  getBounds(item: EdgelessSelectionRef): VisualFrame | undefined {
+    return this.bounds(item);
+  }
   /**
    * Reads canvas geometry before applying visual rotation.
    *
@@ -252,21 +285,27 @@ export class EdgelessOperations {
    * @returns Its frame before rotation; groups derive it from current descendants.
    * Returns undefined when the element has no usable geometry.
    */
-  getFrame(item: EdgelessSelectionRef): VisualFrame | undefined { return this.geometry.frame(item); }
+  getFrame(item: EdgelessSelectionRef): VisualFrame | undefined {
+    return this.geometry.frame(item);
+  }
   /**
    * Reads rotation from current element properties.
    *
    * @param item - Element ID.
    * @returns Its normalized visual rotation in degrees, or zero for absolute-geometry types or missing rotation.
    */
-  getRotation(item: EdgelessSelectionRef): number { return this.rotation(item); }
+  getRotation(item: EdgelessSelectionRef): number {
+    return this.rotation(item);
+  }
   /**
    * Reads the stored stacking order without deriving group bounds.
    *
    * @param item - Element ID.
    * @returns Its persisted stacking order, or zero when the element is missing.
    */
-  getZIndex(item: EdgelessSelectionRef): number { return this.element(item)?.zIndex ?? 0; }
+  getZIndex(item: EdgelessSelectionRef): number {
+    return this.element(item)?.zIndex ?? 0;
+  }
   /**
    * Derives the stacking order used by a group hit target.
    *
@@ -274,33 +313,48 @@ export class EdgelessOperations {
    * @returns A layer below every descendant and the group record, so older lower canvas content remains behind it.
    */
   getGroupHitZIndex(item: EdgelessSelectionRef): number {
-    return Math.min(...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0), this.getZIndex(item)) - 1;
+    return (
+      Math.min(
+        ...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0),
+        this.getZIndex(item),
+      ) - 1
+    );
   }
   /**
    * Reads the creation tool owned by this mounted edgeless representation.
    *
    * @returns Current session creation tool; treat the returned object as read-only.
    */
-  getTool(): EdgelessVisualTool { return this.tools.getTool(); }
+  getTool(): EdgelessVisualTool {
+    return this.tools.getTool();
+  }
   /**
    * Reads the remembered size for placement gestures.
    *
    * @param fallback - Initial size from the creation factory; omitted values use the standard 160×120 size.
    * @returns Detached remembered size, or the supplied/default initial size, in canvas units.
    */
-  getPlaceSize(fallback?: Pick<VisualFrame, "width" | "height">): Pick<VisualFrame, "width" | "height"> { return this.tools.getPlaceSize(fallback); }
+  getPlaceSize(
+    fallback?: Pick<VisualFrame, "width" | "height">,
+  ): Pick<VisualFrame, "width" | "height"> {
+    return this.tools.getPlaceSize(fallback);
+  }
   /**
    * Remembers the final interactive drag size for the active place preset.
    *
    * @param frame - Final drag geometry in canvas units; only width and height are remembered.
    */
-  rememberPlaceSize(frame: VisualFrame): void { return this.tools.rememberPlaceSize(frame); }
+  rememberPlaceSize(frame: VisualFrame): void {
+    return this.tools.rememberPlaceSize(frame);
+  }
   /**
    * Reads creation properties remembered for this mounted edgeless representation.
    *
    * @returns Detached session defaults used by creation menus.
    */
-  getDefaults() { return this.tools.getDefaults(); }
+  getDefaults() {
+    return this.tools.getDefaults();
+  }
   /**
    * Resolves the last activated entry for a creation-toolbar group (session memory).
    *
@@ -308,7 +362,9 @@ export class EdgelessOperations {
    * @returns Shared registered entry, falling back to the group default or first tool;
    * undefined when the group is absent or has no available members.
    */
-  getGroupTool(groupId: string): EdgelessToolbarTool | undefined { return this.tools.getGroupTool(groupId); }
+  getGroupTool(groupId: string): EdgelessToolbarTool | undefined {
+    return this.tools.getGroupTool(groupId);
+  }
   /**
    * Activates the remembered entry, or the first available default, for a group.
    *
@@ -317,7 +373,9 @@ export class EdgelessOperations {
    */
   activateToolbarGroup(groupId: string): void {
     const entry = this.getGroupTool(groupId);
-    if (entry) this.activateToolbarTool(entry.id);
+    if (entry) {
+      this.activateToolbarTool(entry.id);
+    }
   }
   /**
    * Activates a registered toolbar entry using this panel's shared operations.
@@ -327,8 +385,12 @@ export class EdgelessOperations {
    */
   activateToolbarTool(id: string): void {
     const entry = this.runtime.edgelessToolbar.getTool(id);
-    if (!entry) return;
-    if (!this.reactPanel) throw new Error('Toolbar activation requires a React panel');
+    if (!entry) {
+      return;
+    }
+    if (!this.reactPanel) {
+      throw new Error("Toolbar activation requires a React panel");
+    }
     entry.activate({ operations: this, reactPanel: this.reactPanel });
   }
   /**
@@ -336,7 +398,9 @@ export class EdgelessOperations {
    *
    * @param payload - Toolbar preset; sticker style fields are retained in the active tool.
    */
-  setPlaceTool(payload: PresetPayload): void { return this.tools.setPlaceTool(payload); }
+  setPlaceTool(payload: PresetPayload): void {
+    return this.tools.setPlaceTool(payload);
+  }
   /**
    * Updates local creation defaults without mutating document content.
    *
@@ -345,7 +409,12 @@ export class EdgelessOperations {
    * @param kind - Built-in visual category whose creation defaults change.
    * @param patch - Property values to clone into the session defaults.
    */
-  setCreationDefaults(kind: "shape" | "drawing" | "text" | "sticker" | "connector", patch: Record<string, unknown>): void { return this.tools.setCreationDefaults(kind, patch); }
+  setCreationDefaults(
+    kind: "shape" | "drawing" | "text" | "sticker" | "connector",
+    patch: Record<string, unknown>,
+  ): void {
+    return this.tools.setCreationDefaults(kind, patch);
+  }
   /**
    * Selects a brush and its complete visual preset for subsequent strokes.
    *
@@ -353,7 +422,9 @@ export class EdgelessOperations {
    *
    * @param brush - Built-in brush preset to activate.
    */
-  setDrawingBrush(brush: keyof typeof drawingDefaults): void { return this.tools.setDrawingBrush(brush); }
+  setDrawingBrush(brush: keyof typeof drawingDefaults): void {
+    return this.tools.setDrawingBrush(brush);
+  }
   /**
    * Observes local canvas state invalidations without an initial callback.
    *
@@ -363,7 +434,10 @@ export class EdgelessOperations {
    * @param listener - Callback that can reread tool, selection, and visual state.
    * @returns Subscription disposer; destroy also releases this listener.
    */
-  subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
   /**
    * Releases commands and local listeners without deleting persisted elements.
@@ -396,26 +470,15 @@ export class EdgelessOperations {
    * @returns Detached prepared input with complete frame and normalized props.
    * @throws If the type is absent, its preparation/validation rejects data, or frame is invalid.
    */
-  prepareElementCreation(input: CreateElementInput): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
+  prepareElementCreation(
+    input: CreateElementInput,
+  ): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
     const prepared = this.prepareCreationInput(input);
-    const props = copy({ ...this.runtime.elementRegistry.get(prepared.type)?.defaults, ...prepared.props });
+    const props = copy({
+      ...this.runtime.elementRegistry.get(prepared.type)?.defaults,
+      ...prepared.props,
+    });
     return { ...prepared, props: this.runtime.elementRegistry.validate(prepared.type, props) };
-  }
-
-  /** Shares defaults and pure geometry preparation; persisted insertion owns its own single validation pass. */
-  private prepareCreationInput(input: CreateElementInput): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
-    const registration = this.runtime.elementTypes.get(input.type);
-    if (!registration) throw new Error(`Element type ${input.type} is not registered`);
-    const preparedInput = { ...copy(input), frame: this.frame({ ...DEFAULT_FRAME, ...input.frame }), zIndex: input.zIndex ?? 0 };
-    const sessionDefaults = this.sessionDefaults(registration.behavior?.defaultsGroup, registration.definition.defaults) ?? registration.definition.defaults ?? {};
-    const defaults = registration.behavior?.creationDefaults?.(sessionDefaults, preparedInput) ?? sessionDefaults;
-    const props = copy({ ...defaults, ...this.creationDefaults.get(input.type) });
-    for (const [key, value] of Object.entries(input.props ?? {})) {
-      if (value !== undefined || !(key in props)) props[key] = copy(value);
-    }
-    const prepared = { ...preparedInput, props };
-    const result = registration.behavior?.create?.(prepared, this.reactPanel ?? this.documentPanel) ?? prepared;
-    return { ...result, frame: this.frame({ ...DEFAULT_FRAME, ...result.frame }), props: result.props ?? {} };
   }
 
   /**
@@ -432,7 +495,9 @@ export class EdgelessOperations {
    * @throws If the type is not registered, geometry is not finite and positive, or its definition rejects the input.
    */
   createElement(input: CreateElementInput): EditorElementNode {
-    const zIndex = input.zIndex ?? Math.max(0, ...this.elements.getElementNodes().map(element => element.zIndex)) + 1;
+    const zIndex =
+      input.zIndex ??
+      Math.max(0, ...this.elements.getElementNodes().map((element) => element.zIndex)) + 1;
     const prepared = this.prepareCreationInput({ ...input, zIndex });
     const element = this.elements.insertElement(prepared);
     this.selection.set([element.id]);
@@ -447,9 +512,16 @@ export class EdgelessOperations {
    * @throws If the payload type is unregistered or creation processing or validation fails.
    */
   create(payload: CreateVisualPayload): EditorElementNode {
-    if (!payload || !this.runtime.elementTypes.get(payload.kind)) throw new Error("Element type is not registered");
+    if (!payload || !this.runtime.elementTypes.get(payload.kind)) {
+      throw new Error("Element type is not registered");
+    }
     const { kind, frame, ...props } = payload;
-    return this.createElement({ type: kind, frame: { ...DEFAULT_FRAME, ...frame }, zIndex: Math.max(0, ...this.elements.getElementNodes().map(element => element.zIndex)) + 1, props });
+    return this.createElement({
+      type: kind,
+      frame: { ...DEFAULT_FRAME, ...frame },
+      zIndex: Math.max(0, ...this.elements.getElementNodes().map((element) => element.zIndex)) + 1,
+      props,
+    });
   }
 
   /**
@@ -462,12 +534,16 @@ export class EdgelessOperations {
    */
   update({ id, patch }: UpdateVisualPayload): EditorElementNode {
     const current = this.visual(id);
-    if (!current) throw new Error(`Edgeless visual ${id} not found`);
+    if (!current) {
+      throw new Error(`Edgeless visual ${id} not found`);
+    }
     const safe = copy(patch) as Record<string, unknown>;
     delete safe.id;
     delete safe.kind;
-    if ("rotation" in safe) safe.rotation = normalizeRotation(typeof safe.rotation === "number" ? safe.rotation : 0);
-    const framePatch = isRecord(safe.frame) ? safe.frame as Partial<VisualFrame> : undefined;
+    if ("rotation" in safe) {
+      safe.rotation = normalizeRotation(typeof safe.rotation === "number" ? safe.rotation : 0);
+    }
+    const framePatch = isRecord(safe.frame) ? (safe.frame as Partial<VisualFrame>) : undefined;
     delete safe.frame;
     delete safe.zIndex;
     const updated = this.elements.updateElement(id, {
@@ -500,8 +576,12 @@ export class EdgelessOperations {
    */
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
-    if (!visuals.length || visuals.some((visual) => !visual || visual.type !== visuals[0]!.type)) throw new Error("Shared properties require one visual type");
-    this.runtime.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
+    if (!visuals.length || visuals.some((visual) => !visual || visual.type !== visuals[0]!.type)) {
+      throw new Error("Shared properties require one visual type");
+    }
+    this.runtime.history.batchUpdates(() =>
+      ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })),
+    );
   }
 
   /**
@@ -514,7 +594,9 @@ export class EdgelessOperations {
    * @throws If either delta is not finite.
    */
   move(dx: number, dy: number): void {
-    if (!Number.isFinite(dx) || !Number.isFinite(dy)) throw new Error("Move delta must be finite");
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+      throw new Error("Move delta must be finite");
+    }
     this.translate(this.selection.get().items, dx, dy);
   }
 
@@ -530,25 +612,31 @@ export class EdgelessOperations {
   resize(width: number, height: number): void {
     const items = this.selection.get().items;
     const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? []));
-    if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) return;
+    if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) {
+      return;
+    }
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => {
-      const frame = this.element(id)?.frame;
-      if (!frame) return;
-      const center = {
-        x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX,
-        y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY,
-      };
-      const nextWidth = frame.width * scaleX;
-      const nextHeight = frame.height * scaleY;
-      this.setFrame(id, {
-        x: center.x - nextWidth / 2,
-        y: center.y - nextHeight / 2,
-        width: nextWidth,
-        height: nextHeight,
-      });
-    }));
+    this.runtime.history.batchUpdates(() =>
+      this.leaves(items).forEach((id) => {
+        const frame = this.element(id)?.frame;
+        if (!frame) {
+          return;
+        }
+        const center = {
+          x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX,
+          y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY,
+        };
+        const nextWidth = frame.width * scaleX;
+        const nextHeight = frame.height * scaleY;
+        this.setFrame(id, {
+          x: center.x - nextWidth / 2,
+          y: center.y - nextHeight / 2,
+          width: nextWidth,
+          height: nextHeight,
+        });
+      }),
+    );
   }
 
   /**
@@ -570,10 +658,16 @@ export class EdgelessOperations {
     const selected = [...this.selection.get().items];
     const internalConnectors = this.relatedElementIds(selected);
     const items = [...new Set([...selected, ...internalConnectors])];
-    if (items.some((id) => !this.elements.hasElement(id))) throw new Error("Grouped objects must exist");
-    if (items.length < 2) throw new Error("Grouping requires at least two objects");
+    if (items.some((id) => !this.elements.hasElement(id))) {
+      throw new Error("Grouped objects must exist");
+    }
+    if (items.length < 2) {
+      throw new Error("Grouping requires at least two objects");
+    }
     const parents = new Set(items.map((id) => this.parentId(id)));
-    if (parents.size !== 1) throw new Error("Grouped objects must share one parent");
+    if (parents.size !== 1) {
+      throw new Error("Grouped objects must share one parent");
+    }
     const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? [])) ?? DEFAULT_FRAME;
     const parentId = this.parentId(items[0]!) ?? null;
     const parent = parentId ? this.element(parentId) : undefined;
@@ -583,12 +677,18 @@ export class EdgelessOperations {
     const ordered = siblings.filter((id) => selectedIds.has(id));
     const group = this.runtime.history.batchUpdates(() => {
       const group = this.elements.insertElement({
-        type: "group", frame: bounds,
+        type: "group",
+        frame: bounds,
         zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
         props: { title: `Group ${this.getGroups().length + 1}` },
       });
       if (this.reactPanel) {
-        this.reactPanel.elements.moveElements([group.id], parentId === null ? { root: true, beforeId: ordered[0] } : { parentId, beforeId: ordered[0] });
+        this.reactPanel.elements.moveElements(
+          [group.id],
+          parentId === null
+            ? { root: true, beforeId: ordered[0] }
+            : { parentId, beforeId: ordered[0] },
+        );
       } else {
         this.runtime.elements.moveElements([group.id], { parentId, beforeId: ordered[0] });
       }
@@ -608,12 +708,16 @@ export class EdgelessOperations {
   ungroup(): void {
     const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
     const children: string[] = [];
-    this.runtime.history.batchUpdates(() => selected.forEach((id) => {
-      const group = this.groupRecord(id);
-      if (!group) return;
-      children.push(...group.children);
-      this.elements.removeElementAndPromoteChildren(id);
-    }));
+    this.runtime.history.batchUpdates(() =>
+      selected.forEach((id) => {
+        const group = this.groupRecord(id);
+        if (!group) {
+          return;
+        }
+        children.push(...group.children);
+        this.elements.removeElementAndPromoteChildren(id);
+      }),
+    );
     this.selection.set(children);
   }
 
@@ -626,14 +730,37 @@ export class EdgelessOperations {
    * @param mode - Edge or center of the selection bounds to align against.
    */
   align(mode: EdgelessAlignment): void {
-    const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; });
+    const entries = this.selection.get().items.flatMap((id) => {
+      const bounds = this.bounds(id);
+      return bounds ? [{ id, bounds }] : [];
+    });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
-    if (!outer || entries.length < 2) return;
-    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
-      const dx = mode === "left" ? outer.x - bounds.x : mode === "center" ? outer.x + outer.width / 2 - bounds.width / 2 - bounds.x : mode === "right" ? outer.x + outer.width - bounds.width - bounds.x : 0;
-      const dy = mode === "top" ? outer.y - bounds.y : mode === "middle" ? outer.y + outer.height / 2 - bounds.height / 2 - bounds.y : mode === "bottom" ? outer.y + outer.height - bounds.height - bounds.y : 0;
-      if (dx || dy) this.translate([id], dx, dy);
-    }));
+    if (!outer || entries.length < 2) {
+      return;
+    }
+    this.runtime.history.batchUpdates(() =>
+      entries.forEach(({ id, bounds }) => {
+        let dx = 0;
+        if (mode === "left") {
+          dx = outer.x - bounds.x;
+        } else if (mode === "center") {
+          dx = outer.x + outer.width / 2 - bounds.width / 2 - bounds.x;
+        } else if (mode === "right") {
+          dx = outer.x + outer.width - bounds.width - bounds.x;
+        }
+        let dy = 0;
+        if (mode === "top") {
+          dy = outer.y - bounds.y;
+        } else if (mode === "middle") {
+          dy = outer.y + outer.height / 2 - bounds.height / 2 - bounds.y;
+        } else if (mode === "bottom") {
+          dy = outer.y + outer.height - bounds.height - bounds.y;
+        }
+        if (dx || dy) {
+          this.translate([id], dx, dy);
+        }
+      }),
+    );
   }
 
   /**
@@ -645,20 +772,35 @@ export class EdgelessOperations {
    * @param axis - Canvas axis along which elements are sorted and spaced.
    */
   distribute(axis: "horizontal" | "vertical"): void {
-    const entries = this.selection.get().items.flatMap((id) => { const bounds = this.bounds(id); return bounds ? [{ id, bounds }] : []; })
-      .sort((a, b) => axis === "horizontal" ? a.bounds.x - b.bounds.x : a.bounds.y - b.bounds.y);
-    if (entries.length < 3) return;
+    const entries = this.selection
+      .get()
+      .items.flatMap((id) => {
+        const bounds = this.bounds(id);
+        return bounds ? [{ id, bounds }] : [];
+      })
+      .sort((a, b) => (axis === "horizontal" ? a.bounds.x - b.bounds.x : a.bounds.y - b.bounds.y));
+    if (entries.length < 3) {
+      return;
+    }
     const first = entries[0]!.bounds;
     const last = entries.at(-1)!.bounds;
-    const occupied = entries.reduce((sum, entry) => sum + (axis === "horizontal" ? entry.bounds.width : entry.bounds.height), 0);
-    const span = axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
+    const occupied = entries.reduce(
+      (sum, entry) => sum + (axis === "horizontal" ? entry.bounds.width : entry.bounds.height),
+      0,
+    );
+    const span =
+      axis === "horizontal" ? last.x + last.width - first.x : last.y + last.height - first.y;
     const gap = (span - occupied) / (entries.length - 1);
     let cursor = axis === "horizontal" ? first.x : first.y;
-    this.runtime.history.batchUpdates(() => entries.forEach(({ id, bounds }) => {
-      const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
-      if (delta) this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
-      cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
-    }));
+    this.runtime.history.batchUpdates(() =>
+      entries.forEach(({ id, bounds }) => {
+        const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
+        if (delta) {
+          this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
+        }
+        cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
+      }),
+    );
   }
 
   /**
@@ -672,16 +814,25 @@ export class EdgelessOperations {
   reorder(direction: EdgelessReorder): void {
     const items = this.selection.get().items;
     const selected = new Set([...this.leaves(items), ...this.relatedElementIds(items)]);
-    const layers = this.elements.getElementNodes().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
+    const layers = this.elements
+      .getElementNodes()
+      .filter((element) => element.type !== "group")
+      .sort((a, b) => a.zIndex - b.zIndex)
+      .map((element) => element.id);
     const moving = layers.filter((id) => selected.has(id));
     const stationary = layers.filter((id) => !selected.has(id));
     const frontmost = Math.max(...moving.map((id) => layers.indexOf(id)));
     const current = stationary.filter((id) => layers.indexOf(id) < frontmost).length;
     let insertion: number;
-    if (direction === "front") insertion = stationary.length;
-    else if (direction === "back") insertion = 0;
-    else if (direction === "forward") insertion = Math.min(stationary.length, current + 1);
-    else insertion = Math.max(0, current - 1);
+    if (direction === "front") {
+      insertion = stationary.length;
+    } else if (direction === "back") {
+      insertion = 0;
+    } else if (direction === "forward") {
+      insertion = Math.min(stationary.length, current + 1);
+    } else {
+      insertion = Math.max(0, current - 1);
+    }
     const next = [...stationary];
     next.splice(insertion, 0, ...moving);
     this.elements.updateElements(next.map((id, zIndex) => ({ id, patch: { zIndex } })));
@@ -695,8 +846,12 @@ export class EdgelessOperations {
    */
   setBlockAutoHeight(items: readonly EdgelessSelectionRef[], enabled: boolean): void {
     const blocks = items.filter((id) => this.element(id)?.type === "block");
-    if (!blocks.length) return;
-    this.elements.updateElements(blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })));
+    if (!blocks.length) {
+      return;
+    }
+    this.elements.updateElements(
+      blocks.map((id) => ({ id, patch: { props: { autoHeight: enabled } } })),
+    );
   }
 
   /**
@@ -721,18 +876,26 @@ export class EdgelessOperations {
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
     const leaves = this.leaves(selected);
-    const blockIds = leaves.flatMap(id => {
+    const blockIds = leaves.flatMap((id) => {
       const element = this.element(id);
       return element?.type === "block" ? blockIdsOf(element, this.rootIds()) : [];
     });
     const reactPanel = this.reactPanel;
-    if (reactPanel && blockIds.some(id => !reactPanel.blocks.canRemove(id))) return;
+    if (reactPanel && blockIds.some((id) => !reactPanel.blocks.canRemove(id))) {
+      return;
+    }
     this.runtime.history.batchUpdates(() => {
       leaves.forEach((id) => {
         const element = this.element(id);
-        if (element?.type === "block") blockIdsOf(element, this.rootIds()).forEach((blockId) => this.runtime.blocks.removeBlock(blockId));
+        if (element?.type === "block") {
+          blockIdsOf(element, this.rootIds()).forEach((blockId) =>
+            this.runtime.blocks.removeBlock(blockId),
+          );
+        }
       });
-      this.elements.removeElements([...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")])]);
+      this.elements.removeElements([
+        ...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")]),
+      ]);
     });
   }
 
@@ -742,29 +905,26 @@ export class EdgelessOperations {
    * @param items - Element or group IDs; duplicates and missing IDs are ignored.
    * @returns Leaf IDs represented by an element or nested group selection.
    */
-  getLeaves(items: readonly string[]): string[] { return this.leaves(items); }
+  getLeaves(items: readonly string[]): string[] {
+    return this.leaves(items);
+  }
   /**
    * Resolves parentage without exposing an excluded panel container.
    *
    * @param id - Element ID to locate.
    * @returns Direct parent within this panel, or undefined for a panel root or missing element.
    */
-  getParentId(id: string): string | undefined { return this.parentId(id); }
+  getParentId(id: string): string | undefined {
+    return this.parentId(id);
+  }
 
   /**
    * Reads the active canvas selection for this occurrence.
    *
    * @returns Detached active canvas selection.
    */
-  getSelection() { return this.selection.get(); }
-
-  private createClipboardBundle(items: readonly string[], operation: "copy" | "cut" | "duplicate" = "copy"): ClipboardBundle {
-    return this.runtime.clipboard.copyElements(items, (this.reactPanel ?? this.runtime), operation);
-  }
-
-  private pasteClipboardBundle(bundle: ClipboardBundle, operation: "paste" | "duplicate" = "paste"): EditorElementNode[] {
-    this.runtime.clipboard.paste({ bundle, placement: { mergeText: false } }, (this.reactPanel ?? this.runtime), operation);
-    return this.selection.get().items.flatMap(id => this.elements.getElementNode(id) ?? []);
+  getSelection() {
+    return this.selection.get();
   }
 
   /**
@@ -776,7 +936,13 @@ export class EdgelessOperations {
    * @throws If the requested element creation tool is unregistered or the tool configuration is unsupported.
    */
   setTool(value: EdgelessVisualTool | "select"): void {
-    if (typeof value === "object" && value.tool === "element" && !this.runtime.elementTypes.get(value.type)?.creation) throw new Error(`Element creation tool ${value.type} is not registered`);
+    if (
+      typeof value === "object" &&
+      value.tool === "element" &&
+      !this.runtime.elementTypes.get(value.type)?.creation
+    ) {
+      throw new Error(`Element creation tool ${value.type} is not registered`);
+    }
     return this.tools.setTool(value);
   }
 
@@ -787,7 +953,9 @@ export class EdgelessOperations {
    * @throws If the value is not an array of strings or any element is absent or outside the panel.
    */
   select(value: unknown): void {
-    if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !this.element(id))) throw new Error("Edgeless selection must contain existing element IDs");
+    if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !this.element(id))) {
+      throw new Error("Edgeless selection must contain existing element IDs");
+    }
     this.selection.set(value as string[]);
   }
 
@@ -796,7 +964,9 @@ export class EdgelessOperations {
    *
    * Persisted elements, local tools, and property previews remain unchanged.
    */
-  clearSelection(): void { this.selection.clear(); }
+  clearSelection(): void {
+    this.selection.clear();
+  }
 
   /**
    * Duplicates the active selection through the clipboard copy/paste pipeline.
@@ -806,18 +976,175 @@ export class EdgelessOperations {
    */
   duplicateSelection(): EditorElementNode[] {
     const items = this.selection.get().items;
-    if (!items.length) return [];
-    const created = this.pasteClipboardBundle(this.createClipboardBundle(items, "duplicate"), "duplicate");
+    if (!items.length) {
+      return [];
+    }
+    const created = this.pasteClipboardBundle(
+      this.createClipboardBundle(items, "duplicate"),
+      "duplicate",
+    );
     const createdById = new Map(created.map((element) => [element.id, element]));
     return this.selection.get().items.flatMap((id) => createdById.get(id) ?? []);
   }
 
-  private translate(items: readonly string[], dx: number, dy: number): void {
-    this.runtime.history.batchUpdates(() => this.leaves(items).forEach((id) => { const frame = this.element(id)?.frame; if (frame) this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy }); }));
+  // Resolve through this controller so panel proxies keep their Panel boundary.
+  /**
+   * Creates a geometry resolver over the current element and rotation readers.
+   *
+   * @returns A resolver that reads current document geometry when used.
+   */
+  private get geometry() {
+    return new ElementGeometry(
+      (id) => this.element(id),
+      (id) => this.rotation(id),
+    );
+  }
+  /**
+   * Reads the root blocks visible in the operation's scope.
+   *
+   * @returns Panel root IDs when mounted, otherwise document root IDs.
+   */
+  private rootIds() {
+    return this.reactPanel ? this.reactPanel.blocks.getRootIds() : this.runtime.blocks.getRootIds();
   }
 
+  /**
+   * Advances the operation revision and synchronously notifies a snapshot of listeners.
+   */
+  private emit(): void {
+    this.revision += 1;
+    [...this.listeners].forEach((listener) => listener());
+  }
+
+  /**
+   * Combines persisted properties, registered defaults, and a valid local preview without changing the document.
+   *
+   * @param element - Element snapshot or DOM host used by the operation.
+   * @returns Detached rendered node; invalid previews fall back to persisted properties and defaults.
+   */
+  private renderedElement(element: EditorElementNode): EditorElementNode {
+    const definition = this.runtime.elementRegistry.get(element.type);
+    const preview = this.propertyPreview.get(element.id);
+    let props = { ...definition?.defaults, ...element.props, ...preview };
+    if (preview && definition?.validate) {
+      try {
+        props = definition.validate(copy(props));
+      } catch {
+        // Concurrent document changes can invalidate an otherwise valid local preview.
+        props = { ...definition.defaults, ...element.props };
+      }
+    }
+    return { ...element, frame: { ...element.frame }, props };
+  }
+
+  /** Shares defaults and pure geometry preparation; persisted insertion owns its own single validation pass. */
+  private prepareCreationInput(
+    input: CreateElementInput,
+  ): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
+    const registration = this.runtime.elementTypes.get(input.type);
+    if (!registration) {
+      throw new Error(`Element type ${input.type} is not registered`);
+    }
+    const preparedInput = {
+      ...copy(input),
+      frame: this.frame({ ...DEFAULT_FRAME, ...input.frame }),
+      zIndex: input.zIndex ?? 0,
+    };
+    const sessionDefaults =
+      this.sessionDefaults(
+        registration.behavior?.defaultsGroup,
+        registration.definition.defaults,
+      ) ??
+      registration.definition.defaults ??
+      {};
+    const defaults =
+      registration.behavior?.creationDefaults?.(sessionDefaults, preparedInput) ?? sessionDefaults;
+    const props = copy({ ...defaults, ...this.creationDefaults.get(input.type) });
+    for (const [key, value] of Object.entries(input.props ?? {})) {
+      if (value !== undefined || !(key in props)) {
+        props[key] = copy(value);
+      }
+    }
+    const prepared = { ...preparedInput, props };
+    const result =
+      registration.behavior?.create?.(prepared, this.reactPanel ?? this.documentPanel) ?? prepared;
+    return {
+      ...result,
+      frame: this.frame({ ...DEFAULT_FRAME, ...result.frame }),
+      props: result.props ?? {},
+    };
+  }
+
+  /**
+   * Copies the selected elements through the shared clipboard converter pipeline.
+   *
+   * @param items - Selected element IDs to copy or transform.
+   * @param operation - Clipboard operation associated with conversion; defaults are specified by the method signature.
+   * @returns Clipboard bundle for the requested operation, defaulting to copy.
+   */
+  private createClipboardBundle(
+    items: readonly string[],
+    operation: "copy" | "cut" | "duplicate" = "copy",
+  ): ClipboardBundle {
+    return this.runtime.clipboard.copyElements(items, this.reactPanel ?? this.runtime, operation);
+  }
+
+  /**
+   * Pastes a bundle without merging text and reads the resulting selection.
+   *
+   * @param bundle - Clipboard bundle containing source blocks, elements, and identity metadata.
+   * @param operation - Clipboard operation associated with conversion; defaults are specified by the method signature.
+   * @returns Existing element nodes selected after paste or duplicate.
+   */
+  private pasteClipboardBundle(
+    bundle: ClipboardBundle,
+    operation: "paste" | "duplicate" = "paste",
+  ): EditorElementNode[] {
+    this.runtime.clipboard.paste(
+      { bundle, placement: { mergeText: false } },
+      this.reactPanel ?? this.runtime,
+      operation,
+    );
+    return this.selection.get().items.flatMap((id) => this.elements.getElementNode(id) ?? []);
+  }
+
+  /**
+   * Translates reachable leaf frames within a history batch, omitting missing elements.
+   *
+   * @param items - Selected element IDs to copy or transform.
+   * @param dx - Horizontal translation in canvas coordinates.
+   * @param dy - Vertical translation in canvas coordinates.
+   */
+  private translate(items: readonly string[], dx: number, dy: number): void {
+    this.runtime.history.batchUpdates(() =>
+      this.leaves(items).forEach((id) => {
+        const frame = this.element(id)?.frame;
+        if (frame) {
+          this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy });
+        }
+      }),
+    );
+  }
+
+  /**
+   * Expands group selections into existing leaf IDs without revisiting IDs.
+   *
+   * @param items - Selected element IDs to copy or transform.
+   * @param visited - IDs already visited; updated during recursive group expansion.
+   * @returns Unique reachable leaf IDs; missing elements are omitted.
+   */
   private leaves(items: readonly string[], visited = new Set<string>()): string[] {
-    return items.flatMap((id): string[] => { if (visited.has(id)) return []; visited.add(id); const group = this.groupRecord(id); return group ? this.leaves(group.children, visited) : this.element(id) ? [id] : []; });
+    return items.flatMap((id): string[] => {
+      if (visited.has(id)) {
+        return [];
+      }
+      visited.add(id);
+      const group = this.groupRecord(id);
+      if (group) {
+        return this.leaves(group.children, visited);
+      }
+      return this.element(id) ? [id] : [];
+    });
   }
 
   /**
@@ -833,7 +1160,9 @@ export class EdgelessOperations {
     const contained = new Set(items);
     const collect = (id: string): void => {
       this.groupRecord(id)?.children.forEach((child) => {
-        if (contained.has(child)) return;
+        if (contained.has(child)) {
+          return;
+        }
         contained.add(child);
         collect(child);
       });
@@ -841,39 +1170,91 @@ export class EdgelessOperations {
     items.forEach(collect);
     const parents = new Set(items.map((id) => this.parentId(id)));
     const parentId = parents.size === 1 ? [...parents][0] : undefined;
-    if (parents.size !== 1) return [];
-    return this.elements.getElementNodes().filter(element => {
-      if (contained.has(element.id) || this.parentId(element.id) !== parentId) return false;
-      const references = this.runtime.elementTypes.get(element.type)?.behavior?.relatedElements?.(element);
-      return Boolean(references?.length && references.every(id => contained.has(id)));
-    }).map(element => element.id);
+    if (parents.size !== 1) {
+      return [];
+    }
+    return this.elements
+      .getElementNodes()
+      .filter((element) => {
+        if (contained.has(element.id) || this.parentId(element.id) !== parentId) {
+          return false;
+        }
+        const references = this.runtime.elementTypes
+          .get(element.type)
+          ?.behavior?.relatedElements?.(element);
+        return Boolean(references?.length && references.every((id) => contained.has(id)));
+      })
+      .map((element) => element.id);
+  }
+  /**
+   * Computes an element's visual bounds using current document geometry.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Axis-aligned bounds, or undefined when unavailable.
+   */
+  private bounds(id: string): VisualFrame | undefined {
+    return this.geometry.bounds(id);
   }
 
-  // Resolve through this controller so panel proxies keep their Panel boundary.
-  private get geometry() { return new ElementGeometry((id) => this.element(id), (id) => this.rotation(id)); }
-  private bounds(id: string): VisualFrame | undefined { return this.geometry.bounds(id); }
-
+  /**
+   * Validates and writes an existing non-group element's frame; missing elements and groups are ignored.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @param frame - Requested element frame in canvas coordinates.
+   * @throws If the new frame has non-finite coordinates or non-positive dimensions.
+   */
   private setFrame(id: string, frame: VisualFrame): void {
     const element = this.element(id);
-    if (!element || element.type === "group") return;
+    if (!element || element.type === "group") {
+      return;
+    }
     const next = this.frame(frame);
     this.elements.updateElement(id, { frame: next });
   }
+  /**
+   * Reads a selectable parent while stopping at the panel boundary.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Parent element ID, or undefined outside the selectable subtree.
+   */
   private parentId(id: string): string | undefined {
     const parent = this.elements.getParentId(id);
     // Stop group selection and connector attachment at the Panel boundary.
     return parent && this.elements.hasElement(parent) ? parent : undefined;
   }
 
+  /**
+   * Reads normalized rotation unless the registered element owns absolute geometry.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Rotation in degrees, defaulting to zero.
+   */
   private rotation(id: string): number {
     const element = this.element(id);
-    return !this.runtime.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry && typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+    return !this.runtime.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry &&
+      typeof element?.props.rotation === "number"
+      ? normalizeRotation(element.props.rotation)
+      : 0;
   }
 
-  private sessionDefaults(group?: string, initial: Readonly<Record<string, unknown>> = {}): Record<string, unknown> | undefined {
-    if (!group) return undefined;
+  /**
+   * Reads palette defaults or lazily initializes detached shared defaults for a creation group.
+   *
+   * @param group - Shared creation-default group; undefined disables group defaults.
+   * @param initial - Default properties copied when the shared group is first encountered.
+   * @returns Shared mutable defaults, or undefined when no group is supplied.
+   */
+  private sessionDefaults(
+    group?: string,
+    initial: Readonly<Record<string, unknown>> = {},
+  ): Record<string, unknown> | undefined {
+    if (!group) {
+      return undefined;
+    }
     const paletteDefaults = this.tools.defaults as Record<string, Record<string, unknown>>;
-    if (Object.hasOwn(paletteDefaults, group)) return paletteDefaults[group];
+    if (Object.hasOwn(paletteDefaults, group)) {
+      return paletteDefaults[group];
+    }
     let defaults = this.sharedCreationDefaults.get(group);
     if (!defaults) {
       defaults = copy(initial);
@@ -882,30 +1263,85 @@ export class EdgelessOperations {
     return defaults;
   }
 
+  /**
+   * Copies configured remembered properties into shared and per-type creation defaults.
+   *
+   * @param type - Native event or registered editor type name.
+   * @param patch - Element properties whose configured creation defaults should be remembered.
+   */
   private remember(type: string, patch: Record<string, unknown>): void {
     const registration = this.runtime.elementTypes.get(type);
-    const shared = this.sessionDefaults(registration?.behavior?.defaultsGroup, registration?.definition.defaults);
+    const shared = this.sessionDefaults(
+      registration?.behavior?.defaultsGroup,
+      registration?.definition.defaults,
+    );
     if (shared) {
-      for (const key of Object.keys(shared)) if (key in patch) shared[key] = copy(patch[key]);
+      for (const key of Object.keys(shared)) {
+        if (key in patch) {
+          shared[key] = copy(patch[key]);
+        }
+      }
     }
     const remembered = this.creationDefaults.get(type) ?? {};
     for (const key of registration?.rememberedProperties ?? []) {
-      if (key in patch) remembered[key] = copy(patch[key]);
+      if (key in patch) {
+        remembered[key] = copy(patch[key]);
+      }
     }
     this.creationDefaults.set(type, remembered);
   }
 
-  private element(id: string): EditorElementNode | undefined { return this.elements.getElementNode(id); }
-  private visual(id: string): EditorElementNode | undefined { return this.getRenderedElement(id); }
+  /**
+   * Looks up the current persisted element node within the operation's scope.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Element node, or undefined when missing.
+   */
+  private element(id: string): EditorElementNode | undefined {
+    return this.elements.getElementNode(id);
+  }
+  /**
+   * Reads the element node with local rendering previews applied.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Rendered node, or undefined when missing.
+   */
+  private visual(id: string): EditorElementNode | undefined {
+    return this.getRenderedElement(id);
+  }
+  /**
+   * Projects an existing group node into its visual group record.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Group ID, title, and children, or undefined for other or missing elements.
+   */
   private groupRecord(id: string): VisualGroup | undefined {
     const element = this.element(id);
-    if (element?.type !== "group") return undefined;
-    return { id, title: typeof element.props.title === "string" ? element.props.title : "Group", children: element.childIds };
+    if (element?.type !== "group") {
+      return undefined;
+    }
+    return {
+      id,
+      title: typeof element.props.title === "string" ? element.props.title : "Group",
+      children: element.childIds,
+    };
   }
 
+  /**
+   * Checks finite frame coordinates and positive dimensions and returns a detached frame.
+   *
+   * @param value - Frame whose coordinates and positive dimensions must be validated.
+   * @returns Frame containing only x, y, width, and height.
+   * @throws If any coordinate is non-finite or a dimension is non-positive.
+   */
   private frame(value: VisualFrame): VisualFrame {
-    if (![value.x, value.y, value.width, value.height].every(Number.isFinite) || value.width <= 0 || value.height <= 0) throw new Error("Visual frame requires finite positive geometry");
+    if (
+      ![value.x, value.y, value.width, value.height].every(Number.isFinite) ||
+      value.width <= 0 ||
+      value.height <= 0
+    ) {
+      throw new Error("Visual frame requires finite positive geometry");
+    }
     return { x: value.x, y: value.y, width: value.width, height: value.height };
   }
-
 }

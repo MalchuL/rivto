@@ -4,12 +4,7 @@ import { useReactPanel } from "../hooks/editor/use-react-panel";
 import type { ReactPanelApi } from "../panels/types";
 import { BroadcastChannelProvider, YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
-import {
-  createElement,
-  useContext,
-  type ComponentType,
-  type ReactNode,
-} from "react";
+import { createElement, useContext, type ComponentType, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BlockWrapper, type BlockShellProps, type BlockWrapperProps } from "../blocks";
 import { EditorPanel } from "../components/editor-panel/editor-panel";
@@ -20,14 +15,21 @@ import { EditorStorageContext } from "../editor/editor-storage-context";
 import { createReactEditor as createRuntime } from "../editor/react-editor";
 import type { ReactEditorApi } from "../editor/types";
 import { pageDragExtension } from "../extensions/block-drag";
-import {
-  standardPreset,
-  trailingBlockExtension,
-} from "../extensions/built-ins/built-ins";
+import { standardPreset, trailingBlockExtension } from "../extensions/built-ins/built-ins";
 import { edgelessPreset } from "../extensions/edgeless";
-import { EditorEvent, EventManager, KeyboardEditorEvent, KeyboardManager, type ReactEditorExtension } from "../managers";
+import {
+  EditorEvent,
+  EventManager,
+  KeyboardEditorEvent,
+  KeyboardManager,
+  type ReactEditorExtension,
+} from "../managers";
 import { PageSurface } from "../surfaces/page/page-surface";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor, createTestMultiEditor } from "../test-utils";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+  createTestMultiEditor,
+} from "../test-utils";
 import { isReactPanelApi, isRivtoEditor } from "../utils";
 
 const Empty: ComponentType<{ blockId: string }> = () => null;
@@ -35,38 +37,71 @@ const EmptyComponent: ComponentType = () => null;
 const EmptyWrapper: ComponentType<BlockWrapperProps> = () => null;
 const SecondWrapper: ComponentType<BlockWrapperProps> = () => null;
 const EmptySurface: ComponentType = () => null;
-const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({
-  children,
-}) => children;
+const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({ children }) =>
+  children;
 
 describe("ReactPanelApi", () => {
   test("components select document roots, children or the protected embedded root", async () => {
     const core = await createEditor();
     const editor = createRuntime({ editor: core, extensions: [standardPreset()] });
-    const root = core.blocks.insertBlock({ type: "paragraph", content: "Parent", children: [{ type: "paragraph", content: "Child" }] });
+    const root = core.blocks.insertBlock({
+      type: "paragraph",
+      content: "Parent",
+      children: [{ type: "paragraph", content: "Child" }],
+    });
     const documentPanel = new ReactPanel(editor, new ChildrenPanel(editor));
-    const childrenPanel = new ReactPanel(editor, new ChildrenPanel(editor, { rootBlockId: root.id }));
-    const embeddedPanel = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: root.id }));
-    const missingPanel = new ReactPanel(editor, new EmbeddingPanel(editor, { rootBlockId: "not-loaded" }));
+    const childrenPanel = new ReactPanel(
+      editor,
+      new ChildrenPanel(editor, { rootBlockId: root.id }),
+    );
+    const embeddedPanel = new ReactPanel(
+      editor,
+      new EmbeddingPanel(editor, { rootBlockId: root.id }),
+    );
+    const missingPanel = new ReactPanel(
+      editor,
+      new EmbeddingPanel(editor, { rootBlockId: "not-loaded" }),
+    );
     let current: ReactPanelApi | undefined;
-    function Probe() { current = useReactPanel(); return null; }
+    function Probe() {
+      current = useReactPanel();
+      return null;
+    }
     try {
-      renderToStaticMarkup(createElement(TestPanel, { panel: documentPanel }, createElement(Probe)));
+      renderToStaticMarkup(
+        createElement(TestPanel, { panel: documentPanel }, createElement(Probe)),
+      );
       expect(current!.blocks.getRootIds()).toEqual([root.id]);
       expect(current!.blocks.canRemove(root.id)).toBe(true);
-      renderToStaticMarkup(createElement(TestPanel, { panel: childrenPanel }, createElement(Probe)));
+      renderToStaticMarkup(
+        createElement(TestPanel, { panel: childrenPanel }, createElement(Probe)),
+      );
       expect(current!.blocks.getRootIds()).toEqual([root.children[0]!.id]);
       expect(current!.blocks.hasBlock(root.id)).toBe(false);
-      const childrenMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: childrenPanel }, createElement(PageSurface)));
+      const childrenMarkup = renderToStaticMarkup(
+        createElement(TestPanel, { panel: childrenPanel }, createElement(PageSurface)),
+      );
       expect(childrenMarkup).toContain('data-page-end-slot="true"');
-      renderToStaticMarkup(createElement(TestPanel, { panel: embeddedPanel }, createElement(Probe)));
+      renderToStaticMarkup(
+        createElement(TestPanel, { panel: embeddedPanel }, createElement(Probe)),
+      );
       expect(current!.blocks.getRootIds()).toEqual([root.id]);
       expect(current!.blocks.canRemove(root.id)).toBe(false);
-      const embedMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: embeddedPanel }, createElement(PageSurface)));
+      const embedMarkup = renderToStaticMarkup(
+        createElement(TestPanel, { panel: embeddedPanel }, createElement(PageSurface)),
+      );
       expect(embedMarkup).not.toContain('data-page-end-slot="true"');
-      const missingMarkup = renderToStaticMarkup(createElement(TestPanel, { panel: missingPanel }, createElement(PageSurface)));
+      const missingMarkup = renderToStaticMarkup(
+        createElement(TestPanel, { panel: missingPanel }, createElement(PageSurface)),
+      );
       expect(missingMarkup).not.toContain('data-page-end-slot="true"');
-    } finally { [documentPanel, childrenPanel, embeddedPanel, missingPanel].forEach(panel => panel.destroy()); editor.destroy(); await core.destroy(); }
+    } finally {
+      [documentPanel, childrenPanel, embeddedPanel, missingPanel].forEach((panel) =>
+        panel.destroy(),
+      );
+      editor.destroy();
+      await core.destroy();
+    }
   });
 
   test("nested panels inherit the nearest storage while independent providers keep equal document IDs separate", async () => {
@@ -83,15 +118,28 @@ describe("ReactPanelApi", () => {
       const storage = useContext(EditorStorageContext);
       return storage?.getEditor("shared")?.blocks.getBlockNode("same")?.content;
     }
-    const markup = renderToStaticMarkup(createElement(EditorStorageContext.Provider, { value: first },
-      createElement(TestPanel, { panel: outer }, createElement(TestPanel, { panel: nested }, createElement(Source))),
-      createElement(EditorStorageContext.Provider, { value: second }, createElement(TestPanel, { panel: independent }, createElement(Source))),
-      createElement(TestPanel, { panel: outer }, createElement(Source)),
-    ));
+    const markup = renderToStaticMarkup(
+      createElement(
+        EditorStorageContext.Provider,
+        { value: first },
+        createElement(
+          TestPanel,
+          { panel: outer },
+          createElement(TestPanel, { panel: nested }, createElement(Source)),
+        ),
+        createElement(
+          EditorStorageContext.Provider,
+          { value: second },
+          createElement(TestPanel, { panel: independent }, createElement(Source)),
+        ),
+        createElement(TestPanel, { panel: outer }, createElement(Source)),
+      ),
+    );
     expect(markup).toBe("First userSecond userFirst user");
     expect(a.getDocument()).not.toBe(b.getDocument());
-    [outer, nested, independent].forEach(panel => panel.destroy());
-    await first.destroy(); await second.destroy();
+    [outer, nested, independent].forEach((panel) => panel.destroy());
+    await first.destroy();
+    await second.destroy();
   });
 
   test("source APIs retain their document for direct commands, transactions, subscriptions, and undo", async () => {
@@ -104,10 +152,14 @@ describe("ReactPanelApi", () => {
     editor.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Host" });
     source.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Source" });
     replacement.blocks.insertBlock({ id: "shared-id", type: "paragraph", content: "Replacement" });
-    const hostPanel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor, {  }), {  });
+    const hostPanel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor, {}), {});
     hostPanel.mode.set("edgeless");
     const sourceEditor = mediator.getEditor(source.id)!;
-    const controller = new ReactPanel(sourceEditor, new EmbeddingPanel(sourceEditor, { rootBlockId: "shared-id" }), {  });
+    const controller = new ReactPanel(
+      sourceEditor,
+      new EmbeddingPanel(sourceEditor, { rootBlockId: "shared-id" }),
+      {},
+    );
     const closePanel = controller.destroy;
     const reactPanel = controller.getSnapshot().api!;
     expect(reactPanel.editor.renderers).toBe(sourceEditor.renderers);
@@ -143,7 +195,11 @@ describe("ReactPanelApi", () => {
     expect(source.blocks.getBlockNode("shared-id")).toMatchObject({ content: "Source", props: {} });
     reactPanel.editor.history.redo();
     expect(source.blocks.getBlockNode("shared-id")!.content).toBe("Edited source");
-    expect(() => reactPanel.editor.history.batchUpdates(() => { throw new Error("aborted callback"); })).toThrow("aborted callback");
+    expect(() =>
+      reactPanel.editor.history.batchUpdates(() => {
+        throw new Error("aborted callback");
+      }),
+    ).toThrow("aborted callback");
     expect(replacementPanel.blocks.getBlockNode("shared-id")!.content).toBe("Replacement");
     const count = changes.length;
     unsubscribe();
@@ -157,7 +213,10 @@ describe("ReactPanelApi", () => {
 
   test("opens a registered document with a factory and returns its fixed core", async () => {
     const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
-    const editors = new EditorStorage({ openDocument: (id) => storage.openDocument(id), createEditor: (editor) => createRuntime({ editor, extensions: [standardPreset()] }) });
+    const editors = new EditorStorage({
+      openDocument: (id) => storage.openDocument(id),
+      createEditor: (editor) => createRuntime({ editor, extensions: [standardPreset()] }),
+    });
     expect(editors.getDocuments()).toEqual([]);
     storage.registerDocument("first");
     const core = (await editors.acquireEditor("first")).editor;
@@ -166,36 +225,56 @@ describe("ReactPanelApi", () => {
     expect(reactEditor.blocks).toBe(core.blocks);
     expect("openCoreEditor" in reactEditor).toBe(false);
     expect(reactEditor.getDocument()).toBe(core.getDocument());
-    expect(renderToStaticMarkup(createElement(EditorPanel, { editor: reactEditor }, createElement(PageSurface)))).toContain("Loading document…");
-    await editors.destroy(); await storage.destroy();
+    expect(
+      renderToStaticMarkup(
+        createElement(EditorPanel, { editor: reactEditor }, createElement(PageSurface)),
+      ),
+    ).toContain("Loading document…");
+    await editors.destroy();
+    await storage.destroy();
   });
 
   test("keeps shared documents active after another React runtime is destroyed", async () => {
     const channel = crypto.randomUUID();
-    const firstDoc = new YjsDoc(channel); const secondDoc = new YjsDoc(channel);
+    const firstDoc = new YjsDoc(channel);
+    const secondDoc = new YjsDoc(channel);
     await firstDoc.attachProvider(new BroadcastChannelProvider(channel));
     await secondDoc.attachProvider(new BroadcastChannelProvider(channel));
     const firstModel = new DocumentModelImpl(firstDoc);
     const secondModel = new DocumentModelImpl(secondDoc);
-    const firstCore = await createTestMultiEditor([firstModel], undefined, { extensions: [standardPreset()] });
-    const secondCore = await createTestMultiEditor([secondModel], undefined, { extensions: [standardPreset()] });
+    const firstCore = await createTestMultiEditor([firstModel], undefined, {
+      extensions: [standardPreset()],
+    });
+    const secondCore = await createTestMultiEditor([secondModel], undefined, {
+      extensions: [standardPreset()],
+    });
     const firstRuntime = firstCore.getEditor(channel)!;
     const secondRuntime = secondCore.getEditor(channel)!;
     const first = firstRuntime;
     const second = secondRuntime;
-    let firstUpdates = 0; let secondUpdates = 0;
-    first.subscribe(() => { firstUpdates += 1; });
-    second.subscribe(() => { secondUpdates += 1; });
+    let firstUpdates = 0;
+    let secondUpdates = 0;
+    first.subscribe(() => {
+      firstUpdates += 1;
+    });
+    second.subscribe(() => {
+      secondUpdates += 1;
+    });
     const sharedId = first.blocks.insertBlock({ type: "paragraph", content: "Shared" }).id;
-    for (let attempt = 0; attempt < 100 && !second.blocks.hasBlock(sharedId); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    for (let attempt = 0; attempt < 100 && !second.blocks.hasBlock(sharedId); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     expect(second.blocks.getBlockNode(sharedId)?.content).toBe("Shared");
-    expect(firstUpdates).toBeGreaterThan(0); expect(secondUpdates).toBeGreaterThan(0);
-    secondRuntime.destroy(); await secondCore.destroy();
+    expect(firstUpdates).toBeGreaterThan(0);
+    expect(secondUpdates).toBeGreaterThan(0);
+    secondRuntime.destroy();
+    await secondCore.destroy();
     const stopped = secondUpdates;
     const survivingId = first.blocks.insertBlock({ type: "paragraph", content: "Surviving" }).id;
     expect(first.blocks.getBlockNode(survivingId)?.content).toBe("Surviving");
     expect(secondUpdates).toBe(stopped);
-    firstRuntime.destroy(); await firstCore.destroy();
+    firstRuntime.destroy();
+    await firstCore.destroy();
   });
 
   test("distinguishes React and core editor runtimes", async () => {
@@ -217,12 +296,19 @@ describe("ReactPanelApi", () => {
     let received: ReactEditorApi | undefined;
     const reactEditor = createRuntime({
       editor,
-      extensions: [{
-        id: "identity",
-        setup(reactEditor) {
-          received = reactEditor;
+      extensions: [
+        {
+          id: "identity",
+          /**
+           * Captures the React editor passed to the extension setup fixture.
+           *
+           * @param reactEditor - React editor that owns the extension registrations.
+           */
+          setup(reactEditor) {
+            received = reactEditor;
+          },
         },
-      }],
+      ],
     });
 
     expect(received).toBe(reactEditor);
@@ -260,8 +346,27 @@ describe("ReactPanelApi", () => {
   test("rejects duplicate extension IDs and cleans completed setup", async () => {
     const editor = await createEditor();
     let cleaned = false;
-    const first: ReactEditorExtension = { id: "same", setup: () => () => { cleaned = true; } };
-    expect(() => createReactEditor({ editor, extensions: [first, { id: "same", setup() {} }] })).toThrow(/already registered/);
+    const first: ReactEditorExtension = {
+      id: "same",
+      setup: () => () => {
+        cleaned = true;
+      },
+    };
+    expect(() =>
+      createReactEditor({
+        editor,
+        extensions: [
+          first,
+          {
+            id: "same",
+            /**
+             * Provides a no-op extension setup for the lifecycle fixture.
+             */
+            setup() {},
+          },
+        ],
+      }),
+    ).toThrow(/already registered/);
     expect(cleaned).toBe(true);
     editor.destroy();
   });
@@ -277,7 +382,11 @@ describe("ReactPanelApi", () => {
     expect(editor.blockRegistry.has("test.card")).toBe(true);
     expect(reactPanel.editor.renderers.get("test.card")).toBe(Empty);
     const paragraphId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    expect(reactPanel.slashCommands.getAll({ blockId: paragraphId }).some(({ id }) => id === "type.test.card")).toBe(true);
+    expect(
+      reactPanel.slashCommands
+        .getAll({ blockId: paragraphId })
+        .some(({ id }) => id === "type.test.card"),
+    ).toBe(true);
     dispose();
     expect(editor.blockRegistry.has("test.card")).toBe(false);
     expect(reactPanel.editor.renderers.get("test.card")).toBeUndefined();
@@ -335,12 +444,21 @@ describe("ReactPanelApi", () => {
   test("rolls block registration back when its slash command conflicts", async () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
-    const releaseConflict = reactPanel.editor.slashCommands.register({ id: "type.test.conflict", title: "Conflict", execute() {} });
-    expect(() => reactPanel.editor.blockTypes.register({
-      definition: { type: "test.conflict" },
-      render: Empty,
-      slashCommand: { title: "Conflict" },
-    })).toThrow(/already registered/);
+    const releaseConflict = reactPanel.editor.slashCommands.register({
+      id: "type.test.conflict",
+      title: "Conflict",
+      /**
+       * Provides a no-op executor for the keyboard registration conflict fixture.
+       */
+      execute() {},
+    });
+    expect(() =>
+      reactPanel.editor.blockTypes.register({
+        definition: { type: "test.conflict" },
+        render: Empty,
+        slashCommand: { title: "Conflict" },
+      }),
+    ).toThrow(/already registered/);
     expect(editor.blockRegistry.has("test.conflict")).toBe(false);
     expect(reactPanel.editor.renderers.get("test.conflict")).toBeUndefined();
     releaseConflict();
@@ -352,13 +470,15 @@ describe("ReactPanelApi", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({
       editor,
-      extensions: [{
-        id: "wrapper",
-        setup: (reactEditor) => {
-          reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
-          reactEditor.surfaces.registerBlockWrapper("block", SecondWrapper);
+      extensions: [
+        {
+          id: "wrapper",
+          setup: (reactEditor) => {
+            reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+            reactEditor.surfaces.registerBlockWrapper("block", SecondWrapper);
+          },
         },
-      }],
+      ],
     });
     expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toEqual([
       EmptyWrapper,
@@ -374,32 +494,36 @@ describe("ReactPanelApi", () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
     const block = editor.blocks.getBlockNode(blockId)!;
-    const Shell: ComponentType<BlockShellProps> = () => createElement("span", { "data-layer": "shell" });
-    const Outer: ComponentType<BlockWrapperProps> = ({ children }) => (
-      createElement("div", { "data-layer": "outer" }, children)
-    );
-    const Inner: ComponentType<BlockWrapperProps> = ({ children }) => (
-      createElement("div", { "data-layer": "inner" }, children)
-    );
-    const Surface = () => createElement(BlockWrapper, {
-      fallback: Shell,
-      block,
-      isSelected: false,
-      content: null,
-    });
+    const Shell: ComponentType<BlockShellProps> = () =>
+      createElement("span", { "data-layer": "shell" });
+    const Outer: ComponentType<BlockWrapperProps> = ({ children }) =>
+      createElement("div", { "data-layer": "outer" }, children);
+    const Inner: ComponentType<BlockWrapperProps> = ({ children }) =>
+      createElement("div", { "data-layer": "inner" }, children);
+    const Surface = () =>
+      createElement(BlockWrapper, {
+        fallback: Shell,
+        block,
+        isSelected: false,
+        content: null,
+      });
     const reactPanel = createReactEditor({
       editor,
-      extensions: [{
-        id: "ordered-wrappers",
-        setup: (reactEditor) => {
-          reactEditor.surfaces.register("block", Surface);
-          reactEditor.surfaces.registerBlockWrapper("block", Outer);
-          reactEditor.surfaces.registerBlockWrapper("block", Inner);
+      extensions: [
+        {
+          id: "ordered-wrappers",
+          setup: (reactEditor) => {
+            reactEditor.surfaces.register("block", Surface);
+            reactEditor.surfaces.registerBlockWrapper("block", Outer);
+            reactEditor.surfaces.registerBlockWrapper("block", Inner);
+          },
         },
-      }],
+      ],
     });
 
-    const markup = renderToStaticMarkup(createElement(TestPanel, { panel: reactPanel }, createElement(Surface)));
+    const markup = renderToStaticMarkup(
+      createElement(TestPanel, { panel: reactPanel }, createElement(Surface)),
+    );
     expect(markup).toContain(
       '<div data-layer="outer"><div data-layer="inner"><span data-layer="shell"></span></div></div>',
     );
@@ -411,9 +535,15 @@ describe("ReactPanelApi", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const disposeComponent = reactPanel.editor.extensions.mount(EmptyComponent);
-    const disposeEditorWrapper = reactPanel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper, "block");
+    const disposeEditorWrapper = reactPanel.editor.surfaces.registerEditorWrapper(
+      EmptyEditorWrapper,
+      "block",
+    );
     const disposeSurface = reactPanel.editor.surfaces.register("block", EmptySurface);
-    const disposeBlockWrapper = reactPanel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+    const disposeBlockWrapper = reactPanel.editor.surfaces.registerBlockWrapper(
+      "block",
+      EmptyWrapper,
+    );
 
     expect(reactPanel.editor.extensions.getComponents()).toEqual([EmptyComponent]);
     expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toEqual([EmptyEditorWrapper]);
@@ -452,15 +582,23 @@ describe("ReactPanelApi", () => {
     let sawMountedComponent = false;
     const reactPanel = createReactEditor({
       editor,
-      extensions: [{
-        id: "owned-ui",
-        setup(reactEditor) {
-          reactEditor.extensions.mount(EmptyComponent);
-          return () => {
-            sawMountedComponent = reactEditor.extensions.getComponents().includes(EmptyComponent);
-          };
+      extensions: [
+        {
+          id: "owned-ui",
+          /**
+           * Mounts the fixture component and records whether it survives until extension cleanup.
+           *
+           * @param reactEditor - React editor that owns the extension registrations.
+           * @returns Cleanup that checks the mounted component before teardown.
+           */
+          setup(reactEditor) {
+            reactEditor.extensions.mount(EmptyComponent);
+            return () => {
+              sawMountedComponent = reactEditor.extensions.getComponents().includes(EmptyComponent);
+            };
+          },
         },
-      }],
+      ],
     });
 
     reactPanel.editor.destroy();
@@ -492,20 +630,30 @@ describe("ReactPanelApi", () => {
     const editor = await createEditor();
     let failedRuntime: ReactEditorApi | undefined;
 
-    expect(() => createReactEditor({
-      editor,
-      extensions: [{
-        id: "partial",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.extensions.mount(EmptyComponent);
-          reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper);
-          reactEditor.surfaces.register("block", EmptySurface);
-          reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
-          throw new Error("setup failed");
-        },
-      }],
-    })).toThrow("setup failed");
+    expect(() =>
+      createReactEditor({
+        editor,
+        extensions: [
+          {
+            id: "partial",
+            /**
+             * Registers fixture UI resources before deliberately failing extension setup.
+             *
+             * @param reactEditor - React editor that owns the extension registrations.
+             * @throws Always, to exercise registration rollback.
+             */
+            setup(reactEditor) {
+              failedRuntime = reactEditor;
+              reactEditor.extensions.mount(EmptyComponent);
+              reactEditor.surfaces.registerEditorWrapper(EmptyEditorWrapper);
+              reactEditor.surfaces.register("block", EmptySurface);
+              reactEditor.surfaces.registerBlockWrapper("block", EmptyWrapper);
+              throw new Error("setup failed");
+            },
+          },
+        ],
+      }),
+    ).toThrow("setup failed");
 
     expect(failedRuntime?.extensions.getComponents()).toEqual([]);
     expect(failedRuntime?.surfaces.getEditorWrappers("block")).toEqual([]);
@@ -558,16 +706,24 @@ describe("ReactPanelApi", () => {
   test("forwards core changes through one global revision stream", async () => {
     const editor = await createEditor();
     const leftId = editor.blocks.insertBlock({ type: "paragraph", content: "left" }).id;
-    const rightId = editor.blocks.insertBlock({ type: "paragraph", content: "right" }, editor.blocks.getInsertionDestinationAfter(leftId)).id;
-    const parentId = editor.blocks.insertBlock({
-      type: "paragraph",
-      content: "parent",
-      children: [{ type: "paragraph", content: "child" }],
-    }, editor.blocks.getInsertionDestinationAfter(rightId)).id;
+    const rightId = editor.blocks.insertBlock(
+      { type: "paragraph", content: "right" },
+      editor.blocks.getInsertionDestinationAfter(leftId),
+    ).id;
+    const parentId = editor.blocks.insertBlock(
+      {
+        type: "paragraph",
+        content: "parent",
+        children: [{ type: "paragraph", content: "child" }],
+      },
+      editor.blocks.getInsertionDestinationAfter(rightId),
+    ).id;
     const childId = editor.blocks.getBlock(parentId)!.children[0]!.id;
     const reactPanel = createReactEditor({ editor });
     let updates = 0;
-    const dispose = reactPanel.editor.subscribe(() => { updates += 1; });
+    const dispose = reactPanel.editor.subscribe(() => {
+      updates += 1;
+    });
     const initialRevision = reactPanel.editor.revision;
 
     editor.blocks.updateBlock(leftId, { content: "changed" });
@@ -586,39 +742,59 @@ describe("ReactPanelApi", () => {
     const first = editor.getDocument()!;
     first.blocks.insertBlock({ id: "same", type: "paragraph", content: "First" });
     const secondCore = await createEditor();
-    const second = { editor: secondCore, document: secondCore.getDocument(), release: () => secondCore.destroy() };
+    const second = {
+      editor: secondCore,
+      document: secondCore.getDocument(),
+      release: () => secondCore.destroy(),
+    };
     second.editor.blocks.insertBlock({ id: "same", type: "paragraph", content: "Second" });
     const reactPanel = createReactEditor({ editor });
     const other = createReactEditor({ editor: secondCore });
     expect(other.editor.renderers).not.toBe(reactPanel.editor.renderers);
     expect(other.editor.getDocument()).toBe(second.document);
     let updates = 0;
-    const dispose = reactPanel.editor.blocks.subscribeBlockNode("same", () => { updates += 1; });
+    const dispose = reactPanel.editor.blocks.subscribeBlockNode("same", () => {
+      updates += 1;
+    });
     other.editor.blocks.updateBlock("same", { content: "Changed second" });
     expect(reactPanel.editor.blocks.getBlockNode("same")?.content).toBe("First");
     expect(other.editor.blocks.getBlockNode("same")?.content).toBe("Changed second");
     expect(updates).toBe(0);
     reactPanel.editor.blocks.updateBlock("same", { content: "Changed first" });
     expect(updates).toBe(1);
-    dispose(); reactPanel.editor.destroy(); other.editor.destroy(); await second.release(); await editor.destroy();
+    dispose();
+    reactPanel.editor.destroy();
+    other.editor.destroy();
+    await second.release();
+    await editor.destroy();
   });
 
   test("rolls back registrations when a duplicate surface fails setup", async () => {
     const editor = await createEditor();
     let failedRuntime: ReactEditorApi | undefined;
 
-    expect(() => createReactEditor({
-      editor,
-      extensions: [{
-        id: "duplicate-surface",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.extensions.mount(EmptyComponent);
-          reactEditor.surfaces.register("block", EmptySurface);
-          reactEditor.surfaces.register("block", EmptySurface);
-        },
-      }],
-    })).toThrow(/already registered/);
+    expect(() =>
+      createReactEditor({
+        editor,
+        extensions: [
+          {
+            id: "duplicate-surface",
+            /**
+             * Registers the same surface twice to exercise failed setup cleanup.
+             *
+             * @param reactEditor - React editor that owns the extension registrations.
+             * @throws When the duplicate surface is registered.
+             */
+            setup(reactEditor) {
+              failedRuntime = reactEditor;
+              reactEditor.extensions.mount(EmptyComponent);
+              reactEditor.surfaces.register("block", EmptySurface);
+              reactEditor.surfaces.register("block", EmptySurface);
+            },
+          },
+        ],
+      }),
+    ).toThrow(/already registered/);
 
     expect(failedRuntime?.extensions.getComponents()).toEqual([]);
     expect(failedRuntime?.surfaces.get("block")).toBeUndefined();
@@ -629,28 +805,49 @@ describe("ReactPanelApi", () => {
     const editor = await createEditor();
     let failedRuntime: ReactEditorApi | undefined;
 
-    expect(() => createReactEditor({
-      editor,
-      extensions: [{
-        id: "duplicates",
-        setup(reactEditor) {
-          failedRuntime = reactEditor;
-          reactEditor.keyboard.register({
-            id: "test.duplicate",
-            keys: ["Primary+K"],
-          }, () => false);
-          reactEditor.keyboard.register({
-            id: "test.duplicate",
-            keys: ["Primary+L"],
-          }, () => false);
-        },
-      }],
-    })).toThrow(/already registered/);
+    expect(() =>
+      createReactEditor({
+        editor,
+        extensions: [
+          {
+            id: "duplicates",
+            /**
+             * Registers the same keyboard command twice to exercise failed setup cleanup.
+             *
+             * @param reactEditor - React editor that owns the extension registrations.
+             * @throws When the duplicate keyboard command is registered.
+             */
+            setup(reactEditor) {
+              failedRuntime = reactEditor;
+              reactEditor.keyboard.register(
+                {
+                  id: "test.duplicate",
+                  keys: ["Primary+K"],
+                },
+                () => false,
+              );
+              reactEditor.keyboard.register(
+                {
+                  id: "test.duplicate",
+                  keys: ["Primary+L"],
+                },
+                () => false,
+              );
+            },
+          },
+        ],
+      }),
+    ).toThrow(/already registered/);
 
-    expect(() => failedRuntime?.keyboard.register({
-      id: "test.after-destroy",
-      keys: ["Primary+J"],
-    }, () => false)).toThrow(/destroyed/);
+    expect(() =>
+      failedRuntime?.keyboard.register(
+        {
+          id: "test.after-destroy",
+          keys: ["Primary+J"],
+        },
+        () => false,
+      ),
+    ).toThrow(/destroyed/);
     editor.destroy();
   });
 
@@ -664,9 +861,13 @@ describe("ReactPanelApi", () => {
     expect(() => reactPanel.editor.renderers.delete("paragraph")).toThrow(/destroyed/);
     expect(() => reactPanel.editor.surfaces.delete("block")).toThrow(/destroyed/);
     expect(() => reactPanel.editor.slashCommands.delete("type.paragraph")).toThrow(/destroyed/);
-    expect(() => reactPanel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.registerEditorWrapper(EmptyEditorWrapper)).toThrow(
+      /destroyed/,
+    );
     expect(() => reactPanel.editor.surfaces.register("block", EmptySurface)).toThrow(/destroyed/);
-    expect(() => reactPanel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(/destroyed/);
+    expect(() => reactPanel.editor.surfaces.registerBlockWrapper("block", EmptyWrapper)).toThrow(
+      /destroyed/,
+    );
     editor.destroy();
   });
 });
@@ -675,20 +876,43 @@ describe("delegated events", () => {
   class FakeTarget {
     readonly listeners = new Map<string, Set<EventListener>>();
 
+    /**
+     * Adds a native-event listener to the fake event target.
+     *
+     * @param type - Native event or registered editor type name.
+     * @param listener - Native listener to register for the event type.
+     */
     addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
       const listeners = this.listeners.get(type) ?? new Set<EventListener>();
       listeners.add(listener as EventListener);
       this.listeners.set(type, listeners);
     }
 
+    /**
+     * Removes a native-event listener from the fake event target.
+     *
+     * @param type - Native event or registered editor type name.
+     * @param listener - Previously registered native listener to remove.
+     */
     removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
       this.listeners.get(type)?.delete(listener as EventListener);
     }
 
+    /**
+     * Synchronously dispatches a fixture event to a snapshot of its listeners.
+     *
+     * @param type - Native event type to dispatch.
+     * @param event - Native or React event supplying the current input.
+     */
     emit(type: string, event: Event): void {
       [...(this.listeners.get(type) ?? [])].forEach((listener) => listener(event));
     }
 
+    /**
+     * Counts listeners across all native event types.
+     *
+     * @returns Total number of registered listeners.
+     */
     count(): number {
       return [...this.listeners.values()].reduce((sum, listeners) => sum + listeners.size, 0);
     }
@@ -701,6 +925,12 @@ describe("delegated events", () => {
     readonly nodeType = 1;
     readonly tagName = "DIV";
 
+    /**
+     * Walks the fixture parent chain to check subtree membership.
+     *
+     * @param candidate - Candidate descendant whose parent chain is checked.
+     * @returns Whether the candidate is this fake element or its descendant.
+     */
     contains(candidate: unknown): boolean {
       let found = false;
       for (let current = candidate as FakeElement | null; current; current = current.parent) {
@@ -712,6 +942,12 @@ describe("delegated events", () => {
       return found;
     }
 
+    /**
+     * Finds the nearest fixture ancestor matching a block or content marker.
+     *
+     * @param selector - Selector to match against this fixture and its ancestors.
+     * @returns Matching fake element, or null if no ancestor matches.
+     */
     closest(selector: string): FakeElement | null {
       if (selector.includes("data-block-id") && this.attributes.has("data-block-id")) {
         return this;
@@ -722,8 +958,22 @@ describe("delegated events", () => {
       return this.parent?.closest(selector) ?? null;
     }
 
-    setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
+    /**
+     * Stores an attribute on the fake element.
+     *
+     * @param name - Attribute name to access.
+     * @param value - Attribute string to store.
+     */
+    setAttribute(name: string, value: string): void {
+      this.attributes.set(name, value);
+    }
 
+    /**
+     * Reads an attribute from the fake element.
+     *
+     * @param name - Attribute name to access.
+     * @returns Stored string, or null when the attribute is absent.
+     */
     getAttribute(name: string): string | null {
       return this.attributes.get(name) ?? null;
     }
@@ -750,7 +1000,9 @@ describe("delegated events", () => {
   function keyboardEvent(
     target: FakeElement,
     key: string,
-    modifiers: Partial<Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">> = {},
+    modifiers: Partial<
+      Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "isComposing">
+    > = {},
   ): KeyboardEvent {
     const event = {
       type: "keydown",
@@ -763,7 +1015,12 @@ describe("delegated events", () => {
       cancelable: true,
       defaultPrevented: false,
       target,
-      preventDefault() { event.defaultPrevented = true; },
+      /**
+       * Marks the fixture event as default-prevented.
+       */
+      preventDefault() {
+        event.defaultPrevented = true;
+      },
       ...modifiers,
     };
     return event as unknown as KeyboardEvent;
@@ -777,20 +1034,29 @@ describe("delegated events", () => {
     expect(reactPanel.editor.keyboard).toBeInstanceOf(KeyboardManager);
     const first = realm();
     const second = realm();
-    const disposeDocument = events.register({
-      id: "test.selection-change",
-      type: "selectionchange",
-      target: "document",
-    }, () => undefined);
-    reactPanel.keyboard.register({
-      id: "test.surface-key",
-      keys: "Enter",
-    }, () => false);
-    reactPanel.keyboard.register({
-      id: "test.window-key",
-      keys: "Escape",
-      target: "window",
-    }, () => false);
+    const disposeDocument = events.register(
+      {
+        id: "test.selection-change",
+        type: "selectionchange",
+        target: "document",
+      },
+      () => undefined,
+    );
+    reactPanel.keyboard.register(
+      {
+        id: "test.surface-key",
+        keys: "Enter",
+      },
+      () => false,
+    );
+    reactPanel.keyboard.register(
+      {
+        id: "test.window-key",
+        keys: "Escape",
+        target: "window",
+      },
+      () => false,
+    );
     events.setRoot(first.root as unknown as HTMLElement);
     expect(first.root.count()).toBeGreaterThan(0);
     expect(first.document.count()).toBe(1);
@@ -818,13 +1084,20 @@ describe("delegated events", () => {
     const calls: string[] = [];
     let predicateEvent: KeyboardEditorEvent | undefined;
     let handlerEvent: KeyboardEditorEvent | undefined;
-    keyboard.register({ id: "first", keys: ["Tab"], when: (event) => {
-      predicateEvent = event;
-      return false;
-    } }, () => {
-      calls.push("skipped");
-      return true;
-    });
+    keyboard.register(
+      {
+        id: "first",
+        keys: ["Tab"],
+        when: (event) => {
+          predicateEvent = event;
+          return false;
+        },
+      },
+      () => {
+        calls.push("skipped");
+        return true;
+      },
+    );
     keyboard.register({ id: "second", keys: ["Tab"] }, (event) => {
       handlerEvent = event;
       calls.push(event.shortcut);
@@ -857,20 +1130,26 @@ describe("delegated events", () => {
       calls.push("undo");
       return true;
     });
-    reactPanel.keyboard.register({
-      id: "test.redo",
-      keys: ["Primary+Shift+z", "Primary+y"],
-    }, () => {
-      calls.push("redo");
-      return true;
-    });
+    reactPanel.keyboard.register(
+      {
+        id: "test.redo",
+        keys: ["Primary+Shift+z", "Primary+y"],
+      },
+      () => {
+        calls.push("redo");
+        return true;
+      },
+    );
 
     root.emit("keydown", keyboardEvent(root, "я", { code: "KeyZ", ctrlKey: true }));
-    root.emit("keydown", keyboardEvent(root, "Я", {
-      code: "KeyZ",
-      ctrlKey: true,
-      shiftKey: true,
-    }));
+    root.emit(
+      "keydown",
+      keyboardEvent(root, "Я", {
+        code: "KeyZ",
+        ctrlKey: true,
+        shiftKey: true,
+      }),
+    );
     root.emit("keydown", keyboardEvent(root, "н", { code: "KeyY", ctrlKey: true }));
 
     expect(calls).toEqual(["undo", "redo", "redo"]);
@@ -892,24 +1171,30 @@ describe("delegated events", () => {
       calls.push("low");
       return true;
     });
-    reactPanel.keyboard.register({
-      id: "high",
-      keys: ["Tab"],
-      mode: "block",
-      scope: "content",
-      priority: 10,
-    }, () => {
-      calls.push("high");
-      return true;
-    });
-    reactPanel.keyboard.register({
-      id: "window",
-      keys: ["Escape"],
-      target: "window",
-    }, () => {
-      calls.push("window");
-      return true;
-    });
+    reactPanel.keyboard.register(
+      {
+        id: "high",
+        keys: ["Tab"],
+        mode: "block",
+        scope: "content",
+        priority: 10,
+      },
+      () => {
+        calls.push("high");
+        return true;
+      },
+    );
+    reactPanel.keyboard.register(
+      {
+        id: "window",
+        keys: ["Escape"],
+        target: "window",
+      },
+      () => {
+        calls.push("window");
+        return true;
+      },
+    );
 
     root.emit("keydown", keyboardEvent(root, "Tab"));
     root.emit("keydown", keyboardEvent(content, "Tab"));
@@ -935,20 +1220,26 @@ describe("delegated events", () => {
     outside.ownerDocument = document;
     outside.attributes.set("data-block-id", "outside");
     const seen: Array<[boolean, string | undefined]> = [];
-    events.register({
-      id: "test.pointer",
-      type: "pointerdown",
-      target: "document",
-      mode: "block",
-    }, ({ insideRoot, blockId }) => {
-      seen.push([insideRoot, blockId]);
-    });
+    events.register(
+      {
+        id: "test.pointer",
+        type: "pointerdown",
+        target: "document",
+        mode: "block",
+      },
+      ({ insideRoot, blockId }) => {
+        seen.push([insideRoot, blockId]);
+      },
+    );
 
     document.emit("pointerdown", {
       type: "pointerdown",
       target: inside,
       defaultPrevented: false,
       cancelable: true,
+      /**
+       * Provides the unused preventDefault hook required by the keyboard event fixture.
+       */
       preventDefault() {},
     } as unknown as PointerEvent);
     document.emit("pointerdown", {
@@ -956,6 +1247,9 @@ describe("delegated events", () => {
       target: outside,
       defaultPrevented: false,
       cancelable: true,
+      /**
+       * Provides the unused preventDefault hook required by the keyboard event fixture.
+       */
       preventDefault() {},
     } as unknown as PointerEvent);
     reactPanel.mode.set("edgeless");
@@ -964,9 +1258,15 @@ describe("delegated events", () => {
       target: inside,
       defaultPrevented: false,
       cancelable: true,
+      /**
+       * Provides the unused preventDefault hook required by the keyboard event fixture.
+       */
       preventDefault() {},
     } as unknown as PointerEvent);
-    expect(seen).toEqual([[true, "inside"], [false, undefined]]);
+    expect(seen).toEqual([
+      [true, "inside"],
+      [false, undefined],
+    ]);
     reactPanel.editor.destroy();
     editor.destroy();
   });
@@ -988,13 +1288,16 @@ describe("delegated events", () => {
     const calls: string[] = [];
 
     for (const scope of ["surface", "block", "content"] as const) {
-      events.register({
-        id: `scope.${scope}`,
-        type: "pointerdown",
-        scope,
-      }, () => {
-        calls.push(scope);
-      });
+      events.register(
+        {
+          id: `scope.${scope}`,
+          type: "pointerdown",
+          scope,
+        },
+        () => {
+          calls.push(scope);
+        },
+      );
     }
 
     root.emit("pointerdown", {
@@ -1002,6 +1305,9 @@ describe("delegated events", () => {
       target: content,
       defaultPrevented: false,
       cancelable: true,
+      /**
+       * Provides the unused preventDefault hook required by the keyboard event fixture.
+       */
       preventDefault() {},
     } as unknown as PointerEvent);
     expect(calls).toEqual(["surface", "block", "content"]);
@@ -1012,10 +1318,14 @@ describe("delegated events", () => {
   test("deletes DOM registrations and releases their stable IDs", async () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
-    const register = () => reactPanel.events.register({
-      id: "test.delete-dom",
-      type: "click",
-    }, () => false);
+    const register = () =>
+      reactPanel.events.register(
+        {
+          id: "test.delete-dom",
+          type: "click",
+        },
+        () => false,
+      );
 
     const staleDisposer = register();
     expect(() => register()).toThrow(/already registered/);
@@ -1034,20 +1344,26 @@ describe("delegated events", () => {
     const { root } = realm();
     reactPanel.events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    reactPanel.keyboard.register({
-      id: "test.keyboard-first",
-      keys: ["Enter"],
-    }, () => {
-      calls.push("keyboard");
-      return true;
-    });
-    reactPanel.events.register({
-      id: "test.dom-second",
-      type: "keydown",
-    }, () => {
-      calls.push("dom");
-      return true;
-    });
+    reactPanel.keyboard.register(
+      {
+        id: "test.keyboard-first",
+        keys: ["Enter"],
+      },
+      () => {
+        calls.push("keyboard");
+        return true;
+      },
+    );
+    reactPanel.events.register(
+      {
+        id: "test.dom-second",
+        type: "keydown",
+      },
+      () => {
+        calls.push("dom");
+        return true;
+      },
+    );
 
     root.emit("keydown", keyboardEvent(root, "Enter"));
     expect(calls).toEqual(["keyboard"]);
@@ -1063,38 +1379,52 @@ describe("delegated events", () => {
     const calls: string[] = [];
     let predicateEvent: EditorEvent | undefined;
     let handlerEvent: EditorEvent | undefined;
-    reactPanel.events.register({
-      id: "test.dom-skipped",
-      type: "click",
-      when: (event) => {
-        predicateEvent = event;
-        return false;
+    reactPanel.events.register(
+      {
+        id: "test.dom-skipped",
+        type: "click",
+        when: (event) => {
+          predicateEvent = event;
+          return false;
+        },
       },
-    }, () => {
-      calls.push("skipped");
-      return true;
-    });
-    reactPanel.events.register({
-      id: "test.dom-claimed",
-      type: "click",
-    }, (event) => {
-      handlerEvent = event;
-      calls.push("claimed");
-      return true;
-    });
-    reactPanel.events.register({
-      id: "test.dom-late",
-      type: "click",
-    }, () => {
-      calls.push("late");
-      return true;
-    });
+      () => {
+        calls.push("skipped");
+        return true;
+      },
+    );
+    reactPanel.events.register(
+      {
+        id: "test.dom-claimed",
+        type: "click",
+      },
+      (event) => {
+        handlerEvent = event;
+        calls.push("claimed");
+        return true;
+      },
+    );
+    reactPanel.events.register(
+      {
+        id: "test.dom-late",
+        type: "click",
+      },
+      () => {
+        calls.push("late");
+        return true;
+      },
+    );
     const nativeEvent = {
       type: "click",
       target: root,
       defaultPrevented: false,
       cancelable: true,
-      preventDefault() { nativeEvent.defaultPrevented = true; },
+      /**
+       * Marks the fixture native event as default-prevented.
+       */
+      preventDefault() {
+        nativeEvent.defaultPrevented = true;
+      },
     };
     const event = nativeEvent as unknown as MouseEvent;
 
@@ -1157,13 +1487,26 @@ describe("delegated events", () => {
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    keyboard.register({ id: "remapped", keys: ["Tab"] }, () => { calls.push("remapped"); return true; });
-    keyboard.register({ id: "disabled", keys: ["Escape"] }, () => { calls.push("disabled"); return true; });
-    expect(() => keyboard.register({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(/already registered/);
-    expect(() => events.register({
-      id: "remapped",
-      type: "click",
-    }, () => false)).not.toThrow();
+    keyboard.register({ id: "remapped", keys: ["Tab"] }, () => {
+      calls.push("remapped");
+      return true;
+    });
+    keyboard.register({ id: "disabled", keys: ["Escape"] }, () => {
+      calls.push("disabled");
+      return true;
+    });
+    expect(() => keyboard.register({ id: "remapped", keys: ["Enter"] }, () => true)).toThrow(
+      /already registered/,
+    );
+    expect(() =>
+      events.register(
+        {
+          id: "remapped",
+          type: "click",
+        },
+        () => false,
+      ),
+    ).not.toThrow();
     const release = keyboard.register({ id: "temporary", keys: ["Enter"] }, () => true);
     release();
     expect(() => keyboard.register({ id: "temporary", keys: ["Enter"] }, () => true)).not.toThrow();
@@ -1184,7 +1527,9 @@ describe("delegated events", () => {
     const revisions: number[] = [];
     const stop = keyboard.subscribe(() => revisions.push(keyboard.revision));
     keyboard.setKeymapOverride("remapped", ["Enter"]);
-    expect(listed.find((item) => item.id === "remapped")?.conflicts ?? []).not.toContain("temporary");
+    expect(listed.find((item) => item.id === "remapped")?.conflicts ?? []).not.toContain(
+      "temporary",
+    );
     expect(keyboard.list().find((item) => item.id === "remapped")?.keys).toEqual(["Enter"]);
     expect(revisions.length).toBeGreaterThan(0);
     stop();
@@ -1241,9 +1586,11 @@ describe("delegated events", () => {
     const keys = ["b"];
     reactPanel.keyboard.setKeymapOverride("dynamic", keys);
     keys[0] = "c";
-    expect(() => reactPanel.keyboard.replaceKeymap({
-      dynamic: ["Unknown+b"],
-    })).toThrow(/Unknown keyboard modifier/);
+    expect(() =>
+      reactPanel.keyboard.replaceKeymap({
+        dynamic: ["Unknown+b"],
+      }),
+    ).toThrow(/Unknown keyboard modifier/);
     root.emit("keydown", keyboardEvent(root, "b"));
     root.emit("keydown", keyboardEvent(root, "c"));
     expect(calls).toEqual(["dynamic"]);
@@ -1266,10 +1613,22 @@ describe("delegated events", () => {
     const { root } = realm();
     events.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
-    keyboard.register({ id: "ignored", keys: ["a"] }, () => { calls.push("ignored"); return true; });
-    keyboard.register({ id: "handled", keys: ["b"], composing: "handle" }, () => { calls.push("handled"); return true; });
-    keyboard.register({ id: "prevented", keys: ["c"], composing: "prevent" }, () => { calls.push("prevented"); return true; });
-    keyboard.register({ id: "released", keys: ["d"], phase: "keyup" }, () => { calls.push("released"); return true; });
+    keyboard.register({ id: "ignored", keys: ["a"] }, () => {
+      calls.push("ignored");
+      return true;
+    });
+    keyboard.register({ id: "handled", keys: ["b"], composing: "handle" }, () => {
+      calls.push("handled");
+      return true;
+    });
+    keyboard.register({ id: "prevented", keys: ["c"], composing: "prevent" }, () => {
+      calls.push("prevented");
+      return true;
+    });
+    keyboard.register({ id: "released", keys: ["d"], phase: "keyup" }, () => {
+      calls.push("released");
+      return true;
+    });
     const ignored = keyboardEvent(root, "a", { isComposing: true });
     const handled = keyboardEvent(root, "b", { isComposing: true });
     const prevented = keyboardEvent(root, "c", { isComposing: true });

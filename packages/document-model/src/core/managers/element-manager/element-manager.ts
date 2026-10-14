@@ -4,8 +4,23 @@
  * caching, and exposes the element scopes tracked by history.
  */
 import { type ElementDestination, type ElementSnapshot } from "../../types";
-import type { CRDTArray, CRDTDoc, CRDTType, CRDTMap, CRDTUndoScope, CRDTObserveEvent } from "@chulane/crdt-doc";
-import type { ElementNode, DocumentElement, DocumentElementManagerApi, ElementFrame, ElementInput, ElementPatch, ElementUpdate } from "../../types";
+import type {
+  CRDTArray,
+  CRDTDoc,
+  CRDTType,
+  CRDTMap,
+  CRDTUndoScope,
+  CRDTObserveEvent,
+} from "@chulane/crdt-doc";
+import type {
+  ElementNode,
+  DocumentElement,
+  DocumentElementManagerApi,
+  ElementFrame,
+  ElementInput,
+  ElementPatch,
+  ElementUpdate,
+} from "../../types";
 import type { ElementFrameStorage, ElementStorage, IDElement, IDProp } from "../../types/storage";
 import { assignMap, clone, isCRDTMap, requireNonemptyId } from "../../utils";
 import {
@@ -28,7 +43,9 @@ const ELEMENTS_KEY = "rivto.editor.elements";
  */
 export class DocumentElementManager implements DocumentElementManagerApi {
   /** Creates element identities without exposing generator configuration. */
-  protected generateId(): string { return crypto.randomUUID(); }
+  protected generateId(): string {
+    return crypto.randomUUID();
+  }
   private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
   /** Adapter roots tracked by document-owned history. */
   readonly historyScopes: readonly CRDTUndoScope[];
@@ -113,7 +130,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   getElement(id: string): DocumentElement | undefined {
     return this.cache.readTree(id, this.crdt.isTransacting, () => {
       const node = this.getElementNode(id);
-      if (!node) return undefined;
+      if (!node) {
+        return undefined;
+      }
       const { childIds, ...fields } = node;
       const children = childIds.flatMap((childId) => {
         const child = this.getElement(childId);
@@ -135,10 +154,12 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Detached recursive roots, or an empty array when there are no elements.
    */
   getElements(rootElementId: string | null = null): DocumentElement[] {
-    return this.cache.readForest(rootElementId, this.crdt.isTransacting, () => this.getRootIds(rootElementId).flatMap((id) => {
-      const tree = this.getElement(id);
-      return tree ? [tree] : [];
-    }));
+    return this.cache.readForest(rootElementId, this.crdt.isTransacting, () =>
+      this.getRootIds(rootElementId).flatMap((id) => {
+        const tree = this.getElement(id);
+        return tree ? [tree] : [];
+      }),
+    );
   }
 
   /**
@@ -154,11 +175,16 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   subscribeElement(id: string, listener: () => void): () => void {
     let listeners = this.treeListeners.get(id);
-    if (!listeners) { listeners = new Set(); this.treeListeners.set(id, listeners); }
+    if (!listeners) {
+      listeners = new Set();
+      this.treeListeners.set(id, listeners);
+    }
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
-      if (!listeners.size) this.treeListeners.delete(id);
+      if (!listeners.size) {
+        this.treeListeners.delete(id);
+      }
     };
   }
 
@@ -176,12 +202,19 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Detached node array, empty when the selected tree contains no elements.
    */
   getElementNodes(rootElementId: string | null = null): ElementNode[] {
-    if (rootElementId !== null) return this.cache.readSubtreeNodes(rootElementId, this.crdt.isTransacting, () =>
-      this.hierarchy.collect(this.getRootIds(rootElementId)).flatMap((id) => this.getElementNode(id) ?? []));
-    return this.cache.readCollection(this.crdt.isTransacting, () => [...this.storage.keys()].flatMap((id) => {
-      const element = this.getElementNode(id);
-      return element ? [element] : [];
-    }));
+    if (rootElementId !== null) {
+      return this.cache.readSubtreeNodes(rootElementId, this.crdt.isTransacting, () =>
+        this.hierarchy
+          .collect(this.getRootIds(rootElementId))
+          .flatMap((id) => this.getElementNode(id) ?? []),
+      );
+    }
+    return this.cache.readCollection(this.crdt.isTransacting, () =>
+      [...this.storage.keys()].flatMap((id) => {
+        const element = this.getElementNode(id);
+        return element ? [element] : [];
+      }),
+    );
   }
 
   /**
@@ -191,7 +224,11 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Read-only root list, with stable identity while its contents are unchanged;
    * an empty list when the selected container is missing or has no children.
    */
-  getRootIds(rootElementId: string | null = null): readonly string[] { return rootElementId === null ? this.hierarchy.getRootIds() : this.hierarchy.getChildIds(rootElementId); }
+  getRootIds(rootElementId: string | null = null): readonly string[] {
+    return rootElementId === null
+      ? this.hierarchy.getRootIds()
+      : this.hierarchy.getChildIds(rootElementId);
+  }
 
   /**
    * Resolves an element's direct parent from document roots and child lists.
@@ -199,7 +236,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @param id - Stable element ID to locate.
    * @returns Parent element ID, null for a document root, or undefined when absent.
    */
-  getParentId(id: string): string | null | undefined { return this.hierarchy.getLocation(id)?.parentId; }
+  getParentId(id: string): string | null | undefined {
+    return this.hierarchy.getLocation(id)?.parentId;
+  }
 
   /**
    * Moves selected subtrees together, preserving IDs and canvas-relative geometry.
@@ -227,7 +266,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   removeElementAndPromoteChildren(id: string): readonly string[] {
     const location = this.hierarchy.getLocation(id);
-    if (!location) throw new Error(`Element ${id} not found`);
+    if (!location) {
+      throw new Error(`Element ${id} not found`);
+    }
     const children = [...this.hierarchy.getChildIds(id)];
     this.crdt.transact(() => {
       this.moveElements(children, { ...location, beforeId: id });
@@ -244,7 +285,10 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * document root. Payloads are not deleted. Repairs update root and child lists in one
    * transaction using the same hierarchy traversal as reads.
    */
-  normalize(): void { this.hierarchy.invalidate(); this.hierarchy.normalize(); }
+  normalize(): void {
+    this.hierarchy.invalidate();
+    this.hierarchy.normalize();
+  }
 
   /**
    * Checks complete document roots and element child lists without changing storage.
@@ -298,7 +342,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     listeners.add(listener);
     return () => {
       listeners!.delete(listener);
-      if (!listeners!.size) this.elementListeners.delete(id);
+      if (!listeners!.size) {
+        this.elementListeners.delete(id);
+      }
     };
   }
 
@@ -311,7 +357,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   subscribeStructure(listener: () => void): () => void {
     this.structureListeners.add(listener);
-    return () => { this.structureListeners.delete(listener); };
+    return () => {
+      this.structureListeners.delete(listener);
+    };
   }
 
   /**
@@ -330,15 +378,6 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   }
 
   /**
-   * Publishes to a stable listener snapshot so callbacks may unsubscribe safely.
-   * @param listeners - Subscribers for one change channel.
-   * @returns No value.
-   */
-  private emit(listeners: ReadonlySet<() => void> | undefined): void {
-    if (listeners) [...listeners].forEach((listener) => listener());
-  }
-
-  /**
    * Creates the element ID map used by an immediate import.
    *
    * Available source IDs survive cut/paste. IDs already present in this
@@ -350,17 +389,21 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   createImportIdMap(sourceIds: readonly string[]): ReadonlyMap<string, string> {
     const assigned = new Set<string>();
-    return new Map(sourceIds.map((sourceId) => {
-      // A free identity survives cut/paste. Copying into a document that still
-      // owns it needs a fresh identity to avoid replacing data.
-      const reusable = !this.storage.has(sourceId) && !assigned.has(sourceId);
-      let id = reusable ? sourceId : this.generateId();
-      // Generated collisions are improbable, but the document boundary still
-      // guarantees a usable mapping rather than relying on chance.
-      while (this.storage.has(id) || assigned.has(id)) id = this.generateId();
-      assigned.add(id);
-      return [sourceId, id];
-    }));
+    return new Map(
+      sourceIds.map((sourceId) => {
+        // A free identity survives cut/paste. Copying into a document that still
+        // owns it needs a fresh identity to avoid replacing data.
+        const reusable = !this.storage.has(sourceId) && !assigned.has(sourceId);
+        let id = reusable ? sourceId : this.generateId();
+        // Generated collisions are improbable, but the document boundary still
+        // guarantees a usable mapping rather than relying on chance.
+        while (this.storage.has(id) || assigned.has(id)) {
+          id = this.generateId();
+        }
+        assigned.add(id);
+        return [sourceId, id];
+      }),
+    );
   }
 
   /**
@@ -392,35 +435,66 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * geometry is invalid, existing children are missing, overlap, or would contain the destination
    * parent, or application identity preparation fails.
    */
-  insertElement(input: ElementInput, destination: ElementDestination = { parentId: null }): DocumentElement {
-    if (destination.parentId !== null && !this.hasElement(destination.parentId)) throw new Error("Element destination not found");
-    if (destination.beforeId !== undefined && !this.getRootIds(destination.parentId).includes(destination.beforeId)) throw new Error("Invalid destination sibling");
+  insertElement(
+    input: ElementInput,
+    destination: ElementDestination = { parentId: null },
+  ): DocumentElement {
+    if (destination.parentId !== null && !this.hasElement(destination.parentId)) {
+      throw new Error("Element destination not found");
+    }
+    if (
+      destination.beforeId !== undefined &&
+      !this.getRootIds(destination.parentId).includes(destination.beforeId)
+    ) {
+      throw new Error("Invalid destination sibling");
+    }
     const records: PreparedElementInput[] = [];
     const ids = new Set<string>();
     const visiting = new Set<ElementInput>();
     const existing = new Map<string, DocumentElement>();
     const prepare = (source: ElementInput): PreparedElementInput => {
-      if (visiting.has(source)) throw new Error("Cyclic element input");
+      if (visiting.has(source)) {
+        throw new Error("Cyclic element input");
+      }
       visiting.add(source);
-      if (source.childIds !== undefined && !Array.isArray(source.childIds)) throw new Error("Element child IDs must be an array");
-      if (source.children !== undefined && !Array.isArray(source.children)) throw new Error("Element children must be an array");
-      if (source.children !== undefined && source.childIds?.length) throw new Error("Use children or childIds, not both");
+      if (source.childIds !== undefined && !Array.isArray(source.childIds)) {
+        throw new Error("Element child IDs must be an array");
+      }
+      if (source.children !== undefined && !Array.isArray(source.children)) {
+        throw new Error("Element children must be an array");
+      }
+      if (source.children !== undefined && source.childIds?.length) {
+        throw new Error("Use children or childIds, not both");
+      }
       const children = source.children?.map(prepare);
-      const childIds = children?.map((child) => child.id!) ?? [...source.childIds ?? []];
-      if (!children) for (const childId of childIds) {
-        const child = this.getElement(childId);
-        if (!child || existing.has(childId)) throw new Error("Children must be distinct existing elements");
-        existing.set(childId, child);
+      const childIds = children?.map((child) => child.id!) ?? [...(source.childIds ?? [])];
+      if (!children) {
+        for (const childId of childIds) {
+          const child = this.getElement(childId);
+          if (!child || existing.has(childId)) {
+            throw new Error("Children must be distinct existing elements");
+          }
+          existing.set(childId, child);
+        }
       }
       const id = requireNonemptyId(source.id ?? this.generateId(), "Element");
       let frame = source.frame;
       if (!frame) {
-        const frames = children?.map((child) => child.frame) ?? childIds.map((id) => existing.get(id)!.frame);
+        const frames =
+          children?.map((child) => child.frame) ?? childIds.map((id) => existing.get(id)!.frame);
         frame = this.childrenFrame(frames);
       }
-      const validated = this.processElement({ ...source, id, frame: frame!, children: undefined, childIds });
+      const validated = this.processElement({
+        ...source,
+        id,
+        frame: frame!,
+        children: undefined,
+        childIds,
+      });
       const prepared = this.processElement(this.prepareElement(validated));
-      if (this.storage.has(prepared.id!) || ids.has(prepared.id!)) throw new Error(`Element ${prepared.id} already exists`);
+      if (this.storage.has(prepared.id!) || ids.has(prepared.id!)) {
+        throw new Error(`Element ${prepared.id} already exists`);
+      }
       ids.add(prepared.id!);
       records.push(prepared);
       visiting.delete(source);
@@ -430,31 +504,49 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     for (const id of existing.keys()) {
       let parent = this.getParentId(id);
       while (parent) {
-        if (existing.has(parent)) throw new Error("Child subtrees must not overlap");
+        if (existing.has(parent)) {
+          throw new Error("Child subtrees must not overlap");
+        }
         parent = this.getParentId(parent);
       }
     }
-    const retained = this.hierarchy.collect([...existing.keys()]).map((id) => this.getElementNode(id)!);
-    if (destination.parentId !== null && retained.some((node) => node.id === destination.parentId)) {
+    const retained = this.hierarchy
+      .collect([...existing.keys()])
+      .map((id) => this.getElementNode(id)!);
+    if (
+      destination.parentId !== null &&
+      retained.some((node) => node.id === destination.parentId)
+    ) {
       throw new Error("Cannot insert an element into its own subtree");
     }
-    if (destination.beforeId && retained.some((node) => node.id === destination.beforeId)) throw new Error("Invalid destination sibling");
+    if (destination.beforeId && retained.some((node) => node.id === destination.beforeId)) {
+      throw new Error("Invalid destination sibling");
+    }
     validateElementCollection([...records, ...retained]);
     ElementHierarchy.validate(
-      [...records, ...retained].map((record) => ({ id: record.id, childIds: [...record.childIds ?? []] })),
+      [...records, ...retained].map((record) => ({
+        id: record.id,
+        childIds: [...(record.childIds ?? [])],
+      })),
       [root.id],
     );
     this.crdt.transact(() => {
       if (records.length === 1 && !existing.size) {
         // Keep ordinary insertion incremental, including large projection batches.
         this.insertInto(root, false, destination.parentId);
-        if (destination.beforeId) this.moveElements([root.id], destination);
+        if (destination.beforeId) {
+          this.moveElements([root.id], destination);
+        }
         return;
       }
-      if (existing.size) this.hierarchy.detach([...existing.keys()]);
+      if (existing.size) {
+        this.hierarchy.detach([...existing.keys()]);
+      }
       records.forEach((record) => this.insertInto(record, true));
       this.hierarchy.append(root.id!, destination.parentId);
-      if (destination.beforeId) this.moveElements([root.id], destination);
+      if (destination.beforeId) {
+        this.moveElements([root.id], destination);
+      }
       this.hierarchy.invalidate();
     });
     // Assemble from prepared values so insertion does not reread every stored field.
@@ -464,18 +556,6 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       trees.set(record.id!, { ...node, children: childIds.map((id) => trees.get(id)!) });
     }
     return trees.get(root.id!)!;
-  }
-
-  /** Computes initial parent geometry from child frames without changing their coordinates. */
-  private childrenFrame(frames: readonly ElementFrame[]): ElementFrame {
-    if (!frames.length) throw new Error("An element without children requires a frame");
-    let x = Infinity; let y = Infinity; let right = -Infinity; let bottom = -Infinity;
-    for (const frame of frames) {
-      x = Math.min(x, frame.x); y = Math.min(y, frame.y);
-      right = Math.max(right, frame.x + frame.width);
-      bottom = Math.max(bottom, frame.y + frame.height);
-    }
-    return { x, y, width: right - x, height: bottom - y };
   }
 
   /**
@@ -489,7 +569,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Prepared insertion data with an allocated or reused ID, or the unchanged default input.
    * @throws If application creation constraints fail or an identity cannot be reused.
    */
-  protected prepareElement(input: ElementInput): ElementInput { return input; }
+  protected prepareElement(input: ElementInput): ElementInput {
+    return input;
+  }
 
   /**
    * Processes nested record changes, including remote and undo writes.
@@ -500,81 +582,31 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @param _transaction - Commit identity available to subclasses; the default manager publishes at the update event.
    * @returns Changed or deleted element IDs; the default manager performs no external persistence.
    */
-  protected onRecordsChanged(events: readonly CRDTObserveEvent[], _transaction: unknown): ReadonlySet<string> {
+  protected onRecordsChanged(
+    events: readonly CRDTObserveEvent[],
+    _transaction: unknown,
+  ): ReadonlySet<string> {
     const changedIds = new Set<string>();
     let membershipChanged = false;
     events.forEach(({ path, keys }) => {
       const id = path[0];
-      if (typeof id === "string") changedIds.add(id);
+      if (typeof id === "string") {
+        changedIds.add(id);
+      }
       if (path.length === 0 && keys.length) {
         membershipChanged = true;
         keys.forEach((key) => changedIds.add(key));
       }
     });
-    const structural = events.some(({ path, keys }) => path.length === 0
-      || path[1] === "childIds" || (path.length === 1 && keys.includes("childIds")));
+    const structural = events.some(
+      ({ path, keys }) =>
+        path.length === 0 ||
+        path[1] === "childIds" ||
+        (path.length === 1 && keys.includes("childIds")),
+    );
     this.publishChanges(changedIds, structural);
     this.pendingMembership ||= membershipChanged;
     return changedIds;
-  }
-
-  /**
-   * Invalidates reads immediately and collects notifications for the current commit.
-   * Structural observers may run in either order. The tree cache retains previous
-   * parents so both sides of moves and deletions are invalidated before publication.
-   * Subscribers are notified by the adapter's update event after every storage
-   * observer has invalidated its own records; this also covers remote and undo writes.
-   */
-  private publishChanges(changedIds: Set<string>, structural: boolean): void {
-    if (structural) this.hierarchy.invalidate();
-    this.cache.invalidate(changedIds);
-    const changedTrees = this.cache.invalidateTrees(changedIds, structural ? this.hierarchy.getLocations() : undefined);
-    changedIds.forEach((id) => this.pendingNodes.add(id));
-    changedTrees.forEach((id) => this.pendingTrees.add(id));
-    this.pendingStructure ||= structural;
-    this.pendingCollection = true;
-  }
-
-  /** Publishes one complete commit, clearing pending state before any listener can write again. */
-  private notifyChanges(): void {
-    if (!this.pendingCollection) return;
-    const nodes = [...this.pendingNodes]; const trees = [...this.pendingTrees];
-    const structure = this.pendingStructure; const membership = this.pendingMembership;
-    this.pendingNodes.clear(); this.pendingTrees.clear();
-    this.pendingCollection = false; this.pendingStructure = false; this.pendingMembership = false;
-    nodes.forEach((id) => this.emit(this.elementListeners.get(id)));
-    trees.forEach((id) => this.emit(this.treeListeners.get(id)));
-    if (structure) this.emit(this.structureListeners);
-    if (membership) this.emit(this.membershipListeners);
-    this.emit(this.listeners);
-  }
-
-  /** Writes prepared or restored element data without running application preparation again. */
-  private insertInto(validated: ElementInput, restoring = false, parentId: string | null = null): void {
-    const id = requireNonemptyId(validated.id ?? this.generateId(), "Element");
-    if (this.storage.has(id)) throw new Error(`Element ${id} already exists`);
-    this.crdt.transact(() => {
-      const model = this.crdt.createDetachedMap<ElementStorage>();
-      const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
-      const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
-      model.set("id", id);
-      model.set("type", validated.type);
-      const children = this.crdt.createDetachedArray<string>();
-      model.set("childIds", children);
-      model.set("frame", frameMap);
-      model.set("zIndex", validated.zIndex);
-      model.set("props", props);
-      this.storage.set(id, model);
-      assignMap(frameMap, validated.frame as ElementFrameStorage);
-      assignMap(props, validated.props ?? {});
-      if (restoring) {
-        if (validated.childIds?.length) children.insert(0, ...validated.childIds);
-        this.hierarchy.invalidate();
-      } else {
-        this.hierarchy.append(id, parentId);
-        if (validated.childIds?.length) this.moveElements(validated.childIds, { parentId: id });
-      }
-    });
   }
 
   /**
@@ -619,20 +651,31 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       simulated.set(id, validated);
       return { element, patch, validated };
     });
-    this.crdt.transact(() => prepared.forEach(({ element, patch, validated }) => {
-      if (patch.frame) {
-        assignMap(this.requiredMap<ElementFrameStorage>(element, "frame"), validated.frame as ElementFrameStorage, false);
-      }
-      if (patch.zIndex !== undefined) element.set("zIndex", validated.zIndex);
-      if (patch.props) {
-        const props = this.requiredMap<Record<string, CRDTType>>(element, "props");
-        for (const key of Object.keys(patch.props)) {
-          const value = validated.props?.[key];
-          if (value === undefined) props.delete(key);
-          else props.set(key, clone(value) as CRDTType);
+    this.crdt.transact(() =>
+      prepared.forEach(({ element, patch, validated }) => {
+        if (patch.frame) {
+          assignMap(
+            this.requiredMap<ElementFrameStorage>(element, "frame"),
+            validated.frame as ElementFrameStorage,
+            false,
+          );
         }
-      }
-    }));
+        if (patch.zIndex !== undefined) {
+          element.set("zIndex", validated.zIndex);
+        }
+        if (patch.props) {
+          const props = this.requiredMap<Record<string, CRDTType>>(element, "props");
+          for (const key of Object.keys(patch.props)) {
+            const value = validated.props?.[key];
+            if (value === undefined) {
+              props.delete(key);
+            } else {
+              props.set(key, clone(value) as CRDTType);
+            }
+          }
+        }
+      }),
+    );
     return prepared.map(({ validated }, index) => this.result(updates[index]!.id, validated));
   }
 
@@ -644,7 +687,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    *
    * @param id - Subtree root to delete; a missing ID does nothing.
    */
-  removeElement(id: string): void { this.removeElements([id]); }
+  removeElement(id: string): void {
+    this.removeElements([id]);
+  }
 
   /**
    * Deletes selected element subtrees together in one transaction.
@@ -695,7 +740,11 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   loadElements(elements: readonly ElementSnapshot[]): void {
     this.validateElements(elements);
-    const prepared = elements.map((element) => ({ ...element, frame: normalizeElementFrame(element.frame), props: normalizeElementProps(element.props) }));
+    const prepared = elements.map((element) => ({
+      ...element,
+      frame: normalizeElementFrame(element.frame),
+      props: normalizeElementProps(element.props),
+    }));
     this.storage.clear();
     prepared.forEach((element) => this.insertInto(element, true));
     this.hierarchy.invalidate();
@@ -708,8 +757,124 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   loadRootIds(ids: readonly string[]): void {
     this.rootIds.delete(0, this.rootIds.length);
-    if (ids.length) this.rootIds.insert(0, ...ids);
+    if (ids.length) {
+      this.rootIds.insert(0, ...ids);
+    }
     this.hierarchy.invalidate();
+  }
+
+  /**
+   * Publishes to a stable listener snapshot so callbacks may unsubscribe safely.
+   * @param listeners - Subscribers for one change channel.
+   * @returns No value.
+   */
+  private emit(listeners: ReadonlySet<() => void> | undefined): void {
+    if (listeners) {
+      [...listeners].forEach((listener) => listener());
+    }
+  }
+
+  /** Computes initial parent geometry from child frames without changing their coordinates. */
+  private childrenFrame(frames: readonly ElementFrame[]): ElementFrame {
+    if (!frames.length) {
+      throw new Error("An element without children requires a frame");
+    }
+    let x = Infinity;
+    let y = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const frame of frames) {
+      x = Math.min(x, frame.x);
+      y = Math.min(y, frame.y);
+      right = Math.max(right, frame.x + frame.width);
+      bottom = Math.max(bottom, frame.y + frame.height);
+    }
+    return { x, y, width: right - x, height: bottom - y };
+  }
+
+  /**
+   * Invalidates reads immediately and collects notifications for the current commit.
+   * Structural observers may run in either order. The tree cache retains previous
+   * parents so both sides of moves and deletions are invalidated before publication.
+   * Subscribers are notified by the adapter's update event after every storage
+   * observer has invalidated its own records; this also covers remote and undo writes.
+   */
+  private publishChanges(changedIds: Set<string>, structural: boolean): void {
+    if (structural) {
+      this.hierarchy.invalidate();
+    }
+    this.cache.invalidate(changedIds);
+    const changedTrees = this.cache.invalidateTrees(
+      changedIds,
+      structural ? this.hierarchy.getLocations() : undefined,
+    );
+    changedIds.forEach((id) => this.pendingNodes.add(id));
+    changedTrees.forEach((id) => this.pendingTrees.add(id));
+    this.pendingStructure ||= structural;
+    this.pendingCollection = true;
+  }
+
+  /** Publishes one complete commit, clearing pending state before any listener can write again. */
+  private notifyChanges(): void {
+    if (!this.pendingCollection) {
+      return;
+    }
+    const nodes = [...this.pendingNodes];
+    const trees = [...this.pendingTrees];
+    const structure = this.pendingStructure;
+    const membership = this.pendingMembership;
+    this.pendingNodes.clear();
+    this.pendingTrees.clear();
+    this.pendingCollection = false;
+    this.pendingStructure = false;
+    this.pendingMembership = false;
+    nodes.forEach((id) => this.emit(this.elementListeners.get(id)));
+    trees.forEach((id) => this.emit(this.treeListeners.get(id)));
+    if (structure) {
+      this.emit(this.structureListeners);
+    }
+    if (membership) {
+      this.emit(this.membershipListeners);
+    }
+    this.emit(this.listeners);
+  }
+
+  /** Writes prepared or restored element data without running application preparation again. */
+  private insertInto(
+    validated: ElementInput,
+    restoring = false,
+    parentId: string | null = null,
+  ): void {
+    const id = requireNonemptyId(validated.id ?? this.generateId(), "Element");
+    if (this.storage.has(id)) {
+      throw new Error(`Element ${id} already exists`);
+    }
+    this.crdt.transact(() => {
+      const model = this.crdt.createDetachedMap<ElementStorage>();
+      const frameMap = this.crdt.createDetachedMap<ElementFrameStorage>();
+      const props = this.crdt.createDetachedMap<Record<string, CRDTType>>();
+      model.set("id", id);
+      model.set("type", validated.type);
+      const children = this.crdt.createDetachedArray<string>();
+      model.set("childIds", children);
+      model.set("frame", frameMap);
+      model.set("zIndex", validated.zIndex);
+      model.set("props", props);
+      this.storage.set(id, model);
+      assignMap(frameMap, validated.frame as ElementFrameStorage);
+      assignMap(props, validated.props ?? {});
+      if (restoring) {
+        if (validated.childIds?.length) {
+          children.insert(0, ...validated.childIds);
+        }
+        this.hierarchy.invalidate();
+      } else {
+        this.hierarchy.append(id, parentId);
+        if (validated.childIds?.length) {
+          this.moveElements(validated.childIds, { parentId: id });
+        }
+      }
+    });
   }
 
   /**
@@ -720,7 +885,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @throws {Error} When the type is empty or the record is invalid.
    */
   private processElement(element: ElementInput): PreparedElementInput {
-    if (!element.type) throw new Error("Element type is required");
+    if (!element.type) {
+      throw new Error("Element type is required");
+    }
     return {
       ...element,
       id: requireNonemptyId(element.id, "Element"),
@@ -769,9 +936,16 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       id: String(value.get("id")),
       childIds: [...this.hierarchy.getChildIds(String(value.get("id")))],
       type: String(value.get("type")),
-      frame: normalizeElementFrame(this.requiredMap<ElementFrameStorage>(value, "frame").toObject() as unknown as ElementFrame),
+      frame: normalizeElementFrame(
+        this.requiredMap<ElementFrameStorage>(value, "frame").toObject() as unknown as ElementFrame,
+      ),
       zIndex: normalizeElementZIndex(value.get("zIndex")),
-      props: clone(this.requiredMap<Record<IDProp, CRDTType>>(value, "props").toObject() as Record<string, unknown>),
+      props: clone(
+        this.requiredMap<Record<IDProp, CRDTType>>(value, "props").toObject() as Record<
+          string,
+          unknown
+        >,
+      ),
     };
   }
 
@@ -784,7 +958,9 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    */
   private required(id: string): CRDTMap<ElementStorage> {
     const value = this.storage.get(id);
-    if (!isCRDTMap(value)) throw new Error(`Element ${id} not found`);
+    if (!isCRDTMap(value)) {
+      throw new Error(`Element ${id} not found`);
+    }
     return value;
   }
 
@@ -796,9 +972,14 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Nested shared map.
    * @throws {Error} When the field is missing or has the wrong shared type.
    */
-  private requiredMap<Value extends Record<string, unknown>>(value: CRDTMap<ElementStorage>, key: "frame" | "props"): CRDTMap<Value> {
+  private requiredMap<Value extends Record<string, unknown>>(
+    value: CRDTMap<ElementStorage>,
+    key: "frame" | "props",
+  ): CRDTMap<Value> {
     const child = value.get(key);
-    if (!isCRDTMap(child)) throw new Error(`Element ${String(value.get("id"))} has invalid ${key}`);
+    if (!isCRDTMap(child)) {
+      throw new Error(`Element ${String(value.get("id"))} has invalid ${key}`);
+    }
     return child as CRDTMap<Value>;
   }
 }

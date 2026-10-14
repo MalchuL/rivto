@@ -87,6 +87,7 @@ The renderer must therefore follow the actual host layout during the gesture.
   live inside `foreignObject`; do not hide that interactive subtree with
   `aria-hidden`. A canvas/WebGL renderer may need imperative redraw from actual
   host dimensions; keep that preview outside React/document geometry state.
+
 - Do not compute a live content `scale()` solely from `element.frame.width/height`.
   The mindmap did this initially: the frame resized immediately, but its nodes and
   labels jumped to the new scale only after release.

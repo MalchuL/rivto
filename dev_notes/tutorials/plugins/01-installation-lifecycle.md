@@ -236,4 +236,3 @@ PluginManager InstalledPlugin
 
 Сам manager не копирует реализации specialized registries. Он только связывает
 их ownership в одну lifecycle boundary.
-

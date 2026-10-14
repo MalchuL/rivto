@@ -1,7 +1,4 @@
-import {
-  replaceMarkdownCode,
-  resolveCodeFenceInfo,
-} from "../blocks/markdown/markdown-code";
+import { replaceMarkdownCode, resolveCodeFenceInfo } from "../blocks/markdown/markdown-code";
 
 describe("resolveCodeFenceInfo", () => {
   it("preserves direct language labels", () => {
@@ -35,11 +32,15 @@ describe("replaceMarkdownCode", () => {
     const start = source.indexOf("```ts");
     const end = source.indexOf("```", start + 3) + 3;
 
-    expect(replaceMarkdownCode(source, {
-      position: { start: { offset: start }, end: { offset: end } },
-    }, "const next = false;")).toBe(
-      "Before\n\n```ts\nconst next = false;\n```\n\nAfter",
-    );
+    expect(
+      replaceMarkdownCode(
+        source,
+        {
+          position: { start: { offset: start }, end: { offset: end } },
+        },
+        "const next = false;",
+      ),
+    ).toBe("Before\n\n```ts\nconst next = false;\n```\n\nAfter");
   });
 
   it("retains indentation for indented Markdown code", () => {
@@ -47,10 +48,14 @@ describe("replaceMarkdownCode", () => {
     const start = source.indexOf("    old()");
     const end = source.indexOf("\n\nAfter");
 
-    expect(replaceMarkdownCode(source, {
-      position: { start: { offset: start }, end: { offset: end } },
-    }, "next()\nvalue")).toBe(
-      "Before\n\n    next()\n    value\n\nAfter",
-    );
+    expect(
+      replaceMarkdownCode(
+        source,
+        {
+          position: { start: { offset: start }, end: { offset: end } },
+        },
+        "next()\nvalue",
+      ),
+    ).toBe("Before\n\n    next()\n    value\n\nAfter");
   });
 });

@@ -21,11 +21,12 @@ export function buildPageTree(pages: Page[]): PageTreeNode[] {
       roots.push(node);
     }
   }
-  const byTitle = (a: PageTreeNode, b: PageTreeNode) =>
-    a.page.title.localeCompare(b.page.title);
+  const byTitle = (a: PageTreeNode, b: PageTreeNode) => a.page.title.localeCompare(b.page.title);
   const sortDeep = (list: PageTreeNode[]) => {
     list.sort(byTitle);
-    for (const node of list) sortDeep(node.children);
+    for (const node of list) {
+      sortDeep(node.children);
+    }
   };
   sortDeep(roots);
   return roots;

@@ -1,5 +1,3 @@
-
-
 /**
  * Inclusive document-order boundaries rendered by one edgeless block element.
  *

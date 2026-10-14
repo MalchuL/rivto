@@ -41,9 +41,27 @@ export function DrawingCapture({
   connectorLineStyle?: ConnectorLineStyle;
   connectorStartStyle?: "none" | "arrow";
   connectorEndStyle?: "none" | "arrow";
+  /**
+   * Starts the drawing or connector gesture at the pointer position.
+   *
+   * @param event - Native or React event supplying the current input.
+   */
   onPointerDown(event: ReactPointerEvent<SVGSVGElement>): void;
+  /**
+   * Updates the drawing or connector gesture preview at the pointer position.
+   *
+   * @param event - Native or React event supplying the current input.
+   */
   onPointerMove(event: ReactPointerEvent<SVGSVGElement>): void;
+  /**
+   * Completes the drawing or connector gesture at the pointer position.
+   *
+   * @param event - Native or React event supplying the current input.
+   */
   onPointerUp(event: ReactPointerEvent<SVGSVGElement>): void;
+  /**
+   * Clears the drawing capture's pointer hover state.
+   */
   onPointerLeave(): void;
 }) {
   const captureActive = tool.tool !== "select" && tool.tool !== "pan";
@@ -59,72 +77,98 @@ export function DrawingCapture({
     >
       {/* The capture box follows the viewport, while previews use absolute
           canvas coordinates. Restore the panned plane origin for their paths. */}
-      <g style={{
-        transform: "translate(var(--edgeless-capture-offset-x, 0px), var(--edgeless-capture-offset-y, 0px))",
-      }}>
-      {preview.length > 1 && tool.tool === "drawing" && (
-        <path
-          d={preview.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ")}
-          fill="none"
-          stroke={drawingStroke}
-          strokeWidth={drawingStrokeWidth / zoom}
-          strokeLinecap="butt"
-          strokeLinejoin="round"
-          opacity={drawingOpacity}
-        />
-      )}
-      {connectorPreview && (
-        <>
-          <defs>
-            <marker id="edgeless-connector-preview-end" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
-            </marker>
-            <marker id="edgeless-connector-preview-start" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto-start-reverse">
-              <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
-            </marker>
-          </defs>
+      <g
+        style={{
+          transform:
+            "translate(var(--edgeless-capture-offset-x, 0px), var(--edgeless-capture-offset-y, 0px))",
+        }}
+      >
+        {preview.length > 1 && tool.tool === "drawing" && (
           <path
-            data-edgeless-connector-preview-stroke="true"
-            data-line-style={connectorLineStyle}
-            d={connectorPath(
-              connectorPreview.source,
-              connectorPreview.target,
-              connectorPreview.route,
-              connectorPreview.sourceAnchor,
-              connectorPreview.targetAnchor,
-              connectorPreview.sourceFrame,
-              connectorPreview.targetFrame,
-            )}
+            d={preview.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ")}
             fill="none"
-            stroke={connectorStroke}
-            strokeWidth={connectorStrokeWidth / zoom}
-            markerStart={connectorStartStyle === "arrow" ? "url(#edgeless-connector-preview-start)" : undefined}
-            markerEnd={connectorEndStyle === "arrow" ? "url(#edgeless-connector-preview-end)" : undefined}
+            stroke={drawingStroke}
+            strokeWidth={drawingStrokeWidth / zoom}
+            strokeLinecap="butt"
+            strokeLinejoin="round"
+            opacity={drawingOpacity}
           />
-        </>
-      )}
-      {connectorHover && (
-        <g className="edgeless-connector-anchors" data-edgeless-connector-anchors={connectorHover.elementId}>
-          <rect
-            className="edgeless-connector-target-outline"
-            x={connectorHover.outline.x}
-            y={connectorHover.outline.y}
-            width={connectorHover.outline.width}
-            height={connectorHover.outline.height}
-            rx={4 / zoom}
-          />
-          {connectorHover.anchors.map((anchor, index) => (
-            <circle
-              key={index}
-              className="edgeless-connector-anchor"
-              data-active={anchor.active || undefined}
-              cx={anchor.x}
-              cy={anchor.y}
-              r={anchor.active ? 5 / zoom : 3.5 / zoom}
+        )}
+        {connectorPreview && (
+          <>
+            <defs>
+              <marker
+                id="edgeless-connector-preview-end"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
+              </marker>
+              <marker
+                id="edgeless-connector-preview-start"
+                markerWidth="8"
+                markerHeight="8"
+                refX="1"
+                refY="4"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
+              </marker>
+            </defs>
+            <path
+              data-edgeless-connector-preview-stroke="true"
+              data-line-style={connectorLineStyle}
+              d={connectorPath(
+                connectorPreview.source,
+                connectorPreview.target,
+                connectorPreview.route,
+                connectorPreview.sourceAnchor,
+                connectorPreview.targetAnchor,
+                connectorPreview.sourceFrame,
+                connectorPreview.targetFrame,
+              )}
+              fill="none"
+              stroke={connectorStroke}
+              strokeWidth={connectorStrokeWidth / zoom}
+              markerStart={
+                connectorStartStyle === "arrow"
+                  ? "url(#edgeless-connector-preview-start)"
+                  : undefined
+              }
+              markerEnd={
+                connectorEndStyle === "arrow" ? "url(#edgeless-connector-preview-end)" : undefined
+              }
             />
-          ))}
-        </g>
-      )}
+          </>
+        )}
+        {connectorHover && (
+          <g
+            className="edgeless-connector-anchors"
+            data-edgeless-connector-anchors={connectorHover.elementId}
+          >
+            <rect
+              className="edgeless-connector-target-outline"
+              x={connectorHover.outline.x}
+              y={connectorHover.outline.y}
+              width={connectorHover.outline.width}
+              height={connectorHover.outline.height}
+              rx={4 / zoom}
+            />
+            {connectorHover.anchors.map((anchor, index) => (
+              <circle
+                key={index}
+                className="edgeless-connector-anchor"
+                data-active={anchor.active || undefined}
+                cx={anchor.x}
+                cy={anchor.y}
+                r={anchor.active ? 5 / zoom : 3.5 / zoom}
+              />
+            ))}
+          </g>
+        )}
       </g>
     </svg>
   );

@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, type ComponentType } from 'react';
-import type { ElementPropertiesProps } from '../../../../managers/elements/types';
-import type { EdgelessOperations } from '../../../../managers/elements/edgeless-operations';
-import { isNodeLike } from '../../../../managers/events/dom-nodes';
-import { EdgelessPropertiesPanel } from '../../../../components/edgeless/properties-panel';
+import { useEffect, useLayoutEffect, useRef, type ComponentType } from "react";
+import type { ElementPropertiesProps } from "../../../../managers/elements/types";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import { isNodeLike } from "../../../../managers/events/dom-nodes";
+import { EdgelessPropertiesPanel } from "../../../../components/edgeless/properties-panel";
 
 /**
  * Hosts registered property contents for a same-type selection.
@@ -14,7 +14,12 @@ import { EdgelessPropertiesPanel } from '../../../../components/edgeless/propert
  * when there is no receiving React panel or no selected records remain.
  * @throws During preview/commit callbacks if selected targets or their properties fail validation.
  */
-export function ElementProperties({ ids, title, component: Properties, operations }: {
+export function ElementProperties({
+  ids,
+  title,
+  component: Properties,
+  operations,
+}: {
   readonly ids: readonly string[];
   readonly title: string;
   readonly component: ComponentType<ElementPropertiesProps>;
@@ -25,32 +30,68 @@ export function ElementProperties({ ids, title, component: Properties, operation
   // Commit before the canvas owner releases its passive subscriptions and previews.
   useLayoutEffect(() => {
     const view = panelRef.current?.ownerDocument.defaultView;
-    if (!view) return;
+    if (!view) {
+      return;
+    }
     const commit = (event: PointerEvent) => {
-      if (isNodeLike(event.target) && panelRef.current?.contains(event.target)) return;
-      if (operations.hasPropertyPreview()) operations.commitPropertyPreview();
+      if (isNodeLike(event.target) && panelRef.current?.contains(event.target)) {
+        return;
+      }
+      if (operations.hasPropertyPreview()) {
+        operations.commitPropertyPreview();
+      }
     };
-    view.addEventListener('pointerdown', commit, true);
+    view.addEventListener("pointerdown", commit, true);
     return () => {
-      view.removeEventListener('pointerdown', commit, true);
-      if (operations.hasPropertyPreview()) operations.commitPropertyPreview();
+      view.removeEventListener("pointerdown", commit, true);
+      if (operations.hasPropertyPreview()) {
+        operations.commitPropertyPreview();
+      }
     };
   }, [operations, selectionKey]);
-  useEffect(() => (operations.reactPanel ?? operations.runtime).keyboard.register({
-    id: 'edgeless.properties.cancel', keys: ['Escape'], mode: 'edgeless', priority: 50,
-    when: ({ raw }) => isNodeLike(raw.target) && Boolean(panelRef.current?.contains(raw.target)),
-  }, () => { operations.discardPropertyPreview(); return true; }), [operations]);
-  const elements = ids.flatMap(id => operations.getRenderedElement(id) ?? []);
+  useEffect(
+    () =>
+      (operations.reactPanel ?? operations.runtime).keyboard.register(
+        {
+          id: "edgeless.properties.cancel",
+          keys: ["Escape"],
+          mode: "edgeless",
+          priority: 50,
+          when: ({ raw }) =>
+            isNodeLike(raw.target) && Boolean(panelRef.current?.contains(raw.target)),
+        },
+        () => {
+          operations.discardPropertyPreview();
+          return true;
+        },
+      ),
+    [operations],
+  );
+  const elements = ids.flatMap((id) => operations.getRenderedElement(id) ?? []);
   const reactPanel = operations.reactPanel;
-  if (!reactPanel || !elements.length) return null;
+  if (!reactPanel || !elements.length) {
+    return null;
+  }
   const common = (key: string) => {
     const value = elements[0]!.props[key];
-    return elements.every(element => Object.is(element.props[key], value)) ? value : undefined;
+    return elements.every((element) => Object.is(element.props[key], value)) ? value : undefined;
   };
-  return <EdgelessPropertiesPanel title={title} count={elements.length} ariaLabel="Visual properties"
-    panelRef={panelRef} onClose={() => operations.clearSelection()}>
-    <Properties elements={elements} reactPanel={reactPanel} common={common}
-      preview={patch => operations.previewProperties(ids, patch)}
-      commit={() => operations.commitPropertyPreview()} cancel={() => operations.discardPropertyPreview()} />
-  </EdgelessPropertiesPanel>;
+  return (
+    <EdgelessPropertiesPanel
+      title={title}
+      count={elements.length}
+      ariaLabel="Visual properties"
+      panelRef={panelRef}
+      onClose={() => operations.clearSelection()}
+    >
+      <Properties
+        elements={elements}
+        reactPanel={reactPanel}
+        common={common}
+        preview={(patch) => operations.previewProperties(ids, patch)}
+        commit={() => operations.commitPropertyPreview()}
+        cancel={() => operations.discardPropertyPreview()}
+      />
+    </EdgelessPropertiesPanel>
+  );
 }

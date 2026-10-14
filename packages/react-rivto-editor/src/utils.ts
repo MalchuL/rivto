@@ -13,7 +13,9 @@ import type { ReactPanelApi } from "./panels/types";
  * @param editor - Known view editor, shared React runtime, or framework-neutral editor.
  * @returns Whether `editor` has an explicit occurrence and shared runtime.
  */
-export function isReactPanelApi(editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI): editor is ReactPanelApi {
+export function isReactPanelApi(
+  editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI,
+): editor is ReactPanelApi {
   return "editor" in editor;
 }
 
@@ -23,6 +25,8 @@ export function isReactPanelApi(editor: ReactPanelApi | ReactEditorApi | Documen
  * @param editor - Known view editor, shared React runtime, or framework-neutral editor.
  * @returns Whether `editor` exposes the core block-definition registry, including a ReactEditorApi.
  */
-export function isRivtoEditor(editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI): editor is DocumentEditorAPI {
+export function isRivtoEditor(
+  editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI,
+): editor is DocumentEditorAPI {
   return "blockRegistry" in editor;
 }

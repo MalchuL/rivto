@@ -25,16 +25,16 @@
 
 ## 2. Таблица типов на boundaries
 
-| Boundary | Вход | Выход |
-| --- | --- | --- |
-| pointer hit test | viewport x/y | DOMSelectionPoint |
-| DOM conversion | Node + DOM offset | EditorPosition |
-| selection command | EditorSelection | validated EditorSelection |
-| manager | validated value | detached stored value |
-| DOM restoration | EditorPosition | Node + DOM offset |
-| clipboard normalization | directed EditorSelection | ordered NormalizedSelection |
-| clipboard payload | NormalizedSelection | JSON + HTML + text |
-| paste mutation | bundle/range | document changes + collapsed caret |
+| Boundary                | Вход                     | Выход                              |
+| ----------------------- | ------------------------ | ---------------------------------- |
+| pointer hit test        | viewport x/y             | DOMSelectionPoint                  |
+| DOM conversion          | Node + DOM offset        | EditorPosition                     |
+| selection command       | EditorSelection          | validated EditorSelection          |
+| manager                 | validated value          | detached stored value              |
+| DOM restoration         | EditorPosition           | Node + DOM offset                  |
+| clipboard normalization | directed EditorSelection | ordered NormalizedSelection        |
+| clipboard payload       | NormalizedSelection      | JSON + HTML + text                 |
+| paste mutation          | bundle/range             | document changes + collapsed caret |
 
 Если bug пересекает boundary, логируйте value до и после него. Не начинайте с
 CSS, если runtime offsets уже неправильные.
@@ -272,15 +272,15 @@ Chromium и Firefox имеют разные caret hit-test APIs и event timing.
 
 После изменения общего selection code проверьте:
 
-| Scenario | Forward | Reverse |
-| --- | --- | --- |
-| Same-block text | да | да |
-| Cross-block partial text | да | да |
-| Nested blocks | да | да |
-| Shift block range | да | да |
-| Rectangle blocks | вниз | вверх |
-| Copy exact text | да | да |
-| Replace by typing | да | да |
+| Scenario                 | Forward | Reverse |
+| ------------------------ | ------- | ------- |
+| Same-block text          | да      | да      |
+| Cross-block partial text | да      | да      |
+| Nested blocks            | да      | да      |
+| Shift block range        | да      | да      |
+| Rectangle blocks         | вниз    | вверх   |
+| Copy exact text          | да      | да      |
+| Replace by typing        | да      | да      |
 
 И отдельно:
 

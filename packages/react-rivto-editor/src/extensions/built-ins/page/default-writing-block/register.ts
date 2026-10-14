@@ -25,8 +25,8 @@ export function registerDefaultWritingBlock(
 ): () => void {
   const type = options.type ?? DEFAULT_WRITING_BLOCK_TYPE;
   const title = options.title ?? "Paragraph";
-  const createDefaultBlock = options.createDefaultBlock
-    ?? ((): EditorBlockInput => ({ type, content: "" }));
+  const createDefaultBlock =
+    options.createDefaultBlock ?? ((): EditorBlockInput => ({ type, content: "" }));
   const isEmptyBlock = resolveIsEmptyBlock(options.isEmptyBlock, type);
   const slashCommand: ReactBlockSlashCommand = {
     title: "Markdown",
@@ -34,9 +34,11 @@ export function registerDefaultWritingBlock(
     keywords: [DEFAULT_WRITING_BLOCK_TYPE, "text"],
     ...options.slashCommand,
   };
-  const render: BlockRenderer = options.render
-    ?? (options.onMarkdownLinkClick
-      ? (props) => createElement(MarkdownContent, { ...props, onLinkClick: options.onMarkdownLinkClick })
+  const render: BlockRenderer =
+    options.render ??
+    (options.onMarkdownLinkClick
+      ? (props) =>
+          createElement(MarkdownContent, { ...props, onLinkClick: options.onMarkdownLinkClick })
       : MarkdownContent);
   const restoreWriting = reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
   const unregisterBlock = reactEditor.blockTypes.register({

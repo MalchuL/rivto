@@ -23,7 +23,9 @@ export function createBlockBehaviorContext(
   selection?: Selection,
 ): BlockBehaviorContext | undefined {
   const block = reactPanel.blocks.getBlock(blockId);
-  if (!block) return undefined;
+  if (!block) {
+    return undefined;
+  }
   return {
     reactPanel,
     block,

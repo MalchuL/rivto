@@ -48,17 +48,29 @@ export function ToolPopover({
   readonly defaults?: ReactNode;
 }) {
   return (
-    <PopoverContent id={id} container={container} side="top" sideOffset={10} className={POPOVER_CLASS}
-      data-edgeless-ui="true" aria-label={`${category} tools`}
-      onOpenAutoFocus={event => event.preventDefault()}
-      onCloseAutoFocus={event => event.preventDefault()}
+    <PopoverContent
+      id={id}
+      container={container}
+      side="top"
+      sideOffset={10}
+      className={POPOVER_CLASS}
+      data-edgeless-ui="true"
+      aria-label={`${category} tools`}
+      onOpenAutoFocus={(event) => event.preventDefault()}
+      onCloseAutoFocus={(event) => event.preventDefault()}
       // Radix consumes Escape before editor keyboard routing; changing tools also cancels its active gesture.
-      onEscapeKeyDown={() => operations.setTool('select')}
-      onInteractOutside={event => {
+      onEscapeKeyDown={() => operations.setTool("select")}
+      onInteractOutside={(event) => {
         const current = operations.getTool().tool;
         // Group buttons own toggling; canvas placement must not dismiss its defaults.
-        if (container?.contains(event.target as Node) || (current !== 'select' && current !== 'pan')) event.preventDefault();
-      }}>
+        if (
+          container?.contains(event.target as Node) ||
+          (current !== "select" && current !== "pan")
+        ) {
+          event.preventDefault();
+        }
+      }}
+    >
       {children ?? <ToolSections tools={tools} defaults={defaults} />}
     </PopoverContent>
   );
@@ -69,17 +81,25 @@ export function ToolPopover({
  * @param props - Resolved tool buttons and optional default-value controls.
  * @returns Tools section and, when supplied, Defaults section; neither adds a popover or owns tool state.
  */
-export function ToolSections({ tools, defaults }: { readonly tools: ReactNode; readonly defaults?: ReactNode }) {
-  return <>
-    <section className={SECTION_CLASS}>
-      <h3 className={HEADING_CLASS}>Tools</h3>
-      <div className={TOOLS_CLASS}>{tools}</div>
-    </section>
-    {defaults && (
+export function ToolSections({
+  tools,
+  defaults,
+}: {
+  readonly tools: ReactNode;
+  readonly defaults?: ReactNode;
+}) {
+  return (
+    <>
       <section className={SECTION_CLASS}>
-        <h3 className={HEADING_CLASS}>Defaults</h3>
-        <div className={DEFAULTS_CLASS}>{defaults}</div>
+        <h3 className={HEADING_CLASS}>Tools</h3>
+        <div className={TOOLS_CLASS}>{tools}</div>
       </section>
-    )}
-  </>;
+      {defaults && (
+        <section className={SECTION_CLASS}>
+          <h3 className={HEADING_CLASS}>Defaults</h3>
+          <div className={DEFAULTS_CLASS}>{defaults}</div>
+        </section>
+      )}
+    </>
+  );
 }

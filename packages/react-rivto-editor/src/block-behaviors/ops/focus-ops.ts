@@ -42,7 +42,12 @@ export function focusCaret(
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.
  */
-export function scheduleBlockFocus(reactPanel: ReactPanelApi, root: HTMLElement, blockId: string, offset: number): void {
+export function scheduleBlockFocus(
+  reactPanel: ReactPanelApi,
+  root: HTMLElement,
+  blockId: string,
+  offset: number,
+): void {
   // Only place the caret and its editing focus; model mutations happen before scheduling.
   reactPanel.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, offset));
 }

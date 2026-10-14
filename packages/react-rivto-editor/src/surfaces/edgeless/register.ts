@@ -9,9 +9,7 @@ import type { ReactEditorApi } from "../../editor/types";
  * @module
  */
 import type { ReactPanelApi } from "../../panels/types";
-import {
-  EDGELESS_CARD_DEFAULT_FRAME,
-} from "../../elements/block-element-projection";
+import { EDGELESS_CARD_DEFAULT_FRAME } from "../../elements/block-element-projection";
 import { type EdgelessSurfaceOptions } from ".";
 
 const surfaceOptions = new WeakMap<object, EdgelessSurfaceOptions>();
@@ -34,12 +32,15 @@ export function registerEdgelessSurface(
 ): () => void {
   const previous = surfaceOptions.get(reactEditor.surfaces);
   surfaceOptions.set(reactEditor.surfaces, options);
-  reactEditor.blockElements.setOverlapAvoidance(options.avoidBlockElementOverlap !== false,
-  );
-  reactEditor.blockElements.setDefaultWidth(options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
+  reactEditor.blockElements.setOverlapAvoidance(options.avoidBlockElementOverlap !== false);
+  reactEditor.blockElements.setDefaultWidth(
+    options.blockElementWidth ?? EDGELESS_CARD_DEFAULT_FRAME.width,
   );
   return () => {
-    if (previous) surfaceOptions.set(reactEditor.surfaces, previous);
-    else surfaceOptions.delete(reactEditor.surfaces);
+    if (previous) {
+      surfaceOptions.set(reactEditor.surfaces, previous);
+    } else {
+      surfaceOptions.delete(reactEditor.surfaces);
+    }
   };
 }

@@ -35,10 +35,18 @@ export class ElementCache {
    * @returns Cached or newly assembled detached tree, or undefined for an absent record.
    * Treat a returned tree as read-only because subsequent readers may share it.
    */
-  readTree(id: string, isTransacting: boolean, create: () => DocumentElement | undefined): DocumentElement | undefined {
-    if (!isTransacting && this.trees.has(id)) return this.trees.get(id);
+  readTree(
+    id: string,
+    isTransacting: boolean,
+    create: () => DocumentElement | undefined,
+  ): DocumentElement | undefined {
+    if (!isTransacting && this.trees.has(id)) {
+      return this.trees.get(id);
+    }
     const tree = create();
-    if (tree && !isTransacting) this.trees.set(id, tree);
+    if (tree && !isTransacting) {
+      this.trees.set(id, tree);
+    }
     return tree;
   }
 
@@ -55,10 +63,19 @@ export class ElementCache {
    * @returns Read-only-by-convention root array with stable identity until its container
    * or a descendant is invalidated; document roots refresh after any element change.
    */
-  readForest(rootElementId: string | null, isTransacting: boolean, create: () => DocumentElement[]): DocumentElement[] {
-    if (isTransacting) return create();
+  readForest(
+    rootElementId: string | null,
+    isTransacting: boolean,
+    create: () => DocumentElement[],
+  ): DocumentElement[] {
+    if (isTransacting) {
+      return create();
+    }
     let roots = this.forests.get(rootElementId);
-    if (!roots) { roots = create(); this.forests.set(rootElementId, roots); }
+    if (!roots) {
+      roots = create();
+      this.forests.set(rootElementId, roots);
+    }
     return roots;
   }
 
@@ -80,7 +97,10 @@ export class ElementCache {
    * @returns Changed IDs and affected old/new ancestors whose recursive subscribers
    * need notification. The set includes nested and deleted nodes, not only document roots.
    */
-  invalidateTrees(ids: ReadonlySet<string>, locations: ReadonlyMap<string, { parentId: string | null }> | undefined): Set<string> {
+  invalidateTrees(
+    ids: ReadonlySet<string>,
+    locations: ReadonlyMap<string, { parentId: string | null }> | undefined,
+  ): Set<string> {
     this.forests.delete(null);
     const affected = new Set(ids);
     const addAncestors = (id: string, parentOf: (id: string) => string | null | undefined) => {
@@ -94,10 +114,14 @@ export class ElementCache {
     };
     if (locations) {
       for (const [id, parent] of this.parents) {
-        if (locations.get(id)?.parentId !== parent) affected.add(id);
+        if (locations.get(id)?.parentId !== parent) {
+          affected.add(id);
+        }
       }
       for (const [id, location] of locations) {
-        if (this.parents.get(id) !== location.parentId) affected.add(id);
+        if (this.parents.get(id) !== location.parentId) {
+          affected.add(id);
+        }
       }
     }
     [...affected].forEach((id) => addAncestors(id, (key) => this.parents.get(key)));
@@ -114,7 +138,6 @@ export class ElementCache {
     return affected;
   }
 
-
   /**
    * Reads one flat element snapshot, caching only existing records.
    *
@@ -128,11 +151,19 @@ export class ElementCache {
    * @returns Detached node or undefined. Treat returned nodes as read-only because
    * unchanged cached objects are shared between readers.
    */
-  readNode(id: IDElement, isTransacting: boolean, create: () => ElementNode | undefined): ElementNode | undefined {
+  readNode(
+    id: IDElement,
+    isTransacting: boolean,
+    create: () => ElementNode | undefined,
+  ): ElementNode | undefined {
     const cached = isTransacting ? undefined : this.elements.get(id);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const element = create();
-    if (element && !isTransacting) this.elements.set(id, element);
+    if (element && !isTransacting) {
+      this.elements.set(id, element);
+    }
     return element;
   }
 
@@ -149,7 +180,9 @@ export class ElementCache {
    * and its nodes as read-only.
    */
   readCollection(isTransacting: boolean, create: () => ElementNode[]): ElementNode[] {
-    if (isTransacting) return create();
+    if (isTransacting) {
+      return create();
+    }
     this.collection ??= create();
     return this.collection;
   }
@@ -164,10 +197,19 @@ export class ElementCache {
    * @returns Shared detached array, including an empty array for a missing container.
    * Callers must treat the array and its records as read-only.
    */
-  readSubtreeNodes(rootElementId: string, isTransacting: boolean, create: () => ElementNode[]): ElementNode[] {
-    if (isTransacting) return create();
+  readSubtreeNodes(
+    rootElementId: string,
+    isTransacting: boolean,
+    create: () => ElementNode[],
+  ): ElementNode[] {
+    if (isTransacting) {
+      return create();
+    }
     let nodes = this.subtreeNodes.get(rootElementId);
-    if (!nodes) { nodes = create(); this.subtreeNodes.set(rootElementId, nodes); }
+    if (!nodes) {
+      nodes = create();
+      this.subtreeNodes.set(rootElementId, nodes);
+    }
     return nodes;
   }
 

@@ -49,7 +49,9 @@ function readManagerRevisions(reactPanel: ReactPanelApi): RevisionSnapshot {
   ];
   const key = rows.map((row) => `${row.manager}:${row.revision}`).join("|");
   const cached = snapshots.get(reactPanel);
-  if (cached?.key === key) return cached;
+  if (cached?.key === key) {
+    return cached;
+  }
   const next = { key, rows };
   snapshots.set(reactPanel, next);
   return next;
@@ -92,12 +94,15 @@ export function RevisionsPanel() {
   );
 
   return (
-    <details className={REVISION_PANEL_CLASS} data-revision-panel="" data-revision-key={snapshot.key}>
+    <details
+      className={REVISION_PANEL_CLASS}
+      data-revision-panel=""
+      data-revision-key={snapshot.key}
+    >
       <summary>Manager revisions</summary>
       <p className={REVISION_HELP_CLASS}>
-        Counters bump when that manager publishes. <code>editor</code> follows
-        document and mode; <code>blocks</code> follows block data; the rest are
-        React registries.
+        Counters bump when that manager publishes. <code>editor</code> follows document and mode;{" "}
+        <code>blocks</code> follows block data; the rest are React registries.
       </p>
       <div className={REVISION_TABLE_WRAP_CLASS}>
         <table className={REVISION_TABLE_CLASS}>

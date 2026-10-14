@@ -49,10 +49,31 @@ interface ReviewControlsProps {
   saving: boolean;
   error: string | null;
   includeReportBlock?: boolean;
+  /**
+   * Updates the number of preceding blocks included in the review snapshot.
+   *
+   * @param value - Number of blocks to include above the report.
+   */
   onAboveChange(value: number): void;
+  /**
+   * Updates the number of following blocks included in the review snapshot.
+   *
+   * @param value - Number of blocks to include below the report.
+   */
   onBelowChange(value: number): void;
+  /**
+   * Updates whether the report block itself is included in the snapshot.
+   *
+   * @param value - Whether the snapshot includes the report block.
+   */
   onIncludeReportBlockChange?(value: boolean): void;
+  /**
+   * Requests saving the current review report and its snapshot.
+   */
   onSave(): void;
+  /**
+   * Requests restoring the review snapshot into the demo.
+   */
   onRestore(): void;
 }
 
@@ -69,7 +90,7 @@ function ReviewControls(props: ReviewControlsProps) {
     update: (value: number) => void,
   ): void => {
     const value = Number(event.currentTarget.value);
-    if (Number.isInteger(value) && value >= 0) update(value);
+    if (Number.isInteger(value) && value >= 0) {update(value);}
   };
 
   return (
@@ -148,17 +169,17 @@ function ReviewBlock({
   const editing = useBlockEditing<ReviewBlockProps>(blockId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!editing.block) return null;
+  if (!editing.block) {return null;}
   const props = reviewBlockPropsSchema.parse(editing.block.props);
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) return;
+    if (saving) {return;}
     setSaving(true);
     setError(null);
     try {
       const live = panel.blocks.getBlockNode(blockId);
-      if (!live) throw new Error("Review block no longer exists");
+      if (!live) {throw new Error("Review block no longer exists");}
       const liveProps = reviewBlockPropsSchema.parse(live.props);
       const capture = captureBlockReview(
         panel.document,
@@ -242,12 +263,12 @@ function ReviewElement({
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) return;
+    if (saving) {return;}
     setSaving(true);
     setError(null);
     try {
       const live = panel.elements.getElementNode(element.id);
-      if (!live) throw new Error("Review element no longer exists");
+      if (!live) {throw new Error("Review element no longer exists");}
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
         panel.document,

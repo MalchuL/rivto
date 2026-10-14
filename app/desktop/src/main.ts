@@ -1,9 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  shell,
-  type BrowserWindowConstructorOptions,
-} from "electron";
+import { app, BrowserWindow, shell, type BrowserWindowConstructorOptions } from "electron";
 import { createServer } from "node:http";
 
 const DEV_URL = process.env.RIVTO_WEB_URL ?? "http://127.0.0.1:3000";
@@ -81,8 +76,12 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow) {
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
     mainWindow.focus();
   });
 

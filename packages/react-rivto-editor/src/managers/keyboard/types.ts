@@ -1,15 +1,18 @@
 import type { EditorEvent } from "../events/editor-event";
 import type { PanelRegistration, EditorEventHandler, EditorEventInit } from "../events/types";
-import type { KeyboardEventDefinition, KeyboardEventPhase, KeyboardEventTarget } from "./keyboard-types";
+import type {
+  KeyboardEventDefinition,
+  KeyboardEventPhase,
+  KeyboardEventTarget,
+} from "./keyboard-types";
 import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type { ParsedShortcut } from "./shortcut";
 
 /** Values required to construct one normalized keyboard editor event. */
-export interface KeyboardEditorEventInit
-  extends EditorEventInit<
-    KeyboardEventTarget,
-    "keydown" | "keyup"
-  > {
+export interface KeyboardEditorEventInit extends EditorEventInit<
+  KeyboardEventTarget,
+  "keydown" | "keyup"
+> {
   /** Exact shortcut normalized from raw. */
   readonly shortcut: string;
   /** Native keyboard phase which produced the dispatch. */

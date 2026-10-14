@@ -20,7 +20,8 @@ import { SizeControl } from "../../components/edgeless/size-control";
 import { EdgelessToolButton, type EdgelessToolIcon } from "../../components/edgeless/tool-button";
 
 /* Segmented control for text alignment; buttons keep `aria-pressed` for the active value. */
-const ALIGN_TOGGLES_CLASS = "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";
+const ALIGN_TOGGLES_CLASS =
+  "inline-flex gap-0.5 rounded-lg border border-border bg-secondary p-0.5 [&_button]:size-7 [&_button]:min-w-7";
 const PAINT_TOGGLE_CLASS = "ml-auto grid h-7 w-[18px] place-items-center";
 const SELECT_CLASS = "text-xs";
 
@@ -39,24 +40,46 @@ function PropertySelect({
 }: {
   readonly label: string;
   readonly value: unknown;
+  /**
+   * Receives the property value selected in the control.
+   *
+   * @param value - Chosen string property value.
+   */
   onChange(value: string): void;
   readonly children: ReactNode;
 }) {
   return (
-    <NativeSelect {...editorControlProps} size="sm" className={SELECT_CLASS} aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.currentTarget.value)}>
-      <NativeSelectOption value="" disabled>Mixed</NativeSelectOption>
+    <NativeSelect
+      {...editorControlProps}
+      size="sm"
+      className={SELECT_CLASS}
+      aria-label={label}
+      value={String(value ?? "")}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    >
+      <NativeSelectOption value="" disabled>
+        Mixed
+      </NativeSelectOption>
       {children}
     </NativeSelect>
   );
 }
 
-const horizontalAlignments: readonly { value: TextHorizontalAlign; label: string; icon: EdgelessToolIcon }[] = [
+const horizontalAlignments: readonly {
+  value: TextHorizontalAlign;
+  label: string;
+  icon: EdgelessToolIcon;
+}[] = [
   { value: "left", label: "Align text left", icon: "align-left" },
   { value: "center", label: "Align text center", icon: "align-center" },
   { value: "right", label: "Align text right", icon: "align-right" },
 ];
 
-const verticalAlignments: readonly { value: TextVerticalAlign; label: string; icon: EdgelessToolIcon }[] = [
+const verticalAlignments: readonly {
+  value: TextVerticalAlign;
+  label: string;
+  icon: EdgelessToolIcon;
+}[] = [
   { value: "top", label: "Align text top", icon: "align-top" },
   { value: "middle", label: "Align text middle", icon: "align-middle" },
   { value: "bottom", label: "Align text bottom", icon: "align-bottom" },
@@ -78,8 +101,12 @@ function propertyControls({ elements, common, preview }: ElementPropertiesProps)
       />
     );
   const paintToggle = (label: string, key: "filled" | "stroked", enabled: boolean) => (
-    <span className={PAINT_TOGGLE_CLASS} title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}>
-      <Checkbox {...editorControlProps}
+    <span
+      className={PAINT_TOGGLE_CLASS}
+      title={enabled ? `Disable ${label.toLowerCase()}` : `Enable ${label.toLowerCase()}`}
+    >
+      <Checkbox
+        {...editorControlProps}
         aria-label={`Enable ${label.toLowerCase()}`}
         checked={enabled}
         onCheckedChange={(checked) => preview({ [key]: checked === true })}
@@ -101,14 +128,27 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
   const fontOptions = useContext(VisualFontContext);
   return (
     <PropertyGroup title="Text">
-      <PropertyRow label="Color">
-        {color("Text color", "color")}
-      </PropertyRow>
+      <PropertyRow label="Color">{color("Text color", "color")}</PropertyRow>
       <PropertyRow label="Font">
-        <PropertySelect label="Font family" value={common("fontFamily")} onChange={(fontFamily) => preview({ fontFamily })}>
-          {fontOptions.map((font) => <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>{font.label}</NativeSelectOption>)}
+        <PropertySelect
+          label="Font family"
+          value={common("fontFamily")}
+          onChange={(fontFamily) => preview({ fontFamily })}
+        >
+          {fontOptions.map((font) => (
+            <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>
+              {font.label}
+            </NativeSelectOption>
+          ))}
         </PropertySelect>
-        <SizeControl label="Font size" preview="text" value={common("fontSize")} min={10} max={96} onChange={(fontSize) => preview({ fontSize })} />
+        <SizeControl
+          label="Font size"
+          preview="text"
+          value={common("fontSize")}
+          min={10}
+          max={96}
+          onChange={(fontSize) => preview({ fontSize })}
+        />
       </PropertyRow>
       <PropertyRow label="Align">
         <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Horizontal text alignment">
@@ -136,7 +176,11 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
       </PropertyRow>
       {connector && (
         <PropertyRow label="Rotation">
-          <PropertySelect label="Connector text rotation" value={common("textRotation")} onChange={(textRotation) => preview({ textRotation })}>
+          <PropertySelect
+            label="Connector text rotation"
+            value={common("textRotation")}
+            onChange={(textRotation) => preview({ textRotation })}
+          >
             <NativeSelectOption value="horizontal">Horizontal</NativeSelectOption>
             <NativeSelectOption value="90">90°</NativeSelectOption>
             <NativeSelectOption value="180">180°</NativeSelectOption>
@@ -146,7 +190,6 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
         </PropertyRow>
       )}
     </PropertyGroup>
-
   );
 }
 /**
@@ -179,7 +222,6 @@ export function ShapeProperties(props: ElementPropertiesProps) {
       </PropertyGroup>
       <TextProperties {...props} />
     </>
-
   );
 }
 /**
@@ -193,10 +235,15 @@ export function DrawingProperties(props: ElementPropertiesProps) {
     <PropertyGroup title="Stroke">
       <PropertyRow label="Color">{color("Stroke color", "stroke")}</PropertyRow>
       <PropertyRow label="Width">
-        <SizeControl label="Stroke width" preview="dot" value={common("strokeWidth")} max={48} onChange={(strokeWidth) => preview({ strokeWidth })} />
+        <SizeControl
+          label="Stroke width"
+          preview="dot"
+          value={common("strokeWidth")}
+          max={48}
+          onChange={(strokeWidth) => preview({ strokeWidth })}
+        />
       </PropertyRow>
     </PropertyGroup>
-
   );
 }
 /**
@@ -206,7 +253,14 @@ export function DrawingProperties(props: ElementPropertiesProps) {
  */
 export function StickerProperties(props: ElementPropertiesProps) {
   const { color } = propertyControls(props);
-  return <><PropertyGroup title="Style"><PropertyRow label="Fill">{color('Fill color', 'fill')}</PropertyRow></PropertyGroup><TextProperties {...props} /></>;
+  return (
+    <>
+      <PropertyGroup title="Style">
+        <PropertyRow label="Fill">{color("Fill color", "fill")}</PropertyRow>
+      </PropertyGroup>
+      <TextProperties {...props} />
+    </>
+  );
 }
 /**
  * Connector route, stroke, endpoints, and text properties.
@@ -220,17 +274,31 @@ export function ConnectorProperties(props: ElementPropertiesProps) {
       <PropertyGroup title="Line">
         <PropertyRow label="Stroke">
           {color("Stroke color", "stroke")}
-          <SizeControl label="Stroke width" preview="dot" value={common("strokeWidth")} max={24} onChange={(strokeWidth) => preview({ strokeWidth })} />
+          <SizeControl
+            label="Stroke width"
+            preview="dot"
+            value={common("strokeWidth")}
+            max={24}
+            onChange={(strokeWidth) => preview({ strokeWidth })}
+          />
         </PropertyRow>
         <PropertyRow label="Route">
-          <PropertySelect label="Connector route" value={common("route")} onChange={(route) => preview({ route })}>
+          <PropertySelect
+            label="Connector route"
+            value={common("route")}
+            onChange={(route) => preview({ route })}
+          >
             <NativeSelectOption value="straight">Straight</NativeSelectOption>
             <NativeSelectOption value="orthogonal">Orthogonal</NativeSelectOption>
             <NativeSelectOption value="curve">Curve</NativeSelectOption>
           </PropertySelect>
         </PropertyRow>
         <PropertyRow label="Style">
-          <PropertySelect label="Connector line style" value={common("lineStyle")} onChange={(lineStyle) => preview({ lineStyle })}>
+          <PropertySelect
+            label="Connector line style"
+            value={common("lineStyle")}
+            onChange={(lineStyle) => preview({ lineStyle })}
+          >
             <NativeSelectOption value="solid">Solid</NativeSelectOption>
             <NativeSelectOption value="dashed">Dashed</NativeSelectOption>
             <NativeSelectOption value="dashed-animated">Dashed animated</NativeSelectOption>

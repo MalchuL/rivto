@@ -51,5 +51,4 @@ export class HistoryManager implements HistoryManagerApi {
   stopCapturing(): void {
     this.manager.stopCapturing();
   }
-
 }

@@ -4,9 +4,7 @@ import type { ReactPanelApi } from "../../panels/types";
 import type { EditorEvent } from "./editor-event";
 
 /** Callback used by DOM and keyboard event registrations. */
-export type EditorEventHandler<EventValue> = (
-  event: EventValue
-) => boolean | void;
+export type EditorEventHandler<EventValue> = (event: EventValue) => boolean | void;
 
 /** Local registration identity and DOM root belonging to one mounted EditorPanel. */
 export interface PanelRegistration {

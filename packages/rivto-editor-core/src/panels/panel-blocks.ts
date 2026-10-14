@@ -1,5 +1,12 @@
 import type { BlockDestination } from "@chulane/document-model";
-import type { BlockPrepareErrorHandler, DocumentEditorAPI, EditorBlock, EditorBlockInput, EditorBlockPatch, EditorBlockUpdate } from "..";
+import type {
+  BlockPrepareErrorHandler,
+  DocumentEditorAPI,
+  EditorBlock,
+  EditorBlockInput,
+  EditorBlockPatch,
+  EditorBlockUpdate,
+} from "..";
 import type { PanelBlocksAPI, PanelDestination } from "./types";
 
 const EMPTY_IDS: readonly string[] = [];
@@ -23,14 +30,20 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param rootBlockId - Fixed boundary or null for document roots.
    * @param includeRoot - Whether the boundary block itself is displayed and protected; ignored for a null boundary.
    */
-  constructor(private readonly document: DocumentEditorAPI, readonly rootBlockId: string | null, readonly includeRoot: boolean) {}
+  constructor(
+    private readonly document: DocumentEditorAPI,
+    readonly rootBlockId: string | null,
+    readonly includeRoot: boolean,
+  ) {}
 
   /**
    * Reads the shared block revision, including changes outside this panel.
    *
    * @returns Document block revision, used to invalidate panel membership checks.
    */
-  get revision() { return this.document.blocks.revision; }
+  get revision() {
+    return this.document.blocks.revision;
+  }
   /**
    * Checks current document ancestry against the fixed panel boundary.
    *
@@ -39,12 +52,20 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   hasBlock(id: string): boolean {
     const blocks = this.document.blocks;
-    if (!blocks.hasBlock(id)) return false;
-    if (this.rootBlockId === null) return true;
-    if (id === this.rootBlockId) return this.includeRoot;
+    if (!blocks.hasBlock(id)) {
+      return false;
+    }
+    if (this.rootBlockId === null) {
+      return true;
+    }
+    if (id === this.rootBlockId) {
+      return this.includeRoot;
+    }
     let parent = blocks.getParentId(id);
     while (parent) {
-      if (parent === this.rootBlockId) return true;
+      if (parent === this.rootBlockId) {
+        return true;
+      }
       parent = blocks.getParentId(parent);
     }
     return false;
@@ -55,14 +76,18 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param id - Identity to read.
    * @returns Own fields or undefined outside the panel.
    */
-  getBlockNode(id: string) { return this.hasBlock(id) ? this.document.blocks.getBlockNode(id) : undefined; }
+  getBlockNode(id: string) {
+    return this.hasBlock(id) ? this.document.blocks.getBlockNode(id) : undefined;
+  }
   /**
    * Reads a block and its complete recursive subtree.
    *
    * @param id - Identity to read.
    * @returns Recursive snapshot or undefined outside the panel.
    */
-  getBlock(id: string) { return this.hasBlock(id) ? this.document.blocks.getBlock(id) : undefined; }
+  getBlock(id: string) {
+    return this.hasBlock(id) ? this.document.blocks.getBlock(id) : undefined;
+  }
   private rootIds: readonly string[] = EMPTY_IDS;
   /**
    * Reads the ordered IDs displayed at the top level of this panel.
@@ -73,12 +98,21 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   getRootIds(): readonly string[] {
     let ids: readonly string[];
-    if (this.rootBlockId === null) ids = this.document.blocks.getRootIds();
-    else if (!this.document.blocks.hasBlock(this.rootBlockId)) ids = EMPTY_IDS;
-    else if (this.includeRoot) ids = [this.rootBlockId];
-    else ids = this.document.blocks.getChildIds(this.rootBlockId);
-    if (ids === this.rootIds) return ids;
-    if (ids.length !== this.rootIds.length || ids.some((id, i) => id !== this.rootIds[i])) this.rootIds = ids;
+    if (this.rootBlockId === null) {
+      ids = this.document.blocks.getRootIds();
+    } else if (!this.document.blocks.hasBlock(this.rootBlockId)) {
+      ids = EMPTY_IDS;
+    } else if (this.includeRoot) {
+      ids = [this.rootBlockId];
+    } else {
+      ids = this.document.blocks.getChildIds(this.rootBlockId);
+    }
+    if (ids === this.rootIds) {
+      return ids;
+    }
+    if (ids.length !== this.rootIds.length || ids.some((id, i) => id !== this.rootIds[i])) {
+      this.rootIds = ids;
+    }
     return this.rootIds;
   }
   /**
@@ -86,21 +120,27 @@ export class PanelBlocks implements PanelBlocksAPI {
    *
    * @returns Recursive snapshots of this panel's current roots.
    */
-  getBlocks(): EditorBlock[] { return this.getRootIds().flatMap(id => this.document.blocks.getBlock(id) ?? []); }
+  getBlocks(): EditorBlock[] {
+    return this.getRootIds().flatMap((id) => this.document.blocks.getBlock(id) ?? []);
+  }
   /**
    * Reads direct children of an included block without recursive snapshots.
    *
    * @param id - Local parent.
    * @returns Its direct children or empty outside the panel.
    */
-  getChildIds(id: string): readonly string[] { return this.getBlockNode(id)?.childIds ?? EMPTY_IDS; }
+  getChildIds(id: string): readonly string[] {
+    return this.getBlockNode(id)?.childIds ?? EMPTY_IDS;
+  }
   /**
    * Checks whether an included block has direct children.
    *
    * @param id - Local parent.
    * @returns Whether it has children.
    */
-  hasChildren(id: string): boolean { return this.getChildIds(id).length > 0; }
+  hasChildren(id: string): boolean {
+    return this.getChildIds(id).length > 0;
+  }
   /**
    * Resolves parentage relative to the displayed panel tree.
    *
@@ -108,8 +148,12 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Local parent, null at the panel's top level, or undefined outside.
    */
   getParentId(id: string): string | null | undefined {
-    if (!this.hasBlock(id)) return undefined;
-    if (this.includeRoot && id === this.rootBlockId) return null;
+    if (!this.hasBlock(id)) {
+      return undefined;
+    }
+    if (this.includeRoot && id === this.rootBlockId) {
+      return null;
+    }
     const parent = this.document.blocks.getParentId(id);
     return !this.includeRoot && parent === this.rootBlockId ? null : parent;
   }
@@ -119,14 +163,18 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param id - Candidate block.
    * @returns Whether it is a displayed root.
    */
-  isRootBlock(id: string): boolean { return this.getParentId(id) === null; }
+  isRootBlock(id: string): boolean {
+    return this.getParentId(id) === null;
+  }
   /**
    * Filters candidates to this panel and orders them using document traversal.
    *
    * @param ids - Candidate IDs.
    * @returns Local IDs in document order.
    */
-  getOrderedIds(ids: Iterable<string>): string[] { return this.document.blocks.getOrderedIds([...ids].filter(id => this.hasBlock(id))); }
+  getOrderedIds(ids: Iterable<string>): string[] {
+    return this.document.blocks.getOrderedIds([...ids].filter((id) => this.hasBlock(id)));
+  }
   /**
    * Observes changes to the displayed root ID list.
    *
@@ -138,8 +186,16 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   subscribeRootIds(listener: () => void): () => void {
     let previous = this.getRootIds();
-    const notify = () => { const next = this.getRootIds(); if (next !== previous) { previous = next; listener(); } };
-    if (this.rootBlockId === null) return this.document.blocks.subscribeRootIds(notify);
+    const notify = () => {
+      const next = this.getRootIds();
+      if (next !== previous) {
+        previous = next;
+        listener();
+      }
+    };
+    if (this.rootBlockId === null) {
+      return this.document.blocks.subscribeRootIds(notify);
+    }
     return this.document.blocks.subscribeBlockNode(this.rootBlockId, notify);
   }
   /**
@@ -150,7 +206,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param listener - Structural observer.
    * @returns Cleanup for document placement changes affecting membership.
    */
-  subscribeStructure(listener: () => void): () => void { return this.document.blocks.subscribeStructure(listener); }
+  subscribeStructure(listener: () => void): () => void {
+    return this.document.blocks.subscribeStructure(listener);
+  }
   /**
    * Observes a recursive subtree while tracking its panel membership.
    *
@@ -161,7 +219,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param listener - Observer.
    * @returns Cleanup, including entry/exit notifications.
    */
-  subscribeBlock(id: string, listener: () => void): () => void { return this.observe(id, listener, false); }
+  subscribeBlock(id: string, listener: () => void): () => void {
+    return this.observe(id, listener, false);
+  }
   /**
    * Observes one flat record while tracking its panel membership.
    *
@@ -172,13 +232,8 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param listener - Observer.
    * @returns Cleanup; descendant payload changes do not notify.
    */
-  subscribeBlockNode(id: string, listener: () => void): () => void { return this.observe(id, listener, true); }
-  private observe(id: string, listener: () => void, node: boolean): () => void {
-    let present = this.hasBlock(id);
-    const notify = () => { const next = this.hasBlock(id); const changed = present || next; present = next; if (changed) listener(); };
-    const dispose = node ? this.document.blocks.subscribeBlockNode(id, notify) : this.document.blocks.subscribeBlock(id, notify);
-    const structure = this.document.blocks.subscribeStructure(() => { const next = this.hasBlock(id); if (next !== present) { present = next; listener(); } });
-    return () => { dispose(); structure(); };
+  subscribeBlockNode(id: string, listener: () => void): () => void {
+    return this.observe(id, listener, true);
   }
   /**
    * Checks whether an included block may be structurally removed or moved.
@@ -186,7 +241,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param id - Candidate identity.
    * @returns Whether deletion/movement is allowed by the panel boundary.
    */
-  canRemove(id: string): boolean { return this.hasBlock(id) && !(this.includeRoot && id === this.rootBlockId); }
+  canRemove(id: string): boolean {
+    return this.hasBlock(id) && !(this.includeRoot && id === this.rootBlockId);
+  }
   /**
    * Checks whether a block can move up one level without leaving the panel.
    *
@@ -194,25 +251,11 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Whether outdent stays within the panel.
    */
   canOutdent(id: string): boolean {
-    return this.canRemove(id) && this.document.blocks.getParentId(id) !== this.rootBlockId && this.getParentId(id) !== null;
-  }
-  private require(id: string, structural = false): void {
-    if (!this.hasBlock(id)) throw new Error(`Block ${id} not found in panel`);
-    if (structural && !this.canRemove(id)) throw new Error(`Panel root ${id} is protected`);
-  }
-  private destination(destination: PanelDestination): BlockDestination {
-    if ('root' in destination ? destination.root !== true : typeof destination.parentId !== 'string') throw new Error('Panel destination requires root: true or a parent ID');
-    const parentId = 'root' in destination ? this.rootBlockId : destination.parentId;
-    if (parentId !== null) {
-      if (parentId === this.rootBlockId) {
-        if (!this.document.blocks.hasBlock(parentId)) throw new Error(`Panel root ${parentId} not found`);
-      } else this.require(parentId);
-    }
-    if (destination.beforeId !== undefined) {
-      this.require(destination.beforeId);
-      if (this.document.blocks.getParentId(destination.beforeId) !== parentId) throw new Error('Insertion anchor belongs to another parent');
-    }
-    return { parentId, beforeId: destination.beforeId };
+    return (
+      this.canRemove(id) &&
+      this.document.blocks.getParentId(id) !== this.rootBlockId &&
+      this.getParentId(id) !== null
+    );
   }
   /**
    * Resolves a sibling anchor into an explicit destination within the panel.
@@ -222,11 +265,23 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @throws If insertion would escape the panel.
    */
   getInsertionDestinationAfter(afterId?: string | null): PanelDestination {
-    if (afterId === undefined) return { root: true };
-    if (afterId === null) return { root: true, beforeId: this.rootBlockId === null ? this.getRootIds()[0] : this.document.blocks.getChildIds(this.rootBlockId)[0] };
+    if (afterId === undefined) {
+      return { root: true };
+    }
+    if (afterId === null) {
+      return {
+        root: true,
+        beforeId:
+          this.rootBlockId === null
+            ? this.getRootIds()[0]
+            : this.document.blocks.getChildIds(this.rootBlockId)[0],
+      };
+    }
     this.require(afterId, true);
     const result = this.document.blocks.getInsertionDestinationAfter(afterId);
-    if (result.parentId === this.rootBlockId) return { root: true, beforeId: result.beforeId };
+    if (result.parentId === this.rootBlockId) {
+      return { root: true, beforeId: result.beforeId };
+    }
     return { parentId: result.parentId!, beforeId: result.beforeId };
   }
   /**
@@ -240,7 +295,12 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Inserted subtree.
    * @throws Before writes for an invalid destination or input.
    */
-  insertBlock(input: EditorBlockInput, destination: PanelDestination = { root: true }): EditorBlock { return this.document.blocks.insertBlock(input, this.destination(destination)); }
+  insertBlock(
+    input: EditorBlockInput,
+    destination: PanelDestination = { root: true },
+  ): EditorBlock {
+    return this.document.blocks.insertBlock(input, this.destination(destination));
+  }
   /**
    * Imports copied subtrees at a panel-relative destination.
    *
@@ -254,7 +314,12 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Imported subtrees and their ID map.
    * @throws Before writes for an invalid panel destination.
    */
-  importForest(input: readonly (EditorBlock | EditorBlockInput)[], destination: PanelDestination = { root: true }, onError?: BlockPrepareErrorHandler, ids?: ReadonlyMap<string, string>) {
+  importForest(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    destination: PanelDestination = { root: true },
+    onError?: BlockPrepareErrorHandler,
+    ids?: ReadonlyMap<string, string>,
+  ) {
     return this.document.blocks.importForest(input, this.destination(destination), onError, ids);
   }
   /**
@@ -264,7 +329,12 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param onError - Optional preparation recovery.
    * @returns Prepared inputs without changing the document.
    */
-  prepareInput(input: readonly (EditorBlock | EditorBlockInput)[], onError?: BlockPrepareErrorHandler) { return this.document.blocks.prepareInput(input, onError); }
+  prepareInput(
+    input: readonly (EditorBlock | EditorBlockInput)[],
+    onError?: BlockPrepareErrorHandler,
+  ) {
+    return this.document.blocks.prepareInput(input, onError);
+  }
   /**
    * Patches one included block through the document commands.
    *
@@ -273,7 +343,10 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Updated node.
    * @throws Before writing outside the panel.
    */
-  updateBlock(id: string, patch: EditorBlockPatch) { this.require(id); return this.document.blocks.updateBlock(id, patch); }
+  updateBlock(id: string, patch: EditorBlockPatch) {
+    this.require(id);
+    return this.document.blocks.updateBlock(id, patch);
+  }
   /**
    * Checks every target before delegating the ordered patch batch.
    *
@@ -281,7 +354,10 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Updated nodes.
    * @throws Before writes if any target is outside.
    */
-  updateBlocks(updates: readonly EditorBlockUpdate[]) { updates.forEach(({id}) => this.require(id)); return this.document.blocks.updateBlocks(updates); }
+  updateBlocks(updates: readonly EditorBlockUpdate[]) {
+    updates.forEach(({ id }) => this.require(id));
+    return this.document.blocks.updateBlocks(updates);
+  }
   /**
    * Removes selected list-property keys from an included block.
    *
@@ -290,21 +366,30 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Whether anything changed.
    * @throws If a required block is outside the panel or document validation fails.
    */
-  deleteListProps(id: string, keys: readonly string[]) { this.require(id); return this.document.blocks.deleteListProps(id, keys); }
+  deleteListProps(id: string, keys: readonly string[]) {
+    this.require(id);
+    return this.document.blocks.deleteListProps(id, keys);
+  }
   /**
    * Checks every target before removing list-property keys in a batch.
    *
    * @param updates - Local list-property removals.
    * @throws Before writing for any outside target, or if document validation fails.
    */
-  deleteListPropsBatch(updates: readonly {id: string; keys: readonly string[]}[]) { updates.forEach(({id}) => this.require(id)); this.document.blocks.deleteListPropsBatch(updates); }
+  deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]) {
+    updates.forEach(({ id }) => this.require(id));
+    this.document.blocks.deleteListPropsBatch(updates);
+  }
   /**
    * Clears an included block through the document commands, preserving its ID.
    *
    * @param id - Local block whose content is cleared while preserving identity.
    * @throws If a required block is outside the panel or document validation fails.
    */
-  clearBlock(id: string) { this.require(id); this.document.blocks.clearBlock(id); }
+  clearBlock(id: string) {
+    this.require(id);
+    this.document.blocks.clearBlock(id);
+  }
   /**
    * Changes the type of an included block through the document commands.
    *
@@ -312,7 +397,10 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param type - Registered destination type.
    * @throws If a required block is outside the panel or document validation fails.
    */
-  setBlockType(id: string, type: string) { this.require(id); this.document.blocks.setBlockType(id, type); }
+  setBlockType(id: string, type: string) {
+    this.require(id);
+    this.document.blocks.setBlockType(id, type);
+  }
   /**
    * Sets or removes one property on an included block.
    *
@@ -321,7 +409,10 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param value - Validated value or undefined to remove.
    * @throws If a required block is outside the panel or document validation fails.
    */
-  setBlockProp(id: string, key: string, value: unknown) { this.require(id); this.document.blocks.setBlockProp(id, key, value); }
+  setBlockProp(id: string, key: string, value: unknown) {
+    this.require(id);
+    this.document.blocks.setBlockProp(id, key, value);
+  }
   /**
    * Writes plugin data in one namespace on an included block.
    *
@@ -330,21 +421,29 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param value - Portable plugin data.
    * @throws If a required block is outside the panel or document validation fails.
    */
-  setBlockPluginData(id: string, pluginId: string, value: unknown) { this.require(id); this.document.blocks.setBlockPluginData(id, pluginId, value); }
+  setBlockPluginData(id: string, pluginId: string, value: unknown) {
+    this.require(id);
+    this.document.blocks.setBlockPluginData(id, pluginId, value);
+  }
   /**
    * Deletes an included subtree while protecting the displayed embedding root.
    *
    * @param id - Local subtree to remove.
    * @throws If outside or the protected embedding root.
    */
-  removeBlock(id: string) { this.removeBlocks([id]); }
+  removeBlock(id: string) {
+    this.removeBlocks([id]);
+  }
   /**
    * Validates all selected subtree roots before deleting them together.
    *
    * @param ids - Local subtrees.
    * @throws Before any write if a target is outside or protected.
    */
-  removeBlocks(ids: readonly string[]) { ids.forEach(id => this.require(id, true)); this.document.blocks.removeBlocks([...ids]); }
+  removeBlocks(ids: readonly string[]) {
+    ids.forEach((id) => this.require(id, true));
+    this.document.blocks.removeBlocks([...ids]);
+  }
   /**
    * Merges a removable source block into an included surviving block.
    *
@@ -353,7 +452,11 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Caret offset after merging.
    * @throws If a required block is outside the panel, a structural target is protected, or document validation fails.
    */
-  mergeBlocks(targetId: string, sourceId: string) { this.require(targetId); this.require(sourceId, true); return this.document.blocks.mergeBlocks(targetId, sourceId); }
+  mergeBlocks(targetId: string, sourceId: string) {
+    this.require(targetId);
+    this.require(sourceId, true);
+    return this.document.blocks.mergeBlocks(targetId, sourceId);
+  }
   /**
    * Moves one subtree relative to an included target.
    *
@@ -364,7 +467,13 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param position - Placement relative to target.
    * @throws If a required block is outside the panel, a structural target is protected, or document validation fails.
    */
-  moveBlock(id: string, targetId: string | null, position: 'before' | 'after' | 'inside' = 'after') { this.moveBlocks([id], targetId, position); }
+  moveBlock(
+    id: string,
+    targetId: string | null,
+    position: "before" | "after" | "inside" = "after",
+  ) {
+    this.moveBlocks([id], targetId, position);
+  }
   /**
    * Checks source and target boundaries before moving selected subtrees.
    *
@@ -376,9 +485,15 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param position - Placement.
    * @throws Before writes for an outside or protected target.
    */
-  moveBlocks(ids: readonly string[], targetId: string | null, position: 'before' | 'after' | 'inside' = 'after') {
-    ids.forEach(id => this.require(id, true));
-    if (targetId !== null) this.require(targetId, position !== 'inside');
+  moveBlocks(
+    ids: readonly string[],
+    targetId: string | null,
+    position: "before" | "after" | "inside" = "after",
+  ) {
+    ids.forEach((id) => this.require(id, true));
+    if (targetId !== null) {
+      this.require(targetId, position !== "inside");
+    }
     this.document.blocks.moveBlocks([...ids], targetId, position);
   }
   /**
@@ -387,7 +502,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param id - Local subtree to indent.
    * @throws If a required block is outside the panel, a structural target is protected, or document validation fails.
    */
-  indentBlock(id: string) { this.indentBlocks([id]); }
+  indentBlock(id: string) {
+    this.indentBlocks([id]);
+  }
   /**
    * Indents selected sibling roots without adopting an outside sibling.
    *
@@ -395,13 +512,18 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @throws If indent could adopt an outside sibling.
    */
   indentBlocks(ids: readonly string[]) {
-    ids.forEach(id => this.require(id, true));
-    if (!ids.length) return;
+    ids.forEach((id) => this.require(id, true));
+    if (!ids.length) {
+      return;
+    }
     const ordered = this.document.blocks.getOrderedIds(ids);
     const parent = this.document.blocks.getParentId(ordered[0]!);
-    const siblings = parent == null ? this.document.blocks.getRootIds() : this.document.blocks.getChildIds(parent);
+    const siblings =
+      parent == null ? this.document.blocks.getRootIds() : this.document.blocks.getChildIds(parent);
     const previous = siblings[siblings.indexOf(ordered[0]!) - 1];
-    if (previous) this.require(previous);
+    if (previous) {
+      this.require(previous);
+    }
     this.document.blocks.indentBlocks([...ids]);
   }
   /**
@@ -410,7 +532,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param id - Local subtree to outdent.
    * @throws At the panel boundary.
    */
-  outdentBlock(id: string) { this.outdentBlocks([id]); }
+  outdentBlock(id: string) {
+    this.outdentBlocks([id]);
+  }
   /**
    * Checks all selected roots before delegating an outdent to document commands.
    *
@@ -418,7 +542,91 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @throws Before mutation if any outdent crosses the boundary.
    */
   outdentBlocks(ids: readonly string[]) {
-    ids.forEach(id => { this.require(id, true); if (!this.canOutdent(id)) throw new Error('Cannot outdent outside panel'); });
+    ids.forEach((id) => {
+      this.require(id, true);
+      if (!this.canOutdent(id)) {
+        throw new Error("Cannot outdent outside panel");
+      }
+    });
     this.document.blocks.outdentBlocks([...ids]);
+  }
+  /**
+   * Observes a block and its membership in the panel, notifying when the block changes or enters or leaves scope.
+   *
+   * @param id - Stable block ID to observe within this panel.
+   * @param listener - Callback invoked for record changes while present or when panel membership changes.
+   * @param node - Whether to observe a shallow block node instead of its recursive subtree.
+   * @returns Cleanup that removes both record and hierarchy subscriptions.
+   */
+  private observe(id: string, listener: () => void, node: boolean): () => void {
+    let present = this.hasBlock(id);
+    const notify = () => {
+      const next = this.hasBlock(id);
+      const changed = present || next;
+      present = next;
+      if (changed) {
+        listener();
+      }
+    };
+    const dispose = node
+      ? this.document.blocks.subscribeBlockNode(id, notify)
+      : this.document.blocks.subscribeBlock(id, notify);
+    const structure = this.document.blocks.subscribeStructure(() => {
+      const next = this.hasBlock(id);
+      if (next !== present) {
+        present = next;
+        listener();
+      }
+    });
+    return () => {
+      dispose();
+      structure();
+    };
+  }
+  /**
+   * Guards block access and optionally disallows structural changes to a protected panel root.
+   *
+   * @param id - Stable block ID that must belong to this panel.
+   * @param structural - Whether to reject structural changes to a protected panel root; defaults to false.
+   * @throws If the block is outside the panel or a structural operation targets the panel root.
+   */
+  private require(id: string, structural = false): void {
+    if (!this.hasBlock(id)) {
+      throw new Error(`Block ${id} not found in panel`);
+    }
+    if (structural && !this.canRemove(id)) {
+      throw new Error(`Panel root ${id} is protected`);
+    }
+  }
+  /**
+   * Converts a panel-local insertion destination to document coordinates after checking parent and anchor membership.
+   *
+   * @param destination - Panel-local parent or root and optional insertion anchor.
+   * @returns Validated document insertion destination.
+   * @throws If the destination is malformed, its parent is missing or outside the panel, or its anchor belongs to another parent.
+   */
+  private destination(destination: PanelDestination): BlockDestination {
+    if (
+      "root" in destination ? destination.root !== true : typeof destination.parentId !== "string"
+    ) {
+      throw new Error("Panel destination requires root: true or a parent ID");
+    }
+    const parentId = "root" in destination ? this.rootBlockId : destination.parentId;
+    if (parentId !== null) {
+      if (parentId === this.rootBlockId) {
+        if (!this.document.blocks.hasBlock(parentId)) {
+          throw new Error(`Panel root ${parentId} not found`);
+        }
+      } else {
+        this.require(parentId);
+      }
+    }
+    if (destination.beforeId !== undefined) {
+      this.require(destination.beforeId);
+      if (this.document.blocks.getParentId(destination.beforeId) !== parentId) {
+        throw new Error("Insertion anchor belongs to another parent");
+      }
+    }
+    return { parentId, beforeId: destination.beforeId };
   }
 }

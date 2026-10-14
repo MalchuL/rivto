@@ -4,8 +4,5 @@
  * CRDT storage helpers.
  */
 export { DocumentBlockManager } from "./block-manager";
-export {
-  validateBlockForest,
-  validateBlockListProps,
-} from "./utils";
+export { validateBlockForest, validateBlockListProps } from "./utils";
 export type { BlockListProps } from "../../types";

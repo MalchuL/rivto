@@ -31,8 +31,12 @@ function sendJson(res, status, body) {
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (chunks.length === 0) return {};
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  if (chunks.length === 0) {
+    return {};
+  }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
@@ -51,9 +55,7 @@ function startFallback() {
 
     try {
       if (method === "GET" && url.pathname === "/page") {
-        const list = [...pages.values()].sort((a, b) =>
-          b.updatedAt.localeCompare(a.updatedAt),
-        );
+        const list = [...pages.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         sendJson(res, 200, { pages: list });
         return;
       }
@@ -99,10 +101,8 @@ function startFallback() {
             body.title !== undefined
               ? (body.title.trim() || "Untitled").slice(0, 500)
               : existing.title,
-          content:
-            body.content !== undefined ? body.content : existing.content,
-          parentId:
-            body.parentId !== undefined ? body.parentId : existing.parentId,
+          content: body.content !== undefined ? body.content : existing.content,
+          parentId: body.parentId !== undefined ? body.parentId : existing.parentId,
           updatedAt: new Date().toISOString(),
         };
         pages.set(page.id, page);
@@ -129,12 +129,8 @@ function startFallback() {
   });
 
   server.listen(port, "127.0.0.1", () => {
-    console.log(
-      `[rivto-server] Encore CLI not found; in-memory API on http://127.0.0.1:${port}`,
-    );
-    console.log(
-      "[rivto-server] Install Encore CLI to use the real Encore.ts SQL backend.",
-    );
+    console.log(`[rivto-server] Encore CLI not found; in-memory API on http://127.0.0.1:${port}`);
+    console.log("[rivto-server] Install Encore CLI to use the real Encore.ts SQL backend.");
   });
 }
 

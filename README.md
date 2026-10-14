@@ -62,13 +62,13 @@ and ordering in the task collection.
 
 ## Requirements
 
-| Use | Requirements |
-| --- | --- |
-| React integration | React and React DOM **18 or 19**, Yjs **13**, and a bundler that supports ES modules and CSS imports. |
-| Browser | A modern browser with DOM selection, Clipboard APIs, and `crypto.randomUUID()`. Serve through HTTPS or localhost for secure-context APIs. |
-| Core only | No React dependency; use the document model and CRDT adapter directly. |
-| Repository development | Use **Node.js 24** and **pnpm 11.8.0** (the pnpm version is pinned in the root `package.json`). The demo uses Vite 7 and TypeScript 5.8. |
-| Browser tests | Playwright Chromium and Firefox; install them with `pnpm exec playwright install chromium firefox`. |
+| Use                    | Requirements                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| React integration      | React and React DOM **18 or 19**, Yjs **13**, and a bundler that supports ES modules and CSS imports.                                     |
+| Browser                | A modern browser with DOM selection, Clipboard APIs, and `crypto.randomUUID()`. Serve through HTTPS or localhost for secure-context APIs. |
+| Core only              | No React dependency; use the document model and CRDT adapter directly.                                                                    |
+| Repository development | Use **Node.js 24** and **pnpm 11.8.0** (the pnpm version is pinned in the root `package.json`). The demo uses Vite 7 and TypeScript 5.8.  |
+| Browser tests          | Playwright Chromium and Firefox; install them with `pnpm exec playwright install chromium firefox`.                                       |
 
 Import the editor stylesheet once. Published styles are precompiled; a consuming
 project does not need to configure Tailwind. The source demo compiles styles
@@ -140,11 +140,11 @@ before starting it. Source changes hot-reload.
 
 Additional demo routes:
 
-| URL | What it demonstrates |
-| --- | --- |
+| URL                     | What it demonstrates                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/?sync=1&room=my-room` | Two editors synchronized through BroadcastChannel. Open the same URL in another tab on the same browser/origin to join; no server is needed. |
-| `/?editors=2` | Independent documents for cross-document dragging and selection. |
-| `/?repeat=10` | Additional seeded document content for exploration. |
+| `/?editors=2`           | Independent documents for cross-document dragging and selection.                                                                             |
+| `/?repeat=10`           | Additional seeded document content for exploration.                                                                                          |
 
 The default demo creates fresh in-memory documents on reload. BroadcastChannel
 shows local synchronization; it does not connect users on different computers.
@@ -167,14 +167,14 @@ The main dependency chain is:
 React and browser UI   Editor behavior   Persisted document       CRDT adapter
 ```
 
-| Directory | Package | Responsibility |
-| --- | --- | --- |
-| `packages/crdt-doc/` | `@chulane/crdt-doc` | Adapter-neutral CRDT contracts, Yjs adapter, shared values, and synchronization providers. Native Yjs imports stay here. |
-| `packages/document-model/` | `@chulane/document-model` | Canonical blocks, hierarchy, canvas elements, plugin data, transactions, and snapshots. |
-| `packages/rivto-editor-core/` | `@chulane/rivto` | Framework-neutral document mediation, commands, selection, clipboard, and undo managers. |
-| `packages/react-rivto-editor/` | `@chulane/rivto-react` | React renderers and hooks, page/canvas surfaces, DOM selection and events, keyboard handling, slash commands, and extensions. |
-| `packages/graph-runtime/` | `@chulane/graph-runtime` | Optional headless graph execution, endpoint registration, value propagation, and slot flows. |
-| `packages/block-graph/` | `@chulane/block-graph` | Optional block-oriented bindings on top of the graph runtime. |
+| Directory                      | Package                   | Responsibility                                                                                                                |
+| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/crdt-doc/`           | `@chulane/crdt-doc`       | Adapter-neutral CRDT contracts, Yjs adapter, shared values, and synchronization providers. Native Yjs imports stay here.      |
+| `packages/document-model/`     | `@chulane/document-model` | Canonical blocks, hierarchy, canvas elements, plugin data, transactions, and snapshots.                                       |
+| `packages/rivto-editor-core/`  | `@chulane/rivto`          | Framework-neutral document mediation, commands, selection, clipboard, and undo managers.                                      |
+| `packages/react-rivto-editor/` | `@chulane/rivto-react`    | React renderers and hooks, page/canvas surfaces, DOM selection and events, keyboard handling, slash commands, and extensions. |
+| `packages/graph-runtime/`      | `@chulane/graph-runtime`  | Optional headless graph execution, endpoint registration, value propagation, and slot flows.                                  |
+| `packages/block-graph/`        | `@chulane/block-graph`    | Optional block-oriented bindings on top of the graph runtime.                                                                 |
 
 The graph packages are separate from the normal editor setup. `demo/` is the
 interactive integration playground, `e2e/` contains browser tests, and `docs/`

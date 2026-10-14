@@ -15,7 +15,11 @@ import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 const DIALOG_CLASS = "rivto-block-modal";
 const EXPAND_CLASS = "rivto-block-modal-expand";
-const ExpandContext = createContext<{ expanded: boolean; label: string; toggle: () => void } | null>(null);
+const ExpandContext = createContext<{
+  expanded: boolean;
+  label: string;
+  toggle: () => void;
+} | null>(null);
 
 /**
  * Expands the existing board into the browser's modal top layer. Keeping one
@@ -33,17 +37,30 @@ export function BlockModal({ children, label }: { children: ReactNode; label: st
    */
   const expand = (modal: boolean) => {
     const element = dialog.current;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
     element.close();
-    if (modal) element.showModal();
-    else element.show();
+    if (modal) {
+      element.showModal();
+    } else {
+      element.show();
+    }
     setExpanded(modal);
     element.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
   };
   return (
-    <dialog ref={dialog} open className={DIALOG_CLASS} role={expanded ? "dialog" : "group"}
+    <dialog
+      ref={dialog}
+      open
+      className={DIALOG_CLASS}
+      role={expanded ? "dialog" : "group"}
       aria-label={expanded ? `Expanded ${label}` : `${label} board`}
-      onCancel={(event) => { event.preventDefault(); expand(false); }}>
+      onCancel={(event) => {
+        event.preventDefault();
+        expand(false);
+      }}
+    >
       <ExpandContext.Provider value={{ expanded, label, toggle: () => expand(!expanded) }}>
         {children}
       </ExpandContext.Provider>
@@ -57,10 +74,20 @@ export function BlockModal({ children, label }: { children: ReactNode; label: st
  */
 export function BlockModalButton() {
   const state = useContext(ExpandContext);
-  if (!state) return null;
+  if (!state) {
+    return null;
+  }
   return (
-    <Button {...editorControlProps} variant="outline" size="icon-sm" className={`${EXPAND_CLASS} ml-2`} type="button" onClick={state.toggle}
-      aria-label={state.expanded ? `Collapse ${state.label}` : `Expand ${state.label}`} aria-expanded={state.expanded}>
+    <Button
+      {...editorControlProps}
+      variant="outline"
+      size="icon-sm"
+      className={`${EXPAND_CLASS} ml-2`}
+      type="button"
+      onClick={state.toggle}
+      aria-label={state.expanded ? `Collapse ${state.label}` : `Expand ${state.label}`}
+      aria-expanded={state.expanded}
+    >
       {state.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
     </Button>
   );
