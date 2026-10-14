@@ -149,7 +149,11 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
 
   );
 }
-/** Shape fill, stroke, and text properties for either registered shape. */
+/**
+ * Shape fill, stroke, and text properties for either registered shape.
+ * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
+ * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
+ */
 export function ShapeProperties(props: ElementPropertiesProps) {
   const { color, paintToggle, common, preview } = propertyControls(props);
   return (
@@ -178,7 +182,11 @@ export function ShapeProperties(props: ElementPropertiesProps) {
 
   );
 }
-/** Drawing color and width, committed using the same lifecycle as custom properties. */
+/**
+ * Drawing color and width, committed using the same lifecycle as custom properties.
+ * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
+ * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
+ */
 export function DrawingProperties(props: ElementPropertiesProps) {
   const { color, common, preview } = propertyControls(props);
   return (
@@ -191,12 +199,20 @@ export function DrawingProperties(props: ElementPropertiesProps) {
 
   );
 }
-/** Sticky fill plus shared text properties. */
+/**
+ * Sticky fill plus shared text properties.
+ * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
+ * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
+ */
 export function StickerProperties(props: ElementPropertiesProps) {
   const { color } = propertyControls(props);
   return <><PropertyGroup title="Style"><PropertyRow label="Fill">{color('Fill color', 'fill')}</PropertyRow></PropertyGroup><TextProperties {...props} /></>;
 }
-/** Connector route, stroke, endpoints, and text properties. */
+/**
+ * Connector route, stroke, endpoints, and text properties.
+ * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
+ * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
+ */
 export function ConnectorProperties(props: ElementPropertiesProps) {
   const { color, common, preview } = propertyControls(props);
   return (

@@ -10,7 +10,13 @@ export const ConnectorInteractionContext = createContext<{
   onReconnectHover(event: Pick<PointerEvent, 'clientX' | 'clientY'> | null): void;
 } | null>(null);
 
-/** Keeps endpoint drag previews local to this connector renderer. */
+/**
+ * Keeps endpoint drag previews local to this connector renderer.
+ * @param props - Current connector snapshot and the receiving panel’s shared operations.
+ * @returns Current endpoints merged with a local draft, its setter and interaction context;
+ * interaction is null outside the gesture provider. Draft setters never write document state.
+ * Unmount clears reconnect hover through the provider.
+ */
 export function useConnectorPreview({ element, operations }: ElementRenderProps) {
   const interaction = useContext(ConnectorInteractionContext);
   const [draft, setDraft] = useState<{ key: 'source' | 'target'; endpoint: ConnectorEndpoint } | null>(null);
@@ -23,7 +29,13 @@ export function useConnectorPreview({ element, operations }: ElementRenderProps)
   };
 }
 
-/** Selected connector endpoints use pointer capture and commit through the shared property API. */
+/**
+ * Selected connector endpoints use pointer capture and commit through the shared property API.
+ * Pointer movement updates a local endpoint draft; release writes one property patch.
+ * Pointer cancellation clears the draft and hover without persisting changes.
+ * @param props - Connector snapshot, selection state and state from useConnectorPreview.
+ * @returns Endpoint controls when selected, an empty fragment when unselected, or null without an interaction provider.
+ */
 export function ConnectorEndpoints({ element, selected, preview }: Omit<ElementRenderProps, 'preview'> & { preview: ReturnType<typeof useConnectorPreview> }) {
   const { interaction, source, target, setDraft, operations } = preview;
   if (!interaction) return null;

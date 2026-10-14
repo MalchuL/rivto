@@ -48,7 +48,17 @@ function styleDefaults(category: keyof ReturnType<typeof createEdgelessDefaults>
   };
 }
 
-/** Registers built-in figure definitions, renderers, geometry and clipboard as ordinary element types. */
+/**
+ * Registers built-in rectangle, ellipse, text, sticker, drawing and connector element types.
+ *
+ * Installs persisted definitions, renderers, property editors, interaction behavior and
+ * clipboard converters through elementTypes. Toolbar groups and presets are installed
+ * separately by registerVisualToolbar; this function supplies no creation tools.
+ * @param editor - React editor whose registries receive these shared definitions.
+ * @returns Idempotent cleanup removing this installation in reverse order without deleting content.
+ * @throws If a type or converter conflicts, the owner is inactive, or installation fails;
+ * completed registrations are rolled back before the error propagates.
+ */
 export function registerVisualElements(editor: ReactEditorApi): () => void {
   const defaults = createEdgelessDefaults();
   const shapes = styleDefaults('shape');

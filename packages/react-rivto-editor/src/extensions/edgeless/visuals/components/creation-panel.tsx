@@ -28,7 +28,11 @@ function CreationPanel({ items, renderTool, children }: EdgelessToolbarGroupProp
   return <ToolSections tools={items.map(item => renderTool(item))} defaults={children} />;
 }
 
-/** Registered ShapeTools contents include every contributed tool and the built-in creation defaults. */
+/**
+ * Registered ShapeTools contents include every contributed tool and the built-in creation defaults.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
+ */
 export function ShapeTools(props: EdgelessToolbarGroupProps) {
   const edgelessOperation = props.operations;
   const defaults = edgelessOperation.getDefaults();
@@ -41,7 +45,11 @@ export function ShapeTools(props: EdgelessToolbarGroupProps) {
   </CreationPanel>;
 }
 
-/** Registered DrawingTools contents include every contributed tool and the built-in creation defaults. */
+/**
+ * Registered DrawingTools contents include every contributed tool and the built-in creation defaults.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
+ */
 export function DrawingTools(props: EdgelessToolbarGroupProps) {
   const edgelessOperation = props.operations;
   const defaults = edgelessOperation.getDefaults();
@@ -53,7 +61,11 @@ export function DrawingTools(props: EdgelessToolbarGroupProps) {
   </CreationPanel>;
 }
 
-/** Registered TextTools contents include every contributed tool and the built-in creation defaults. */
+/**
+ * Registered TextTools contents include every contributed tool and the built-in creation defaults.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
+ */
 export function TextTools(props: EdgelessToolbarGroupProps & { readonly fonts: readonly EdgelessFontOption[] }) {
   const edgelessOperation = props.operations;
   const defaults = edgelessOperation.getDefaults();
@@ -75,7 +87,11 @@ export function TextTools(props: EdgelessToolbarGroupProps & { readonly fonts: r
   </CreationPanel>;
 }
 
-/** Registered ConnectorTools contents include every contributed tool and the built-in creation defaults. */
+/**
+ * Registered ConnectorTools contents include every contributed tool and the built-in creation defaults.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
+ */
 export function ConnectorTools(props: EdgelessToolbarGroupProps) {
   const edgelessOperation = props.operations;
   const defaults = edgelessOperation.getDefaults();
@@ -98,7 +114,11 @@ export function ConnectorTools(props: EdgelessToolbarGroupProps) {
   </CreationPanel>;
 }
 
-/** Sticky presets supply thumbnail icons; contributed tools use the same resolved list. */
+/**
+ * Sticky presets supply thumbnail icons; contributed tools use the same resolved list.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
+ */
 export function StickerTools(props: EdgelessToolbarGroupProps) {
   return <ToolSections tools={props.items.map(item => props.renderTool(item, item.tool.icon ? null : item.tool.title))} />;
 }

@@ -23,7 +23,11 @@ import { ToolPopover, ToolSections } from './tool-popover';
 /** Bottom-centered create toolbar; its CSS hook also identifies the in-tree popover owner. */
 const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
 
-/** Bottom-centered create toolbar with always-visible Select and registered group popovers. */
+/**
+ * Bottom-centered create toolbar with always-visible Select and registered group popovers.
+ * @param props - Shared receiving operations, current tool and mounted preset-drag handlers.
+ * @returns Toolbar with registered standalone tools and nonempty groups; active styling follows each tool predicate.
+ */
 export function ToolBar({ edgelessOperation, tool, ...pointer }: {
   readonly edgelessOperation: EdgelessOperations;
   readonly tool: EdgelessVisualTool;

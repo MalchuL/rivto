@@ -75,7 +75,13 @@ const mindmapIcon = <svg viewBox="0 0 24 24" width={20} height={20} fill="none" 
   <rect x={16} y={16} width={6} height={6} rx={1.5} />
 </svg>;
 
-/** Installs a custom canvas element using the same public registration contract as built-in shapes. */
+/**
+ * Installs a custom canvas element using the same public registration contract as built-in shapes.
+ * The renderer scales its SVG viewport during host transform previews; branch additions
+ * write through panel operations, while detached placement previews suppress editing.
+ * @returns Extension installing the mindmap definition, renderer, properties and creation tool
+ * during setup; registration cleanup follows the extension lifecycle.
+ */
 export function mindmapExtension(): ReactEditorExtension {
   return {
     id: 'demo.mindmap', setup(editor) {

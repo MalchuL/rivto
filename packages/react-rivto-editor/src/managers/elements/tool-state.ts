@@ -4,13 +4,18 @@ import type { EdgelessPlaceKind, EdgelessVisualTool, PresetPayload, VisualFrame 
 import { DEFAULT_PLACE_SIZE } from "../../elements/visuals/utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
+/** Built-in brush presets; stroke widths are canvas units and opacity ranges from zero to one. */
 export const drawingDefaults = {
   pencil: { stroke: "#3f3f46", strokeWidth: 2, opacity: .68 },
   pen: { stroke: "#18181b", strokeWidth: 3, opacity: 1 },
   marker: { stroke: "#facc15", strokeWidth: 16, opacity: .34 },
 } as const;
 
-/** Returns fresh built-in creation defaults, independent of mounted panels and session choices. */
+/**
+ * Returns fresh built-in creation defaults, independent of mounted panels and session choices.
+ *
+ * @returns Independent mutable category objects; dimensions are canvas units and opacity is a zero-to-one fraction.
+ */
 export function createEdgelessDefaults() {
   return {
     shape: { fill: "#eeeaff", stroke: "#6c5ce7", strokeWidth: 2, filled: true, stroked: true, text: "", color: "#222222", fontFamily: DEFAULT_FONT, fontSize: 16, align: "center" as const, verticalAlign: "middle" as const },
@@ -32,7 +37,11 @@ export function createEdgelessDefaults() {
  */
 export class EdgelessToolState {
   private readonly store = new RevisionStore();
-  /** Observes local tool changes without an initial callback; returns an unsubscribe function. */
+  /**
+   * Observes local tool changes without an initial callback; returns an unsubscribe function.
+   * @param listener - Called synchronously after tool or creation-default changes.
+   * @returns Idempotent unsubscribe callback.
+   */
   readonly subscribe = (listener: () => void): (() => void) => this.store.subscribe(listener);
   private emit(): void { this.store.changed(); }
 
@@ -40,6 +49,7 @@ export class EdgelessToolState {
 
   private placeSize?: Pick<VisualFrame, "width" | "height">;
 
+  /** Mutable panel-local defaults; use setCreationDefaults to notify observers after changes. */
   readonly defaults = createEdgelessDefaults();
 
   private readonly lastByGroup = new Map<string, string>();
@@ -57,13 +67,20 @@ export class EdgelessToolState {
     this.activeEntryId = this.toolbar.getTools().find(item => item.isActive(this.currentTool))?.id;
   }
 
-  /** @returns Current local creation tool. */
+  /** @returns Current local creation tool object; treat it as read-only. */
   getTool(): EdgelessVisualTool { return this.currentTool; }
 
-  /** @returns Default size for the currently active place preset. */
+  /**
+   * Reads the remembered size for the active placement tool without changing it.
+   * @param fallback - Initial factory size in canvas units; defaults to 160 by 120.
+   * @returns A detached size, using the fallback until a gesture remembers its final dimensions.
+   */
   getPlaceSize(fallback: Pick<VisualFrame, "width" | "height"> = DEFAULT_PLACE_SIZE): Pick<VisualFrame, "width" | "height"> { return { ...(this.placeSize ?? fallback) }; }
 
-  /** Remembers the final interactive drag size for the active place preset. */
+  /**
+   * Remembers the final interactive drag size for the active place preset without notifying observers.
+   * @param frame - Final canvas geometry; only width and height are copied.
+   */
   rememberPlaceSize(frame: VisualFrame): void {
     this.placeSize = { width: frame.width, height: frame.height };
   }
@@ -85,19 +102,31 @@ export class EdgelessToolState {
       ?? items[0];
   }
 
-  /** Enters place mode for a toolbar preset (click, not drag-drop). */
+  /**
+   * Enters place mode for a toolbar preset (click, not drag-drop).
+   * @param payload - Preset kind; sticker fill, color and font are retained. The supplied frame is ignored.
+   */
   setPlaceTool(payload: PresetPayload): void {
     this.setTool(this.placeToolFromPreset(payload));
   }
 
-  /** Updates local creation defaults without mutating document content. */
+  /**
+   * Updates local creation defaults without mutating document content.
+   * Only existing category keys are cloned; unknown keys are ignored. Notifies subscribers synchronously.
+   * @param kind - Built-in defaults category to update.
+   * @param patch - Values to copy; this method does not run element validation.
+   */
   setCreationDefaults(kind: "shape" | "drawing" | "text" | "sticker" | "connector", patch: Record<string, unknown>): void {
     const target = this.defaults[kind];
     Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
     this.emit();
   }
 
-  /** Selects a brush and its complete visual preset for subsequent strokes. */
+  /**
+   * Selects a brush and its complete visual preset for subsequent strokes.
+   * Re-selecting the current brush preserves edited defaults; switching brushes resets them to the preset.
+   * @param brush - Built-in brush identity; activates drawing and notifies subscribers.
+   */
   setDrawingBrush(brush: keyof typeof drawingDefaults): void {
     // Switching brushes adopts that brush preset; re-picking the same brush keeps session defaults.
     if (this.defaults.drawing.brush !== brush) {
@@ -127,7 +156,13 @@ export class EdgelessToolState {
     if (entry?.group) this.lastByGroup.set(entry.group, entry.id);
   }
 
-  /** Activates one canvas interaction tool. */
+  /**
+   * Activates one canvas interaction tool and remembers its first matching toolbar entry.
+   * Copies the configuration and notifies synchronously even when unchanged. A changed configuration
+   * clears remembered placement size. Custom type registration is checked by EdgelessOperations.
+   * @param value - Tool configuration or the select shorthand.
+   * @throws For unsupported tools, placement kinds, brushes or connector routes.
+   */
   setTool(value: EdgelessVisualTool | "select"): void {
     const tool = value === "select" ? { tool: "select" } as const : value;
     if (!tool || !["select", "pan", "place", "element", "drawing", "eraser", "connector"].includes(tool.tool)) throw new Error("Unsupported edgeless visual tool");

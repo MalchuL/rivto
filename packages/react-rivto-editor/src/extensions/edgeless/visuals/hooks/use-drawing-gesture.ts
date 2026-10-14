@@ -24,12 +24,14 @@ interface Gesture {
   erased: Set<string>;
 }
 
+/** Candidate attachment point in canvas units, with active hover highlighting. */
 export interface ConnectorAnchorMarker {
   x: number;
   y: number;
   active: boolean;
 }
 
+/** Receiving element and canvas-space outlines/anchors for connector hover feedback. */
 export interface ConnectorHover {
   elementId: string;
   frame: VisualFrame;
@@ -37,6 +39,7 @@ export interface ConnectorHover {
   anchors: readonly ConnectorAnchorMarker[];
 }
 
+/** Detached connector route preview; endpoints and frames use canvas units, anchors use normalized coordinates. */
 export interface ConnectorPreview {
   source: CanvasPoint;
   target: CanvasPoint;
@@ -47,7 +50,18 @@ export interface ConnectorPreview {
   targetFrame?: VisualFrame;
 }
 
-/** Drawing, eraser, connector, and place pointer capture against the plane SVG. */
+/**
+ * Drawing, eraser, connector, and place pointer capture against the plane SVG.
+ *
+ * Keeps placement, ink, endpoint and erasure feedback local while the pointer moves;
+ * release commits creation or deletion through the receiving operations. Cancellation
+ * clears drafts, pointer capture and snap guides without committing the gesture.
+ * @param props - Mounted panel operations, canvas root, viewport scale factor (1 is 100%)
+ * and the active tool configuration. Custom placement requires a registered factory and panel.
+ * @returns Local preview data, capture handlers and shared connector hit-testing services.
+ * @throws When preparing a custom placement whose factory is absent or returns a different type;
+ * factory and operation errors propagate to the caller.
+ */
 export function useDrawingGesture({
   edgelessOperation,
   root,

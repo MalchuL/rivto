@@ -16,6 +16,13 @@ function PopoverTrigger({
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
+/**
+ * Renders styled popover content through the Radix portal.
+ * @param props - Radix content props plus an optional portal container. Alignment defaults
+ * to center and sideOffset to four CSS pixels; an omitted container uses document.body.
+ * Use a panel-owned container when DOM event routing must remain within that panel.
+ * @returns Portaled content whose positioning, focus and dismissal follow Radix props.
+ */
 function PopoverContent({
   className,
   align = "center",

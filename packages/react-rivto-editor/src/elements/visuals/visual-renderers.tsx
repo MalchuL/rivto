@@ -13,7 +13,11 @@ function labelControl({ element, operations, editing, setEditing, focusPointRef,
     focusPointRef={focusPointRef} stopPointerWhileEditing />;
 }
 
-/** Built-in figure content; placement, selection and geometry remain owned by the common element host. */
+/**
+ * Built-in figure content; placement, selection and geometry remain owned by the common element host.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function DrawingContent(props: ElementRenderProps) {
   const visual = { ...props.element.props, frame: props.element.frame } as unknown as DrawingVisual;
   const d = visual.points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
@@ -36,7 +40,11 @@ export function DrawingContent(props: ElementRenderProps) {
   );
 
 }
-/** Renders routed connector geometry, its editable label, and selected endpoint controls. */
+/**
+ * Renders routed connector geometry, its editable label, and selected endpoint controls.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function ConnectorContent(props: ElementRenderProps) {
   const preview = useConnectorPreview(props);
   const { source, target } = preview;
@@ -134,9 +142,17 @@ function TextLabel(props: ElementRenderProps & { sticky: boolean }) {
   );
 
 }
-/** Renders a standalone text element. */
+/**
+ * Renders a standalone text element.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function TextContent(props: ElementRenderProps) { return <TextLabel {...props} sticky={false} />; }
-/** Renders a sticky note with its own fill. */
+/**
+ * Renders a sticky note with its own fill.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function StickerContent(props: ElementRenderProps) { return <TextLabel {...props} sticky />; }
 /** Shared shape geometry and label layout, selected explicitly by the registration. */
 function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
@@ -198,7 +214,15 @@ function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
   );
 
 }
-/** Renders a rectangular shape. */
+/**
+ * Renders a rectangular shape.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function RectangleContent(props: ElementRenderProps) { return <ShapeContent {...props} ellipse={false} />; }
-/** Renders an elliptical shape. */
+/**
+ * Renders an elliptical shape.
+ * @param props - Current element data, preview flag and shared panel interaction state.
+ * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
+ */
 export function EllipseContent(props: ElementRenderProps) { return <ShapeContent {...props} ellipse />; }

@@ -12,8 +12,12 @@ import { EdgelessVisualLayer } from "./visual-layer";
  *
  * The extension registers commands on the supplied editor but stores every
  * visual-specific props on generic first-class document elements.
+ * Setup installs built-in definitions, toolbar groups, connector maintenance and the
+ * visual layer. Cleanup removes these registrations in reverse order without deleting
+ * persisted content; partial setup is rolled back if any registration fails.
  *
- * @param options - Optional sticker catalog and toolbar visibility.
+ * @param options - Optional font/sticker catalogs, toolbar visibility and connector settings;
+ * omitted fields use the built-in defaults.
  * @returns Creation-time React editor extension.
  */
 export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): ReactEditorExtension {

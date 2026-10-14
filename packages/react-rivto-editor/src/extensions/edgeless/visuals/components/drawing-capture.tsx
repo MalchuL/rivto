@@ -4,7 +4,11 @@ import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gest
 import { connectorPath } from "../../../../elements/visuals/utils/geometry";
 import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 
-/** Full-plane SVG that captures drawing/eraser/connector/place gestures. */
+/**
+ * Full-plane SVG that captures drawing/eraser/connector/place gestures.
+ * @param props - Current tool, drawing and connector drafts, attachment markers and gesture pointer handlers.
+ * @returns Plane-sized SVG capture layer with local drawing/connector feedback; placement content uses ElementCreationPreview.
+ */
 export function DrawingCapture({
   tool,
   zoom,

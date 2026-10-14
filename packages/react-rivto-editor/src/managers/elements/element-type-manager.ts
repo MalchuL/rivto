@@ -28,6 +28,8 @@ export class ElementTypeManager implements ElementTypesApi {
    *
    * Addition and removal notify registry subscribers. Removal also switches the
    * tool to selection in subscribed panels that were creating this type; persisted elements remain.
+   * A creation contribution installs tool ID `element:${type}`; its group must be registered
+   * separately. A supplied behavior.resize overrides definition.resize for core registration.
    *
    * @param registration - Definition and presentation for a unique type.
    * @returns Idempotent disposer, also owned by the extension lifecycle.

@@ -21,7 +21,19 @@ interface PresetDrag {
   capture: HTMLButtonElement;
 }
 
-/** Pointer-capture place/drag for create-toolbar presets (no HTML5 DnD). */
+/**
+ * Pointer-capture place/drag for create-toolbar presets (no HTML5 DnD).
+ *
+ * Mounts the registered renderer into a detached preview portal after four screen pixels
+ * of movement. Subsequent pointer samples move its host through requestAnimationFrame
+ * without inserting or updating document elements. Release over the canvas commits once;
+ * a click only selects the placement tool. Escape, panel deactivation, Select/Pan and
+ * unmount release capture, remove the ghost and cancel placement.
+ * @param props - Shared panel operations, canvas root for hit testing/snapping, positioned
+ * plane for screen conversion, and viewport scale factor (1 is 100%).
+ * @returns Preview portal to include in the toolbar tree and start/move/end button handlers.
+ * Pass false to endPresetDrag on pointer cancellation; commit otherwise defaults to true.
+ */
 export function usePresetDrag({
   edgelessOperation,
   root,

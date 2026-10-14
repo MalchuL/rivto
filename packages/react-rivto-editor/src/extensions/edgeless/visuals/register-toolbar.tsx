@@ -12,9 +12,14 @@ const STICKER_SWATCH_CLASS = 'edgeless-creation-panel-sticker-swatch';
 
 /**
  * Installs built-in tool groups through the same registry used by host extensions.
+ * Installs shapes, drawing, text, stickers and connectors groups, their presets and
+ * custom group contents. Element definitions are installed separately by registerVisualElements.
+ * Hosts can add members by registering tools with the corresponding group ID.
  * @param editor - Shared React editor that owns these registrations.
  * @param options - Host font and sticker catalogs used by the registered groups.
+ * Host catalog entries replace built-ins with the same fontFamily or sticker ID.
  * @returns Idempotent cleanup; partial installation is rolled back if a registration conflicts.
+ * @throws If the owner is inactive or a group/tool ID is already registered.
  */
 export function registerVisualToolbar(editor: ReactEditorApi, options: EdgelessVisualsOptions): () => void {
   const disposers: Array<() => void> = [];

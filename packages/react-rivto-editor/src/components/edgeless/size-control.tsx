@@ -25,7 +25,8 @@ const VALUE_CLASS = "edgeless-size-control-value";
  * Renders a labeled slider with a size preview and numeric readout.
  *
  * @param props - Accessible label, current value (non-numbers render as the
- * minimum), range bounds, preview glyph, and change callback.
+ * minimum), range bounds (1–64 by default), preview glyph (dot by default), and change callback.
+ * onChange runs for each slider value change; persistence and commit timing belong to the caller.
  * @returns A group wrapping the preview, accessible slider thumb, and value.
  */
 export function SizeControl({

@@ -11,8 +11,12 @@ const ignoreEditing = () => { };
  * Renders the registered element content from detached creation data without document insertion.
  * The host has no persisted selection/slot markers and is inert, hidden from accessibility,
  * and excluded from pointer hit testing. Renderer effects must honor preview=true.
- * @param props - Draft input, live canvas frame, receiving operations and viewport scale.
- * @returns Positioned preview using the normal content renderer, or null if its type was removed.
+ * The temporary React ID is stable for this mount and never enters the document. Geometry
+ * preparation runs during rendering; registration callbacks must be pure.
+ * @param props - Draft input, live canvas frame in canvas units, receiving operations,
+ * viewport scale factor (1 is 100%), and optional host class/style overrides.
+ * @returns Positioned preview using the normal content renderer, or null if its type was removed or operations have no receiving React panel.
+ * @throws If registered creation preparation or validation rejects the draft.
  */
 export function ElementCreationPreview({ input, frame, operations, zoom, className = '', style: hostStyle }: {
   readonly input: CreateElementInput;

@@ -8,9 +8,11 @@ import { EdgelessPropertiesPanel } from '../../../../components/edgeless/propert
  * Hosts registered property contents for a same-type selection.
  * Edits are previewed locally and committed as one undo entry on an outside pointer press,
  * selection change, or unmount. Escape cancels the pending preview. The property component
- * receives the owning panel and shared operations rather than creating another canvas state.
+ * receives the owning panel and callbacks backed by shared operations rather than creating another canvas state.
  * @param props - Stable selection identity, title, registered contents, and mounted canvas operations.
- * @returns Right-side property panel with shared chrome and editing lifecycle.
+ * @returns Right-side property panel with shared chrome and editing lifecycle, or null
+ * when there is no receiving React panel or no selected records remain.
+ * @throws During preview/commit callbacks if selected targets or their properties fail validation.
  */
 export function ElementProperties({ ids, title, component: Properties, operations }: {
   readonly ids: readonly string[];

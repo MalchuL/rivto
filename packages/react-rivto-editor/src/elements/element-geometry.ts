@@ -16,8 +16,12 @@ export class ElementGeometry {
     private readonly previewRotation?: (id: string) => number | undefined,
   ) {}
 
-  /** @param id - Element identity. @returns Preview or stored clockwise degrees;
-   * missing nodes and nodes without an angle return zero. */
+  /**
+   * Reads normalized rotation without mutating the element or preview.
+   * @param id - Element identity.
+   * @returns Preview or stored clockwise degrees;
+   * missing nodes and nodes without an angle return zero.
+   */
   rotation(id: string): number {
     const node = this.read(id);
     if (!node) return 0;

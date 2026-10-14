@@ -64,7 +64,11 @@ export function ToolPopover({
   );
 }
 
-/** Common Tools / Defaults layout; custom group contents may supply a different arrangement. */
+/**
+ * Common Tools / Defaults layout; custom group contents may supply a different arrangement.
+ * @param props - Resolved tool buttons and optional default-value controls.
+ * @returns Tools section and, when supplied, Defaults section; neither adds a popover or owns tool state.
+ */
 export function ToolSections({ tools, defaults }: { readonly tools: ReactNode; readonly defaults?: ReactNode }) {
   return <>
     <section className={SECTION_CLASS}>

@@ -4,6 +4,15 @@ import * as React from "react"
 import { cn } from "cn"
 import { Slider as SliderPrimitive } from "radix-ui"
 
+/**
+ * Renders the shared Radix slider track, range and one thumb per supplied value.
+ *
+ * Accessible label attributes are forwarded to each thumb, where the slider role lives.
+ * @param props - Radix root props; min/max default to 0/100. Controlled value determines
+ * thumb count, then defaultValue; absent both, two thumbs are rendered. Callbacks remain
+ * owned by Radix and the caller decides whether changes preview or persist data.
+ * @returns Styled slider with keyboard and pointer interaction delegated to Radix.
+ */
 function Slider({
   className,
   defaultValue,

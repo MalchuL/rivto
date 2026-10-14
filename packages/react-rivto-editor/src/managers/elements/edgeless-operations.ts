@@ -168,6 +168,8 @@ export class EdgelessOperations {
    *
    * @param ids - Visual IDs whose rendered properties should be previewed.
    * @param patch - Temporary property values; document records remain unchanged.
+   * @throws If the selection is empty, a target is missing, types differ, or validation rejects a patch.
+   * All targets are checked before any pending preview is changed.
    */
   previewProperties(ids: readonly string[], patch: Record<string, unknown>): void {
     const targets = ids.map(id => this.getRenderedElement(id));
@@ -255,7 +257,7 @@ export class EdgelessOperations {
    * Reads rotation from current element properties.
    *
    * @param item - Element ID.
-   * @returns Its normalized visual rotation in degrees, or zero for connectors or missing rotation.
+   * @returns Its normalized visual rotation in degrees, or zero for absolute-geometry types or missing rotation.
    */
   getRotation(item: EdgelessSelectionRef): number { return this.rotation(item); }
   /**
@@ -275,7 +277,7 @@ export class EdgelessOperations {
     return Math.min(...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0), this.getZIndex(item)) - 1;
   }
   /**
-   * Reads the creation tool shared by panels of this React editor.
+   * Reads the creation tool owned by this mounted edgeless representation.
    *
    * @returns Current session creation tool; treat the returned object as read-only.
    */
@@ -294,7 +296,7 @@ export class EdgelessOperations {
    */
   rememberPlaceSize(frame: VisualFrame): void { return this.tools.rememberPlaceSize(frame); }
   /**
-   * Reads creation properties remembered for this editor session.
+   * Reads creation properties remembered for this mounted edgeless representation.
    *
    * @returns Detached session defaults used by creation menus.
    */
@@ -424,7 +426,8 @@ export class EdgelessOperations {
    * differs from the current brush), then prepare geometry without mutating the input.
    * Custom types retain opaque property values, including null and nested content.
    *
-   * @param input - Persisted type and initial fields; missing frame fields use the standard creation size.
+   * @param input - Persisted type and initial fields; missing frame fields use x=120, y=120, width=160, height=120
+   * in canvas units. Omitted zIndex places the element above current panel elements.
    * @returns Complete created node. The new ID replaces the active selection.
    * @throws If the type is not registered, geometry is not finite and positive, or its definition rejects the input.
    */
@@ -556,7 +559,7 @@ export class EdgelessOperations {
    * covers the selection; displayed bounds are derived from the children afterward
    * in the group's props.rotation axes (zero when absent), without persisting
    * those derived dimensions or changing the angle when a child moves.
-   * Group membership is owned by this extension; the model stores an ordinary parent.
+   * Group membership is derived by these panel-bound operations; the model stores an ordinary parent.
    * All writes use the editor processing pipeline within one history transaction.
    *
    * @returns Detached flat parent record with its final ordered childIds.

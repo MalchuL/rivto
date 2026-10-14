@@ -1,11 +1,16 @@
 /** A mindmap owns a flat tree so depth never depends on recursive serialization. */
 export interface MindmapNode {
+  /** Stable node identity local to this mindmap, distinct from the element ID. */
   readonly id: string;
+  /** Parent node identity; exactly one node in a validated tree has null. */
   readonly parentId: string | null;
+  /** Visible node text; empty labels are accepted. */
   readonly label: string;
 }
 
+/** Node width in natural SVG layout units before scaling to the element frame. */
 export const NODE_WIDTH = 160;
+/** Node height in natural SVG layout units before scaling to the element frame. */
 export const NODE_HEIGHT = 40;
 const COLUMN_GAP = 64;
 const ROW_GAP = 20;
@@ -14,7 +19,7 @@ const PADDING = 24;
 /**
  * Validates a single rooted tree without limiting its depth or number of branches.
  * @param value - Persisted nodes from element props or a clipboard snapshot.
- * @returns The validated flat array.
+ * @returns The original validated flat array without cloning or mutation; treat it as read-only.
  * @throws For malformed nodes, duplicate IDs, missing parents, cycles, or multiple roots.
  */
 export function readMindmapNodes(value: unknown): readonly MindmapNode[] {
@@ -52,7 +57,9 @@ export function readMindmapNodes(value: unknown): readonly MindmapNode[] {
 /**
  * Lays out a tree from left to right in linear time using explicit stacks.
  * @param nodes - Validated single rooted tree in sibling insertion order.
- * @returns Natural bounds and node positions; neither document nor input is mutated.
+ * @returns Natural SVG bounds and copied nodes with top-left x/y positions in layout units;
+ * neither document nor input is mutated. The renderer scales these bounds to the element frame.
+ * Input must already satisfy readMindmapNodes; this layout function does not validate it.
  */
 export function layoutMindmap(nodes: readonly MindmapNode[]) {
   const children = new Map<string, MindmapNode[]>();
