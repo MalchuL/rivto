@@ -20,9 +20,12 @@ import { connectorFrame, endpointPoint } from '../../elements/visuals/utils/geom
  * @returns Unsubscribe callback that stops automatic connector reconciliation.
  */
 export function registerConnectorNormalization(editor: ReactEditorApi, options: { readonly orphanConnectors?: OrphanConnectorBehavior }): () => void {
-  const geometry = new ElementGeometry(id => editor.elements.getElementNode(id));
+  const geometry = new ElementGeometry(id => editor.elements.getElementNode(id), id => {
+    const element = editor.elements.getElementNode(id);
+    return editor.elementTypes.get(element?.type ?? '')?.behavior?.absoluteGeometry ? 0 : undefined;
+  });
   const defaults = createEdgelessDefaults().connector;
-  const rotation = (id: string): number => { const value = editor.elements.getElementNode(id)?.props.rotation; return typeof value === 'number' ? value : 0; };
+  const rotation = (id: string): number => geometry.rotation(id);
   const resolveEndpoint = (endpoint: ConnectorEndpoint) => endpointPoint(endpoint, endpoint.elementId ? geometry.frame(endpoint.elementId) : undefined, endpoint.elementId ? rotation(endpoint.elementId) : 0);
   let reconciling = false;
   return editor.subscribe(() => {

@@ -145,9 +145,6 @@ export type CreateVisualPayload =
 /** Click/drag presets from the create toolbar (not drawing or connector tools). */
 export type PresetPayload = Exclude<CreateVisualPayload, { kind: "drawing" | "connector" }>;
 
-/** Openable create-toolbar category. */
-export type ToolCategory = "shapes" | "drawing" | "text" | "stickers" | "connectors";
-
 /** Payload accepted by `edgeless.visual.update`. */
 export interface UpdateVisualPayload { readonly id: string; readonly patch: Partial<Omit<EdgelessVisual, "id" | "kind">> }
 

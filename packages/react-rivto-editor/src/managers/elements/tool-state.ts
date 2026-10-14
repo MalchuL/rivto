@@ -1,7 +1,6 @@
-import type { EditorElementInput } from "@chulane/rivto";
 import { RevisionStore } from "../../internal-store";
-import { DEFAULT_STICKERS } from "../../elements/visuals/presets";
-import type { EdgelessPlaceKind, EdgelessVisual, EdgelessVisualTool, PresetPayload, ToolCategory, VisualFrame } from "../../elements/visuals/types";
+import type { EdgelessToolbarApi, EdgelessToolbarTool } from "../edgeless-toolbar/types";
+import type { EdgelessPlaceKind, EdgelessVisualTool, PresetPayload, VisualFrame } from "../../elements/visuals/types";
 import { DEFAULT_PLACE_SIZE } from "../../elements/visuals/utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
 const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
@@ -39,76 +38,51 @@ export class EdgelessToolState {
 
   private currentTool: EdgelessVisualTool = { tool: "select" };
 
-  private placeSize: Pick<VisualFrame, "width" | "height"> = { ...DEFAULT_PLACE_SIZE };
+  private placeSize?: Pick<VisualFrame, "width" | "height">;
 
   readonly defaults = createEdgelessDefaults();
 
-  private readonly lastByCategory: Record<ToolCategory, EdgelessVisualTool> = {
-    shapes: { tool: "place", kind: "rectangle" },
-    // Match session drawing defaults so first category activation does not swap brush presets.
-    drawing: { tool: "drawing", brush: "pen" },
-    text: { tool: "place", kind: "text" },
-    stickers: {
-      tool: "place",
-      kind: "sticker",
-      fill: DEFAULT_STICKERS[0]!.fill,
-      color: DEFAULT_STICKERS[0]!.color,
-      fontFamily: DEFAULT_STICKERS[0]!.fontFamily,
-    },
-    connectors: { tool: "connector", route: "straight" },
-  };
+  private readonly lastByGroup = new Map<string, string>();
+  private activeEntryId?: string;
+
+  /** @param toolbar - Shared tool definitions; this instance only owns panel-local choices. */
+  constructor(private readonly toolbar: EdgelessToolbarApi) {}
+
+  /** Removes stale remembered entries and resets a removed active tool without changing document content. */
+  reconcileToolbar(): void {
+    for (const [group, id] of this.lastByGroup) {
+      if (!this.toolbar.getGroup(group) || this.toolbar.getTool(id)?.group !== group) this.lastByGroup.delete(group);
+    }
+    if (this.activeEntryId && !this.toolbar.getTool(this.activeEntryId)) this.setTool('select');
+    this.activeEntryId = this.toolbar.getTools().find(item => item.isActive(this.currentTool))?.id;
+  }
 
   /** @returns Current local creation tool. */
   getTool(): EdgelessVisualTool { return this.currentTool; }
 
   /** @returns Default size for the currently active place preset. */
-  getPlaceSize(): Pick<VisualFrame, "width" | "height"> { return { ...this.placeSize }; }
+  getPlaceSize(fallback: Pick<VisualFrame, "width" | "height"> = DEFAULT_PLACE_SIZE): Pick<VisualFrame, "width" | "height"> { return { ...(this.placeSize ?? fallback) }; }
 
   /** Remembers the final interactive drag size for the active place preset. */
   rememberPlaceSize(frame: VisualFrame): void {
     this.placeSize = { width: frame.width, height: frame.height };
   }
 
-  /**
-   * Copies local built-in creation defaults into an element input without changing it.
-   *
-   * Custom types keep their registered defaults. An explicit drawing brush uses
-   * its preset when it differs from the panel's current brush.
-   * @param input - Registered element input before geometry and property validation.
-   * @returns A new input for built-in visuals, or the original input for custom types.
-   */
-  applyCreationDefaults(input: EditorElementInput): EditorElementInput {
-    if (!["rectangle", "ellipse", "text", "sticker", "drawing", "connector"].includes(input.type)) return input;
-    const category = input.type === "rectangle" || input.type === "ellipse" ? "shape" : input.type;
-    let defaults: Record<string, unknown> = this.defaults[category as keyof typeof this.defaults];
-    const brush = input.props?.brush;
-    if (category === "drawing" && (brush === "pencil" || brush === "pen" || brush === "marker")
-      && brush !== this.defaults.drawing.brush) {
-      defaults = { ...defaults, ...drawingDefaults[brush], brush };
-    }
-    const props = { ...defaults };
-    for (const [key, value] of Object.entries(input.props ?? {})) {
-      if (value != null || !(key in defaults)) props[key] = value;
-    }
-    return { ...input, props };
-  }
-
   /** @returns Detached session defaults used by creation menus. */
   getDefaults() { return copy(this.defaults); }
 
-  /** Last activated tool for a create-toolbar category (session memory). */
-  getLastTool(category: ToolCategory): EdgelessVisualTool { return copy(this.lastByCategory[category]); }
-
-  /** Activates the remembered (or first-default) tool for a category. */
-  activateCategory(category: ToolCategory): void {
-    const last = this.lastByCategory[category];
-    if (last.tool === "drawing") {
-      // Avoid clobbering session stroke defaults when the brush is already active.
-      if (this.defaults.drawing.brush !== last.brush) this.setDrawingBrush(last.brush);
-      else this.setTool(last);
-      return;
-    }
-    this.setTool(last);
+  /**
+   * Resolves a group's remembered tool or its default without activating it.
+   * @param groupId - Registered group identity.
+   * @returns Current registration, or undefined for an absent or empty group.
+   */
+  getGroupTool(groupId: string): EdgelessToolbarTool | undefined {
+    const group = this.toolbar.getGroup(groupId);
+    if (!group) return undefined;
+    const items = this.toolbar.getTools().filter(item => item.group === groupId);
+    return items.find(item => item.id === this.lastByGroup.get(groupId))
+      ?? items.find(item => item.id === group.defaultToolId)
+      ?? items[0];
   }
 
   /** Enters place mode for a toolbar preset (click, not drag-drop). */
@@ -148,14 +122,9 @@ export class EdgelessToolState {
   }
 
   private rememberTool(tool: EdgelessVisualTool): void {
-    if (tool.tool === "place") {
-      if (tool.kind === "rectangle" || tool.kind === "ellipse") this.lastByCategory.shapes = copy(tool);
-      else if (tool.kind === "text") this.lastByCategory.text = copy(tool);
-      else if (tool.kind === "sticker") this.lastByCategory.stickers = copy(tool);
-      return;
-    }
-    if (tool.tool === "drawing" || tool.tool === "eraser") this.lastByCategory.drawing = copy(tool);
-    if (tool.tool === "connector") this.lastByCategory.connectors = copy(tool);
+    const entry = this.toolbar.getTools().find(item => item.isActive(tool));
+    this.activeEntryId = entry?.id;
+    if (entry?.group) this.lastByGroup.set(entry.group, entry.id);
   }
 
   /** Activates one canvas interaction tool. */
@@ -168,18 +137,11 @@ export class EdgelessToolState {
     if (tool.tool === "drawing" && !["pencil", "pen", "marker"].includes(tool.brush)) throw new Error("Unsupported drawing brush");
     if (tool.tool === "connector" && !["straight", "orthogonal", "curve"].includes(tool.route)) throw new Error("Unsupported connector route");
     if (JSON.stringify(tool) !== JSON.stringify(this.currentTool)) {
-      this.placeSize = { ...DEFAULT_PLACE_SIZE };
+      this.placeSize = undefined;
     }
     this.currentTool = copy(tool);
     this.rememberTool(tool);
     this.emit();
   }
 
-  /** Remembers supported properties for subsequent objects without notifying subscribers. */
-  remember(kind: EdgelessVisual["kind"], patch: Record<string, unknown>): void {
-    const key = kind === "rectangle" || kind === "ellipse" ? "shape" : kind;
-    const target = this.defaults[key];
-    if (!target) return;
-    Object.keys(target).forEach((key) => { if (key in patch) Object.assign(target, { [key]: copy(patch[key]) }); });
-  }
 }

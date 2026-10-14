@@ -145,7 +145,7 @@ export class EdgelessTransformController {
   };
   private rotation = (id: string): number => {
     const element = this.elements.getElementNode(id);
-    return element?.type !== "connector" && typeof element?.props.rotation === "number"
+    return !this.reactEditor.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry && typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
       : 0;
   };
@@ -155,7 +155,7 @@ export class EdgelessTransformController {
     const children = this.groupChildren(id);
     return children.length ? this.leaves(children, seen) : this.elements.hasElement(id) ? [id] : [];
   });
-  private readonly geometry = new ElementGeometry((id) => this.elements.getElementNode(id));
+  private readonly geometry = new ElementGeometry((id) => this.elements.getElementNode(id), (id) => this.rotation(id));
   private bounds = (id: string): EditorElementFrame | undefined => this.geometry.bounds(id);
   private transformFrame = (id: string): EditorElementFrame | undefined => this.geometry.frame(id);
   private rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
@@ -539,7 +539,7 @@ export class EdgelessTransformController {
     if (this.start) this.finish(false);
     this.reactPanel = reactPanel;
     const element = this.elements.getElementNode(id);
-    if (!element || element.type === "connector") return false;
+    if (!element || this.reactEditor.elementTypes.get(element.type)?.behavior?.absoluteGeometry) return false;
     const moving = new Set(this.leaves([id]));
     const frames = new Map<string, EditorElementFrame>();
     [id, ...moving].forEach((item) => {
@@ -659,7 +659,7 @@ export class EdgelessTransformController {
         // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
         id = childId;
         const kind = this.elements.getElementNode(childId)?.type;
-        if (kind !== "text" && kind !== "sticker" && kind !== "rectangle" && kind !== "ellipse" && kind !== "connector") {
+        if (!this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel) {
           returnToGroup = parent;
         }
       } else if (inActiveGroup) {
@@ -745,7 +745,7 @@ export class EdgelessTransformController {
       return node && frame && active.moving.has(id)
         ? { ...node, frame: { ...frame, x: frame.x + dx, y: frame.y + dy } }
         : node;
-    });
+    }, (id) => this.rotation(id));
     if (!active.moved && Math.hypot(dx, dy) < 2) return;
     active.moved = true;
     this.previewTargets?.forEach((target) => {

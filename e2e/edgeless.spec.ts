@@ -16,7 +16,7 @@ const switchMode = async (page: Page, mode: "block" | "edgeless") => {
 const openCreateMenu = async (page: Page, category: "Shapes" | "Drawing" | "Text" | "Stickies" | "Connectors") => {
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   const menuKey = category === "Stickies" ? "stickers" : category.toLowerCase();
-  const menu = page.getByRole("menu", { name: `${menuKey} tools` });
+  const menu = page.getByRole("dialog", { name: `${menuKey} tools` });
   if (!(await menu.isVisible())) await toolbar.getByRole("button", { name: category }).click();
   await expect(menu).toBeVisible();
   return menu;
@@ -330,7 +330,7 @@ test("double-clicks empty canvas to append and focus a block at that canvas poin
 
   await created.locator("[data-block-content]").dblclick();
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Shapes" }).click();
-  await page.getByRole("menu", { name: "shapes tools" }).getByRole("button", { name: "Rectangle" }).click();
+  await page.getByRole("dialog", { name: "shapes tools" }).getByRole("button", { name: "Rectangle" }).click();
   await clickPlaceCapture(page);
   const shape = page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]');
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Select" }).click();
@@ -559,7 +559,8 @@ test("edits shape labels and keeps thick ellipse strokes inside the frame", asyn
 
   const properties = page.getByRole("region", { name: "Visual properties" });
   await properties.getByRole("button", { name: "Expand properties" }).click();
-  await properties.getByLabel("Stroke width").fill("28");
+  await properties.getByRole("slider", { name: "Stroke width" }).press("Home");
+  for (let step = 1; step < 28; step++) await properties.getByRole("slider", { name: "Stroke width" }).press("ArrowRight");
   await expect(ellipse.locator("ellipse")).toHaveAttribute("stroke-width", "28");
   await expect.poll(async () => Number(await ellipse.locator("ellipse").getAttribute("rx"))).toBeLessThan(50);
   await properties.getByRole("button", { name: "Collapse properties" }).click();
@@ -810,7 +811,8 @@ test("edits visual properties immediately and enters text editing on double-clic
     }
   });
   await expect(rectangle.locator("rect")).toHaveAttribute("fill", "#123456");
-  await properties.getByLabel("Stroke width").fill("5");
+  await properties.getByRole("slider", { name: "Stroke width" }).press("Home");
+  for (let step = 1; step < 5; step++) await properties.getByRole("slider", { name: "Stroke width" }).press("ArrowRight");
   await expect(rectangle.locator("rect")).toHaveAttribute("stroke-width", "5");
   // Commit the deferred property transaction by clicking away.
   await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
@@ -879,7 +881,7 @@ test("drags categorized presets to canvas and edits a styled sticky", async ({ p
   await page.getByRole("toolbar", { name: "Canvas zoom" })
     .getByRole("button", { name: "Disable object alignment" }).click();
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Shapes" }).click();
-  const rectanglePreset = page.getByRole("menu", { name: "shapes tools" }).getByRole("button", { name: "Rectangle" });
+  const rectanglePreset = page.getByRole("dialog", { name: "shapes tools" }).getByRole("button", { name: "Rectangle" });
   const rectanglesBefore = await page.locator('[data-edgeless-visual-kind="rectangle"]').count();
   const presetBox = await rectanglePreset.boundingBox();
   const viewportBox = await viewport.boundingBox();
@@ -904,7 +906,7 @@ test("drags categorized presets to canvas and edits a styled sticky", async ({ p
   expect(rectangleFrame.y % 20).toBe(0);
 
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Stickies" }).click();
-  await page.getByRole("menu", { name: "stickers tools" }).getByRole("button", { name: "Pink sticky" }).click();
+  await page.getByRole("dialog", { name: "stickers tools" }).getByRole("button", { name: "Pink sticky" }).click();
   const stickyCapture = await page.locator(".edgeless-drawing-capture[data-active]").boundingBox();
   if (!stickyCapture) throw new Error("Expected sticky place capture");
   await clickPlaceCapture(page, { x: stickyCapture.x + 220, y: stickyCapture.y + 180 });
@@ -1085,11 +1087,11 @@ test("draws presets, erases whole objects, and connects moving objects", async (
   if (!source || !target) throw new Error("Expected connector targets");
   const connectorsBefore = await page.locator('[data-edgeless-visual-kind="connector"]').count();
   await page.getByRole("toolbar", { name: "Visual objects" }).getByRole("button", { name: "Connectors" }).click();
-  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Curve connector" }).click();
+  await page.getByRole("dialog", { name: "connectors tools" }).getByRole("button", { name: "Curve connector" }).click();
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2); await page.mouse.down(); await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 }); await page.mouse.up();
   await expect(page.locator('[data-edgeless-visual-kind="connector"]')).toHaveCount(connectorsBefore + 1);
   const connector = page.locator('[data-edgeless-visual-kind="connector"]').nth(connectorsBefore);
-  await expect(connector).toHaveAttribute("data-edgeless-connector-route", "curve");
+  await expect(connector.locator(".edgeless-connector")).toHaveAttribute("data-edgeless-connector-route", "curve");
   const beforeFrame = await connector.evaluate((element) => ({
     left: (element as HTMLElement).style.left,
     top: (element as HTMLElement).style.top,
@@ -1118,14 +1120,14 @@ test("exits connector mode with toolbar Select and Escape", async ({ page }) => 
   await createVisual(page, "Ellipse");
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   await toolbar.getByRole("button", { name: "Connectors" }).click();
-  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
+  await page.getByRole("dialog", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
   await expect(toolbar.getByRole("button", { name: "Connectors" })).toHaveAttribute("aria-pressed", "true");
   await toolbar.getByRole("button", { name: "Select" }).click();
   await expect(toolbar.getByRole("button", { name: "Select" })).toHaveAttribute("aria-pressed", "true");
   await expect(toolbar.getByRole("button", { name: "Connectors" })).not.toHaveAttribute("aria-pressed", "true");
 
   await toolbar.getByRole("button", { name: "Connectors" }).click();
-  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Curve connector" }).click();
+  await page.getByRole("dialog", { name: "connectors tools" }).getByRole("button", { name: "Curve connector" }).click();
   await expect(toolbar.getByRole("button", { name: "Connectors" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
   await expect(toolbar.getByRole("button", { name: "Select" })).toHaveAttribute("aria-pressed", "true");
@@ -1145,7 +1147,7 @@ test("previews attached connectors while dragging and highlights attach anchors"
 
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   await toolbar.getByRole("button", { name: "Connectors" }).click();
-  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
+  await page.getByRole("dialog", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
   const source = await rectangle.boundingBox();
   const target = await ellipse.boundingBox();
   if (!source || !target) throw new Error("Expected attach targets");
@@ -1206,7 +1208,7 @@ test("keeps an internal labeled connector in its layer while dragging a group", 
   const connectorsBefore = await page.locator('[data-edgeless-visual-kind="connector"]').count();
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   await toolbar.getByRole("button", { name: "Connectors" }).click();
-  await page.getByRole("menu", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
+  await page.getByRole("dialog", { name: "connectors tools" }).getByRole("button", { name: "Straight connector" }).click();
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
@@ -1248,7 +1250,7 @@ test("keeps create popovers above the selection toolbar", async ({ page }) => {
   await expect(selection).toBeVisible();
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   await toolbar.getByRole("button", { name: "Shapes" }).click();
-  const menu = page.getByRole("menu", { name: "shapes tools" });
+  const menu = page.getByRole("dialog", { name: "shapes tools" });
   await expect(menu).toBeVisible();
   await expect(toolbar).toHaveAttribute("data-menu-open", "shapes");
   const menuBox = await menu.boundingBox();
@@ -1266,11 +1268,12 @@ test("updates drawing defaults from circle size slider and pads stroke frames", 
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   const drawingsBefore = await page.locator('[data-edgeless-visual-kind="drawing"]').count();
   await toolbar.getByRole("button", { name: "Drawing" }).click();
-  const width = page.getByRole("menu", { name: "drawing tools" }).getByLabel("Default drawing width");
-  await width.fill("16");
-  await expect(width).toHaveValue("16");
-  await page.getByRole("menu", { name: "drawing tools" }).getByRole("button", { name: "Pen", exact: true }).click();
-  await expect(width).toHaveValue("16");
+  const width = page.getByRole("dialog", { name: "drawing tools" }).getByRole("slider", { name: "Default drawing width" });
+  await width.press("Home");
+  for (let step = 1; step < 16; step++) await width.press("ArrowRight");
+  await expect(width).toHaveAttribute("aria-valuenow", "16");
+  await page.getByRole("dialog", { name: "drawing tools" }).getByRole("button", { name: "Pen", exact: true }).click();
+  await expect(width).toHaveAttribute("aria-valuenow", "16");
   const viewport = page.locator(".edgeless-viewport");
   const box = await viewport.boundingBox();
   if (!box) throw new Error("Expected viewport");

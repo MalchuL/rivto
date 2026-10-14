@@ -19,20 +19,21 @@ import { normalizeRotation } from "../../elements/visuals/utils/geometry";
  * The hook does not subscribe or write to the document; pass its current snapshot.
  *
  * @param element - Current flat element record, or undefined after removal.
+ * @param absoluteGeometry - Uses world-space left/top without host rotation; false by default; connector registrations enable this explicitly.
  * @returns Ref and style to attach to the same positioned host. Style is undefined
  * when the element is missing. The renderer still owns its class and DOM markers.
  */
-export function useEdgelessElementStyle<Host extends HTMLElement = HTMLElement>(element: EditorElementNode | undefined) {
+export function useEdgelessElementStyle<Host extends HTMLElement = HTMLElement>(element: EditorElementNode | undefined, absoluteGeometry = false) {
   const ref = useRef<Host | null>(null);
   const host = ref.current;
   let style: CSSProperties | undefined;
   if (element) {
     const locked = host?.dataset.edgelessGeometryLock === "true";
     const rotation = typeof element.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
-    let transform = element.type === "connector" ? undefined : `translate(${element.frame.x}px, ${element.frame.y}px) rotate(${rotation}deg)`;
+    let transform = absoluteGeometry ? undefined : `translate(${element.frame.x}px, ${element.frame.y}px) rotate(${rotation}deg)`;
     if (locked && host.style.transform) transform = host.style.transform;
-    const left = element.type === "connector" ? element.frame.x : 0;
-    const top = element.type === "connector" ? element.frame.y : 0;
+    const left = absoluteGeometry ? element.frame.x : 0;
+    const top = absoluteGeometry ? element.frame.y : 0;
     style = {
       left: locked && host.style.left ? host.style.left : left,
       top: locked && host.style.top ? host.style.top : top,

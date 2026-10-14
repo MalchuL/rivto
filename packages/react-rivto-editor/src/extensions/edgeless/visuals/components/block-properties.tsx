@@ -10,7 +10,7 @@ import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
 import { editorControlProps } from "../../../../constants";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
+import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "../../../../components/edgeless/properties-panel";
 
 const AUTO_HEIGHT_FIELD_CLASS = "flex items-center gap-2";
 const AUTO_HEIGHT_INPUT_CLASS = "edgeless-block-auto-height";

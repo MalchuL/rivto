@@ -119,8 +119,8 @@ const TOOL_BUTTON_CLASS = "edgeless-tool-button";
 export type EdgelessToolButtonProps = Omit<ComponentProps<"button">, "children"> & {
   /** Accessible name; also shown as the native tooltip. */
   readonly label: string;
-  /** Built-in icon rendered before any children. */
-  readonly icon?: EdgelessToolIcon;
+  /** Built-in icon name or custom React content rendered before any children. */
+  readonly icon?: EdgelessToolIcon | ReactNode;
   /**
    * Pressed state for tools and toggles. When provided the button renders as a
    * shadcn `Toggle` and exposes `aria-pressed`; the caller keeps ownership of
@@ -146,10 +146,10 @@ export function EdgelessToolButton({
   className,
   ...button
 }: EdgelessToolButtonProps) {
-  const Icon = icon ? icons[icon] : null;
+  const Icon = typeof icon === "string" && Object.prototype.hasOwnProperty.call(icons, icon) ? icons[icon as EdgelessToolIcon] : null;
   const content = (
     <>
-      {Icon && <Icon {...iconProps} />}
+      {Icon ? <Icon {...iconProps} /> : icon}
       {children}
     </>
   );

@@ -1,39 +1,14 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import type { ConnectorLineStyle, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
+import type { ConnectorLineStyle, EdgelessVisualTool } from "../../../../elements/visuals/types";
 import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gesture";
 import { connectorPath } from "../../../../elements/visuals/utils/geometry";
-import { shapeStrokePad } from "../../../../elements/visuals/utils/shape-stroke";
 import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
-
-/** Visual defaults used to paint a near-real place preview. */
-export interface PlacePreviewStyle {
-  readonly shape: {
-    readonly fill: string;
-    readonly stroke: string;
-    readonly strokeWidth: number;
-    readonly filled: boolean;
-    readonly stroked: boolean;
-  };
-  readonly text: {
-    readonly color: string;
-    readonly fontFamily: string;
-    readonly fontSize: number;
-  };
-  readonly sticker: {
-    readonly fill: string;
-    readonly color: string;
-    readonly fontFamily: string;
-    readonly fontSize: number;
-  };
-}
 
 /** Full-plane SVG that captures drawing/eraser/connector/place gestures. */
 export function DrawingCapture({
   tool,
   zoom,
   preview,
-  placePreview,
-  placeStyle,
   connectorPreview,
   connectorHover,
   drawingStroke,
@@ -47,12 +22,11 @@ export function DrawingCapture({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onPointerLeave,
 }: {
   tool: EdgelessVisualTool;
   zoom: number;
   preview: readonly CanvasPoint[];
-  placePreview: VisualFrame | null;
-  placeStyle: PlacePreviewStyle;
   connectorPreview: ConnectorPreview | null;
   connectorHover: ConnectorHover | null;
   drawingStroke: string;
@@ -66,6 +40,7 @@ export function DrawingCapture({
   onPointerDown(event: ReactPointerEvent<SVGSVGElement>): void;
   onPointerMove(event: ReactPointerEvent<SVGSVGElement>): void;
   onPointerUp(event: ReactPointerEvent<SVGSVGElement>): void;
+  onPointerLeave(): void;
 }) {
   const captureActive = tool.tool !== "select" && tool.tool !== "pan";
   return (
@@ -76,6 +51,7 @@ export function DrawingCapture({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerLeave}
     >
       {/* The capture box follows the viewport, while previews use absolute
           canvas coordinates. Restore the panned plane origin for their paths. */}
@@ -92,10 +68,6 @@ export function DrawingCapture({
           strokeLinejoin="round"
           opacity={drawingOpacity}
         />
-      )}
-      {placePreview && tool.tool === "element" && <rect x={placePreview.x} y={placePreview.y} width={placePreview.width} height={placePreview.height} fill="none" stroke="currentColor" strokeDasharray="4 4" />}
-      {placePreview && tool.tool === "place" && (
-        <PlacePreview frame={placePreview} kind={tool.kind} style={placeStyle} zoom={zoom} fill={tool.kind === "sticker" ? tool.fill : undefined} />
       )}
       {connectorPreview && (
         <>
@@ -151,138 +123,5 @@ export function DrawingCapture({
       )}
       </g>
     </svg>
-  );
-}
-
-/** Dashed frame outline so place size is obvious next to the shape ghost. */
-function PlaceBBox({ frame }: { frame: VisualFrame }) {
-  return (
-    <rect
-      className="edgeless-place-preview-bbox"
-      x={frame.x}
-      y={frame.y}
-      width={frame.width}
-      height={frame.height}
-      fill="none"
-      vectorEffect="non-scaling-stroke"
-    />
-  );
-}
-
-/** Near-real object ghost for place tools (fill/stroke from creation defaults). */
-function PlacePreview({
-  frame,
-  kind,
-  style,
-  zoom,
-  fill,
-}: {
-  frame: VisualFrame;
-  kind: "rectangle" | "ellipse" | "text" | "sticker";
-  style: PlacePreviewStyle;
-  zoom: number;
-  fill?: string;
-}) {
-  if (kind === "text") {
-    const pad = 8 / zoom;
-    return (
-      <g className="edgeless-place-preview-group" data-edgeless-place-kind="text">
-        <PlaceBBox frame={frame} />
-        <g opacity={0.7}>
-          <rect
-            x={frame.x}
-            y={frame.y}
-            width={frame.width}
-            height={frame.height}
-            rx={2 / zoom}
-            fill="#ffffff"
-            stroke={style.text.color}
-            strokeWidth={1.25 / zoom}
-          />
-          <text
-            x={frame.x + pad}
-            y={frame.y + pad + style.text.fontSize * 0.85}
-            fill={style.text.color}
-            fontFamily={style.text.fontFamily}
-            fontSize={style.text.fontSize}
-          >
-            Text
-          </text>
-        </g>
-      </g>
-    );
-  }
-
-  if (kind === "sticker") {
-    const stickerFill = fill ?? style.sticker.fill;
-    const pad = 10 / zoom;
-    return (
-      <g className="edgeless-place-preview-group" data-edgeless-place-kind="sticker">
-        <PlaceBBox frame={frame} />
-        <g opacity={0.72}>
-          <rect
-            x={frame.x}
-            y={frame.y}
-            width={frame.width}
-            height={frame.height}
-            rx={6 / zoom}
-            fill={stickerFill}
-            stroke="rgb(0 0 0 / 12%)"
-            strokeWidth={1 / zoom}
-          />
-          <text
-            x={frame.x + pad}
-            y={frame.y + pad + style.sticker.fontSize * 0.85}
-            fill={style.sticker.color}
-            fontFamily={style.sticker.fontFamily}
-            fontSize={style.sticker.fontSize}
-          >
-            Note
-          </text>
-        </g>
-      </g>
-    );
-  }
-
-  const { shape } = style;
-  const filled = shape.filled !== false;
-  const stroked = shape.stroked !== false;
-  const pad = shapeStrokePad(stroked ? shape.strokeWidth : 0, frame, zoom);
-  const insetX = (pad.x / 100) * frame.width;
-  const insetY = (pad.y / 100) * frame.height;
-  const fillPaint = filled ? shape.fill : "none";
-  const strokePaint = stroked ? shape.stroke : "none";
-  const strokeWidth = stroked ? shape.strokeWidth : 0;
-
-  return (
-    <g className="edgeless-place-preview-group" data-edgeless-place-kind={kind}>
-      <PlaceBBox frame={frame} />
-      <g opacity={0.7}>
-        {kind === "ellipse" ? (
-          <ellipse
-            cx={frame.x + frame.width / 2}
-            cy={frame.y + frame.height / 2}
-            rx={Math.max(1, frame.width / 2 - insetX)}
-            ry={Math.max(1, frame.height / 2 - insetY)}
-            fill={fillPaint}
-            stroke={strokePaint}
-            strokeWidth={strokeWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-        ) : (
-          <rect
-            x={frame.x + insetX}
-            y={frame.y + insetY}
-            width={Math.max(1, frame.width - insetX * 2)}
-            height={Math.max(1, frame.height - insetY * 2)}
-            rx={3 / zoom}
-            fill={fillPaint}
-            stroke={strokePaint}
-            strokeWidth={strokeWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-        )}
-      </g>
-    </g>
   );
 }

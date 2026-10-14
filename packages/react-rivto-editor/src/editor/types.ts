@@ -1,3 +1,4 @@
+import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
 import type { ElementTypesApi } from "../managers/elements/types";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { BlockRenderer, ClipboardFormatRegistry, ClipboardManager, EventManager, KeyboardManager, KeymapOverrides, ReactEditorExtension, SlashCommandRegistry } from "../managers";
@@ -90,6 +91,8 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   registerCleanup(release: () => void): () => void;
   /** Shared definitions, renderers and editing contributions for canvas element types. */
   readonly elementTypes: ElementTypesApi;
+  /** Shared creation-tool groups and extension contributions; interaction state is panel-local. */
+  readonly edgelessToolbar: EdgelessToolbarApi;
 
   /** Creates input for an empty writing block using the installed writing extension.
    *

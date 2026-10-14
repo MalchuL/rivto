@@ -16,7 +16,7 @@
 }
 
 .edgeless-size-control-range, .edgeless-size-control-range[data-slot] {
-  @apply w-[88px] accent-(--rivto-accent);
+  @apply w-[88px];
 }
 
 .edgeless-size-control-value, .edgeless-size-control-value[data-slot] {
@@ -35,8 +35,9 @@
   @apply absolute inset-0 m-0 size-full cursor-pointer rounded-full border-0 bg-transparent p-0 opacity-0;
 }
 
+/* Center without a transform: the nested fixed Popover portal must use viewport coordinates. */
 .edgeless-tool-bar, .edgeless-tool-bar[data-slot] {
-  @apply absolute bottom-3.5 left-1/2 z-21 flex w-max max-w-[calc(100%-160px)] -translate-x-1/2 flex-row items-center gap-[3px] rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow) data-[menu-open]:z-24;
+  @apply absolute inset-x-0 bottom-3.5 z-21 mx-auto flex w-max max-w-[calc(100%-160px)] flex-row items-center gap-[3px] rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow) data-[menu-open]:z-24;
 }
 
 .edgeless-selection-toolbar, .edgeless-selection-toolbar[data-slot] {
@@ -44,7 +45,7 @@
 }
 
 .edgeless-tool-popover, .edgeless-tool-popover[data-slot] {
-  @apply absolute bottom-[calc(100%+10px)] left-1/2 z-22 flex w-[min(320px,calc(100vw-48px))] -translate-x-1/2 flex-col gap-2.5 rounded-xl border border-border bg-popover/98 p-2.5 text-popover-foreground shadow-[0_10px_28px_rgb(42_34_72/16%)];
+  @apply z-22 flex w-[min(320px,calc(100vw-48px))] flex-col gap-2.5 rounded-xl border border-border bg-popover/98 p-2.5 text-popover-foreground shadow-[0_10px_28px_rgb(42_34_72/16%)];
 }
 
 .edgeless-tool-popover-section, .edgeless-tool-popover-section[data-slot] {

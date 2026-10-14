@@ -1,9 +1,11 @@
+import type { CreateElementInput } from "../../../../managers/elements/types";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import type { ConnectorEndpoint, ConnectorRoute, CreateVisualPayload, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
+import type { ConnectorEndpoint, ConnectorRoute, EdgelessVisualTool, VisualFrame } from "../../../../elements/visuals/types";
 import { canvasPoint, type CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 import {
   centeredPlaceFrame,
+  DEFAULT_PLACE_SIZE,
   snapDraggedFrame,
   snapPlacedFrame,
   type CreationSnapOptions,
@@ -45,14 +47,6 @@ export interface ConnectorPreview {
   targetFrame?: VisualFrame;
 }
 
-function placePayload(tool: Extract<EdgelessVisualTool, { tool: "place" }>, frame: VisualFrame): CreateVisualPayload {
-  if (tool.kind === "sticker") {
-    return { kind: "sticker", frame, fill: tool.fill, color: tool.color, fontFamily: tool.fontFamily };
-  }
-  if (tool.kind === "text") return { kind: "text", frame };
-  return { kind: tool.kind, frame };
-}
-
 /** Drawing, eraser, connector, and place pointer capture against the plane SVG. */
 export function useDrawingGesture({
   edgelessOperation,
@@ -66,9 +60,25 @@ export function useDrawingGesture({
   tool: EdgelessVisualTool;
 }) {
   const gesture = useRef<Gesture | null>(null);
+  const placement = useRef<{ tool: EdgelessVisualTool; input: CreateElementInput } | null>(null);
+  const placementInput = (): CreateElementInput => {
+    if (placement.current?.tool === tool) return placement.current.input;
+    let input: CreateElementInput;
+    if (tool.tool === 'element') {
+      const creation = edgelessOperation.runtime.elementTypes.get(tool.type)?.creation;
+      const panel = edgelessOperation.reactPanel;
+      if (!creation || !panel) throw new Error('Element placement requires a registered factory and panel');
+      input = creation.create(panel);
+      if (input.type !== tool.type) throw new Error('Element creation factory returned a different type');
+    } else if (tool.tool === 'place') {
+      const { tool: _tool, kind, ...props } = tool;
+      void _tool;
+      input = { type: kind, props };
+    } else throw new Error('Current tool does not place an element');
+    placement.current = { tool, input };
+    return input;
+  };
   const captureEl = useRef<SVGSVGElement | null>(null);
-  const toolRef = useRef(tool);
-  toolRef.current = tool;
   const [preview, setPreview] = useState<CanvasPoint[]>([]);
   const [placePreview, setPlacePreview] = useState<VisualFrame | null>(null);
   const [connectorPreview, setConnectorPreview] = useState<ConnectorPreview | null>(null);
@@ -88,7 +98,10 @@ export function useDrawingGesture({
   });
 
   const placedFrame = (point: CanvasPoint, altKey = false) => snapPlacedFrame(
-    centeredPlaceFrame(point, edgelessOperation.getPlaceSize()),
+    centeredPlaceFrame(point, edgelessOperation.getPlaceSize({
+      width: placementInput().frame?.width ?? DEFAULT_PLACE_SIZE.width,
+      height: placementInput().frame?.height ?? DEFAULT_PLACE_SIZE.height,
+    })),
     creationCandidates(),
     snapOptions(altKey),
   );
@@ -140,7 +153,6 @@ export function useDrawingGesture({
   const cancelGesture = () => {
     const active = gesture.current;
     if (!active) return false;
-    const last = active.points.at(-1);
     const pointerId = active.pointerId;
     gesture.current = null;
     setPreview([]);
@@ -149,8 +161,8 @@ export function useDrawingGesture({
     const host = captureEl.current;
     if (host?.hasPointerCapture(pointerId)) host.releasePointerCapture(pointerId);
     if (root) showSnapGuides(root, []);
-    if ((toolRef.current.tool === "place" || toolRef.current.tool === "element") && last) setPlacePreview(placedFrame(last).frame);
-    else setPlacePreview(null);
+    placement.current = null;
+    setPlacePreview(null);
     return true;
   };
 
@@ -160,7 +172,8 @@ export function useDrawingGesture({
   }, [tool]);
 
   useEffect(() => {
-    if ((tool.tool === "place" || tool.tool === "element")) return;
+    cancelGesture();
+    placement.current = null;
     setPlacePreview(null);
     if (root) showSnapGuides(root, []);
   }, [root, tool]);
@@ -296,16 +309,9 @@ export function useDrawingGesture({
       const frame = moved
         ? snapDraggedFrame(start, end, creationCandidates(), snapOptions(event.altKey), event.shiftKey).frame
         : placedFrame(start, event.altKey).frame;
-      if (tool.tool === "element") {
-        const reactPanel = edgelessOperation.reactPanel;
-        const creation = edgelessOperation.runtime.elementTypes.get(tool.type)?.creation;
-        if (!reactPanel || !creation) return;
-        const input = creation.create(reactPanel);
-        if (input.type !== tool.type) throw new Error("Element creation factory returned a different type");
-        edgelessOperation.createElement({ ...input, frame });
-      } else edgelessOperation.create(placePayload(tool, frame));
+      edgelessOperation.createElement({ ...placementInput(), frame });
       if (moved) edgelessOperation.rememberPlaceSize(frame);
-      setPlacePreview(placedFrame(end, event.altKey).frame);
+      placement.current = null;
     }
     if (tool.tool === "connector") {
       const point = canvasPoint(event.nativeEvent, root, zoom);
@@ -316,6 +322,8 @@ export function useDrawingGesture({
   return {
     preview,
     placePreview,
+    placeInput: placement.current?.tool === tool ? placement.current.input : null,
+    hidePlacePreview: () => { if (!gesture.current) setPlacePreview(null); },
     connectorPreview,
     connectorHover,
     objectAt,

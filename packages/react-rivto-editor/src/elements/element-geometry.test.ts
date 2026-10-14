@@ -72,3 +72,13 @@ test("uses a connector's temporary target rotation without persisting it", () =>
   expect(stored.frame("group")!.height).toBeCloseTo(120);
   expect(line.props).toEqual({});
 });
+
+test('accepts registered world-space geometry without dispatching on element type', () => {
+  const node: EditorElementNode = { id: 'custom', type: 'custom-world-space', childIds: [], zIndex: 0,
+    frame: { x: 10, y: 20, width: 100, height: 40 }, props: { rotation: 90 } };
+  const ordinary = new ElementGeometry(() => node);
+  const absolute = new ElementGeometry(() => node, () => 0);
+  expect(ordinary.rotation(node.id)).toBe(90);
+  expect(absolute.rotation(node.id)).toBe(0);
+  expect(absolute.bounds(node.id)).toEqual(node.frame);
+});

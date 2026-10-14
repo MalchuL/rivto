@@ -26,7 +26,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
   const target = targets.length === 1 ? targets[0] : targets;
   const id = selection.items.length === 1 ? selection.items[0] : undefined;
   const element = id ? reactPanel.elements.getElementNode(id) : undefined;
-  const eligible = mode === "edgeless" && element && element.type !== "connector";
+  const eligible = mode === "edgeless" && element && !reactPanel.editor.elementTypes.get(element.type)?.behavior?.absoluteGeometry;
   const plane = editorRoot?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
   const viewport = plane?.parentElement ?? null;
   const [settings, setSettings] = useState({ zoom: 1, grid: 20, snap: true, align: true });
@@ -133,7 +133,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
     return [...plane.querySelectorAll<HTMLElement>("[data-edgeless-object-kind][data-edgeless-object-id]")].filter((host) =>
       !targets.includes(host)
       && host.dataset.edgelessObjectKind !== "group"
-      && reactPanel.elements.getElementNode(host.dataset.edgelessObjectId!)?.type !== "connector");
+      && !reactPanel.editor.elementTypes.get(reactPanel.elements.getElementNode(host.dataset.edgelessObjectId!)?.type ?? "")?.behavior?.absoluteGeometry);
   }, [settings.align, plane, targets, elements, reactPanel]);
 
   if (mode !== "edgeless" || !plane || !viewport) return null;
@@ -142,7 +142,7 @@ export function EdgelessTransformControls({ controller }: { controller: Edgeless
     if (!current) return false;
     initial.current = new Map(targets.map((host) => {
       const node = reactPanel.elements.getElementNode(host.dataset.edgelessObjectId!)!;
-      return [node.id, { frame: { ...node.frame }, rotation: node.type !== "connector" && typeof node.props.rotation === "number" ? node.props.rotation : 0 }];
+      return [node.id, { frame: { ...node.frame }, rotation: !reactPanel.editor.elementTypes.get(node.type)?.behavior?.absoluteGeometry && typeof node.props.rotation === "number" ? node.props.rotation : 0 }];
     }));
     return controller.beginControls(reactPanel, viewport, current.id, kind, () => {
       moveable.current?.stopDrag();

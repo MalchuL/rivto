@@ -7,7 +7,7 @@ import { RevisionStore } from '../../internal-store';
  * Installs document definitions and React presentation as one disposable registration.
  *
  * Each persisted type has at most one React registration. Definitions, optional
- * resize behavior, and clipboard conversion are installed together; failed
+ * resize behavior, toolbar creation tools, and clipboard conversion are installed together; failed
  * installation rolls back completed registrations. The extension owner releases
  * successful registrations when its lifecycle ends.
  */
@@ -24,7 +24,7 @@ export class ElementTypeManager implements ElementTypesApi {
     owner.registerCleanup(() => this.store.clear());
   }
   /**
-   * Installs a type's definition, presentation, and optional clipboard converter.
+   * Installs a type's definition, presentation, optional toolbar tool and clipboard converter.
    *
    * Addition and removal notify registry subscribers. Removal also switches the
    * tool to selection in subscribed panels that were creating this type; persisted elements remain.
@@ -41,6 +41,15 @@ export class ElementTypeManager implements ElementTypesApi {
     const disposers: Array<() => void> = [];
     try {
       disposers.push(this.editor.elementRegistry.register({ ...registration.definition, ...(registration.behavior?.resize ? { resize: registration.behavior.resize } : {}) }));
+      if (registration.creation) {
+        const creation = registration.creation;
+        disposers.push(this.editor.edgelessToolbar.registerTool({
+          id: `element:${type}`, title: creation.title, icon: creation.icon,
+          group: creation.group, order: creation.order,
+          activate: ({ operations }) => operations.setTool({ tool: 'element', type }),
+          isActive: tool => tool.tool === 'element' && tool.type === type,
+        }));
+      }
       if (registration.clipboard) disposers.push(this.editor.clipboard.registerElementConverter(type, registration.clipboard));
     } catch (error) {
       disposers.reverse().forEach(dispose => dispose());

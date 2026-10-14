@@ -90,6 +90,75 @@ returns property changes for core frame updates, including programmatic resize a
 Moveable commits. Disposing a registration removes presentation and contributions;
 persisted unknown elements remain visible through the fallback renderer.
 
+### Custom renderers and editable properties
+
+Built-in figures and custom types use the same registration path. A renderer receives
+`element` with registered defaults and local property previews already merged into
+`props`, together with `reactPanel`, the mounted canvas `operations`, `zoom`, and
+`selected`. Render only the contents: the shared host owns position, rotation,
+identity, selection markers and element slots. During a transform the host previews
+geometry directly in the DOM; `element.frame` still contains the persisted size until
+release. Renderers that scale their contents should follow the host's size through
+CSS or an SVG `viewBox` with a `100%` viewport, rather than computing a scale from
+the persisted frame. This does not require per-pointer React state or document writes.
+`behavior.editableLabel` enables the
+host's double-click editing state (`editing`, `setEditing`, `focusPointRef`). Internal
+buttons and inputs should use `data-edgeless-ui="true"` and stop pointer propagation
+so editing a control does not begin a canvas drag.
+
+The `properties` component explicitly declares which fields are editable. Document
+validation and defaults belong in `definition`; they do not automatically generate
+controls. The component supplies only the sidebar contents:
+
+```tsx
+function BadgeProperties({ common, preview }: ElementPropertiesProps) {
+  return <label>Title
+    <input value={String(common("title") ?? "")}
+      onChange={event => preview({ title: event.target.value })} />
+  </label>;
+}
+
+// In extension.setup(editor); return this disposer for extension cleanup.
+return editor.elementTypes.register({
+  title: "Badge",
+  definition: { type: "badge", defaults: { title: "Badge", color: "blue" } },
+  render: BadgeElement,
+  properties: BadgeProperties,
+  creation: { title: "Badge", create: () => ({ type: "badge" }) },
+  rememberedProperties: ["color"],
+});
+```
+
+`common(key)` returns the shared value (compared with `Object.is`) or `undefined`
+for mixed values. `elements` contains the same previewed snapshots as the renderers.
+`preview(patch)` validates and normalizes the candidate properties without persisting
+them. An outside pointer press, selection change, or property-panel unmount commits
+pending edits as one undo entry; Escape inside the panel cancels them. Components
+can also call `commit()` or `cancel()`. The shell owns its title, collapse/close
+controls and selection count, and remains available with `visuals.toolbar: false`.
+Use property patches for properties only; a key named `id` or `frame` is not
+interpreted as element identity or geometry by this API.
+
+`rememberedProperties` explicitly opts fields into canvas-local creation defaults.
+Leave content such as a mindmap tree out of this list. Related registrations can
+share a `behavior.defaultsGroup`; its initial property keys define shared settings.
+The built-in categories retain their palette defaults. `behavior.creationDefaults`
+can derive defaults before explicit creation properties are applied. Geometry
+preparation belongs in `behavior.create`; `behavior.resize` handles persisted frame
+changes. `behavior.relatedElements` returns referenced IDs so a same-level element
+can follow its selected references into a group, as built-in connectors do.
+World-space elements can declare `behavior.absoluteGeometry` and provide their own
+controls instead of using the ordinary resize/rotate handles.
+
+The main demo installs `demo/src/extensions/mindmap/mindmap.tsx` as a host extension.
+Choose **Mindmap** in the bottom toolbar and click the canvas. Every node has an
+editable label and a **+** button; each button adds a child, including on newly added
+nodes. The tree is stored as a flat node array inside one element, with iterative
+validation and layout and no configured branch/depth limit. It uses normal canvas
+selection, moving, resizing, clipboard and undo, plus registered color/font-size
+property contents. Large maps still have browser memory, DOM and canvas-coordinate
+limits; this demo does not virtualize individual nodes.
+
 Snapping preferences can be shared and persisted by the host without entering
 the collaborative document:
 
@@ -223,3 +292,123 @@ separate component receiving that instance. Extension UI is mounted beneath the
 receiving panel context, where `usePanel()` exposes the core panel contract and
 `useReactPanel()` exposes the React panel and its `editor`. This refactor does
 not add toolbar slots, sidebars or floating-window APIs.
+
+## Creation toolbar groups
+
+`reactEditor.edgelessToolbar` registers groups and tools for all panels of that
+React editor. Open menus, active tools and each group's last-used entry remain
+local to the mounted edgeless panel; toolbar interactions do not write document
+state or history. A group button opens its menu and activates the last-used member,
+then its `defaultToolId`, then its first available member. Clicking the open group
+closes the menu without deactivating its tool. Select, Pan and Escape close menus.
+
+An element's `creation` automatically registers a toolbar tool with ID
+`element:${definition.type}`. Add `group` to place it inside a group, or omit it
+for a standalone button. Its disposer removes the toolbar entry together with the
+renderer and definition. Removing presentation never deletes persisted elements.
+
+```tsx
+setup(editor) {
+  editor.edgelessToolbar.registerGroup({
+    id: 'diagrams', title: 'Diagrams', icon: <DiagramIcon />,
+    defaultToolId: 'element:mindmap', order: 10,
+  });
+  return editor.elementTypes.register({
+    definition: mindmapDefinition,
+    render: MindmapElement,
+    properties: MindmapProperties,
+    creation: {
+      title: 'Mindmap', icon: <MindmapIcon />, group: 'diagrams', order: 0,
+      create: () => ({ type: 'mindmap', frame: { x: 0, y: 0, width: 240, height: 160 } }),
+    },
+  });
+}
+```
+
+Registrations made in extension setup follow its lifecycle. Each register method
+also returns an idempotent disposer. Group and tool IDs are unique within their
+respective registries; duplicates throw. Groups may be registered after their
+tools: members remain available in `getTools()` but are hidden until their group
+exists. Empty groups are hidden. Ascending `order` defaults to zero and ties use
+registration order, including between groups and standalone tools. `getEntries()`
+returns those visible top-level entries; `getGroup`, `getTool`, `getGroups`,
+`getTools`, `subscribe` and `revision` support custom hosts.
+
+A group's `render` component controls its contents, while the common toolbar owns
+popover positioning and dismissal. Always render the supplied `items`, including
+members registered by other extensions. Use `renderTool(item, children?)` to keep
+activation, keyboard access, active styling and optional drag bindings. It renders
+the registered icon plus the title by default; pass children to replace the title
+with custom content, or `null` for an icon-only item.
+
+```tsx
+editor.edgelessToolbar.registerGroup({
+  id: 'diagrams', title: 'Diagrams', icon: <DiagramIcon />,
+  render: ({ items, renderTool, operations, reactPanel }) => (
+    <div className="diagram-tools">
+      <h3>Diagrams</h3>
+      <div className="diagram-grid">{items.map(item => renderTool(item))}</div>
+      <DiagramCreationSettings operations={operations} reactPanel={reactPanel} />
+    </div>
+  ),
+});
+```
+
+Each resolved item also exposes `tool`, `active` and `activate` for a fully custom
+control. Preserve accessible labels, active styling and keyboard activation when
+replacing the standard button. Internal UI must carry `data-edgeless-ui="true"`.
+Group content describes creation settings; selection editing still belongs to the
+element's `properties` component and its shared preview/commit/cancel lifecycle.
+
+For tools independent of a registered element type, use `registerTool` with `id`,
+`title`, optional `icon`/`group`/`order`, `activate({ operations, reactPanel })` and a
+pure `isActive(currentTool)` predicate. Predicates should identify distinct tools
+or presets so remembered group choices are unambiguous. For example, built-in
+brushes select drawing mode instead of directly inserting an element. Toolbar
+activation must not create document content; placement/drawing gestures do that.
+Optional `getButtonProps` supplies pointer bindings for draggable presets. Its
+click handler may call `preventDefault()` when pointer release already activated
+the tool, avoiding a duplicate activation. Leave keyboard clicks unhandled to
+use the common `activate` behavior.
+
+Removing the active tool resets affected panels to Select. Removing an open group
+closes its menu and clears its remembered choice; registered members remain and
+can reappear when the group is installed again. Existing elements, their properties
+and undo history are unaffected. Groups are one level deep.
+
+## Creation preview lifecycle
+
+Place tools and toolbar presets preview the registered `render` component using a
+detached draft. Built-in figures and host types such as Mindmap use this same path.
+`ElementRenderProps.preview` is true for drafts and false for persisted elements.
+The draft has a temporary ID, complete prepared props and the preview frame in
+canvas units. Render from those supplied values; the ID cannot identify a stored
+node. The preview host is inert and hidden from assistive technology, cannot be
+selected, and does not mount element slots or transform controls. A dashed outline
+shows empty or transparent content. There is no fabricated text for an empty label.
+
+Renderers must not mutate documents or autofocus/register document resources when
+`preview` is true. DOM inertness prevents ordinary control interaction but does not
+suppress component effects. For example, guard an effect inside the effect callback,
+without changing the order in which React hooks are called.
+
+`creation.create` runs once when a prospective placement first needs a draft. Keep
+it free of document writes: return data, not an inserted record. Its width/height
+set the initial preview size; a remembered completed drag size takes precedence.
+Movement reuses that input, and release inserts it with the final placement frame.
+Escape, pointer cancellation, tool changes and panel deactivation discard the
+active gesture without creating an element. Merely leaving the viewport while
+hovering hides the ghost; the next hover can reuse the same prospective input.
+
+`EdgelessOperations.prepareElementCreation` shares detached defaults and pure
+`behavior.create` preparation with insertion. It validates preview props without
+allocating persisted IDs, selecting a node or notifying document subscribers.
+Insertion retains its ordinary core validation/middleware path; do not insert the
+normalized preview record instead of the original input. In particular, validators
+must not accidentally run twice on already-normalized values at commit.
+
+Canvas placement uses local gesture preview geometry; toolbar preset ghosts move
+imperatively after mounting their renderer. Neither path publishes intermediate
+geometry to the document or undo history. Existing-element transform previews keep
+their separate DOM geometry lock: their renderer still sees the persisted frame.
+Drawing and connector tools keep geometric previews for their unfinished gestures.

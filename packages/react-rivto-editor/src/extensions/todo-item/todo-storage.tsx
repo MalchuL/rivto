@@ -16,7 +16,6 @@ import {
   useMemo,
   useState,
   type ChangeEvent,
-  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { z } from "zod";
@@ -280,9 +279,8 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   });
 
   /** Inserts the first writing block through the registered container view. */
-  const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>): void => {
+  const startWriting = (event: MouseEvent<HTMLButtonElement>): void => {
     if (childIds.length || event.defaultPrevented) return;
-    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
     const behaviorContext = root ? createBlockBehaviorContext(reactPanel, blockId, root) : undefined;
@@ -360,21 +358,19 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
         </TodoStorageMenu>
       </div>
       {childIds.length === 0 && (
-        <div
+        <Button variant="ghost" type="button"
+          {...editorControlProps}
           {...preventTextEditingAttributes}
-          className={TODO_STORAGE_DROP_FIELD_CLASS}
-          role="button"
-          tabIndex={0}
+          className={`${TODO_STORAGE_DROP_FIELD_CLASS} h-auto justify-start whitespace-normal text-left`}
           aria-label="Drop blocks into TODO storage"
           onClick={startWriting}
-          onKeyDown={startWriting}
         >
           <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true"><ArrowDownIcon /></span>
           <span className={TODO_STORAGE_DROP_COPY_CLASS}>
             <strong>Drag a task here</strong>
             <small>Drop it inside this storage</small>
           </span>
-        </div>
+        </Button>
       )}
     </div>
   );

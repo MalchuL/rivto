@@ -1,7 +1,9 @@
+import type { EdgelessToolbarTool } from "../edgeless-toolbar/types";
 import { ChildrenPanel } from "@chulane/rivto";
 import {
   type ClipboardBundle,
   type EditorElementNode,
+  type EditorElementInput,
 } from "@chulane/rivto";
 import type { CreateElementInput } from "./types";
 import type { ReactPanelApi } from "../../panels/types";
@@ -15,10 +17,8 @@ import type {
   CreateVisualPayload,
   EdgelessAlignment,
   EdgelessReorder,
-  EdgelessVisual,
   EdgelessVisualTool,
   PresetPayload,
-  ToolCategory,
   UpdateVisualPayload,
   VisualFrame,
   VisualGroup,
@@ -54,7 +54,10 @@ export class EdgelessOperations {
   private unsubscribeDocument?: () => void;
   private unsubscribeTools?: () => void;
   private unsubscribeTypes?: () => void;
+  private unsubscribeToolbar?: () => void;
   private revision = 0;
+  private readonly sharedCreationDefaults = new Map<string, Record<string, unknown>>();
+  private readonly creationDefaults = new Map<string, Record<string, unknown>>();
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
 
   /**
@@ -65,7 +68,7 @@ export class EdgelessOperations {
    * @param reactPanel - Fixed receiving occurrence; omitted only for document-level named commands.
    * @throws If the panel belongs to another React editor.
    */
-  constructor(readonly runtime: ReactEditorApi, readonly reactPanel?: ReactPanelApi, private readonly tools = new EdgelessToolState()) {
+  constructor(readonly runtime: ReactEditorApi, readonly reactPanel?: ReactPanelApi, private readonly tools = new EdgelessToolState(runtime.edgelessToolbar)) {
     if (reactPanel && reactPanel.editor !== runtime) throw new Error("Canvas operations require a panel from the same React editor");
     this.documentPanel = new ChildrenPanel(runtime);
     this.selection = new EdgelessSelectionRuntime(reactPanel ?? runtime);
@@ -84,6 +87,11 @@ export class EdgelessOperations {
     };
     onTypesChange();
     this.unsubscribeTypes = this.runtime.elementTypes.subscribe(onTypesChange);
+    this.tools.reconcileToolbar();
+    this.unsubscribeToolbar = this.runtime.edgelessToolbar.subscribe(() => {
+      this.tools.reconcileToolbar();
+      this.emit();
+    });
     this.unsubscribeTools = this.tools.subscribe(() => this.emit());
     this.unsubscribeDocument = this.runtime.subscribe(() => {
       this.emit();
@@ -106,26 +114,51 @@ export class EdgelessOperations {
   /**
    * Reads visual elements with registered defaults and local property previews.
    *
-   * Block cards and groups are excluded. Non-connector rotations are normalized.
+   * Block cards and groups are excluded. Registered defaults are merged before previews.
    * Frame and property containers are copied shallowly; nested property values
    * may still be shared and must be treated as read-only.
+   * Previews invalidated by document changes fall back to persisted properties and defaults.
    *
    * @returns Detached visual panels backed by first-class elements, within this
    * instance's element scope; an empty array when no visual elements exist.
    */
-  getVisuals(): EdgelessVisual[] {
-    return this.elements.getElementNodes().flatMap((element) => {
-      if (element.type === "block" || element.type === "group") return [];
-      const preview = this.propertyPreview.get(element.id);
-      const definition = this.runtime.elementRegistry.get(element.type);
-      const props = { ...definition?.defaults, ...element.props, ...preview };
-      if (element.type !== "connector") props.rotation = normalizeRotation(typeof props.rotation === "number" ? props.rotation : 0);
-      // Missing built-in label/style fields use the registered type defaults;
-      // loaded unknown types retain their original props and use the fallback renderer.
-      // Shallow frame/props copies keep render hot paths off structuredClone while
-      // still preventing callers from mutating live element identity fields.
-      return [{ ...props, id: element.id, kind: element.type, frame: { ...element.frame }, zIndex: element.zIndex } as EdgelessVisual];
-    });
+  getVisuals(): Array<Record<string, unknown> & { id: string; kind: string; frame: VisualFrame; zIndex: number }> {
+    return this.getRenderedElements().map(element => ({ ...element.props, id: element.id, kind: element.type, frame: element.frame, zIndex: element.zIndex }));
+  }
+
+  /**
+   * Reads renderable leaf elements with registered defaults and local previews merged into props.
+   * Invalidated previews fall back to persisted properties and defaults without discarding pending patches.
+   * @returns Detached element records for this panel; block cards and groups have their own surface hosts.
+   */
+  getRenderedElements(): EditorElementNode[] {
+    return this.elements.getElementNodes().filter(element => element.type !== 'block' && element.type !== 'group').map(element => this.renderedElement(element));
+  }
+
+  /**
+   * Reads a presentation snapshot, falling back to persisted properties and defaults for an invalidated preview.
+   * @param id - Element in this panel.
+   * @returns Current presentation snapshot, or undefined when missing; pending patches remain available for commit or cancellation.
+   */
+  getRenderedElement(id: string): EditorElementNode | undefined {
+    const element = this.elements.getElementNode(id);
+    if (!element) return undefined;
+    return this.renderedElement(element);
+  }
+
+  private renderedElement(element: EditorElementNode): EditorElementNode {
+    const definition = this.runtime.elementRegistry.get(element.type);
+    const preview = this.propertyPreview.get(element.id);
+    let props = { ...definition?.defaults, ...element.props, ...preview };
+    if (preview && definition?.validate) {
+      try {
+        props = definition.validate(copy(props));
+      } catch {
+        // Concurrent document changes can invalidate an otherwise valid local preview.
+        props = { ...definition.defaults, ...element.props };
+      }
+    }
+    return { ...element, frame: { ...element.frame }, props };
   }
 
   /**
@@ -137,7 +170,14 @@ export class EdgelessOperations {
    * @param patch - Temporary property values; document records remain unchanged.
    */
   previewProperties(ids: readonly string[], patch: Record<string, unknown>): void {
-    ids.forEach((id) => {
+    const targets = ids.map(id => this.getRenderedElement(id));
+    if (!targets.length || targets.some(element => !element || element.type !== targets[0]!.type)) throw new Error('Property preview requires existing elements of one type');
+    const prepared = targets.map(element => {
+      const props = copy({ ...element!.props, ...this.propertyPreview.get(element!.id), ...patch });
+      this.runtime.elementRegistry.get(element!.type)?.validate?.(props);
+      return element!.id;
+    });
+    prepared.forEach((id) => {
       this.propertyPreview.set(id, { ...this.propertyPreview.get(id), ...copy(patch) });
     });
     this.emit();
@@ -146,21 +186,21 @@ export class EdgelessOperations {
   /**
    * Commits the live property preview as one undoable transaction.
    *
-   * Clears pending previews before applying patches through update, then notifies
-   * local subscribers. An empty preview still emits a notification.
+   * Applies patches through the element manager, then clears previews and notifies
+   * local subscribers. Deleted targets are skipped. An empty preview still emits a notification.
    *
-   * @throws If a preview target is missing or a patch fails processing or validation.
+   * @throws If a remaining target rejects the patch; pending previews remain available for cancellation.
    */
   commitPropertyPreview(): void {
     const entries = [...this.propertyPreview.entries()];
-    this.propertyPreview.clear();
     if (!entries.length) {
       this.emit();
       return;
     }
-    this.runtime.history.batchUpdates(() => {
-      entries.forEach(([id, patch]) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] }));
-    });
+    const updates = entries.filter(([id]) => this.elements.hasElement(id)).map(([id, props]) => ({ id, patch: { props } }));
+    const updated = this.elements.updateElements(updates);
+    updated.forEach(element => this.remember(element.type, element.props));
+    this.propertyPreview.clear();
     this.emit();
   }
 
@@ -243,9 +283,10 @@ export class EdgelessOperations {
   /**
    * Reads the remembered size for placement gestures.
    *
-   * @returns Detached default size for the currently active place preset, in canvas units.
+   * @param fallback - Initial size from the creation factory; omitted values use the standard 160×120 size.
+   * @returns Detached remembered size, or the supplied/default initial size, in canvas units.
    */
-  getPlaceSize(): Pick<VisualFrame, "width" | "height"> { return this.tools.getPlaceSize(); }
+  getPlaceSize(fallback?: Pick<VisualFrame, "width" | "height">): Pick<VisualFrame, "width" | "height"> { return this.tools.getPlaceSize(fallback); }
   /**
    * Remembers the final interactive drag size for the active place preset.
    *
@@ -259,18 +300,35 @@ export class EdgelessOperations {
    */
   getDefaults() { return this.tools.getDefaults(); }
   /**
-   * Last activated tool for a create-toolbar category (session memory).
+   * Resolves the last activated entry for a creation-toolbar group (session memory).
    *
-   * @param category - Toolbar category to inspect.
-   * @returns Detached remembered tool, initialized to the category default.
+   * @param groupId - Registered toolbar group to inspect.
+   * @returns Shared registered entry, falling back to the group default or first tool;
+   * undefined when the group is absent or has no available members.
    */
-  getLastTool(category: ToolCategory): EdgelessVisualTool { return this.tools.getLastTool(category); }
+  getGroupTool(groupId: string): EdgelessToolbarTool | undefined { return this.tools.getGroupTool(groupId); }
   /**
-   * Activates the remembered (or first-default) tool for a category.
+   * Activates the remembered entry, or the first available default, for a group.
    *
-   * @param category - Toolbar category whose remembered tool becomes active.
+   * @param groupId - Toolbar group whose remembered tool becomes active.
+   * @throws If these operations have no receiving React panel.
    */
-  activateCategory(category: ToolCategory): void { return this.tools.activateCategory(category); }
+  activateToolbarGroup(groupId: string): void {
+    const entry = this.getGroupTool(groupId);
+    if (entry) this.activateToolbarTool(entry.id);
+  }
+  /**
+   * Activates a registered toolbar entry using this panel's shared operations.
+   *
+   * @param id - Registered tool identity; an absent entry is ignored.
+   * @throws If these operations have no receiving React panel.
+   */
+  activateToolbarTool(id: string): void {
+    const entry = this.runtime.edgelessToolbar.getTool(id);
+    if (!entry) return;
+    if (!this.reactPanel) throw new Error('Toolbar activation requires a React panel');
+    entry.activate({ operations: this, reactPanel: this.reactPanel });
+  }
   /**
    * Enters place mode for a toolbar preset (click, not drag-drop).
    *
@@ -317,6 +375,8 @@ export class EdgelessOperations {
     this.unsubscribeDocument = undefined;
     this.unsubscribeTypes?.();
     this.unsubscribeTypes = undefined;
+    this.unsubscribeToolbar?.();
+    this.unsubscribeToolbar = undefined;
     this.unsubscribeTools?.();
     this.unsubscribeTools = undefined;
     this.discardPropertyPreview();
@@ -324,17 +384,54 @@ export class EdgelessOperations {
   }
 
   /**
+   * Prepares detached creation data for rendering a preview without modifying the document.
+   *
+   * Copies registered/session defaults and explicit props, runs the registration's pure
+   * geometry preparation and validates props. No ID is allocated, selected or registered.
+   * Commit the original input: final insertion runs core validation and middleware again.
+   * The preview zIndex defaults to zero; insertion computes its actual stacking position.
+   * @param input - Draft data; missing frame fields use the standard creation frame.
+   * @returns Detached prepared input with complete frame and normalized props.
+   * @throws If the type is absent, its preparation/validation rejects data, or frame is invalid.
+   */
+  prepareElementCreation(input: CreateElementInput): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
+    const prepared = this.prepareCreationInput(input);
+    const props = copy({ ...this.runtime.elementRegistry.get(prepared.type)?.defaults, ...prepared.props });
+    return { ...prepared, props: this.runtime.elementRegistry.validate(prepared.type, props) };
+  }
+
+  /** Shares defaults and pure geometry preparation; persisted insertion owns its own single validation pass. */
+  private prepareCreationInput(input: CreateElementInput): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
+    const registration = this.runtime.elementTypes.get(input.type);
+    if (!registration) throw new Error(`Element type ${input.type} is not registered`);
+    const preparedInput = { ...copy(input), frame: this.frame({ ...DEFAULT_FRAME, ...input.frame }), zIndex: input.zIndex ?? 0 };
+    const sessionDefaults = this.sessionDefaults(registration.behavior?.defaultsGroup, registration.definition.defaults) ?? registration.definition.defaults ?? {};
+    const defaults = registration.behavior?.creationDefaults?.(sessionDefaults, preparedInput) ?? sessionDefaults;
+    const props = copy({ ...defaults, ...this.creationDefaults.get(input.type) });
+    for (const [key, value] of Object.entries(input.props ?? {})) {
+      if (value !== undefined || !(key in props)) props[key] = copy(value);
+    }
+    const prepared = { ...preparedInput, props };
+    const result = registration.behavior?.create?.(prepared, this.reactPanel ?? this.documentPanel) ?? prepared;
+    return { ...result, frame: this.frame({ ...DEFAULT_FRAME, ...result.frame }), props: result.props ?? {} };
+  }
+
+  /**
    * Creates a registered canvas element in this panel and selects it.
+   *
+   * Registered defaults and remembered session values are copied before explicit properties.
+   * A registration may derive defaults (for example, when an explicit drawing brush
+   * differs from the current brush), then prepare geometry without mutating the input.
+   * Custom types retain opaque property values, including null and nested content.
    *
    * @param input - Persisted type and initial fields; missing frame fields use the standard creation size.
    * @returns Complete created node. The new ID replaces the active selection.
    * @throws If the type is not registered, geometry is not finite and positive, or its definition rejects the input.
    */
   createElement(input: CreateElementInput): EditorElementNode {
-    const registration = this.runtime.elementTypes.get(input.type);
-    if (!registration) throw new Error(`Element type ${input.type} is not registered`);
-    const prepared = this.tools.applyCreationDefaults({ ...input, frame: this.frame({ ...DEFAULT_FRAME, ...input.frame }), zIndex: input.zIndex ?? Math.max(0, ...this.elements.getElementNodes().map(element => element.zIndex)) + 1 });
-    const element = this.elements.insertElement(registration.behavior?.create?.(prepared, this.reactPanel ?? this.documentPanel) ?? prepared);
+    const zIndex = input.zIndex ?? Math.max(0, ...this.elements.getElementNodes().map(element => element.zIndex)) + 1;
+    const prepared = this.prepareCreationInput({ ...input, zIndex });
+    const element = this.elements.insertElement(prepared);
     this.selection.set([element.id]);
     return this.elements.getElementNode(element.id)!;
   }
@@ -374,7 +471,20 @@ export class EdgelessOperations {
       frame: framePatch,
       props: safe,
     });
-    this.remember(current.kind, safe);
+    this.remember(current.type, safe);
+    return updated;
+  }
+
+  /**
+   * Updates opaque properties of one registered element without interpreting property names as geometry.
+   * @param id - Existing element in this panel.
+   * @param patch - Property keys to merge; validation runs through the element manager.
+   * @returns Updated element snapshot.
+   * @throws If the element is missing or its definition rejects the patch.
+   */
+  updateProperties(id: string, patch: Record<string, unknown>): EditorElementNode {
+    const updated = this.elements.updateElement(id, { props: patch });
+    this.remember(updated.type, updated.props);
     return updated;
   }
 
@@ -387,7 +497,7 @@ export class EdgelessOperations {
    */
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
     const visuals = ids.map((id) => this.visual(id));
-    if (!visuals.length || visuals.some((visual) => !visual || visual.kind !== visuals[0]!.kind)) throw new Error("Shared properties require one visual type");
+    if (!visuals.length || visuals.some((visual) => !visual || visual.type !== visuals[0]!.type)) throw new Error("Shared properties require one visual type");
     this.runtime.history.batchUpdates(() => ids.forEach((id) => this.update({ id, patch: patch as UpdateVisualPayload["patch"] })));
   }
 
@@ -455,7 +565,7 @@ export class EdgelessOperations {
    */
   group(): EditorElementNode {
     const selected = [...this.selection.get().items];
-    const internalConnectors = this.internalConnectorIds(selected);
+    const internalConnectors = this.relatedElementIds(selected);
     const items = [...new Set([...selected, ...internalConnectors])];
     if (items.some((id) => !this.elements.hasElement(id))) throw new Error("Grouped objects must exist");
     if (items.length < 2) throw new Error("Grouping requires at least two objects");
@@ -558,7 +668,7 @@ export class EdgelessOperations {
    */
   reorder(direction: EdgelessReorder): void {
     const items = this.selection.get().items;
-    const selected = new Set([...this.leaves(items), ...this.internalConnectorIds(items)]);
+    const selected = new Set([...this.leaves(items), ...this.relatedElementIds(items)]);
     const layers = this.elements.getElementNodes().filter((element) => element.type !== "group").sort((a, b) => a.zIndex - b.zIndex).map((element) => element.id);
     const moving = layers.filter((id) => selected.has(id));
     const stationary = layers.filter((id) => !selected.has(id));
@@ -708,15 +818,15 @@ export class EdgelessOperations {
   }
 
   /**
-   * Finds same-level connectors whose two endpoints are contained by selected objects.
+   * Finds same-level related elements whose registered references are all contained by selected objects.
    *
    * This derives ownership for older persisted groups that predate automatic
    * connector membership, while new groups persist the same connector IDs.
    *
    * @param items - Selected element or group IDs.
-   * @returns Connector IDs in document layer order.
+   * @returns Related element IDs in document layer order; connectors register both endpoints.
    */
-  private internalConnectorIds(items: readonly string[]): string[] {
+  private relatedElementIds(items: readonly string[]): string[] {
     const contained = new Set(items);
     const collect = (id: string): void => {
       this.groupRecord(id)?.children.forEach((child) => {
@@ -728,18 +838,16 @@ export class EdgelessOperations {
     items.forEach(collect);
     const parents = new Set(items.map((id) => this.parentId(id)));
     const parentId = parents.size === 1 ? [...parents][0] : undefined;
-    return parents.size === 1
-      ? this.getVisuals().filter((visual) => visual.kind === "connector"
-        && !contained.has(visual.id)
-        && this.parentId(visual.id) === parentId
-        && Boolean(visual.source.elementId && contained.has(visual.source.elementId))
-        && Boolean(visual.target.elementId && contained.has(visual.target.elementId)))
-        .map((visual) => visual.id)
-      : [];
+    if (parents.size !== 1) return [];
+    return this.elements.getElementNodes().filter(element => {
+      if (contained.has(element.id) || this.parentId(element.id) !== parentId) return false;
+      const references = this.runtime.elementTypes.get(element.type)?.behavior?.relatedElements?.(element);
+      return Boolean(references?.length && references.every(id => contained.has(id)));
+    }).map(element => element.id);
   }
 
   // Resolve through this controller so panel proxies keep their Panel boundary.
-  private get geometry() { return new ElementGeometry((id) => this.element(id)); }
+  private get geometry() { return new ElementGeometry((id) => this.element(id), (id) => this.rotation(id)); }
   private bounds(id: string): VisualFrame | undefined { return this.geometry.bounds(id); }
 
   private setFrame(id: string, frame: VisualFrame): void {
@@ -756,13 +864,36 @@ export class EdgelessOperations {
 
   private rotation(id: string): number {
     const element = this.element(id);
-    return element?.type !== "connector" && typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+    return !this.runtime.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry && typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
   }
 
-  private remember(kind: EdgelessVisual["kind"], patch: Record<string, unknown>): void { return this.tools.remember(kind, patch); }
+  private sessionDefaults(group?: string, initial: Readonly<Record<string, unknown>> = {}): Record<string, unknown> | undefined {
+    if (!group) return undefined;
+    const paletteDefaults = this.tools.defaults as Record<string, Record<string, unknown>>;
+    if (Object.hasOwn(paletteDefaults, group)) return paletteDefaults[group];
+    let defaults = this.sharedCreationDefaults.get(group);
+    if (!defaults) {
+      defaults = copy(initial);
+      this.sharedCreationDefaults.set(group, defaults);
+    }
+    return defaults;
+  }
+
+  private remember(type: string, patch: Record<string, unknown>): void {
+    const registration = this.runtime.elementTypes.get(type);
+    const shared = this.sessionDefaults(registration?.behavior?.defaultsGroup, registration?.definition.defaults);
+    if (shared) {
+      for (const key of Object.keys(shared)) if (key in patch) shared[key] = copy(patch[key]);
+    }
+    const remembered = this.creationDefaults.get(type) ?? {};
+    for (const key of registration?.rememberedProperties ?? []) {
+      if (key in patch) remembered[key] = copy(patch[key]);
+    }
+    this.creationDefaults.set(type, remembered);
+  }
 
   private element(id: string): EditorElementNode | undefined { return this.elements.getElementNode(id); }
-  private visual(id: string): EdgelessVisual | undefined { return this.getVisuals().find((visual) => visual.id === id); }
+  private visual(id: string): EditorElementNode | undefined { return this.getRenderedElement(id); }
   private groupRecord(id: string): VisualGroup | undefined {
     const element = this.element(id);
     if (element?.type !== "group") return undefined;

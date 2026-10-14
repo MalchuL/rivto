@@ -55,43 +55,26 @@
   touch-action: none;
 }
 
-.edgeless-place-preview-group {
-  pointer-events: none;
+/* Dashed frame outline keeps place size visible even for transparent or empty content.
+   Drafts use the real renderer but must never accept input or canvas selection. */
+[data-edgeless-creation-preview] {
+  outline: 1.5px dashed var(--rivto-accent);
+}
+[data-edgeless-creation-preview], [data-edgeless-creation-preview] * {
+  pointer-events: none !important;
 }
 
-.edgeless-place-preview-bbox {
-  fill: none;
-  stroke: var(--rivto-accent);
-  stroke-dasharray: 6 4;
-  stroke-width: 1.5px;
-  opacity: 0.85;
-}
-
-/* Ghost frame that follows the pointer while dragging a preset out of the toolbar. */
+/* Screen-positioned shell for the registered renderer while dragging a toolbar preset.
+   Geometry follows the pointer imperatively; React mounts its draft content only once. */
 .edgeless-preset-ghost {
   position: fixed;
   top: 0;
   left: 0;
   z-index: 2147483646;
   box-sizing: border-box;
-  width: 160px;
-  height: 120px;
-  border: 2px dashed var(--rivto-accent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--rivto-background) 72%, transparent);
   pointer-events: none;
+  transform-origin: 0 0;
   will-change: transform;
-}
-
-.edgeless-preset-ghost[data-kind="sticker"] {
-  border-style: solid;
-  border-color: transparent;
-  border-radius: 4px 4px 18px 4px;
-  box-shadow: var(--rivto-edgeless-sticker-shadow);
-}
-
-.edgeless-preset-ghost[data-kind="ellipse"] {
-  border-radius: 50%;
 }
 
 /* Checkerboard for a color swatch whose selection holds several values. */

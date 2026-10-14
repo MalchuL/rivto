@@ -1,13 +1,14 @@
 /**
  * Range control with a live preview for stroke widths and font sizes.
  *
- * The slider stays a native `<input type="range">` rather than the Radix
- * slider so hosts, tests, and assistive tech can set it with a plain value
- * (`fill`, `value=`) and so it inherits the accent color through
- * `accent-color`. The preview swaps between a dot whose diameter tracks the
- * value and a serif "T" whose font size tracks it.
+ * The shadcn Slider owns pointer capture, keyboard input and accessible thumb
+ * values. Changes preview live through onValueChange; the owning property panel
+ * retains its commit/cancel lifecycle. Hosts should use the slider keyboard or
+ * pointer API rather than assigning an input value. The preview swaps between
+ * a dot whose diameter tracks the value and a serif "T" whose font size tracks it.
  */
-import { editorControlProps } from "../../../../constants";
+import { Slider } from "../ui/slider";
+import { editorControlProps } from "../../constants";
 import { useEffect, useState } from "react";
 
 /** Preview glyph shown before the slider. */
@@ -25,7 +26,7 @@ const VALUE_CLASS = "edgeless-size-control-value";
  *
  * @param props - Accessible label, current value (non-numbers render as the
  * minimum), range bounds, preview glyph, and change callback.
- * @returns A label element wrapping the preview, range input, and value.
+ * @returns A group wrapping the preview, accessible slider thumb, and value.
  */
 export function SizeControl({
   label,
@@ -55,7 +56,7 @@ export function SizeControl({
   const textSize = Math.max(11, Math.min(30, Math.round(10 + ((draft - min) / Math.max(1, max - min)) * 18)));
 
   return (
-    <label className={CONTROL_CLASS} data-preview={preview} title={label}>
+    <div role="group" aria-label={label} className={CONTROL_CLASS} data-preview={preview} title={label}>
       <span className={PREVIEW_CLASS} aria-hidden="true">
         {preview === "text" ? (
           <span className={LETTER_CLASS} style={{ fontSize: textSize }}>T</span>
@@ -63,16 +64,15 @@ export function SizeControl({
           <span className={DOT_CLASS} style={{ width: diameter, height: diameter }} />
         )}
       </span>
-      <input {...editorControlProps}
-        type="range"
+      <Slider {...editorControlProps}
         className={RANGE_CLASS}
         aria-label={label}
         min={min}
         max={max}
-        value={draft}
-        onChange={(event) => commit(Number(event.currentTarget.value))}
+        value={[draft]}
+        onValueChange={([next]) => commit(next!)}
       />
       <span className={VALUE_CLASS}>{draft}</span>
-    </label>
+    </div>
   );
 }

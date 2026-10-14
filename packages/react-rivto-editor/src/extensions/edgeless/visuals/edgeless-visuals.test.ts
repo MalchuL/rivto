@@ -359,14 +359,14 @@ describe("edgelessVisualsExtension", () => {
     expect(edgelessOperation.getPlaceSize()).toEqual({ width: 90, height: 70 });
     edgelessOperation.setPlaceTool({ kind: "rectangle" });
     expect(edgelessOperation.getPlaceSize()).toEqual({ width: 160, height: 120 });
-    expect(edgelessOperation.getLastTool("shapes")).toEqual({ tool: "place", kind: "rectangle" });
+    expect(edgelessOperation.getGroupTool("shapes")?.id).toBe("rectangle");
     edgelessOperation.setDrawingBrush("marker");
-    expect(edgelessOperation.getLastTool("drawing")).toEqual({ tool: "drawing", brush: "marker" });
+    expect(edgelessOperation.getGroupTool("drawing")?.id).toBe("marker");
     editor.commands.execute("edgeless.tool.set", { operations: reactPanelOperations, payload: "select" });
     expect(edgelessOperation.getTool()).toEqual({ tool: "select" });
-    edgelessOperation.activateCategory("shapes");
+    edgelessOperation.activateToolbarGroup("shapes");
     expect(edgelessOperation.getTool()).toEqual({ tool: "place", kind: "rectangle" });
-    edgelessOperation.activateCategory("drawing");
+    edgelessOperation.activateToolbarGroup("drawing");
     expect(edgelessOperation.getTool()).toEqual({ tool: "drawing", brush: "marker" });
     edgelessOperation.destroy();
     reactPanel.editor.destroy();

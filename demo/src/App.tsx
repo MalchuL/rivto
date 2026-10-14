@@ -1,3 +1,4 @@
+import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
 import { DemoEditorPanels } from "./editor-panels";
@@ -343,6 +344,7 @@ async function createDemoEditor() {
             ],
           }),
           ...edgelessPreset({ visuals: edgelessOptions }),
+          mindmapExtension(),
           blockIdExtension(),
           blockNavigationExtension(),
           blockNumberExtension(),
@@ -596,6 +598,7 @@ async function createEmptyDemoEditor() {
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
+      mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
@@ -849,6 +852,7 @@ async function createMultiEditor(
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
+      mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
@@ -1022,6 +1026,7 @@ async function createSyncedPeer(side: "left" | "right", roomId: string, repeatCo
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
+      mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,

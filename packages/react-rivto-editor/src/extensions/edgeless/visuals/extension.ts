@@ -1,3 +1,4 @@
+import { registerVisualToolbar } from "./register-toolbar";
 import { registerConnectorNormalization } from "../../../managers/elements/normalize-connectors";
 import { registerEdgelessCommands } from "../../../managers/elements/register-edgeless-commands";
 import { registerVisualElements } from "../../../elements/visuals/register-elements";
@@ -23,6 +24,7 @@ export function edgelessVisualsExtension(options: EdgelessVisualsOptions = {}): 
       const cleanup = () => { disposers.splice(0).reverse().forEach(dispose => dispose()); };
       try {
         disposers.push(registerVisualElements(reactEditor));
+        disposers.push(registerVisualToolbar(reactEditor, options));
         disposers.push(registerConnectorNormalization(reactEditor, options));
         disposers.push(registerEdgelessCommands(reactEditor));
         disposers.push(reactEditor.extensions.mount(() => createElement(EdgelessVisualLayer, { options })));

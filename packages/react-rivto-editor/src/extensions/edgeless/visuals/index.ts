@@ -24,7 +24,6 @@ export type {
   OrphanConnectorBehavior,
   CreateVisualPayload,
   PresetPayload,
-  ToolCategory,
   UpdateVisualPayload,
   EdgelessAlignment,
   EdgelessReorder,

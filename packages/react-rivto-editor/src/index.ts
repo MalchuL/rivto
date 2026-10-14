@@ -149,3 +149,7 @@ export type { PanelAPI } from "@chulane/rivto";
 export type { EdgelessAPI } from "./managers/elements/types";
 
 export { useEdgelessOperations } from "./hooks/elements/use-edgeless-operations";
+
+export type { EdgelessToolbarApi, EdgelessToolbarEntry, EdgelessToolbarGroup, EdgelessToolbarTool, EdgelessToolbarContext, EdgelessToolbarRenderContext, EdgelessToolbarGroupProps, EdgelessToolbarItem } from "./managers/edgeless-toolbar/types";
+export { EdgelessToolButton } from "./components/edgeless/tool-button";
+export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/tool-button";

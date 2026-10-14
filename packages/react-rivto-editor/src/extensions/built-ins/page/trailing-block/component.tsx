@@ -1,3 +1,4 @@
+import { Button } from "../../../../components/ui/button";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
@@ -24,10 +25,10 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
     Array.from({ length: count }, (_, index) => {
       const amount = index + 1;
       return (
-        <button {...editorControlProps}
+        <Button variant="ghost" {...editorControlProps}
           key={amount}
           type="button"
-          className={`${TRAILING_BLOCK_CLASS} my-1 box-border flex h-(--rivto-default-block-height) w-full cursor-text items-center gap-1 rounded border-0 bg-transparent px-2 text-left [font:inherit] leading-normal text-transparent transition-colors outline-none hover:bg-primary/5 hover:text-primary focus-visible:bg-primary/5 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5`}
+          className={`${TRAILING_BLOCK_CLASS} my-1 box-border flex h-(--rivto-default-block-height) w-full cursor-text items-center justify-start gap-1 rounded border-0 bg-transparent px-2 py-0 text-left [font:inherit] leading-normal text-transparent transition-colors outline-none hover:bg-primary/5 hover:text-primary focus-visible:bg-primary/5 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5`}
           aria-label={amount === 1 ? "Add block" : `Add ${amount} blocks`}
           onClick={() => {
             let id = "";
@@ -46,7 +47,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
         >
           <PlusIcon aria-hidden="true" />
           Add block
-        </button>
+        </Button>
       );
     }),
     slot,

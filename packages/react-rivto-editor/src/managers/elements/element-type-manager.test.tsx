@@ -99,3 +99,117 @@ it('keeps custom properties separate from canvas identity and rejects foreign pa
   expect(notifications).toBe(notificationsAfterCleanup);
   await firstCore.destroy(); await secondCore.destroy();
 });
+
+it('shares validated custom property previews, preserves opaque keys and remembers only opted-in defaults', async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  const operations = observeOperations(panel);
+  panel.editor.elementTypes.register({
+    definition: { type: 'custom-tree', defaults: { color: 'blue', count: 1, optional: 'default' }, validate(props) {
+      if (typeof props.count !== 'number' || props.count < 1) throw new Error('Invalid count');
+      return { ...props, count: Math.round(props.count) };
+    } },
+    render: () => null,
+    rememberedProperties: ['color'],
+  });
+  const first = operations.createElement({ type: 'custom-tree', props: { id: 'opaque', optional: null } });
+  expect(first.props.optional).toBeNull();
+  const second = operations.createElement({ type: 'custom-tree' });
+  core.history.stopCapturing();
+  operations.previewProperties([first.id, second.id], { color: 'red', count: 2.8, id: 'still-opaque' });
+  expect(operations.getRenderedElement(first.id)?.props).toMatchObject({ color: 'red', count: 3, id: 'still-opaque' });
+  expect(core.elements.getElementNode(first.id)?.props.color).toBe('blue');
+  expect(() => operations.previewProperties([first.id, second.id], { count: 0 })).toThrow('Invalid count');
+  expect(operations.getRenderedElement(second.id)?.props.count).toBe(3);
+  operations.commitPropertyPreview();
+  expect(core.elements.getElementNode(first.id)?.props.id).toBe('still-opaque');
+  expect(core.elements.getElementNode(second.id)?.props.color).toBe('red');
+  core.history.undo();
+  expect(core.elements.getElementNode(first.id)?.props.color).toBe('blue');
+  expect(core.elements.getElementNode(second.id)?.props.color).toBe('blue');
+  core.history.redo();
+  const third = operations.createElement({ type: 'custom-tree' });
+  expect(third.props).toMatchObject({ color: 'red', count: 1 });
+  expect(third.props.id).toBeUndefined();
+  operations.previewProperties([third.id], { color: 'green' });
+  operations.discardPropertyPreview();
+  expect(operations.getRenderedElement(third.id)?.props.color).toBe('red');
+  panel.editor.destroy(); await core.destroy();
+});
+
+it('validates every preview target before committing and preserves concurrent unrelated properties', async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  const operations = observeOperations(panel);
+  panel.editor.elementTypes.register({
+    definition: { type: 'guarded', defaults: { color: 'blue' }, validate(props) {
+      if (props.locked && props.color === 'red') throw new Error('Locked color');
+      return props;
+    } },
+    render: () => null,
+  });
+  const first = operations.createElement({ type: 'guarded' });
+  const second = operations.createElement({ type: 'guarded' });
+  operations.previewProperties([first.id, second.id], { color: 'red' });
+  core.elements.updateElement(second.id, { props: { locked: true } });
+  expect(operations.getRenderedElement(second.id)?.props).toMatchObject({ color: 'blue', locked: true });
+  expect(operations.getRenderedElements().map(element => element.props.color)).toEqual(['red', 'blue']);
+  expect(operations.getVisuals().map(element => element.color)).toEqual(['red', 'blue']);
+  expect(() => operations.previewProperties([second.id], { title: 'Still invalid' })).toThrow('Locked color');
+  expect(() => operations.commitPropertyPreview()).toThrow('Locked color');
+  expect(core.elements.getElementNode(first.id)?.props.color).toBe('blue');
+  expect(core.elements.getElementNode(second.id)?.props.color).toBe('blue');
+  expect(operations.hasPropertyPreview()).toBe(true);
+  operations.previewProperties([second.id], { color: 'green' });
+  expect(operations.getRenderedElement(second.id)?.props).toMatchObject({ color: 'green', locked: true });
+  operations.discardPropertyPreview();
+  operations.previewProperties([first.id], { color: 'green' });
+  core.elements.updateElement(first.id, { props: { title: 'Concurrent title' } });
+  operations.commitPropertyPreview();
+  expect(core.elements.getElementNode(first.id)?.props).toMatchObject({ color: 'green', title: 'Concurrent title' });
+  operations.previewProperties([first.id], { color: 'red' });
+  core.elements.removeElement(first.id);
+  expect(() => operations.commitPropertyPreview()).not.toThrow();
+  expect(operations.hasPropertyPreview()).toBe(false);
+  panel.editor.destroy(); await core.destroy();
+});
+
+it('prepares detached creation data with the same defaults and normalization as insertion', async () => {
+  const editor = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor });
+  const operations = observeOperations(panel);
+  let validations = 0;
+  const defaults = { nested: { value: 1 }, count: 0 };
+  panel.editor.elementTypes.register({
+    definition: { type: 'preview-example', defaults, validate(props) {
+      validations += 1;
+      return { ...props, count: Number(props.count) + 1 };
+    } },
+    render: () => null,
+    behavior: { create: input => ({ ...input, props: { ...input.props, prepared: true } }) },
+  });
+  const input = { type: 'preview-example', frame: { x: 10, y: 20, width: 220, height: 80 }, props: { title: 'Draft' } };
+  const before = editor.dump();
+  let notifications = 0;
+  const stop = editor.subscribe(() => { notifications += 1; });
+  const draft = operations.prepareElementCreation(input);
+  expect(draft).toMatchObject({ type: 'preview-example', frame: input.frame,
+    props: { ...defaults, count: 1, title: 'Draft', prepared: true } });
+  expect(validations).toBe(1);
+  expect(notifications).toBe(0);
+  expect(editor.dump()).toEqual(before);
+  expect(input.props).toEqual({ title: 'Draft' });
+  (draft.props.nested as { value: number }).value = 42;
+  expect(defaults.nested.value).toBe(1);
+  const created = operations.createElement(input);
+  expect(validations).toBe(2);
+  expect(created.props).toEqual({ ...defaults, count: 1, title: 'Draft', prepared: true });
+  expect(created.frame).toEqual(input.frame);
+  expect(notifications).toBeGreaterThan(0);
+  stop();
+  expect(operations.getPlaceSize({ width: 220, height: 80 })).toEqual({ width: 220, height: 80 });
+  operations.rememberPlaceSize({ x: 0, y: 0, width: 300, height: 150 });
+  expect(operations.getPlaceSize({ width: 220, height: 80 })).toEqual({ width: 300, height: 150 });
+  operations.destroy();
+  await panel.editor.destroy(); await editor.destroy();
+});

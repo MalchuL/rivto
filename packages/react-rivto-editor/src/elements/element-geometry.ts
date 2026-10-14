@@ -6,9 +6,10 @@ export class ElementGeometry {
   /**
    * @param read - Reads a node in the current view; may substitute uncommitted
    * preview geometry. Missing or outside-view IDs must return undefined.
-   * @param previewRotation - Optional uncommitted angle in clockwise degrees.
+   * @param previewRotation - Optional resolved angle in clockwise degrees, including uncommitted previews.
    * A connector's DOM target rotates during a gesture even though its persisted
-   * frame is axis-aligned. Undefined uses the normal stored-angle rules.
+   * frame is axis-aligned. Callers can also return zero for registered world-space
+   * geometry. Undefined uses the normal stored-angle rules.
    */
   constructor(
     private readonly read: (id: string) => EditorElementNode | undefined,
@@ -16,13 +17,13 @@ export class ElementGeometry {
   ) {}
 
   /** @param id - Element identity. @returns Preview or stored clockwise degrees;
-   * missing nodes and connectors without a preview angle return zero. */
+   * missing nodes and nodes without an angle return zero. */
   rotation(id: string): number {
     const node = this.read(id);
     if (!node) return 0;
     const preview = this.previewRotation?.(id);
     if (preview !== undefined) return normalizeRotation(preview);
-    return node?.type !== "connector" && typeof node?.props.rotation === "number" ? normalizeRotation(node.props.rotation) : 0;
+    return typeof node.props.rotation === "number" ? normalizeRotation(node.props.rotation) : 0;
   }
 
   /**

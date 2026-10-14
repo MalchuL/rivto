@@ -8,8 +8,9 @@
  * treat interaction with a control as a click on the canvas.
  */
 import { useState, type ReactNode, type RefObject } from "react";
-import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { UI_SCOPE_CLASS } from "../ui-scope";
+import { EdgelessToolButton } from "./tool-button";
 
 /** Right-side floating panel; `edgeless-visual-properties` is a stable hook. */
 const PANEL_CLASS = `${UI_SCOPE_CLASS} edgeless-visual-properties group/panel`;
@@ -81,7 +82,7 @@ export function EdgelessPropertiesPanel({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
-    <div
+    <Collapsible open={!collapsed} onOpenChange={open => setCollapsed(!open)}
       ref={panelRef}
       className={PANEL_CLASS}
       data-edgeless-ui="true"
@@ -96,13 +97,12 @@ export function EdgelessPropertiesPanel({
           {count > 1 && <span className={COUNT_CLASS}>{count} selected</span>}
         </div>
         <div className={ACTIONS_CLASS}>
-          <EdgelessToolButton
+          <CollapsibleTrigger asChild><EdgelessToolButton
             label={collapsed ? "Expand properties" : "Collapse properties"}
             icon={collapsed ? "chevron-down" : "chevron-up"}
             className={ACTION_CLASS}
             aria-expanded={!collapsed}
-            onClick={() => setCollapsed((value) => !value)}
-          />
+          /></CollapsibleTrigger>
           <EdgelessToolButton
             label="Close properties"
             icon="close"
@@ -111,7 +111,7 @@ export function EdgelessPropertiesPanel({
           />
         </div>
       </header>
-      {!collapsed && children}
-    </div>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
   );
 }

@@ -1,3 +1,4 @@
+import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
@@ -125,6 +126,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly blockTypes: BlockTypesApi;
   /** Atomic element definitions and React presentation registrations. */
   readonly elementTypes: ElementTypeManager;
+  /** Shared creation-tool groups and extension contributions. */
+  readonly edgelessToolbar: EdgelessToolbarManager;
   /** Registers list-property validation and keyboard behavior with the core policy manager.
    * Registrations are removed when their React extension is disposed. */
   readonly blockListProps: BlockListPropsApi;
@@ -189,6 +192,7 @@ export class ReactEditor implements ReactEditorApi {
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor, extensions);
     this.clipboard = new ClipboardManager(editor, this, extensions);
+    this.edgelessToolbar = new EdgelessToolbarManager(extensions);
     this.elementTypes = new ElementTypeManager(this, extensions);
     this.clipboardFormats = new ClipboardFormatRegistry(extensions, this.clipboard.converters);
     this.pasteStrategies = editor.clipboard.pasteStrategies;
