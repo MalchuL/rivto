@@ -16,10 +16,7 @@ import {
   usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import {
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useState, type ChangeEvent } from "react";
 import {
   REVIEW_REPORT_TYPE,
   captureBlockReview,
@@ -90,7 +87,9 @@ function ReviewControls(props: ReviewControlsProps) {
     update: (value: number) => void,
   ): void => {
     const value = Number(event.currentTarget.value);
-    if (Number.isInteger(value) && value >= 0) {update(value);}
+    if (Number.isInteger(value) && value >= 0) {
+      update(value);
+    }
   };
 
   return (
@@ -169,17 +168,23 @@ function ReviewBlock({
   const editing = useBlockEditing<ReviewBlockProps>(blockId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!editing.block) {return null;}
+  if (!editing.block) {
+    return null;
+  }
   const props = reviewBlockPropsSchema.parse(editing.block.props);
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) {return;}
+    if (saving) {
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const live = panel.blocks.getBlockNode(blockId);
-      if (!live) {throw new Error("Review block no longer exists");}
+      if (!live) {
+        throw new Error("Review block no longer exists");
+      }
       const liveProps = reviewBlockPropsSchema.parse(live.props);
       const capture = captureBlockReview(
         panel.document,
@@ -225,9 +230,9 @@ function ReviewBlock({
           includeReportBlock={props.includeReportBlock}
           onAboveChange={(blocksAbove) => editing.operations.setProp("blocksAbove", blocksAbove)}
           onBelowChange={(blocksBelow) => editing.operations.setProp("blocksBelow", blocksBelow)}
-          onIncludeReportBlockChange={(includeReportBlock) => (
+          onIncludeReportBlockChange={(includeReportBlock) =>
             editing.operations.setProp("includeReportBlock", includeReportBlock)
-          )}
+          }
           onSave={() => void save()}
           onRestore={() => panel.document.load(props.snapshot!)}
         />
@@ -263,12 +268,16 @@ function ReviewElement({
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) {return;}
+    if (saving) {
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const live = panel.elements.getElementNode(element.id);
-      if (!live) {throw new Error("Review element no longer exists");}
+      if (!live) {
+        throw new Error("Review element no longer exists");
+      }
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
         panel.document,
@@ -334,9 +343,7 @@ export function reviewReportExtensions(options: {
   return [
     blockExtension({
       definition: reviewBlockDefinition,
-      render: ({ blockId }) => (
-        <ReviewBlock blockId={blockId} saveReport={options.saveReport} />
-      ),
+      render: ({ blockId }) => <ReviewBlock blockId={blockId} saveReport={options.saveReport} />,
       slashCommand: {
         title: "Review report",
         group: "Turn into",
@@ -364,11 +371,11 @@ export {
   REVIEW_REPORT_TYPE,
   createReviewBlockInput,
   createReviewElementInput,
-  reviewBlockDefinition
+  reviewBlockDefinition,
 } from "./review-report-model";
 export type {
   ReviewBlockProps,
   ReviewElementProps,
   ReviewReport,
-  SaveReviewReport
+  SaveReviewReport,
 } from "./review-report-model";

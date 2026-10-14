@@ -36,7 +36,7 @@
   color: var(--review-accent-deep);
   font-size: 10px;
   font-weight: 750;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -52,7 +52,9 @@
 
 .review-report-element[data-selected] {
   border-color: var(--review-accent);
-  box-shadow: 0 0 0 3px rgb(109 74 255 / 18%), 0 12px 32px rgb(46 28 105 / 18%);
+  box-shadow:
+    0 0 0 3px rgb(109 74 255 / 18%),
+    0 12px 32px rgb(46 28 105 / 18%);
 }
 
 .review-report-problem {
@@ -67,10 +69,15 @@
   font: inherit;
   line-height: 1.5;
   resize: vertical;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
-.review-report-problem:hover { background: #fff; }
+.review-report-problem:hover {
+  background: #fff;
+}
 
 .review-report-problem:focus {
   border-color: var(--review-accent);
@@ -143,7 +150,10 @@
   font-weight: 650;
   line-height: 1.2;
   cursor: pointer;
-  transition: transform 100ms ease, border-color 100ms ease, box-shadow 100ms ease;
+  transition:
+    transform 100ms ease,
+    border-color 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .review-report-controls button:first-of-type {
@@ -166,7 +176,7 @@
 
 .review-report-controls button:disabled {
   cursor: wait;
-  opacity: .58;
+  opacity: 0.58;
 }
 
 .review-report-controls [role="alert"] {
@@ -207,12 +217,18 @@
   padding: 11px;
   background: #221d30;
   color: #f4f0ff;
-  font: 11px/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font:
+    11px/1.5 ui-monospace,
+    "SFMono-Regular",
+    Consolas,
+    monospace;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .review-report-problem,
-  .review-report-controls button { transition: none; }
+  .review-report-controls button {
+    transition: none;
+  }
 }
 
 /* Fields and the saved JSON still allow text selection inside their own content. */

@@ -9,7 +9,7 @@
 **/.stuff/
 playwright-report/
 test-results/
-reports/
+/reports/
 **/pnpm-lock.yaml
 **/encore.gen/
 **/encore.gen.ts
