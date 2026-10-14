@@ -1,8 +1,12 @@
-import { DocumentViewDOM, isInDocumentView } from "../../../managers/events/document-view";
+import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
-import type { EditorViewApi } from "../../../editor-view/types";
-import { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions } from "../placement/resolver";
+import type { ReactPanelApi } from "../../../panels/types";
+import {
+  resolveDropPlacement,
+  type DropLayoutBlock,
+  type DropLayoutOptions,
+} from "../placement/resolver";
 import type { DropBlock } from "../placement/types";
 import { resolveBeforeDropPlacement, resolveSiblingAfterDropPlacement } from "../placement/utils";
 import type { DropPlacement, PointerCoordinates } from "../types";
@@ -11,14 +15,12 @@ import { blockContainment } from "../utils/containment";
 /**
  * Returns the tree displayed by this view without changing document operations.
  *
- * @param editorView - Destination view, optionally scoped to one subtree.
+ * @param reactPanel - Destination view, optionally scoped to one subtree.
  * @returns The displayed subtree, the complete forest for a document view,
  * or an empty list when the scoped root has been deleted.
  */
-export function getDropBlocks(editorView: EditorViewApi): EditorBlock[] {
-  if (!editorView.rootBlockId) return editorView.runtime.blocks.getBlocks();
-  const root = editorView.runtime.blocks.getBlock(editorView.rootBlockId);
-  return root ? (editorView.panel ? root.children : [root]) : [];
+export function getDropBlocks(reactPanel: ReactPanelApi): EditorBlock[] {
+  return reactPanel.blocks.getBlocks();
 }
 
 /**
@@ -27,26 +29,39 @@ export function getDropBlocks(editorView: EditorViewApi): EditorBlock[] {
  * them. Each access reads the live DOM; no geometry survives between calculations.
  *
  * @param root - Surface element containing the rendered destination blocks.
- * @param editorView - Destination React view providing block-view behavior and containment.
+ * @param reactPanel - Destination React view providing block-view behavior and containment.
  * @returns Rendered block identities and layout policies with live viewport
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
-export function collectDropLayout(root: HTMLElement, editorView: EditorViewApi): DropLayoutBlock[] {
-  const dom = new DocumentViewDOM(root);
+export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi): DropLayoutBlock[] {
+  const dom = new PanelDOM(root);
   return dom.getBlocks().flatMap((element) => {
     const id = element.dataset.blockId;
     const row = dom.getRow(element);
-    if (!id || !row || !element.getClientRects().length) return [];
+    if (!id || !row || !element.getClientRects().length) {
+      return [];
+    }
     const parent = dom.getParent(element);
-    const behavior = editorView.runtime.blockBehaviors.resolve(id);
-    return [{
-      id, parentId: parent && root.contains(parent) ? parent.dataset.blockId ?? null : null,
-      get row() { return row.getBoundingClientRect(); },
-      get rect() { return element.getBoundingClientRect(); },
-      axis: behavior.dropAxis, fixed: blockContainment(editorView, id)?.childOutline === "fixed",
-      acceptsBody: Boolean(behavior.acceptsDropContainer), options: behavior.dropPlacement,
-      hasRenderedChildren: Boolean(element.querySelector(":scope > .page-block-children > [data-block-id]")),
-    }];
+    const behavior = reactPanel.editor.blockBehaviors.resolve(id);
+    return [
+      {
+        id,
+        parentId: parent && root.contains(parent) ? (parent.dataset.blockId ?? null) : null,
+        get row() {
+          return row.getBoundingClientRect();
+        },
+        get rect() {
+          return element.getBoundingClientRect();
+        },
+        axis: behavior.dropAxis,
+        fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
+        acceptsBody: Boolean(behavior.acceptsDropContainer),
+        options: behavior.dropPlacement,
+        hasRenderedChildren: Boolean(
+          element.querySelector(":scope > .page-block-children > [data-block-id]"),
+        ),
+      },
+    ];
   });
 }
 
@@ -62,7 +77,7 @@ export function collectDropLayout(root: HTMLElement, editorView: EditorViewApi):
  * neighbors outside the card so the final move validates against that tree.
  *
  * @param root - Destination surface element, or `null` when unavailable.
- * @param editorView - Destination React view providing layout and acceptance behavior.
+ * @param reactPanel - Destination React view providing layout and acceptance behavior.
  * @param sources - Source blocks checked against each candidate destination.
  * @param blocks - Destination tree participating in placement resolution.
  * @param pointer - Pointer or keyboard-generated position in viewport pixels.
@@ -72,34 +87,62 @@ export function collectDropLayout(root: HTMLElement, editorView: EditorViewApi):
  */
 export function resolveSurfaceDrop(
   root: HTMLElement | null,
-  editorView: EditorViewApi,
+  reactPanel: ReactPanelApi,
   sources: readonly EditorBlock[],
   blocks: readonly DropBlock[],
   pointer: PointerCoordinates,
   options: DropLayoutOptions,
 ): DropPlacement | null {
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   // Canvas cards may overlap. Hit-testing selects the visible owning layout;
   // resolving all cards together can choose a hidden block from another card.
-  const card = !options.keyboard ? root.ownerDocument?.elementFromPoint(pointer.x, pointer.y)
-    ?.closest<HTMLElement>("[data-edgeless-card-content]") : null;
+  const card = !options.keyboard
+    ? root.ownerDocument
+        ?.elementFromPoint(pointer.x, pointer.y)
+        ?.closest<HTMLElement>("[data-edgeless-card-content]")
+    : null;
   // Blank canvas has no outline destination; only the card under the pointer
   // contributes blocks. Keyboard movement still uses its supplied geometry.
-  if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) return null;
-  const layoutRoot = card && root.contains(card) && isInDocumentView(root, card) ? card : root;
-  const measured = collectDropLayout(layoutRoot, editorView);
-  const panelRoot = editorView.panel?.rootBlockId;
-  const placement = resolveDropPlacement(measured, blocks, pointer, options,
-    (destination) => (!editorView.rootBlockId || Boolean(panelRoot) || destination.parentId !== null)
-      && editorView.runtime.blockBehaviors.acceptsDrop(panelRoot && destination.parentId === null ? { ...destination, parentId: panelRoot } : destination, sources));
-  if (placement?.kind !== "between") return placement;
+  if (!options.keyboard && root.getAttribute?.("data-rivto-surface") === "edgeless" && !card) {
+    return null;
+  }
+  const layoutRoot = card && root.contains(card) && isInPanel(root, card) ? card : root;
+  const measured = collectDropLayout(layoutRoot, reactPanel);
+  const panelRoot =
+    reactPanel.rootBlockId &&
+    !reactPanel.blocks.hasBlock(reactPanel.rootBlockId) &&
+    reactPanel.document.blocks.hasBlock(reactPanel.rootBlockId)
+      ? reactPanel.rootBlockId
+      : undefined;
+  const placement = resolveDropPlacement(
+    measured,
+    blocks,
+    pointer,
+    options,
+    (destination) =>
+      (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null) &&
+      reactPanel.editor.blockBehaviors.acceptsDrop(
+        panelRoot && destination.parentId === null
+          ? { ...destination, parentId: panelRoot }
+          : destination,
+        sources,
+      ),
+  );
+  if (placement?.kind !== "between") {
+    return placement;
+  }
   // A card boundary is a document gap, not necessarily the document's edge.
   // Keep the visible indicator, but include hidden separators or other cards
   // in its canonical neighbors for the final adjacency check.
   // Filtered containers likewise need their hidden siblings in the stored gap.
   let destination;
-  if (placement.nextId) destination = resolveBeforeDropPlacement(blocks, placement.nextId);
-  else if (placement.previousId) destination = resolveSiblingAfterDropPlacement(blocks, placement.previousId);
+  if (placement.nextId) {
+    destination = resolveBeforeDropPlacement(blocks, placement.nextId);
+  } else if (placement.previousId) {
+    destination = resolveSiblingAfterDropPlacement(blocks, placement.previousId);
+  }
   const resolved = destination ? { ...placement, ...destination } : placement;
   return panelRoot && resolved.parentId === null ? { ...resolved, parentId: panelRoot } : resolved;
 }

@@ -5,14 +5,14 @@ import type { BlockWrapperComponent } from "../../blocks/block-wrapper/block-wra
 /** Root React component rendering one complete presentation mode. */
 export type SurfaceComponent = ComponentType;
 
-/** Component wrapped around the complete active EditorView content. */
+/** Component wrapped around the complete active EditorPanel content. */
 export type EditorWrapper = ComponentType<{ readonly children?: ReactNode }>;
 
-/** One editor wrapper and the modes where it surrounds EditorView. */
+/** One editor wrapper and the modes where it surrounds EditorPanel. */
 export interface EditorWrapperRegistration {
   /** Editor-wide React context or interaction boundary. */
   readonly wrapper: EditorWrapper;
-  /** Modes in which EditorView applies the wrapper. */
+  /** Modes in which EditorPanel applies the wrapper. */
   readonly mode?: EditorMode | readonly EditorMode[];
 }
 
@@ -39,7 +39,7 @@ export const SLOT_POSITIONS = [
 ] as const;
 
 /** One supported block-row or canvas-element perimeter anchor. */
-export type SlotPosition = typeof SLOT_POSITIONS[number];
+export type SlotPosition = (typeof SLOT_POSITIONS)[number];
 
 /**
  * In-flow logical anchors available only to block rows.
@@ -59,10 +59,7 @@ export const BLOCK_FLOW_SLOT_POSITIONS = ["start", "end"] as const;
  * checkbox, collapse button, and drag handle. This slot only controls presentation;
  * it does not make the rendered content a child in the document hierarchy.
  */
-export type BlockSlotPosition =
-  | SlotPosition
-  | typeof BLOCK_FLOW_SLOT_POSITIONS[number]
-  | "body";
+export type BlockSlotPosition = SlotPosition | (typeof BLOCK_FLOW_SLOT_POSITIONS)[number] | "body";
 
 /** Render context supplied to a registered block-slot component or predicate. */
 export interface BlockSlotProps {

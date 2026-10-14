@@ -1,12 +1,8 @@
-/**
- * Shared contracts for React block registration and containment metadata.
- */
-import type {
-  BlockDefinition,
-} from "@chulane/rivto";
+import type { BlockDefinition } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
 import type { BlockBehavior } from "../../block-behaviors/types";
+import type { BlockClipboardConverter } from "../clipboard/types";
 
 /** React-owned outline policy stored as opaque core definition metadata. */
 export interface BlockContainment {
@@ -17,9 +13,11 @@ export interface BlockContainment {
 }
 
 /** Known React annotations plus metadata owned by other integrations. */
-export type ReactBlockDefinitionMetadata = Readonly<{
-  containment?: BlockContainment;
-} & Record<string, unknown>>;
+export type ReactBlockDefinitionMetadata = Readonly<
+  {
+    containment?: BlockContainment;
+  } & Record<string, unknown>
+>;
 
 /** Core definition refined with metadata understood by the React runtime. */
 export interface ReactBlockDefinition extends BlockDefinition {
@@ -33,7 +31,9 @@ export interface ReactBlockDefinition extends BlockDefinition {
  * @param definition - Registered definition, possibly supplied outside React.
  * @returns React outline policy, or `undefined` when none was declared.
  */
-export function getBlockContainment(definition: BlockDefinition | undefined): BlockContainment | undefined {
+export function getBlockContainment(
+  definition: BlockDefinition | undefined,
+): BlockContainment | undefined {
   return definition?.metadata?.containment as BlockContainment | undefined;
 }
 
@@ -54,7 +54,7 @@ export interface ReactBlockSlashCommand {
 /** Atomic model, renderer, and conversion registration for one block type. */
 export interface ReactBlockRegistration {
   /** Clipboard data conversion and portable formats installed with this type. */
-  readonly clipboard?: import("../clipboard/clipboard-converters").BlockClipboardConverter;
+  readonly clipboard?: BlockClipboardConverter;
   /** Framework-neutral definition registered with the core block registry. */
   readonly definition: ReactBlockDefinition;
   /** React content renderer selected by all registered surfaces. */

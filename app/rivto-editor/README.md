@@ -36,14 +36,14 @@ Node 22.6+ is required for the dependency-free TypeScript tests. The smoke test 
 - A local recovery draft is updated when content or title changes and restored after an unexpected exit. Recovery storage errors are shown explicitly. A recovered draft uses Save As so it cannot silently overwrite a file changed since the last session. Normal close clears the draft after save/discard confirmation. Keep JSON copies as durable backups; recovery uses Chromium local storage and is subject to its quota.
 - Settings persist editor width (560–1440 px) and editor shortcut overrides. `Primary` means Command on macOS and Ctrl elsewhere. Conflicting editor bindings appear in the settings table. The application file shortcuts are reserved.
 
-| Action | Shortcut |
-| --- | --- |
-| New | Primary+N |
-| Open | Primary+O |
-| Save | Primary+S |
-| Save As | Primary+Shift+S |
+| Action          | Shortcut        |
+| --------------- | --------------- |
+| New             | Primary+N       |
+| Open            | Primary+O       |
+| Save            | Primary+S       |
+| Save As         | Primary+Shift+S |
 | Export Markdown | Primary+Shift+E |
-| Settings | Primary+, |
+| Settings        | Primary+,       |
 
 ## Markdown rules
 

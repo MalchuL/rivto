@@ -1,3 +1,4 @@
+import { Button } from "../../../components/ui/button";
 /**
  * Accessible drag-handle slot for one page block row.
  *
@@ -10,9 +11,8 @@
  *
  * @module
  */
-import { useEditorView } from "../../../editor-view/use-editor-view";
 import { editorControlProps } from "../../../constants";
-import { useCallback, useContext, useRef, useSyncExternalStore } from "react";
+import { useCallback, useContext, useSyncExternalStore } from "react";
 import { GripVerticalIcon } from "lucide-react";
 import type { BlockSlotProps } from "../../../managers";
 import { PageDragItemContext } from "../state";
@@ -27,8 +27,6 @@ const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
  */
 export function PageDragBlockSlot({ block }: BlockSlotProps) {
   const item = useContext(PageDragItemContext);
-  const editorView = useEditorView();
-  const clickSequence = useRef(0);
   const subscribe = useCallback(
     (listener: () => void) => item?.placements.subscribe(block.id, listener) ?? (() => undefined),
     [block.id, item],
@@ -39,38 +37,24 @@ export function PageDragBlockSlot({ block }: BlockSlotProps) {
   );
   const draggable = useSyncExternalStore(subscribe, getDraggable, getDraggable);
   const arm = useCallback(() => item?.placements.arm(block.id), [block.id, item]);
-  if (!item) return null;
+  if (!item) {
+    return null;
+  }
   return (
-    <button {...editorControlProps}
+    <Button
+      variant="ghost"
+      size="icon"
+      {...editorControlProps}
       ref={draggable?.handleRef}
       type="button"
-      className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex items-center justify-center`}
+      className={`${PAGE_DRAG_HANDLE_CLASS} inline-flex h-6 w-7 items-center justify-center gap-0 p-0`}
       aria-label={`Move block: ${block.content || block.type}`}
-      aria-description={editorView.openBlock ? "Enter opens this block. Space starts dragging." : undefined}
       contentEditable={false}
-      onPointerDownCapture={() => { clickSequence.current = item.placements.getDragSequence(); }}
-      onKeyDownCapture={(event) => {
-        if (event.key === "Enter" && editorView.openBlock && !item.placements.isDragged(block.id)) {
-          // Reserve Enter for opening; Space still starts a keyboard drag.
-          event.preventDefault();
-          event.stopPropagation();
-          editorView.openBlock(block.id);
-          return;
-        }
-        if (event.key === "Enter" || event.key === " ") {
-          clickSequence.current = item.placements.getDragSequence();
-        }
-      }}
-      onClick={(event) => {
-        if (event.defaultPrevented || item.placements.isDragged(block.id)
-          || clickSequence.current !== item.placements.getDragSequence()) return;
-        editorView.openBlock?.(block.id);
-      }}
       onPointerEnter={arm}
       onFocus={arm}
     >
       {/* The button must stay the hit target so hit testing and dnd-kit see one activator. */}
       <GripVerticalIcon aria-hidden="true" className="pointer-events-none size-4" />
-    </button>
+    </Button>
   );
 }

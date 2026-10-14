@@ -1,12 +1,8 @@
 /** Listener callback selected from one event payload type. */
-export type ListenerCallback<Value> = [Value] extends [void]
-  ? () => void
-  : (value: Value) => void;
+export type ListenerCallback<Value> = [Value] extends [void] ? () => void : (value: Value) => void;
 
 /** Emit arguments selected from one event payload type. */
-type ListenerArguments<Value> = [Value] extends [void]
-  ? []
-  : [value: Value];
+type ListenerArguments<Value> = [Value] extends [void] ? [] : [value: Value];
 
 /** Internal callback shape used to store differently typed named events. */
 type StoredListener = (...args: never[]) => void;
@@ -63,7 +59,9 @@ export class Listeners<Events extends object> {
     ...args: ListenerArguments<Events[Name]>
   ): void {
     const eventListeners = this.listeners.get(name);
-    if (!eventListeners) return;
+    if (!eventListeners) {
+      return;
+    }
     [...eventListeners].forEach((listener) => {
       const callback = listener as unknown as (...values: ListenerArguments<Events[Name]>) => void;
       callback(...args);

@@ -10,7 +10,8 @@ import { EdgelessSelectionRuntime } from "./edgeless-runtime";
  * @returns Stable element ID.
  */
 function element(editor: Awaited<ReturnType<typeof createTestCoreEditor>>): string {
-  return editor.elements.insertElement({ type: "rectangle",
+  return editor.elements.insertElement({
+    type: "rectangle",
     frame: { x: 0, y: 0, width: 10, height: 10 },
     zIndex: editor.elements.getElementNodes().length,
     props: {},
@@ -31,8 +32,8 @@ describe("EdgelessSelectionRuntime", () => {
 
   test("set does not notify when ordered membership is unchanged", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const editorView = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(editorView);
+    const reactPanel = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(reactPanel);
     const first = element(editor);
     const second = element(editor);
     const calls = listen(runtime);
@@ -41,14 +42,14 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set(["", first, second, first]);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [first, second] });
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("set notifies when membership or order changes", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const editorView = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(editorView);
+    const reactPanel = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(reactPanel);
     const first = element(editor);
     const second = element(editor);
     const calls = listen(runtime);
@@ -56,14 +57,14 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first, second]);
     runtime.set([second, first]);
     expect(calls.map((call) => call.items)).toEqual([[first], [first, second], [second, first]]);
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("reactivates retained items and exposes active membership", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const editorView = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(editorView);
+    const reactPanel = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(reactPanel);
     const first = element(editor);
     const calls = listen(runtime);
     runtime.set([first]);
@@ -72,20 +73,20 @@ describe("EdgelessSelectionRuntime", () => {
     runtime.set([first]);
     expect(runtime.isSelected(first)).toBe(true);
     expect(calls).toHaveLength(3);
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("clear is a no-op when selection is already active and empty", async () => {
     const editor = await createTestCoreEditor({ mode: "edgeless" });
-    const editorView = createReactEditor({ editor });
-    const runtime = new EdgelessSelectionRuntime(editorView);
+    const reactPanel = createReactEditor({ editor });
+    const runtime = new EdgelessSelectionRuntime(reactPanel);
     const calls = listen(runtime);
     runtime.clear();
     runtime.clear();
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual({ active: true, items: [] });
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

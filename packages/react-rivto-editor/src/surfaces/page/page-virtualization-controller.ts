@@ -9,7 +9,6 @@
  * @module
  */
 
-
 /** Page-local operations needed by commands that focus a currently unmounted root. */
 export interface PageVirtualizationController {
   /**
@@ -83,7 +82,10 @@ const PAGE_SURFACE_CLASS = "page-surface";
  * @param controller - Operations for mounting target roots.
  * @returns Cleanup that removes the registration.
  */
-export function registerPageVirtualizationController(root: HTMLElement, controller: PageVirtualizationController): () => void {
+export function registerPageVirtualizationController(
+  root: HTMLElement,
+  controller: PageVirtualizationController,
+): () => void {
   controllers.set(root, controller);
   return () => controllers.delete(root);
 }
@@ -96,7 +98,9 @@ export function registerPageVirtualizationController(root: HTMLElement, controll
  * borrowing the host page controller or selecting blocks from another model.
  * @returns Its page controller, or undefined for an unvirtualized or different document view.
  */
-export function getPageVirtualizationControllerForElement(root: HTMLElement): PageVirtualizationController | undefined {
+export function getPageVirtualizationControllerForElement(
+  root: HTMLElement,
+): PageVirtualizationController | undefined {
   const page = root.closest<HTMLElement>(`.${PAGE_SURFACE_CLASS}`) ?? root;
   return controllers.get(page);
 }

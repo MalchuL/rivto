@@ -1,6 +1,6 @@
 # `SlashCommandRegistry`
 
-`editorRuntime.slashCommands` хранит ordered contextual actions. Он React-owned: commands не persist и не входят в core `CommandRegistry`.
+`reactEditor.slashCommands` хранит ordered contextual actions. Он React-owned: commands не persist и не входят в core `CommandRegistry`.
 
 ## Properties
 
@@ -18,8 +18,8 @@ Command properties:
 - `id: string` stable identity;
 - `title: string` display label;
 - optional `group`, `keywords`;
-- optional `isAvailable({ blockId, editorView })`;
-- `execute({ blockId, editorView }): void`.
+- optional `isAvailable({ blockId, panel })`;
+- `execute({ blockId, panel }): void`.
 
 ## Остальные methods
 
@@ -29,14 +29,14 @@ Command properties:
 - **Возвращает:** `boolean`.
 - **Исключения:** throws после destroyed runtime; missing ID возвращает false.
 
-### `editorView.slashCommands.getAll(context)`
+### `reactPanel.slashCommands.getAll(context)`
 
 - **Аргументы:** `{ blockId: string }`; локальный менеджер подставляет своё отображение.
 - Registry `runtime.slashCommands.getAll()` не принимает контекст и возвращает все определения; `get(id)` возвращает определение либо undefined.
 - **Возвращает:** available commands в declaration order.
 - **Исключения:** errors `isAvailable` predicate.
 
-### `editorView.slashCommands.execute(id, context)`
+### `reactPanel.slashCommands.execute(id, context)`
 
 - **Аргументы:** ID и `{ blockId }`; локальный менеджер подставляет своё отображение.
 - У общего registry метода execute нет. Register/delete доступны только через runtime.
@@ -54,10 +54,10 @@ Availability проверяется повторно непосредствен�
 
 ## Связи с другими managers
 
-`editorRuntime.blockTypes.register()` может атомарно добавить type-conversion slash command. При rollback/dispose renderer, definition и command удаляются вместе. `slashCommandExtension()` монтирует menu UI и регистрирует generic list/duplicate/delete/collapse actions.
+`reactEditor.blockTypes.register()` может атомарно добавить type-conversion slash command. При rollback/dispose renderer, definition и command удаляются вместе. `slashCommandExtension()` монтирует menu UI и регистрирует generic list/duplicate/delete/collapse actions.
 
 ## Modes
 
 Registry общий для page и edgeless. Context всегда block-local, поэтому slash menu открывается внутри editable block как на page, так и внутри edgeless card. Canvas object selection без active text block сама по себе не создаёт slash context.
 
-Mode-specific command реализуется через `isAvailable`, читающий `editorView.events.getSurfaceType()` для отображаемого view или `editorRuntime.mode.get()` для режима документа, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.
+Mode-specific command реализуется через `isAvailable`, читающий `reactPanel.events.getSurfaceType()` для отображаемого view или `reactPanel.mode.get()` для выбранного режима панели, либо отдельный mounted UI. Manager автоматически по mode commands не фильтрует.

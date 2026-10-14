@@ -10,11 +10,22 @@
  * @returns The operation's result if it completes before cancellation.
  * @throws The operation's error, or the signal's reason if already aborted or cancelled while waiting.
  */
-export async function waitWithAbort<Result>(pending: Promise<Result>, signal?: AbortSignal): Promise<Result> {
-  if (!signal) return pending;
+export async function waitWithAbort<Result>(
+  pending: Promise<Result>,
+  signal?: AbortSignal,
+): Promise<Result> {
+  if (!signal) {
+    return pending;
+  }
   signal.throwIfAborted();
   let onAbort!: () => void;
-  const cancelled = new Promise<never>((_resolve, reject) => { onAbort = () => reject(signal.reason); signal.addEventListener("abort", onAbort, { once: true }); });
-  try { return await Promise.race([pending, cancelled]); }
-  finally { signal.removeEventListener("abort", onAbort); }
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([pending, cancelled]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 }

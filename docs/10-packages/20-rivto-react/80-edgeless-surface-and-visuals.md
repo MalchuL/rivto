@@ -1,115 +1,92 @@
-# Edgeless surface и visual objects
+# Edgeless: регистрации элементов и API панели
 
-## Базовая edgeless surface
+`ReactEditor.elementTypes` регистрирует типы элементов. `PanelAPI.elements` читает и изменяет элементы в границах `rootElementId`. `useEdgelessOperations()` создаёт операции, которые выполняют действия над текущим canvas-выделением и выбирает инструмент. Расширение устанавливает возможности; отдельного объекта с методами `createRectangle`/`createSticker` больше нет.
 
-Canvas extensions подключаются отдельно от `standardPreset()`:
+## Подключение
 
 ```ts
-extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()]
+extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset({
+  visuals: { toolbar: true, orphanConnectors: "detach" },
+})]
 ```
 
-Surface выбирается локальным React state:
+Preset устанавливает поверхность, выделение, Moveable, удаление, клавиатурное перемещение, встроенные фигуры и их toolbar. `visuals.toolbar: false` скрывает стандартный UI; API и регистрации остаются. Для собственного состава доступны отдельные extensions, включая `edgelessVisualsExtension`, которая возвращает обычное расширение без imperative API. Не устанавливайте её повторно вместе с полным preset.
 
 ```tsx
-const [canvas, setCanvas] = useState(false);
-<EditorView runtime={editorRuntime}>
-  <button onClick={() => setCanvas(!canvas)}>Switch surface</button>
-  {canvas ? <EdgelessSurface /> : <PageSurface />}
-</EditorView>
+<EditorPanel editor={reactEditor} rootElementId={containerId}>
+  <EdgelessSurface />
+</EditorPanel>
 ```
 
-Root blocks проецируются в first-class elements type `"block"`. Один block card может содержать range соседних root blocks; separator partitions ranges. Frame и z-index сохраняются в core elements snapshot.
+Без `rootElementId` отображается всё дерево элементов. Block-корень независим от element-корня. Переключение Page/Edgeless остаётся выбором поверхности в JSX; состояние режима принадлежит React-панели. Root blocks проецируются в элементы `block`; один card может содержать диапазон соседних блоков. `group` сохраняет структурные правила дерева.
 
-### `EdgelessSurfaceOptions`
+## Пользовательский элемент
 
-- **`snapping?: EdgelessSnappingStore`:** host-owned observable settings.
-- **`avoidBlockElementOverlap?: boolean`:** default `true` для новых cards.
-- **`blockElementWidth?: number`:** new card width; default page width `720`.
-
-### `EdgelessSnappingStore`
-
-`constructor(initial?)` принимает partial `{ snapToGrid; alignObjects }`, defaults оба `true`.
-
-- `getSnapshot()` → current stable `EdgelessSnappingSnapshot`; не throws.
-- `subscribe(listener)` → unsubscribe; listener errors propagate при set.
-- `set(patch)` → `void`; одинаковое effective state не уведомляет.
-
-Store допускает несколько distinct listeners, не заменяя предыдущие. Одинаковая function reference хранится в `Set` один раз; returned cleanup удаляет её и безопасен повторно. Immediate callback отсутствует: external-store consumer отдельно вызывает `getSnapshot()`. Один effective `set()` вызывает каждый listener один раз.
-
-Persistence этих UI preferences принадлежит host и не входит в document snapshot.
-
-### `EdgelessSelectionRuntime.subscribe(listener)`
-
-Runtime предоставляет один local canvas-selection stream. Можно подписать несколько distinct callbacks; новая подписка не override-ит старые. Одинаковая function reference имеет одну effective registration, unsubscribe idempotent, immediate callback отсутствует. После notification snapshot читается через `snapshot()`/`get()`. `destroy()` очищает всех listeners.
-
-### `EdgelessVisualController.subscribe(listener)`
-
-Controller предоставляет один visual/tool revision stream для toolbar и visual layer. Несколько distinct listeners сосуществуют; одинаковая function reference deduplicate-ится `Set`. Returned disposer удаляет exact function и безопасен повторно. Initial notification отсутствует: consumer читает `getRevision()` и соответствующие getters. Document updates и effective tool/default/preview changes вызывают stream; `destroy()` очищает listeners.
-
-## Visual objects extension
-
-Shapes/text/stickers/drawings/connectors подключаются отдельно:
-
-```ts
-const visuals = edgelessVisualsExtension({
-  toolbar: true,
-  orphanConnectors: "detach",
-  fonts: [{ label: "Editorial", fontFamily: "Georgia, serif" }],
-  stickers: [{ id: "mint", label: "Mint", fill: "#d3f9d8" }],
-});
-
-const editorRuntime = createEditorRuntime({
-  editor,
-  extensions: [standardPreset(), ...edgelessPreset(), visuals],
+```tsx
+const dispose = reactEditor.elementTypes.register({
+  definition: {
+    type: "badge",
+    defaults: { title: "Badge" },
+    validate(props) {
+      if (typeof props.title !== "string") throw new Error("Invalid badge title");
+      return props;
+    },
+  },
+  render: ({ element }) => <div>{String(element.props.title)}</div>,
+  creation: {
+    title: "Badge",
+    create: () => ({ type: "badge" }),
+  },
+  properties: ({ elements, reactPanel }) => <button onClick={() =>
+    reactPanel.elements.updateElements(elements.map(element => ({
+      id: element.id, patch: { props: { title: "Updated" } },
+    })))
+  }>Rename selection</button>,
 });
 ```
 
-`EdgelessVisualsOptions`: `fonts`, `stickers`, `orphanConnectors: "detach" | "delete"`, `toolbar?: boolean`.
+Регистрация атомарно устанавливает core-определение, React-рендерер и необязательные `behavior`, `clipboard`, `creation`, `properties`. Конфликт типа или converter вызывает исключение и откатывает установленные части. Disposer идемпотентен и автоматически принадлежит extension lifecycle. Удаление регистрации не удаляет данные; неизвестный тип отображается fallback-сообщением. Если удалённый тип был активным инструментом создания, включается Select.
 
-## Creation API
+`definition.defaults` и `validate` применяются при создании и изменении через core element pipeline, включая вложенное создание и пакетные updates. Регистрация не переписывает ранее загруженные данные. Неизвестные типы допускаются core и сохраняют props.
 
-Каждый method возвращает stable element ID и throws, если extension ещё не установлена либо payload invalid:
+`behavior.resize(element, frame)` возвращает изменения props, связанные с новым размером: например, масштабирование точек drawing. Он применяется общим core-путём, включая прямой `panel.elements.updateElement`. `behavior.create(input, panel)` может подготовить геометрию интерактивного создания в границах core-панели. Встроенные коннекторы используют его для расчёта frame по концам. Итоговый input проходит core-валидацию.
 
-- `create(payload: CreateVisualPayload): string`;
-- `createSticker(payload?): string`;
-- `createRectangle(payload?): string`;
-- `createEllipse(payload?): string`;
-- `createText(payload?): string`;
-- `createDrawing({ frame, points, ... }): string`;
-- `createConnector({ source, target, ... }): string`.
+`clipboard` использует существующий `ElementClipboardConverter`: defaults, правила свойств и восстановление ссылок не дублируются в UI. `creation` добавляет кнопку в стандартный toolbar и использует существующий click/drag placement со snapping. Фабрика обязана вернуть свой зарегистрированный тип. `properties` получает выбранные элементы одного типа и React-панель; изменения проходят через ограниченные операции.
 
-```ts
-const rectangle = visuals.createRectangle({
-  frame: { x: 60, y: 60, width: 160, height: 100 },
-  fill: "#d0ebff",
-  stroke: "#1c7ed6",
-  text: "Node",
+Общая оболочка элемента отвечает за координаты, DOM identity, transform-preview, выделение и slots. Рендерер отвечает за содержимое. Встроенные фигуры используют тот же реестр; пользовательскому типу не требуется изменять код поверхности или встроенных фигур.
+
+## Операции
+
+```tsx
+const panel = usePanel();
+const operations = useEdgelessOperations();
+
+const element = operations.createElement({
+  type: "rectangle",
+  frame: { x: 10, y: 20, width: 160, height: 120 },
+  zIndex: 0,
+  props: { fill: "#eeeaff" },
 });
+panel.elements.updateElement(element.id, { props: { fill: "#ffffff" } });
+operations.align("left");
 ```
 
-## Selection и transformations
+`createElement` возвращает полный созданный node и выбирает его. Незарегистрированный тип или невалидные свойства вызывают исключение. Без frame применяется стандартный frame `{ x: 120, y: 120, width: 160, height: 120 }`; без zIndex выбирается слой над текущими элементами панели.
 
-- `getSelection()` → detached `{ active: boolean; items: readonly EdgelessSelectionRef[] }`.
-- `select(items)` → `void`; заменяет selection, throws для missing/non-string element ID.
-- `clearSelection()` → `void`.
-- `duplicateSelection()` → IDs копий.
-- `deleteSelection()` → `void`.
-- `move(dx, dy)` → `void`.
-- `resize(width, height)` → `void`; требует positive geometry.
-- `group()` → group ID; throws, если выбрано меньше двух objects или они не имеют общего parent.
-- `ungroup()` → `void`.
-- `align("left" | "center" | "right" | "top" | "middle" | "bottom")` → `void`.
-- `distribute("horizontal" | "vertical")` → `void`; meaningful для трёх и более objects.
-- `reorder("front" | "forward" | "backward" | "back")` → `void`.
-- `setTool(tool | "select")` → `void`.
-- `update({ id, patch })` → `void`; ID/kind сохраняются.
+`move(dx, dy)` перемещает выбранные элементы в единицах canvas. `resize(width, height)` масштабирует внешние границы выделения, требует положительных конечных размеров. `group()` возвращает созданную группу и требует совместимого набора соседей; `ungroup()` поднимает детей выбранных групп. `align`, `distribute` и `reorder` меняют геометрию/слой выбранных объектов; распределение требует не менее трёх объектов. `duplicateSelection()` возвращает новые nodes и использует clipboard converters. Многоэлементные изменения проходят через общую history batch.
 
-Все mutation errors из validation/core element manager передаются caller. Transformations используют one core batch/history boundary там, где меняют несколько elements.
+Выделение и clipboard доступны через `reactPanel.selection` и `reactPanel.clipboard`; дополнительную копию этих API edgeless не создаёт. Именованные команды остаются доступны через `DocumentEditor.commands`; документные вызовы фиксированы на документе, panel-вызовы передают получателя явно.
 
-## Connectors и groups
+## Состояние и lifecycle
 
-`ConnectorEndpoint` может ссылаться на element ID с relative anchor и fallback position. При удалении target extension либо detaches endpoint, либо удаляет connector по `orphanConnectors` policy. Groups — first-class elements со ссылками на child selection refs; normalization удаляет stale membership и предотвращает invalid nesting.
+Выбранный инструмент, defaults создания и временные превью хранятся в edgeless-представлении через `useEdgelessOperations()`. При переходе в page оно размонтируется, а при возвращении создаётся новое состояние. Отдельные вызовы хука создают независимые операции; дочерним компонентам одного canvas передаются общие operations. Реестр типов и стандартные свойства определений остаются общими; настройки панели не изменяют их. Команда `edgeless.tool.set` требует явного аргумента `{ operations, payload }`. Другие canvas-команды принимают тот же аргумент для работы с локальными defaults или `{ reactPanel, payload }` для ограниченных панелью операций со свежими defaults. `getTool()` возвращает текущий инструмент, `setTool("select")` включает выделение; пользовательский инструмент выбирается через `{ tool: "element", type: "badge" }` и требует регистрации `creation`.
 
-## Demo reference
+Жест, временная геометрия и property preview принадлежат конкретной React-панели. Размонтирование отменяет локальные previews; transform и drawing/place жесты также отменяются при деактивации панели. Moveable вычисляет drag/resize/rotation; редактор сохраняет геометрию, undo и привязки. Нормализация коннекторов устанавливается один раз для документа независимо от количества панелей. `orphanConnectors` выбирает detach или delete при исчезновении конца.
 
-`demo/src/App.tsx` создаёт rectangle, ellipse, sticker, drawing, free text, connectors и nested group через тот же public imperative object `visuals`. Это хороший seed pattern: extension instance создаётся до `createEditorRuntime()`, передаётся в extensions, затем используется после setup.
+Повторное монтирование в StrictMode создаёт новые подписки и браузерные привязки, сохраняя core-панель и общий редактор. Панель никогда не уничтожает переданный DocumentEditor.
+
+## Настройки поверхности
+
+`EdgelessSurfaceOptions` сохраняет `snapping`, `avoidBlockElementOverlap` (default true) и `blockElementWidth` (default 720). `EdgelessSnappingStore` хранит host-owned `{ snapToGrid, alignObjects }`, оба defaults true. `getSnapshot()` стабилен до изменения; `subscribe` допускает несколько callbacks и возвращает идемпотентную отписку; `set` уведомляет только при effective change. UI preferences не входят в document snapshot.
+
+Полный пример пользовательской регистрации: `demo/src/ElementRegistrationTest.tsx`, маршрут `?elementRegistration=1`. Он демонстрирует две независимые element-панели, общее состояние инструмента, создание, property editor, resize, clipboard, undo и повторное монтирование.

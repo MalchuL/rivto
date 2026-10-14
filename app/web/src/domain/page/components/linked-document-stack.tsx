@@ -18,9 +18,7 @@ export function LinkedDocumentStack({
   emptyMessage?: string;
 }) {
   if (items.length === 0) {
-    return (
-      <p className="px-8 py-10 text-sm text-muted-foreground">{emptyMessage}</p>
-    );
+    return <p className="px-8 py-10 text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (

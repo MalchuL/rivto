@@ -5,8 +5,8 @@
 ## Место в архитектуре
 
 ```text
-createRivtoEditor(options)
-  -> EditorRuntime
+createDocumentEditor(options)
+  -> ReactEditor
     -> one supplied DocumentModel
     -> BlockManager + BlockRegistryManager
     -> ElementManager + LinkManager
@@ -23,7 +23,7 @@ Editor не владеет rendering и DOM. React-пакет подписыва
 ```ts
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
 const document = await storage.create("document-id");
-const editor = createRivtoEditor({ document });
+const editor = createDocumentEditor({ document });
 
 editor.blockRegistry.defineBlock({
   type: "paragraph",
@@ -66,6 +66,6 @@ Persisted в CRDT:
 
 ## Владение lifecycle
 
-`EditorRuntime.destroy()` уничтожает только runtime managers, registry, listeners и commands. Storage принадлежит host; views independently acquire документы, включая embeds и inactive tabs. Последний release уничтожает live document и отключает его providers. После завершения `editorStorage.destroy()` host вызывает `storage.destroy()` для cleanup workspace registry; storage не хранит editor consumers.
+`ReactEditor.destroy()` уничтожает только runtime managers, registry, listeners и commands. Storage принадлежит host; views independently acquire документы, включая embeds и inactive tabs. Последний release уничтожает live document и отключает его providers. После завершения `editorStorage.destroy()` host вызывает `storage.destroy()` для cleanup workspace registry; storage не хранит editor consumers.
 
 Вложенные страницы описывают каждый interface, property, method, argument, return value, exception, built-in command и interaction с остальными модулями.

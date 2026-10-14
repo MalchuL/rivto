@@ -37,12 +37,17 @@ export function rootsInRect(
   roots: readonly EdgelessObjectHit[],
   selection: EdgelessRect,
 ): string[] {
-  return roots.filter(({ rect }) => !(
-    rect.right < selection.left ||
-    rect.left > selection.right ||
-    rect.bottom < selection.top ||
-    rect.top > selection.bottom
-  )).map(({ id }) => id);
+  return roots
+    .filter(
+      ({ rect }) =>
+        !(
+          rect.right < selection.left ||
+          rect.left > selection.right ||
+          rect.bottom < selection.top ||
+          rect.top > selection.bottom
+        ),
+    )
+    .map(({ id }) => id);
 }
 
 /**
@@ -57,9 +62,13 @@ export function rootsInRect(
 export function groupParentByChild(elements: readonly GroupParentRecord[]): Map<string, string> {
   const parentByChild = new Map<string, string>();
   for (const element of elements) {
-    if (element.type !== "group" || !Array.isArray(element.childIds)) continue;
+    if (element.type !== "group" || !Array.isArray(element.childIds)) {
+      continue;
+    }
     for (const child of element.childIds) {
-      if (typeof child !== "string" || !child || parentByChild.has(child)) continue;
+      if (typeof child !== "string" || !child || parentByChild.has(child)) {
+        continue;
+      }
       parentByChild.set(child, element.id);
     }
   }
@@ -76,7 +85,11 @@ export function groupParentByChild(elements: readonly GroupParentRecord[]): Map<
 export function outermostGroupId(id: string, parentByChild: ReadonlyMap<string, string>): string {
   const seen = new Set<string>();
   let current = id;
-  for (let parent = parentByChild.get(current); parent && !seen.has(current); parent = parentByChild.get(current)) {
+  for (
+    let parent = parentByChild.get(current);
+    parent && !seen.has(current);
+    parent = parentByChild.get(current)
+  ) {
     seen.add(current);
     current = parent;
   }

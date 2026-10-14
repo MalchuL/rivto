@@ -4,7 +4,7 @@ export type {
   CanonicalDropPlacement,
   DropBlock,
   DropMoveTarget,
-  ResolvedDropPlacementOptions
+  ResolvedDropPlacementOptions,
 } from "./types";
 export {
   dropMoveTarget,
@@ -13,5 +13,5 @@ export {
   resolveBeforeDropPlacement,
   resolveBlockDropPlacementOptions,
   resolveInsideDropPlacement,
-  resolveSiblingAfterDropPlacement
+  resolveSiblingAfterDropPlacement,
 } from "./utils";

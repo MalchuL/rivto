@@ -4,8 +4,8 @@
 
 Мы разрабатываем frontend runtime для блочного редактора с двумя режимами представления одного и того же документа:
 
-* **Block Mode** — линейный outliner/document editor, где блоки идут в иерархическом порядке.
-* **Edgeless Mode** — canvas-like режим, где часть блоков может свободно позиционироваться, связываться, группироваться и рендериться как объекты на бесконечной доске.
+- **Block Mode** — линейный outliner/document editor, где блоки идут в иерархическом порядке.
+- **Edgeless Mode** — canvas-like режим, где часть блоков может свободно позиционироваться, связываться, группироваться и рендериться как объекты на бесконечной доске.
 
 `DocumentModel` уже реализована и является source of truth для данных документа. Новый runtime должен предоставить слой для регистрации блоков, команд, плагинов, selection, drag-and-drop, slash menu, toolbar/side menu/actions, стилизации и mode-aware rendering.
 
@@ -21,32 +21,33 @@
 2. Поддержать два режима отображения документа: `block` и `edgeless`.
 3. Сделать selection первым классом системы:
 
-   * text selection;
-   * block selection;
-   * multi-block selection;
-   * edgeless object selection.
+   - text selection;
+   - block selection;
+   - multi-block selection;
+   - edgeless object selection.
+
 4. Реализовать drag-and-drop:
 
-   * reorder блоков в Block Mode;
-   * move/resize blocks в Edgeless Mode;
-   * перенос блоков между контейнерами;
-   * вставка внешнего контента через drop.
+   - reorder блоков в Block Mode;
+   - move/resize blocks в Edgeless Mode;
+   - перенос блоков между контейнерами;
+   - вставка внешнего контента через drop.
+
 5. Реализовать slash menu как command-driven систему.
 6. Сделать plugin architecture для расширения поведения без переписывания core.
 7. Сделать command registry, через который работают toolbar, slash menu, keyboard shortcuts, AI actions и plugins.
 8. Сделать registry для toolbar / side menu / block actions.
 9. Поддержать кастомизацию поведения блока:
-   * enter/backspace handling;
-   * paste/drop handling;
-   * transform block;
-   * rendering only in specific modes.
+   - enter/backspace handling;
+   - paste/drop handling;
+   - transform block;
+   - rendering only in specific modes.
 10. Подготовить архитектуру под AI-фичи, которые взаимодействуют с `DocumentModel` напрямую.
 11. Используй зрелые блочные редакторы как продуктовый ориентир, не копируя их архитектуру целиком.
 12. Учитывай при реализации, что AI может взаимодействовать с `DocumentModel`, поэтому код не должен игнорировать обновления через CRDT
 13. Это должен быть WYSIWYG, т.е. мы можем редактировать текст в блоке, а рендеринг происходить, когда мы не редактируем
+
 ---
-
-
 
 ## 4. Core Principle
 
@@ -83,7 +84,7 @@ UI Layer
 ┌──────────────────────────────▼──────────────────────────────┐
 │                      Editor Runtime                         │
 │                                                             │
-│  EditorContext                                               │
+│  ReactPanelContext                                           │
 │  BlockRegistry                                               │
 │  CommandRegistry                                             │
 │  PluginManager                                               │
@@ -122,19 +123,19 @@ UI Layer
 
 Примеры:
 
-* paragraph;
-* heading;
-* todo;
-* list item;
-* image;
-* code block;
-* database/table;
-* embed;
-* frame;
-* whiteboard shape;
-* connector;
-* note card;
-* AI-generated block.
+- paragraph;
+- heading;
+- todo;
+- list item;
+- image;
+- code block;
+- database/table;
+- embed;
+- frame;
+- whiteboard shape;
+- connector;
+- note card;
+- AI-generated block.
 
 Блок может быть:
 
@@ -160,12 +161,12 @@ Block Mode — линейное представление документа.
 
 Характеристики:
 
-* блоки рендерятся в порядке дерева;
-* основной interaction model — caret, text editing, indent/outdent, reorder;
-* drag-and-drop меняет положение блока в иерархии;
-* slash menu вставляет блоки в текущую позицию;
-* side menu привязан к hovered/selected block;
-* multi-block selection работает по order traversal документа.
+- блоки рендерятся в порядке дерева;
+- основной interaction model — caret, text editing, indent/outdent, reorder;
+- drag-and-drop меняет положение блока в иерархии;
+- slash menu вставляет блоки в текущую позицию;
+- side menu привязан к hovered/selected block;
+- multi-block selection работает по order traversal документа.
 
 ---
 
@@ -175,13 +176,13 @@ Edgeless Mode — canvas-представление.
 
 Характеристики:
 
-* блоки могут иметь layout metadata: `x`, `y`, `width`, `height`, `rotation`, `zIndex`;
-* часть блоков доступна только в Edgeless Mode;
-* часть обычных блоков может иметь alternative rendering в Edgeless Mode;
-* selection похож на canvas/object selection;
-* drag-and-drop перемещает объекты, а не меняет порядок в документе;
-* возможны frame, group, connector, sticky note, drawing blocks;
-* viewport, zoom, pan являются частью editor state, но не DocumentModel, кроме сохранённых layout props.
+- блоки могут иметь layout metadata: `x`, `y`, `width`, `height`, `rotation`, `zIndex`;
+- часть блоков доступна только в Edgeless Mode;
+- часть обычных блоков может иметь alternative rendering в Edgeless Mode;
+- selection похож на canvas/object selection;
+- drag-and-drop перемещает объекты, а не меняет порядок в документе;
+- возможны frame, group, connector, sticky note, drawing blocks;
+- viewport, zoom, pan являются частью editor state, но не DocumentModel, кроме сохранённых layout props.
 
 ---
 
@@ -199,7 +200,9 @@ defineBlock({
   },
 });
 ```
+
 Для ситуации когда блок доступен в обоих режимах, можно использовать:
+
 ```ts
 defineBlock({
   type: 'paragraph',
@@ -230,20 +233,20 @@ defineBlock({
 
 Нужен DSL для определения блока, который регистрирует:
 
-* model schema;
-* props;
-* supported modes;
-* renderers;
-* commands;
-* slash menu metadata;
-* toolbar actions;
-* side menu actions;
-* drag behavior;
-* selection behavior;
-* keyboard behavior;
-* paste/drop behavior;
-* AI capabilities;
-* serialization hooks.
+- model schema;
+- props;
+- supported modes;
+- renderers;
+- commands;
+- slash menu metadata;
+- toolbar actions;
+- side menu actions;
+- drag behavior;
+- selection behavior;
+- keyboard behavior;
+- paste/drop behavior;
+- AI capabilities;
+- serialization hooks.
 
 ### 7.2 Proposed API
 
@@ -404,7 +407,7 @@ Rendering должен:
 Block Mode рендерит дерево документа.
 
 ```tsx
-function BlockModeEditor({ editor }: { editor: EditorRuntime }) {
+function BlockModeEditor({ editor }: { editor: ReactEditor }) {
   const rootBlocks = editor.blocks.getBlocks();
 
   return (
@@ -447,7 +450,7 @@ function BlockTreeNode({ editor, blockId }) {
 Edgeless Mode рендерит canvas viewport.
 
 ```tsx
-function EdgelessEditor({ editor }: { editor: EditorRuntime }) {
+function EdgelessEditor({ editor }: { editor: ReactEditor }) {
   const viewport = useViewport(editor);
   const objects = useEdgelessObjects(editor);
 
@@ -519,12 +522,12 @@ if (!renderer) {
 
 ### 9.1 Runtime Responsibilities
 
-`EditorRuntime` — центральный объект редактора.
+`ReactEditor` — центральный объект редактора.
 
 Он должен содержать:
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModelAdapter;
 
   mode: ModeManager;
@@ -581,19 +584,19 @@ Commands — единый способ изменения документа и 
 
 Через commands должны работать:
 
-* slash menu;
-* toolbar;
-* side menu;
-* keyboard shortcuts;
-* drag-and-drop;
-* AI actions;
-* programmatic API.
+- slash menu;
+- toolbar;
+- side menu;
+- keyboard shortcuts;
+- drag-and-drop;
+- AI actions;
+- programmatic API.
 
 ### 10.2 Command Type
 
 ```ts
 type CommandContext = {
-  editor: EditorRuntime;
+  editor: ReactEditor;
   document: DocumentModelAdapter;
   selection: SelectionManager;
   mode: EditorMode;
@@ -721,11 +724,11 @@ type BlockSelection = {
 
 BlockSelection используется в обоих режимах для:
 
-* multi-select blocks;
-* copy/cut/delete;
-* drag selected blocks;
-* toolbar over selection;
-* AI actions over selected blocks.
+- multi-select blocks;
+- copy/cut/delete;
+- drag selected blocks;
+- toolbar over selection;
+- AI actions over selected blocks.
 
 В edgeless mode тот же BlockSelection может содержать root или nested blocks.
 Canvas move/resize вычисляет owning roots из выбранных IDs, не меняя selection.
@@ -754,10 +757,10 @@ type SelectionManager = {
 
 Selection visual state должен рендериться через:
 
-* `data-block-selected` attributes;
-* overlay layer;
-* decorations;
-* wrapper state.
+- `data-block-selected` attributes;
+- overlay layer;
+- decorations;
+- wrapper state.
 
 Block Mode:
 
@@ -804,11 +807,11 @@ DnD должен поддерживать разные стратегии в р�
 
 Block Mode drag-and-drop означает:
 
-* reorder block before/after another block;
-* move block into another block;
-* drag multiple selected blocks;
-* drag from side handle;
-* show drop indicator.
+- reorder block before/after another block;
+- move block into another block;
+- drag multiple selected blocks;
+- drag from side handle;
+- show drop indicator.
 
 ```ts
 type BlockDropTarget = {
@@ -822,11 +825,11 @@ type BlockDropTarget = {
 
 Edgeless DnD означает:
 
-* move object on canvas;
-* resize object;
-* drop external content into viewport;
-* convert block into edgeless object;
-* drag selected group.
+- move object on canvas;
+- resize object;
+- drop external content into viewport;
+- convert block into edgeless object;
+- drag selected group.
 
 ```ts
 type EdgelessDropTarget = {
@@ -930,13 +933,13 @@ type SlashMenuItem = {
 
 Responsibilities:
 
-* detect `/`;
-* build query;
-* get available items from registry;
-* filter by query/mode/context;
-* render popup;
-* execute selected command;
-* remove typed slash query.
+- detect `/`;
+- build query;
+- get available items from registry;
+- filter by query/mode/context;
+- render popup;
+- execute selected command;
+- remove typed slash query.
 
 ```txt
 User types "/cal"
@@ -953,7 +956,7 @@ User types "/cal"
 
 ```ts
 type SlashMenuContext = {
-  editor: EditorRuntime;
+  editor: ReactEditor;
   mode: EditorMode;
   currentBlockId?: BlockId;
   selection: EditorSelection;
@@ -985,15 +988,15 @@ Plugins должны расширять editor runtime без изменения
 
 Плагины должны уметь:
 
-* регистрировать commands;
-* регистрировать UI contributions;
-* слушать document changes;
-* слушать selection changes;
-* обрабатывать keyboard/pointer events;
-* добавлять overlays;
-* добавлять slash items;
-* добавлять toolbar actions;
-* добавлять block behavior.
+- регистрировать commands;
+- регистрировать UI contributions;
+- слушать document changes;
+- слушать selection changes;
+- обрабатывать keyboard/pointer events;
+- добавлять overlays;
+- добавлять slash items;
+- добавлять toolbar actions;
+- добавлять block behavior.
 
 ### 14.2 Plugin API
 
@@ -1017,9 +1020,9 @@ type EditorPlugin = {
 
   overlays?: OverlayContribution[];
 
-  onDocumentChange?: (event: DocumentChangeEvent, ctx: EditorRuntime) => void;
+  onDocumentChange?: (event: DocumentChangeEvent, ctx: ReactEditor) => void;
 
-  onSelectionChange?: (selection: EditorSelection, ctx: EditorRuntime) => void;
+  onSelectionChange?: (selection: EditorSelection, ctx: ReactEditor) => void;
 };
 ```
 
@@ -1159,12 +1162,12 @@ AI actions should be just actions:
 
 Styling must support:
 
-* default theme;
-* dark/light theme;
-* custom block styles;
-* data attributes for state;
-* CSS variables;
-* component overrides.
+- default theme;
+- dark/light theme;
+- custom block styles;
+- data attributes for state;
+- CSS variables;
+- component overrides.
 
 ### 16.2 DOM Convention
 
@@ -1358,9 +1361,9 @@ type BlockLayout = {
 
 Recommendation:
 
-* content props live in block props;
-* visual layout lives in layout storage;
-* selection/hover/drag state lives in editor runtime state.
+- content props live in block props;
+- visual layout lives in layout storage;
+- selection/hover/drag state lives in editor runtime state.
 
 ---
 
@@ -1490,12 +1493,12 @@ This requires AI output to include layout suggestions:
 
 Copy/paste should support:
 
-* internal block JSON;
-* plain text;
-* markdown;
-* HTML;
-* image/file drops;
-* edgeless object copy.
+- internal block JSON;
+- plain text;
+- markdown;
+- HTML;
+- image/file drops;
+- edgeless object copy.
 
 ### 20.2 Internal Clipboard Format
 
@@ -1660,7 +1663,7 @@ document metadata
 
 ### 23.2 Runtime State
 
-Stored in `EditorRuntime`:
+Stored in `ReactEditor`:
 
 ```txt
 current mode
@@ -1730,54 +1733,54 @@ edgeless connector
 
 ### 25.1 Block Definition
 
-* Developer can define a new block with `defineBlock`.
-* The block appears in Block Mode if it supports `block`.
-* The block appears in Edgeless Mode if it supports `edgeless`.
-* The block can contribute slash menu items.
-* The block can contribute toolbar/side menu actions.
-* The block can define custom behavior for enter/backspace/paste/drop.
+- Developer can define a new block with `defineBlock`.
+- The block appears in Block Mode if it supports `block`.
+- The block appears in Edgeless Mode if it supports `edgeless`.
+- The block can contribute slash menu items.
+- The block can contribute toolbar/side menu actions.
+- The block can define custom behavior for enter/backspace/paste/drop.
 
 ### 25.2 Selection
 
-* User can select one block.
-* User can select multiple blocks.
-* Selected blocks are visually highlighted.
-* User can delete selected blocks.
-* User can copy selected blocks.
-* Edgeless objects can be selected with click.
-* Multiple edgeless objects can be selected with marquee or shift-click.
+- User can select one block.
+- User can select multiple blocks.
+- Selected blocks are visually highlighted.
+- User can delete selected blocks.
+- User can copy selected blocks.
+- Edgeless objects can be selected with click.
+- Multiple edgeless objects can be selected with marquee or shift-click.
 
 ### 25.3 Drag-and-Drop
 
-* User can drag block by handle in Block Mode.
-* User sees drop indicator.
-* User can reorder selected blocks.
-* User can drag edgeless object on canvas.
-* Drag operations are undoable.
-* Drag operations update `DocumentModel`, not React state only.
+- User can drag block by handle in Block Mode.
+- User sees drop indicator.
+- User can reorder selected blocks.
+- User can drag edgeless object on canvas.
+- Drag operations are undoable.
+- Drag operations update `DocumentModel`, not React state only.
 
 ### 25.4 Slash Menu
 
-* Typing `/` opens slash menu.
-* Slash items are collected from block registry and plugins.
-* Slash menu filters by query.
-* Selecting item executes command.
-* AI actions can be added as slash items.
+- Typing `/` opens slash menu.
+- Slash items are collected from block registry and plugins.
+- Slash menu filters by query.
+- Selecting item executes command.
+- AI actions can be added as slash items.
 
 ### 25.5 Plugins
 
-* Plugin can register command.
-* Plugin can register slash item.
-* Plugin can register toolbar action.
-* Plugin can listen to selection changes.
-* Plugin can be active only in selected modes.
+- Plugin can register command.
+- Plugin can register slash item.
+- Plugin can register toolbar action.
+- Plugin can listen to selection changes.
+- Plugin can be active only in selected modes.
 
 ### 25.6 AI
 
-* AI action can read selected blocks from `DocumentModel`.
-* AI action can return document patch.
-* Patch can insert/update/delete/move blocks.
-* AI-created blocks render through same block registry.
+- AI action can read selected blocks from `DocumentModel`.
+- AI action can return document patch.
+- Patch can insert/update/delete/move blocks.
+- AI-created blocks render through same block registry.
 
 ---
 
@@ -1786,8 +1789,8 @@ edgeless connector
 ```txt
 src/editor/
   core/
-    EditorRuntime.ts
-    EditorContext.ts
+    ReactEditor.ts
+    ReactPanelContext.ts
     ModeManager.ts
     EventRouter.ts
 
@@ -1868,9 +1871,9 @@ If block components directly mutate DocumentModel, behavior becomes inconsistent
 
 Mitigation:
 
-* All mutations through commands.
-* Block views receive `editor` but use command API.
-* Lint rule/code review rule: no direct `document.updateBlock` inside random UI except command implementations.
+- All mutations through commands.
+- Block views receive `editor` but use command API.
+- Lint rule/code review rule: no direct `document.updateBlock` inside random UI except command implementations.
 
 ### 27.2 Risk: Edgeless Mode becomes a separate editor
 
@@ -1878,9 +1881,9 @@ If Edgeless Mode forks the model, sync between modes becomes painful.
 
 Mitigation:
 
-* Same DocumentModel.
-* Different renderer and plugins.
-* Layout stored as block layout metadata.
+- Same DocumentModel.
+- Different renderer and plugins.
+- Layout stored as block layout metadata.
 
 ### 27.3 Risk: Plugin order bugs
 
@@ -1888,9 +1891,9 @@ Selection, drag, slash menu and keyboard shortcuts can conflict.
 
 Mitigation:
 
-* Explicit event priority.
-* Plugin lifecycle.
-* Tests for event routing.
+- Explicit event priority.
+- Plugin lifecycle.
+- Tests for event routing.
 
 ### 27.4 Risk: AI bypasses validation
 
@@ -1898,9 +1901,9 @@ AI may generate invalid blocks.
 
 Mitigation:
 
-* AI returns `DocumentPatch`.
-* Patch is validated against BlockRegistry.
-* Invalid block types rejected or converted to fallback.
+- AI returns `DocumentPatch`.
+- Patch is validated against BlockRegistry.
+- Invalid block types rejected or converted to fallback.
 
 ### 27.5 Risk: Too much in `defineBlock`
 
@@ -1908,9 +1911,9 @@ If `defineBlock` becomes huge, blocks become hard to maintain.
 
 Mitigation:
 
-* Keep `defineBlock` declarative.
-* Complex behavior should be extracted into commands/plugins.
-* Block spec contributes metadata, not full global behavior.
+- Keep `defineBlock` declarative.
+- Complex behavior should be extracted into commands/plugins.
+- Block spec contributes metadata, not full global behavior.
 
 ---
 
@@ -1920,63 +1923,63 @@ Mitigation:
 
 Deliver:
 
-* `EditorRuntime`;
-* `DocumentModelAdapter`;
-* `BlockRegistry`;
-* `defineBlock`;
-* `CommandRegistry`;
-* basic Block Mode renderer.
+- `ReactEditor`;
+- `DocumentModelAdapter`;
+- `BlockRegistry`;
+- `defineBlock`;
+- `CommandRegistry`;
+- basic Block Mode renderer.
 
 ### Phase 2: Core Interactions
 
 Deliver:
 
-* `SelectionManager`;
-* `BlockSelection`;
-* side menu;
-* block toolbar;
-* keyboard shortcuts;
-* block commands.
+- `SelectionManager`;
+- `BlockSelection`;
+- side menu;
+- block toolbar;
+- keyboard shortcuts;
+- block commands.
 
 ### Phase 3: Slash Menu and Plugins
 
 Deliver:
 
-* `PluginManager`;
-* `SlashMenuPlugin`;
-* plugin contribution system;
-* slash items from blocks and plugins.
+- `PluginManager`;
+- `SlashMenuPlugin`;
+- plugin contribution system;
+- slash items from blocks and plugins.
 
 ### Phase 4: Drag-and-Drop
 
 Deliver:
 
-* `DragManager`;
-* Block Mode drag-and-drop;
-* drop indicator;
-* multi-block drag;
-* undoable move commands.
+- `DragManager`;
+- Block Mode drag-and-drop;
+- drop indicator;
+- multi-block drag;
+- undoable move commands.
 
 ### Phase 5: Edgeless Mode
 
 Deliver:
 
-* Edgeless renderer;
-* viewport/pan/zoom;
-* edgeless object wrappers;
-* edgeless selection;
-* edgeless drag/move;
-* mode switching.
+- Edgeless renderer;
+- viewport/pan/zoom;
+- edgeless object wrappers;
+- edgeless selection;
+- edgeless drag/move;
+- mode switching.
 
 ### Phase 6: AI-ready Integration
 
 Deliver:
 
-* AI capability metadata in block specs;
-* AI command namespace;
-* `AIDocumentPatch`;
-* patch validation;
-* example AI action: summarize selection into callout block.
+- AI capability metadata in block specs;
+- AI command namespace;
+- `AIDocumentPatch`;
+- patch validation;
+- example AI action: summarize selection into callout block.
 
 ---
 

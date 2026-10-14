@@ -9,5 +9,4 @@ export * from "./block-list-props-manager";
 export * from "./block-registry-manager";
 export * from "./element-manager";
 export * from "./mode-manager";
-
-export { ElementTree } from "./element-manager/element-tree";
+export * from "./element-registry";

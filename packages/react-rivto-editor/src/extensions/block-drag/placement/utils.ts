@@ -25,7 +25,7 @@ export type {
   DropBlockLocation,
   DropMoveTarget,
   InsideDropPlacement,
-  ResolvedDropPlacementOptions
+  ResolvedDropPlacementOptions,
 } from "./types";
 
 /**
@@ -39,10 +39,16 @@ export function excludeDropSubtrees(
   blocks: readonly DropBlock[],
   rootIds: ReadonlySet<string>,
 ): DropBlock[] {
-  return blocks.flatMap((block) => rootIds.has(block.id) ? [] : [{
-    id: block.id,
-    children: excludeDropSubtrees(block.children, rootIds),
-  }]);
+  return blocks.flatMap((block) =>
+    rootIds.has(block.id)
+      ? []
+      : [
+          {
+            id: block.id,
+            children: excludeDropSubtrees(block.children, rootIds),
+          },
+        ],
+  );
 }
 
 /**
@@ -85,10 +91,13 @@ function findBlockLocation(
   let result: DropBlockLocation | undefined;
   for (const block of blocks) {
     const blockPath = [...path, block];
-    result = block.id === targetId
-      ? { block, siblings: blocks, parentId, depth: path.length, path: blockPath }
-      : findBlockLocation(block.children, targetId, block.id, blockPath);
-    if (result) break;
+    result =
+      block.id === targetId
+        ? { block, siblings: blocks, parentId, depth: path.length, path: blockPath }
+        : findBlockLocation(block.children, targetId, block.id, blockPath);
+    if (result) {
+      break;
+    }
   }
   return result;
 }
@@ -105,7 +114,9 @@ export function resolveBeforeDropPlacement(
   blockId: string,
 ): BetweenDropPlacement | undefined {
   const location = findBlockLocation(blocks, blockId);
-  if (!location) return undefined;
+  if (!location) {
+    return undefined;
+  }
   const index = location.siblings.indexOf(location.block);
   return {
     kind: "between",
@@ -128,7 +139,9 @@ export function resolveSiblingAfterDropPlacement(
   blockId: string,
 ): BetweenDropPlacement | undefined {
   const location = findBlockLocation(blocks, blockId);
-  if (!location) return undefined;
+  if (!location) {
+    return undefined;
+  }
   const index = location.siblings.indexOf(location.block);
   return {
     kind: "between",
@@ -147,7 +160,9 @@ export function resolveSiblingAfterDropPlacement(
  */
 function minimumDropDepth(path: readonly DropBlock[]): number {
   let depth = path.length - 1;
-  while (depth > 0 && path[depth - 1]?.children.at(-1)?.id === path[depth]?.id) depth -= 1;
+  while (depth > 0 && path[depth - 1]?.children.at(-1)?.id === path[depth]?.id) {
+    depth -= 1;
+  }
   return depth;
 }
 
@@ -168,11 +183,16 @@ export function resolveAfterDropPlacement(
   depthOffset: number,
 ): BetweenDropPlacement | undefined {
   const location = findBlockLocation(blocks, blockId);
-  if (!location) return undefined;
+  if (!location) {
+    return undefined;
+  }
   const currentDepth = location.depth;
   const firstChild = location.block.children[0];
   const requestedDepth = firstChild ? currentDepth + 1 : currentDepth + depthOffset;
-  const depth = Math.max(minimumDropDepth(location.path), Math.min(currentDepth + 1, requestedDepth));
+  const depth = Math.max(
+    minimumDropDepth(location.path),
+    Math.min(currentDepth + 1, requestedDepth),
+  );
   if (depth > currentDepth) {
     return {
       kind: "between",
@@ -215,9 +235,15 @@ export function resolveInsideDropPlacement(parentId: string): InsideDropPlacemen
  * @returns Target and relationship accepted by core and cross-document moves.
  */
 export function dropMoveTarget(placement: CanonicalDropPlacement): DropMoveTarget {
-  if (placement.kind === "inside") return { targetId: placement.parentId, position: "inside" };
-  if (placement.nextId) return { targetId: placement.nextId, position: "before" };
-  if (placement.previousId) return { targetId: placement.previousId, position: "after" };
+  if (placement.kind === "inside") {
+    return { targetId: placement.parentId, position: "inside" };
+  }
+  if (placement.nextId) {
+    return { targetId: placement.nextId, position: "before" };
+  }
+  if (placement.previousId) {
+    return { targetId: placement.previousId, position: "after" };
+  }
   return placement.parentId
     ? { targetId: placement.parentId, position: "inside" }
     : { targetId: null, position: "after" };
@@ -236,11 +262,22 @@ export function dropMoveTarget(placement: CanonicalDropPlacement): DropMoveTarge
  * @returns `true` when the parent exists, if specified, and the recorded gap
  * still matches its sibling list, or when an inside placement's parent exists.
  */
-export function isCurrentDropDestination(blocks: readonly DropBlock[], placement: CanonicalDropPlacement): boolean {
-  const parent = placement.parentId ? findBlockLocation(blocks, placement.parentId)?.block : undefined;
-  if (placement.parentId && !parent) return false;
-  if (placement.kind === "inside") return true;
+export function isCurrentDropDestination(
+  blocks: readonly DropBlock[],
+  placement: CanonicalDropPlacement,
+): boolean {
+  const parent = placement.parentId
+    ? findBlockLocation(blocks, placement.parentId)?.block
+    : undefined;
+  if (placement.parentId && !parent) {
+    return false;
+  }
+  if (placement.kind === "inside") {
+    return true;
+  }
   const siblings = parent?.children ?? blocks;
-  const index = placement.previousId ? siblings.findIndex(({ id }) => id === placement.previousId) + 1 : 0;
+  const index = placement.previousId
+    ? siblings.findIndex(({ id }) => id === placement.previousId) + 1
+    : 0;
   return (!placement.previousId || index > 0) && (siblings[index]?.id ?? null) === placement.nextId;
 }

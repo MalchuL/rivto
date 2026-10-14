@@ -12,7 +12,7 @@ import { scheduleBlockFocus } from "./ops/focus-ops";
 import { appendWritingBlock } from "./ops/outline-ops";
 import { DefaultBlockBehavior } from "./default-block-behavior";
 import type { BlockBehaviorContext, BlockBehaviorOutcome, DropAxis } from "./types";
-import type { KeyboardSelectionTarget } from "../managers/index";
+import type { KeyboardSelectionTarget } from "../managers";
 
 /**
  * Base class for kanban, bento, columns, and table behaviors.
@@ -31,8 +31,13 @@ export class ContainerBlockBehavior extends DefaultBlockBehavior {
    * @param _target - Keyboard target; unused once emptiness is confirmed.
    * @returns `"handled"` when a child was inserted, otherwise `"default"`.
    */
-  override onSplit(context: BlockBehaviorContext, _target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    if (context.block.children.length > 0) return "default";
+  override onSplit(
+    context: BlockBehaviorContext,
+    _target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome {
+    if (context.block.children.length > 0) {
+      return "default";
+    }
     return this.appendWritingBlock(context);
   }
 
@@ -46,8 +51,8 @@ export class ContainerBlockBehavior extends DefaultBlockBehavior {
    * @returns "handled" after insertion and scheduling focus at offset zero.
    */
   appendWritingBlock(context: BlockBehaviorContext): BlockBehaviorOutcome {
-    const child = appendWritingBlock(context.editorView, context.block.id);
-    scheduleBlockFocus(context.editorView, context.root, child.id, 0);
+    const child = appendWritingBlock(context.reactPanel, context.block.id);
+    scheduleBlockFocus(context.reactPanel, context.root, child.id, 0);
     return "handled";
   }
 }

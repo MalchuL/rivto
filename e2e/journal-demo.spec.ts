@@ -6,9 +6,10 @@ test("renders today and yesterday as one seamless two-document journal", async (
   await expect(documents).toHaveCount(2);
 
   const expected = await page.evaluate(() => {
-    const key = (date: Date) => [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-      .map((part) => String(part).padStart(2, "0"))
-      .join("-");
+    const key = (date: Date) =>
+      [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+        .map((part) => String(part).padStart(2, "0"))
+        .join("-");
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);

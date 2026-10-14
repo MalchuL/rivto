@@ -19,11 +19,8 @@ const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
  * @param segments - Path segments below `src/extensions`.
  * @returns Absolute filename consumed by ESLint's RuleTester.
  */
-const sourceFile = (...segments) => path.join(
-  REPOSITORY_ROOT,
-  "packages/react-rivto-editor/src/extensions",
-  ...segments,
-);
+const sourceFile = (...segments) =>
+  path.join(REPOSITORY_ROOT, "packages/react-rivto-editor/src/extensions", ...segments);
 
 const tester = new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: "module" } });
 

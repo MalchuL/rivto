@@ -15,7 +15,9 @@ import { isDangerousKey } from "./portable";
  * @returns Structurally independent value with the same data.
  */
 export function clone<T>(value: T): T {
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
   let result: T;
   if (Array.isArray(value)) {
     // `Array.prototype.map` preserves a foreign realm's constructor. Build
@@ -25,7 +27,9 @@ export function clone<T>(value: T): T {
   } else {
     const record: Record<string, unknown> = {};
     for (const key of Object.keys(value)) {
-      if (isDangerousKey(key)) continue;
+      if (isDangerousKey(key)) {
+        continue;
+      }
       if (Object.prototype.hasOwnProperty.call(value, key)) {
         record[key] = clone((value as Record<string, unknown>)[key]);
       }

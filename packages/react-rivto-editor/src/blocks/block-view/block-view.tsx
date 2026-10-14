@@ -1,8 +1,4 @@
-import {
-  forwardRef,
-  type HTMLAttributes,
-  type ReactNode,
-} from "react";
+import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import type { EditorBlockNode as Block } from "@chulane/rivto";
 
 /** Properties accepted by the stable DOM container for one editor block. */
@@ -50,18 +46,19 @@ export interface BlockViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
  * </BlockView>
  * ```
  */
-export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(
-  function BlockView({ block, children, isSelected = false, ...attributes }, ref) {
-    return (
-      <div
-        {...attributes}
-        ref={ref}
-        data-block-id={block.id}
-        data-block-type={block.type}
-        data-block-selected={isSelected ? "true" : undefined}
-      >
-        {children}
-      </div>
-    );
-  },
-);
+export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function BlockView(
+  { block, children, isSelected = false, ...attributes },
+  ref,
+) {
+  return (
+    <div
+      {...attributes}
+      ref={ref}
+      data-block-id={block.id}
+      data-block-type={block.type}
+      data-block-selected={isSelected ? "true" : undefined}
+    >
+      {children}
+    </div>
+  );
+});

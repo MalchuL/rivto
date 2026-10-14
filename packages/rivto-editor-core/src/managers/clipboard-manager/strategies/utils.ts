@@ -2,7 +2,7 @@
  * Stateless matching, placement, and plain-text insertion helpers shared by
  * clipboard paste strategies.
  */
-import type { RivtoEditorApi } from "../../../editor/types";
+import type { DocumentEditorAPI } from "../../../editor/types";
 import type { EditorPosition, Selection } from "../../selection-manager";
 import { isStructuralSelection } from "../../selection-manager";
 import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
@@ -14,12 +14,16 @@ import type { PasteContext, PastePlacement, TextPasteTarget } from "./types";
  * @returns Range including empty overlap slices, or undefined for structural/empty selection.
  */
 export function textRangeFromSelection(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   selection: Selection | undefined,
 ): TextPasteTarget | undefined {
-  if (!selection || isStructuralSelection(selection)) return undefined;
+  if (!selection || isStructuralSelection(selection)) {
+    return undefined;
+  }
   const range = editor.selection.resolveBlockSelection(selection);
-  if (!range) return undefined;
+  if (!range) {
+    return undefined;
+  }
   return {
     blocks: range.blocks,
     startOffset: range.ranges[0]!.startOffset,
@@ -34,7 +38,12 @@ export function textRangeFromSelection(
  * @returns Whether the preserve-newlines strategy should run.
  */
 export function isPreserveNewlinesPaste(context: PasteContext, placement: PastePlacement): boolean {
-  return placement.preserveNewlines === true && Boolean(context.text) && !context.bundle?.blocks.length && !context.bundle?.elements?.length;
+  return (
+    placement.preserveNewlines === true &&
+    Boolean(context.text) &&
+    !context.bundle?.blocks.length &&
+    !context.bundle?.elements?.length
+  );
 }
 
 /**
@@ -49,9 +58,13 @@ export function isTextPasteContext(
   placement: PastePlacement,
   range: TextPasteTarget | undefined,
 ): boolean {
-  if (isPreserveNewlinesPaste(context, placement)) return false;
+  if (isPreserveNewlinesPaste(context, placement)) {
+    return false;
+  }
   if (context.bundle?.blocks.length) {
-    return Boolean(range && context.bundle.fromTextSelection === true && placement.mergeText !== false);
+    return Boolean(
+      range && context.bundle.fromTextSelection === true && placement.mergeText !== false,
+    );
   }
   // A canvas-only bundle is structured content too; its text flavor is only a fallback.
   return !context.bundle?.elements?.length && Boolean(context.text);
@@ -69,7 +82,9 @@ export function isBlockPasteContext(
   placement: PastePlacement,
   range: TextPasteTarget | undefined,
 ): boolean {
-  if (!context.bundle?.blocks.length) return false;
+  if (!context.bundle?.blocks.length) {
+    return false;
+  }
   return !isTextPasteContext(context, placement, range);
 }
 
@@ -85,7 +100,7 @@ export function isBlockPasteContext(
  * @returns Resulting caret, or undefined for empty input.
  */
 export function insertPlainText(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   value: string,
   defaultBlockType: string,
   splitNewlines: boolean,
@@ -93,13 +108,17 @@ export function insertPlainText(
   afterId: string | undefined,
   parentId?: string | null,
 ): EditorPosition | undefined {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
   const lines = splitNewlines ? value.split(/\r\n?|\n/) : [value];
   const destination = range?.blocks[0];
   const suffixBlock = range?.blocks.at(-1);
   const prefix = destination ? destination.content.slice(0, range!.startOffset) : "";
   const suffix = suffixBlock ? suffixBlock.content.slice(range!.endOffset) : "";
-  if (range) range.blocks.slice(1).forEach((block) => editor.blocks.removeBlock(block.id));
+  if (range) {
+    range.blocks.slice(1).forEach((block) => editor.blocks.removeBlock(block.id));
+  }
   let previous = destination?.id ?? afterId;
   let caret: EditorPosition | undefined;
   lines.forEach((line, index) => {
@@ -109,13 +128,15 @@ export function insertPlainText(
       editor.blocks.updateBlock(destination.id, { content: prefix + line + (last ? suffix : "") });
       offset += prefix.length;
     } else {
-      previous = editor.blocks.insertBlock({
-        type: defaultBlockType,
-        content: line + (last ? suffix : ""),
-      }, previous).id;
-      if (!destination && index === 0 && !afterId && parentId) {
-        editor.blocks.moveBlocks([previous], parentId, "inside");
-      }
+      previous = editor.blocks.insertBlock(
+        {
+          type: defaultBlockType,
+          content: line + (last ? suffix : ""),
+        },
+        !destination && index === 0 && !afterId && parentId
+          ? { parentId }
+          : editor.blocks.getInsertionDestinationAfter(previous),
+      ).id;
     }
     caret = { blockId: previous!, offset };
   });
@@ -134,7 +155,11 @@ export function textAfterId(
   placement: PastePlacement,
   range: TextPasteTarget | undefined,
 ): string | undefined {
-  if (typeof placement.afterId === "string") return placement.afterId;
-  if (range) return undefined;
+  if (typeof placement.afterId === "string") {
+    return placement.afterId;
+  }
+  if (range) {
+    return undefined;
+  }
   return context.selection?.focusBlockId;
 }

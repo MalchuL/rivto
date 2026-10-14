@@ -1,11 +1,7 @@
 "use client";
 
 import type { Page, Project } from "@chulane/app";
-import {
-  usePagesQuery,
-  useProjectQuery,
-  useUpdateProjectMutation,
-} from "@chulane/app/client";
+import { usePagesQuery, useProjectQuery, useUpdateProjectMutation } from "@chulane/app/client";
 import { FilePlus, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -38,9 +34,7 @@ function PageRow({ page }: { page: Page }) {
       <FileText className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{page.title}</div>
-        {preview ? (
-          <p className="truncate text-xs text-muted-foreground">{preview}</p>
-        ) : null}
+        {preview ? <p className="truncate text-xs text-muted-foreground">{preview}</p> : null}
       </div>
     </Link>
   );
@@ -80,11 +74,7 @@ function PageTreeRows({
             </button>
           </div>
           {node.children.length > 0 ? (
-            <PageTreeRows
-              nodes={node.children}
-              depth={depth + 1}
-              onAddSubpage={onAddSubpage}
-            />
+            <PageTreeRows nodes={node.children} depth={depth + 1} onAddSubpage={onAddSubpage} />
           ) : null}
         </div>
       ))}
@@ -130,9 +120,7 @@ function ProjectHeader({ project }: { project: Project }) {
       />
       <div className="mt-3 flex items-center gap-2 text-sm">
         {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
-        {project.parentProjectId ? (
-          <Badge variant="outline">Subproject</Badge>
-        ) : null}
+        {project.parentProjectId ? <Badge variant="outline">Subproject</Badge> : null}
       </div>
     </header>
   );
@@ -155,23 +143,14 @@ export function ProjectView({ projectId }: { projectId: string }) {
     entityId: projectId,
   });
 
-  const documents = useMemo(
-    () => pages.filter((page) => page.kind !== "journal"),
-    [pages],
-  );
+  const documents = useMemo(() => pages.filter((page) => page.kind !== "journal"), [pages]);
   const recent = useMemo(
-    () =>
-      [...documents]
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, 5),
+    () => [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
     [documents],
   );
   const tree = useMemo(() => buildPageTree(documents), [documents]);
   const linkedItems = useMemo(
-    () =>
-      [...documents]
-        .sort((a, b) => a.title.localeCompare(b.title))
-        .map((page) => ({ page })),
+    () => [...documents].sort((a, b) => a.title.localeCompare(b.title)).map((page) => ({ page })),
     [documents],
   );
 
@@ -218,13 +197,9 @@ export function ProjectView({ projectId }: { projectId: string }) {
 
         <TabsContent value="overview" className="mt-4">
           {project.description ? (
-            <p className="mb-4 px-3 text-sm text-muted-foreground">
-              {project.description}
-            </p>
+            <p className="mb-4 px-3 text-sm text-muted-foreground">{project.description}</p>
           ) : null}
-          <h2 className="px-3 text-sm font-medium text-muted-foreground">
-            Recent pages
-          </h2>
+          <h2 className="px-3 text-sm font-medium text-muted-foreground">Recent pages</h2>
           <div className="mt-1 flex flex-col gap-0.5">
             {recent.length === 0 ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">
@@ -246,11 +221,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
                 value={viewMode}
                 onChange={(mode) => setProjectViewMode(projectId, mode)}
               />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void newPage(projectId)}
-              >
+              <Button variant="outline" size="sm" onClick={() => void newPage(projectId)}>
                 <FilePlus />
                 New page
               </Button>

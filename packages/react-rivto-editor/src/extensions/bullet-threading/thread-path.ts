@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { DOCUMENT_VIEW_SELECTOR, DocumentViewDOM } from "../../managers/events/document-view";
+import { PANEL_SELECTOR, PanelDOM } from "../../managers/events/panel-dom";
 
 const ROOT_LEAD_RADIUS = 6;
 
@@ -55,32 +55,52 @@ function curve(fromX: number, fromY: number, toX: number, toY: number): string {
  * @param options - Surface, traversal rules, and anchor measurements.
  * @returns Complete SVG path data, or an empty string when nothing is drawable.
  */
-export function buildThreadPath({ root, rootLineOffset, excluded, continued, point }: ThreadPathOptions): string {
+export function buildThreadPath({
+  root,
+  rootLineOffset,
+  excluded,
+  continued,
+  point,
+}: ThreadPathOptions): string {
   const canContinue = (block: Element) => {
     const type = block.getAttribute("data-block-type") ?? "";
     return !excluded.has(type) && (!continued || continued.has(type));
   };
-  const dom = new DocumentViewDOM(root);
+  const dom = new PanelDOM(root);
   const active = root.ownerDocument.activeElement;
   const focused = active && root.contains(active) ? dom.getBlock(active) : null;
-  if (!focused) return "";
+  if (!focused) {
+    return "";
+  }
   // An embedding owns its own overlay; the enclosing view must not thread
   // through the source subtree merely because its DOM contains that view.
-  if (active?.closest(DOCUMENT_VIEW_SELECTOR) !== root.closest(DOCUMENT_VIEW_SELECTOR)) return "";
+  if (active?.closest(PANEL_SELECTOR) !== root.closest(PANEL_SELECTOR)) {
+    return "";
+  }
 
   // Direct and wrapped root blocks share the same document boundary regardless of wrapper depth.
   const roots = dom.getRootBlocks();
   const blocks: Element[] = [];
-  for (let block: Element | null = focused; block && root.contains(block); block = dom.getParent(block)) {
+  for (
+    let block: Element | null = focused;
+    block && root.contains(block);
+    block = dom.getParent(block)
+  ) {
     blocks.unshift(block);
   }
   // A container stays connected to its parent, but its own descendants do not get threads.
   const stop = blocks.findIndex((block) => !canContinue(block));
-  if (stop >= 0) blocks.length = stop + 1;
+  if (stop >= 0) {
+    blocks.length = stop + 1;
+  }
   let topStart: Element | undefined;
   for (const sibling of roots) {
-    if (sibling === blocks[0]) break;
-    if (!topStart && point(sibling)) topStart = sibling;
+    if (sibling === blocks[0]) {
+      break;
+    }
+    if (!topStart && point(sibling)) {
+      topStart = sibling;
+    }
   }
   let path = "";
   if (topStart) {
@@ -97,12 +117,18 @@ export function buildThreadPath({ root, rootLineOffset, excluded, continued, poi
   for (let index = 1; index < blocks.length; index += 1) {
     const from = point(blocks[index - 1]!);
     const to = point(blocks[index]!);
-    if (!from || !to) break;
+    if (!from || !to) {
+      break;
+    }
     // The first link begins below an earlier root; later links begin at their parent anchor.
     const fromX = index === 1 && Boolean(topStart) ? to.x - rootLineOffset : from.x;
     const fromY = index === 1 && Boolean(topStart) ? from.bottom : from.y;
-    if (to.y <= fromY) break;
-    if (!path) path = `M ${fromX} ${fromY}`;
+    if (to.y <= fromY) {
+      break;
+    }
+    if (!path) {
+      path = `M ${fromX} ${fromY}`;
+    }
     path += curve(fromX, fromY, to.x, to.y);
   }
   return path.trim();

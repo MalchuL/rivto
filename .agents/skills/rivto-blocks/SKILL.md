@@ -33,13 +33,13 @@ to the change:
 
 Use the closest complete example:
 
-| Block shape | Example |
-| --- | --- |
-| Normal editable text | `src/blocks/markdown/markdown.tsx` and default-writing registration |
-| Contentless visual leaf | `src/extensions/built-ins/separator/separator-block.tsx` |
-| Contentless interactive leaf | `demo/src/blocks/custom-blocks.tsx` Counter |
-| Text plus native control | `demo/src/blocks/custom-blocks.tsx` Slider |
-| Block that owns child layout | Load the `rivto-containers` skill |
+| Block shape                  | Example                                                             |
+| ---------------------------- | ------------------------------------------------------------------- |
+| Normal editable text         | `src/blocks/markdown/markdown.tsx` and default-writing registration |
+| Contentless visual leaf      | `src/extensions/built-ins/separator/separator-block.tsx`            |
+| Contentless interactive leaf | `demo/src/blocks/custom-blocks.tsx` Counter                         |
+| Text plus native control     | `demo/src/blocks/custom-blocks.tsx` Slider                          |
+| Block that owns child layout | Load the `rivto-containers` skill                                   |
 
 ## Preserve the shared DOM shell
 

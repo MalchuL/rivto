@@ -30,19 +30,33 @@ export class ElementHierarchy {
   ) {}
 
   /** Invalidates derived ownership after a root, child list, or record changes. */
-  invalidate(): void { this.dirty = true; }
+  invalidate(): void {
+    this.dirty = true;
+  }
 
   /** @returns Indexed ownership of all placed elements; callers must not mutate it. */
-  getLocations(): ReadonlyMap<string, ElementLocation> { this.refresh(); return this.locations; }
+  getLocations(): ReadonlyMap<string, ElementLocation> {
+    this.refresh();
+    return this.locations;
+  }
 
   /** @returns Stable ordered document roots, or an empty list when the document has no elements. */
-  getRootIds(): readonly string[] { this.refresh(); return this.roots; }
+  getRootIds(): readonly string[] {
+    this.refresh();
+    return this.roots;
+  }
 
   /** @returns Stable direct children, or an empty list for an unknown element. */
-  getChildIds(id: string): readonly string[] { this.refresh(); return this.children.get(id) ?? this.empty; }
+  getChildIds(id: string): readonly string[] {
+    this.refresh();
+    return this.children.get(id) ?? this.empty;
+  }
 
   /** @returns Direct parent (null for a document root), or undefined for an unknown element. */
-  getLocation(id: string): ElementLocation | undefined { this.refresh(); return this.locations.get(id); }
+  getLocation(id: string): ElementLocation | undefined {
+    this.refresh();
+    return this.locations.get(id);
+  }
 
   /**
    * Collects each selected subtree once in preorder, preserving selection order.
@@ -53,7 +67,9 @@ export class ElementHierarchy {
     this.refresh();
     const seen = new Set<string>();
     const visit = (id: string) => {
-      if (seen.has(id) || !this.elements.has(id)) return;
+      if (seen.has(id) || !this.elements.has(id)) {
+        return;
+      }
       seen.add(id);
       this.getChildIds(id).forEach(visit);
     };
@@ -70,28 +86,46 @@ export class ElementHierarchy {
     this.refresh();
     const unique = [...new Set(ids)];
     const selected = new Set(unique);
-    unique.forEach((id) => { if (!this.locations.has(id)) throw new Error(`Element ${id} not found`); });
+    unique.forEach((id) => {
+      if (!this.locations.has(id)) {
+        throw new Error(`Element ${id} not found`);
+      }
+    });
     const roots = unique.filter((id) => {
       let parent = this.locations.get(id)?.parentId;
       while (parent) {
-        if (selected.has(parent)) return false;
+        if (selected.has(parent)) {
+          return false;
+        }
         parent = this.locations.get(parent)?.parentId;
       }
       return true;
     });
     const array = this.array(destination);
     const descendants = new Set(this.collect(roots));
-    if (destination.parentId && descendants.has(destination.parentId)) throw new Error("Cannot move an element into its own subtree");
-    if (destination.beforeId && (descendants.has(destination.beforeId)
-      || !array.toArray().includes(destination.beforeId))) throw new Error("Invalid destination sibling");
+    if (destination.parentId && descendants.has(destination.parentId)) {
+      throw new Error("Cannot move an element into its own subtree");
+    }
+    if (
+      destination.beforeId &&
+      (descendants.has(destination.beforeId) || !array.toArray().includes(destination.beforeId))
+    ) {
+      throw new Error("Invalid destination sibling");
+    }
     this.crdt.transact(() => {
       for (const id of roots) {
         const source = this.array(this.locations.get(id)!);
         const index = source.toArray().indexOf(id);
-        if (index >= 0) source.delete(index, 1);
+        if (index >= 0) {
+          source.delete(index, 1);
+        }
       }
-      const index = destination.beforeId ? array.toArray().indexOf(destination.beforeId) : array.length;
-      if (roots.length) array.insert(index, ...roots);
+      const index = destination.beforeId
+        ? array.toArray().indexOf(destination.beforeId)
+        : array.length;
+      if (roots.length) {
+        array.insert(index, ...roots);
+      }
       this.invalidate();
     });
   }
@@ -101,10 +135,14 @@ export class ElementHierarchy {
     this.refresh();
     for (const id of ids) {
       const location = this.locations.get(id);
-      if (!location) continue;
+      if (!location) {
+        continue;
+      }
       const array = this.array(location);
       const index = array.toArray().indexOf(id);
-      if (index >= 0) array.delete(index, 1);
+      if (index >= 0) {
+        array.delete(index, 1);
+      }
     }
     this.invalidate();
   }
@@ -120,8 +158,11 @@ export class ElementHierarchy {
     if (!this.dirty) {
       this.locations.set(id, { parentId });
       this.children.set(id, []);
-      if (parentId === null) this.roots = [...this.roots, id];
-      else this.children.set(parentId, [...this.children.get(parentId) ?? [], id]);
+      if (parentId === null) {
+        this.roots = [...this.roots, id];
+      } else {
+        this.children.set(parentId, [...(this.children.get(parentId) ?? []), id]);
+      }
     }
   }
 
@@ -136,31 +177,46 @@ export class ElementHierarchy {
       this.replace(this.rootIds, this.roots);
       for (const [id, children] of this.children) {
         const value = this.elements.get(id);
-        if (isCRDTMap(value)) this.replace(this.requiredArray(value.get("childIds")), children);
+        if (isCRDTMap(value)) {
+          this.replace(this.requiredArray(value.get("childIds")), children);
+        }
       }
     });
   }
 
   /** Validates one complete forest without changing either records or root lists. */
-  static validate(elements: readonly Pick<ElementSnapshot, "id" | "childIds">[], rootIds: readonly string[]): void {
+  static validate(
+    elements: readonly Pick<ElementSnapshot, "id" | "childIds">[],
+    rootIds: readonly string[],
+  ): void {
     const records = new Map(elements.map((element) => [element.id, element]));
     const seen = new Set<string>();
     const visit = (ids: readonly string[]) => {
-      if (!Array.isArray(ids)) throw new Error("Element children and document roots must be arrays");
+      if (!Array.isArray(ids)) {
+        throw new Error("Element children and document roots must be arrays");
+      }
       for (const id of ids) {
-        if (typeof id !== "string" || !records.has(id)) throw new Error(`Unknown element reference ${id}`);
-        if (seen.has(id)) throw new Error(`Duplicate or cyclic element reference ${id}`);
+        if (typeof id !== "string" || !records.has(id)) {
+          throw new Error(`Unknown element reference ${id}`);
+        }
+        if (seen.has(id)) {
+          throw new Error(`Duplicate or cyclic element reference ${id}`);
+        }
         seen.add(id);
         visit(records.get(id)!.childIds);
       }
     };
     visit(rootIds);
-    if (seen.size !== records.size) throw new Error("Every element must belong to the document tree");
+    if (seen.size !== records.size) {
+      throw new Error("Every element must belong to the document tree");
+    }
   }
 
   /** Rebuilds after structural edits; the first placement in document traversal wins. */
   private refresh(): void {
-    if (!this.dirty) return;
+    if (!this.dirty) {
+      return;
+    }
     this.dirty = false;
     const locations = new Map<string, ElementLocation>();
     const children = new Map<string, string[]>();
@@ -168,10 +224,18 @@ export class ElementHierarchy {
       const result: string[] = [];
       for (const id of ids) {
         const value = this.elements.get(id);
-        if (!isCRDTMap(value) || locations.has(id)) continue;
+        if (!isCRDTMap(value) || locations.has(id)) {
+          continue;
+        }
         locations.set(id, { parentId });
         result.push(id);
-        children.set(id, this.reuse(this.children.get(id), visit(this.requiredArray(value.get("childIds")).toArray().map(String), id)));
+        children.set(
+          id,
+          this.reuse(
+            this.children.get(id),
+            visit(this.requiredArray(value.get("childIds")).toArray().map(String), id),
+          ),
+        );
       }
       return result;
     };
@@ -187,28 +251,40 @@ export class ElementHierarchy {
 
   /** Resolves the collaborative list for a parent, or the document root array. */
   private array(location: ElementLocation): CRDTArray<string> {
-    if (location.parentId === null) return this.rootIds;
+    if (location.parentId === null) {
+      return this.rootIds;
+    }
     const value = this.elements.get(location.parentId);
-    if (!isCRDTMap(value)) throw new Error("Element destination not found");
+    if (!isCRDTMap(value)) {
+      throw new Error("Element destination not found");
+    }
     return this.requiredArray(value.get("childIds"));
   }
 
   /** Rejects malformed shared storage rather than silently dropping its contents. */
   private requiredArray(value: unknown): CRDTArray<string> {
-    if (!isCRDTArray(value)) throw new Error("Invalid element hierarchy array");
+    if (!isCRDTArray(value)) {
+      throw new Error("Invalid element hierarchy array");
+    }
     return value as CRDTArray<string>;
   }
 
   /** Preserves array identity when a structural change occurred in a different list. */
   private reuse(previous: string[] | undefined, next: string[]): string[] {
-    return previous?.length === next.length && previous.every((id, index) => id === next[index]) ? previous : next;
+    return previous?.length === next.length && previous.every((id, index) => id === next[index])
+      ? previous
+      : next;
   }
 
   /** Applies only changed lists, keeping CRDT container identities intact. */
   private replace(array: CRDTArray<string>, ids: readonly string[]): void {
     const previous = array.toArray();
-    if (previous.length === ids.length && previous.every((id, index) => id === ids[index])) return;
+    if (previous.length === ids.length && previous.every((id, index) => id === ids[index])) {
+      return;
+    }
     array.delete(0, array.length);
-    if (ids.length) array.insert(0, ...ids);
+    if (ids.length) {
+      array.insert(0, ...ids);
+    }
   }
 }

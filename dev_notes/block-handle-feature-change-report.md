@@ -413,4 +413,3 @@ The feature is complete when:
    behavior.
 5. Bulk operations remain manager-owned and atomic.
 6. The change introduces no new runtime dependency and no persisted migration.
-

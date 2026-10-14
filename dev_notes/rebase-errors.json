@@ -1889,15 +1889,9 @@
       "lint": "passed",
       "demo_build": "passed",
       "gap_cases_passed": 12,
-      "feedback_median_range_ms": [
-        28.799999997019768,
-        72.29999999701977
-      ],
+      "feedback_median_range_ms": [28.799999997019768, 72.29999999701977],
       "feedback_budget_ms": 160,
-      "full_scan_count_range": [
-        5,
-        15
-      ],
+      "full_scan_count_range": [5, 15],
       "preview_follow_median_ms": 10.7,
       "failures": [
         {
@@ -2128,22 +2122,13 @@
       "lint": "passed",
       "demo_build": "passed",
       "gap_cases_passed": 12,
-      "feedback_median_range_ms": [
-        29.600000001490116,
-        59.5
-      ],
+      "feedback_median_range_ms": [29.600000001490116, 59.5],
       "feedback_budget_ms": 160,
       "bounding_rectangle_reads": {
         "nested_page_before": 20565,
         "nested_page_after": 185,
-        "nested_edgeless_before_range": [
-          49329,
-          61662
-        ],
-        "nested_edgeless_after_range": [
-          762,
-          4590
-        ],
+        "nested_edgeless_before_range": [49329, 61662],
+        "nested_edgeless_after_range": [762, 4590],
         "note": "Observed per-gesture counts with identical fixtures; auto-scroll causes differing calculation counts. Identity scans were not removed."
       },
       "regression_before": "/tmp/rivto-qol4-adapt-tests/regression-before.log",
@@ -2153,11 +2138,7 @@
         {
           "browser": "chromium",
           "repeat": 20,
-          "samples_ms": [
-            17.200000002980232,
-            18.100000001490116,
-            18.5
-          ],
+          "samples_ms": [17.200000002980232, 18.100000001490116, 18.5],
           "median_ms": 18.100000001490116,
           "hierarchy_committed": true,
           "virtualization": "demo default"
@@ -2165,11 +2146,7 @@
         {
           "browser": "chromium",
           "repeat": 200,
-          "samples_ms": [
-            76.5,
-            76.69999999552965,
-            94.69999999552965
-          ],
+          "samples_ms": [76.5, 76.69999999552965, 94.69999999552965],
           "median_ms": 76.69999999552965,
           "hierarchy_committed": true,
           "virtualization": "demo default"
@@ -2177,11 +2154,7 @@
         {
           "browser": "firefox",
           "repeat": 20,
-          "samples_ms": [
-            19,
-            19,
-            19
-          ],
+          "samples_ms": [19, 19, 19],
           "median_ms": 19,
           "hierarchy_committed": true,
           "virtualization": "demo default"
@@ -2189,11 +2162,7 @@
         {
           "browser": "firefox",
           "repeat": 200,
-          "samples_ms": [
-            42,
-            43,
-            45
-          ],
+          "samples_ms": [42, 43, 45],
           "median_ms": 43,
           "hierarchy_committed": true,
           "virtualization": "demo default"

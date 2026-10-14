@@ -56,7 +56,7 @@ CRDT document, transaction origin и history scopes являются прива�
 - **Возвращает:** обычный cleanup callback `() => void`.
 - **Исключения:** передаёт ошибки `crdt.on("update", listener)`; исключения listener возникают при доставке события.
 
-Подписывается на общий CRDT update. `EditorRuntime` использует сигнал для reconciliation selection и увеличения revision после локальных и remote mutations.
+Подписывается на общий CRDT update. `ReactEditor` использует сигнал для reconciliation selection и увеличения revision после локальных и remote mutations.
 
 Listener не получает snapshot или описание patch: это общий invalidation signal. Если consumer-у нужны новые данные, он повторно читает focused manager после вызова. Возвращённый `Unsubscribe` нужно вызвать при teardown, иначе callback останется зарегистрированным до уничтожения CRDT document. Метод не фильтрует updates по `origin`, поэтому listener видит и локальные, и provider-delivered изменения.
 
@@ -107,7 +107,7 @@ Host создаёт модель и передаёт её в editor так:
 ```ts
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
 const document = await storage.create("document-id");
-const editor = createRivtoEditor({ document });
+const editor = createDocumentEditor({ document });
 ```
 
-Затем public editor managers делегируют focused operations в document managers. `EditorRuntime` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.
+Затем public editor managers делегируют focused operations в document managers. `ReactEditor` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.

@@ -1,4 +1,4 @@
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
 import type { ExtensionsApi } from "./api";
 import type {
@@ -30,9 +30,9 @@ export class ExtensionManager implements ExtensionsApi {
   /**
    * Creates the mode-independent extension lifecycle owner.
    *
-   * @param editorRuntime - Owning React runtime supplied during extension setup.
+   * @param reactEditor - Owning React runtime supplied during extension setup.
    */
-  constructor(private readonly editorRuntime: EditorRuntime) {}
+  constructor(private readonly reactEditor: ReactEditorApi) {}
 
   /**
    * Installs the creation-time extension list.
@@ -44,7 +44,9 @@ export class ExtensionManager implements ExtensionsApi {
    */
   initialize(extensions: readonly ReactEditorExtension[]): void {
     this.assertActive();
-    for (const extension of extensions) this.install(extension);
+    for (const extension of extensions) {
+      this.install(extension);
+    }
   }
 
   /**
@@ -63,9 +65,11 @@ export class ExtensionManager implements ExtensionsApi {
     const registration = { component, position };
     this.components.push(registration);
     this.store.changed();
-    return this.own(() => {
+    return this.registerCleanup(() => {
       const index = this.components.indexOf(registration);
-      if (index < 0) return;
+      if (index < 0) {
+        return;
+      }
       this.components.splice(index, 1);
       this.store.changed();
     });
@@ -83,10 +87,21 @@ export class ExtensionManager implements ExtensionsApi {
       .map(({ component }) => component);
   }
 
+  /**
+   * Reads the extension runtime's observable revision.
+   *
+   * @returns Current revision number.
+   */
   get revision(): number {
     return this.store.revision;
   }
 
+  /**
+   * Observes extension component registration changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe(listener: () => void): () => void {
     return this.store.subscribe(listener);
   }
@@ -97,14 +112,16 @@ export class ExtensionManager implements ExtensionsApi {
    * @param release - Exact underlying resource cleanup.
    * @returns Idempotent disposer safe for callers and repeated teardown.
    */
-  own(release: RegistrationDisposer): RegistrationDisposer {
+  registerCleanup(release: RegistrationDisposer): RegistrationDisposer {
     this.assertActive();
     let active = true;
     const dispose = () => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
-      release();
       this.registrations.delete(dispose);
+      release();
     };
     this.registrations.add(dispose);
     this.activeExtensionRegistrations?.push(dispose);
@@ -113,7 +130,9 @@ export class ExtensionManager implements ExtensionsApi {
 
   /** Throws when a manager mutation is attempted after runtime destruction. */
   assertActive(): void {
-    if (this.destroyed) throw new Error("React editor is destroyed");
+    if (this.destroyed) {
+      throw new Error("React editor is destroyed");
+    }
   }
 
   /**
@@ -123,7 +142,9 @@ export class ExtensionManager implements ExtensionsApi {
    * every owned resource has been released.
    */
   destroy(): void {
-    if (this.destroyed) return;
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
     const errors: unknown[] = [];
     const run = (dispose: () => void): void => {
@@ -137,8 +158,12 @@ export class ExtensionManager implements ExtensionsApi {
     [...this.registrations].reverse().forEach(run);
     this.components.length = 0;
     this.store.clear();
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Extension teardown failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Extension teardown failed");
+    }
   }
 
   /**
@@ -149,7 +174,9 @@ export class ExtensionManager implements ExtensionsApi {
    */
   install(extension: ReactEditorExtension): () => void {
     this.assertActive();
-    if (!extension.id.trim()) throw new Error("React extension ID is required");
+    if (!extension.id.trim()) {
+      throw new Error("React extension ID is required");
+    }
     if (this.extensionIds.has(extension.id)) {
       throw new Error(`React extension ${extension.id} is already registered`);
     }
@@ -158,7 +185,7 @@ export class ExtensionManager implements ExtensionsApi {
     this.activeExtensionRegistrations = owned;
     let dispose: RegistrationDisposer = () => undefined;
     try {
-      const cleanup = extension.setup(this.editorRuntime);
+      const cleanup = extension.setup(this.reactEditor);
       dispose = () => {
         let cleanupError: unknown;
         try {
@@ -166,28 +193,38 @@ export class ExtensionManager implements ExtensionsApi {
         } catch (error) {
           cleanupError = error;
         }
-        owned.slice().reverse().forEach((release) => {
-          try {
-            release();
-          } catch {
-            // Owned registrations must still release after a throwing cleanup.
-          }
-        });
+        owned
+          .slice()
+          .reverse()
+          .forEach((release) => {
+            try {
+              release();
+            } catch {
+              // Owned registrations must still release after a throwing cleanup.
+            }
+          });
         this.extensionIds.delete(extension.id);
         const index = this.extensionDisposers.indexOf(dispose);
-        if (index >= 0) this.extensionDisposers.splice(index, 1);
-        if (cleanupError) throw cleanupError;
+        if (index >= 0) {
+          this.extensionDisposers.splice(index, 1);
+        }
+        if (cleanupError) {
+          throw cleanupError;
+        }
       };
       this.extensionDisposers.push(dispose);
       return dispose;
     } catch (error) {
-      owned.slice().reverse().forEach((release) => {
-        try {
-          release();
-        } catch {
-          // Rollback is best-effort so the original setup error is preserved.
-        }
-      });
+      owned
+        .slice()
+        .reverse()
+        .forEach((release) => {
+          try {
+            release();
+          } catch {
+            // Rollback is best-effort so the original setup error is preserved.
+          }
+        });
       this.extensionIds.delete(extension.id);
       throw error;
     } finally {

@@ -3,20 +3,37 @@ export class RevisionStore {
   private readonly listeners = new Set<() => void>();
   private value = 0;
 
+  /**
+   * Reads the store's current monotonic revision.
+   *
+   * @returns Current revision number.
+   */
   get revision(): number {
     return this.value;
   }
 
+  /**
+   * Subscribes to revision changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Increments the revision and synchronously notifies a snapshot of listeners.
+   */
   changed(): void {
     this.value += 1;
     [...this.listeners].forEach((listener) => listener());
   }
 
+  /**
+   * Removes all revision listeners without resetting the revision.
+   */
   clear(): void {
     this.listeners.clear();
   }

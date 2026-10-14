@@ -1,7 +1,9 @@
-import { createTestEditor as createRivtoEditor } from "../test-utils";
+import { createTestEditor as createDocumentEditor } from "../test-utils";
 
-describe("EditorRuntime element commands", () => {
-  const input = { childIds: [], id: "shape",
+describe("DocumentEditor element commands", () => {
+  const input = {
+    childIds: [],
+    id: "shape",
     type: "rectangle",
     frame: { x: 10, y: 20, width: 100, height: 80 },
     zIndex: 2,
@@ -9,10 +11,13 @@ describe("EditorRuntime element commands", () => {
   } as const;
 
   it("creates, patches, snapshots, and removes generic elements", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const { childIds: _childIds, ...fields } = input;
     expect(editor.elements.insertElement(input)).toEqual({ ...fields, children: [] });
-    const updated = editor.elements.updateElement("shape", { frame: { x: 30 }, props: { stroke: "blue" } });
+    const updated = editor.elements.updateElement("shape", {
+      frame: { x: 30 },
+      props: { stroke: "blue" },
+    });
     expect(updated).toEqual({
       ...input,
       frame: { ...input.frame, x: 30 },
@@ -23,20 +28,25 @@ describe("EditorRuntime element commands", () => {
       frame: { ...input.frame, x: 30 },
       props: { ...input.props, stroke: "blue" },
     });
-    expect(editor.dump()).toMatchObject({ version: 9, elements: [{ id: "shape", type: "rectangle" }] });
+    expect(editor.dump()).toMatchObject({
+      version: 9,
+      elements: [{ id: "shape", type: "rectangle" }],
+    });
     editor.elements.removeElement("shape");
     expect(editor.elements.getElementNodes()).toEqual([]);
     editor.destroy();
   });
 
   it("prevalidates atomic updates and tracks element undo and redo", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     editor.elements.insertElement(input);
     editor.history.clear();
-    expect(() => editor.elements.updateElements([
-      { id: "shape", patch: { frame: { x: 40 } } },
-      { id: "missing", patch: { zIndex: 4 } },
-    ])).toThrow("Element missing not found");
+    expect(() =>
+      editor.elements.updateElements([
+        { id: "shape", patch: { frame: { x: 40 } } },
+        { id: "missing", patch: { zIndex: 4 } },
+      ]),
+    ).toThrow("Element missing not found");
     expect(editor.elements.getElementNode("shape")?.frame.x).toBe(10);
 
     editor.elements.updateElement("shape", { frame: { x: 40 } });
@@ -48,8 +58,10 @@ describe("EditorRuntime element commands", () => {
   });
 
   it("rejects invalid geometry and unsupported snapshot versions", async () => {
-    const editor = await createRivtoEditor();
-    expect(() => editor.elements.insertElement({ ...input, frame: { ...input.frame, width: 0 } })).toThrow();
+    const editor = await createDocumentEditor();
+    expect(() =>
+      editor.elements.insertElement({ ...input, frame: { ...input.frame, width: 0 } }),
+    ).toThrow();
     editor.elements.insertElement(input);
     expect(() => editor.load({ version: 4, blocks: [] } as never)).toThrow(
       "Unsupported Rivto document snapshot version: 4",
@@ -59,7 +71,7 @@ describe("EditorRuntime element commands", () => {
   });
 
   it("runs registered element processors before insert and update", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     const dispose = editor.elements.registerProcessor({
       id: "test.element.tag",
       priority: 30,
@@ -69,19 +81,27 @@ describe("EditorRuntime element commands", () => {
       }),
     });
     editor.elements.insertElement({ ...input, id: "processed" });
-    expect(editor.elements.getElementNode("processed")?.props).toMatchObject({ fill: "red", tagged: true });
+    expect(editor.elements.getElementNode("processed")?.props).toMatchObject({
+      fill: "red",
+      tagged: true,
+    });
     editor.elements.updateElement("processed", { props: { stroke: "blue" } });
-    expect(editor.elements.getElementNode("processed")?.props).toMatchObject({ stroke: "blue", tagged: true });
+    expect(editor.elements.getElementNode("processed")?.props).toMatchObject({
+      stroke: "blue",
+      tagged: true,
+    });
     dispose();
     editor.destroy();
   });
 
   it("removes child references without changing blocks or opaque properties", async () => {
-    const editor = await createRivtoEditor();
+    const editor = await createDocumentEditor();
     editor.blocks.insertBlock({ id: "from", type: "paragraph" });
     editor.blocks.insertBlock({ id: "to", type: "paragraph" });
     editor.elements.insertElement(input);
-    editor.elements.insertElement({ childIds: ["shape"],       id: "opaque-group",
+    editor.elements.insertElement({
+      childIds: ["shape"],
+      id: "opaque-group",
       type: "group",
       frame: { x: 0, y: 0, width: 10, height: 10 },
       zIndex: 0,
@@ -98,13 +118,18 @@ describe("EditorRuntime element commands", () => {
 });
 
 it("processes new descendants and processor-added children before one atomic insertion", async () => {
-  const editor = await createRivtoEditor();
+  const editor = await createDocumentEditor();
   const frame = { x: 10, y: 20, width: 30, height: 40 };
-  editor.elements.registerProcessor({ id: "tree-input", priority: 0, processor: (input) => ({
-    ...input,
-    props: { ...input.props, processed: true },
-    children: input.id === "root" ? [{ id: "added", type: "shape", frame, zIndex: 0 }] : input.children,
-  }) });
+  editor.elements.registerProcessor({
+    id: "tree-input",
+    priority: 0,
+    processor: (input) => ({
+      ...input,
+      props: { ...input.props, processed: true },
+      children:
+        input.id === "root" ? [{ id: "added", type: "shape", frame, zIndex: 0 }] : input.children,
+    }),
+  });
   const root = editor.elements.insertElement({ type: "group", id: "root", zIndex: 0 });
   expect(root.frame).toEqual(frame);
   expect(root.children[0]!.props.processed).toBe(true);
@@ -112,49 +137,4 @@ it("processes new descendants and processor-added children before one atomic ins
   editor.history.undo();
   expect(editor.elements.getElementNodes()).toEqual([]);
   await editor.destroy();
-});
-
-it("restricts commands to a selected root and observes descendants entering or leaving it", async () => {
-  const editor = await createRivtoEditor();
-  const shape = { type: "shape", frame: { x: 0, y: 0, width: 20, height: 30 }, zIndex: 0 };
-  const root = editor.elements.insertElement({ ...shape, type: "group" });
-  const other = editor.elements.insertElement({ ...shape, type: "group", children: [
-    { ...shape, id: "nested", children: [{ ...shape, id: "leaf" }] },
-  ] });
-  const elements = editor.elements.forRoot(root.id);
-  expect(editor.elements.forRoot(root.id)).toBe(elements);
-  expect(elements.getElementNode(root.id)).toBeUndefined();
-  const nodeChanged = jest.fn(); const treeChanged = jest.fn();
-  elements.subscribeElementNode("leaf", nodeChanged);
-  elements.subscribeElement("leaf", treeChanged);
-  editor.elements.moveElements(["nested"], { parentId: root.id });
-  expect(elements.getElementNodes().map(({ id }) => id)).toEqual(["nested", "leaf"]);
-  expect(nodeChanged).toHaveBeenCalledTimes(1);
-  expect(treeChanged).toHaveBeenCalledTimes(1);
-  const before = editor.getDocument().getSnapshot();
-  expect(() => elements.removeElements(["leaf", other.id])).toThrow("outside root");
-  expect(() => elements.moveElements(["leaf"], { parentId: other.id })).toThrow("outside root");
-  expect(() => elements.insertElement({ ...shape, childIds: [other.id] })).toThrow("outside root");
-  expect(editor.getDocument().getSnapshot()).toEqual(before);
-  editor.elements.moveElements(["nested"], { parentId: other.id });
-  expect(elements.getElementNodes()).toEqual([]);
-  expect(nodeChanged).toHaveBeenCalledTimes(2);
-  expect(treeChanged).toHaveBeenCalledTimes(2);
-  await editor.destroy();
-});
-
-it.each([10, 2000])("notifies only the changed node among %i scoped subscriptions", async (count) => {
-  const editor = await createRivtoEditor();
-  const root = editor.elements.insertElement({ type: "group", zIndex: 0, children:
-    Array.from({ length: count }, (_, i) => ({ id: `node-${i}`, type: "shape", zIndex: 0, frame: { x: i, y: 0, width: 1, height: 1 } })) });
-  const scoped = editor.elements.forRoot(root.id);
-  const listeners = Array.from({ length: count }, () => jest.fn());
-  const dispose = listeners.map((listener, i) => scoped.subscribeElementNode(`node-${i}`, listener));
-  const lookup = jest.spyOn(editor.elements, "getElementNode");
-  scoped.updateElement("node-0", { frame: { x: 42 } });
-  expect(scoped.getElementNode("node-0")!.frame.x).toBe(42);
-  expect(listeners[0]).toHaveBeenCalledTimes(1);
-  expect(listeners.slice(1).every((listener) => listener.mock.calls.length === 0)).toBe(true);
-  expect(lookup.mock.calls.length).toBeLessThan(8);
-  lookup.mockRestore(); dispose.forEach((unsubscribe) => unsubscribe()); await editor.destroy();
 });

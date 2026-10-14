@@ -32,11 +32,11 @@ export type BasicType =
  * - BasicType
  */
 export type CRDTType =
-// CRDT types, synchronized any changes to the CRDT types are synchronized to the other clients.
-| CRDTArray<any>
-| CRDTMap<any>
-| CRDTText 
-// Object types, objects are serialized to a JSON and synchronized to the other clients.
-| Record<string, BasicType> 
-| BasicType[]
-| BasicType
+  // CRDT types, synchronized any changes to the CRDT types are synchronized to the other clients.
+  | CRDTArray<any>
+  | CRDTMap<any>
+  | CRDTText
+  // Object types, objects are serialized to a JSON and synchronized to the other clients.
+  | Record<string, BasicType>
+  | BasicType[]
+  | BasicType;

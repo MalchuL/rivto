@@ -14,7 +14,9 @@ export class CommandRegistry implements CommandRegistryApi {
   private currentLastExecuted: string | null = null;
 
   /** Returns the last command whose handler completed without throwing. */
-  get lastExecuted(): string | null { return this.currentLastExecuted; }
+  get lastExecuted(): string | null {
+    return this.currentLastExecuted;
+  }
 
   /**
    * Registers one command handler until the returned disposer is called.
@@ -25,14 +27,22 @@ export class CommandRegistry implements CommandRegistryApi {
    * @throws If the command name is empty or already registered.
    */
   register(name: string, handler: CommandHandler): RegisteredCommand {
-    if (!name) throw new Error("Command name is required");
-    if (this.handlers.has(name)) throw new Error(`Command ${name} is already registered`);
+    if (!name) {
+      throw new Error("Command name is required");
+    }
+    if (this.handlers.has(name)) {
+      throw new Error(`Command ${name} is already registered`);
+    }
     this.handlers.set(name, handler);
     let active = true;
     const dispose = (): void => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
-      if (this.handlers.get(name) === handler) this.handlers.delete(name);
+      if (this.handlers.get(name) === handler) {
+        this.handlers.delete(name);
+      }
     };
     return {
       name,
@@ -70,7 +80,9 @@ export class CommandRegistry implements CommandRegistryApi {
    */
   execute(name: string, payload?: unknown): unknown {
     const handler = this.handlers.get(name);
-    if (!handler) throw new Error(`Unknown command ${name}`);
+    if (!handler) {
+      throw new Error(`Unknown command ${name}`);
+    }
     const result = handler(payload);
     this.currentLastExecuted = name;
     this.notify();

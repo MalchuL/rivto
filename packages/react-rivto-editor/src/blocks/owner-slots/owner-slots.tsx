@@ -16,7 +16,7 @@ import { SurfaceContext } from "../../surfaces/surface";
  */
 import type { EditorBlockNode, EditorElementNode } from "@chulane/rivto";
 import { Fragment, type ReactNode } from "react";
-import { useEditorView } from "../../hooks";
+import { useReactPanel } from "../../hooks";
 import {
   SLOT_POSITIONS,
   type BlockSlotPosition,
@@ -39,13 +39,11 @@ function SlotHost<Props extends object>({
   readonly components: readonly ResolvedSlot<Props>[];
   readonly props: Props;
 }) {
-  if (!components.length) return null;
+  if (!components.length) {
+    return null;
+  }
   return (
-    <div
-      className={SLOT_CLASS}
-      data-slot-owner={owner}
-      data-slot-position={position}
-    >
+    <div className={SLOT_CLASS} data-slot-owner={owner} data-slot-position={position}>
       {components.map(({ id, component: Component }) => (
         <Fragment key={id}>
           <Component {...props} />
@@ -72,7 +70,7 @@ function SlotHost<Props extends object>({
  * @param props.selected - Whether the owner is selected, passed to slot components and filters.
  * @param props.children - Main block content to place between the start and end slots.
  * @returns Ordered row content and every populated row-slot host.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel subtree.
  */
 export function BlockSlots({
   block,
@@ -83,33 +81,35 @@ export function BlockSlots({
   readonly selected: boolean;
   readonly children: ReactNode;
 }) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const mode = useContext(SurfaceContext);
   const slotProps: BlockSlotProps = { block, mode, selected };
-  return <>
-    <SlotHost
-      owner="block"
-      position="start"
-      components={editorView.runtime.surfaces.getBlockSlotEntries("start", slotProps)}
-      props={slotProps}
-    />
-    {children}
-    <SlotHost
-      owner="block"
-      position="end"
-      components={editorView.runtime.surfaces.getBlockSlotEntries("end", slotProps)}
-      props={slotProps}
-    />
-    {SLOT_POSITIONS.map((position) => (
+  return (
+    <>
       <SlotHost
-        key={position}
         owner="block"
-        position={position}
-        components={editorView.runtime.surfaces.getBlockSlotEntries(position, slotProps)}
+        position="start"
+        components={reactPanel.editor.surfaces.getBlockSlotEntries("start", slotProps)}
         props={slotProps}
       />
-    ))}
-  </>;
+      {children}
+      <SlotHost
+        owner="block"
+        position="end"
+        components={reactPanel.editor.surfaces.getBlockSlotEntries("end", slotProps)}
+        props={slotProps}
+      />
+      {SLOT_POSITIONS.map((position) => (
+        <SlotHost
+          key={position}
+          owner="block"
+          position={position}
+          components={reactPanel.editor.surfaces.getBlockSlotEntries(position, slotProps)}
+          props={slotProps}
+        />
+      ))}
+    </>
+  );
 }
 
 /**
@@ -129,18 +129,20 @@ export function BlockSlots({
  * @param props.block - Current snapshot of the block that owns the body slot.
  * @param props.selected - Whether the owner is selected, passed to slot components and filters.
  * @returns A body-slot host that renders registered components, or nothing when the slot is empty.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel subtree.
  */
 export function BlockBodySlot({ block, selected }: Omit<BlockSlotProps, "mode">) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const mode = useContext(SurfaceContext);
   const props = { block, mode, selected };
-  return <SlotHost
-    owner="block"
-    position="body"
-    components={editorView.runtime.surfaces.getBlockSlotEntries("body", props)}
-    props={props}
-  />;
+  return (
+    <SlotHost
+      owner="block"
+      position="body"
+      components={reactPanel.editor.surfaces.getBlockSlotEntries("body", props)}
+      props={props}
+    />
+  );
 }
 
 /**
@@ -156,16 +158,20 @@ export function ElementSlots({
   readonly element: EditorElementNode;
   readonly selected: boolean;
 }) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const mode = useContext(SurfaceContext);
   const slotProps: ElementSlotProps = { element, mode, selected };
-  return <>{SLOT_POSITIONS.map((position) => (
-    <SlotHost
-      key={position}
-      owner="element"
-      position={position}
-      components={editorView.runtime.surfaces.getElementSlotEntries(position, slotProps)}
-      props={slotProps}
-    />
-  ))}</>;
+  return (
+    <>
+      {SLOT_POSITIONS.map((position) => (
+        <SlotHost
+          key={position}
+          owner="element"
+          position={position}
+          components={reactPanel.editor.surfaces.getElementSlotEntries(position, slotProps)}
+          props={slotProps}
+        />
+      ))}
+    </>
+  );
 }

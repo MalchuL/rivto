@@ -56,9 +56,13 @@ export function formatTagName(name: string): string {
 }
 
 export function normalizeTagColor(raw: string | undefined): string {
-  if (!raw) return DEFAULT_TAG_COLOR;
+  if (!raw) {
+    return DEFAULT_TAG_COLOR;
+  }
   const value = raw.trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toLowerCase();
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+    return value.toLowerCase();
+  }
   if (/^#[0-9a-fA-F]{3}$/.test(value)) {
     const [, a, b, c] = value;
     return `#${a}${a}${b}${b}${c}${c}`.toLowerCase();

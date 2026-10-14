@@ -41,7 +41,12 @@ const DEFAULT_ROOT_LINE_OFFSET = 12;
  * @param props - Anchor resolver, offset, and traversal rules.
  * @returns Body-hosted SVG overlay for page mode, or null for other surfaces.
  */
-function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excludeBlockTypes, continueBlockTypes }: BulletThreadingOptions) {
+function ThreadOverlay({
+  anchor,
+  rootLineOffset = DEFAULT_ROOT_LINE_OFFSET,
+  excludeBlockTypes,
+  continueBlockTypes,
+}: BulletThreadingOptions) {
   const { element: root } = useEditorRoot();
   const overlayRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
@@ -49,9 +54,13 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excl
   const continued = continueBlockTypes ? new Set(continueBlockTypes) : null;
 
   useEffect(() => {
-    if (!root || !root.matches(".page-surface")) return;
+    if (!root || !root.matches(".page-surface")) {
+      return;
+    }
     const view = root.ownerDocument.defaultView;
-    if (!view) return;
+    if (!view) {
+      return;
+    }
     const observer = new ResizeObserver(() => schedule());
     const observed = new Set<Element>();
     let frame = 0;
@@ -63,7 +72,9 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excl
       // Measure each block once per frame and observe the exact elements supplying its geometry.
       const cache = new Map<Element, ThreadPoint | null>();
       const point = (block: Element): ThreadPoint | null => {
-        if (cache.has(block)) return cache.get(block)!;
+        if (cache.has(block)) {
+          return cache.get(block)!;
+        }
         const control = anchor(block);
         if (!control) {
           cache.set(block, null);
@@ -85,20 +96,36 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excl
         return value;
       };
       const path = buildThreadPath({ root: root!, rootLineOffset, excluded, continued, point });
-      for (const element of observed) if (!nextObserved.has(element)) observer.unobserve(element);
-      for (const element of nextObserved) if (!observed.has(element)) observer.observe(element);
+      for (const element of observed) {
+        if (!nextObserved.has(element)) {
+          observer.unobserve(element);
+        }
+      }
+      for (const element of nextObserved) {
+        if (!observed.has(element)) {
+          observer.observe(element);
+        }
+      }
       observed.clear();
-      for (const element of nextObserved) observed.add(element);
-      if (pathRef.current?.getAttribute("d") !== path) pathRef.current?.setAttribute("d", path);
+      for (const element of nextObserved) {
+        observed.add(element);
+      }
+      if (pathRef.current?.getAttribute("d") !== path) {
+        pathRef.current?.setAttribute("d", path);
+      }
     }
 
     function schedule() {
-      if (!frame) frame = view!.requestAnimationFrame(measure);
+      if (!frame) {
+        frame = view!.requestAnimationFrame(measure);
+      }
     }
 
     function onScroll(event: Event) {
       // The body-hosted SVG scrolls with the document; only nested scrollers need new coordinates.
-      if (event.target !== root!.ownerDocument && event.target !== view) schedule();
+      if (event.target !== root!.ownerDocument && event.target !== view) {
+        schedule();
+      }
     }
 
     const mutations = new MutationObserver(schedule);
@@ -119,9 +146,16 @@ function ThreadOverlay({ anchor, rootLineOffset = DEFAULT_ROOT_LINE_OFFSET, excl
     };
   }, [root, anchor, rootLineOffset, excludeBlockTypes, continueBlockTypes]);
 
-  if (!root?.matches(".page-surface")) return null;
+  if (!root?.matches(".page-surface")) {
+    return null;
+  }
   return createPortal(
-    <svg ref={overlayRef} className="rivto-bullet-threading" aria-hidden="true" data-bullet-threading="true">
+    <svg
+      ref={overlayRef}
+      className="rivto-bullet-threading"
+      aria-hidden="true"
+      data-bullet-threading="true"
+    >
       <path ref={pathRef} />
     </svg>,
     root.ownerDocument.body,
@@ -140,11 +174,15 @@ export function bulletThreadingExtension(options: BulletThreadingOptions): React
   if (typeof anchor !== "function") {
     throw new Error("Bullet threading anchor must be a function");
   }
-  if (options.rootLineOffset !== undefined && (!Number.isFinite(options.rootLineOffset) || options.rootLineOffset < 0)) {
+  if (
+    options.rootLineOffset !== undefined &&
+    (!Number.isFinite(options.rootLineOffset) || options.rootLineOffset < 0)
+  ) {
     throw new Error(`Invalid bullet threading root line offset: ${options.rootLineOffset}`);
   }
   return {
     id: "block.bullet-threading",
-    setup: (editorRuntime) => editorRuntime.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
+    setup: (reactEditor) =>
+      reactEditor.extensions.mount(() => <ThreadOverlay {...options} />, "afterSurface"),
   };
 }

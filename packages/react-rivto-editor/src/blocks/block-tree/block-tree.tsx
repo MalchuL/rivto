@@ -10,7 +10,7 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  */
 import { memo, useCallback, useSyncExternalStore, type ComponentType } from "react";
 import { BLOCK_ROW_CLASS } from "../../constants";
-import { useBlockNode, useBlockSelected, useEditorView } from "../../hooks";
+import { useBlockNode, useBlockSelected, useReactPanel } from "../../hooks";
 import { BlockView } from "../block-view/block-view";
 import {
   BlockElementRefBoundary,
@@ -33,12 +33,7 @@ export interface BlockTreeProps {
 function BlockTreeShell({ block, isSelected, content, controls, children }: BlockShellProps) {
   const blockElementRef = useBlockElementRef();
   return (
-    <BlockView
-      ref={blockElementRef}
-      block={block}
-      isSelected={isSelected}
-      className="page-block"
-    >
+    <BlockView ref={blockElementRef} block={block} isSelected={isSelected} className="page-block">
       <div className={BLOCK_ROW_CLASS}>
         {controls}
         <BlockSlots block={block} selected={isSelected}>
@@ -65,22 +60,24 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
  */
 function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const selected = useBlockSelected(blockId);
   const childrenId = useBlockChildrenId(blockId);
   const subscribeRenderers = useCallback(
-    (listener: () => void) => editorView.runtime.renderers.subscribe(listener),
-    [editorView],
+    (listener: () => void) => reactPanel.editor.renderers.subscribe(listener),
+    [reactPanel],
   );
   useSyncExternalStore(
     subscribeRenderers,
-    () => editorView.runtime.renderers.revision,
-    () => editorView.runtime.renderers.revision,
+    () => reactPanel.editor.renderers.revision,
+    () => reactPanel.editor.renderers.revision,
   );
 
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   const childIds = block.childIds;
-  const Content = editorView.runtime.renderers.get(block.type) ?? UnknownBlock;
+  const Content = reactPanel.editor.renderers.get(block.type) ?? UnknownBlock;
 
   return (
     <BlockWrapper
@@ -89,7 +86,7 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && editorView.runtime.blockListProps.childrenVisible(block) && (
+      {childIds.length > 0 && reactPanel.editor.blockListProps.childrenVisible(block) && (
         <div id={childrenId} className="page-block-children">
           {childIds.map((childId) => (
             <MemoBlockTreeNode key={childId} blockId={childId} />
@@ -125,5 +122,11 @@ const MemoBlockTreeNode = memo(BlockTreeNode);
  * @returns Block roots and their expanded descendants without an extra DOM wrapper.
  */
 export const BlockTree = memo(function BlockTree({ blockIds }: BlockTreeProps) {
-  return <>{blockIds.map((blockId) => <MemoBlockTreeNode key={blockId} blockId={blockId} />)}</>;
+  return (
+    <>
+      {blockIds.map((blockId) => (
+        <MemoBlockTreeNode key={blockId} blockId={blockId} />
+      ))}
+    </>
+  );
 });

@@ -15,7 +15,9 @@
  * @returns True when `nodeType` is a number.
  */
 export function isNodeLike(value: unknown): value is Node {
-  return typeof value === "object" && value !== null && typeof (value as Node).nodeType === "number";
+  return (
+    typeof value === "object" && value !== null && typeof (value as Node).nodeType === "number"
+  );
 }
 
 /**

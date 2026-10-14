@@ -5,7 +5,16 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
@@ -75,7 +84,7 @@ export async function readMarkdownDocuments(
   for (const entry of entries) {
     const absolutePath = resolve(currentDirectory, entry.name);
     if (entry.isDirectory() && !EXCLUDED_DIRECTORIES.has(entry.name)) {
-      documents.push(...await readMarkdownDocuments(rootDirectory, absolutePath));
+      documents.push(...(await readMarkdownDocuments(rootDirectory, absolutePath)));
     } else if (entry.isFile() && extname(entry.name).toLowerCase() === ".md") {
       const metadata = await stat(absolutePath);
       documents.push({
@@ -105,7 +114,7 @@ export async function readDocumentationImages(
   for (const entry of entries) {
     const absolutePath = resolve(currentDirectory, entry.name);
     if (entry.isDirectory() && !EXCLUDED_DIRECTORIES.has(entry.name)) {
-      images.push(...await readDocumentationImages(rootDirectory, absolutePath));
+      images.push(...(await readDocumentationImages(rootDirectory, absolutePath)));
     } else if (entry.isFile()) {
       const contentType = getImageContentType(entry.name);
       if (contentType) {
@@ -149,9 +158,21 @@ export function markdownFilesPlugin(): Plugin {
 
   return {
     name: "rivto-markdown-files",
+    /**
+     * Resolves the documentation virtual module without claiming unrelated imports.
+     *
+     * @param id - Imported module ID to resolve.
+     * @returns The internal module ID, or undefined for other imports.
+     */
     resolveId(id) {
       return id === VIRTUAL_MODULE_ID ? RESOLVED_VIRTUAL_MODULE_ID : undefined;
     },
+    /**
+     * Loads bundled Markdown documents and registers their source files for watching.
+     *
+     * @param id - Resolved module ID to load.
+     * @returns Module source, or undefined for unrelated module IDs.
+     */
     async load(id) {
       if (id !== RESOLVED_VIRTUAL_MODULE_ID) {
         return undefined;
@@ -163,6 +184,11 @@ export function markdownFilesPlugin(): Plugin {
       }
       return `export const bundledDocuments = ${JSON.stringify(documents)};`;
     },
+    /**
+     * Registers development endpoints for documentation, Markdown mirrors, and image uploads.
+     *
+     * @param server - Vite development server receiving the endpoint registrations.
+     */
     configureServer(server) {
       server.middlewares.use(IMAGES_ENDPOINT, async function handleImageUpload(request, response) {
         try {
@@ -194,40 +220,43 @@ export function markdownFilesPlugin(): Plugin {
         }
         sendText(response, 200, generateLlmsText(await readMarkdownDocuments(rootDirectory)));
       });
-      server.middlewares.use(MARKDOWN_ENDPOINT, async function handleMarkdownMirrorRequest(
-        request,
-        response,
-      ) {
-        try {
-          if (request.method !== "GET") {
-            sendJson(response, 405, { message: "Only GET is supported." });
-            return;
-          }
-          const requestPath = new URL(request.url ?? "/", "http://localhost").pathname.slice(1);
-          const decodedPath = decodeURIComponent(requestPath);
-          if (extname(decodedPath).toLowerCase() === ".md") {
-            const absolutePath = resolveMarkdownPath(rootDirectory, decodedPath);
-            sendText(response, 200, await readFile(absolutePath, "utf8"));
-          } else {
-            const contentType = getImageContentType(decodedPath);
-            if (!contentType) {
-              throw new Error("Unsupported documentation asset type.");
+      server.middlewares.use(
+        MARKDOWN_ENDPOINT,
+        async function handleMarkdownMirrorRequest(request, response) {
+          try {
+            if (request.method !== "GET") {
+              sendJson(response, 405, { message: "Only GET is supported." });
+              return;
             }
-            const absolutePath = resolveImagePath(rootDirectory, decodedPath);
-            sendBinary(response, 200, await readFile(absolutePath), contentType);
+            const requestPath = new URL(request.url ?? "/", "http://localhost").pathname.slice(1);
+            const decodedPath = decodeURIComponent(requestPath);
+            if (extname(decodedPath).toLowerCase() === ".md") {
+              const absolutePath = resolveMarkdownPath(rootDirectory, decodedPath);
+              sendText(response, 200, await readFile(absolutePath, "utf8"));
+            } else {
+              const contentType = getImageContentType(decodedPath);
+              if (!contentType) {
+                throw new Error("Unsupported documentation asset type.");
+              }
+              const absolutePath = resolveImagePath(rootDirectory, decodedPath);
+              sendBinary(response, 200, await readFile(absolutePath), contentType);
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Markdown page not found.";
+            sendJson(response, 404, { message });
           }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Markdown page not found.";
-          sendJson(response, 404, { message });
-        }
-      });
-      server.middlewares.use(DOCUMENTS_ENDPOINT, async function handleDocumentsRequest(
-        request,
-        response,
-      ) {
-        await routeDocumentsRequest(rootDirectory, request, response);
-      });
+        },
+      );
+      server.middlewares.use(
+        DOCUMENTS_ENDPOINT,
+        async function handleDocumentsRequest(request, response) {
+          await routeDocumentsRequest(rootDirectory, request, response);
+        },
+      );
     },
+    /**
+     * Emits llms.txt, Markdown pages, and documentation images into the production bundle.
+     */
     async generateBundle() {
       const documents = await readMarkdownDocuments(rootDirectory);
       this.emitFile({ type: "asset", fileName: "llms.txt", source: generateLlmsText(documents) });
@@ -319,8 +348,11 @@ function resolveImagePath(rootDirectory: string, imagePath: string): string {
  */
 function getImageContentType(path: string): keyof typeof IMAGE_TYPES | undefined {
   const extension = extname(path).toLowerCase();
-  return (Object.entries(IMAGE_TYPES) as Array<[keyof typeof IMAGE_TYPES, string]>)
-    .find(function matchesExtension(entry) { return entry[1] === extension; })?.[0];
+  return (Object.entries(IMAGE_TYPES) as Array<[keyof typeof IMAGE_TYPES, string]>).find(
+    function matchesExtension(entry) {
+      return entry[1] === extension;
+    },
+  )?.[0];
 }
 
 /**
@@ -333,15 +365,21 @@ function getImageContentType(path: string): keyof typeof IMAGE_TYPES | undefined
 function hasValidImageSignature(contentType: string, content: Buffer): boolean {
   let valid = false;
   if (contentType === "image/png") {
-    valid = content.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    valid = content
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   } else if (contentType === "image/jpeg") {
     valid = content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff;
   } else if (contentType === "image/gif") {
     valid = ["GIF87a", "GIF89a"].includes(content.subarray(0, 6).toString("ascii"));
   } else if (contentType === "image/webp") {
-    valid = content.subarray(0, 4).toString("ascii") === "RIFF" && content.subarray(8, 12).toString("ascii") === "WEBP";
+    valid =
+      content.subarray(0, 4).toString("ascii") === "RIFF" &&
+      content.subarray(8, 12).toString("ascii") === "WEBP";
   } else if (contentType === "image/avif") {
-    valid = content.subarray(4, 8).toString("ascii") === "ftyp" && ["avif", "avis"].includes(content.subarray(8, 12).toString("ascii"));
+    valid =
+      content.subarray(4, 8).toString("ascii") === "ftyp" &&
+      ["avif", "avis"].includes(content.subarray(8, 12).toString("ascii"));
   }
   return valid;
 }
@@ -426,7 +464,9 @@ function compareDocumentPaths(left: MarkdownDocument, right: MarkdownDocument): 
     const leftOrder = Number.parseInt(leftSegment.match(/^(\d+)-/)?.[1] ?? "", 10);
     const rightOrder = Number.parseInt(rightSegment.match(/^(\d+)-/)?.[1] ?? "", 10);
     const normalizedLeftOrder = Number.isFinite(leftOrder) ? leftOrder : Number.POSITIVE_INFINITY;
-    const normalizedRightOrder = Number.isFinite(rightOrder) ? rightOrder : Number.POSITIVE_INFINITY;
+    const normalizedRightOrder = Number.isFinite(rightOrder)
+      ? rightOrder
+      : Number.POSITIVE_INFINITY;
     result = normalizedLeftOrder - normalizedRightOrder || leftSegment.localeCompare(rightSegment);
   }
   return result;
@@ -471,7 +511,9 @@ function getMarkdownTitle(document: MarkdownDocument): string {
 function getMarkdownDescription(document: MarkdownDocument): string {
   const description = document.content
     .split("\n")
-    .map(function trimLine(line) { return line.trim(); })
+    .map(function trimLine(line) {
+      return line.trim();
+    })
     .find(function isDescriptionLine(line) {
       return line.length > 0 && !/^(#|>|-|\*|```)/.test(line);
     });
@@ -513,7 +555,8 @@ async function routeDocumentsRequest(
       sendJson(response, 404, { message: "Document endpoint not found." });
     }
   } catch (error) {
-    const statusCode = error instanceof StaleDocumentError || error instanceof DuplicateDocumentError ? 409 : 400;
+    const statusCode =
+      error instanceof StaleDocumentError || error instanceof DuplicateDocumentError ? 409 : 400;
     const message = error instanceof Error ? error.message : "Unable to process document request.";
     sendJson(response, statusCode, { message });
   }
@@ -621,10 +664,12 @@ async function assertExistingAncestorsStayInsideRoot(
  */
 function isOrderedMarkdownPath(documentPath: string): boolean {
   const segments = documentPath.split("/");
-  return segments.every(function isOrderedSegment(segment, index) {
-    const value = index === segments.length - 1 ? segment.replace(/\.md$/i, "") : segment;
-    return /^\d+-[\p{Letter}\p{Number}]+(?:-[\p{Letter}\p{Number}]+)*$/u.test(value);
-  }) && documentPath.toLowerCase().endsWith(".md");
+  return (
+    segments.every(function isOrderedSegment(segment, index) {
+      const value = index === segments.length - 1 ? segment.replace(/\.md$/i, "") : segment;
+      return /^\d+-[\p{Letter}\p{Number}]+(?:-[\p{Letter}\p{Number}]+)*$/u.test(value);
+    }) && documentPath.toLowerCase().endsWith(".md")
+  );
 }
 
 /**

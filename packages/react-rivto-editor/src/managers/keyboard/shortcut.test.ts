@@ -25,40 +25,48 @@ describe("Primary modifier", () => {
     Object.defineProperty(navigator, "platform", { configurable: true, value: "MacIntel" });
     expect(resolvePrimaryModifier()).toBe("meta");
     const shortcut = parseShortcut("Primary+z");
-    expect(matchesShortcut(shortcut, {
-      key: "z",
-      code: "KeyZ",
-      ctrlKey: false,
-      metaKey: true,
-      altKey: false,
-      shiftKey: false,
-    } as KeyboardEvent)).toBe(true);
-    expect(matchesShortcut(shortcut, {
-      key: "z",
-      code: "KeyZ",
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-    } as KeyboardEvent)).toBe(false);
+    expect(
+      matchesShortcut(shortcut, {
+        key: "z",
+        code: "KeyZ",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: false,
+      } as KeyboardEvent),
+    ).toBe(true);
+    expect(
+      matchesShortcut(shortcut, {
+        key: "z",
+        code: "KeyZ",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+      } as KeyboardEvent),
+    ).toBe(false);
 
     Object.defineProperty(navigator, "platform", { configurable: true, value: "Linux x86_64" });
     expect(resolvePrimaryModifier()).toBe("ctrl");
-    expect(matchesShortcut(parseShortcut("Primary+z"), {
-      key: "z",
-      code: "KeyZ",
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-    } as KeyboardEvent)).toBe(true);
-    expect(matchesShortcut(parseShortcut("Primary+z"), {
-      key: "z",
-      code: "KeyZ",
-      ctrlKey: false,
-      metaKey: true,
-      altKey: false,
-      shiftKey: false,
-    } as KeyboardEvent)).toBe(false);
+    expect(
+      matchesShortcut(parseShortcut("Primary+z"), {
+        key: "z",
+        code: "KeyZ",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+      } as KeyboardEvent),
+    ).toBe(true);
+    expect(
+      matchesShortcut(parseShortcut("Primary+z"), {
+        key: "z",
+        code: "KeyZ",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: false,
+      } as KeyboardEvent),
+    ).toBe(false);
   });
 });

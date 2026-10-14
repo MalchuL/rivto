@@ -20,8 +20,10 @@ const EDGELESS_CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
  */
 export function canPageDragAutoScroll(element: Element): boolean {
   const modal = element.ownerDocument.querySelector("dialog:modal");
-  return (!modal || modal.contains(element))
-    && !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR));
+  return (
+    (!modal || modal.contains(element)) &&
+    !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR))
+  );
 }
 
 /**
@@ -33,11 +35,19 @@ export function canPageDragAutoScroll(element: Element): boolean {
  * @param onMove - Called with each live cursor position for preview movement.
  * @returns A tracker for pointer gestures, or null for keyboard activation.
  */
-export function trackGesturePointer(activatorEvent: Event, onScroll?: () => void, onMove?: (point: PointerCoordinates) => void): PointerTracker | null {
+export function trackGesturePointer(
+  activatorEvent: Event,
+  onScroll?: () => void,
+  onMove?: (point: PointerCoordinates) => void,
+): PointerTracker | null {
   const activator = activatorEvent as Event & { clientX?: unknown; clientY?: unknown };
   const target = activatorEvent.target;
   const ownerDocument = target instanceof Node ? target.ownerDocument : null;
-  if (typeof activator.clientX !== "number" || typeof activator.clientY !== "number" || !ownerDocument) {
+  if (
+    typeof activator.clientX !== "number" ||
+    typeof activator.clientY !== "number" ||
+    !ownerDocument
+  ) {
     return null;
   }
   let current: PointerCoordinates = { x: activator.clientX, y: activator.clientY };
@@ -47,7 +57,9 @@ export function trackGesturePointer(activatorEvent: Event, onScroll?: () => void
   };
   const scrolled = () => onScroll?.();
   ownerDocument.addEventListener("pointermove", update, { capture: true, passive: true });
-  if (onScroll) ownerDocument.addEventListener("scroll", scrolled, { capture: true, passive: true });
+  if (onScroll) {
+    ownerDocument.addEventListener("scroll", scrolled, { capture: true, passive: true });
+  }
   return {
     get: () => current,
     dispose: () => {

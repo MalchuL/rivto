@@ -44,6 +44,8 @@ failing checks; do not describe unverified work as fully validated.
 - `pnpm --filter @chulane/rivto-react test` — run React Jest tests.
 - `pnpm test:e2e` — run Playwright.
 
+Run Playwright behavioral tests with `--workers=12`. Rerun failed tests with `--workers=1` before diagnosing or classifying the failures; report the parallel and serial results separately. Run dedicated performance measurements with `--workers=1` to avoid contention between workers.
+
 Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run checks proportionate to the change; use focused tests first and build when exports or packaging change. Run relevant local checks and fix failures caused by the requested change without asking for approval at each step.
 
 ## Style and Reviews
@@ -54,7 +56,19 @@ Use concrete names that describe the implemented behavior and reuse existing dom
 
 Avoid nested or chained ternary operators. Use `if`/`else` or early returns for multiple conditions; a single simple ternary is fine.
 
-Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Straightforward private helpers do not need boilerplate JSDoc.
+Use Prettier's default ternary style (`experimentalTernaries: false`): when a ternary wraps, put `?` and `:` at the beginning of their respective lines. Short ternaries may remain on one line; do not force every ternary onto multiple lines.
+
+Always use braces (`{}`) around the bodies of `if`, `else`, `for`, `for...in`, `for...of`, `while`, and `do...while`, including single statements. ESLint enforces this with `curly: ["error", "all"]`; Prettier controls brace placement and spacing.
+
+Put non-empty block contents on a new line after `{`, and put the closing `}` on a separate line after the contents. This also applies to function bodies, methods, classes, `switch`, and `try`/`catch`/`finally`. Empty blocks may remain `{}`. ESLint enforces the internal line breaks with `@stylistic/curly-newline: ["error", { minElements: 1, consistent: true }]`, configured after `eslint-config-prettier` so it remains enabled. Prettier controls where the opening brace sits relative to declarations and how comments between branches are formatted.
+
+Keep functions and methods within 50 lines, including blank lines and comment-only lines. ESLint reports longer functions as warnings only; warnings do not fail lint or CI.
+
+Place all private class methods at the bottom of the class, after every other member. This includes static private methods and JavaScript `#private` methods. Keep the relative order of other members unless another rule requires a change.
+
+Every method must have a TypeScript JSDoc docstring (`/** ... */`) directly above its declaration, including private methods, constructors, getters, setters, object methods, interface method signatures, and function-valued class fields.
+
+Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Private helpers also require meaningful documentation of their behavior, parameters, and return values.
 
 For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-block.ts` subscribes to a recursive snapshot and returns ID-bound commands. Its documentation can describe that contract as follows:
 
@@ -68,7 +82,7 @@ For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-blo
  * @param blockId - Stable persisted ID of the block to observe.
  * @returns Current recursive snapshot and ID-bound operations. The `block`
  * field is undefined when the ID is unknown or the block has been deleted.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel subtree.
  */
 export function useBlock(blockId: string): UseBlockResult;
 ```

@@ -26,7 +26,7 @@ it can hide a production defect.
 - **Problem:** `ListPropsRegistration.isValid` can only accept or reject a
   complete record. `prepare` then catches both a normal `false` result and any
   exception thrown by a policy and replaces them with `Error("Invalid block
-  list properties")`. The caller cannot identify the rejecting registration,
+list properties")`. The caller cannot identify the rejecting registration,
   the invalid field, or whether the validator itself crashed.
 - **Risk:** Misconfigured extensions and invalid user data are indistinguishable,
   making an integration defect look like a routine rejected operation.

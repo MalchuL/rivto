@@ -15,6 +15,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm test:eslint-rules
       - run: pnpm --filter @chulane/rivto test
       - run: pnpm --filter @chulane/rivto-react test
       - run: pnpm check-types

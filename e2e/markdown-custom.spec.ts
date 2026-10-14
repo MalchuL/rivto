@@ -13,6 +13,7 @@ import {
   blockIdSelector,
   blockTypeSelector,
 } from "./dom-markers";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
@@ -24,41 +25,55 @@ test.beforeEach(async ({ page }) => {
 
 test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {
   const ids = await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     return {
       plain: editor.blocks.insertBlock({ type: "paragraph", content: "Child 0-1" }).id,
       list: editor.blocks.insertBlock({ type: "paragraph", content: "- item" }).id,
     };
   });
-  await expect(page.locator(blockIdSelector(ids.plain)).locator(`.${MARKDOWN_PREVIEW_CLASS} > p`)).toHaveText("Child 0-1");
-  await expect(page.locator(blockIdSelector(ids.list)).locator(`.${MARKDOWN_PREVIEW_CLASS} ul li`)).toHaveText("item");
+  await expect(
+    page.locator(blockIdSelector(ids.plain)).locator(`.${MARKDOWN_PREVIEW_CLASS} > p`),
+  ).toHaveText("Child 0-1");
+  await expect(
+    page.locator(blockIdSelector(ids.list)).locator(`.${MARKDOWN_PREVIEW_CLASS} ul li`),
+  ).toHaveText("item");
 });
 
 test("preserves an existing caret during an external text update", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected block ID");
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
   const editor = block.locator("[data-block-content]");
   await editor.evaluate((element) => {
     (element as HTMLElement).focus();
     const text = element.firstChild;
     const selection = element.ownerDocument.getSelection();
-    if (!text || !selection) throw new Error("Expected editable text selection");
+    if (!text || !selection) {
+      throw new Error("Expected editable text selection");
+    }
     selection.setBaseAndExtent(text, 4, text, 4);
   });
   await page.evaluate((blockId) => {
-    const runtime = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const runtime = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo.editor;
     runtime.blocks.updateBlock(blockId, { content: "Changed content" });
   }, id);
   await expect(editor).toHaveText("Changed content");
-  expect(await editor.evaluate((element) => {
-    const selection = element.ownerDocument.getSelection();
-    const range = element.ownerDocument.createRange();
-    if (!selection?.anchorNode || !element.contains(selection.anchorNode)) return -1;
-    range.selectNodeContents(element);
-    range.setEnd(selection.anchorNode, selection.anchorOffset);
-    return range.toString().length;
-  })).toBe(4);
+  expect(
+    await editor.evaluate((element) => {
+      const selection = element.ownerDocument.getSelection();
+      const range = element.ownerDocument.createRange();
+      if (!selection?.anchorNode || !element.contains(selection.anchorNode)) {
+        return -1;
+      }
+      range.selectNodeContents(element);
+      range.setEnd(selection.anchorNode, selection.anchorOffset);
+      return range.toString().length;
+    }),
+  ).toBe(4);
 });
 
 test("shows full GFM at rest and raw source while editing", async ({ page }) => {
@@ -93,7 +108,9 @@ test("shows full GFM at rest and raw source while editing", async ({ page }) => 
   ].join("\n");
   await editor.evaluate((element, value) => {
     element.textContent = value;
-    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+    element.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }),
+    );
   }, source);
   await editor.evaluate((element) => (element as HTMLElement).blur());
 
@@ -120,17 +137,23 @@ test("opens ordinary Markdown links and delegates custom protocols", async ({ pa
     (element as HTMLElement).blur();
   });
   await page.evaluate(() => {
-    window.addEventListener("rivto:markdown-link", ((event: CustomEvent<string>) => {
-      (window as typeof window & { markdownLink?: string }).markdownLink = event.detail;
-    }) as EventListener, { once: true });
+    window.addEventListener(
+      "rivto:markdown-link",
+      ((event: CustomEvent<string>) => {
+        (window as typeof window & { markdownLink?: string }).markdownLink = event.detail;
+      }) as EventListener,
+      { once: true },
+    );
   });
 
   await preview.getByRole("link", { name: "Browser" }).click();
   await expect(page).toHaveURL(/#markdown-target$/);
   await preview.getByRole("link", { name: "Local" }).click();
-  await expect.poll(() => page.evaluate(() => (
-    window as typeof window & { markdownLink?: string }
-  ).markdownLink)).toBe("chulane:page/example");
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as typeof window & { markdownLink?: string }).markdownLink),
+    )
+    .toBe("chulane:page/example");
   await expect(page).toHaveURL(/#markdown-target$/);
 });
 
@@ -147,10 +170,13 @@ test("scrolls Markdown code without opening the raw editor", async ({ page }) =>
   });
 
   const code = preview.locator("pre");
-  await expect.poll(() => code.evaluate((element) => element.scrollWidth - element.clientWidth))
+  await expect
+    .poll(() => code.evaluate((element) => element.scrollWidth - element.clientWidth))
     .toBeGreaterThan(100);
   const box = await code.boundingBox();
-  if (!box) throw new Error("Expected rendered code block");
+  if (!box) {
+    throw new Error("Expected rendered code block");
+  }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(300, 0);
 
@@ -159,38 +185,52 @@ test("scrolls Markdown code without opening the raw editor", async ({ page }) =>
 
   const sourceBeforeEdit = await editor.textContent();
   const editableCode = code.locator(".markdown-code-editor");
-  await code.evaluate((element) => { element.scrollLeft = 0; });
+  await code.evaluate((element) => {
+    element.scrollLeft = 0;
+  });
   const codeBox = await editableCode.boundingBox();
-  if (!codeBox) throw new Error("Expected editable code");
+  if (!codeBox) {
+    throw new Error("Expected editable code");
+  }
   await page.mouse.move(codeBox.x + 10, codeBox.y + codeBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(codeBox.x + 130, codeBox.y + codeBox.height / 2);
   await page.mouse.up();
   await expect(editableCode).toBeFocused();
   await expect(preview).toBeVisible();
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0))
+  await expect
+    .poll(() => page.evaluate(() => getSelection()?.toString().length ?? 0))
     .toBeGreaterThan(0);
   await page.keyboard.insertText("Z");
   await page.keyboard.type("ABC");
   await expect(editableCode).toBeFocused();
   await expect.poll(() => editor.textContent()).toContain("ZABC");
-  await expect.poll(async () => (await editor.textContent())?.length)
+  await expect
+    .poll(async () => (await editor.textContent())?.length)
     .toBeLessThanOrEqual((sourceBeforeEdit?.length ?? 0) + 3);
 });
 
-test("preserves a newer Markdown edit when code input arrives before React rerenders", async ({ page }) => {
+test("preserves a newer Markdown edit when code input arrives before React rerenders", async ({
+  page,
+}) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected block ID");
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
   const editor = block.locator(":scope > .page-block-row .markdown-editor");
   const code = block.locator(`.${MARKDOWN_CODE_EDITOR_CLASS}`);
   const source = "```text\nold\n```\n\nOriginal tail";
   const newer = "```text\nold\n```\n\nNewer tail";
 
-  await page.evaluate(({ blockId, content }) => {
-    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
-    core.blocks.updateBlock(blockId, { content });
-  }, { blockId: id, content: source });
+  await page.evaluate(
+    ({ blockId, content }) => {
+      const core = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+        .editor;
+      core.blocks.updateBlock(blockId, { content });
+    },
+    { blockId: id, content: source },
+  );
   await expect(code).toHaveText("old");
 
   // An external write and the existing input handler can run in one browser
@@ -198,21 +238,33 @@ test("preserves a newer Markdown edit when code input arrives before React reren
   // built from the previous render's whole Markdown string.
   // If this fails, read the current block content inside updateCode before
   // replacing code; also recheck the fence position if earlier text shifted.
-  await code.evaluate((element, { blockId, content }) => {
-    const core = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
-    core.blocks.updateBlock(blockId, { content });
-    element.textContent = "edited";
-    element.dispatchEvent(new InputEvent("input", { bubbles: true }));
-  }, { blockId: id, content: newer });
+  await code.evaluate(
+    (element, { blockId, content }) => {
+      const core = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+        .editor;
+      core.blocks.updateBlock(blockId, { content });
+      element.textContent = "edited";
+      element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    },
+    { blockId: id, content: newer },
+  );
 
   await expect(editor).toHaveText("```text\nedited\n```\n\nNewer tail");
 });
 
-test("filters typo queries, converts in place, and undoes query removal with conversion", async ({ page }) => {
-  const content = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
+test("filters typo queries, converts in place, and undoes query removal with conversion", async ({
+  page,
+}) => {
+  const content = page
+    .locator(
+      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+    )
+    .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected block ID");
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
 
   await content.click();
   const editor = block.locator("[data-block-content]");
@@ -239,9 +291,11 @@ test("filters typo queries, converts in place, and undoes query removal with con
 test("keeps a filtered slash menu beside the caret when it opens upward", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   const id = await page.evaluate(() => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     return editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
   });
   const content = page.locator(`[data-block-id="${id}"] [data-block-content]`);
@@ -264,10 +318,16 @@ test("keeps a filtered slash menu beside the caret when it opens upward", async 
 });
 
 test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
-  const editor = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
+  const editor = page
+    .locator(
+      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+    )
+    .last();
   const block = editor.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected block ID");
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
   const kanbanCount = await page.locator(blockTypeSelector("kanban")).count();
 
   await editor.click();
@@ -276,10 +336,16 @@ test("executes the highlighted command after grouped slash navigation", async ({
   // Registration of embedding and TODO commands changes the result count.
   // Navigate the rendered groups to Delete rather than assume its old index.
   const options = page.locator("[data-slash-command]");
-  const commandIds = await options.evaluateAll((items) => items.map((item) => item.getAttribute("data-slash-command")));
+  const commandIds = await options.evaluateAll((items) =>
+    items.map((item) => item.getAttribute("data-slash-command")),
+  );
   const activeId = await page.locator("[data-active]").getAttribute("data-slash-command");
-  const steps = (commandIds.indexOf("block.delete") - commandIds.indexOf(activeId) + commandIds.length) % commandIds.length;
-  for (let index = 0; index < steps; index++) await page.keyboard.press("ArrowDown");
+  const steps =
+    (commandIds.indexOf("block.delete") - commandIds.indexOf(activeId) + commandIds.length) %
+    commandIds.length;
+  for (let index = 0; index < steps; index++) {
+    await page.keyboard.press("ArrowDown");
+  }
   await expect(page.locator("[data-active]")).toHaveAttribute("data-slash-command", "block.delete");
   await page.keyboard.press("Enter");
 
@@ -287,8 +353,14 @@ test("executes the highlighted command after grouped slash navigation", async ({
   await expect(page.locator(blockTypeSelector("kanban"))).toHaveCount(kanbanCount);
 });
 
-test("Escape preserves slash text and custom controls update or select their block", async ({ page }) => {
-  const editor = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
+test("Escape preserves slash text and custom controls update or select their block", async ({
+  page,
+}) => {
+  const editor = page
+    .locator(
+      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+    )
+    .last();
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type(" /count");
@@ -317,11 +389,19 @@ test("Escape preserves slash text and custom controls update or select their blo
   await expect(button).toHaveText("Count: 3");
 });
 
-test("mouse slash execution creates a contentless Counter and undo restores dormant text", async ({ page }) => {
-  const content = page.locator('[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]').last();
+test("mouse slash execution creates a contentless Counter and undo restores dormant text", async ({
+  page,
+}) => {
+  const content = page
+    .locator(
+      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+    )
+    .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected block ID");
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
 
   await content.click();
   const editor = block.locator("[data-block-content]");
@@ -332,9 +412,10 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
   // even when the deferred selection callback has not reached its next frame.
   await page.evaluate(() => {
     const original = window.requestAnimationFrame;
-    window.requestAnimationFrame = (callback) => original(() => {
-      window.setTimeout(() => callback(performance.now()), 1000);
-    });
+    window.requestAnimationFrame = (callback) =>
+      original(() => {
+        window.setTimeout(() => callback(performance.now()), 1000);
+      });
   });
   await page.locator('[data-slash-command="type.demo.counter"]').click();
   const converted = page.locator(blockIdSelector(id));
@@ -348,7 +429,9 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
 });
 
 test("Slider property changes use editor history", async ({ page }) => {
-  const slider = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.slider")} input[type="range"]`);
+  const slider = page.locator(
+    `${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.slider")} input[type="range"]`,
+  );
   await expect(slider).toHaveValue("35");
   await slider.focus();
   await page.keyboard.press("ArrowRight");
@@ -360,11 +443,15 @@ test("Slider property changes use editor history", async ({ page }) => {
 });
 
 test("Slider commits a drag as one history step", async ({ page }) => {
-  const slider = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.slider")} input[type="range"]`);
+  const slider = page.locator(
+    `${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.slider")} input[type="range"]`,
+  );
   await expect(slider).toHaveValue("35");
   await slider.scrollIntoViewIfNeeded();
   const box = await slider.boundingBox();
-  if (!box) throw new Error("Expected the slider to be visible");
+  if (!box) {
+    throw new Error("Expected the slider to be visible");
+  }
   const y = box.y + box.height / 2;
   await page.mouse.move(box.x + box.width * 0.35, y);
   await page.mouse.down();

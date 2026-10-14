@@ -9,8 +9,11 @@
 
 /* The shared shell paints whole-subtree selection. Let that background show
    through when the reference itself or one of its outline ancestors is selected. */
-.page-block:where([data-block-type="embedding"][data-block-selected]) > .rivto-slot[data-slot-position="body"],
-.page-block[data-block-selected] .page-block:where([data-block-type="embedding"]) > .rivto-slot[data-slot-position="body"] {
+.page-block:where([data-block-type="embedding"][data-block-selected])
+  > .rivto-slot[data-slot-position="body"],
+.page-block[data-block-selected]
+  .page-block:where([data-block-type="embedding"])
+  > .rivto-slot[data-slot-position="body"] {
   background: transparent;
 }
 
@@ -29,9 +32,18 @@
   pointer-events: none;
 }
 
-[data-block-type="embedding"]:hover > .page-block-row > .rivto-slot[data-slot-position="right"] > button,
-[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] > button:focus,
-[data-block-type="embedding"] > .page-block-row > .rivto-slot[data-slot-position="right"] > button[data-state="open"] {
+[data-block-type="embedding"]:hover
+  > .page-block-row
+  > .rivto-slot[data-slot-position="right"]
+  > button,
+[data-block-type="embedding"]
+  > .page-block-row
+  > .rivto-slot[data-slot-position="right"]
+  > button:focus,
+[data-block-type="embedding"]
+  > .page-block-row
+  > .rivto-slot[data-slot-position="right"]
+  > button[data-state="open"] {
   opacity: 1;
   pointer-events: auto;
 }

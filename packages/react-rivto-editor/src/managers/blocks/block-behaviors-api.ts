@@ -1,5 +1,9 @@
 import type { EditorBlock } from "@chulane/rivto";
-import type { BlockBehavior, BlockBehaviorAction, BlockDropDestination } from "../../block-behaviors/types";
+import type {
+  BlockBehavior,
+  BlockBehaviorAction,
+  BlockDropDestination,
+} from "../../block-behaviors/types";
 
 /** Per-type outline, split, and drop behavior resolved by page dispatchers. */
 export interface BlockBehaviorsApi {
@@ -9,7 +13,10 @@ export interface BlockBehaviorsApi {
    * @param args - Block context and operation-specific arguments.
    * @returns True when the operation was handled or explicitly rejected.
    */
-  dispatch<Action extends BlockBehaviorAction>(action: Action, ...args: Parameters<BlockBehavior[Action]>): boolean;
+  dispatch<Action extends BlockBehaviorAction>(
+    action: Action,
+    ...args: Parameters<BlockBehavior[Action]>
+  ): boolean;
   /**
    * Registers one shared behavior instance for a persisted block type.
    * @param type - Non-empty type name, unique within this registry.

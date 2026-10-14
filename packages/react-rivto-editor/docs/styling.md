@@ -23,11 +23,11 @@ their user-agent defaults.
 Workspace apps that already run Tailwind compile the source entry directly, so
 class edits hot-reload without a package build:
 
-| Consumer | Integration | Alias for `@chulane/rivto-react/styles.css` |
-| --- | --- | --- |
-| `demo/` | `@tailwindcss/vite` | `packages/react-rivto-editor/src/styles/index.css` |
-| `app/web` | `@tailwindcss/postcss` | same source entry via `next.config.ts` |
-| `app/rivto-editor` | `@tailwindcss/vite` | same source entry via `vite.config.ts` |
+| Consumer           | Integration            | Alias for `@chulane/rivto-react/styles.css`        |
+| ------------------ | ---------------------- | -------------------------------------------------- |
+| `demo/`            | `@tailwindcss/vite`    | `packages/react-rivto-editor/src/styles/index.css` |
+| `app/web`          | `@tailwindcss/postcss` | same source entry via `next.config.ts`             |
+| `app/rivto-editor` | `@tailwindcss/vite`    | same source entry via `vite.config.ts`             |
 
 ## Stylesheet layout
 
@@ -63,15 +63,15 @@ by redefining a handful of variables on any ancestor:
 
 Token groups:
 
-| Group | Purpose |
-| --- | --- |
+| Group                                                                                                                                                                                                                                                                        | Purpose                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--rivto-accent`, `--rivto-background`, `--rivto-foreground`, `--rivto-card*`, `--rivto-popover*`, `--rivto-primary*`, `--rivto-secondary*`, `--rivto-muted*`, `--rivto-subtle*`, `--rivto-destructive`, `--rivto-border`, `--rivto-input`, `--rivto-ring`, `--rivto-radius` | Semantic palette. `@theme inline` maps these onto Tailwind's `bg-background`, `text-muted-foreground`, `ring-ring`, `rounded-lg`, ... so shadcn primitives and package utilities share one theme, including chrome rendered in portals. |
-| `--rivto-default-block-height`, `--rivto-block-surface-padding` | Block geometry shared by page and edgeless trees. |
-| `--rivto-drop-*` | Drag and drop indicator feedback. |
-| `--rivto-code-*`, `--rivto-link-color` | Markdown code blocks and links. |
-| `--rivto-kanban-*`, `--rivto-bento-background` | Layout containers. |
-| `--rivto-todo-*` | TODO item and storage. |
-| `--rivto-edgeless-*` | Canvas background, grid dots, snap guides, floating chrome shadows and panel dividers. |
+| `--rivto-default-block-height`, `--rivto-block-surface-padding`                                                                                                                                                                                                              | Block geometry shared by page and edgeless trees.                                                                                                                                                                                       |
+| `--rivto-drop-*`                                                                                                                                                                                                                                                             | Drag and drop indicator feedback.                                                                                                                                                                                                       |
+| `--rivto-code-*`, `--rivto-link-color`                                                                                                                                                                                                                                       | Markdown code blocks and links.                                                                                                                                                                                                         |
+| `--rivto-kanban-*`, `--rivto-bento-background`                                                                                                                                                                                                                               | Layout containers.                                                                                                                                                                                                                      |
+| `--rivto-todo-*`                                                                                                                                                                                                                                                             | TODO item and storage.                                                                                                                                                                                                                  |
+| `--rivto-edgeless-*`                                                                                                                                                                                                                                                         | Canvas background, grid dots, snap guides, floating chrome shadows and panel dividers.                                                                                                                                                  |
 
 Add a token when a feature introduces a color or dimension a host should be
 able to change; reference it from utilities with the Tailwind variable

@@ -8,10 +8,14 @@
  *
  * @module
  */
-import type { RivtoEditorApi } from "@chulane/rivto";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext, BlockBehaviorOutcome, DropAxis } from "../../../block-behaviors/types";
-import type { EditorViewApi } from "../../../editor-view/types";
+import type {
+  BlockBehaviorContext,
+  BlockBehaviorOutcome,
+  DropAxis,
+} from "../../../block-behaviors/types";
+import type { ReactPanelApi } from "../../../panels/types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
 export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
@@ -27,19 +31,33 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * @param columnIds - Column identifiers whose children must survive.
  * @returns Nothing; callers delete the empty shells afterwards.
  */
-export function relocateColumnContents(editor: EditorViewApi | RivtoEditorApi, columnIds: readonly string[]): void {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
-  const unique = [...new Set(columnIds)].filter((id) => documentEditor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE);
+export function relocateColumnContents(
+  editor: ReactPanelApi | DocumentEditorAPI,
+  columnIds: readonly string[],
+): void {
+  const documentEditor = "editor" in editor ? editor.document : editor;
+  const unique = [...new Set(columnIds)].filter(
+    (id) => documentEditor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
+  );
   unique.forEach((id) => {
     const parentId = documentEditor.blocks.getParentId(id);
-    if (!parentId || documentEditor.blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) return;
-    const keep = (documentEditor.blocks.getBlockNode(parentId)?.childIds ?? []).filter((childId) => (
-      documentEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE && !unique.includes(childId)
-    ));
+    if (!parentId || documentEditor.blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) {
+      return;
+    }
+    const keep = (documentEditor.blocks.getBlockNode(parentId)?.childIds ?? []).filter(
+      (childId) =>
+        documentEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE &&
+        !unique.includes(childId),
+    );
     const childIds = documentEditor.blocks.getBlockNode(id)?.childIds ?? [];
-    if (!childIds.length) return;
-    if (keep.length) documentEditor.blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
-    else documentEditor.blocks.moveBlocks([...childIds], parentId, "after");
+    if (!childIds.length) {
+      return;
+    }
+    if (keep.length) {
+      documentEditor.blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
+    } else {
+      documentEditor.blocks.moveBlocks([...childIds], parentId, "after");
+    }
   });
 }
 
@@ -66,11 +84,16 @@ export class ColumnsColumnBehavior extends ContainerBlockBehavior {
    * @param ids - Complete structural selection about to be removed.
    * @returns `"default"` so the shared deletion path still removes the shells.
    */
-  override onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
-    const columnIds = ids.filter((id) => (
-      context.editorView.runtime.blocks.getBlockNode(id)?.type === context.block.type
-    ));
-    if (columnIds.length) relocateColumnContents(context.editorView, columnIds);
+  override onStructuralDelete(
+    context: BlockBehaviorContext,
+    ids: readonly string[],
+  ): BlockBehaviorOutcome {
+    const columnIds = ids.filter(
+      (id) => context.reactPanel.blocks.getBlockNode(id)?.type === context.block.type,
+    );
+    if (columnIds.length) {
+      relocateColumnContents(context.reactPanel, columnIds);
+    }
     return "default";
   }
 }

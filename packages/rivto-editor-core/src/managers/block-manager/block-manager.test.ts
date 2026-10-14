@@ -14,8 +14,11 @@ describe("block feature ownership independent of presentation", () => {
       { id: "c", type: "paragraph" },
     ]);
     const forest = jest.spyOn(editor.runtime.blocks, "getBlocks");
-    expect(editor.blocks.getOrderedIds(["b", "child", "a", "child", "missing"]))
-      .toEqual(["a", "child", "b"]);
+    expect(editor.blocks.getOrderedIds(["b", "child", "a", "child", "missing"])).toEqual([
+      "a",
+      "child",
+      "b",
+    ]);
     editor.history.clear();
     editor.blocks.moveBlock("b", "a", "before");
     expect(editor.blocks.getOrderedIds(["child", "b", "a"])).toEqual(["b", "a", "child"]);
@@ -49,7 +52,10 @@ describe("block feature ownership independent of presentation", () => {
       content: "First",
       children: [{ type: "paragraph", content: "Child" }],
     });
-    const second = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, first.id);
+    const second = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(first.id),
+    );
     const getBlock = jest.spyOn(editor.runtime.blocks, "getBlock");
 
     const updated = editor.blocks.updateBlock(first.id, { content: "Updated" });
@@ -91,16 +97,21 @@ describe("block feature ownership independent of presentation", () => {
       children: [{ id: "child", listProps: { collapsed: false } }],
     });
     expect(editor.blockListProps.validate({ collapsed: false })).toBeUndefined();
-    expect(() => editor.blockListProps.validate({ collapsed: "yes" }))
-      .toThrow("Invalid block list properties");
-    expect(() => editor.blocks.updateBlock(rootId, { listProps: { collapsed: "yes" } }))
-      .toThrow("Invalid block list properties");
-    expect(() => editor.blocks.deleteListProps("missing", ["collapsed"]))
-      .toThrow("Block missing not found");
-    expect(() => editor.blocks.deleteListPropsBatch([
-      { id: rootId, keys: ["collapsed"] },
-      { id: "missing", keys: ["collapsed"] },
-    ])).toThrow("Block missing not found");
+    expect(() => editor.blockListProps.validate({ collapsed: "yes" })).toThrow(
+      "Invalid block list properties",
+    );
+    expect(() => editor.blocks.updateBlock(rootId, { listProps: { collapsed: "yes" } })).toThrow(
+      "Invalid block list properties",
+    );
+    expect(() => editor.blocks.deleteListProps("missing", ["collapsed"])).toThrow(
+      "Block missing not found",
+    );
+    expect(() =>
+      editor.blocks.deleteListPropsBatch([
+        { id: rootId, keys: ["collapsed"] },
+        { id: "missing", keys: ["collapsed"] },
+      ]),
+    ).toThrow("Block missing not found");
     expect(editor.blocks.getBlockNode(rootId)?.listProps).toEqual({ collapsed: false });
     editor.destroy();
   });
@@ -118,10 +129,12 @@ describe("block feature ownership independent of presentation", () => {
       processor: (block) => ({ ...block, props: { ...block.props, processed: true } }),
     });
 
-    const prepared = editor.blocks.prepareInput([{
-      type: "prepared",
-      children: [{ type: "prepared", props: { own: true } }],
-    }])[0]!;
+    const prepared = editor.blocks.prepareInput([
+      {
+        type: "prepared",
+        children: [{ type: "prepared", props: { own: true } }],
+      },
+    ])[0]!;
 
     expect(prepared).toMatchObject({
       props: { sequence: 1, processed: true },
@@ -137,35 +150,40 @@ describe("block feature ownership independent of presentation", () => {
       id: "test.cyclic-children",
       priority: 0,
       processor: (block) => {
-        const children: typeof block[] = [];
+        const children: (typeof block)[] = [];
         const processed = { ...block, children };
         children.push(processed);
         return processed;
       },
     });
 
-    expect(() => editor.blocks.prepareInput([{ type: "paragraph" }]))
-      .toThrow("Block forest must be acyclic");
+    expect(() => editor.blocks.prepareInput([{ type: "paragraph" }])).toThrow(
+      "Block forest must be acyclic",
+    );
     editor.destroy();
   });
 
   it("retries one failed block through the preparation error handler", async () => {
     const editor = await createTestEditor();
     const failures: string[] = [];
-    const prepared = editor.blocks.prepareInput([{
-      type: "paragraph",
-      children: [{ type: "missing", content: "Original" }],
-    }], (block, error) => {
-      failures.push(`${block.type}:${error instanceof Error ? error.message : String(error)}`);
-      return { type: "paragraph", content: "Replacement" };
-    });
+    const prepared = editor.blocks.prepareInput(
+      [
+        {
+          type: "paragraph",
+          children: [{ type: "missing", content: "Original" }],
+        },
+      ],
+      (block, error) => {
+        failures.push(`${block.type}:${error instanceof Error ? error.message : String(error)}`);
+        return { type: "paragraph", content: "Replacement" };
+      },
+    );
 
     expect(prepared[0]?.children).toMatchObject([{ type: "paragraph", content: "Replacement" }]);
     expect(failures).toHaveLength(1);
-    expect(() => editor.blocks.prepareInput(
-      [{ type: "missing" }],
-      () => ({ type: "still-missing" }),
-    )).toThrow("Block type still-missing is not registered");
+    expect(() =>
+      editor.blocks.prepareInput([{ type: "missing" }], () => ({ type: "still-missing" })),
+    ).toThrow("Block type still-missing is not registered");
     editor.destroy();
   });
 
@@ -181,10 +199,9 @@ describe("block feature ownership independent of presentation", () => {
       children: [],
     });
 
-    expect(() => editor.blocks.importForest([
-      complete("valid", "paragraph"),
-      complete("invalid", "missing"),
-    ])).toThrow("Block type missing is not registered");
+    expect(() =>
+      editor.blocks.importForest([complete("valid", "paragraph"), complete("invalid", "missing")]),
+    ).toThrow("Block type missing is not registered");
     expect(editor.blocks.getBlocks()).toEqual([]);
     editor.destroy();
   });
@@ -212,8 +229,14 @@ describe("block feature ownership independent of presentation", () => {
   it("indents only the supplied ids even when other blocks are selected", async () => {
     const editor = await createTestEditor();
     const previousId = editor.blocks.insertBlock({ type: "paragraph", content: "Previous" }).id;
-    const firstId = editor.blocks.insertBlock({ type: "paragraph", content: "First" }, previousId).id;
-    const secondId = editor.blocks.insertBlock({ type: "paragraph", content: "Second" }, firstId).id;
+    const firstId = editor.blocks.insertBlock(
+      { type: "paragraph", content: "First" },
+      editor.blocks.getInsertionDestinationAfter(previousId),
+    ).id;
+    const secondId = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Second" },
+      editor.blocks.getInsertionDestinationAfter(firstId),
+    ).id;
     editor.selection.set(createStructuralSelection([firstId, secondId], firstId, secondId));
     editor.blocks.indentBlock(firstId);
     expect(editor.blocks.getBlocks()).toMatchObject([
@@ -228,7 +251,10 @@ describe("block feature ownership independent of presentation", () => {
     editor.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
-      children: Array.from({ length: 128 }, (_, index) => ({ id: `child-${index}`, type: "paragraph" })),
+      children: Array.from({ length: 128 }, (_, index) => ({
+        id: `child-${index}`,
+        type: "paragraph",
+      })),
     });
     const getBlockNode = jest.spyOn(editor.runtime.blocks, "getBlockNode");
 
@@ -269,54 +295,93 @@ describe("block feature ownership independent of presentation", () => {
     const editor = await createTestEditor();
     const getBlock = jest.spyOn(editor.runtime.blocks, "getBlock");
 
-    const imported = editor.blocks.importForest([{
-      type: "paragraph",
-      content: "Parsed externally",
-      children: [{ type: "paragraph", content: "Child" }],
-    }]);
+    const imported = editor.blocks.importForest([
+      {
+        type: "paragraph",
+        content: "Parsed externally",
+        children: [{ type: "paragraph", content: "Child" }],
+      },
+    ]);
 
     expect(imported.idMap.size).toBe(0);
-    expect(imported.roots).toMatchObject([{
-      id: expect.any(String),
-      type: "paragraph",
-      content: "Parsed externally",
-      children: [{ type: "paragraph", content: "Child" }],
-    }]);
+    expect(imported.roots).toMatchObject([
+      {
+        id: expect.any(String),
+        type: "paragraph",
+        content: "Parsed externally",
+        children: [{ type: "paragraph", content: "Child" }],
+      },
+    ]);
     expect(getBlock).not.toHaveBeenCalled();
     getBlock.mockRestore();
     editor.destroy();
   });
-
 });
 
 test("imports with preallocated identities and runs processors once per block", async () => {
   const editor = await createTestEditor();
   const calls: string[] = [];
-  const dispose = editor.blocks.registerProcessor({ id: "prepare-once", priority: 0, processor: block => {
-    calls.push(block.id!); return { ...block, content: `${block.content ?? ""}!` };
-  } });
-  const ids = new Map([["parent", "new-parent"], ["child", "new-child"]]);
-  const result = editor.blocks.importForest([{ id: "parent", type: "paragraph", content: "parent",
-    children: [{ id: "child", type: "paragraph", content: "child" }] }], undefined, undefined, ids);
+  const dispose = editor.blocks.registerProcessor({
+    id: "prepare-once",
+    priority: 0,
+    processor: (block) => {
+      calls.push(block.id!);
+      return { ...block, content: `${block.content ?? ""}!` };
+    },
+  });
+  const ids = new Map([
+    ["parent", "new-parent"],
+    ["child", "new-child"],
+  ]);
+  const result = editor.blocks.importForest(
+    [
+      {
+        id: "parent",
+        type: "paragraph",
+        content: "parent",
+        children: [{ id: "child", type: "paragraph", content: "child" }],
+      },
+    ],
+    undefined,
+    undefined,
+    ids,
+  );
   expect(calls).toEqual(["new-parent", "new-child"]);
   expect(result.idMap).toBe(ids);
-  expect(result.roots[0]).toMatchObject({ id: "new-parent", content: "parent!", children: [{ id: "new-child", content: "child!" }] });
-  dispose(); await editor.destroy();
+  expect(result.roots[0]).toMatchObject({
+    id: "new-parent",
+    content: "parent!",
+    children: [{ id: "new-child", content: "child!" }],
+  });
+  dispose();
+  await editor.destroy();
 });
 
 test("rejects an incomplete preallocated identity map before insertion", async () => {
   const editor = await createTestEditor();
-  expect(() => editor.blocks.importForest([{ id: "source", type: "paragraph" }], undefined, undefined, new Map()))
-    .toThrow("Missing imported block ID");
+  expect(() =>
+    editor.blocks.importForest(
+      [{ id: "source", type: "paragraph" }],
+      undefined,
+      undefined,
+      new Map(),
+    ),
+  ).toThrow("Missing imported block ID");
   expect(editor.blocks.getRootIds()).toEqual([]);
   await editor.destroy();
 });
 
 test("import recovery can replace a rejected subtree with a single error block", async () => {
   const editor = await createTestEditor();
-  const imported = editor.blocks.importForest([
-    { id: "invalid", type: "unknown", children: [{ id: "child", type: "paragraph" }] },
-  ], undefined, (block) => ({ type: "paragraph", content: "Recovered", props: { original: block } }));
-  expect(imported.roots[0]).toMatchObject({ id: imported.idMap.get("invalid"), content: "Recovered", children: [] });
+  const imported = editor.blocks.importForest(
+    [{ id: "invalid", type: "unknown", children: [{ id: "child", type: "paragraph" }] }],
+    undefined,
+    (block) => ({ type: "paragraph", content: "Recovered", props: { original: block } }),
+  );
+  expect(imported.roots[0]).toMatchObject({
+    id: imported.idMap.get("invalid"),
+    content: "Recovered",
+    children: [],
+  });
   editor.destroy();
 });

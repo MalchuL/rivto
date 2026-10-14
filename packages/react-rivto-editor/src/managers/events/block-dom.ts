@@ -1,11 +1,7 @@
 import type { EditorPosition } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../constants";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
 import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
-import { DOCUMENT_VIEW_SELECTOR, findViewElements, isInDocumentView } from "./document-view";
+import { PANEL_SELECTOR, findPanelElements, isInPanel } from "./panel-dom";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
@@ -30,7 +26,9 @@ export interface EventBlock {
  * @returns Editable content, its BlockView element, and persisted block ID.
  */
 export function findBlockFromEvent(event: Event): EventBlock | null {
-  if (!(event.target instanceof Element)) return null;
+  if (!(event.target instanceof Element)) {
+    return null;
+  }
 
   const content = event.target.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
   const block = content?.closest<HTMLElement>(BLOCK_ID_SELECTOR);
@@ -41,8 +39,10 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
 
 /** Finds a rendered BlockView by ID without interpolating that ID into CSS. */
 export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
-  for (const block of findViewElements(root, BLOCK_ID_SELECTOR)) {
-    if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) return block;
+  for (const block of findPanelElements(root, BLOCK_ID_SELECTOR)) {
+    if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) {
+      return block;
+    }
   }
   return null;
 }
@@ -50,7 +50,9 @@ export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLEleme
 /** Finds editable content owned directly by one BlockView, excluding descendants. */
 function findOwnedContent(block: HTMLElement): HTMLElement | null {
   for (const content of block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)) {
-    if (content.closest(BLOCK_ID_SELECTOR) === block) return content;
+    if (content.closest(BLOCK_ID_SELECTOR) === block) {
+      return content;
+    }
   }
   return null;
 }
@@ -67,14 +69,16 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
  * @returns Previous editable block identity and elements, or null.
  */
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   if (index === 0 && getPageVirtualizationControllerForElement(root)) {
     getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, -1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
-  if (index <= 0) return null;
+  if (index <= 0) {
+    return null;
+  }
 
   const block = blocks[index - 1];
   const content = findOwnedContent(block);
@@ -84,14 +88,16 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 
 /** Finds the immediately next rendered block when that block is editable. */
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   if (index === blocks.length - 1 && getPageVirtualizationControllerForElement(root)) {
     getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, 1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
-  if (index < 0 || index >= blocks.length - 1) return null;
+  if (index < 0 || index >= blocks.length - 1) {
+    return null;
+  }
 
   const block = blocks[index + 1];
   const content = findOwnedContent(block);
@@ -107,8 +113,8 @@ export function findNextEditableBlock(root: HTMLElement, blockId: string): Event
  */
 export function findParentBlock(block: HTMLElement): HTMLElement | null {
   const parent = block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
-  const root = block.closest?.<HTMLElement>(DOCUMENT_VIEW_SELECTOR);
-  return parent && (!root || isInDocumentView(root, parent)) ? parent : null;
+  const root = block.closest?.<HTMLElement>(PANEL_SELECTOR);
+  return parent && (!root || isInPanel(root, parent)) ? parent : null;
 }
 
 /**
@@ -125,14 +131,20 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
  * @returns True when the block and editable content were found.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
-  if (!findRenderedBlock(root, blockId)) getPageVirtualizationControllerForElement(root)?.mountBlocks([blockId]);
+  if (!findRenderedBlock(root, blockId)) {
+    getPageVirtualizationControllerForElement(root)?.mountBlocks([blockId]);
+  }
   const block = findRenderedBlock(root, blockId);
   const content = block ? findOwnedContent(block) : null;
-  if (!content) return false;
+  if (!content) {
+    return false;
+  }
 
   content.focus();
   const selection = content.ownerDocument.getSelection();
-  if (!selection) return true;
+  if (!selection) {
+    return true;
+  }
 
   const range = content.ownerDocument.createRange();
   const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
@@ -177,10 +189,14 @@ function textPoint(content: HTMLElement, requestedOffset: number): { node: Node;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     last = node;
     const length = node.textContent?.length ?? 0;
-    if (remaining <= length) return { node, offset: remaining };
+    if (remaining <= length) {
+      return { node, offset: remaining };
+    }
     remaining -= length;
   }
-  return last ? { node: last, offset: last.textContent?.length ?? 0 } : { node: content, offset: 0 };
+  return last
+    ? { node: last, offset: last.textContent?.length ?? 0 }
+    : { node: content, offset: 0 };
 }
 
 /** Measures a collapsed caret, falling back to an adjacent character box. */
@@ -202,7 +218,11 @@ function caretCandidate(content: HTMLElement, offset: number): CaretCandidate {
     return { offset: safeOffset, left: fromPrevious ? rect.right : rect.left, top: rect.top };
   }
   const contentRect = content.getBoundingClientRect();
-  return { offset: safeOffset, left: rect.left || contentRect.left, top: rect.top || contentRect.top };
+  return {
+    offset: safeOffset,
+    left: rect.left || contentRect.left,
+    top: rect.top || contentRect.top,
+  };
 }
 
 /** Groups measured character positions into rendered visual lines. */
@@ -212,17 +232,20 @@ function caretLines(content: HTMLElement): CaretCandidate[][] {
   for (let offset = 0; offset <= length; offset += 1) {
     const candidate = caretCandidate(content, offset);
     const line = lines.find((items) => Math.abs(items[0]!.top - candidate.top) < 2);
-    if (line) line.push(candidate);
-    else lines.push([candidate]);
+    if (line) {
+      line.push(candidate);
+    } else {
+      lines.push([candidate]);
+    }
   }
   return lines.sort((left, right) => left[0]!.top - right[0]!.top);
 }
 
 /** Chooses the character on one visual line nearest a viewport x-coordinate. */
 function closestOnLine(line: CaretCandidate[], x: number): CaretCandidate {
-  return line.reduce((closest, candidate) => (
-    Math.abs(candidate.left - x) < Math.abs(closest.left - x) ? candidate : closest
-  ));
+  return line.reduce((closest, candidate) =>
+    Math.abs(candidate.left - x) < Math.abs(closest.left - x) ? candidate : closest,
+  );
 }
 
 /**
@@ -240,21 +263,40 @@ export function verticalCaretPosition(
 ): EditorPosition | undefined {
   const currentBlock = findRenderedBlock(root, position.blockId);
   const currentContent = currentBlock ? findOwnedContent(currentBlock) : null;
-  if (!currentContent) return;
+  if (!currentContent) {
+    return;
+  }
   const current = caretCandidate(currentContent, position.offset);
   const lines = caretLines(currentContent);
-  const lineIndex = lines.reduce((best, line, index) => (
-    Math.abs(line[0]!.top - current.top) < Math.abs(lines[best]![0]!.top - current.top) ? index : best
-  ), 0);
+  const lineIndex = lines.reduce(
+    (best, line, index) =>
+      Math.abs(line[0]!.top - current.top) < Math.abs(lines[best]![0]!.top - current.top)
+        ? index
+        : best,
+    0,
+  );
   const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
-  if (nextLine) return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
+  if (nextLine) {
+    return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
+  }
 
-  let blocks = findViewElements(root, BLOCK_ID_SELECTOR);
-  let currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
-  if ((direction === "up" && currentIndex === 0 || direction === "down" && currentIndex === blocks.length - 1) && getPageVirtualizationControllerForElement(root)) {
-    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(position.blockId, direction === "up" ? -1 : 1);
-    blocks = findViewElements(root, BLOCK_ID_SELECTOR);
-    currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId);
+  let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
+  let currentIndex = blocks.findIndex(
+    (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId,
+  );
+  if (
+    ((direction === "up" && currentIndex === 0) ||
+      (direction === "down" && currentIndex === blocks.length - 1)) &&
+    getPageVirtualizationControllerForElement(root)
+  ) {
+    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(
+      position.blockId,
+      direction === "up" ? -1 : 1,
+    );
+    blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
+    currentIndex = blocks.findIndex(
+      (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId,
+    );
   }
   for (
     let index = currentIndex + (direction === "up" ? -1 : 1);
@@ -263,10 +305,14 @@ export function verticalCaretPosition(
   ) {
     const content = findOwnedContent(blocks[index]!);
     const blockId = blocks[index]!.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!content || !blockId) continue;
+    if (!content || !blockId) {
+      continue;
+    }
     const targetLines = caretLines(content);
     const targetLine = direction === "up" ? targetLines.at(-1) : targetLines[0];
-    return targetLine ? { blockId, offset: closestOnLine(targetLine, current.left).offset } : undefined;
+    return targetLine
+      ? { blockId, offset: closestOnLine(targetLine, current.left).offset }
+      : undefined;
   }
   return;
 }

@@ -8,7 +8,7 @@
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
-import type { EditorViewApi } from "../../../editor-view/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -40,11 +40,20 @@ export function SeparatorBlock() {
       role="separator"
       aria-label="Block element separator"
     >
-      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+      <span
+        className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`}
+        aria-hidden="true"
+      >
         <ArrowUpIcon strokeWidth={2.5} />
       </span>
-      <span className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`} aria-hidden="true" />
-      <span className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`} aria-hidden="true">
+      <span
+        className={`${SEPARATOR_LINE_CLASS} w-full border-t border-border`}
+        aria-hidden="true"
+      />
+      <span
+        className={`${SEPARATOR_ARROW_CLASS} flex h-2.5 items-center [&_svg]:size-2.5`}
+        aria-hidden="true"
+      >
         <ArrowDownIcon strokeWidth={2.5} />
       </span>
     </div>
@@ -56,38 +65,50 @@ export function SeparatorBlock() {
  * Empty leaf blocks are converted in place so slash insertion does not leave a
  * meaningless blank block. Content or descendants are never discarded.
  *
- * @param editorView - Editor view providing the registered separator type.
+ * @param reactPanel - Editor view providing the registered separator type.
  * @param blockId - Active block before which editing should continue.
  * @param separatorType - Plugin-owned persisted separator type.
  * @param createDefaultBlock - Factory for the follow-up writing block.
  * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
-  editorView: EditorViewApi,
+  reactPanel: ReactPanelApi,
   blockId: string,
   separatorType: string,
   createDefaultBlock: CreateDefaultBlock,
 ): EditorBlock | undefined {
-  const block = editorView.runtime.blocks.getBlockNode(blockId);
-  if (!block) return undefined;
+  const block = reactPanel.blocks.getBlockNode(blockId);
+  if (!block) {
+    return undefined;
+  }
   let separatorId = "";
   let writing: EditorBlock | undefined;
-  editorView.runtime.history.batchUpdates(() => {
-    if (!block.content && !editorView.runtime.blocks.hasChildren(blockId)) {
+  reactPanel.batchUpdates(() => {
+    if (!block.content && !reactPanel.blocks.hasChildren(blockId)) {
       separatorId = block.id;
-      editorView.runtime.blocks.setBlockType(separatorId, separatorType);
-      editorView.runtime.blocks.updateBlock(separatorId, {
+      reactPanel.blocks.setBlockType(separatorId, separatorType);
+      reactPanel.blocks.updateBlock(separatorId, {
         listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
-      separatorId = editorView.runtime.blocks.insertBlock({
-        type: separatorType,
-        content: "",
-        listProps: { type: "list", checked: false },
-      }, block.id).id;
+      separatorId = reactPanel.blocks.insertBlock(
+        {
+          type: separatorType,
+          content: "",
+          listProps: { type: "list", checked: false },
+        },
+        reactPanel.blocks.canRemove(block.id)
+          ? reactPanel.blocks.getInsertionDestinationAfter(block.id)
+          : { parentId: block.id },
+      ).id;
     }
-    writing = editorView.runtime.blocks.insertBlock(createDefaultBlock(), separatorId);
-    editorView.selection.set(createCaretSelection(writing.id, 0));
+    writing = reactPanel.blocks.insertBlock(
+      createDefaultBlock(),
+      reactPanel.blocks.canRemove(separatorId)
+        ? reactPanel.blocks.getInsertionDestinationAfter(separatorId)
+        : { parentId: separatorId },
+    );
+    reactPanel.selection.set(createCaretSelection(writing.id, 0));
   });
   return writing;
 }
@@ -100,20 +121,22 @@ function insertSeparator(
  */
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
-  setup: (editorRuntime) => {
-    const createDefaultBlock = () => editorRuntime.createDefaultBlock();
-    const focusInserted = (editorView: EditorViewApi, blockId: string): void => {
+  setup: (reactEditor) => {
+    const createDefaultBlock = () => reactEditor.createDefaultBlock();
+    const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
       const writing = insertSeparator(
-        editorView,
+        reactPanel,
         blockId,
         SEPARATOR_BLOCK_TYPE,
         createDefaultBlock,
       );
-      const root = editorView.events.getRoot();
-      if (writing && root) requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      const root = reactPanel.events.getRoot();
+      if (writing && root) {
+        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      }
     };
     const disposers = [
-      editorRuntime.blockTypes.register({
+      reactEditor.blockTypes.register({
         definition: {
           type: SEPARATOR_BLOCK_TYPE,
           title: "Separator",
@@ -122,35 +145,45 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         separatesBlockElements: true,
         clipboard: {
           format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
-          parseHTML: element => element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
+          parseHTML: (element) =>
+            element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
         },
       }),
-      editorRuntime.slashCommands.register({
+      reactEditor.slashCommands.register({
         id: "block.separator.insert",
         title: "Separator",
         group: "Insert",
         keywords: ["divider", "split"],
-        execute: ({ blockId, editorView }) => focusInserted(editorView, blockId),
+        execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
       }),
-      editorRuntime.keyboard.register({
-        id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
-        keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
-        when: ({ raw: event }) => isEditableKeyboardEvent(event),
-      }, ({ editorView, root }) => {
-        const nativeSelection = editorView.selection.readDOM();
-        if (nativeSelection) editorView.selection.set(nativeSelection);
-        const target = firstKeyboardTarget(nativeSelection ?? editorView.selection.get());
-        if (!target) return false;
-        const writing = insertSeparator(
-          editorView,
-          target.blockId,
-          SEPARATOR_BLOCK_TYPE,
-          createDefaultBlock,
-        );
-        if (!writing) return false;
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-        return true;
-      }),
+      reactEditor.keyboard.register(
+        {
+          id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
+          keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
+          when: ({ raw: event }) => isEditableKeyboardEvent(event),
+        },
+        ({ reactPanel, root }) => {
+          const nativeSelection = reactPanel.selection.readDOM();
+          if (nativeSelection) {
+            reactPanel.selection.set(nativeSelection);
+          }
+          const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
+          if (!target) {
+            return false;
+          }
+          const writing = insertSeparator(
+            reactPanel,
+            target.blockId,
+            SEPARATOR_BLOCK_TYPE,
+            createDefaultBlock,
+          );
+          if (!writing) {
+            return false;
+          }
+          requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+          return true;
+        },
+      ),
     ];
     return () => disposers.reverse().forEach((dispose) => dispose());
   },

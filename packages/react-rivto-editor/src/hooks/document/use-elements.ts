@@ -7,10 +7,10 @@
  * @module
  */
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorView } from "../../editor-view/use-editor-view";
+import { usePanel } from "../editor/use-panel";
 
 /**
- * Subscribes to all flat element records in the current EditorView's canvas.
+ * Subscribes to all flat element records in the current EditorPanel's canvas.
  *
  * Includes roots and descendants once each, with childIds rather than recursive
  * children. The document manager caches the array between canvas changes. Treat
@@ -18,14 +18,14 @@ import { useEditorView } from "../../editor-view/use-editor-view";
  * these objects does not update collaborative storage.
  *
  * @returns Current detached node array, empty when the canvas has no elements.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useElements() {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const subscribe = useCallback(
-    (listener: () => void) => editorView.elements.subscribe(listener),
-    [editorView],
+    (listener: () => void) => panel.elements.subscribe(listener),
+    [panel],
   );
-  const getSnapshot = useCallback(() => editorView.elements.getElementNodes(), [editorView]);
+  const getSnapshot = useCallback(() => panel.elements.getElementNodes(), [panel]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

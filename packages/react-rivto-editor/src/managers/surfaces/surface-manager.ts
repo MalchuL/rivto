@@ -31,16 +31,19 @@ const BLOCK_SLOT_POSITION_SET = new Set<BlockSlotPosition>([
  * Owns mode-specific surface composition.
  *
  * Root surfaces, per-block decorators, and editor-wide wrappers share this
- * manager because EditorView resolves all three from the active mode. Plugins
+ * manager because EditorPanel resolves all three from the active mode. Plugins
  * remain independent: they call this public manager but ExtensionManager never
  * imports or queries it.
  */
 export class SurfaceManager implements SurfacesApi {
   private readonly store = new RevisionStore();
-  private readonly surfaces = new Map<EditorMode, {
-    readonly surface: SurfaceComponent;
-    dispose: () => void;
-  }>();
+  private readonly surfaces = new Map<
+    EditorMode,
+    {
+      readonly surface: SurfaceComponent;
+      dispose: () => void;
+    }
+  >();
   private readonly blockWrappers = new Map<EditorMode, BlockWrapperRegistration[]>();
   private readonly editorWrappers: EditorWrapperRegistration[] = [];
   private readonly blockSlots: Array<BlockSlotRegistration & { readonly id: number }> = [];
@@ -57,13 +60,15 @@ export class SurfaceManager implements SurfacesApi {
   /**
    * Registers the single root renderer for one editor mode.
    *
-   * @param mode - Presentation mode resolved by EditorView.
+   * @param mode - Presentation mode resolved by EditorPanel.
    * @param surface - Component rendering the complete active surface.
    * @returns Idempotent disposer removing only this registration.
    */
   register(mode: EditorMode, surface: SurfaceComponent): () => void {
     this.registrations.assertActive();
-    if (this.surfaces.has(mode)) throw new Error(`Surface ${mode} is already registered`);
+    if (this.surfaces.has(mode)) {
+      throw new Error(`Surface ${mode} is already registered`);
+    }
     const registration: {
       readonly surface: SurfaceComponent;
       dispose: () => void;
@@ -73,8 +78,10 @@ export class SurfaceManager implements SurfacesApi {
     };
     this.surfaces.set(mode, registration);
     this.store.changed();
-    registration.dispose = this.registrations.own(() => {
-      if (this.surfaces.get(mode) !== registration) return;
+    registration.dispose = this.registrations.registerCleanup(() => {
+      if (this.surfaces.get(mode) !== registration) {
+        return;
+      }
       this.surfaces.delete(mode);
       this.store.changed();
     });
@@ -90,7 +97,9 @@ export class SurfaceManager implements SurfacesApi {
   delete(mode: EditorMode): boolean {
     this.registrations.assertActive();
     const registration = this.surfaces.get(mode);
-    if (!registration) return false;
+    if (!registration) {
+      return false;
+    }
     registration.dispose();
     return true;
   }
@@ -110,24 +119,28 @@ export class SurfaceManager implements SurfacesApi {
    * @param wrapper - Decorator receiving block metadata and the next layer.
    * @returns Idempotent disposer for this exact ordered entry.
    */
-  registerBlockWrapper(
-    mode: EditorMode,
-    wrapper: BlockWrapperComponent,
-  ): () => void {
+  registerBlockWrapper(mode: EditorMode, wrapper: BlockWrapperComponent): () => void {
     this.registrations.assertActive();
     const wrappers = this.blockWrappers.get(mode) ?? [];
     const registration = { wrapper };
     wrappers.push(registration);
     this.blockWrappers.set(mode, wrappers);
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const current = this.blockWrappers.get(mode);
-      if (!current) return;
+      if (!current) {
+        return;
+      }
       const index = current.indexOf(registration);
-      if (index < 0) return;
+      if (index < 0) {
+        return;
+      }
       current.splice(index, 1);
-      if (current.length) this.blockWrappers.set(mode, current);
-      else this.blockWrappers.delete(mode);
+      if (current.length) {
+        this.blockWrappers.set(mode, current);
+      } else {
+        this.blockWrappers.delete(mode);
+      }
       this.store.changed();
     });
   }
@@ -157,9 +170,11 @@ export class SurfaceManager implements SurfacesApi {
     this.blockSlots.push(entry);
     this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.blockSlots.indexOf(entry);
-      if (index < 0) return;
+      if (index < 0) {
+        return;
+      }
       this.blockSlots.splice(index, 1);
       this.store.changed();
     });
@@ -186,18 +201,16 @@ export class SurfaceManager implements SurfacesApi {
    * @returns Idempotent disposer removing this exact contribution.
    */
   registerElementSlot(registration: ElementSlotRegistration): () => void {
-    this.validateSlotRegistration(
-      registration.position,
-      registration.priority,
-      SLOT_POSITION_SET,
-    );
+    this.validateSlotRegistration(registration.position, registration.priority, SLOT_POSITION_SET);
     const entry = { ...registration, id: this.nextSlotId++ };
     this.elementSlots.push(entry);
     this.elementSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.elementSlots.indexOf(entry);
-      if (index < 0) return;
+      if (index < 0) {
+        return;
+      }
       this.elementSlots.splice(index, 1);
       this.store.changed();
     });
@@ -223,7 +236,10 @@ export class SurfaceManager implements SurfacesApi {
    * @param props - Current owner context, evaluated against each dynamic filter.
    * @returns Matching entries with IDs unchanged by neighboring registrations.
    */
-  getBlockSlotEntries(position: BlockSlotPosition, props: BlockSlotProps): readonly ResolvedSlot<BlockSlotProps>[] {
+  getBlockSlotEntries(
+    position: BlockSlotPosition,
+    props: BlockSlotProps,
+  ): readonly ResolvedSlot<BlockSlotProps>[] {
     return this.resolveSlots(this.blockSlots, position, props);
   }
 
@@ -233,48 +249,17 @@ export class SurfaceManager implements SurfacesApi {
    * @param props - Current owner context, evaluated against each dynamic filter.
    * @returns Matching entries with IDs unchanged by neighboring registrations.
    */
-  getElementSlotEntries(position: SlotPosition, props: ElementSlotProps): readonly ResolvedSlot<ElementSlotProps>[] {
+  getElementSlotEntries(
+    position: SlotPosition,
+    props: ElementSlotProps,
+  ): readonly ResolvedSlot<ElementSlotProps>[] {
     return this.resolveSlots(this.elementSlots, position, props);
-  }
-
-  /** Validates the shared public fields of a slot registration. */
-  private validateSlotRegistration<Position extends string>(
-    position: Position,
-    priority: number | undefined,
-    positions: ReadonlySet<Position>,
-  ): void {
-    this.registrations.assertActive();
-    if (!positions.has(position)) throw new Error(`Unsupported slot position ${position}`);
-    if (priority !== undefined && !Number.isFinite(priority)) {
-      throw new Error("Slot priority must be finite");
-    }
-  }
-
-  /** Filters one owner-kind list whose stable priority order is maintained during registration. */
-  private resolveSlots<
-    Props extends { readonly mode: EditorMode },
-    Position extends string,
-    Registration extends {
-      readonly position: Position;
-      readonly priority?: number;
-      readonly mode?: EditorMode | readonly EditorMode[];
-      readonly when?: (props: Props) => boolean;
-    },
-  >(
-    registrations: readonly Registration[],
-    position: Position,
-    props: Props,
-  ): Registration[] {
-    return registrations
-      .filter((registration) => registration.position === position &&
-        matchesMode(registration.mode, props.mode) &&
-        (!registration.when || registration.when(props)));
   }
 
   /**
    * Registers an editor-wide wrapper with optional surface-mode restriction.
    *
-   * The first active wrapper remains outermost when EditorView composes them.
+   * The first active wrapper remains outermost when EditorPanel composes them.
    *
    * @param wrapper - Context or interaction boundary around complete editor UI.
    * @param mode - Optional mode or mode list restricting composition.
@@ -288,9 +273,11 @@ export class SurfaceManager implements SurfacesApi {
     const registration = { wrapper, mode };
     this.editorWrappers.push(registration);
     this.store.changed();
-    return this.registrations.own(() => {
+    return this.registrations.registerCleanup(() => {
       const index = this.editorWrappers.indexOf(registration);
-      if (index < 0) return;
+      if (index < 0) {
+        return;
+      }
       this.editorWrappers.splice(index, 1);
       this.store.changed();
     });
@@ -307,12 +294,57 @@ export class SurfaceManager implements SurfacesApi {
       .map((registration) => registration.wrapper);
   }
 
+  /**
+   * Reads the surface registry's observable revision.
+   *
+   * @returns Current revision number.
+   */
   get revision(): number {
     return this.store.revision;
   }
 
+  /**
+   * Observes surface and wrapper registration changes.
+   *
+   * @param listener - Callback invoked when the observed state changes.
+   * @returns A function that removes the listener.
+   */
   subscribe(listener: () => void): () => void {
     return this.store.subscribe(listener);
+  }
+
+  /** Validates the shared public fields of a slot registration. */
+  private validateSlotRegistration<Position extends string>(
+    position: Position,
+    priority: number | undefined,
+    positions: ReadonlySet<Position>,
+  ): void {
+    this.registrations.assertActive();
+    if (!positions.has(position)) {
+      throw new Error(`Unsupported slot position ${position}`);
+    }
+    if (priority !== undefined && !Number.isFinite(priority)) {
+      throw new Error("Slot priority must be finite");
+    }
+  }
+
+  /** Filters one owner-kind list whose stable priority order is maintained during registration. */
+  private resolveSlots<
+    Props extends { readonly mode: EditorMode },
+    Position extends string,
+    Registration extends {
+      readonly position: Position;
+      readonly priority?: number;
+      readonly mode?: EditorMode | readonly EditorMode[];
+      readonly when?: (props: Props) => boolean;
+    },
+  >(registrations: readonly Registration[], position: Position, props: Props): Registration[] {
+    return registrations.filter(
+      (registration) =>
+        registration.position === position &&
+        matchesMode(registration.mode, props.mode) &&
+        (!registration.when || registration.when(props)),
+    );
   }
 }
 

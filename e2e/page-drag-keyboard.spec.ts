@@ -18,7 +18,8 @@ const today = (page: Page): Locator => page.locator('[data-journal-document="tod
 
 /** @returns Root block IDs of one editor in document order. */
 function rootIds(editor: Locator): Promise<string[]> {
-  return editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
+  return editor
+    .locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.blockId ?? ""));
 }
 
@@ -35,13 +36,17 @@ function rootIds(editor: Locator): Promise<string[]> {
  */
 async function pickUpFirstRoot(page: Page, editor: Locator, steps: number): Promise<string[]> {
   const before = await rootIds(editor);
-  const handle = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first()
+  const handle = editor
+    .locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
+    .first()
     .locator(":scope > .page-block-row .page-drag-handle");
   await handle.focus();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   await page.keyboard.press("Space");
   await expect(page.locator(".page-drag-overlay")).toBeVisible();
-  for (let step = 0; step < steps; step += 1) await page.keyboard.press("ArrowDown");
+  for (let step = 0; step < steps; step += 1) {
+    await page.keyboard.press("ArrowDown");
+  }
   return before;
 }
 
@@ -64,8 +69,9 @@ test("moves a block to a later sibling position with the keyboard", async ({ pag
   await page.keyboard.press("Space");
   await expect(page.locator(".page-drag-overlay")).toHaveCount(0);
   expect(await rootIds(editor)).toEqual([before[1], before[0], ...before.slice(2)]);
-  await expect(editor.locator(`${BLOCK_ID_SELECTOR}[data-block-id="${before[0]}"] .page-block-children`))
-    .toHaveCount(0);
+  await expect(
+    editor.locator(`${BLOCK_ID_SELECTOR}[data-block-id="${before[0]}"] .page-block-children`),
+  ).toHaveCount(0);
 });
 
 test("leaves the document unchanged when a keyboard drag is cancelled", async ({ page }) => {
@@ -85,5 +91,8 @@ test("keeps the first root in place when the handle never moves", async ({ page 
   await page.keyboard.press("Space");
   await expect(page.locator(".page-drag-overlay")).toHaveCount(0);
   expect(await rootIds(editor)).toEqual(before);
-  await expect(editor.locator(BLOCK_ID_SELECTOR).first()).toHaveAttribute(BLOCK_ID_ATTRIBUTE, before[0]!);
+  await expect(editor.locator(BLOCK_ID_SELECTOR).first()).toHaveAttribute(
+    BLOCK_ID_ATTRIBUTE,
+    before[0]!,
+  );
 });

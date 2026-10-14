@@ -16,7 +16,7 @@ import {
   type ReactNode,
   type RefCallback,
 } from "react";
-import { useEditorView } from "../../hooks";
+import { useReactPanel } from "../../hooks";
 
 /**
  * Stable slots used by BlockTree to render one block shell.
@@ -81,10 +81,7 @@ export interface BlockElementRefProviderProps {
  * @param props - Decorator callback and the remaining render chain.
  * @returns A context boundary that emits no DOM element.
  */
-export function BlockElementRefProvider({
-  elementRef,
-  children,
-}: BlockElementRefProviderProps) {
+export function BlockElementRefProvider({ elementRef, children }: BlockElementRefProviderProps) {
   const parentRef = useContext(BlockElementRefContext);
   const composedRef = useMemo<RefCallback<HTMLDivElement>>(
     () => (element) => {
@@ -119,15 +116,9 @@ export function useBlockElementRef(): RefCallback<HTMLDivElement> | undefined {
  * @param props - Recursively rendered surface children.
  * @returns A DOM-free context reset.
  */
-export function BlockElementRefBoundary({
-  children,
-}: {
-  readonly children?: ReactNode;
-}) {
+export function BlockElementRefBoundary({ children }: { readonly children?: ReactNode }) {
   return (
-    <BlockElementRefContext.Provider value={undefined}>
-      {children}
-    </BlockElementRefContext.Provider>
+    <BlockElementRefContext.Provider value={undefined}>{children}</BlockElementRefContext.Provider>
   );
 }
 
@@ -147,20 +138,14 @@ export function BlockWrapper({
   isSelected,
   ...slots
 }: BlockWrapperSlotProps) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const mode = useContext(SurfaceContext);
-  const wrappers = editorView.runtime.surfaces.getBlockWrappers(mode);
-  let result: ReactNode = (
-    <Fallback block={block} isSelected={isSelected} {...slots} />
-  );
+  const wrappers = reactPanel.editor.surfaces.getBlockWrappers(mode);
+  let result: ReactNode = <Fallback block={block} isSelected={isSelected} {...slots} />;
 
   for (let index = wrappers.length - 1; index >= 0; index -= 1) {
     const Wrapper = wrappers[index]!;
-    result = (
-      <Wrapper block={block}>
-        {result}
-      </Wrapper>
-    );
+    result = <Wrapper block={block}>{result}</Wrapper>;
   }
   return result;
 }

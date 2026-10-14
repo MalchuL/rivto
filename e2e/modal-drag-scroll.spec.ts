@@ -6,11 +6,16 @@ for (const type of ["bento", "kanban"]) {
     await page.goto("/");
     const board = page.locator(`[data-block-type="${type}"]`).first();
     await board.scrollIntoViewIfNeeded();
-    await board.getByRole("button", { name: `Expand ${type === "bento" ? "Bento" : "Kanban"}`, exact: true }).click();
+    await board
+      .getByRole("button", { name: `Expand ${type === "bento" ? "Bento" : "Kanban"}`, exact: true })
+      .click();
     const modal = page.locator("dialog:modal");
     const handleClass = "page-drag-handle";
     const handles = modal.locator(`.${handleClass}`);
-    const handle = type === "bento" ? handles.nth(1) : modal.locator('[data-block-type="paragraph"] .page-drag-handle').first();
+    const handle =
+      type === "bento"
+        ? handles.nth(1)
+        : modal.locator('[data-block-type="paragraph"] .page-drag-handle').first();
     await handle.locator("xpath=ancestor::*[@data-block-id][1]").hover();
     await handle.hover();
     const from = (await handle.boundingBox())!;

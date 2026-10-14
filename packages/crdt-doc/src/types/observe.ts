@@ -29,21 +29,21 @@
  * `{ path: ["b1", "content"], keys: [] }`
  */
 export interface CRDTObserveEvent {
-    /**
-     * Segments from the observed container to the shared value that changed.
-     *
-     * Empty when the observed map or array itself mutated. Map keys are
-     * strings; array indexes are numbers. A nested text change uses the path
-     * to that text, not a character offset.
-     */
-    readonly path: readonly (string | number)[];
-    /**
-     * Map keys mutated on the value at `path`.
-     *
-     * Empty for array inserts/deletes and for text edits. Several keys can
-     * appear when one transaction updates multiple entries on the same map.
-     */
-    readonly keys: readonly string[];
+  /**
+   * Segments from the observed container to the shared value that changed.
+   *
+   * Empty when the observed map or array itself mutated. Map keys are
+   * strings; array indexes are numbers. A nested text change uses the path
+   * to that text, not a character offset.
+   */
+  readonly path: readonly (string | number)[];
+  /**
+   * Map keys mutated on the value at `path`.
+   *
+   * Empty for array inserts/deletes and for text edits. Several keys can
+   * appear when one transaction updates multiple entries on the same map.
+   */
+  readonly keys: readonly string[];
 }
 
 /**
@@ -54,6 +54,6 @@ export interface CRDTObserveEvent {
  *   that ran for this commit. Compare by reference to skip duplicate work.
  */
 export type CRDTObserveHandler = (
-    events: readonly CRDTObserveEvent[],
-    transaction: unknown,
+  events: readonly CRDTObserveEvent[],
+  transaction: unknown,
 ) => void;

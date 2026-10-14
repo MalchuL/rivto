@@ -1,12 +1,21 @@
 import type { CRDTDoc, CRDTMap, CRDTObserveEvent } from "@chulane/crdt-doc";
 import {
-  DocumentBlockManager, DocumentElementManager,
+  DocumentBlockManager,
+  DocumentElementManager,
   DocumentModelImpl,
-  type BlockInput, type BlockNode, type ElementNode, type ElementInput,
+  type BlockInput,
+  type BlockNode,
+  type ElementNode,
+  type ElementInput,
 } from "@chulane/document-model";
 
 type EntityKind = "block" | "element";
-interface IndexedRecord { kind: EntityKind; documentId: string; id: string; present: boolean; }
+interface IndexedRecord {
+  kind: EntityKind;
+  documentId: string;
+  id: string;
+  present: boolean;
+}
 
 /**
  * Session database used by the demo. Record IDs share a namespace within each document.
@@ -34,7 +43,9 @@ export class DemoDatabase {
   /** @param documentId - Allocating document. @returns A locally unused candidate ID; creation reserves it before CRDT writes. */
   createId(documentId: string): string {
     let id = crypto.randomUUID();
-    while (this.hasId(documentId, id)) id = crypto.randomUUID();
+    while (this.hasId(documentId, id)) {
+      id = crypto.randomUUID();
+    }
     return id;
   }
 
@@ -46,7 +57,9 @@ export class DemoDatabase {
 
   /** @param id - Existing document identity to open, or a fresh identity to register. @returns Nothing; records in other documents may use this same ID. */
   openDocument(id: string): void {
-    if (!this.documents.has(id)) this.documents.set(id, { updates: [] });
+    if (!this.documents.has(id)) {
+      this.documents.set(id, { updates: [] });
+    }
   }
 
   /** @param crdt - Fresh adapter restored before providers and model observers attach. @returns Nothing after replaying saved collaborative updates. */
@@ -77,16 +90,22 @@ export class DemoDatabase {
    * @returns Containing document IDs in sorted order, or an empty list when absent.
    */
   findDocumentIdsWithBlock(blockId: string): string[] {
-    if (!this.index) return [...(this.blocks.get(blockId)?.keys() ?? [])].sort();
+    if (!this.index) {
+      return [...(this.blocks.get(blockId)?.keys() ?? [])].sort();
+    }
     // ponytail: fallback scans metadata; a durable database uses an index on block_id.
-    return [...this.index.values()].filter((row) => row.kind === "block" && row.id === blockId && row.present)
-      .map((row) => row.documentId).sort();
+    return [...this.index.values()]
+      .filter((row) => row.kind === "block" && row.id === blockId && row.present)
+      .map((row) => row.documentId)
+      .sort();
   }
 
   /** @param listener - Block membership observer; text edits do not notify it. @returns Unsubscribe callback. */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   /**
@@ -100,49 +119,119 @@ export class DemoDatabase {
    * @throws If an ID is empty, repeated, or already belongs to another record kind in this document.
    */
   reuse(documentId: string, kind: EntityKind, ...ids: string[]): void {
-    if (new Set(ids).size !== ids.length) throw new Error("Duplicate identity ID");
+    if (new Set(ids).size !== ids.length) {
+      throw new Error("Duplicate identity ID");
+    }
     ids.forEach((id) => {
       const key = JSON.stringify([documentId, id]);
       const existing = this.identities.get(key) ?? this.index?.get(key)?.kind;
-      if (!id.trim() || existing && existing !== kind) throw new Error(`ID ${id} cannot be reused as a ${kind}`);
+      if (!id.trim() || (existing && existing !== kind)) {
+        throw new Error(`ID ${id} cannot be reused as a ${kind}`);
+      }
     });
     const write = () => ids.forEach((id) => this.recordIdentity(documentId, kind, id));
-    if (this.registry) this.registry.transact(write);
-    else write();
+    if (this.registry) {
+      this.registry.transact(write);
+    } else {
+      write();
+    }
   }
 
+  /**
+   * Records an entity's document-local identity and creates a missing index entry.
+   *
+   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   * @param kind - Entity kind associated with the document-local ID.
+   * @param id - Stable ID of the record or registration to access.
+   * @throws If the ID was previously assigned to a different entity kind.
+   */
   private recordIdentity(documentId: string, kind: EntityKind, id: string): void {
     const key = JSON.stringify([documentId, id]);
     const existing = this.identities.get(key) ?? this.index?.get(key)?.kind;
-    if (existing && existing !== kind) throw new Error(`ID ${id} belongs to a ${existing}`);
+    if (existing && existing !== kind) {
+      throw new Error(`ID ${id} belongs to a ${existing}`);
+    }
     this.identities.set(key, kind);
-    if (this.index && !this.index.has(key)) this.index.set(key, { kind, documentId, id, present: false });
+    if (this.index && !this.index.has(key)) {
+      this.index.set(key, { kind, documentId, id, present: false });
+    }
   }
 
-  private saveRecord<T>(table: Map<string, Map<string, T>>, kind: EntityKind, documentId: string, id: string, value?: T): void {
+  /**
+   * Stores a detached record or removes its document entry, updating block-presence indexes and listeners.
+   *
+   * @param table - Record table indexed by entity ID and then document ID.
+   * @param kind - Entity kind associated with the document-local ID.
+   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   * @param id - Stable ID of the record or registration to access.
+   * @param value - Record to clone into storage, or undefined to remove its document entry.
+   */
+  private saveRecord<T>(
+    table: Map<string, Map<string, T>>,
+    kind: EntityKind,
+    documentId: string,
+    id: string,
+    value?: T,
+  ): void {
     let records = table.get(id);
     const present = records?.has(documentId) ?? false;
     if (value) {
       this.recordIdentity(documentId, kind, id);
-      if (!records) { records = new Map(); table.set(id, records); }
+      if (!records) {
+        records = new Map();
+        table.set(id, records);
+      }
       records.set(documentId, structuredClone(value));
     } else {
       records?.delete(documentId);
-      if (!records?.size) table.delete(id);
+      if (!records?.size) {
+        table.delete(id);
+      }
     }
     if (kind === "block" && present !== Boolean(value)) {
       const key = JSON.stringify([documentId, id]);
       const indexed = this.index?.get(key);
-      if (indexed && indexed.present !== Boolean(value)) this.index!.set(key, { ...indexed, present: Boolean(value) });
-      if (!this.index) this.listeners.forEach((listener) => listener());
+      if (indexed && indexed.present !== Boolean(value)) {
+        this.index!.set(key, { ...indexed, present: Boolean(value) });
+      }
+      if (!this.index) {
+        this.listeners.forEach((listener) => listener());
+      }
     }
   }
 }
 
 class DBBlockManager extends DocumentBlockManager {
   private readonly changedIds = new Set<string>();
-  constructor(crdt: CRDTDoc, private readonly getDatabase: () => DemoDatabase, private readonly documentId = crdt.id) { super(crdt); }
-  protected override generateId(): string { return this.getDatabase().createId(this.documentId); }
+  /**
+   * Connects block persistence to the demo database for the supplied CRDT document.
+   *
+   * @param crdt - CRDT document backing the manager.
+   * @param getDatabase - Reads the demo database used for identity allocation and record storage.
+   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   */
+  constructor(
+    crdt: CRDTDoc,
+    private readonly getDatabase: () => DemoDatabase,
+    private readonly documentId = crdt.id,
+  ) {
+    super(crdt);
+  }
+  /**
+   * Allocates a document-local block ID through the demo database.
+   *
+   * @returns New block ID.
+   */
+  protected override generateId(): string {
+    return this.getDatabase().createId(this.documentId);
+  }
+  /**
+   * Assigns missing IDs throughout the input subtree and reserves all block identities in the database.
+   *
+   * @param block - Block snapshot or input used by this operation.
+   * @returns Prepared subtree with stable IDs.
+   * @throws If an ID conflicts with another entity kind.
+   */
   protected override prepareBlock(block: BlockInput): BlockInput {
     const ids: string[] = [];
     const prepare = (input: BlockInput): BlockInput => {
@@ -154,7 +243,17 @@ class DBBlockManager extends DocumentBlockManager {
     this.getDatabase().reuse(this.documentId, "block", ...ids);
     return prepared;
   }
-  protected override onRecordsChanged(events: readonly CRDTObserveEvent[], transaction: unknown): ReadonlySet<string> {
+  /**
+   * Accumulates changed block IDs after the base manager applies CRDT observations.
+   *
+   * @param events - CRDT record changes in the current transaction.
+   * @param transaction - Adapter transaction passed to the base manager.
+   * @returns IDs changed by this transaction.
+   */
+  protected override onRecordsChanged(
+    events: readonly CRDTObserveEvent[],
+    transaction: unknown,
+  ): ReadonlySet<string> {
     const ids = super.onRecordsChanged(events, transaction);
     ids.forEach((id) => this.changedIds.add(id));
     return ids;
@@ -165,19 +264,57 @@ class DBBlockManager extends DocumentBlockManager {
     this.changedIds.clear();
     ids.forEach((id) => this.getDatabase().saveBlock(this.documentId, id, this.getBlockNode(id)));
   }
-
 }
 
 class DBElementManager extends DocumentElementManager {
-  constructor(crdt: CRDTDoc, private readonly getDatabase: () => DemoDatabase, private readonly documentId = crdt.id) { super(crdt); }
-  protected override generateId(): string { return this.getDatabase().createId(this.documentId); }
+  /**
+   * Connects element persistence to the demo database for the supplied CRDT document.
+   *
+   * @param crdt - CRDT document backing the manager.
+   * @param getDatabase - Reads the demo database used for identity allocation and record storage.
+   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   */
+  constructor(
+    crdt: CRDTDoc,
+    private readonly getDatabase: () => DemoDatabase,
+    private readonly documentId = crdt.id,
+  ) {
+    super(crdt);
+  }
+  /**
+   * Allocates a document-local element ID through the demo database.
+   *
+   * @returns New element ID.
+   */
+  protected override generateId(): string {
+    return this.getDatabase().createId(this.documentId);
+  }
+  /**
+   * Reserves the prepared element's identity in the demo database.
+   *
+   * @param input - Creation or update fields for this operation.
+   * @returns The unchanged input.
+   * @throws If its ID conflicts with another entity kind.
+   */
   protected override prepareElement(input: ElementInput): ElementInput {
     this.getDatabase().reuse(this.documentId, "element", input.id!);
     return input;
   }
-  protected override onRecordsChanged(events: readonly CRDTObserveEvent[], transaction: unknown): ReadonlySet<string> {
+  /**
+   * Writes changed element records to the demo database after processing CRDT observations.
+   *
+   * @param events - CRDT record changes in the current transaction.
+   * @param transaction - Adapter transaction passed to the base manager.
+   * @returns IDs changed by this transaction.
+   */
+  protected override onRecordsChanged(
+    events: readonly CRDTObserveEvent[],
+    transaction: unknown,
+  ): ReadonlySet<string> {
     const ids = super.onRecordsChanged(events, transaction);
-    ids.forEach((id) => this.getDatabase().saveElement(this.documentId, id, this.getElementNode(id)));
+    ids.forEach((id) =>
+      this.getDatabase().saveElement(this.documentId, id, this.getElementNode(id)),
+    );
     return ids;
   }
 }
@@ -190,7 +327,10 @@ class DBElementManager extends DocumentElementManager {
 export class DBDocumentModel extends DocumentModelImpl {
   private readonly unsubscribeDatabase: () => void;
   /** @param crdt - Fresh collaborative document. @param database - Shared application database holding documents and the document-local ID namespaces. */
-  constructor(crdt: CRDTDoc, private readonly database: DemoDatabase) {
+  constructor(
+    crdt: CRDTDoc,
+    private readonly database: DemoDatabase,
+  ) {
     database.restore(crdt);
     super(crdt);
     // Persist initialization too: later incremental updates depend on its CRDT clock.
@@ -212,5 +352,8 @@ export class DBDocumentModel extends DocumentModelImpl {
   }
 
   /** @returns Nothing after removing database observation and releasing the model, history, and providers. */
-  async destroy(): Promise<void> { this.unsubscribeDatabase(); await super.destroy(); }
+  async destroy(): Promise<void> {
+    this.unsubscribeDatabase();
+    await super.destroy();
+  }
 }

@@ -27,17 +27,25 @@ export class SlashCommandRegistry {
   register(command: SlashCommand): () => void {
     const extensions = this.owner;
     extensions.assertActive();
-    if (!command.id.trim()) throw new Error("Slash command ID is required");
-    if (!command.title.trim()) throw new Error("Slash command title is required");
-    if (this.commands.has(command.id)) throw new Error(`Slash command ${command.id} is already registered`);
+    if (!command.id.trim()) {
+      throw new Error("Slash command ID is required");
+    }
+    if (!command.title.trim()) {
+      throw new Error("Slash command title is required");
+    }
+    if (this.commands.has(command.id)) {
+      throw new Error(`Slash command ${command.id} is already registered`);
+    }
     this.commands.set(command.id, command);
     this.store.changed();
     let dispose: () => void = () => undefined;
-    dispose = extensions.own(() => {
+    dispose = extensions.registerCleanup(() => {
       if (this.registrations.get(command.id) === dispose) {
         this.registrations.delete(command.id);
       }
-      if (this.commands.get(command.id) !== command) return;
+      if (this.commands.get(command.id) !== command) {
+        return;
+      }
       this.commands.delete(command.id);
       this.store.changed();
     });
@@ -54,16 +62,22 @@ export class SlashCommandRegistry {
   delete(id: string): boolean {
     this.owner.assertActive();
     const dispose = this.registrations.get(id);
-    if (!dispose) return false;
+    if (!dispose) {
+      return false;
+    }
     dispose();
     return true;
   }
 
-  /** Returns registered definitions in declaration order; availability is view-specific. */
-  getAll(): SlashCommand[] { return [...this.commands.values()]; }
+  /** Returns registered definitions in declaration order; availability is panel-specific. */
+  getAll(): SlashCommand[] {
+    return [...this.commands.values()];
+  }
 
   /** Returns the definition with this ID, or undefined when it is not registered. */
-  get(id: string): SlashCommand | undefined { return this.commands.get(id); }
+  get(id: string): SlashCommand | undefined {
+    return this.commands.get(id);
+  }
 
   /**
    * @param listener - Callback invoked when the registry revision changes.

@@ -190,7 +190,7 @@ remove UI/events/commands/blocks
 
 Если plugin B был установлен после A и опирался на A, B освобождается первым.
 
-`EditorRuntime.destroy()` вызывает `plugins.destroy()` до удаления runtime-owned
+`DocumentEditor.destroy()` вызывает `plugins.destroy()` до удаления runtime-owned
 block definitions и очистки commands.
 
 ## 12. Проверка atomic rollback в tests
@@ -236,4 +236,3 @@ PluginManager InstalledPlugin
 
 Сам manager не копирует реализации specialized registries. Он только связывает
 их ownership в одну lifecycle boundary.
-

@@ -22,10 +22,7 @@ const report = {
 
 test("Review filenames transliterate, timestamp, fall back, and respect NAME_MAX", () => {
   assert.equal(reviewReportSlug(report.problem), "oshibka-struktury");
-  assert.equal(
-    reviewReportFileName(report),
-    "20260915-123456789-oshibka-struktury.json",
-  );
+  assert.equal(reviewReportFileName(report), "20260915-123456789-oshibka-struktury.json");
   assert.match(
     reviewReportFileName({ ...report, problem: "", reportId: "Отчёт 7" }),
     /-review-otchyot-7\.json$/,

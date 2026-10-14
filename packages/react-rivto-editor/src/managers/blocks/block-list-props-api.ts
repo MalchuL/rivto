@@ -12,9 +12,12 @@ export type BlockListPropsRegistration = Parameters<BlockListPropsManagerApi["re
 };
 
 /** Core property validation combined with optional React outline behavior. */
-export interface BlockListPropsApi extends Omit<BlockListPropsManagerApi, "destroy" | "register"> {
+export interface BlockListPropsApi extends Omit<BlockListPropsManagerApi, "register"> {
   /** Registers property validation and presentation behavior together; returns their owned cleanup. */
   register(registration: BlockListPropsRegistration): () => void;
+  /** Releases this React manager's registrations; caller-owned core policies remain installed.
+   * @returns No value after removing owned validation and presentation behavior. */
+  destroy(): void;
   /** Returns merged split properties in registration order, or undefined when no extension supplies them. */
   prepareSplit(block: EditorBlock): Record<string, unknown> | undefined;
   /** Runs split handlers in registration order until one handles the request. */

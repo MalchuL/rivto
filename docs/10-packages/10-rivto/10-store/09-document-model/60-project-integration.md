@@ -4,12 +4,12 @@ CRDT-каталог предоставляет механику хранения
 
 ## Владение во время выполнения
 
-Host создаёт `DocumentModelImpl` поверх выбранного `CRDTDoc` и передаёт готовую модель в `EditorRuntime`. Core editor не создаёт и не знает конкретный CRDT adapter.
+Host создаёт `DocumentModelImpl` поверх выбранного `CRDTDoc` и передаёт готовую модель в `ReactEditor`. Core editor не создаёт и не знает конкретный CRDT adapter.
 
 ```text
 Host
   владеет DocumentModelImpl
-    используется EditorRuntime
+    используется ReactEditor
     владеет CRDTDoc
       владеет shared-корнями и подключениями провайдеров
 ```
@@ -121,7 +121,7 @@ Helpers модели обновляют существующие shared-знач
 
 ## Пользовательские адаптеры
 
-Другую реализацию `CRDTDoc` можно передать в `DocumentModelImpl`, а retained model использовать через `createRivtoEditor({ document: model })` с настроенным host storage. Adapter должна сохранять ожидаемую семантику:
+Другую реализацию `CRDTDoc` можно передать в `DocumentModelImpl`, а retained model использовать через `createDocumentEditor({ document: model })` с настроенным host storage. Adapter должна сохранять ожидаемую семантику:
 
 - стабильная идентичность корневых контейнеров;
 - транзакционные update-уведомления;

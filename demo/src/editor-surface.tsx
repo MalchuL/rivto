@@ -6,6 +6,8 @@ import { EdgelessSurface, PageSurface, useEditorMode } from "@chulane/rivto-reac
  */
 export function DemoEditorSurface() {
   const { mode } = useEditorMode();
-  if (mode === "edgeless") return <EdgelessSurface />;
+  if (mode === "edgeless") {
+    return <EdgelessSurface />;
+  }
   return <PageSurface />;
 }

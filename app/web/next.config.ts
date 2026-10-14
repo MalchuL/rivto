@@ -14,7 +14,13 @@ const webReact = path.join(appDir, "node_modules/react");
 const webReactDom = path.join(appDir, "node_modules/react-dom");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@chulane/app", "@chulane/crdt-doc", "@chulane/document-model", "@chulane/rivto", "@chulane/rivto-react"],
+  transpilePackages: [
+    "@chulane/app",
+    "@chulane/crdt-doc",
+    "@chulane/document-model",
+    "@chulane/rivto",
+    "@chulane/rivto-react",
+  ],
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   eslint: {

@@ -20,12 +20,12 @@ React-пакет не создаёт и не уничтожает core editor а
 ## Минимальная интеграция
 
 ```tsx
-import { createRivtoEditor } from "@chulane/rivto";
+import { createDocumentEditor } from "@chulane/rivto";
 import { DocumentStorage } from "@chulane/document-model";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
-  createEditorRuntime,
-  EditorView,
+  createReactEditor,
+  EditorPanel,
   PageSurface,
   standardPreset,
 } from "@chulane/rivto-react";
@@ -34,21 +34,21 @@ import "@chulane/rivto-react/styles.css";
 const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
 storage.registerDocument("document-id");
 const document = await storage.openDocument("document-id");
-const editor = createRivtoEditor({ document });
-const editorRuntime = createEditorRuntime({
+const editor = createDocumentEditor({ document });
+const reactEditor = createReactEditor({
   editor,
   extensions: [standardPreset()],
 });
 
 export function RivtoView() {
-  return <EditorView runtime={editorRuntime}><PageSurface /></EditorView>;
+  return <EditorPanel editor={reactEditor}><PageSurface /></EditorPanel>;
 }
 ```
 
 Application владеет обоими lifecycle. Сначала уничтожайте React runtime:
 
 ```ts
-editorRuntime.destroy();
+reactEditor.destroy();
 editor.destroy();
 await document.destroy();
 await storage.destroy();

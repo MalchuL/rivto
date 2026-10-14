@@ -1,16 +1,20 @@
-import { createRivtoEditor, type EditorRuntime } from "./rivto-editor";
-import type { CreateRivtoEditorOptions, RivtoEditorApi } from "./types";
+import { createDocumentEditor, type DocumentEditor } from "./document-editor";
+import type { CreateDocumentEditorOptions, DocumentEditorAPI } from "./types";
 import type { EditorPosition } from "../managers/selection-manager";
-import { createCaretSelection, createTextSelection, createStructuralSelection } from "../managers/selection-manager";
+import {
+  createCaretSelection,
+  createTextSelection,
+  createStructuralSelection,
+} from "../managers/selection-manager";
 import type { Block } from "@chulane/document-model";
 import { DocumentModelImpl } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
 
-type CreateTestEditorOptions = Partial<CreateRivtoEditorOptions>;
+type CreateTestEditorOptions = Partial<CreateDocumentEditorOptions>;
 
 /** Test-owned consumer and explicit command API over a shared runtime. */
-export interface TestEditor extends RivtoEditorApi {
-  readonly runtime: EditorRuntime;
+export interface TestEditor extends DocumentEditorAPI {
+  readonly runtime: DocumentEditor;
 }
 
 /**
@@ -20,15 +24,20 @@ export interface TestEditor extends RivtoEditorApi {
  * auto-installs `paragraph`.
  */
 export async function createTestEditor(options: CreateTestEditorOptions = {}): Promise<TestEditor> {
-  const document = options.document ?? new DocumentModelImpl(new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
-  const runtime = createRivtoEditor({ ...options, document });
+  const document =
+    options.document ?? new DocumentModelImpl(new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
+  const runtime = createDocumentEditor({ ...options, document });
   const destroy = runtime.destroy.bind(runtime);
   let destroyed = false;
   runtime.destroy = async () => {
-    if (destroyed) return;
+    if (destroyed) {
+      return;
+    }
     destroyed = true;
     await destroy();
-    if (!options.document) await document.destroy();
+    if (!options.document) {
+      await document.destroy();
+    }
   };
   runtime.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
   return Object.assign(runtime, { runtime });
@@ -39,12 +48,15 @@ export async function createTestEditor(options: CreateTestEditorOptions = {}): P
  * @param editor - Runtime providing the document forest.
  * @returns Ordered `{ id, length }` rows for {@link createTextSelection}.
  */
-function orderedLengths(editor: Pick<RivtoEditorApi, "blocks">): { id: string; length: number }[] {
+function orderedLengths(
+  editor: Pick<DocumentEditorAPI, "blocks">,
+): { id: string; length: number }[] {
   const ordered: { id: string; length: number }[] = [];
-  const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-    ordered.push({ id: block.id, length: block.content.length });
-    visit(block.children);
-  });
+  const visit = (blocks: Block[]): void =>
+    blocks.forEach((block) => {
+      ordered.push({ id: block.id, length: block.content.length });
+      visit(block.children);
+    });
   visit(editor.blocks.getBlocks());
   return ordered;
 }
@@ -66,9 +78,15 @@ export function testCaret(blockId: string, offset: number) {
  * @param head - Gesture head.
  * @returns Canonical block selection.
  */
-export function testRange(editor: Pick<RivtoEditorApi, "blocks">, anchor: EditorPosition, head: EditorPosition) {
+export function testRange(
+  editor: Pick<DocumentEditorAPI, "blocks">,
+  anchor: EditorPosition,
+  head: EditorPosition,
+) {
   const item = createTextSelection(orderedLengths(editor), anchor, head);
-  if (!item) throw new Error("testRange: endpoint block not found");
+  if (!item) {
+    throw new Error("testRange: endpoint block not found");
+  }
   return item;
 }
 

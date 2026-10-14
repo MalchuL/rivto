@@ -1,50 +1,84 @@
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
-
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 describe("SlashCommandRegistry", () => {
   test("owns storage, execution, revision, and disposal", async () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    const editorView = createReactEditor({ editor });
-    const manager = editorView.slashCommands;
+    const reactPanel = createReactEditor({ editor });
+    const manager = reactPanel.slashCommands;
     let executed = false;
     const revision = manager.revision;
-    const dispose = editorView.runtime.slashCommands.register({
+    const dispose = reactPanel.editor.slashCommands.register({
       id: "test.command",
       title: "Test",
-      execute: () => { executed = true; },
+      execute: () => {
+        executed = true;
+      },
     });
 
     expect(manager.revision).toBeGreaterThan(revision);
     expect(manager.getAll({ blockId }).map(({ id }) => id)).toContain("test.command");
     manager.execute("test.command", { blockId });
     expect(executed).toBe(true);
-    expect(editorView.runtime.slashCommands.delete("test.command")).toBe(true);
-    expect(editorView.runtime.slashCommands.delete("test.command")).toBe(false);
+    expect(reactPanel.editor.slashCommands.delete("test.command")).toBe(true);
+    expect(reactPanel.editor.slashCommands.delete("test.command")).toBe(false);
     dispose();
     expect(manager.getAll({ blockId }).map(({ id }) => id)).not.toContain("test.command");
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 
   test("validates registrations and command availability", async () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph" }).id;
-    const editorView = createReactEditor({ editor });
-    const manager = editorView.slashCommands;
-    expect(() => editorView.runtime.slashCommands.register({ id: "", title: "Missing", execute() {} })).toThrow("ID");
-    expect(() => editorView.runtime.slashCommands.register({ id: "missing", title: "", execute() {} })).toThrow("title");
-    editorView.runtime.slashCommands.register({
+    const reactPanel = createReactEditor({ editor });
+    const manager = reactPanel.slashCommands;
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "",
+        title: "Missing",
+        /**
+         * Provides a no-op executor for slash-command registration validation.
+         */
+        execute() {},
+      }),
+    ).toThrow("ID");
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "missing",
+        title: "",
+        /**
+         * Provides a no-op executor for slash-command registration validation.
+         */
+        execute() {},
+      }),
+    ).toThrow("title");
+    reactPanel.editor.slashCommands.register({
       id: "conditional",
       title: "Conditional",
       isAvailable: ({ blockId: current }) => current === blockId,
+      /**
+       * Provides a no-op executor because this fixture tests command lookup only.
+       */
       execute() {},
     });
-    expect(() => editorView.runtime.slashCommands.register({ id: "conditional", title: "Again", execute() {} })).toThrow("already registered");
+    expect(() =>
+      reactPanel.editor.slashCommands.register({
+        id: "conditional",
+        title: "Again",
+        /**
+         * Provides a no-op executor for the duplicate slash-command registration fixture.
+         */
+        execute() {},
+      }),
+    ).toThrow("already registered");
     expect(manager.getAll({ blockId: "other" })).toEqual([]);
     expect(() => manager.execute("conditional", { blockId: "other" })).toThrow("unavailable");
     expect(() => manager.execute("unknown", { blockId })).toThrow("Unknown");
-    editorView.runtime.destroy();
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

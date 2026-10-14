@@ -10,7 +10,7 @@
 
 1. `editor/types.ts` — формы данных.
 2. `managers/selection-manager.ts` — storage contract.
-3. `editor/rivto-editor.ts`, методы `setSelection`, `reconcileSelection`,
+3. `editor/document-editor.ts`, методы `setSelection`, `reconcileSelection`,
    `validatePosition` — validation.
 4. `react/selection.ts`, сначала `readPosition` и `pointAtOffset` — conversion.
 5. `react/rivto-editor.tsx` — subscriptions и effects.
@@ -25,16 +25,16 @@
 
 ## 2. Таблица типов на boundaries
 
-| Boundary | Вход | Выход |
-| --- | --- | --- |
-| pointer hit test | viewport x/y | DOMSelectionPoint |
-| DOM conversion | Node + DOM offset | EditorPosition |
-| selection command | EditorSelection | validated EditorSelection |
-| manager | validated value | detached stored value |
-| DOM restoration | EditorPosition | Node + DOM offset |
-| clipboard normalization | directed EditorSelection | ordered NormalizedSelection |
-| clipboard payload | NormalizedSelection | JSON + HTML + text |
-| paste mutation | bundle/range | document changes + collapsed caret |
+| Boundary                | Вход                     | Выход                              |
+| ----------------------- | ------------------------ | ---------------------------------- |
+| pointer hit test        | viewport x/y             | DOMSelectionPoint                  |
+| DOM conversion          | Node + DOM offset        | EditorPosition                     |
+| selection command       | EditorSelection          | validated EditorSelection          |
+| manager                 | validated value          | detached stored value              |
+| DOM restoration         | EditorPosition           | Node + DOM offset                  |
+| clipboard normalization | directed EditorSelection | ordered NormalizedSelection        |
+| clipboard payload       | NormalizedSelection      | JSON + HTML + text                 |
+| paste mutation          | bundle/range             | document changes + collapsed caret |
 
 Если bug пересекает boundary, логируйте value до и после него. Не начинайте с
 CSS, если runtime offsets уже неправильные.
@@ -272,15 +272,15 @@ Chromium и Firefox имеют разные caret hit-test APIs и event timing.
 
 После изменения общего selection code проверьте:
 
-| Scenario | Forward | Reverse |
-| --- | --- | --- |
-| Same-block text | да | да |
-| Cross-block partial text | да | да |
-| Nested blocks | да | да |
-| Shift block range | да | да |
-| Rectangle blocks | вниз | вверх |
-| Copy exact text | да | да |
-| Replace by typing | да | да |
+| Scenario                 | Forward | Reverse |
+| ------------------------ | ------- | ------- |
+| Same-block text          | да      | да      |
+| Cross-block partial text | да      | да      |
+| Nested blocks            | да      | да      |
+| Shift block range        | да      | да      |
+| Rectangle blocks         | вниз    | вверх   |
+| Copy exact text          | да      | да      |
+| Replace by typing        | да      | да      |
 
 И отдельно:
 
@@ -410,7 +410,7 @@ hit-test старой anchor coordinate.
         ↓
 React adapter понимает DOM и browser events
         ↓
-EditorRuntime проверяет portable selection
+DocumentEditor проверяет portable selection
         ↓
 SelectionManager хранит local value
         ↓

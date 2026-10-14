@@ -22,14 +22,16 @@ export type EditorElementFrame = ElementFrame;
  * Includes ordered childIds without materializing descendants; getParentId resolves placement.
  * Manager reads can share cached objects, so treat these snapshots as read-only.
  */
-export type EditorElementNode<Props extends Record<string, unknown> = Record<string, unknown>> = ElementNode<Props>;
+export type EditorElementNode<Props extends Record<string, unknown> = Record<string, unknown>> =
+  ElementNode<Props>;
 
 /**
  * Detached element with its complete recursive child tree in sibling order.
  * Uses children instead of childIds; unchanged branches may share cached objects.
  * The Props parameter describes this node's properties, not every descendant.
  */
-export type EditorElement<Props extends Record<string, unknown> = Record<string, unknown>> = DocumentElement<Props>;
+export type EditorElement<Props extends Record<string, unknown> = Record<string, unknown>> =
+  DocumentElement<Props>;
 
 /**
  * Creation input for an element and optional recursive children.
@@ -38,7 +40,8 @@ export type EditorElement<Props extends Record<string, unknown> = Record<string,
  * frame to derive it from direct children; leaves require a frame.
  * childIds can instead reparent existing subtrees from the same document.
  */
-export type EditorElementInput<Props extends Record<string, unknown> = Record<string, unknown>> = ElementInput<Props>;
+export type EditorElementInput<Props extends Record<string, unknown> = Record<string, unknown>> =
+  ElementInput<Props>;
 
 /**
  * Geometry, stacking order, and property changes for an existing element.

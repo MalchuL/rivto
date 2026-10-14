@@ -1,4 +1,3 @@
-/** Configuration and empty-block contracts for the default writing block. */
 import type { EditorBlockInput } from "@chulane/rivto";
 import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
 import type { MarkdownLinkClick } from "../../../../types";

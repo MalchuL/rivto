@@ -30,9 +30,13 @@ export function selectedMoveRoots(
   activeId: string,
   isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): SelectedMoveRoots {
-  const structuralSelection = selection && hasBlockRanges(selection)
-    && isStructuralSelection(selection) && getSelectedBlockIds(selection).includes(activeId)
-    ? selection : undefined;
+  const structuralSelection =
+    selection &&
+    hasBlockRanges(selection) &&
+    isStructuralSelection(selection) &&
+    getSelectedBlockIds(selection).includes(activeId)
+      ? selection
+      : undefined;
   let result: SelectedMoveRoots = { ids: [activeId], grouped: false };
   if (structuralSelection) {
     const entries = pageEntries(blocks, null, false, isCollapsed);

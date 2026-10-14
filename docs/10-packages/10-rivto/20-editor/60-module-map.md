@@ -1,12 +1,12 @@
 # Карта editor-модулей
 
-## `editor/rivto-editor.ts`
+## `editor/document-editor.ts`
 
-Владеет `EditorRuntime`, composition order, subscriptions, batching, built-in runtime/clipboard commands, selection reconciliation, persistence facade и destroy sequence. Также экспортирует `createRivtoEditor()`.
+Владеет `ReactEditor`, composition order, subscriptions, batching, built-in runtime/clipboard commands, selection reconciliation, persistence facade и destroy sequence. Также экспортирует `createDocumentEditor()`.
 
 ## `editor/types.ts`
 
-Определяет `EditorMode`, selection shapes, creation options и `RivtoEditorApi`. Типы не зависят от React/DOM.
+Определяет `EditorMode`, selection shapes, creation options и `DocumentEditorAPI`. Типы не зависят от React/DOM.
 
 ## `editor/model.ts`
 
@@ -25,14 +25,14 @@ Public barrel экспортирует model/types, clipboard-manager API и run
 - `block-commands.test.ts` — runtime command delegation, props validation и hierarchy operations.
 - `clipboard-commands.test.ts` — data-only clipboard command integration.
 - `element-commands.test.ts` — first-class element commands.
-- `rivto-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
+- `document-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
 - `selection-manager.test.ts` — direction, ordering, reconciliation и heterogeneous ranges.
 - `history-manager.test.ts` — capture boundaries, remote origin filtering и load baseline.
 
 ## Ownership между слоями
 
 ```text
-EditorRuntime
+ReactEditor
   owns runtime lifecycle and cross-cutting state
 
 DocumentModel

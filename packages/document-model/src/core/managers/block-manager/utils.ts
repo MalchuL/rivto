@@ -62,18 +62,30 @@ export function validateBlockForest(
     if (!block || typeof block !== "object" || Array.isArray(block)) {
       throw new Error("Snapshot block children must be an array");
     }
-    if (visiting.has(block)) throw new Error("Block forest must be acyclic");
+    if (visiting.has(block)) {
+      throw new Error("Block forest must be acyclic");
+    }
     visiting.add(block);
     if (options.requireComplete || block.id !== undefined) {
       const id = requireNonemptyId(block.id, "Block");
-      if (ids.has(id)) throw new Error(`Duplicate block ${id}`);
-      if (options.existingIds?.has(id)) throw new Error(`Block ${id} already exists`);
+      if (ids.has(id)) {
+        throw new Error(`Duplicate block ${id}`);
+      }
+      if (options.existingIds?.has(id)) {
+        throw new Error(`Block ${id} already exists`);
+      }
       ids.add(id);
     }
-    if (!block.type || typeof block.type !== "string") throw new Error("Block type is required");
+    if (!block.type || typeof block.type !== "string") {
+      throw new Error("Block type is required");
+    }
     if (options.requireComplete) {
-      if (typeof block.content !== "string") throw new Error("Block content must be a string");
-      if (!Array.isArray(block.children)) throw new Error("Snapshot block children must be an array");
+      if (typeof block.content !== "string") {
+        throw new Error("Block content must be a string");
+      }
+      if (!Array.isArray(block.children)) {
+        throw new Error("Snapshot block children must be an array");
+      }
       validateBlockListProps(block.listProps);
       assertPortableRecord(block.props, "block.props");
       assertPortableRecord(block.pluginData, "block.pluginData");
@@ -84,11 +96,15 @@ export function validateBlockForest(
       if (block.children !== undefined && !Array.isArray(block.children)) {
         throw new Error("Snapshot block children must be an array");
       }
-      if (block.listProps !== undefined) validateBlockListProps(block.listProps);
+      if (block.listProps !== undefined) {
+        validateBlockListProps(block.listProps);
+      }
       if (block.props !== undefined) {
         assertPortableRecord(block.props, "block.props");
       }
-      if (block.pluginData !== undefined) assertPortableRecord(block.pluginData, "block.pluginData");
+      if (block.pluginData !== undefined) {
+        assertPortableRecord(block.pluginData, "block.pluginData");
+      }
     }
     (block.children ?? []).forEach(visit);
     visiting.delete(block);

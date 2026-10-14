@@ -1,5 +1,6 @@
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const RESIZE_RIGHT = "Resize Bento tile from the right";
 const RESIZE_LEFT = "Resize Bento tile from the left";
@@ -7,7 +8,7 @@ const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
 // Child-region IDs have a per-view prefix; select direct tiles by the children container class.
-const BENTO_TILES_SELECTOR = ':scope > .page-block-children > [data-block-id]';
+const BENTO_TILES_SELECTOR = ":scope > .page-block-children > [data-block-id]";
 
 /**
  * Drags one Bento edge handle by a horizontal pixel delta.
@@ -32,13 +33,22 @@ for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
     await page.goto("/");
     await page.evaluate((mode) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
-      if (mode === "edgeless") editor.elements.insertElement({ type: "block", zIndex: 0,
-        frame: { x: 20, y: 20, width: 800, height: 600 }, props: { startBlockId: board.id, endBlockId: board.id } });
+      if (mode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 800, height: 600 },
+          props: { startBlockId: board.id, endBlockId: board.id },
+        });
+      }
     }, mode);
-    if (mode === "edgeless") await page.locator('[data-editor-mode="edgeless"]').click();
+    if (mode === "edgeless") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
     const board = page.locator('[data-block-type="bento"]');
     const tiles = board.locator(BENTO_TILES_SELECTOR);
     await expect(tiles).toHaveCount(3);
@@ -66,22 +76,30 @@ for (const mode of ["block", "edgeless"]) {
     await expect(page.locator("dialog:modal")).toHaveCount(0);
     // Width preferences survive snapshot reload, and tiles shrink to their surface.
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
       editor.load(editor.dump());
     });
     await expect(first).toHaveCSS("flex-basis", committed);
-    if (mode === "block") await page.setViewportSize({ width: 420, height: 800 });
+    if (mode === "block") {
+      await page.setViewportSize({ width: 420, height: 800 });
+    }
     const box = (await board.boundingBox())!;
-    for (const tile of await tiles.all()) expect((await tile.boundingBox())!.width).toBeLessThanOrEqual(box.width);
+    for (const tile of await tiles.all()) {
+      expect((await tile.boundingBox())!.width).toBeLessThanOrEqual(box.width);
+    }
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.blocks.removeBlocks(board.children.map((child) => child.id));
     });
     await expect(tiles).toHaveCount(0);
-    await expect(board.locator(
-      `:scope > .${ROW_CLASS} > .${CONTENT_FLOW_CLASS} > [data-block-selection-anchor]`,
-    )).not.toHaveAttribute("contenteditable");
+    await expect(
+      board.locator(
+        `:scope > .${ROW_CLASS} > .${CONTENT_FLOW_CLASS} > [data-block-selection-anchor]`,
+      ),
+    ).not.toHaveAttribute("contenteditable");
     expect((await board.boundingBox())!.height).toBeGreaterThanOrEqual(128);
   });
 }
@@ -89,7 +107,8 @@ for (const mode of ["block", "edgeless"]) {
 test("Bento edge resize freezes siblings until pointer release", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
     editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
   });
@@ -106,7 +125,9 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   const startWidth = await first.evaluate((element) => (element as HTMLElement).offsetWidth);
   await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
   await page.mouse.down();
-  await page.mouse.move(origin.x + origin.width / 2 + 90, origin.y + origin.height / 2, { steps: 10 });
+  await page.mouse.move(origin.x + origin.width / 2 + 90, origin.y + origin.height / 2, {
+    steps: 10,
+  });
   const mid = (await sibling.boundingBox())!;
   expect(mid.x).toBeCloseTo(before.x, 0);
   expect(mid.y).toBeCloseTo(before.y, 0);
@@ -124,19 +145,25 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   const leftBox = (await leftHandle.boundingBox())!;
   await page.mouse.move(leftBox.x + leftBox.width / 2, leftBox.y + leftBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(leftBox.x + leftBox.width / 2 - 60, leftBox.y + leftBox.height / 2, { steps: 8 });
+  await page.mouse.move(leftBox.x + leftBox.width / 2 - 60, leftBox.y + leftBox.height / 2, {
+    steps: 8,
+  });
   const firstMid = (await first.boundingBox())!;
   expect(firstMid.x).toBeCloseTo(siblingBefore.x, 0);
   expect(firstMid.width).toBeCloseTo(siblingBefore.width, 0);
   await page.mouse.up();
-  await expect(sibling).toHaveCSS("flex-basis", `${Math.max(160, Math.min(960, siblingStart + 60))}px`);
+  await expect(sibling).toHaveCSS(
+    "flex-basis",
+    `${Math.max(160, Math.min(960, siblingStart + 60))}px`,
+  );
 });
 
 for (const edge of ["between", "under", "inside", "end-right", "end-under"] as const) {
   test(`Bento drag placement ${edge}`, async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
       const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
       editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
     });
@@ -160,12 +187,10 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     await page.mouse.down();
     await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
     // Sibling drops aim at the 16px wrap gap, not a strip hugging the tile.
-    const destX = edge === "between" || edge === "end-right"
-      ? to.x + to.width + 8
-      : to.x + to.width / 2;
-    const destY = edge === "under" || edge === "end-under"
-      ? to.y + to.height + 8
-      : to.y + to.height / 2;
+    const destX =
+      edge === "between" || edge === "end-right" ? to.x + to.width + 8 : to.x + to.width / 2;
+    const destY =
+      edge === "under" || edge === "end-under" ? to.y + to.height + 8 : to.y + to.height / 2;
     await page.mouse.move(destX, destY, { steps: 15 });
     if (edge === "inside") {
       await expect(target).toHaveAttribute("data-drop-inside", "true");
@@ -174,26 +199,44 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
       const line = page.locator(`.${lineClass}`);
       await expect(line).toBeVisible();
       // Related bounds must be read in the same frame while drag chrome settles.
-      const { lineBox, targetBox, nextBox } = await page.evaluate(({ targetId, nextId }) => {
-        const lineBox = document.querySelector(".page-drop-indicator")!.getBoundingClientRect().toJSON();
-        const targetBox = document.querySelector(`[data-block-id="${targetId}"]`)!.getBoundingClientRect().toJSON();
-        const nextBox = nextId ? document.querySelector(`[data-block-id="${nextId}"]`)!.getBoundingClientRect().toJSON() : null;
-        return { lineBox, targetBox, nextBox };
-      }, { targetId, nextId: end ? null : await next.getAttribute("data-block-id") });
-      const sameRow = nextBox && Math.max(targetBox.y, nextBox.y)
-        < Math.min(targetBox.y + targetBox.height, nextBox.y + nextBox.height);
+      const { lineBox, targetBox, nextBox } = await page.evaluate(
+        ({ targetId, nextId }) => {
+          const lineBox = document
+            .querySelector(".page-drop-indicator")!
+            .getBoundingClientRect()
+            .toJSON();
+          const targetBox = document
+            .querySelector(`[data-block-id="${targetId}"]`)!
+            .getBoundingClientRect()
+            .toJSON();
+          const nextBox = nextId
+            ? document
+                .querySelector(`[data-block-id="${nextId}"]`)!
+                .getBoundingClientRect()
+                .toJSON()
+            : null;
+          return { lineBox, targetBox, nextBox };
+        },
+        { targetId, nextId: end ? null : await next.getAttribute("data-block-id") },
+      );
+      const sameRow =
+        nextBox &&
+        Math.max(targetBox.y, nextBox.y) <
+          Math.min(targetBox.y + targetBox.height, nextBox.y + nextBox.height);
       if (sameRow) {
         await expect(line).toHaveAttribute("data-axis", "vertical");
         expect(lineBox.width).toBe(4);
-        expect(Math.abs(lineBox.x + lineBox.width / 2
-          - (targetBox.x + targetBox.width + nextBox.x) / 2)).toBeLessThanOrEqual(2);
+        expect(
+          Math.abs(lineBox.x + lineBox.width / 2 - (targetBox.x + targetBox.width + nextBox.x) / 2),
+        ).toBeLessThanOrEqual(2);
       } else {
         const verticalEnd = edge === "end-right";
         await expect(line).toHaveAttribute("data-axis", verticalEnd ? "vertical" : "horizontal");
         if (verticalEnd) {
           expect(lineBox.width).toBe(4);
-          expect(Math.abs(lineBox.x + lineBox.width / 2
-            - (targetBox.x + targetBox.width))).toBeLessThanOrEqual(2);
+          expect(
+            Math.abs(lineBox.x + lineBox.width / 2 - (targetBox.x + targetBox.width)),
+          ).toBeLessThanOrEqual(2);
         } else {
           expect(lineBox.height).toBe(4);
           const expectedY = nextBox
@@ -205,18 +248,25 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     }
     await page.mouse.up();
     if (edge === "inside") {
-      await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(1);
+      await expect(
+        page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`),
+      ).toHaveCount(1);
     } else {
-      await expect(page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`)).toHaveCount(0);
+      await expect(
+        page.locator(`[data-block-id="${targetId}"] [data-block-id="${sourceId}"]`),
+      ).toHaveCount(0);
       await expect(end ? tiles.last() : tiles.nth(1)).toHaveAttribute("data-block-id", sourceId!);
     }
   });
 }
 
-test("drags a page block into a bento as a tile and a tile back onto the page", async ({ page }) => {
+test("drags a page block into a bento as a tile and a tile back onto the page", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const boardId = editor.blocks.insertBlock({
       type: "bento",
       content: "Drop board",
@@ -227,7 +277,8 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
     }).id;
     const outsideId = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
     editor.load({
-      ...editor.dump(), rootElementIds: [],
+      ...editor.dump(),
+      rootElementIds: [],
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(outsideId)!],
       elements: [],
     });
@@ -235,7 +286,10 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   const board = page.locator('[data-block-type="bento"]');
   const tiles = board.locator(BENTO_TILES_SELECTOR);
   await expect(tiles).toHaveCount(2);
-  const source = page.locator("[data-block-id]").filter({ has: page.getByText("From page", { exact: true }) }).first();
+  const source = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("From page", { exact: true }) })
+    .first();
   const target = tiles.first();
   const handleClass = "page-drag-handle";
   const handle = source.locator(`:scope > .${ROW_CLASS} .${handleClass}`);
@@ -262,24 +316,31 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await page.mouse.move(title.x + title.width / 2, title.y + 1, { steps: 20 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(2);
-  await expect(page.locator("[data-block-id]").filter({ has: page.getByText("From page", { exact: true }) })).toHaveCount(1);
+  await expect(
+    page.locator("[data-block-id]").filter({ has: page.getByText("From page", { exact: true }) }),
+  ).toHaveCount(1);
 });
 
 test("drops a page block into an empty Bento grid", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor;
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
     const boardId = editor.blocks.insertBlock({ type: "bento", content: "" }).id;
     const sourceId = editor.blocks.insertBlock({ type: "paragraph", content: "Drop me" }).id;
     editor.load({
-      ...editor.dump(), rootElementIds: [],
+      ...editor.dump(),
+      rootElementIds: [],
       blocks: [editor.blocks.getBlock(boardId)!, editor.blocks.getBlock(sourceId)!],
       elements: [],
     });
   });
   const board = page.locator('[data-block-type="bento"]');
   const tiles = board.locator(BENTO_TILES_SELECTOR);
-  const source = page.locator("[data-block-id]").filter({ has: page.getByText("Drop me", { exact: true }) }).first();
+  const source = page
+    .locator("[data-block-id]")
+    .filter({ has: page.getByText("Drop me", { exact: true }) })
+    .first();
   const handle = source.locator(`:scope > .${ROW_CLASS} .${PAGE_DRAG_HANDLE_CLASS}`);
   await source.hover();
   await handle.hover();

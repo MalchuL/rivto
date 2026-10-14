@@ -16,7 +16,7 @@ import {
   tableExtension,
   useBlockNode,
   useBlockSelectionAnchor,
-  useEditorView,
+  usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -49,7 +49,7 @@ export {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,
   SLIDER_BLOCK_TYPE,
-  sliderBlockDefinition
+  sliderBlockDefinition,
 } from "./custom-block-definitions";
 
 /**
@@ -63,8 +63,11 @@ export {
  * @returns The markdown body and range control, or null after deletion.
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const { block, operations: { setProp } } = useBlockNode<SliderProps>(blockId);
-  const editorView = useEditorView();
+  const {
+    block,
+    operations: { setProp },
+  } = useBlockNode<SliderProps>(blockId);
+  const panel = usePanel();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
   const committedValue = block?.props.value ?? 50;
@@ -76,11 +79,17 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    * @param next - Value shown by the input when the gesture completed.
    * @returns Nothing; the document is updated through `setProp`.
    */
-  const commitValue = useCallback((next: number) => {
-    setDraftValue(null);
-    if (next === (editorView.runtime.blocks.getBlockNode(blockId)?.props.value ?? 50)) return;
-    setProp("value", next);
-  }, [editorView, blockId, setProp]);
+  const commitValue = useCallback(
+    (next: number) => {
+      setDraftValue(null);
+      const current = panel.blocks.getBlockNode(blockId);
+      if (!current || next === (current.props.value ?? 50)) {
+        return;
+      }
+      setProp("value", next);
+    },
+    [panel, blockId, setProp],
+  );
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -104,8 +113,11 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const previewOrCommit = (event: ChangeEvent<HTMLInputElement>) => {
     const next = Number(event.currentTarget.value);
-    if (draggingRef.current) setDraftValue(next);
-    else commitValue(next);
+    if (draggingRef.current) {
+      setDraftValue(next);
+    } else {
+      commitValue(next);
+    }
   };
 
   /**
@@ -129,7 +141,9 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
     setDraftValue(null);
   };
 
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   return (
     <div className="custom-slider-block">
       <MarkdownContent blockId={blockId} />
@@ -157,13 +171,20 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 function CounterBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode<CounterProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
-  const editorView = useEditorView();
-  if (!editing.block) return null;
+  const panel = usePanel();
+  if (!editing.block) {
+    return null;
+  }
   const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    const current = editorView.runtime.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
-    editing.operations.setProp("count", (current?.count ?? 0) + 1);
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    if (!current) {
+      return;
+    }
+    editing.operations.setProp("count", (current.count ?? 0) + 1);
   };
   return (
     // The renderer region fills the block row, making its otherwise empty
@@ -185,36 +206,46 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
 
 /** Creation-time extensions for the demo's optional and custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
-    kanbanExtension(),
-    bentoExtension(),
-    tableExtension(),
-    columnsExtension(),
-    blockExtension({
-      definition: sliderBlockDefinition,
-      render: SliderBlock,
-      slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
-    }),
-    blockExtension({
-      definition: counterBlockDefinition,
-      render: CounterBlock,
-      slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
-      clipboard: {
-        format: ({ block }) => {
-          const count = Number(block.props.count);
-          const text = `Count: ${count}`;
-          return { plain: text, markdown: text, html: `<p data-rivto-block="counter" data-count="${count}">${text}</p>` };
-        },
-        parseHTML: (element) => {
-          if (element.getAttribute("data-rivto-block") !== "counter") return;
-          const count = Number(element.getAttribute("data-count"));
-          if (!Number.isInteger(count) || count < 0) return;
-          return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count } }] };
-        },
-        parseText: (text) => {
-          const match = /^Count: (\d+)$/.exec(text.trim());
-          if (!match) return;
-          return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count: Number(match[1]) } }] };
-        },
+  kanbanExtension(),
+  bentoExtension(),
+  tableExtension(),
+  columnsExtension(),
+  blockExtension({
+    definition: sliderBlockDefinition,
+    render: SliderBlock,
+    slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
+  }),
+  blockExtension({
+    definition: counterBlockDefinition,
+    render: CounterBlock,
+    slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
+    clipboard: {
+      format: ({ block }) => {
+        const count = Number(block.props.count);
+        const text = `Count: ${count}`;
+        return {
+          plain: text,
+          markdown: text,
+          html: `<p data-rivto-block="counter" data-count="${count}">${text}</p>`,
+        };
       },
-    }),
+      parseHTML: (element) => {
+        if (element.getAttribute("data-rivto-block") !== "counter") {
+          return;
+        }
+        const count = Number(element.getAttribute("data-count"));
+        if (!Number.isInteger(count) || count < 0) {
+          return;
+        }
+        return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count } }] };
+      },
+      parseText: (text) => {
+        const match = /^Count: (\d+)$/.exec(text.trim());
+        if (!match) {
+          return;
+        }
+        return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count: Number(match[1]) } }] };
+      },
+    },
+  }),
 ];

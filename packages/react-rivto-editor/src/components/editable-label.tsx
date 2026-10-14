@@ -105,33 +105,54 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
     // keydown runs before beforeinput; remember we already inserted for this Enter.
     const enterInsertedNewline = useRef(false);
 
-    useImperativeHandle(ref, () => ({
-      beginEditingAt(clientX, clientY) {
-        pendingCaret.current = { x: clientX, y: clientY };
-        onEditingChange(true);
-      },
-    }), [onEditingChange]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        /**
+         * Enters label editing and records the client-coordinate caret position for the next render.
+         *
+         * @param clientX - Caret position in viewport pixels along the horizontal axis.
+         * @param clientY - Caret position in viewport pixels along the vertical axis.
+         */
+        beginEditingAt(clientX, clientY) {
+          pendingCaret.current = { x: clientX, y: clientY };
+          onEditingChange(true);
+        },
+      }),
+      [onEditingChange],
+    );
 
     useLayoutEffect(() => {
       const element = elementRef.current;
-      if (!element) return;
+      if (!element) {
+        return;
+      }
 
       if (!editing) {
         editingSession.current = false;
-        if (element.textContent !== text) element.textContent = text;
+        if (element.textContent !== text) {
+          element.textContent = text;
+        }
         return;
       }
 
       const entering = !editingSession.current;
       editingSession.current = true;
       // Seed once per session. Rewriting on later renders would drop typed `\n`.
-      if (entering && element.textContent !== text) element.textContent = text;
+      if (entering && element.textContent !== text) {
+        element.textContent = text;
+      }
 
       const point = pendingCaret.current ?? focusPointRef?.current ?? null;
       pendingCaret.current = null;
-      if (focusPointRef) focusPointRef.current = null;
-      if (point) placeCaretAtPoint(element, point.x, point.y);
-      else if (entering) element.focus({ preventScroll: true });
+      if (focusPointRef) {
+        focusPointRef.current = null;
+      }
+      if (point) {
+        placeCaretAtPoint(element, point.x, point.y);
+      } else if (entering) {
+        element.focus({ preventScroll: true });
+      }
     }, [editing, focusPointRef, text]);
 
     return (
@@ -147,8 +168,12 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
         }}
         onBeforeInput={(event) => {
           onBeforeInput?.(event);
-          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) return;
-          if (!isEditableNewlineInput(event.nativeEvent.inputType)) return;
+          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) {
+            return;
+          }
+          if (!isEditableNewlineInput(event.nativeEvent.inputType)) {
+            return;
+          }
           event.preventDefault();
           if (enterInsertedNewline.current) {
             enterInsertedNewline.current = false;
@@ -158,9 +183,15 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
         }}
         onKeyDown={(event) => {
           onKeyDown?.(event);
-          if (event.key !== "Enter") enterInsertedNewline.current = false;
-          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) return;
-          if (event.key !== "Enter") return;
+          if (event.key !== "Enter") {
+            enterInsertedNewline.current = false;
+          }
+          if (event.defaultPrevented || !editing || event.nativeEvent.isComposing) {
+            return;
+          }
+          if (event.key !== "Enter") {
+            return;
+          }
           // Replace insertParagraph so commit can persist a real newline character.
           event.preventDefault();
           insertEditableNewline(event.currentTarget);
@@ -168,7 +199,9 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
         }}
         onPaste={(event) => {
           onPaste?.(event);
-          if (event.defaultPrevented || !editing) return;
+          if (event.defaultPrevented || !editing) {
+            return;
+          }
           // Structured clipboard must not steal this paste; insert visible text.
           event.preventDefault();
           insertEditablePlainText(
@@ -177,7 +210,9 @@ export const EditableLabel = forwardRef<EditableLabelHandle, EditableLabelProps>
           );
         }}
         onPointerDown={(event) => {
-          if (editing && stopPointerWhileEditing) event.stopPropagation();
+          if (editing && stopPointerWhileEditing) {
+            event.stopPropagation();
+          }
           onPointerDown?.(event);
         }}
       />

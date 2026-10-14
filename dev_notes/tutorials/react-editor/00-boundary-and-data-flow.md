@@ -1,4 +1,4 @@
-# Глава 00. Граница React и EditorRuntime
+# Глава 00. Граница React и DocumentEditor
 
 ## 1. Почему runtime не является React state
 
@@ -10,12 +10,12 @@ Collaborative editor должен использоваться не только
 - tests работают без DOM;
 - в будущем другой renderer может использовать тот же runtime.
 
-Поэтому core state находится в framework-independent `EditorRuntime`, а React
+Поэтому core state находится в framework-independent `DocumentEditor`, а React
 подписывается на него.
 
 ```text
-React component       зависит от EditorRuntime
-EditorRuntime         НЕ зависит от React
+React component       зависит от DocumentEditor
+DocumentEditor         НЕ зависит от React
 DocumentModel         НЕ зависит от React
 CRDT adapter          НЕ зависит от React
 ```
@@ -35,7 +35,7 @@ Props:
 
 ### `editor`
 
-Long-lived `EditorRuntime`, созданный host application.
+Long-lived `DocumentEditor`, созданный host application.
 
 ### `defaultBlockType`
 
@@ -90,7 +90,7 @@ DOM nodes другого.
 4. command handler вызывает DocumentModelImpl.setBlockText
 5. model выполняет CRDT transaction с local origin
 6. CRDT document публикует update
-7. EditorRuntime увеличивает revision
+7. DocumentEditor увеличивает revision
 8. useSyncExternalStore просит React rerender
 9. renderer читает новый detached block.content
 10. layout effect сверяет DOM и model

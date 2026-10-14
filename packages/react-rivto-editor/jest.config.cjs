@@ -11,9 +11,6 @@ module.exports = {
     "^remark-gfm$": "<rootDir>/src/test-mocks/empty-plugin.ts",
   },
   transform: {
-    "^.+\\.tsx?$": [
-      "<rootDir>/jest-transformer.cjs",
-      { tsconfig: "tsconfig.json", useESM: true },
-    ],
+    "^.+\\.tsx?$": ["<rootDir>/jest-transformer.cjs", { tsconfig: "tsconfig.json", useESM: true }],
   },
 };

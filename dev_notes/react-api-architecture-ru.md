@@ -24,7 +24,7 @@ runtime ради владения регистрациями.
 
 ### 1. Runtime и отображение
 
-Сохранить две сущности. EditorRuntime владеет общими менеджерами документа и
+Сохранить две сущности. DocumentEditor владеет общими менеджерами документа и
 регистрациями расширений. EditorViewApi описывает взаимодействие с одним
 отображением: DOM, selection, clipboard и slash execution.
 
@@ -51,8 +51,8 @@ runtime ради владения регистрациями.
 - BlockViewBehavior → BlockBehavior.
 - BaseBlockView → DefaultBlockBehavior.
 - DocumentViewRegistry → EditorViewRegistry.
-- ReactSelectionManager → ViewSelectionManager.
-- EditorRuntime, EditorView, EditorViewApi и EditorViewController сохраняют имена.
+- ReactSelectionManager → PanelSelectionManager.
+- DocumentEditor, EditorView, EditorViewApi и EditorViewController сохраняют имена.
 
 Не переименовывать React-компонент BlockView только из-за совпадения слова view:
 он действительно отображает блок. Пересмотреть связанные названия контекстов,
@@ -60,10 +60,10 @@ runtime ради владения регистрациями.
 
 ### 4. Регистрация и выполнение
 
-Разделить ClipboardFormatRegistry (parsers/formatters) и ViewClipboardManager
+Разделить ClipboardFormatRegistry (parsers/formatters) и PanelClipboardManager
 (copy/cut/paste). Расположение общих paste strategies определить при переносе,
 сохранив существующий pipeline и привязку стратегии к отображению.
-SlashCommandRegistry хранит определения, ViewSlashCommandManager проверяет
+SlashCommandRegistry хранит определения, PanelSlashCommandManager проверяет
 доступность и выполняет команды для своего отображения.
 
 Runtime регистрирует поведение; обработчики действуют через полученный editorView.
@@ -112,7 +112,7 @@ Pick сохранять для частичных данных и необход
 ### 8. Зависимости менеджеров
 
 RendererManager и SurfaceManager получают владельца регистраций вместо всего
-runtime, если им нужны только own/assertActive. Не вводить DI-контейнер.
+runtime, если им нужны только registerCleanup/assertActive. Не вводить DI-контейнер.
 BlockTypeManager сохранить координатором атомарной регистрации definition,
 renderer, behavior и slash-команды с rollback.
 
@@ -132,15 +132,15 @@ React-компоненты и hooks остаются функциями. Statefu
 ## Этапы и критерии завершения
 
 1. [x] Названия и контракты: устранить неоднозначные view-названия, разнести
-   capability-типы, отделить block behavior от editor views. Проверить потребителей,
-   exports, demo, docs и fixtures. Только этот этап не требует новых browser timings,
-   если алгоритмы, lifecycle и runtime shape не меняются кроме согласованных имён.
+       capability-типы, отделить block behavior от editor views. Проверить потребителей,
+       exports, demo, docs и fixtures. Только этот этап не требует новых browser timings,
+       если алгоритмы, lifecycle и runtime shape не меняются кроме согласованных имён.
 2. [x] Отображение: объединить реализации, убрать forwarding, сохранить локальные
-   менеджеры и независимость repeated/nested views. Проверить StrictMode и cleanup.
+       менеджеры и независимость repeated/nested views. Проверить StrictMode и cleanup.
 3. [x] Менеджеры: разделить регистрацию и выполнение clipboard/slash; выделить
-   native listeners, сделать выбор активного/default отображения явным.
+       native listeners, сделать выбор активного/default отображения явным.
 4. [x] Storage: выделить resolver, уточнить acquire/release API, сузить зависимости
-   менеджеров. Проверить параллельное открытие, cancellation и перенос источника.
+       менеджеров. Проверить параллельное открытие, cancellation и перенос источника.
 
 После каждого законченного этапа: relevant Jest, React/demo/docs typecheck,
 workspace lint, сборка публичных exports. Для изменения поведения — production
@@ -155,7 +155,6 @@ DOM/selection, медиану и диапазон. Не ослаблять бю�
 
 - План сохранён до изменения исходников. Исходный git index сохранён для сравнения.
 
-
 ### Этап 1: названия и расположение контрактов
 
 - Переименованы BlockBehaviorRegistry, BlockBehavior, DefaultBlockBehavior,
@@ -164,7 +163,7 @@ DOM/selection, медиану и диапазон. Не ослаблять бю�
 - `src/views/` перенесён в `src/block-behaviors/`: это алгоритмы и политики,
   а `blocks/block-view` по-прежнему содержит React-компонент отображения.
   Registry и его контракт принадлежат `managers/blocks/`.
-- EditorViewRegistry и ViewSelectionManager получили согласованные имена.
+- EditorViewRegistry и PanelSelectionManager получили согласованные имена.
 - Контракты из capabilities.ts разделены на 12 файлов рядом с владельцами;
   суффикс Capability заменён на Api. Все существующие описания методов сохранены.
   capabilities.ts остаётся только публичным реэкспортом. Внутренние импорты идут
@@ -202,7 +201,6 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
 явный доступ к общим менеджерам через runtime и публичный интерфейс selection.
 Этапы 2–4 ещё не реализованы; план целиком не считается завершённым.
 
-
 ### Этапы 2–4: реализация
 
 Все оставшиеся этапы реализованы вместе, поскольку удаление forwarding меняет
@@ -219,7 +217,7 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
   `editorView.runtime.blocks`, `.history`, `.surfaces` и остальные менеджеры.
   `editorView.selection`, `.clipboard`, `.slashCommands`, `.events`, `.keyboard`
   сохраняют конкретное отображение при смене фокуса.
-- Selection закрыт интерфейсом ViewSelectionApi. Cleanup недоступен через этот
+- Selection закрыт интерфейсом PanelSelectionApi. Cleanup недоступен через этот
   контракт. Контроллер отменяет DOM-задачи до завершения extension lifecycle.
 - При StrictMode remount идентичность контроллера сохраняется; selection adapter
   пересоздаётся, старые DOM-задачи и локальные регистрации отменяются. Snapshot
@@ -233,14 +231,14 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
 
 - ClipboardFormatRegistry хранит formatters/parsers в `runtime.clipboardFormats`.
   Общие стратегии доступны через `runtime.pasteStrategies`.
-  ViewClipboardManager предоставляет только copy/copyText/cut/paste.
+  PanelClipboardManager предоставляет только copy/copyText/cut/paste.
   Небольшой ClipboardManager сохраняет общую интеграцию с core clipboard и
   транзакционным paste pipeline; он больше не хранит форматтеры или parsers.
   Его paste требует явный editorView, создаёт независимый pipeline для вызова
   и сохраняет destination даже при вложенной вставке. Core coordinator наружу
   для этого не раскрывается, алгоритм core paste не копируется.
 - SlashCommandRegistry хранит определения и предоставляет register/delete/get/getAll.
-  ViewSlashCommandManager проверяет доступность и выполняет команду с собственным
+  PanelSlashCommandManager проверяет доступность и выполняет команду с собственным
   editorView. У локального API нет register/delete; у registry нет execute.
 - DOMEventListeners отвечает за группировку и подключение native listeners.
   EventManager оставляет registration, filtering, event construction и dispatch.
@@ -248,7 +246,7 @@ EditorViewApi будет скрыт за интерфейсом вместе с 
   Доступ идёт через `runtime.editorViews`; getActive и getDefault не смешаны.
   Там, где нужен прежний fallback, он указан явно через `getActive() ?? getDefault()`.
 - RendererManager, SurfaceManager, SlashCommandRegistry и ClipboardFormatRegistry
-  получают узкий RegistrationOwner с own/assertActive вместо полного runtime.
+  получают узкий RegistrationOwner с registerCleanup/assertActive вместо полного runtime.
   Новый DI-контейнер или общий базовый manager не вводился.
 - Прямые импорты DOM helpers устранили цикл через общий managers barrel,
   проявившийся при загрузке DefaultBlockBehavior в тесте todo storage.
@@ -325,12 +323,12 @@ selection и DOM caret. В обычном документе смонтиров�
 после чего отдельно проверяются выделение и иерархия. Это proxy завершения
 отрисовки, а не обещание окончания любой асинхронной layout-работы.
 
-| Документ / клавиша | Обработка до → после, мс (медиана; min–max) | DOM до → после, мс (медиана; min–max) |
-| --- | --- | --- |
-| Обычный / Tab | 4.5 (3.9–6.3) → 4.7 (4.4–5.5) | 31.8 (31.0–32.4) → 31.9 (31.4–32.0) |
-| Обычный / Shift+Tab | 5.0 (4.3–5.7) → 4.9 (4.8–5.2) | 31.6 (30.9–31.8) → 31.4 (31.1–31.8) |
-| repeat=200 / Tab | 56.5 (56.1–60.9) → 59.3 (56.6–97.5) | 167.8 (165.9–175.3) → 169.3 (166.3–217.9) |
-| repeat=200 / Shift+Tab | 72.6 (69.0–78.7) → 75.9 (71.9–80.9) | 182.0 (170.7–207.0) → 187.6 (179.0–211.4) |
+| Документ / клавиша     | Обработка до → после, мс (медиана; min–max) | DOM до → после, мс (медиана; min–max)     |
+| ---------------------- | ------------------------------------------- | ----------------------------------------- |
+| Обычный / Tab          | 4.5 (3.9–6.3) → 4.7 (4.4–5.5)               | 31.8 (31.0–32.4) → 31.9 (31.4–32.0)       |
+| Обычный / Shift+Tab    | 5.0 (4.3–5.7) → 4.9 (4.8–5.2)               | 31.6 (30.9–31.8) → 31.4 (31.1–31.8)       |
+| repeat=200 / Tab       | 56.5 (56.1–60.9) → 59.3 (56.6–97.5)         | 167.8 (165.9–175.3) → 169.3 (166.3–217.9) |
+| repeat=200 / Shift+Tab | 72.6 (69.0–78.7) → 75.9 (71.9–80.9)         | 182.0 (170.7–207.0) → 187.6 (179.0–211.4) |
 
 Рефакторинг не дал ускорения. В этом замере медиана обработки большого документа
 выросла примерно на 5%, диапазоны перекрываются; единичный Tab имел заметный выброс.
@@ -352,7 +350,7 @@ runtime/view и новые storage/registry методы по примерам �
 ### Уточнение документации и имён после рефакторинга
 
 Документация основных классов и публичных контрактов React уточнена по реализации:
-`EditorRuntime`, `EditorStorage`, `EditorViewController`, `useEditorView`, поведение
+`DocumentEditor`, `EditorStorage`, `EditorViewController`, `useEditorView`, поведение
 блоков и менеджеры событий, выделения, clipboard и slash-команд. В описаниях
 разделены общие данные документа и операции конкретного отображения, объяснены
 владение ресурсами, освобождение подписок, отмена загрузки, значения по умолчанию

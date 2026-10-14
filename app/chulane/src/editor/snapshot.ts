@@ -44,10 +44,7 @@ export type SeedWritingBlock =
  * @param visit - Called once per block before its children.
  * @returns No value.
  */
-function walkBlocks(
-  blocks: readonly EditorBlock[],
-  visit: (block: EditorBlock) => void,
-): void {
+function walkBlocks(blocks: readonly EditorBlock[], visit: (block: EditorBlock) => void): void {
   for (const block of blocks) {
     visit(block);
     if (block.children.length > 0) {
@@ -175,11 +172,16 @@ export function extractPageText(content: string): string {
     const parts: string[] = [];
     walkBlocks(snapshot.blocks, (block) => {
       const text = stripMarkdown(block.content);
-      if (text) parts.push(text);
+      if (text) {
+        parts.push(text);
+      }
     });
     return parts.join(" ");
   }
-  return content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 const HEADING_PATTERN = /^(#{1,3})\s+(.+)$/;
@@ -208,7 +210,9 @@ export function extractPageOutline(content: string): PageOutlineItem[] {
   const items: PageOutlineItem[] = [];
   walkBlocks(snapshot.blocks, (block) => {
     const heading = HEADING_PATTERN.exec(block.content.trim());
-    if (!heading) return;
+    if (!heading) {
+      return;
+    }
     items.push({
       level: heading[1].length,
       text: stripMarkdown(heading[2]),

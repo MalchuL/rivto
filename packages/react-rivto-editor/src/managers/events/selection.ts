@@ -7,12 +7,9 @@
  */
 import type { Selection } from "@chulane/rivto";
 import { createCaretSelection, isCaretSelection } from "@chulane/rivto";
-import type { ViewSelectionApi } from "../selection/api";
+import type { PanelSelectionApi } from "../selection/api";
 import type { BlocksApi } from "../blocks/blocks-api";
-import {
-  findBlockFromEvent,
-  focusBlock,
-} from "./block-dom";
+import { findBlockFromEvent, focusBlock } from "./block-dom";
 
 /** One block target resolved from the current selection for a keyboard command. */
 export interface KeyboardSelectionTarget {
@@ -38,7 +35,9 @@ export function firstKeyboardTarget(
 ): KeyboardSelectionTarget | undefined {
   const item = selection;
   const blockId = item?.blocks[0]?.id;
-  if (!item || !blockId) return;
+  if (!item || !blockId) {
+    return;
+  }
   const collapsed = isCaretSelection(item);
   return {
     item,
@@ -49,9 +48,7 @@ export function firstKeyboardTarget(
 }
 
 /** Returns true when the complete editor selection is not one collapsed caret. */
-export function shouldDeleteSelection(
-  selection: Selection | undefined,
-): boolean {
+export function shouldDeleteSelection(selection: Selection | undefined): boolean {
   return Boolean(selection && !firstKeyboardTarget(selection)?.collapsed);
 }
 
@@ -69,17 +66,20 @@ export function shouldDeleteSelection(
  * @returns Current selection suitable for a keyboard command.
  */
 export function readKeyboardSelection(
-  selectionManager: ViewSelectionApi,
-  blocks: BlocksApi,
+  selectionManager: PanelSelectionApi,
+  blocks: Pick<BlocksApi, "getBlockNode">,
   emptyBlockId?: string,
 ): Selection | undefined {
   const nativeSelection = selectionManager.readDOM();
   const emptyBlock = emptyBlockId ? blocks.getBlockNode(emptyBlockId) : undefined;
-  const focusedEmptySelection: Selection | undefined = !nativeSelection && emptyBlock?.content === ""
-    ? createCaretSelection(emptyBlock.id, 0)
-    : undefined;
+  const focusedEmptySelection: Selection | undefined =
+    !nativeSelection && emptyBlock?.content === ""
+      ? createCaretSelection(emptyBlock.id, 0)
+      : undefined;
   const current = nativeSelection ?? focusedEmptySelection;
-  if (current) selectionManager.set(current);
+  if (current) {
+    selectionManager.set(current);
+  }
   return current ?? selectionManager.get();
 }
 
@@ -90,7 +90,7 @@ export function isEditableKeyboardEvent(event: Event): boolean {
 /** Restores the native caret represented by current editor selection state. */
 export function focusSelectionCaret(
   root: HTMLElement,
-  selectionManager: ViewSelectionApi,
+  selectionManager: PanelSelectionApi,
 ): boolean {
   const target = firstKeyboardTarget(selectionManager.get());
   return Boolean(target?.collapsed && focusBlock(root, target.blockId, target.offset ?? 0));

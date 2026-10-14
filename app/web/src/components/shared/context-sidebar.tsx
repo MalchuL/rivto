@@ -1,11 +1,7 @@
 "use client";
 
 import { extractPageOutline, type Page, type Project } from "@chulane/app";
-import {
-  usePageQuery,
-  useProjectQuery,
-  useProjectTagsQuery,
-} from "@chulane/app/client";
+import { usePageQuery, useProjectQuery, useProjectTagsQuery } from "@chulane/app/client";
 import { PanelRightClose, Pin, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,10 +11,7 @@ import { ResizeHandle } from "@/components/shared/resize-handle";
 import { PageTagPicker } from "@/domain/tag/components/page-tag-picker";
 import { TagChip } from "@/domain/tag/components/tag-chip";
 import { useActiveTab } from "@/domain/workspace/store/tabs-store";
-import {
-  useUiStore,
-  type RightSidebarTab,
-} from "@/domain/workspace/store/ui-store";
+import { useUiStore, type RightSidebarTab } from "@/domain/workspace/store/ui-store";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -49,11 +42,7 @@ function PageDetails({ page }: { page: Page }) {
       <DetailRow label="Kind" value={page.kind} />
       <div className="py-2">
         <p className="mb-1.5 text-sm text-muted-foreground">Tags</p>
-        <PageTagPicker
-          pageId={page.id}
-          projectId={page.projectId}
-          tagIds={page.tagIds}
-        />
+        <PageTagPicker pageId={page.id} projectId={page.projectId} tagIds={page.tagIds} />
       </div>
       <DetailRow label="Created" value={formatDate(page.createdAt)} />
       <DetailRow label="Updated" value={formatDate(page.updatedAt)} />
@@ -104,11 +93,7 @@ function ProjectDetails({ project }: { project: Project }) {
 function PageOutline({ page }: { page: Page }) {
   const outline = useMemo(() => extractPageOutline(page.content), [page.content]);
   if (outline.length === 0) {
-    return (
-      <p className="px-4 py-3 text-sm text-muted-foreground">
-        No headings on this page yet.
-      </p>
-    );
+    return <p className="px-4 py-3 text-sm text-muted-foreground">No headings on this page yet.</p>;
   }
   return (
     <div className="flex flex-col gap-0.5 px-4 py-2">
@@ -140,8 +125,7 @@ function SidebarBody({ tab }: { tab: RightSidebarTab }) {
     activeTab && (activeTab.kind === "page" || activeTab.kind === "journal-day")
       ? activeTab.entityId
       : undefined;
-  const projectId =
-    activeTab && activeTab.kind === "project" ? activeTab.entityId : undefined;
+  const projectId = activeTab && activeTab.kind === "project" ? activeTab.entityId : undefined;
   const { data: page } = usePageQuery(pageId);
   const { data: project } = useProjectQuery(projectId);
 
@@ -149,27 +133,16 @@ function SidebarBody({ tab }: { tab: RightSidebarTab }) {
     return <ComingSoon label="Backlinks and related pages" />;
   }
   if (tab === "ai") {
-    return (
-      <ComingSoon
-        label="AI chat about this page"
-        icon={<Sparkles className="size-5" />}
-      />
-    );
+    return <ComingSoon label="AI chat about this page" icon={<Sparkles className="size-5" />} />;
   }
   if (page) {
-    return tab === "details" ? (
-      <PageDetails page={page} />
-    ) : (
-      <PageOutline page={page} />
-    );
+    return tab === "details" ? <PageDetails page={page} /> : <PageOutline page={page} />;
   }
   if (project) {
     return tab === "details" ? (
       <ProjectDetails project={project} />
     ) : (
-      <p className="px-4 py-3 text-sm text-muted-foreground">
-        Outline is available for pages.
-      </p>
+      <p className="px-4 py-3 text-sm text-muted-foreground">Outline is available for pages.</p>
     );
   }
   return (
@@ -189,13 +162,13 @@ export function ContextSidebar() {
     setRightSidebarWidth,
   } = useUiStore();
 
-  if (!rightSidebarOpen) return null;
+  if (!rightSidebarOpen) {
+    return null;
+  }
 
   return (
     <div className="flex h-full shrink-0 duration-200 animate-in slide-in-from-right-4">
-      <ResizeHandle
-        onDrag={(clientX) => setRightSidebarWidth(window.innerWidth - clientX)}
-      />
+      <ResizeHandle onDrag={(clientX) => setRightSidebarWidth(window.innerWidth - clientX)} />
       <aside
         className="flex h-full flex-col border-l border-sidebar-border bg-sidebar"
         style={{ width: rightSidebarWidth }}

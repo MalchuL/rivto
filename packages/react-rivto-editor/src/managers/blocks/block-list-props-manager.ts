@@ -1,14 +1,18 @@
+import type { RegistrationOwner } from "../extensions/types";
 import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
 import type { BlockBehaviorContext } from "../../block-behaviors/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
 import type { BlockListPropsApi, BlockListPropsRegistration } from "./block-list-props-api";
 
 /** Owns React list behavior while the core manager validates persisted properties. */
 export class BlockListPropsManager implements BlockListPropsApi {
   private readonly registrations = new Set<BlockListPropsRegistration>();
+  private readonly disposers = new Set<() => void>();
 
-  /** @param editor - Extension lifecycle owner. @param core - Existing property validation manager. */
-  constructor(private readonly editor: EditorRuntime, private readonly core: BlockListPropsManagerApi) {}
+  /** @param extensions - Extension lifecycle owner. @param core - Existing property validation manager. */
+  constructor(
+    private readonly extensions: RegistrationOwner,
+    private readonly core: BlockListPropsManagerApi,
+  ) {}
 
   /**
    * Registers property validation and optional outline behavior as one owned resource.
@@ -17,23 +21,43 @@ export class BlockListPropsManager implements BlockListPropsApi {
    * @throws When the core rejects a duplicate or invalid registration.
    */
   register(registration: BlockListPropsRegistration): () => void {
-    this.editor.extensions.assertActive();
-    const release = this.core.register({ id: registration.id, defaults: registration.defaults, isValid: registration.isValid });
+    this.extensions.assertActive();
+    const release = this.core.register({
+      id: registration.id,
+      defaults: registration.defaults,
+      isValid: registration.isValid,
+    });
     this.registrations.add(registration);
-    return this.editor.extensions.own(() => {
+    const dispose = this.extensions.registerCleanup(() => {
+      this.disposers.delete(dispose);
       this.registrations.delete(registration);
       release();
     });
+    this.disposers.add(dispose);
+    return dispose;
+  }
+
+  /** Releases this React manager's registrations without removing caller-owned core policies. */
+  destroy(): void {
+    for (const dispose of this.disposers) {
+      dispose();
+    }
   }
 
   /** @param id - Property registration identity. @returns Whether it is installed. */
-  has(id: string): boolean { return this.core.has(id); }
+  has(id: string): boolean {
+    return this.core.has(id);
+  }
   /** @param candidate - Properties to validate. @returns The core validation result. */
-  validate(candidate: Parameters<BlockListPropsManagerApi["validate"]>[0]): ReturnType<BlockListPropsManagerApi["validate"]> {
+  validate(
+    candidate: Parameters<BlockListPropsManagerApi["validate"]>[0],
+  ): ReturnType<BlockListPropsManagerApi["validate"]> {
     return this.core.validate(candidate);
   }
   /** @param candidate - Properties to merge with active defaults. @returns Prepared core properties. */
-  prepare(candidate: Parameters<BlockListPropsManagerApi["prepare"]>[0]): ReturnType<BlockListPropsManagerApi["prepare"]> {
+  prepare(
+    candidate: Parameters<BlockListPropsManagerApi["prepare"]>[0],
+  ): ReturnType<BlockListPropsManagerApi["prepare"]> {
     return this.core.prepare(candidate);
   }
 
@@ -41,7 +65,9 @@ export class BlockListPropsManager implements BlockListPropsApi {
   prepareSplit(block: EditorBlock): Record<string, unknown> | undefined {
     let properties: Record<string, unknown> | undefined;
     for (const registration of this.registrations) {
-      if (registration.prepareSplit) properties = { ...properties, ...registration.prepareSplit(block) };
+      if (registration.prepareSplit) {
+        properties = { ...properties, ...registration.prepareSplit(block) };
+      }
     }
     return properties;
   }
@@ -49,7 +75,9 @@ export class BlockListPropsManager implements BlockListPropsApi {
   /** @param context - Current block and view. @returns True when an extension handled the split. */
   onSplit(context: BlockBehaviorContext): boolean {
     for (const registration of this.registrations) {
-      if (registration.onSplit?.(context)) return true;
+      if (registration.onSplit?.(context)) {
+        return true;
+      }
     }
     return false;
   }
@@ -57,7 +85,9 @@ export class BlockListPropsManager implements BlockListPropsApi {
   /** @param block - Block properties being rendered or traversed. @returns Whether every installed behavior permits its children. */
   childrenVisible(block: Pick<EditorBlockNode, "listProps">): boolean {
     for (const registration of this.registrations) {
-      if (registration.childrenVisible?.(block) === false) return false;
+      if (registration.childrenVisible?.(block) === false) {
+        return false;
+      }
     }
     return true;
   }

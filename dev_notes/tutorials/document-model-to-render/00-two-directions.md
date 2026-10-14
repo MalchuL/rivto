@@ -22,7 +22,7 @@ CRDTDoc даёт adapter-neutral arrays/maps/texts
   ↓
 DocumentModelImpl собирает portable Block[]
   ↓
-EditorRuntime публикует revision после update
+DocumentEditor публикует revision после update
   ↓
 React useSyncExternalStore запускает render
   ↓
@@ -46,7 +46,7 @@ EventRouter выбрал policy, если это interaction event
   ↓
 CommandRegistry выполнил named command
   ↓
-EditorRuntime проверил payload
+DocumentEditor проверил payload
   ↓
 DocumentModelImpl изменил CRDT structures в transaction
   ↓
@@ -149,7 +149,7 @@ Detached read model делает направление данных явным:
 
 Даёт editor-domain операции и portable document values, скрывая native CRDT.
 
-### EditorRuntime
+### DocumentEditor
 
 Координирует commands, selection, mode, plugins, history и invalidation.
 

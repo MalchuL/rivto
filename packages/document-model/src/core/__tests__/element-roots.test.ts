@@ -1,7 +1,12 @@
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "../document-model";
 
-const shape = { childIds: [], type: "shape", frame: { x: 0, y: 0, width: 20, height: 30 }, zIndex: 0 };
+const shape = {
+  childIds: [],
+  type: "shape",
+  frame: { x: 0, y: 0, width: 20, height: 30 },
+  zIndex: 0,
+};
 
 it("round-trips independent element subtrees and rejects broken references before replacing blocks", async () => {
   const model = new DocumentModelImpl(new YjsDoc("container-roundtrip"));
@@ -9,13 +14,16 @@ it("round-trips independent element subtrees and rejects broken references befor
   const container = model.elements.insertElement({ ...shape, type: "group" });
   model.elements.insertElement(shape, { parentId: container.id });
   const snapshot = model.getSnapshot();
-  expect(() => model.loadSnapshot({ ...snapshot, blocks: [], rootElementIds: [] })).toThrow("Every element must belong");
+  expect(() => model.loadSnapshot({ ...snapshot, blocks: [], rootElementIds: [] })).toThrow(
+    "Every element must belong",
+  );
   expect(model.getSnapshot()).toEqual(snapshot);
   expect(() => model.elements.insertElement(shape, { parentId: "missing" })).toThrow();
   const copy = new DocumentModelImpl(new YjsDoc("container-copy"));
   copy.loadSnapshot(snapshot);
   expect(copy.getSnapshot()).toEqual(snapshot);
-  await model.destroy(); await copy.destroy();
+  await model.destroy();
+  await copy.destroy();
 });
 
 it("isolates subscriptions and snapshots and restores a deleted container with its elements through undo", async () => {
@@ -37,31 +45,42 @@ it("isolates subscriptions and snapshots and restores a deleted container with i
   model.history.undo();
   expect(model.elements.getRootIds(container.id)).toEqual([local.id]);
   expect(model.elements.getElement(local.id)).toEqual(local);
-  unsubscribe(); await model.destroy();
+  unsubscribe();
+  await model.destroy();
 });
 
 it("merges independent container edits between peers without mixing element membership", async () => {
-  const a = new YjsDoc("shared-container"); const b = new YjsDoc("shared-container");
-  const left = new DocumentModelImpl(a); const right = new DocumentModelImpl(b);
+  const a = new YjsDoc("shared-container");
+  const b = new YjsDoc("shared-container");
+  const left = new DocumentModelImpl(a);
+  const right = new DocumentModelImpl(b);
   const first = left.elements.insertElement({ ...shape, type: "group" });
   b.applySnapshot(a.getSnapshot());
   const second = right.elements.insertElement({ ...shape, type: "group" });
   const one = left.elements.insertElement(shape, { parentId: first.id });
   const two = right.elements.insertElement(shape, { parentId: second.id });
-  const leftState = a.getSnapshot(); const rightState = b.getSnapshot();
-  a.applySnapshot(rightState); b.applySnapshot(leftState);
+  const leftState = a.getSnapshot();
+  const rightState = b.getSnapshot();
+  a.applySnapshot(rightState);
+  b.applySnapshot(leftState);
   for (const model of [left, right]) {
-    expect(model.elements.getElementNodes(first.id)).toEqual([model.elements.getElementNode(one.id)]);
-    expect(model.elements.getElementNodes(second.id)).toEqual([model.elements.getElementNode(two.id)]);
+    expect(model.elements.getElementNodes(first.id)).toEqual([
+      model.elements.getElementNode(one.id),
+    ]);
+    expect(model.elements.getElementNodes(second.id)).toEqual([
+      model.elements.getElementNode(two.id),
+    ]);
   }
-  await left.destroy(); await right.destroy();
+  await left.destroy();
+  await right.destroy();
 });
 
 it("notifies document and subtree readers when a snapshot replaces an element's membership", async () => {
   const model = new DocumentModelImpl(new YjsDoc("container-replacement"));
   const container = model.elements.insertElement({ ...shape, type: "group" });
   const element = model.elements.insertElement(shape);
-  const mainChanged = jest.fn(); const containerChanged = jest.fn();
+  const mainChanged = jest.fn();
+  const containerChanged = jest.fn();
   model.elements.subscribe(mainChanged);
   model.elements.subscribeElement(container.id, containerChanged);
   const snapshot = model.getSnapshot();
@@ -77,12 +96,15 @@ it("notifies document and subtree readers when a snapshot replaces an element's 
 });
 
 it("publishes current recursive and flat values when a remote commit changes roots and payloads", async () => {
-  const a = new YjsDoc("remote-root-payload"); const b = new YjsDoc("remote-root-payload");
-  const left = new DocumentModelImpl(a); const right = new DocumentModelImpl(b);
+  const a = new YjsDoc("remote-root-payload");
+  const b = new YjsDoc("remote-root-payload");
+  const left = new DocumentModelImpl(a);
+  const right = new DocumentModelImpl(b);
   left.elements.insertElement({ ...shape, id: "first" });
   left.elements.insertElement({ ...shape, id: "second" });
   b.applySnapshot(a.getSnapshot());
-  right.elements.getElements(); right.elements.getElementNodes();
+  right.elements.getElements();
+  right.elements.getElementNodes();
   const observed: ReturnType<typeof right.elements.getElements>[] = [];
   right.elements.subscribe(() => observed.push(right.elements.getElements()));
   a.transact(() => {
@@ -93,5 +115,6 @@ it("publishes current recursive and flat values when a remote commit changes roo
   expect(observed).toHaveLength(1);
   expect(observed[0]!.map(({ id }) => id)).toEqual(["second", "first"]);
   expect(observed[0]![1]!.frame.x).toBe(123);
-  await left.destroy(); await right.destroy();
+  await left.destroy();
+  await right.destroy();
 });

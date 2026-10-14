@@ -43,17 +43,17 @@ Elements не образуют дерево и не используют отд�
 
 ### Гранулярность каждого persisted key element
 
-| Key | Live-тип | Можно изменить | Как изменять | Что получает отдельный CRDT update |
-| --- | --- | --- | --- | --- |
-| root `elements[elementId]` | `CRDTMap<ElementStorage>` | создать или удалить record | `insertElement`, `removeElement(s)`, snapshot load | key конкретного `elementId` в root map |
-| `id` | `string` | после создания — нет | `ElementInput.id` или generated UUID | атомарная запись при создании; update API не разрешает rename |
-| `type` | `string` | текущим update API — нет | только создание или полная snapshot replacement | атомарное поле record; отдельного `setElementType()` нет |
-| `frame.x` | `number` | да | `updateElement(id, { frame: { x } })` | key `x` nested `frame` map |
-| `frame.y` | `number` | да | `updateElement(id, { frame: { y } })` | key `y` независимо от `x`, `width`, `height` |
-| `frame.width` | `number` | да, значение должно быть `> 0` | partial frame patch | key `width` nested map |
-| `frame.height` | `number` | да, значение должно быть `> 0` | partial frame patch | key `height` nested map |
-| `zIndex` | `number` | да, finite value целиком | `updateElement(id, { zIndex })` | атомарное поле `zIndex` |
-| `props[propName]` | portable value в `CRDTMap` | да, по top-level prop key | `updateElement(s)(..., { props: { ... } })` | конкретный prop key; nested plain value под key атомарен |
+| Key                        | Live-тип                   | Можно изменить                 | Как изменять                                       | Что получает отдельный CRDT update                            |
+| -------------------------- | -------------------------- | ------------------------------ | -------------------------------------------------- | ------------------------------------------------------------- |
+| root `elements[elementId]` | `CRDTMap<ElementStorage>`  | создать или удалить record     | `insertElement`, `removeElement(s)`, snapshot load | key конкретного `elementId` в root map                        |
+| `id`                       | `string`                   | после создания — нет           | `ElementInput.id` или generated UUID               | атомарная запись при создании; update API не разрешает rename |
+| `type`                     | `string`                   | текущим update API — нет       | только создание или полная snapshot replacement    | атомарное поле record; отдельного `setElementType()` нет      |
+| `frame.x`                  | `number`                   | да                             | `updateElement(id, { frame: { x } })`              | key `x` nested `frame` map                                    |
+| `frame.y`                  | `number`                   | да                             | `updateElement(id, { frame: { y } })`              | key `y` независимо от `x`, `width`, `height`                  |
+| `frame.width`              | `number`                   | да, значение должно быть `> 0` | partial frame patch                                | key `width` nested map                                        |
+| `frame.height`             | `number`                   | да, значение должно быть `> 0` | partial frame patch                                | key `height` nested map                                       |
+| `zIndex`                   | `number`                   | да, finite value целиком       | `updateElement(id, { zIndex })`                    | атомарное поле `zIndex`                                       |
+| `props[propName]`          | portable value в `CRDTMap` | да, по top-level prop key      | `updateElement(s)(..., { props: { ... } })`        | конкретный prop key; nested plain value под key атомарен      |
 
 `frame` особенно granular: перемещение по `x` и изменение `width` являются операциями над разными keys одной nested CRDT map. Batch update сохраняет identity `frame`, поэтому peer может получить оба изменения без replacement всего geometry object.
 

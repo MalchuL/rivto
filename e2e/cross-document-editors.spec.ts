@@ -16,17 +16,26 @@ const multiEditor = (page: Page, side: "left" | "right"): Locator =>
   page.locator(`[data-multi-editor="${side}"]`);
 
 async function snapshot(editor: Locator): Promise<Snapshot> {
-  return JSON.parse(await editor.locator("[data-document-state]").textContent() ?? "") as Snapshot;
+  return JSON.parse(
+    (await editor.locator("[data-document-state]").textContent()) ?? "",
+  ) as Snapshot;
 }
 
 async function drag(source: Locator, target: Locator, edge: "body" | "before" | "after" = "body") {
   const handleBox = await source.locator(".page-drag-handle").boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
-  if (!handleBox || !targetBox) throw new Error("Expected drag geometry");
-  const y = edge === "before"
-    ? targetBox.y + 1
-    : edge === "after" ? targetBox.y + targetBox.height - 1 : targetBox.y + targetBox.height / 2;
-  await source.page().mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  if (!handleBox || !targetBox) {
+    throw new Error("Expected drag geometry");
+  }
+  let y = targetBox.y + targetBox.height / 2;
+  if (edge === "before") {
+    y = targetBox.y + 1;
+  } else if (edge === "after") {
+    y = targetBox.y + targetBox.height - 1;
+  }
+  await source
+    .page()
+    .mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await source.page().mouse.down();
   const x = edge === "body" ? targetBox.x + targetBox.width / 2 : targetBox.x + 2;
   await source.page().mouse.move(x, y, { steps: 12 });
@@ -43,8 +52,14 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   const leftParent = left.locator(blockIdSelector("left-parent"));
   const rightTarget = right.locator(blockIdSelector("right-target"));
 
-  await leftParent.locator("[data-block-content]").first().click({ modifiers: ["Control"] });
-  await rightTarget.locator("[data-block-content]").first().click({ modifiers: ["Control"] });
+  await leftParent
+    .locator("[data-block-content]")
+    .first()
+    .click({ modifiers: ["Control"] });
+  await rightTarget
+    .locator("[data-block-content]")
+    .first()
+    .click({ modifiers: ["Control"] });
   await expect(leftParent).toHaveAttribute("data-block-selected", "true");
   await expect(rightTarget).toHaveAttribute("data-block-selected", "true");
 
@@ -80,11 +95,19 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   expect((await snapshot(right)).blocks.map(({ id }) => id)).toContain("right-target");
 });
 
-test("moves selected subtrees into the exact cross-document row and keeps histories independent", async ({ page }) => {
+test("moves selected subtrees into the exact cross-document row and keeps histories independent", async ({
+  page,
+}) => {
   const left = multiEditor(page, "left");
   const right = multiEditor(page, "right");
-  await left.locator(blockIdSelector("left-parent")).locator("[data-block-content]").click({ modifiers: ["Control"] });
-  await left.locator(blockIdSelector("left-counter")).locator(".custom-counter-block").click({ modifiers: ["Control"] });
+  await left
+    .locator(blockIdSelector("left-parent"))
+    .locator("[data-block-content]")
+    .click({ modifiers: ["Control"] });
+  await left
+    .locator(blockIdSelector("left-counter"))
+    .locator(".custom-counter-block")
+    .click({ modifiers: ["Control"] });
 
   await drag(
     left.locator(blockIdSelector("left-parent")),
@@ -92,8 +115,14 @@ test("moves selected subtrees into the exact cross-document row and keeps histor
   );
 
   await expect(left.locator(blockIdSelector("left-parent"))).toHaveCount(0);
-  await expect(right.locator(blockIdSelector("left-parent"))).toHaveAttribute("data-block-selected", "true");
-  await expect(right.locator(blockIdSelector("left-counter"))).toHaveAttribute("data-block-selected", "true");
+  await expect(right.locator(blockIdSelector("left-parent"))).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+  await expect(right.locator(blockIdSelector("left-counter"))).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
   await expect(right.locator(".page-surface")).toBeFocused();
   const source = await snapshot(left);
   const destination = await snapshot(right);
@@ -138,7 +167,9 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   const source = emptyLeft.locator(blockIdSelector("left-counter"));
   const sourceBox = await source.locator(".page-drag-handle").boundingBox();
   const targetBox = await emptyRight.locator(".page-surface").boundingBox();
-  if (!sourceBox || !targetBox) throw new Error("Expected empty-page drag geometry");
+  if (!sourceBox || !targetBox) {
+    throw new Error("Expected empty-page drag geometry");
+  }
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 120, { steps: 12 });
@@ -148,7 +179,9 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   expect((await snapshot(emptyRight)).blocks.map(({ id }) => id)).toEqual(["left-counter"]);
 });
 
-test("targets nested cross-document rows and keeps ordinary local dragging local", async ({ page }) => {
+test("targets nested cross-document rows and keeps ordinary local dragging local", async ({
+  page,
+}) => {
   const left = multiEditor(page, "left");
   const right = multiEditor(page, "right");
   const rightBefore = await snapshot(right);
@@ -157,8 +190,9 @@ test("targets nested cross-document rows and keeps ordinary local dragging local
     left.locator(blockIdSelector("left-stay")),
   );
   expect(await snapshot(right)).toEqual(rightBefore);
-  expect((await snapshot(left)).blocks.find(({ id }) => id === "left-stay")?.children)
-    .toEqual([expect.objectContaining({ id: "left-counter" })]);
+  expect((await snapshot(left)).blocks.find(({ id }) => id === "left-stay")?.children).toEqual([
+    expect.objectContaining({ id: "left-counter" }),
+  ]);
 
   await page.goto("/?editors=2");
   const nestedLeft = multiEditor(page, "left");

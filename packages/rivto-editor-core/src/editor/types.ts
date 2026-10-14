@@ -1,3 +1,4 @@
+import type { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
@@ -9,7 +10,6 @@ import type {
   CommandRegistryApi,
   ElementManagerApi,
   HistoryManagerApi,
-  ModeManagerApi,
   SelectionManagerApi,
 } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
@@ -18,9 +18,7 @@ import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
 
-export interface CreateRivtoEditorOptions {
-  /** Initial local presentation mode; defaults to block mode. */
-  mode?: EditorMode;
+export interface CreateDocumentEditorOptions {
   /** Fixed caller-owned model; editor destruction does not destroy it. */
   document: DocumentModel;
 }
@@ -30,9 +28,11 @@ export interface CreateRivtoEditorOptions {
  *
  * Block and element behavior is intentionally available only through
  * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, selection, history, mode, snapshots, and document subscriptions.
+ * commands, selection, history, snapshots, and document subscriptions.
  */
-export interface RivtoEditorApi {
+export interface DocumentEditorAPI {
+  /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
+  readonly elementRegistry: ElementRegistry;
   /** Typed block operations. */
   readonly blocks: BlockManagerApi;
   /** Editor-wide list-property defaults and semantic validation. */
@@ -43,8 +43,6 @@ export interface RivtoEditorApi {
   readonly elements: ElementManagerApi;
   /** Named command registry shared by managers and integrations. */
   readonly commands: CommandRegistryApi;
-  /** Local block/edgeless presentation mode shared by views of this editor. */
-  readonly mode: ModeManagerApi;
   /** Local ordered text and whole-block selection state. */
   readonly selection: SelectionManagerApi;
   /** Framework-neutral structured clipboard operations. */

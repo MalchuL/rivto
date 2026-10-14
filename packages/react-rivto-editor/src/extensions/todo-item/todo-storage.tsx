@@ -16,19 +16,26 @@ import {
   useMemo,
   useState,
   type ChangeEvent,
-  type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { z } from "zod";
 import { createBlockBehaviorContext } from "../../block-behaviors/context";
-import { ContainerBlockBehavior } from "../../block-behaviors/index";
+import { ContainerBlockBehavior } from "../../block-behaviors";
 import type { BlockWrapperProps } from "../../blocks";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { editorControlProps } from "../../constants";
-import { useBlock, useBlockNode, useBlockSelectionAnchor, useEditorRoot, useEditorView, usePreventTextEditing } from "../../hooks";
+import {
+  useBlock,
+  useBlockNode,
+  useBlockSelectionAnchor,
+  useEditorRoot,
+  useReactPanel,
+  usePanel,
+  usePreventTextEditing,
+} from "../../hooks";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
@@ -74,10 +81,14 @@ const DEFAULT_STATUS_ORDER: readonly TodoItemStatus[] = [...TODO_STATUSES];
 /** Runtime schema enforcing the complete status permutation, not only members. */
 export const todoStoragePropsSchema = z.object({
   orderMode: z.enum(["manual", "status"]),
-  statusOrder: z.array(z.enum(TODO_STATUSES)).length(TODO_STATUSES.length).refine(
-    (statuses) => TODO_STATUSES.every((status) => statuses.filter((value) => value === status).length === 1),
-    "statusOrder must contain todo, doing, and done exactly once",
-  ),
+  statusOrder: z
+    .array(z.enum(TODO_STATUSES))
+    .length(TODO_STATUSES.length)
+    .refine(
+      (statuses) =>
+        TODO_STATUSES.every((status) => statuses.filter((value) => value === status).length === 1),
+      "statusOrder must contain todo, doing, and done exactly once",
+    ),
 });
 
 interface TodoStorageFilters {
@@ -116,22 +127,29 @@ export function matchesTodoStorage(
   query: string,
   filters: TodoStorageFilters,
 ): boolean {
-  if (block.type !== TODO_ITEM_BLOCK_TYPE) return true;
+  if (block.type !== TODO_ITEM_BLOCK_TYPE) {
+    return true;
+  }
   const props = block.props as TodoItemProps;
   const normalizedQuery = normalizeTodoSearch(query);
   const searchable = normalizeTodoSearch(`${block.content}\n${props.description}`);
-  return (!normalizedQuery || searchable.includes(normalizedQuery))
-    && (!filters.statuses.size || filters.statuses.has(props.status))
-    && (!filters.priorities.size || filters.priorities.has(props.priority))
-    && (!filters.projects.size || filters.projects.has(props.project));
+  return (
+    (!normalizedQuery || searchable.includes(normalizedQuery)) &&
+    (!filters.statuses.size || filters.statuses.has(props.status)) &&
+    (!filters.priorities.size || filters.priorities.has(props.priority)) &&
+    (!filters.projects.size || filters.projects.has(props.project))
+  );
 }
 
 /** Derives sorted unique direct-child project values, retaining empty as no project. */
 export function deriveTodoProjects(children: readonly EditorBlock[]): string[] {
-  return [...new Set(children
-    .filter((child) => child.type === TODO_ITEM_BLOCK_TYPE)
-    .map((child) => String(child.props.project ?? "")))]
-    .sort((left, right) => (left || "No project").localeCompare(right || "No project"));
+  return [
+    ...new Set(
+      children
+        .filter((child) => child.type === TODO_ITEM_BLOCK_TYPE)
+        .map((child) => String(child.props.project ?? "")),
+    ),
+  ].sort((left, right) => (left || "No project").localeCompare(right || "No project"));
 }
 
 /** Computes stable status ordering while retaining non-TODO child slots. */
@@ -143,23 +161,27 @@ export function orderTodoStorageChildren(
   const todos = children
     .filter((child) => child.type === TODO_ITEM_BLOCK_TYPE)
     .map((child, index) => ({ child, index }))
-    .sort((left, right) => (
-      (ranks.get(left.child.props.status as TodoItemStatus) ?? statusOrder.length)
-      - (ranks.get(right.child.props.status as TodoItemStatus) ?? statusOrder.length)
-      || left.index - right.index
-    ))
+    .sort(
+      (left, right) =>
+        (ranks.get(left.child.props.status as TodoItemStatus) ?? statusOrder.length) -
+          (ranks.get(right.child.props.status as TodoItemStatus) ?? statusOrder.length) ||
+        left.index - right.index,
+    )
     .map(({ child }) => child.id);
   let todoIndex = 0;
-  return children.map((child) => (
-    child.type === TODO_ITEM_BLOCK_TYPE ? todos[todoIndex++]! : child.id
-  ));
+  return children.map((child) =>
+    child.type === TODO_ITEM_BLOCK_TYPE ? todos[todoIndex++]! : child.id,
+  );
 }
 
 /** Toggles one value in a copied filter set. */
 function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
   const next = new Set(current);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
   return next;
 }
 
@@ -173,7 +195,12 @@ function toggleFilter<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
  * @param props.onToggle - Invoked when the user flips the option.
  * @returns A label row containing an accessible checkbox.
  */
-function FilterOption({ id, checked, label, onToggle }: {
+function FilterOption({
+  id,
+  checked,
+  label,
+  onToggle,
+}: {
   readonly id: string;
   readonly checked: boolean;
   readonly label: string;
@@ -189,7 +216,7 @@ function FilterOption({ id, checked, label, onToggle }: {
 
 /** Supplies local storage state and a card boundary around the shared subtree. */
 function TodoStorageState({ block, children }: BlockWrapperProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const { block: tree } = useBlock(block.id);
   const childBlocks = tree?.children ?? [];
   const [query, setQuery] = useState("");
@@ -212,26 +239,31 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
 
   useEffect(() => {
     const props = block.props as TodoStorageProps;
-    if (!tree || props.orderMode !== "status") return;
+    if (!tree || props.orderMode !== "status") {
+      return;
+    }
     const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
     const current = childBlocks.map(({ id }) => id);
     if (desired.some((id, index) => id !== current[index])) {
-      editorView.runtime.history.batchUpdates(() => {
+      panel.batchUpdates(() => {
         desired.forEach((id, index) => {
-          editorView.runtime.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+          panel.blocks.moveBlock(id, index ? desired[index - 1]! : null);
         });
       });
     }
-  }, [block.props, childBlocks, editorView, tree]);
+  }, [block.props, childBlocks, panel, tree]);
 
-  const value = useMemo<TodoStorageContextValue>(() => ({
-    storageId: block.id,
-    query,
-    filters,
-    projects,
-    setQuery,
-    setFilters,
-  }), [block.id, filters, projectKey, query]);
+  const value = useMemo<TodoStorageContextValue>(
+    () => ({
+      storageId: block.id,
+      query,
+      filters,
+      projects,
+      setQuery,
+      setFilters,
+    }),
+    [block.id, filters, projectKey, query],
+  );
   return (
     <TodoStorageContext.Provider value={value}>
       <div className={TODO_STORAGE_CLASS}>{children}</div>
@@ -241,14 +273,16 @@ function TodoStorageState({ block, children }: BlockWrapperProps) {
 
 /** Adds storage state only around storage blocks, keeping wrapper hooks unconditional. */
 export function TodoStorageBlockWrapper({ block, children }: BlockWrapperProps) {
-  return block.type === TODO_STORAGE_BLOCK_TYPE
-    ? <TodoStorageState block={block}>{children}</TodoStorageState>
-    : children;
+  return block.type === TODO_STORAGE_BLOCK_TYPE ? (
+    <TodoStorageState block={block}>{children}</TodoStorageState>
+  ) : (
+    children
+  );
 }
 
 /** Renders search, disclosure filter menus, and persisted status-order controls. */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
   const editing = useBlockNode<TodoStorageProps>(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
@@ -257,7 +291,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const context = useContext(TodoStorageContext);
   const fieldId = useId();
 
-  if (!block || !context) return null;
+  if (!block || !context) {
+    return null;
+  }
   const childIds = block.childIds;
   const props = block.props as TodoStorageProps;
 
@@ -273,20 +309,26 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   ): void => context.setFilters({ ...context.filters, [category]: values });
 
   /** Clears every filter category without changing the search query. */
-  const clearFilters = (): void => context.setFilters({
-    statuses: new Set(),
-    priorities: new Set(),
-    projects: new Set(),
-  });
+  const clearFilters = (): void =>
+    context.setFilters({
+      statuses: new Set(),
+      priorities: new Set(),
+      projects: new Set(),
+    });
 
   /** Inserts the first writing block through the registered container view. */
-  const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>): void => {
-    if (childIds.length || event.defaultPrevented) return;
-    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
+  const startWriting = (event: MouseEvent<HTMLButtonElement>): void => {
+    if (childIds.length || event.defaultPrevented) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
-    const viewContext = root ? createBlockBehaviorContext(editorView, blockId, root) : undefined;
-    if (viewContext) todoStorageBehavior.appendWritingBlock(viewContext);
+    const behaviorContext = root
+      ? createBlockBehaviorContext(reactPanel, blockId, root)
+      : undefined;
+    if (behaviorContext) {
+      todoStorageBehavior.appendWritingBlock(behaviorContext);
+    }
   };
 
   if (block.listProps.collapsed === true) {
@@ -294,7 +336,9 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
     return (
       <div {...attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
         <strong>TODO storage</strong>
-        <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+        <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>
+          {itemCount} {itemCount === 1 ? "item" : "items"}
+        </span>
       </div>
     );
   }
@@ -305,76 +349,108 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   return (
     <div {...attributes} className={TODO_STORAGE_CONTENT_CLASS}>
       <div {...preventTextEditingAttributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
-        <Input {...editorControlProps}
+        <Input
+          {...editorControlProps}
           className={TODO_STORAGE_SEARCH_CLASS}
           type="search"
           aria-label="Search TODOs"
           placeholder="Search"
           value={context.query}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => context.setQuery(event.currentTarget.value)}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            context.setQuery(event.currentTarget.value)
+          }
         />
         <TodoStorageMenu label="Filter" panelLabel="Filters">
           <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
             <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Status</legend>
-            {TODO_STATUSES.map((status) => <FilterOption
-              key={status}
-              id={`${fieldId}-status-${status}`}
-              checked={context.filters.statuses.has(status)}
-              label={TODO_STATUS_LABELS[status]}
-              onToggle={() => updateFilters("statuses", toggleFilter(context.filters.statuses, status))}
-            />)}
+            {TODO_STATUSES.map((status) => (
+              <FilterOption
+                key={status}
+                id={`${fieldId}-status-${status}`}
+                checked={context.filters.statuses.has(status)}
+                label={TODO_STATUS_LABELS[status]}
+                onToggle={() =>
+                  updateFilters("statuses", toggleFilter(context.filters.statuses, status))
+                }
+              />
+            ))}
           </fieldset>
           <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
             <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Priority</legend>
-            {PRIORITIES.map((priority) => <FilterOption
-              key={priority}
-              id={`${fieldId}-priority-${priority}`}
-              checked={context.filters.priorities.has(priority)}
-              label={`P${priority}`}
-              onToggle={() => updateFilters("priorities", toggleFilter(context.filters.priorities, priority))}
-            />)}
+            {PRIORITIES.map((priority) => (
+              <FilterOption
+                key={priority}
+                id={`${fieldId}-priority-${priority}`}
+                checked={context.filters.priorities.has(priority)}
+                label={`P${priority}`}
+                onToggle={() =>
+                  updateFilters("priorities", toggleFilter(context.filters.priorities, priority))
+                }
+              />
+            ))}
           </fieldset>
-          {context.projects.length > 0 && <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
-            <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Project</legend>
-            {context.projects.map((project, index) => <FilterOption
-              key={project || "no-project"}
-              id={`${fieldId}-project-${index}`}
-              checked={context.filters.projects.has(project)}
-              label={project || "No project"}
-              onToggle={() => updateFilters("projects", toggleFilter(context.filters.projects, project))}
-            />)}
-          </fieldset>}
-          <Button {...editorControlProps} variant="outline" size="sm" className={TODO_STORAGE_CLEAR_CLASS} type="button" onClick={clearFilters}>Clear filters</Button>
+          {context.projects.length > 0 && (
+            <fieldset className={TODO_STORAGE_FILTER_GROUP_CLASS}>
+              <legend className={TODO_STORAGE_FILTER_LEGEND_CLASS}>Project</legend>
+              {context.projects.map((project, index) => (
+                <FilterOption
+                  key={project || "no-project"}
+                  id={`${fieldId}-project-${index}`}
+                  checked={context.filters.projects.has(project)}
+                  label={project || "No project"}
+                  onToggle={() =>
+                    updateFilters("projects", toggleFilter(context.filters.projects, project))
+                  }
+                />
+              ))}
+            </fieldset>
+          )}
+          <Button
+            {...editorControlProps}
+            variant="outline"
+            size="sm"
+            className={TODO_STORAGE_CLEAR_CLASS}
+            type="button"
+            onClick={clearFilters}
+          >
+            Clear filters
+          </Button>
         </TodoStorageMenu>
         <TodoStorageMenu label="Order" panelLabel="Ordering">
           <FilterOption
             id={`${fieldId}-order-status`}
             checked={props.orderMode === "status"}
             label="Status"
-            onToggle={() => updateProps({ orderMode: props.orderMode === "status" ? "manual" : "status" })}
+            onToggle={() =>
+              updateProps({ orderMode: props.orderMode === "status" ? "manual" : "status" })
+            }
           />
-          {props.orderMode === "status" && <TodoStatusOrder
-            order={props.statusOrder}
-            onChange={(statusOrder) => updateProps({ statusOrder })}
-          />}
+          {props.orderMode === "status" && (
+            <TodoStatusOrder
+              order={props.statusOrder}
+              onChange={(statusOrder) => updateProps({ statusOrder })}
+            />
+          )}
         </TodoStorageMenu>
       </div>
       {childIds.length === 0 && (
-        <div
+        <Button
+          variant="ghost"
+          type="button"
+          {...editorControlProps}
           {...preventTextEditingAttributes}
-          className={TODO_STORAGE_DROP_FIELD_CLASS}
-          role="button"
-          tabIndex={0}
+          className={`${TODO_STORAGE_DROP_FIELD_CLASS} h-auto justify-start whitespace-normal text-left`}
           aria-label="Drop blocks into TODO storage"
           onClick={startWriting}
-          onKeyDown={startWriting}
         >
-          <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true"><ArrowDownIcon /></span>
+          <span className={TODO_STORAGE_DROP_ICON_CLASS} aria-hidden="true">
+            <ArrowDownIcon />
+          </span>
           <span className={TODO_STORAGE_DROP_COPY_CLASS}>
             <strong>Drag a task here</strong>
             <small>Drop it inside this storage</small>
           </span>
-        </div>
+        </Button>
       )}
     </div>
   );
@@ -382,9 +458,11 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
 
 /** Hides a direct TODO child when its owning storage presentation rejects it. */
 export function TodoStorageVisibility({ block, children }: BlockWrapperProps) {
-  const editorView = useEditorView();
+  const panel = usePanel();
   const context = useContext(TodoStorageContext);
-  const directChild = context && editorView.runtime.blocks.getParentId(block.id) === context.storageId;
-  if (directChild && !matchesTodoStorage(block, context.query, context.filters)) return null;
+  const directChild = context && panel.blocks.getParentId(block.id) === context.storageId;
+  if (directChild && !matchesTodoStorage(block, context.query, context.filters)) {
+    return null;
+  }
   return children;
 }

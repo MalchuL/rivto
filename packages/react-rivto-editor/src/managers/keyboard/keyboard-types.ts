@@ -12,7 +12,7 @@ export type KeyboardShortcut = string;
  */
 export type KeymapOverrides = Readonly<Record<string, readonly KeyboardShortcut[]>>;
 
-/** Immutable view of one installed or orphan keyboard binding. */
+/** Immutable panel of one installed or orphan keyboard binding. */
 export interface KeyboardBindingSnapshot {
   readonly id: string;
   readonly defaultKeys: readonly KeyboardShortcut[];

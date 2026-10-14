@@ -1,18 +1,7 @@
-/**
- * Behavior contract for one block type's outline and drop semantics.
- *
- * The BlockView component in `blocks/block-view/block-view.tsx` renders the DOM.
- * Page Enter/Tab/Backspace and drag handlers consult block behaviors so container
- * extensions can override split, indent, and drop without type switches in
- * those modules. Behaviors call `block-behaviors/ops` primitives and never touch
- * internal document storage directly.
- *
- * @module
- */
 import type { EditorBlock, Selection } from "@chulane/rivto";
-import type { EditorViewApi } from "../editor-view/types";
-import type { EditorRuntime } from "../editor/editor-runtime";
-import type { KeyboardSelectionTarget } from "../managers/index";
+import type { ReactPanelApi } from "../panels/types";
+import type { ReactEditorApi } from "../editor/types";
+import type { KeyboardSelectionTarget } from "../managers";
 
 /** handled stops dispatch, default requests the generic behavior, and rejected refuses the action. */
 export type BlockBehaviorOutcome = "handled" | "default" | "rejected";
@@ -34,13 +23,13 @@ export interface BlockDropPlacementOptions {
  * Block, selection, and DOM context supplied to a keyboard behavior method.
  *
  * `block` is a detached snapshot of the block whose type selected the behavior.
- * Selection is captured by the caller, while editorView remains a live API.
+ * Selection is captured by the caller, while panel remains a live API.
  * Handlers inspect ancestors separately when they need a parent or a container
  * whose outlineFloor metadata prevents children from being outdented further.
  */
 export interface BlockBehaviorContext {
   /** Editor view supplying selection, block behaviors, and shared writing factories. */
-  readonly editorView: EditorViewApi;
+  readonly reactPanel: ReactPanelApi;
   /** Detached snapshot of the resolved block. */
   readonly block: EditorBlock;
   /** Structural parent, or `null` at the document root. */
@@ -52,21 +41,23 @@ export interface BlockBehaviorContext {
 }
 
 /** A stable destination in one parent's ordered child list. */
-export type BlockDropDestination = {
-  readonly kind: "between";
-  readonly parentId: string | null;
-  readonly previousId: string | null;
-  readonly nextId: string | null;
-  readonly depth: number;
-} | {
-  readonly kind: "inside";
-  readonly parentId: string;
-};
+export type BlockDropDestination =
+  | {
+      readonly kind: "between";
+      readonly parentId: string | null;
+      readonly previousId: string | null;
+      readonly nextId: string | null;
+      readonly depth: number;
+    }
+  | {
+      readonly kind: "inside";
+      readonly parentId: string;
+    };
 
 /** Arguments for a drop-acceptance check against the destination parent. */
 export interface BlockDropContext {
   /** Runtime used to read live block types and parents. */
-  readonly editor: EditorRuntime;
+  readonly editor: ReactEditorApi;
   /** Exact destination, shared by feedback and commit. */
   readonly destination: BlockDropDestination;
   /** Source snapshots, including when they belong to another document. */
@@ -134,7 +125,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the outdent.
    */
-  onOutdentAtStart(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onOutdentAtStart(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Merges a root block backward into the previous editable sibling.
    *
@@ -142,7 +136,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the merge.
    */
-  onMergeBackward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onMergeBackward(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Merges the next editable sibling into the current block.
    *
@@ -150,7 +147,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at the block end.
    * @returns Whether the behavior handled, refused, or deferred the merge.
    */
-  onMergeForward(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onMergeForward(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Converts the first empty custom block to the host writing type.
    *
@@ -158,7 +158,10 @@ export interface BlockBehavior {
    * @param target - Collapsed caret at offset zero.
    * @returns Whether the behavior handled, refused, or deferred the reset.
    */
-  onResetEmpty(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome;
+  onResetEmpty(
+    context: BlockBehaviorContext,
+    target: KeyboardSelectionTarget,
+  ): BlockBehaviorOutcome;
   /**
    * Prepares structurally selected blocks immediately before they are deleted.
    *

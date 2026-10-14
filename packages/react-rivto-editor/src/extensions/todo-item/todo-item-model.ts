@@ -24,10 +24,9 @@ export type TodoItemBlock = Omit<EditorBlock, "props"> & {
 };
 
 /** Fields a properties modal may request to change when it closes. */
-export type TodoItemPropertiesPatch = Partial<Pick<
-  TodoItemProps,
-  "status" | "description" | "priority" | "project"
->>;
+export type TodoItemPropertiesPatch = Partial<
+  Pick<TodoItemProps, "status" | "description" | "priority" | "project">
+>;
 
 /** Props shared by the default and host-supplied TODO properties modals. */
 export interface TodoItemPropertiesModalProps {
@@ -77,9 +76,8 @@ export interface PromptMatch {
  * @param previous - Current valid UTC timestamp.
  * @returns Current time or the next millisecond after the previous timestamp.
  */
-export const nextTimestamp = (previous: string): string => (
-  new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString()
-);
+export const nextTimestamp = (previous: string): string =>
+  new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
 
 /**
  * Returns the next workflow state in the fixed TODO cycle.
@@ -87,9 +85,8 @@ export const nextTimestamp = (previous: string): string => (
  * @param status - Current TODO status.
  * @returns Following status, wrapping done back to todo.
  */
-export const nextStatus = (status: TodoItemStatus): TodoItemStatus => (
-  TODO_STATUSES[(TODO_STATUSES.indexOf(status) + 1) % TODO_STATUSES.length]!
-);
+export const nextStatus = (status: TodoItemStatus): TodoItemStatus =>
+  TODO_STATUSES[(TODO_STATUSES.indexOf(status) + 1) % TODO_STATUSES.length]!;
 
 /**
  * Builds and validates the prompt-to-status lookup for one extension instance.
@@ -148,4 +145,3 @@ export const createTodoItemProps = (): TodoItemProps => {
     project: "",
   };
 };
-

@@ -12,9 +12,20 @@ export { createBlockBehaviorContext } from "./context";
 export { DefaultBlockBehavior } from "./default-block-behavior";
 export { dispatchBlockAction } from "./dispatch";
 export { focusCaret, scheduleBlockFocus } from "./ops/focus-ops";
-export { indentBlocks, appendWritingBlock, outdentBlocks, outdentUntilBoundary } from "./ops/outline-ops";
+export {
+  indentBlocks,
+  appendWritingBlock,
+  outdentBlocks,
+  outdentUntilBoundary,
+} from "./ops/outline-ops";
 export { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
 export type {
-  BlockBehavior, BlockBehaviorAction, BlockBehaviorContext, BlockBehaviorOutcome, BlockDropContext,
-  BlockDropDestination, BlockDropPlacementOptions, DropAxis
+  BlockBehavior,
+  BlockBehaviorAction,
+  BlockBehaviorContext,
+  BlockBehaviorOutcome,
+  BlockDropContext,
+  BlockDropDestination,
+  BlockDropPlacementOptions,
+  DropAxis,
 } from "./types";

@@ -11,12 +11,14 @@ export {
   type CanonicalDropPlacement,
   type DropBlock,
   type DropMoveTarget,
-  type ResolvedDropPlacementOptions
+  type ResolvedDropPlacementOptions,
 } from "./placement";
-export { resolveDropPlacement, type DropLayoutBlock, type DropLayoutOptions, type DropRect } from "./placement/resolver";
 export {
-  PageDragProvider,
-  type PageDragExtensionOptions
-} from "./provider";
+  resolveDropPlacement,
+  type DropLayoutBlock,
+  type DropLayoutOptions,
+  type DropRect,
+} from "./placement/resolver";
+export { PageDragProvider, type PageDragExtensionOptions } from "./provider";
 export { registerPageDrag } from "./register";
 export { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";

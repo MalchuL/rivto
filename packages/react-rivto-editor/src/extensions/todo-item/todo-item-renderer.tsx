@@ -4,10 +4,28 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, useEditorView } from "../../hooks";
+import { useBlockEditing, useReactPanel } from "../../hooks";
 import { TodoItemActions } from "./todo-item-actions";
-import { TODO_BODY_CLASS, TODO_DESCRIPTION_CLASS, TODO_ITEM_CLASS, TODO_META_CLASS, TODO_NAME_CLASS, TODO_PRIORITY_CLASS, TODO_PROJECT_CLASS, TODO_PROPERTIES_BUTTON_CLASS, TODO_STATUS_CLASS, TODO_STATUS_DOING_CLASS, TODO_STATUS_DONE_CLASS, TODO_STATUS_TODO_CLASS } from "./todo-item-classes";
-import type { TodoItemBlock, TodoItemComponentProps, TodoItemPropertiesPatch, TodoItemProps } from "./todo-item-model";
+import {
+  TODO_BODY_CLASS,
+  TODO_DESCRIPTION_CLASS,
+  TODO_ITEM_CLASS,
+  TODO_META_CLASS,
+  TODO_NAME_CLASS,
+  TODO_PRIORITY_CLASS,
+  TODO_PROJECT_CLASS,
+  TODO_PROPERTIES_BUTTON_CLASS,
+  TODO_STATUS_CLASS,
+  TODO_STATUS_DOING_CLASS,
+  TODO_STATUS_DONE_CLASS,
+  TODO_STATUS_TODO_CLASS,
+} from "./todo-item-classes";
+import type {
+  TodoItemBlock,
+  TodoItemComponentProps,
+  TodoItemPropertiesPatch,
+  TodoItemProps,
+} from "./todo-item-model";
 import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
 
 /**
@@ -20,19 +38,23 @@ export function TodoItem({
   blockId,
   propertiesModal: PropertiesModal = DefaultTodoItemPropertiesModal,
 }: TodoItemComponentProps) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const editing = useBlockEditing<TodoItemProps>(blockId);
-  const actions = useMemo(() => new TodoItemActions(editorView, blockId), [editorView, blockId]);
+  const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const block = editing.block as TodoItemBlock | undefined;
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
 
   /** Updates content and its timestamp inside one editor batch. */
   const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
     actions.commitText(() => editing.attributes.onInput(event));
   };
   /** Completes IME input and advances its timestamp atomically. */
-  const finishComposition = (event: Parameters<typeof editing.attributes.onCompositionEnd>[0]): void => {
+  const finishComposition = (
+    event: Parameters<typeof editing.attributes.onCompositionEnd>[0],
+  ): void => {
     actions.commitText(() => editing.attributes.onCompositionEnd(event));
   };
   /** Closes the modal and commits a valid changed patch. */
@@ -46,7 +68,11 @@ export function TodoItem({
     doing: TODO_STATUS_DOING_CLASS,
     done: TODO_STATUS_DONE_CLASS,
   }[block.props.status];
-  const statusIcon = { todo: null, doing: <MinusIcon aria-hidden="true" />, done: <CheckIcon aria-hidden="true" /> }[block.props.status];
+  const statusIcon = {
+    todo: null,
+    doing: <MinusIcon aria-hidden="true" />,
+    done: <CheckIcon aria-hidden="true" />,
+  }[block.props.status];
 
   return (
     <div
@@ -54,7 +80,8 @@ export function TodoItem({
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
     >
-      <Button {...editorControlProps}
+      <Button
+        {...editorControlProps}
         {...editing.preventTextEditingAttributes}
         variant="ghost"
         size="icon-xs"
@@ -74,7 +101,8 @@ export function TodoItem({
           onInput={updateName}
           onCompositionEnd={finishComposition}
         />
-        <Input {...editorControlProps}
+        <Input
+          {...editorControlProps}
           {...editing.preventTextEditingAttributes}
           className={TODO_DESCRIPTION_CLASS}
           aria-label="Description"
@@ -83,18 +111,26 @@ export function TodoItem({
           onChange={(event) => actions.commitProperties({ description: event.currentTarget.value })}
         />
         <div className={TODO_META_CLASS}>
-          <NativeSelect {...editorControlProps}
+          <NativeSelect
+            {...editorControlProps}
             {...editing.preventTextEditingAttributes}
             className={TODO_PRIORITY_CLASS}
             aria-label="Priority"
             value={block.props.priority}
-            onChange={(event) => actions.commitProperties({
-              priority: Number(event.currentTarget.value) as TodoItemProps["priority"],
-            })}
+            onChange={(event) =>
+              actions.commitProperties({
+                priority: Number(event.currentTarget.value) as TodoItemProps["priority"],
+              })
+            }
           >
-            {[1, 2, 3, 4].map((priority) => <NativeSelectOption key={priority} value={priority}>P{priority}</NativeSelectOption>)}
+            {[1, 2, 3, 4].map((priority) => (
+              <NativeSelectOption key={priority} value={priority}>
+                P{priority}
+              </NativeSelectOption>
+            ))}
           </NativeSelect>
-          <Input {...editorControlProps}
+          <Input
+            {...editorControlProps}
             {...editing.preventTextEditingAttributes}
             className={TODO_PROJECT_CLASS}
             aria-label="Project"
@@ -104,7 +140,8 @@ export function TodoItem({
           />
         </div>
       </div>
-      <Button {...editorControlProps}
+      <Button
+        {...editorControlProps}
         {...editing.preventTextEditingAttributes}
         variant="ghost"
         size="icon-xs"
@@ -112,9 +149,10 @@ export function TodoItem({
         type="button"
         aria-label="Open TODO properties"
         onClick={() => setPropertiesOpen(true)}
-      ><EllipsisIcon /></Button>
+      >
+        <EllipsisIcon />
+      </Button>
       {propertiesOpen && <PropertiesModal block={block} onClose={closeProperties} />}
     </div>
   );
 }
-

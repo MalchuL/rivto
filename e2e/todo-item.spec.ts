@@ -6,13 +6,16 @@
  */
 import { expect, test } from "@playwright/test";
 import { BLOCK_ID_ATTRIBUTE } from "./dom-markers";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
 test("aligns the inline priority with the project chip without an arrow", async ({ page }) => {
-  const todo = page.locator('[data-journal-document="today"] [data-block-type="todo-item"]').first();
+  const todo = page
+    .locator('[data-journal-document="today"] [data-block-type="todo-item"]')
+    .first();
   const priority = todo.getByRole("combobox", { name: "Priority" });
   const project = todo.getByRole("textbox", { name: "Project" });
   const priorityBox = await priority.boundingBox();
@@ -21,8 +24,9 @@ test("aligns the inline priority with the project chip without an arrow", async 
   expect(projectBox).not.toBeNull();
   expect(priorityBox!.y).toBe(projectBox!.y);
   expect(priorityBox!.height).toBe(projectBox!.height);
-  await expect(priority.locator("xpath=following-sibling::*[@data-slot='native-select-icon']"))
-    .toBeHidden();
+  await expect(
+    priority.locator("xpath=following-sibling::*[@data-slot='native-select-icon']"),
+  ).toBeHidden();
 });
 
 test("highlights a prompt and converts it when editing leaves the block", async ({ page }) => {
@@ -32,14 +36,25 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await expect(seeded.nth(0).getByRole("button", { name: /Status: todo/ })).toBeVisible();
   await expect(seeded.nth(1).getByRole("button", { name: /Status: doing/ })).toBeVisible();
   await expect(seeded.nth(2).getByRole("button", { name: /Status: done/ })).toBeVisible();
-  await expect(seeded.nth(0).locator(".rivto-todo-item")).toHaveAttribute("data-todo-priority", "2");
-  await expect(seeded.nth(1).locator(".rivto-todo-item")).toHaveAttribute("data-todo-priority", "1");
-  await expect(seeded.nth(2).locator(".rivto-todo-item")).toHaveAttribute("data-todo-priority", "3");
+  await expect(seeded.nth(0).locator(".rivto-todo-item")).toHaveAttribute(
+    "data-todo-priority",
+    "2",
+  );
+  await expect(seeded.nth(1).locator(".rivto-todo-item")).toHaveAttribute(
+    "data-todo-priority",
+    "1",
+  );
+  await expect(seeded.nth(2).locator(".rivto-todo-item")).toHaveAttribute(
+    "data-todo-priority",
+    "3",
+  );
   await document.getByRole("button", { name: "Add block" }).click();
   const content = document.locator("[data-block-content]:focus");
   const block = content.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!id) throw new Error("Expected a stable block ID");
+  if (!id) {
+    throw new Error("Expected a stable block ID");
+  }
 
   await page.keyboard.type("task   Buy milk");
   await expect(content.locator(".rivto-todo-prompt")).toHaveText("task");
@@ -58,17 +73,21 @@ test("highlights a prompt and converts it when editing leaves the block", async 
     await new Promise((resolve) => setTimeout(resolve));
     Object.defineProperty(document, "hasFocus", { configurable: true, value: hasFocus });
   });
-  await expect(document.locator(`[${BLOCK_ID_ATTRIBUTE}="${id}"]`))
-    .toHaveAttribute("data-block-type", "paragraph");
+  await expect(document.locator(`[${BLOCK_ID_ATTRIBUTE}="${id}"]`)).toHaveAttribute(
+    "data-block-type",
+    "paragraph",
+  );
 
   await document.locator("[data-block-content]").first().click();
   const converted = document.locator(`[${BLOCK_ID_ATTRIBUTE}="${id}"]`);
   await expect(converted).toHaveAttribute("data-block-type", "todo-item");
   await expect(converted.getByRole("textbox", { name: "TODO item name" })).toHaveText("Buy milk");
   const props = await page.evaluate((blockId) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
-    }).__rivtoDemo.editor;
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
     return editor.blocks.getBlock(blockId).props;
   }, id);
   expect(props).toMatchObject({ status: "todo", description: "", priority: 4, project: "" });
@@ -86,13 +105,19 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await page.keyboard.type("!");
   await converted.getByRole("button", { name: /Status: todo/ }).click();
   await expect(converted.getByRole("button", { name: /Status: doing/ })).toBeVisible();
-  const edited = await page.evaluate((blockId) => (
-    (window as unknown as {
-      __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi };
-    }).__rivtoDemo.editor.blocks.getBlock(blockId)
-  ), id);
+  const edited = await page.evaluate(
+    (blockId) =>
+      (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor.blocks.getBlock(blockId),
+    id,
+  );
   expect(edited.content).toBe("Buy milk!");
-  expect(new Date(String(edited.props.updatedAt)).getTime()).toBeGreaterThan(new Date(String(props.updatedAt)).getTime());
+  expect(new Date(String(edited.props.updatedAt)).getTime()).toBeGreaterThan(
+    new Date(String(props.updatedAt)).getTime(),
+  );
 
   await converted.getByRole("button", { name: "Open TODO properties" }).click();
   let dialog = page.getByRole("dialog", { name: "TODO item properties" });
@@ -110,9 +135,13 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   // The dialog is modal: a pointer press on the overlay outside it closes and commits.
   await page.mouse.click(4, 4);
   await expect(dialog).toHaveCount(0);
-  const modalProps = await page.evaluate((blockId) => (
-    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(blockId).props
-  ), id);
+  const modalProps = await page.evaluate(
+    (blockId) =>
+      (
+        window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+      ).__rivtoDemo.editor.blocks.getBlock(blockId).props,
+    id,
+  );
   expect(modalProps).toMatchObject({
     status: "doing",
     description: "From X",
@@ -127,9 +156,13 @@ test("highlights a prompt and converts it when editing leaves the block", async 
   await page.keyboard.type("XY");
   await converted.getByRole("combobox", { name: "Priority" }).selectOption("2");
   await converted.getByRole("textbox", { name: "Project" }).fill("Inline project");
-  const inlineProps = await page.evaluate((blockId) => (
-    (window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }).__rivtoDemo.editor.blocks.getBlock(blockId).props
-  ), id);
+  const inlineProps = await page.evaluate(
+    (blockId) =>
+      (
+        window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+      ).__rivtoDemo.editor.blocks.getBlock(blockId).props,
+    id,
+  );
   expect(inlineProps).toMatchObject({
     description: "InlineXY description",
     priority: 2,

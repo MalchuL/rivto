@@ -1,4 +1,5 @@
-import type { EditorRuntime } from "../../../editor/editor-runtime";
+import type { ReactEditorApi } from "../../../editor/types";
+import type { EdgelessSelectionRef, EdgelessSelectionSnapshot } from "./types";
 /**
  * Projects the core generic selection into the edgeless selection API.
  *
@@ -8,17 +9,8 @@ import type { EditorRuntime } from "../../../editor/editor-runtime";
  */
 import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
-import { useEditorContext } from "../../../editor-view/editor-context";
-import type { EditorViewApi } from "../../../editor-view/types";
-
-/** Stable first-class element ID stored in local edgeless selection. */
-export type EdgelessSelectionRef = string;
-
-/** Detached local view of the generic editor selection. */
-export interface EdgelessSelectionSnapshot {
-  readonly active: boolean;
-  readonly items: readonly EdgelessSelectionRef[];
-}
+import { useReactPanelContext } from "../../../hooks/editor/use-react-panel-context";
+import type { ReactPanelApi } from "../../../panels/types";
 
 const EDGELESS_SELECTION_PLUGIN_KEY = "edgelessSelection";
 
@@ -55,10 +47,12 @@ export function createEdgelessSelection(
  */
 function isActive(selection: Selection | undefined): boolean {
   const value = selection?.pluginData?.[EDGELESS_SELECTION_PLUGIN_KEY];
-  return Boolean(value && typeof value === "object" && (value as { active?: unknown }).active === true);
+  return Boolean(
+    value && typeof value === "object" && (value as { active?: unknown }).active === true,
+  );
 }
 
-/** Core-backed view used by edgeless gestures and React selection hooks. */
+/** Core-backed panel used by edgeless gestures and React selection hooks. */
 export class EdgelessSelectionRuntime {
   private snapshotSource: Selection | undefined;
   private snapshotValue: EdgelessSelectionSnapshot = { active: false, items: [] };
@@ -67,17 +61,26 @@ export class EdgelessSelectionRuntime {
    * Creates an adapter over one editor's generic selection manager.
    * @param editor - Runtime whose core selection stores element state.
    */
-  constructor(private readonly editor: EditorViewApi | EditorRuntime) {}
+  constructor(private readonly editor: ReactPanelApi | ReactEditorApi) {}
 
-  /** @returns Detached current canvas selection view. */
+  /**
+   * Reads the selection manager backing this edgeless runtime.
+   *
+   * @returns The editor selection API.
+   */
+  private get selection() {
+    return this.editor.selection;
+  }
+
+  /** @returns Detached current canvas selection panel. */
   get(): EdgelessSelectionSnapshot {
-    const current = this.editor.selection.get();
+    const current = this.selection.get();
     return { active: isActive(current), items: [...(current?.elements ?? [])] };
   }
 
   /** @returns Stable snapshot until the underlying core selection changes. */
   snapshot(): EdgelessSelectionSnapshot {
-    const current = this.editor.selection.snapshot();
+    const current = this.selection.snapshot();
     if (current !== this.snapshotSource) {
       this.snapshotSource = current;
       this.snapshotValue = { active: isActive(current), items: current?.elements ?? [] };
@@ -103,13 +106,9 @@ export class EdgelessSelectionRuntime {
    * @returns No value.
    */
   set(items: readonly EdgelessSelectionRef[]): void {
-    const current = this.editor.selection.get();
+    const current = this.selection.get();
     const keepBlocks = current && isStructuralSelection(current);
-    this.editor.selection.set(createEdgelessSelection(
-      keepBlocks ? current : undefined,
-      true,
-      items,
-    ));
+    this.selection.set(createEdgelessSelection(keepBlocks ? current : undefined, true, items));
   }
 
   /**
@@ -118,11 +117,11 @@ export class EdgelessSelectionRuntime {
    * @returns No value.
    */
   setBlocks(blocks: Selection): void {
-    const current = this.editor.selection.get();
+    const current = this.selection.get();
     const active = isActive(current);
-    this.editor.selection.set({
+    this.selection.set({
       ...blocks,
-      elements: active ? current?.elements ?? [] : [],
+      elements: active ? (current?.elements ?? []) : [],
       pluginData: {
         ...(current?.pluginData ?? {}),
         ...(blocks.pluginData ?? {}),
@@ -133,15 +132,17 @@ export class EdgelessSelectionRuntime {
 
   /** Deactivates selected elements while retaining their IDs. */
   deactivate(): void {
-    const current = this.editor.selection.get();
-    if (!current || !isActive(current)) return;
-    this.editor.selection.set(createEdgelessSelection(current, false, current.elements));
+    const current = this.selection.get();
+    if (!current || !isActive(current)) {
+      return;
+    }
+    this.selection.set(createEdgelessSelection(current, false, current.elements));
   }
 
   /** Clears selected elements and keeps edgeless selection active. */
   clear(): void {
-    const current = this.editor.selection.get();
-    this.editor.selection.set(createEdgelessSelection(current, true));
+    const current = this.selection.get();
+    this.selection.set(createEdgelessSelection(current, true));
   }
 
   /**
@@ -150,14 +151,19 @@ export class EdgelessSelectionRuntime {
    * @returns Subscription disposer.
    */
   subscribe(listener: () => void): () => void {
-    return this.editor.selection.subscribe(listener);
+    return this.selection.subscribe(listener);
   }
 
   /** Removes edgeless-owned data while retaining other generic selection data. */
   destroy(): void {
-    const editor = this.editor;
+    const editor = { selection: this.selection };
     const current = editor.selection.get();
-    if (!current || (!(current.elements?.length) && !(EDGELESS_SELECTION_PLUGIN_KEY in (current.pluginData ?? {})))) return;
+    if (
+      !current ||
+      (!current.elements?.length && !(EDGELESS_SELECTION_PLUGIN_KEY in (current.pluginData ?? {})))
+    ) {
+      return;
+    }
     const pluginData = { ...current.pluginData };
     delete pluginData[EDGELESS_SELECTION_PLUGIN_KEY];
     if (current.blocks.length || Object.keys(pluginData).length) {
@@ -168,24 +174,31 @@ export class EdgelessSelectionRuntime {
   }
 }
 
-// Installation belongs to the shared editor; adapters read through each view's
-// bound selection API so identical element IDs in other views stay unselected.
-const runtimes = new WeakMap<EditorRuntime["extensions"], WeakMap<EditorViewApi | EditorRuntime, EdgelessSelectionRuntime>>();
+// Installation belongs to the shared editor; adapters read through each panel's
+// bound selection API so identical element IDs in other panels stay unselected.
+const runtimes = new WeakMap<
+  ReactEditorApi["extensions"],
+  WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>
+>();
 
 /**
  * Installs the core-backed canvas selection adapter for one React editor.
  * @param editor - Owning React editor instance.
  * @returns Disposer that removes the adapter.
  */
-export function installEdgelessRuntime(editor: EditorViewApi | EditorRuntime): () => void {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
-  if (runtimes.has(documentEditor.extensions)) throw new Error("Edgeless selection runtime is already installed");
+export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): () => void {
+  const documentEditor = "editor" in editor ? editor.editor : editor;
+  if (runtimes.has(documentEditor.extensions)) {
+    throw new Error("Edgeless selection runtime is already installed");
+  }
   const runtime = new EdgelessSelectionRuntime(editor);
-  const adapters = new WeakMap<EditorViewApi | EditorRuntime, EdgelessSelectionRuntime>();
+  const adapters = new WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>();
   adapters.set(editor, runtime);
   runtimes.set(documentEditor.extensions, adapters);
   return () => {
-    if (runtimes.get(documentEditor.extensions) !== adapters) return;
+    if (runtimes.get(documentEditor.extensions) !== adapters) {
+      return;
+    }
     runtimes.delete(documentEditor.extensions);
     runtime.destroy();
   };
@@ -193,27 +206,35 @@ export function installEdgelessRuntime(editor: EditorViewApi | EditorRuntime): (
 
 /**
  * Returns the installed canvas selection adapter.
- * View-bound APIs receive a cached adapter that reads their local selection;
+ * Panel-bound APIs receive a cached adapter that reads their local selection;
  * installation and cleanup remain owned by the shared extension runtime.
- * @param editor - Owning React editor instance or its document-bound view API.
+ * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter.
  */
-export function getEdgelessRuntime(editor: EditorViewApi | EditorRuntime): EdgelessSelectionRuntime {
+export function getEdgelessRuntime(
+  editor: ReactPanelApi | ReactEditorApi,
+): EdgelessSelectionRuntime {
   const runtime = findEdgelessRuntime(editor);
-  if (!runtime) throw new Error("Install edgelessSelectionExtension before edgeless interactions");
+  if (!runtime) {
+    throw new Error("Install edgelessSelectionExtension before edgeless interactions");
+  }
   return runtime;
 }
 
 /**
  * Returns the optional installed adapter.
- * View-bound APIs receive a cached adapter while the shared extension is installed.
- * @param editor - Owning React editor instance or its document-bound view API.
+ * Panel-bound APIs receive a cached adapter while the shared extension is installed.
+ * @param editor - Owning React editor instance or its document-bound panel API.
  * @returns Installed adapter, or undefined.
  */
-export function findEdgelessRuntime(editor: EditorViewApi | EditorRuntime): EdgelessSelectionRuntime | undefined {
-  const documentEditor = "runtime" in editor ? editor.runtime : editor;
+export function findEdgelessRuntime(
+  editor: ReactPanelApi | ReactEditorApi,
+): EdgelessSelectionRuntime | undefined {
+  const documentEditor = "editor" in editor ? editor.editor : editor;
   const adapters = runtimes.get(documentEditor.extensions);
-  if (!adapters) return undefined;
+  if (!adapters) {
+    return undefined;
+  }
   let runtime = adapters.get(editor);
   if (!runtime) {
     runtime = new EdgelessSelectionRuntime(editor);
@@ -224,8 +245,8 @@ export function findEdgelessRuntime(editor: EditorViewApi | EditorRuntime): Edge
 
 /** @returns Reactive full canvas selection for ordered element consumers. */
 export function useEdgelessSelection(): EdgelessSelectionSnapshot {
-  const { editorView } = useEditorContext();
-  const runtime = getEdgelessRuntime(editorView);
+  const { reactPanel } = useReactPanelContext();
+  const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
     () => runtime.snapshot(),
@@ -239,8 +260,8 @@ export function useEdgelessSelection(): EdgelessSelectionSnapshot {
  * @returns Whether that element is actively selected.
  */
 export function useEdgelessSelected(id: string): boolean {
-  const { editorView } = useEditorContext();
-  const runtime = getEdgelessRuntime(editorView);
+  const { reactPanel } = useReactPanelContext();
+  const runtime = getEdgelessRuntime(reactPanel);
   return useSyncExternalStore(
     (listener) => runtime.subscribe(listener),
     () => runtime.isSelected(id),

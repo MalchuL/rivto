@@ -8,21 +8,26 @@ test.beforeEach(async ({ page }) => {
 test("creates every paragraph through the chosen trailing insertion target", async ({ page }) => {
   const document = page.locator('[data-journal-document="today"]');
   const surface = document.locator(":scope > .page-surface");
-  const roots = surface.locator(`:scope > ${BLOCK_ID_SELECTOR}, :scope > :not(${BLOCK_ID_SELECTOR}) > ${BLOCK_ID_SELECTOR}`);
+  const roots = surface.locator(
+    `:scope > ${BLOCK_ID_SELECTOR}, :scope > :not(${BLOCK_ID_SELECTOR}) > ${BLOCK_ID_SELECTOR}`,
+  );
   const affordances = document.locator(".page-trailing-block");
   await expect(affordances).toHaveCount(3);
-  const paragraphHeight = await roots.first()
+  const paragraphHeight = await roots
+    .first()
     .locator(":scope > .page-block-row .page-block-content")
     .first()
     .evaluate((element) => element.getBoundingClientRect().height);
-  await expect.poll(() => affordances.first().evaluate(
-    (element) => element.getBoundingClientRect().height,
-  )).toBeCloseTo(paragraphHeight, 0);
+  await expect
+    .poll(() => affordances.first().evaluate((element) => element.getBoundingClientRect().height))
+    .toBeCloseTo(paragraphHeight, 0);
 
   const count = await roots.count();
   for (let index = 0; index < count; index += 1) {
     const toggle = roots.nth(index).locator(":scope > .page-block-row [data-collapse-toggle]");
-    if (await toggle.count()) await toggle.click();
+    if (await toggle.count()) {
+      await toggle.click();
+    }
     const row = roots.nth(index).locator(":scope > .page-block-row");
     await row.click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
   }
@@ -47,14 +52,18 @@ test("creates every paragraph through the chosen trailing insertion target", asy
   await affordance.click();
 
   await expect(roots).toHaveCount(3);
-  expect(await roots.evaluateAll((blocks) => blocks.map(
-    (block) => block.getAttribute("data-block-type"),
-  ))).toEqual(["paragraph", "paragraph", "paragraph"]);
+  expect(
+    await roots.evaluateAll((blocks) =>
+      blocks.map((block) => block.getAttribute("data-block-type")),
+    ),
+  ).toEqual(["paragraph", "paragraph", "paragraph"]);
   await expect(roots.last().locator("[data-block-content]")).toBeFocused();
   await expect(affordances).toHaveCount(3);
-  await expect.poll(() => surface.evaluate(
-    (element) => element.lastElementChild?.hasAttribute("data-page-end-slot"),
-  )).toBe(true);
+  await expect
+    .poll(() =>
+      surface.evaluate((element) => element.lastElementChild?.hasAttribute("data-page-end-slot")),
+    )
+    .toBe(true);
 
   await page.keyboard.press("Control+z");
   await expect(roots).toHaveCount(0);

@@ -1,6 +1,8 @@
 import type { ComponentType } from "react";
-import { createTestCoreEditor as createEditor, createTestReactEditor as createReactEditor } from "../../test-utils";
-
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 const renderer: ComponentType<{ blockId: string }> = () => null;
 const fallback: ComponentType<{ blockId: string }> = () => null;
@@ -8,12 +10,12 @@ const fallback: ComponentType<{ blockId: string }> = () => null;
 describe("RendererManager", () => {
   test("registers exact renderers and falls back without exposing mutable state", async () => {
     const editor = await createEditor();
-    const editorView = createReactEditor({
+    const reactPanel = createReactEditor({
       editor,
       unknownBlockRenderer: fallback,
     });
-    const manager = editorView.runtime.renderers;
-    const revision = editorView.runtime.renderers.revision;
+    const manager = reactPanel.editor.renderers;
+    const revision = reactPanel.editor.renderers.revision;
     const dispose = manager.register("card", renderer);
 
     expect(manager.get("card")).toBe(renderer);
@@ -25,8 +27,8 @@ describe("RendererManager", () => {
     expect(manager.delete("card")).toBe(false);
     dispose();
     expect(manager.get("card")).toBe(fallback);
-    expect(editorView.runtime.renderers.revision).toBe(revision + 2);
-    editorView.runtime.destroy();
+    expect(reactPanel.editor.renderers.revision).toBe(revision + 2);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

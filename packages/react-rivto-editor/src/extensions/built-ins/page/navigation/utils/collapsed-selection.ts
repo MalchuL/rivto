@@ -24,17 +24,27 @@ export function reconcileCollapsedSelection(
   selection: Selection | undefined,
   boundary?: string,
 ): Selection | undefined {
-  if (!selection) return undefined;
+  if (!selection) {
+    return undefined;
+  }
   const visibleIds = new Map<string, string | undefined>();
   const visibleId = (id: string): string | undefined => {
-    if (visibleIds.has(id)) return visibleIds.get(id);
-    if (!blocks.getBlockNode(id)) return undefined;
+    if (visibleIds.has(id)) {
+      return visibleIds.get(id);
+    }
+    if (!blocks.getBlockNode(id)) {
+      return undefined;
+    }
     let visible = id;
     let ancestor = id;
     while (ancestor !== boundary) {
       const parent = blocks.getParentId(ancestor);
-      if (!parent) break;
-      if (blocks.getBlockNode(parent)?.listProps.collapsed === true) visible = parent;
+      if (!parent) {
+        break;
+      }
+      if (blocks.getBlockNode(parent)?.listProps.collapsed === true) {
+        visible = parent;
+      }
       ancestor = parent;
     }
     visibleIds.set(id, visible);
@@ -45,24 +55,33 @@ export function reconcileCollapsedSelection(
     return visible === id ? undefined : visible;
   };
 
-  const partial = hasBlockRanges(selection) && !isStructuralSelection(selection) ? selection : undefined;
+  const partial =
+    hasBlockRanges(selection) && !isStructuralSelection(selection) ? selection : undefined;
   if (partial) {
-    const ancestor = hiddenBy(partial.blocks[0]?.id ?? "")
-      ?? hiddenBy(partial.focusBlockId);
+    const ancestor = hiddenBy(partial.blocks[0]?.id ?? "") ?? hiddenBy(partial.focusBlockId);
     return ancestor ? createStructuralSelection([ancestor]) : selection;
   }
-  if (!hasBlockRanges(selection)) return selection;
-  const selected = new Map(selection.blocks.flatMap((block) => {
-    const id = visibleId(block.id);
-    return id ? [[id, block] as const] : [];
-  }));
-  const nextBlocks = blocks.getOrderedIds(selected.keys()).map((id) => ({ ...selected.get(id)!, id }));
+  if (!hasBlockRanges(selection)) {
+    return selection;
+  }
+  const selected = new Map(
+    selection.blocks.flatMap((block) => {
+      const id = visibleId(block.id);
+      return id ? [[id, block] as const] : [];
+    }),
+  );
+  const nextBlocks = blocks
+    .getOrderedIds(selected.keys())
+    .map((id) => ({ ...selected.get(id)!, id }));
   const anchorBlockId = hiddenBy(selection.anchorBlockId) ?? selection.anchorBlockId;
   const focusBlockId = hiddenBy(selection.focusBlockId) ?? selection.focusBlockId;
-  if (!nextBlocks.length || !selected.has(anchorBlockId) || !selected.has(focusBlockId)) return undefined;
-  const changed = nextBlocks.length !== selection.blocks.length
-    || nextBlocks.some((block, index) => block.id !== selection.blocks[index]?.id)
-    || anchorBlockId !== selection.anchorBlockId
-    || focusBlockId !== selection.focusBlockId;
+  if (!nextBlocks.length || !selected.has(anchorBlockId) || !selected.has(focusBlockId)) {
+    return undefined;
+  }
+  const changed =
+    nextBlocks.length !== selection.blocks.length ||
+    nextBlocks.some((block, index) => block.id !== selection.blocks[index]?.id) ||
+    anchorBlockId !== selection.anchorBlockId ||
+    focusBlockId !== selection.focusBlockId;
   return changed ? { ...selection, blocks: nextBlocks, anchorBlockId, focusBlockId } : selection;
 }

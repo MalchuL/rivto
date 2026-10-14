@@ -9,13 +9,14 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
-import type { EditorViewApi } from "../../../../editor-view/types";
+import type { ReactPanelApi } from "../../../../panels/types";
 import { findRenderedBlock } from "../../../../managers/events/block-dom";
 
 /** Returns true when a BlockView directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
-  return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR))
-    .some((content) => content.closest(BLOCK_ID_SELECTOR) === block);
+  return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)).some(
+    (content) => content.closest(BLOCK_ID_SELECTOR) === block,
+  );
 }
 
 /** Resolves the current BlockView's immediately preceding sibling BlockView. */
@@ -25,7 +26,9 @@ function previousSiblingBlock(
 ): { readonly element: HTMLElement; readonly id: string } | undefined {
   const current = findRenderedBlock(root, blockId);
   const previous = current?.previousElementSibling;
-  if (!(previous instanceof HTMLElement) || !previous.matches(BLOCK_ID_SELECTOR)) return;
+  if (!(previous instanceof HTMLElement) || !previous.matches(BLOCK_ID_SELECTOR)) {
+    return;
+  }
   const id = previous.getAttribute(BLOCK_ID_ATTRIBUTE);
   return id ? { element: previous, id } : undefined;
 }
@@ -33,33 +36,40 @@ function previousSiblingBlock(
 /**
  * Removes a root empty writing block after a non-text-editable sibling.
  *
- * @param editorView - Editor view owning host emptiness policy and block rendering.
+ * @param reactPanel - Editor view owning host emptiness policy and block rendering.
  * @param root - Active page surface or edgeless card DOM scope.
  * @param blockId - Collapsed editable block addressed by the key event.
  * @returns True when the empty block was removed and the key was claimed.
  */
 export function removeEmptyBlockAfterStructuralPredecessor(
-  editorView: EditorViewApi,
+  reactPanel: ReactPanelApi,
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = editorView.runtime;
-  const block = editorView.runtime.blocks.getBlockNode(blockId);
+  const { isEmptyBlock } = reactPanel.editor;
+  const block = reactPanel.blocks.getBlockNode(blockId);
   if (
     !block ||
     !isEmptyBlock(block) ||
+    !reactPanel.blocks.canRemove(block.id) ||
     block.listProps.collapsed === true ||
-    !editorView.getRootBlockIds().includes(block.id)
-  ) return false;
+    !reactPanel.blocks.getRootIds().includes(block.id)
+  ) {
+    return false;
+  }
 
   const previous = previousSiblingBlock(root, block.id);
-  if (!previous || hasOwnedEditableContent(previous.element)) return false;
+  if (!previous || hasOwnedEditableContent(previous.element)) {
+    return false;
+  }
 
-  editorView.runtime.history.batchUpdates(() => {
-    const firstChildId = editorView.runtime.blocks.getBlockNode(block.id)?.childIds[0];
-    if (firstChildId) editorView.runtime.blocks.outdentBlock(firstChildId);
-    editorView.runtime.blocks.removeBlock(block.id);
-    editorView.selection.set(createStructuralSelection([previous.id]));
+  reactPanel.batchUpdates(() => {
+    const firstChildId = reactPanel.blocks.getBlockNode(block.id)?.childIds[0];
+    if (firstChildId) {
+      reactPanel.blocks.outdentBlock(firstChildId);
+    }
+    reactPanel.blocks.removeBlock(block.id);
+    reactPanel.selection.set(createStructuralSelection([previous.id]));
   });
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });

@@ -9,8 +9,12 @@ import { useId } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
 import { editorControlProps } from "../../../../constants";
-import type { EdgelessVisualController } from "../controller";
-import { EdgelessPropertiesPanel, PropertyGroup, PropertyRow } from "./properties-panel";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import {
+  EdgelessPropertiesPanel,
+  PropertyGroup,
+  PropertyRow,
+} from "../../../../components/edgeless/properties-panel";
 
 const AUTO_HEIGHT_FIELD_CLASS = "flex items-center gap-2";
 const AUTO_HEIGHT_INPUT_CLASS = "edgeless-block-auto-height";
@@ -19,15 +23,15 @@ const AUTO_HEIGHT_LABEL_CLASS = "text-xs font-normal text-secondary-foreground";
 /**
  * Edits layout behavior shared by one or more selected block cards.
  *
- * @param props - Selected cards and their owning edgeless controller.
+ * @param props - Selected cards and their owning edgeless edgeless operations.
  * @returns The shared right-side properties panel.
  */
 export function BlockProperties({
   elements,
-  controller,
+  edgelessOperation,
 }: {
   readonly elements: readonly EditorElementNode[];
-  readonly controller: EdgelessVisualController;
+  readonly edgelessOperation: EdgelessOperations;
 }) {
   const ids = elements.map((element) => element.id);
   const autoHeight = elements.every((element) => element.props.autoHeight !== false);
@@ -37,19 +41,24 @@ export function BlockProperties({
       title="Block card"
       count={elements.length}
       ariaLabel="Block properties"
-      onClose={() => controller.execute("edgeless.selection.clear")}
+      onClose={() => edgelessOperation.clearSelection()}
     >
       <PropertyGroup title="Layout">
         <PropertyRow label="Height">
           <div className={AUTO_HEIGHT_FIELD_CLASS}>
-            <Checkbox {...editorControlProps}
+            <Checkbox
+              {...editorControlProps}
               id={autoHeightId}
               className={AUTO_HEIGHT_INPUT_CLASS}
               aria-label="Automatic card height"
               checked={autoHeight}
-              onCheckedChange={(checked) => controller.setBlockAutoHeight(ids, checked === true)}
+              onCheckedChange={(checked) =>
+                edgelessOperation.setBlockAutoHeight(ids, checked === true)
+              }
             />
-            <Label htmlFor={autoHeightId} className={AUTO_HEIGHT_LABEL_CLASS}>Automatic</Label>
+            <Label htmlFor={autoHeightId} className={AUTO_HEIGHT_LABEL_CLASS}>
+              Automatic
+            </Label>
           </div>
         </PropertyRow>
       </PropertyGroup>

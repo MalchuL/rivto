@@ -10,15 +10,13 @@
  * @param clientY - Pointer Y in viewport pixels.
  * @returns True when a caret was placed inside `element`.
  */
-export function placeCaretAtPoint(
-  element: HTMLElement,
-  clientX: number,
-  clientY: number,
-): boolean {
+export function placeCaretAtPoint(element: HTMLElement, clientX: number, clientY: number): boolean {
   const document = element.ownerDocument;
   element.focus({ preventScroll: true });
   const selection = document.getSelection();
-  if (!selection) return false;
+  if (!selection) {
+    return false;
+  }
 
   const caret = document.caretPositionFromPoint?.(clientX, clientY);
   const rangeHit = (

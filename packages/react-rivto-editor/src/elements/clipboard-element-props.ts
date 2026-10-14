@@ -1,4 +1,5 @@
-import type { ElementTreeApi, ElementManagerApi, EditorElementNode } from "@chulane/rivto";
+import type { PanelElementsAPI } from "@chulane/rivto";
+import type { ElementManagerApi, EditorElementNode } from "@chulane/rivto";
 
 /**
  * Restores copied child lists after every destination record has been inserted.
@@ -9,17 +10,21 @@ import type { ElementTreeApi, ElementManagerApi, EditorElementNode } from "@chul
  * @param ids - Complete source-to-destination identity map.
  */
 export function restoreElementChildren(
-  elements: ElementManagerApi | ElementTreeApi,
+  elements: ElementManagerApi | PanelElementsAPI,
   sources: readonly EditorElementNode[],
   ids: ReadonlyMap<string, string>,
 ): void {
   for (const source of sources) {
     const parentId = ids.get(source.id);
-    if (!parentId || !elements.hasElement(parentId)) continue;
+    if (!parentId || !elements.hasElement(parentId)) {
+      continue;
+    }
     const children = source.childIds.flatMap((id) => {
       const mapped = ids.get(id);
       return mapped && elements.hasElement(mapped) ? [mapped] : [];
     });
-    if (children.length) elements.moveElements(children, { parentId });
+    if (children.length) {
+      elements.moveElements(children, { parentId });
+    }
   }
 }

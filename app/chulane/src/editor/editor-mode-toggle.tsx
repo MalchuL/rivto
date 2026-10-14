@@ -1,7 +1,7 @@
 /**
  * Compact Blocks / Edgeless switch for product chrome.
  *
- * Must render under `EditorView` so it can read `useEditorMode`. The control
+ * Must render under `EditorPanel` so it can read `useEditorMode`. The control
  * is icon-only and matches the app's list/linked view toggle.
  */
 
@@ -58,7 +58,9 @@ export function EditorModeToggle() {
    * @returns No value.
    */
   const switchMode = (next: EditorMode) => {
-    if (next === mode) return;
+    if (next === mode) {
+      return;
+    }
     setMode(next);
   };
 

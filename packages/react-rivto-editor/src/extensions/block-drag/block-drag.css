@@ -14,7 +14,11 @@
   --rivto-drop-indicator-thickness: 4px;
   --rivto-drop-indicator-color: var(--rivto-accent);
   --rivto-drop-indicator-radius: 4px;
-  --rivto-drop-inside-background: color-mix(in srgb, var(--rivto-drop-indicator-color) 8%, transparent);
+  --rivto-drop-inside-background: color-mix(
+    in srgb,
+    var(--rivto-drop-indicator-color) 8%,
+    transparent
+  );
 }
 
 .page-drag-handle {
@@ -53,8 +57,7 @@
 
 /* Layout roots keep only their direct handle's hitbox pointer-active while
    transparent so re-entering the handle recovers hover without a fast move. */
-[data-drag-container]
-  > .page-block-row > .rivto-slot > .page-drag-handle {
+[data-drag-container] > .page-block-row > .rivto-slot > .page-drag-handle {
   pointer-events: auto;
 }
 
@@ -90,8 +93,7 @@
   content: none;
 }
 
-[data-drag-container]:hover
-  > .page-block-row > .rivto-slot > .page-drag-handle {
+[data-drag-container]:hover > .page-block-row > .rivto-slot > .page-drag-handle {
   opacity: 1;
 }
 

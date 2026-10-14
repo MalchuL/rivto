@@ -26,8 +26,16 @@
   min-height: var(--rivto-default-block-height);
   /* Keep the editor and preview in one stacking context so links and code
      controls remain clickable above the transparent editing layer. */
+  isolation: isolate;
   content-visibility: auto;
   contain-intrinsic-size: auto var(--rivto-default-block-height);
+}
+
+/* Safari workaround: with content-visibility: auto, Markdown text can stop
+   repainting after Enter until the block is clicked.
+   Keep the active Markdown editor out of deferred painting while its text changes. */
+.markdown-content:focus-within {
+  content-visibility: visible;
 }
 
 .markdown-preview {
@@ -78,7 +86,9 @@
   padding: 0 10px;
   border-bottom: 1px solid var(--rivto-code-border);
   color: var(--rivto-code-label-color);
-  font: 0.78rem/1.2 ui-monospace, monospace;
+  font:
+    0.78rem/1.2 ui-monospace,
+    monospace;
 }
 
 .markdown-code-language {

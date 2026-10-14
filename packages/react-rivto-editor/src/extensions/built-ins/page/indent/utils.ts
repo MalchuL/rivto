@@ -7,18 +7,15 @@
  *
  * @module
  */
-import {
-  getSelectedBlockIds,
-  isStructuralSelection,
-} from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../../block-behaviors/index";
-import type { EditorViewApi } from "../../../../editor-view/types";
+import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
+import { createBlockBehaviorContext } from "../../../../block-behaviors";
+import type { ReactPanelApi } from "../../../../panels/types";
 import {
   firstKeyboardTarget,
   isEditableKeyboardEvent,
   type KeyboardSelectionTarget,
 } from "../../../../managers";
-import type { ViewSelectionApi } from "../../../../managers/selection/api";
+import type { PanelSelectionApi } from "../../../../managers/selection/api";
 import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
 
 /** Active viewport settlement for one page surface. */
@@ -51,7 +48,8 @@ function indentTargetIds(target: KeyboardSelectionTarget): string[] {
  * @returns The block's viewport top, or undefined while it is unmounted.
  */
 function blockViewportTop(root: HTMLElement, blockId: string): number | undefined {
-  return root.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`)
+  return root
+    .querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`)
     ?.getBoundingClientRect().top;
 }
 
@@ -85,9 +83,13 @@ function selectedViewportAnchor(
   let anchorDistance = Number.POSITIVE_INFINITY;
   for (const element of root.querySelectorAll<HTMLElement>("[data-block-id]")) {
     const id = element.dataset.blockId;
-    if (!id || !selected.has(id)) continue;
+    if (!id || !selected.has(id)) {
+      continue;
+    }
     const rect = element.getBoundingClientRect();
-    if (rect.bottom <= 0 || rect.top >= viewportHeight) continue;
+    if (rect.bottom <= 0 || rect.top >= viewportHeight) {
+      continue;
+    }
     const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
     if (distance < anchorDistance) {
       anchor = { id, top: rect.top };
@@ -98,10 +100,14 @@ function selectedViewportAnchor(
     let id: string | undefined;
     for (let index = blockIds.length - 1; index >= 0 && !id; index -= 1) {
       const blockId = blockIds[index]!;
-      if (blockViewportTop(root, blockId) !== undefined) id = blockId;
+      if (blockViewportTop(root, blockId) !== undefined) {
+        id = blockId;
+      }
     }
     const top = id ? blockViewportTop(root, id) : undefined;
-    if (id && top !== undefined) anchor = { id, top };
+    if (id && top !== undefined) {
+      anchor = { id, top };
+    }
   }
   return anchor;
 }
@@ -115,11 +121,13 @@ function selectedViewportAnchor(
  */
 function mountedSelectedBlockIds(root: HTMLElement, blockIds: readonly string[]): string[] {
   const selected = new Set(blockIds);
-  return [...new Set(
-    [...root.querySelectorAll<HTMLElement>("[data-block-id]")]
-      .map((element) => element.dataset.blockId)
-      .filter((id): id is string => Boolean(id && selected.has(id))),
-  )];
+  return [
+    ...new Set(
+      [...root.querySelectorAll<HTMLElement>("[data-block-id]")]
+        .map((element) => element.dataset.blockId)
+        .filter((id): id is string => Boolean(id && selected.has(id))),
+    ),
+  ];
 }
 
 /**
@@ -138,7 +146,9 @@ function restoreBlockViewportTop(
   expectedTop: number,
 ): void {
   const currentTop = blockViewportTop(root, blockId);
-  if (currentTop !== undefined) scrollElement.scrollTop += currentTop - expectedTop;
+  if (currentTop !== undefined) {
+    scrollElement.scrollTop += currentTop - expectedTop;
+  }
 }
 
 /**
@@ -153,27 +163,35 @@ function restoreBlockViewportTop(
  * @param root - Active page surface or edgeless card.
  * @param event - Native keyboard event that matched the binding.
  * @param outdent - Whether this invocation lifts rather than nests.
- * @param editorView - Editor view used to resolve the target block view.
+ * @param reactPanel - Editor view used to resolve the target block view.
  * @returns `true` when the shortcut was claimed.
  */
 export function applyIndentShortcut(
-  selectionManager: ViewSelectionApi,
+  selectionManager: PanelSelectionApi,
   root: HTMLElement,
   event: KeyboardEvent,
   outdent: boolean,
-  editorView: EditorViewApi,
+  reactPanel: ReactPanelApi,
 ): boolean {
   const editable = isEditableKeyboardEvent(event);
   const nativeSelection = editable ? selectionManager.readDOM() : undefined;
-  if (nativeSelection) selectionManager.set(nativeSelection);
+  if (nativeSelection) {
+    selectionManager.set(nativeSelection);
+  }
   const selection = nativeSelection ?? selectionManager.get();
   const target = firstKeyboardTarget(selection);
-  if (!target) return false;
+  if (!target) {
+    return false;
+  }
   const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
-  if (!editable && !blockSelectionAtRoot) return false;
+  if (!editable && !blockSelectionAtRoot) {
+    return false;
+  }
 
-  const context = createBlockBehaviorContext(editorView, target.blockId, root, selection);
-  if (!context) return false;
+  const context = createBlockBehaviorContext(reactPanel, target.blockId, root, selection);
+  if (!context) {
+    return false;
+  }
   const targetIds = indentTargetIds(target);
   // Reparenting a virtualized root block partially above the viewport changes
   // both the root count and its DOM parent. Preserve the viewport through that
@@ -181,12 +199,13 @@ export function applyIndentShortcut(
   const virtualizationController = getPageVirtualizationControllerForElement(root);
   const mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
   const previousSettlement = viewportSettlements.get(root);
-  const inheritedAnchor = previousSettlement?.anchorId
-    && targetIds.includes(previousSettlement.anchorId)
-    && blockViewportTop(root, previousSettlement.anchorId) !== undefined
-    && previousSettlement.expectedTop !== undefined
-    ? { id: previousSettlement.anchorId, top: previousSettlement.expectedTop }
-    : undefined;
+  const inheritedAnchor =
+    previousSettlement?.anchorId &&
+    targetIds.includes(previousSettlement.anchorId) &&
+    blockViewportTop(root, previousSettlement.anchorId) !== undefined &&
+    previousSettlement.expectedTop !== undefined
+      ? { id: previousSettlement.anchorId, top: previousSettlement.expectedTop }
+      : undefined;
   previousSettlement?.cancel();
   const releaseScrollAdjustments = virtualizationController?.suspendScrollAdjustments();
   const scrollElement = virtualizationController ? root.ownerDocument.scrollingElement : null;
@@ -198,11 +217,15 @@ export function applyIndentShortcut(
   let adjustmentsReleased = false;
   /** Applies deliberate wheel movement to the retained visual position. */
   const onWheel = (wheelEvent: WheelEvent): void => {
-    if (settlement.expectedTop !== undefined) settlement.expectedTop -= wheelEvent.deltaY;
+    if (settlement.expectedTop !== undefined) {
+      settlement.expectedTop -= wheelEvent.deltaY;
+    }
   };
   /** Restores normal virtualizer behavior once for this command. */
   const releaseAdjustments = (): void => {
-    if (adjustmentsReleased) return;
+    if (adjustmentsReleased) {
+      return;
+    }
     adjustmentsReleased = true;
     releaseScrollAdjustments?.();
   };
@@ -210,7 +233,9 @@ export function applyIndentShortcut(
     anchorId,
     expectedTop: anchorTop,
     cancel: () => {
-      if (!settlementActive) return;
+      if (!settlementActive) {
+        return;
+      }
       settlementActive = false;
       view?.removeEventListener("wheel", onWheel);
       releaseAdjustments();
@@ -218,7 +243,7 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const claimed = editorView.runtime.blockBehaviors.dispatch(
+  const claimed = reactPanel.editor.blockBehaviors.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,
@@ -229,10 +254,13 @@ export function applyIndentShortcut(
   // Mounting every selected root here makes a large outdent briefly defeat
   // virtualization, then the following indent replaces hundreds of measured
   // roots with one subtree and produces a large scroll offset correction.
-  virtualizationController?.mountBlocks(
-    mountedTargetIds.length ? mountedTargetIds : anchorId ? [anchorId] : targetIds.slice(-1),
-    { scroll: false },
-  );
+  let mountIds = targetIds.slice(-1);
+  if (mountedTargetIds.length) {
+    mountIds = mountedTargetIds;
+  } else if (anchorId) {
+    mountIds = [anchorId];
+  }
+  virtualizationController?.mountBlocks(mountIds, { scroll: false });
   if (scrollElement && anchorId && anchorTop !== undefined) {
     restoreBlockViewportTop(root, scrollElement, anchorId, anchorTop);
   }
@@ -246,50 +274,66 @@ export function applyIndentShortcut(
   // This callback owns caret/selection restoration, not the indent mutation. Mounting
   // endpoints and preserving the viewport support that restoration; unrelated work
   // must not use this slot because a newer selection callback replaces it.
-  selectionManager.scheduleIfSelectionUnchanged(() => {
-    // A newer command owns selection restoration once this settlement is cancelled.
-    if (!settlementActive) return;
-    // The controller captured before dispatch still indexes the old root list.
-    // Resolve it again after React commits so an outdented viewport window is
-    // pinned as new roots instead of being looked up in the former parent root.
-    getPageVirtualizationControllerForElement(root)?.mountBlocks(
-      mountedTargetIds.length ? mountedTargetIds : anchorId ? [anchorId] : targetIds.slice(-1),
-      { scroll: false },
-    );
-    selectionManager.set(selection!);
-    selectionManager.restoreDOM(selection, { scroll: false });
-    if (!scrollElement || !anchorId || anchorTop === undefined) {
-      settlement.cancel();
-      if (viewportSettlements.get(root) === settlement) viewportSettlements.delete(root);
-      return;
-    }
-    const deadline = (view?.performance.now() ?? 0) + 300;
-    /** Preserves the visual anchor until virtual subtree measurements settle. */
-    const stabilize = (): void => {
-      if (!settlementActive) return;
-      const expectedTop = settlement.expectedTop;
-      if (expectedTop !== undefined) restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
-      if (view && view.performance.now() < deadline) {
-        view.requestAnimationFrame(stabilize);
-      } else {
-        // Re-enabling ordinary virtual measurement behavior can itself apply
-        // one deferred offset. Correct that final frame unless a newer command
-        // has superseded this settlement.
-        releaseAdjustments();
-        view?.requestAnimationFrame(() => {
-          if (!settlementActive) return;
-          const expectedTop = settlement.expectedTop;
-          if (expectedTop !== undefined) restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
-          settlementActive = false;
-          view.removeEventListener("wheel", onWheel);
-          if (viewportSettlements.get(root) === settlement) viewportSettlements.delete(root);
-        });
+  selectionManager.scheduleIfSelectionUnchanged(
+    () => {
+      // A newer command owns selection restoration once this settlement is cancelled.
+      if (!settlementActive) {
+        return;
       }
-    };
-    stabilize();
-  }, () => {
-    settlement.cancel();
-    if (viewportSettlements.get(root) === settlement) viewportSettlements.delete(root);
-  });
+      // The controller captured before dispatch still indexes the old root list.
+      // Resolve it again after React commits so an outdented viewport window is
+      // pinned as new roots instead of being looked up in the former parent root.
+      getPageVirtualizationControllerForElement(root)?.mountBlocks(mountIds, { scroll: false });
+      selectionManager.set(selection!);
+      selectionManager.restoreDOM(selection, { scroll: false });
+      if (!scrollElement || !anchorId || anchorTop === undefined) {
+        settlement.cancel();
+        if (viewportSettlements.get(root) === settlement) {
+          viewportSettlements.delete(root);
+        }
+        return;
+      }
+      const deadline = (view?.performance.now() ?? 0) + 300;
+      /** Preserves the visual anchor until virtual subtree measurements settle. */
+      const stabilize = (): void => {
+        if (!settlementActive) {
+          return;
+        }
+        const expectedTop = settlement.expectedTop;
+        if (expectedTop !== undefined) {
+          restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
+        }
+        if (view && view.performance.now() < deadline) {
+          view.requestAnimationFrame(stabilize);
+        } else {
+          // Re-enabling ordinary virtual measurement behavior can itself apply
+          // one deferred offset. Correct that final frame unless a newer command
+          // has superseded this settlement.
+          releaseAdjustments();
+          view?.requestAnimationFrame(() => {
+            if (!settlementActive) {
+              return;
+            }
+            const expectedTop = settlement.expectedTop;
+            if (expectedTop !== undefined) {
+              restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
+            }
+            settlementActive = false;
+            view.removeEventListener("wheel", onWheel);
+            if (viewportSettlements.get(root) === settlement) {
+              viewportSettlements.delete(root);
+            }
+          });
+        }
+      };
+      stabilize();
+    },
+    () => {
+      settlement.cancel();
+      if (viewportSettlements.get(root) === settlement) {
+        viewportSettlements.delete(root);
+      }
+    },
+  );
   return claimed;
 }

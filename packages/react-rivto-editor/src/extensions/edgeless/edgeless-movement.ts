@@ -1,41 +1,54 @@
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
-import type { EditorViewApi } from "../../editor-view/types";
-import type { EditorRuntime } from "../../editor/editor-runtime";
+import type { ReactPanelApi } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
 import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
-export function registerEdgelessMovement(editorRuntime: EditorRuntime): void {
-  const selection = getEdgelessRuntime(editorRuntime);
+export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {
+  const selection = getEdgelessRuntime(reactEditor);
 
-  const move = (editorView: EditorViewApi, dx: number, dy: number): boolean => {
-    const items = getEdgelessRuntime(editorView).get().items;
-    if (!items.length) return false;
-    if (editorRuntime.commands.has("edgeless.selection.move")) {
-      editorRuntime.commands.execute("edgeless.selection.move", { editorView, payload: { dx, dy } });
+  const move = (reactPanel: ReactPanelApi, dx: number, dy: number): boolean => {
+    const items = getEdgelessRuntime(reactPanel).get().items;
+    if (!items.length) {
+      return false;
+    }
+    if (reactEditor.commands.has("edgeless.selection.move")) {
+      reactEditor.commands.execute("edgeless.selection.move", { reactPanel, payload: { dx, dy } });
     } else {
       const updates = items.flatMap((id) => {
-        const element = editorView.elements.getElementNode(id);
-        return element ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }] : [];
+        const element = reactPanel.elements.getElementNode(id);
+        return element
+          ? [{ id, patch: { frame: { x: element.frame.x + dx, y: element.frame.y + dy } } }]
+          : [];
       });
-      if (updates.length) editorView.elements.updateElements(updates);
+      if (updates.length) {
+        reactPanel.elements.updateElements(updates);
+      }
     }
     return true;
   };
 
-  const bind = (id: string, dx: number, dy: number) => editorRuntime.keyboard.register({
-    id,
-    keys: BUILTIN_KEYMAP[id],
-    mode: "edgeless",
-    when: ({ raw: event }) => {
-      const target = event.target;
-      return selection.get().active && selection.get().items.length > 0 &&
-        target instanceof HTMLElement &&
-        !target.isContentEditable &&
-        !target.closest(EDITOR_CONTROL_SELECTOR) &&
-        !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
-    },
-  }, ({ editorView }) => move(editorView, dx, dy));
+  const bind = (id: string, dx: number, dy: number) =>
+    reactEditor.keyboard.register(
+      {
+        id,
+        keys: BUILTIN_KEYMAP[id],
+        mode: "edgeless",
+        when: ({ raw: event }) => {
+          const target = event.target;
+          return (
+            selection.get().active &&
+            selection.get().items.length > 0 &&
+            target instanceof HTMLElement &&
+            !target.isContentEditable &&
+            !target.closest(EDITOR_CONTROL_SELECTOR) &&
+            !/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName)
+          );
+        },
+      },
+      ({ reactPanel }) => move(reactPanel, dx, dy),
+    );
 
   bind(KEYBOARD_BINDING_IDS.edgelessMoveLeft, -1, 0);
   bind(KEYBOARD_BINDING_IDS.edgelessMoveRight, 1, 0);

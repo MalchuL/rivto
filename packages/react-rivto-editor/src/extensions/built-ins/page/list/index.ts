@@ -5,5 +5,5 @@ export {
   DEFAULT_BLOCK_LIST_PROPS,
   isNumberedListType,
   resolveBlockListNumbers,
-  type BlockListType
+  type BlockListType,
 } from "./utils";

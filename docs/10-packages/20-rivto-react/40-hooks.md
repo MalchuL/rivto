@@ -1,13 +1,20 @@
 # Public React hooks
 
-Все hooks требуют ancestor `<EditorView>`. Вне provider они выбрасывают context error.
+Контекстные hooks требуют ancestor `<EditorPanel>`. Вне provider они выбрасывают context error.
+`useReactEditor()` создаёт общий ReactEditor и вызывается вне EditorPanel; его loading/ready/error lifecycle описан в разделе Runtime and lifecycle.
 
 ## Runtime hooks
 
-### `useEditorView()`
+### `usePanel()`
+
+Возвращает core `PanelAPI`: `document`, `documentId`, независимые `rootBlockId` и `rootElementId`, ограниченные `blocks` и `elements`. API фиксирован на исходном документе и не следует за фокусом. Тип не открывает DOM, инструменты или локальное выделение; сам объект совпадает с результатом useReactPanel(). Вне `EditorPanel`/`EditorEmbed` выбрасывает ошибку контекста.
+
+### `useReactPanel()`
+
+`useReactPanel() === usePanel()`. React API предоставляет `editor`, `mode`, `events`, `keyboard`, `selection`, `clipboard`, `slashCommands` и `edgeless`. Через `edgeless` выполняются действия над текущим canvas-выделением; обычные чтения и изменения выполняются через core-панель.
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** stable `EditorViewApi`.
+- **Возвращает:** stable `ReactPanelApi`.
 - **Исключения:** та же provider error.
 
 ### `useContext(SurfaceContext)`
@@ -17,16 +24,16 @@
 - **Исключения:** отсутствуют.
 
 Context immutable; он описывает ближайший rendered surface, включая page embedding внутри canvas.
-Переключение основного surface выполняет host через core mode manager и JSX.
+Переключение основного surface выполняет host через panel mode manager и JSX.
 
 ### `useEditorMode()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ mode, setMode }`, текущее значение core `editor.mode` и stable setter.
+- **Возвращает:** `{ mode, setMode }`, текущее значение `reactPanel.mode` и stable setter.
 - **Исключения:** та же provider error.
 
-Hook подписывается непосредственно на mode manager. Mode локален для core editor,
-общий для его views и не синхронизируется через CRDT. Повторный `setMode()` активного
+Hook подписывается непосредственно на mode manager. Mode локален для панели; host может явно передать общий ModeManager нескольким панелям.
+Режим не синхронизируется через CRDT. Повторный `setMode()` активного
 значения — no-op; конкретный rendered surface выбирается приложением через JSX.
 
 ### `useEditorSelection()`
@@ -39,7 +46,7 @@ Hook подписывается непосредственно на mode manager
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `{ element: HTMLElement | null; ref }`.
-- **Исключения:** `Editor root hooks must be used inside EditorView`.
+- **Исключения:** `Editor root hooks must be used inside EditorPanel`.
 
 Нужен прежде всего custom surface: container назначает `ref` и становится DOM scope.
 
@@ -84,7 +91,7 @@ Text selection намеренно возвращает `null`.
 - **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-В рендере читайте `block.props`, а внутри event closures — актуальный `editorView.runtime.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `reactPanel.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
 
 ### Отдельные команды и DOM
 

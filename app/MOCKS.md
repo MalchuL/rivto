@@ -4,10 +4,10 @@ V1 stores all workspace data in an in-memory mock DB. Nothing is persisted acros
 
 ## Source of truth today
 
-| Piece | Path | Role |
-|-------|------|------|
-| Mock DB + seed | [`chulane/src/lib/mock/db.ts`](chulane/src/lib/mock/db.ts) | In-memory `Map`s for projects, pages, tags; seed data |
-| System project IDs | `SYSTEM_PROJECT_IDS` in the same file | Inbox, Journal, Templates, Archive, Trash |
+| Piece              | Path                                                       | Role                                                  |
+| ------------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
+| Mock DB + seed     | [`chulane/src/lib/mock/db.ts`](chulane/src/lib/mock/db.ts) | In-memory `Map`s for projects, pages, tags; seed data |
+| System project IDs | `SYSTEM_PROJECT_IDS` in the same file                      | Inbox, Journal, Templates, Archive, Trash             |
 
 Domain services call `getMockDb()` directly. TanStack Query hooks in `chulane` call those services. The Next app never talks to HTTP for CRUD.
 
@@ -15,14 +15,14 @@ Domain services call `getMockDb()` directly. TanStack Query hooks in `chulane` c
 
 Keep the **public method shapes** (and domain types) stable so hooks/UI stay unchanged. Swap the implementation from mock Maps to HTTP (or repository) clients.
 
-| Service | Path | Methods | Replace with |
-|---------|------|---------|--------------|
-| `projectService` | [`chulane/src/domain/project/service.ts`](chulane/src/domain/project/service.ts) | `list`, `get`, `create`, `update`, `delete` | Project API (nested `parentProjectId`, description, status) |
-| `pageService` | [`chulane/src/domain/page/service.ts`](chulane/src/domain/page/service.ts) | `list`, `get`, `create`, `update`, `delete`, `search` | Page API (`tagIds`, `kind`, hierarchy, content) |
-| `tagService` | [`chulane/src/domain/tag/service.ts`](chulane/src/domain/tag/service.ts) | `listForProject`, `get`, `create`, `update`, `delete` | Tag vocabulary API; inherit ancestor tags server-side or in client from project tree |
-| `journalService` | [`chulane/src/domain/journal/service.ts`](chulane/src/domain/journal/service.ts) | `listDays`, `getDay`, `getOrCreateDay` | Thin facade over pages with `kind: "journal"` + `properties.day` — prefer reusing page API |
+| Service          | Path                                                                             | Methods                                               | Replace with                                                                               |
+| ---------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `projectService` | [`chulane/src/domain/project/service.ts`](chulane/src/domain/project/service.ts) | `list`, `get`, `create`, `update`, `delete`           | Project API (nested `parentProjectId`, description, status)                                |
+| `pageService`    | [`chulane/src/domain/page/service.ts`](chulane/src/domain/page/service.ts)       | `list`, `get`, `create`, `update`, `delete`, `search` | Page API (`tagIds`, `kind`, hierarchy, content)                                            |
+| `tagService`     | [`chulane/src/domain/tag/service.ts`](chulane/src/domain/tag/service.ts)         | `listForProject`, `get`, `create`, `update`, `delete` | Tag vocabulary API; inherit ancestor tags server-side or in client from project tree       |
+| `journalService` | [`chulane/src/domain/journal/service.ts`](chulane/src/domain/journal/service.ts) | `listDays`, `getDay`, `getOrCreateDay`                | Thin facade over pages with `kind: "journal"` + `properties.day` — prefer reusing page API |
 
-## What is *not* a data mock
+## What is _not_ a data mock
 
 These are client UI state (Zustand + `localStorage`). Do **not** move them to the backend unless you intentionally sync workspace UI across devices:
 
@@ -34,10 +34,10 @@ These are client UI state (Zustand + `localStorage`). Do **not** move them to th
 
 Runtime API URLs are injected for a future client; mocks ignore them:
 
-| Variable | Purpose |
-|----------|---------|
+| Variable              | Purpose                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------- |
 | `PUBLIC_API_BASE_URL` | Browser → API origin ([`web/src/lib/runtime-config.ts`](web/src/lib/runtime-config.ts)) |
-| `SERVER_API_BASE_URL` | Next BFF → API ([`web/src/lib/env.ts`](web/src/lib/env.ts)) |
+| `SERVER_API_BASE_URL` | Next BFF → API ([`web/src/lib/env.ts`](web/src/lib/env.ts))                             |
 
 Suggested replacement pattern (aligned with frontend-architecture skill):
 

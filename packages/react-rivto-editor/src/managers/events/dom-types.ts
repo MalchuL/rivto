@@ -8,14 +8,17 @@ export type DOMEventTarget = "surface" | "document" | "window";
 export type DOMEventScope = "surface" | "block" | "content";
 
 /** Native event map selected from the listener attachment realm. */
-export type DOMEventMap<Target extends DOMEventTarget> =
-  Target extends "document" ? DocumentEventMap :
-  Target extends "window" ? WindowEventMap :
-  HTMLElementEventMap;
+export type DOMEventMap<Target extends DOMEventTarget> = Target extends "document"
+  ? DocumentEventMap
+  : Target extends "window"
+    ? WindowEventMap
+    : HTMLElementEventMap;
 
 /** Native event names valid for one attachment realm. */
-export type DOMEventName<Target extends DOMEventTarget> =
-  Extract<keyof DOMEventMap<Target>, string>;
+export type DOMEventName<Target extends DOMEventTarget> = Extract<
+  keyof DOMEventMap<Target>,
+  string
+>;
 
 /** Declarative DOM registration with stable identity and optional filtering. */
 export interface DOMEventDefinition<

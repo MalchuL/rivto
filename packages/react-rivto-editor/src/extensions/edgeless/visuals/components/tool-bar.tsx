@@ -2,173 +2,199 @@
  * Bottom-centered create toolbar for the edgeless canvas.
  *
  * Hosts the always-visible Select and Pan tools plus one button per tool
- * category. Activating a category opens the in-tree `CreationPanel` popover,
+ * category. Activating a category opens the in-tree registered group popover,
  * which stays open while the user places or draws so defaults remain
  * reachable, and closes on Select/Pan, a category toggle, Escape, or a
  * pointer press outside the bar while no creation tool is active. The bar
  * raises its stacking level while a menu is open so the popover clears the
  * selection toolbar.
  */
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { Separator } from "../../../../components/ui/separator";
-import { isNodeLike } from "../../../../managers/events/dom-nodes";
-import type { EdgelessVisualController } from "../controller";
-import type { EdgelessFontOption, EdgelessStickerOption, EdgelessVisualTool, PresetPayload, ToolCategory } from "../types";
-import { CreationPanel } from "./creation-panel";
-import { EdgelessToolButton, type EdgelessToolIcon } from "./tool-button";
+import { ToolBarDivider } from "../../../../components/edgeless/tool-bar-divider";
+import { Popover, PopoverAnchor } from "../../../../components/ui/popover";
+import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type {
+  EdgelessToolbarItem,
+  EdgelessToolbarRenderContext,
+} from "../../../../managers/edgeless-toolbar/types";
+import type { EdgelessVisualTool } from "../../../../elements/visuals/types";
+import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
+import { ToolPopover, ToolSections } from "./tool-popover";
 
-/** Floating bar chrome; `edgeless-tool-bar` is a stable hook for hosts. */
+/** Bottom-centered create toolbar; its CSS hook also identifies the in-tree popover owner. */
 const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
-const DIVIDER_CLASS = "edgeless-tool-bar-divider";
 
 /**
- * Renders the thin vertical rule that separates groups of toolbar buttons.
- *
- * @returns A decorative vertical shadcn `Separator`.
+ * Bottom-centered create toolbar with always-visible Select and registered group popovers.
+ * @param props - Shared receiving operations, current tool and mounted preset-drag handlers.
+ * @returns Toolbar with registered standalone tools and nonempty groups; active styling follows each tool predicate.
  */
-export function ToolBarDivider() {
-  return <Separator orientation="vertical" className={DIVIDER_CLASS} />;
-}
-
-const categories: readonly { id: ToolCategory; label: string; icon: EdgelessToolIcon }[] = [
-  { id: "shapes", label: "Shapes", icon: "rectangle" },
-  { id: "drawing", label: "Drawing", icon: "draw" },
-  { id: "text", label: "Text", icon: "text" },
-  { id: "stickers", label: "Stickies", icon: "sticker" },
-  { id: "connectors", label: "Connectors", icon: "connector" },
-];
-
-function categoryIcon(category: ToolCategory, last: EdgelessVisualTool, fallback: EdgelessToolIcon): EdgelessToolIcon {
-  if (category === "shapes" && last.tool === "place") return last.kind === "ellipse" ? "ellipse" : "rectangle";
-  if (category === "drawing") {
-    if (last.tool === "eraser") return "eraser";
-    if (last.tool === "drawing") return last.brush === "pen" ? "pen" : last.brush === "marker" ? "marker" : "pencil";
-  }
-  if (category === "connectors" && last.tool === "connector") {
-    return last.route === "orthogonal" ? "connector-orthogonal" : last.route === "curve" ? "connector-curve" : "connector-straight";
-  }
-  return fallback;
-}
-
-function categoryActive(category: ToolCategory, tool: EdgelessVisualTool): boolean {
-  if (category === "shapes") return tool.tool === "place" && (tool.kind === "rectangle" || tool.kind === "ellipse");
-  if (category === "text") return tool.tool === "place" && tool.kind === "text";
-  if (category === "stickers") return tool.tool === "place" && tool.kind === "sticker";
-  if (category === "drawing") return tool.tool === "drawing" || tool.tool === "eraser";
-  if (category === "connectors") return tool.tool === "connector";
-  return false;
-}
-
-/** Bottom-centered create toolbar with always-visible Select and category popovers. */
 export function ToolBar({
-  controller,
+  edgelessOperation,
   tool,
-  fonts,
-  stickers,
-  startPresetDrag,
-  movePresetDrag,
-  endPresetDrag,
+  ...pointer
 }: {
-  controller: EdgelessVisualController;
-  tool: EdgelessVisualTool;
-  fonts: readonly EdgelessFontOption[];
-  stickers: readonly EdgelessStickerOption[];
-  startPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, payload: PresetPayload): void;
-  movePresetDrag(event: ReactPointerEvent<HTMLButtonElement>): void;
-  endPresetDrag(event: ReactPointerEvent<HTMLButtonElement>, commit?: boolean): void;
-}) {
-  const [menu, setMenu] = useState<ToolCategory | null>(null);
+  readonly edgelessOperation: EdgelessOperations;
+  readonly tool: EdgelessVisualTool;
+} & Pick<EdgelessToolbarRenderContext, "startPresetDrag" | "movePresetDrag" | "endPresetDrag">) {
+  const { reactPanel } = useReactPanelContext();
+  const registry = reactPanel.editor.edgelessToolbar;
+  const revision = useSyncExternalStore(
+    (listener) => registry.subscribe(listener),
+    () => registry.revision,
+    () => registry.revision,
+  );
+  const [menu, setMenu] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
-  const close = () => setMenu(null);
+  const popoverId = useId();
+  const tools = registry.getTools();
+  const groups = registry
+    .getGroups()
+    .filter((group) => tools.some((item) => item.group === group.id));
+  const context: EdgelessToolbarRenderContext = {
+    reactPanel,
+    operations: edgelessOperation,
+    ...pointer,
+  };
+  const items: EdgelessToolbarItem[] = tools.map((entry) => ({
+    tool: entry,
+    active: entry.isActive(tool),
+    activate: () => edgelessOperation.activateToolbarTool(entry.id),
+  }));
+  const currentGroup = groups.find((group) => group.id === menu);
 
   useEffect(() => {
-    if (!menu) return;
-    const view = barRef.current?.ownerDocument.defaultView;
-    if (!view) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!isNodeLike(target) || barRef.current?.contains(target)) return;
-      // Keep the category submenu open while placing/drawing on the canvas —
-      // only dismiss on Select/Pan, category toggle, or Escape.
-      const current = controller.getTool().tool;
-      if (current === "place" || current === "drawing" || current === "eraser" || current === "connector") {
-        return;
-      }
+    if (
+      menu &&
+      !registry.getTools().some((item) => item.group === menu && registry.getGroup(menu))
+    ) {
       setMenu(null);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // Close the popover without stopping Escape so tool/select bindings still run.
+    }
+  }, [menu, registry, revision]);
+
+  useEffect(() => {
+    if (tool.tool === "select" || tool.tool === "pan") {
       setMenu(null);
-    };
-    view.addEventListener("pointerdown", onPointerDown, true);
-    view.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      view.removeEventListener("pointerdown", onPointerDown, true);
-      view.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [controller, menu]);
+    }
+  }, [tool]);
 
-  const selectTool = () => {
-    controller.execute("edgeless.tool.set", "select");
-    close();
+  const renderTool = (item: EdgelessToolbarItem, children: ReactNode = item.tool.title) => {
+    const bindings = item.tool.getButtonProps?.(context);
+    return (
+      <EdgelessToolButton
+        key={`tool:${item.tool.id}`}
+        label={item.tool.title}
+        icon={item.tool.icon}
+        pressed={item.active}
+        {...bindings}
+        onClick={(event) => {
+          bindings?.onClick?.(event);
+          if (!event.defaultPrevented) {
+            item.activate();
+          }
+          if (!item.tool.group) {
+            setMenu(null);
+          }
+        }}
+      >
+        {children}
+      </EdgelessToolButton>
+    );
   };
-
-  const panTool = () => {
-    controller.execute("edgeless.tool.set", { tool: "pan" });
-    close();
+  const entries = registry.getEntries().map((entry) => {
+    if (entry.kind === "tool") {
+      const item = items.find((item) => item.tool.id === entry.registration.id)!;
+      return renderTool(item, item.tool.icon ? null : item.tool.title);
+    }
+    const group = entry.registration;
+    const open = menu === group.id;
+    const last = edgelessOperation.getGroupTool(group.id);
+    const active = items.some((item) => item.tool.group === group.id && item.active);
+    return (
+      <EdgelessToolButton
+        key={`group:${group.id}`}
+        label={group.title}
+        icon={last?.icon ?? group.icon}
+        aria-haspopup="dialog"
+        aria-controls={open ? popoverId : undefined}
+        aria-expanded={open}
+        pressed={active || open}
+        onClick={() => {
+          if (open) {
+            setMenu(null);
+            return;
+          }
+          edgelessOperation.activateToolbarGroup(group.id);
+          setMenu(group.id);
+        }}
+      >
+        {(last?.icon ?? group.icon) ? null : group.title}
+      </EdgelessToolButton>
+    );
+  });
+  const groupProps = {
+    reactPanel,
+    operations: edgelessOperation,
+    items: items.filter((item) => item.tool.group === menu),
+    renderTool,
   };
-
+  const Contents = currentGroup?.render;
   return (
-    <div ref={barRef} className={TOOL_BAR_CLASS} data-edgeless-ui="true" data-menu-open={menu || undefined} role="toolbar" aria-label="Visual objects">
-      <EdgelessToolButton
-        label="Select"
-        icon="select"
-        pressed={tool.tool === "select"}
-        onClick={selectTool}
-      />
-      <EdgelessToolButton
-        label="Pan"
-        icon="pan"
-        pressed={tool.tool === "pan"}
-        onClick={panTool}
-      />
-      <ToolBarDivider />
-      {categories.map((category) => {
-        const open = menu === category.id;
-        const last = controller.getLastTool(category.id);
-        const active = categoryActive(category.id, tool);
-        return (
+    <Popover
+      open={Boolean(currentGroup)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setMenu(null);
+        }
+      }}
+    >
+      <PopoverAnchor asChild>
+        <div
+          ref={barRef}
+          className={TOOL_BAR_CLASS}
+          data-edgeless-ui="true"
+          data-menu-open={currentGroup?.id}
+          role="toolbar"
+          aria-label="Visual objects"
+        >
           <EdgelessToolButton
-            key={category.id}
-            label={category.label}
-            icon={categoryIcon(category.id, last, category.icon)}
-            aria-expanded={open}
-            pressed={active || open}
+            label="Select"
+            icon="select"
+            pressed={tool.tool === "select"}
             onClick={() => {
-              if (open) {
-                setMenu(null);
-                return;
-              }
-              controller.activateCategory(category.id);
-              setMenu(category.id);
+              edgelessOperation.setTool("select");
+              setMenu(null);
             }}
           />
-        );
-      })}
-      {menu && (
-        <CreationPanel
-          category={menu}
-          controller={controller}
-          tool={tool}
-          fonts={fonts}
-          stickers={stickers}
-          startPresetDrag={startPresetDrag}
-          movePresetDrag={movePresetDrag}
-          endPresetDrag={endPresetDrag}
-        />
-      )}
-    </div>
+          <EdgelessToolButton
+            label="Pan"
+            icon="pan"
+            pressed={tool.tool === "pan"}
+            onClick={() => {
+              edgelessOperation.setTool({ tool: "pan" });
+              setMenu(null);
+            }}
+          />
+          <ToolBarDivider />
+          {entries}
+          {currentGroup && (
+            <ToolPopover
+              id={popoverId}
+              category={currentGroup.id}
+              container={barRef.current}
+              operations={edgelessOperation}
+            >
+              {Contents ? (
+                <Contents {...groupProps} />
+              ) : (
+                <ToolSections tools={groupProps.items.map((item) => renderTool(item))} />
+              )}
+            </ToolPopover>
+          )}
+        </div>
+      </PopoverAnchor>
+    </Popover>
   );
 }

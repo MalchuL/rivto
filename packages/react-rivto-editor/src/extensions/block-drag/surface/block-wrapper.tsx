@@ -23,7 +23,7 @@ import {
 import { createPortal } from "react-dom";
 import type { DropAxis } from "../../../block-behaviors/types";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
-import { useEditorView } from "../../../hooks";
+import { useReactPanel } from "../../../hooks";
 import { findParentBlock } from "../../../managers/events/block-dom";
 import { PageDropIndicator } from "../placement/indicator";
 import { PageDragItemContext, PageDragStateContext } from "../state";
@@ -53,24 +53,27 @@ const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
  * @returns A DOM-free ref provider plus row-portalled drag controls.
  */
 export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
-  const editorView = useEditorView();
+  const reactPanel = useReactPanel();
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const targetView = editorView.runtime.blockBehaviors.resolve(block.id);
-  const isLayoutRoot = targetView.dropAxis !== undefined && targetView.dropParentTypes === undefined;
-  const parentView = parentId ? editorView.runtime.blockBehaviors.resolve(parentId) : undefined;
-  const parentOutline = parentId ? blockContainment(editorView, parentId)?.childOutline : undefined;
-  const axis = parentOutline === "fixed" ? parentView?.dropAxis : undefined;
+  const targetBehavior = reactPanel.editor.blockBehaviors.resolve(block.id);
+  const isLayoutRoot =
+    targetBehavior.dropAxis !== undefined && targetBehavior.dropParentTypes === undefined;
+  const parentBehavior = parentId ? reactPanel.editor.blockBehaviors.resolve(parentId) : undefined;
+  const parentOutline = parentId ? blockContainment(reactPanel, parentId)?.childOutline : undefined;
+  const axis = parentOutline === "fixed" ? parentBehavior?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const dropNode = sortable || targetView.acceptsDropContainer ? blockElement : row;
+  const dropNode = sortable || targetBehavior.acceptsDropContainer ? blockElement : row;
 
   // Layout roots reveal their handle across the whole container. Structural
   // rows and lanes declare dropParentTypes and retain ordinary row hover.
   // Body-drop acceptance is independent: Columns rejects body drops but still
   // needs container hover. Keep this marker owned and cleaned up by dragging.
   useLayoutEffect(() => {
-    if (!blockElement || !isLayoutRoot) return;
+    if (!blockElement || !isLayoutRoot) {
+      return;
+    }
     blockElement.setAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
     return () => blockElement.removeAttribute(DRAG_CONTAINER_ATTRIBUTE);
   }, [blockElement, isLayoutRoot]);
@@ -123,7 +126,8 @@ function PageDragBlockMechanics({
     () => dragState.placements.get(blockId),
     [blockId, dragState.placements],
   );
-  const indicator = useSyncExternalStore(subscribePlacement, getPlacement, getPlacement) ?? undefined;
+  const indicator =
+    useSyncExternalStore(subscribePlacement, getPlacement, getPlacement) ?? undefined;
   const getDragged = useCallback(
     () => dragState.placements.isDragged(blockId),
     [blockId, dragState.placements],
@@ -138,23 +142,39 @@ function PageDragBlockMechanics({
     () => dragState.placements.isKeyboardDragging(),
     [dragState.placements],
   );
-  const keyboardDragging = useSyncExternalStore(subscribePlacement, getKeyboardDragging, getKeyboardDragging);
-  const itemState = useMemo(() => ({ blockId, placements: dragState.placements }), [blockId, dragState.placements]);
+  const keyboardDragging = useSyncExternalStore(
+    subscribePlacement,
+    getKeyboardDragging,
+    getKeyboardDragging,
+  );
+  const itemState = useMemo(
+    () => ({ blockId, placements: dragState.placements }),
+    [blockId, dragState.placements],
+  );
   const previousPosition = useRef<number | undefined>(undefined);
 
   // Animate committed sibling moves, not pointer motion or scrolling. Offsets
   // stay in the column's layout coordinates and reduced-motion stays instant.
   useLayoutEffect(() => {
-    if (!sortable || !blockElement) return;
+    if (!sortable || !blockElement) {
+      return;
+    }
     const position = axis === "horizontal" ? blockElement.offsetLeft : blockElement.offsetTop;
     const previous = previousPosition.current;
     previousPosition.current = position;
-    if (previous !== undefined && previous !== position && !groupedDragging
-      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const animation = blockElement.animate([
-        { transform: `translate${axis === "horizontal" ? "X" : "Y"}(${previous - position}px)` },
-        { transform: "translate(0)" },
-      ], { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+    if (
+      previous !== undefined &&
+      previous !== position &&
+      !groupedDragging &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      const animation = blockElement.animate(
+        [
+          { transform: `translate${axis === "horizontal" ? "X" : "Y"}(${previous - position}px)` },
+          { transform: "translate(0)" },
+        ],
+        { duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
       return () => animation.cancel();
     }
   }, [axis, blockElement, groupedDragging, sortable]);
@@ -162,13 +182,20 @@ function PageDragBlockMechanics({
   // Dragging and inside-drop state decorate stable surface elements without
   // moving ownership of their data-block markers into this extension.
   useLayoutEffect(() => {
-    if (!blockElement) return;
-    if (groupedDragging) blockElement.setAttribute("data-dragging", "true");
-    else blockElement.removeAttribute("data-dragging");
+    if (!blockElement) {
+      return;
+    }
+    if (groupedDragging) {
+      blockElement.setAttribute("data-dragging", "true");
+    } else {
+      blockElement.removeAttribute("data-dragging");
+    }
     return () => blockElement.removeAttribute("data-dragging");
   }, [blockElement, groupedDragging]);
   useLayoutEffect(() => {
-    if (!dropNode) return;
+    if (!dropNode) {
+      return;
+    }
     if (indicator?.kind === "inside") {
       dropNode.setAttribute("data-drop-inside", "true");
     } else {
@@ -178,16 +205,21 @@ function PageDragBlockMechanics({
   }, [indicator, dropNode]);
 
   const indicatorHost = indicator?.kind === "inside" ? dropNode : blockElement;
-  const indicatorPortal = indicatorHost && indicator ? createPortal(
-    <PageDropIndicator placement={indicator} host={indicatorHost} />,
-    indicatorHost,
-  ) : null;
+  const indicatorPortal =
+    indicatorHost && indicator
+      ? createPortal(
+          <PageDropIndicator placement={indicator} host={indicatorHost} />,
+          indicatorHost,
+        )
+      : null;
 
   return (
     <PageDragItemContext.Provider value={itemState}>
       {children}
       {indicatorPortal}
-      {armed && <PageDragRegistration blockId={blockId} row={row} placements={dragState.placements} />}
+      {armed && (
+        <PageDragRegistration blockId={blockId} row={row} placements={dragState.placements} />
+      )}
       {keyboardDragging && <PageDragKeyboardDropTarget blockId={blockId} dropNode={dropNode} />}
     </PageDragItemContext.Provider>
   );

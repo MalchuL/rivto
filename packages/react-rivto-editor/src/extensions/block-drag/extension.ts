@@ -17,11 +17,11 @@ export type PageDragOptions = Omit<PageDragExtensionOptions, "children">;
  * Creates structural drag-and-drop behavior for page and edgeless blocks.
  *
  * @param options - Pointer activation and page drop-zone tuning.
- * @returns Functional React editor extension installed by createEditorRuntime.
+ * @returns Functional React editor extension installed by createReactEditor.
  */
 export function pageDragExtension(options: PageDragOptions = {}): ReactEditorExtension {
   return {
     id: "drag.page",
-    setup: (editorRuntime) => registerPageDrag(editorRuntime, options),
+    setup: (reactEditor) => registerPageDrag(reactEditor, options),
   };
 }

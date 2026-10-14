@@ -32,11 +32,15 @@ export class Pipe<Value, Context = Record<string, never>> {
    * @returns Idempotent disposer for this exact registration.
    */
   register(processor: PipeProcessor<Value, Context>): () => void {
-    if (!processor.id) throw new Error("Pipe processor id is required");
+    if (!processor.id) {
+      throw new Error("Pipe processor id is required");
+    }
     this.registry.set(processor.id, processor);
     this.rebuild();
     return () => {
-      if (this.registry.get(processor.id) !== processor) return;
+      if (this.registry.get(processor.id) !== processor) {
+        return;
+      }
       this.registry.delete(processor.id);
       this.rebuild();
     };
@@ -58,7 +62,9 @@ export class Pipe<Value, Context = Record<string, never>> {
    */
   delete(id: string): boolean {
     const deleted = this.registry.delete(id);
-    if (deleted) this.rebuild();
+    if (deleted) {
+      this.rebuild();
+    }
     return deleted;
   }
 
@@ -74,6 +80,8 @@ export class Pipe<Value, Context = Record<string, never>> {
 
   /** @returns No value after rebuilding the priority snapshot. */
   private rebuild(): void {
-    this.ordered = [...this.registry.values()].sort((left, right) => left.priority - right.priority);
+    this.ordered = [...this.registry.values()].sort(
+      (left, right) => left.priority - right.priority,
+    );
   }
 }

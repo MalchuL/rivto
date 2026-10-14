@@ -9,49 +9,59 @@
  */
 import type { EditorBlock, EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
-import type { EditorViewApi } from "../../editor-view/types";
+import type { ReactPanelApi } from "../../panels/types";
 import { getBlockContainment } from "../../managers/blocks/types";
 
 /**
  * Reads the outline policy of a placed block's parent.
  *
- * @param editorView - Editor view owning the block definitions.
+ * @param reactPanel - Editor view owning the block definitions.
  * @param id - Child whose current parent supplies the policy.
  * @returns Parent containment, or `undefined` at the root or without metadata.
  */
-function parentContainment(editorView: EditorViewApi, id: string) {
-  const parentId = editorView.runtime.blocks.getParentId(id);
-  const parentType = parentId ? editorView.runtime.blocks.getBlockNode(parentId)?.type : undefined;
-  return parentType ? getBlockContainment(editorView.runtime.blockTypes.getDefinition(parentType)) : undefined;
+function parentContainment(reactPanel: ReactPanelApi, id: string) {
+  const parentId = reactPanel.blocks.getParentId(id);
+  const parentType = parentId ? reactPanel.blocks.getBlockNode(parentId)?.type : undefined;
+  return parentType
+    ? getBlockContainment(reactPanel.editor.blockTypes.getDefinition(parentType))
+    : undefined;
 }
 
 /**
  * Nests consecutive outline roots under their previous sibling.
  *
- * @param editorView - Editor view owning React outline policy and core commands.
+ * @param reactPanel - Editor view owning React outline policy and core commands.
  * @param ids - Identifiers to indent together.
  * @returns Nothing; an ineligible range is unchanged.
  */
-export function indentBlocks(editorView: EditorViewApi, ids: readonly string[]): void {
-  if (!ids.length || parentContainment(editorView, ids[0]!)?.childOutline === "fixed") return;
-  editorView.runtime.blocks.indentBlocks([...ids]);
+export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
+  if (
+    !ids.length ||
+    ids.some((id) => !reactPanel.blocks.canRemove(id)) ||
+    parentContainment(reactPanel, ids[0]!)?.childOutline === "fixed"
+  ) {
+    return;
+  }
+  reactPanel.blocks.indentBlocks([...ids]);
 }
 
 /**
  * Lifts consecutive outline roots to their grandparent.
  *
- * @param editorView - Editor view owning React outline policy and core commands.
+ * @param reactPanel - Editor view owning React outline policy and core commands.
  * @param ids - Identifiers to outdent together.
  * @returns Nothing; root blocks and children of parents with outlineFloor or
  * childOutline: "fixed" remain unchanged.
  */
-export function outdentBlocks(editorView: EditorViewApi, ids: readonly string[]): void {
-  if (!ids.length) return;
-  if (editorView.rootBlockId && ids.some((id) => id === editorView.rootBlockId
-    || editorView.runtime.blocks.getParentId(id) === editorView.rootBlockId)) return;
-  const containment = parentContainment(editorView, ids[0]!);
-  if (containment?.childOutline === "fixed" || containment?.outlineFloor) return;
-  editorView.runtime.blocks.outdentBlocks([...ids]);
+export function outdentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
+  if (!ids.length || ids.some((id) => !reactPanel.blocks.canOutdent(id))) {
+    return;
+  }
+  const containment = parentContainment(reactPanel, ids[0]!);
+  if (containment?.childOutline === "fixed" || containment?.outlineFloor) {
+    return;
+  }
+  reactPanel.blocks.outdentBlocks([...ids]);
 }
 
 /**
@@ -60,16 +70,18 @@ export function outdentBlocks(editorView: EditorViewApi, ids: readonly string[])
  * The loop must stop when outdentBlocks() leaves the parent unchanged. A parent
  * with outlineFloor or fixed children can refuse the move; retrying would loop forever.
  *
- * @param editorView - Editor view owning React outline policy and core commands.
+ * @param reactPanel - Editor view owning React outline policy and core commands.
  * @param id - Nested block to lift.
  * @returns Nothing; the block stays at the last successful depth.
  */
-export function outdentUntilBoundary(editorView: EditorViewApi, id: string): void {
-  let parentId = editorView.runtime.blocks.getParentId(id);
+export function outdentUntilBoundary(reactPanel: ReactPanelApi, id: string): void {
+  let parentId = reactPanel.blocks.getParentId(id);
   while (parentId) {
-    outdentBlocks(editorView, [id]);
-    const next = editorView.runtime.blocks.getParentId(id);
-    if (next === parentId) break;
+    outdentBlocks(reactPanel, [id]);
+    const next = reactPanel.blocks.getParentId(id);
+    if (next === parentId) {
+      break;
+    }
     parentId = next;
   }
 }
@@ -77,22 +89,21 @@ export function outdentUntilBoundary(editorView: EditorViewApi, id: string): voi
 /**
  * Inserts a default writing block as the last child of a container.
  *
- * Insertion first creates the block at the document root, then moves it into the container.
- * Creating it at the root avoids depending on a container's outline policy.
+ * Insertion validates the local parent and creates the block directly inside the container.
+ * No temporary document-root placement is observable during creation.
  * The same history batch expands the parent and sets model selection to the new
  * child at offset zero. The caller schedules DOM focus after rendering.
  *
- * @param editorView - Editor view providing writing factories and selection.
+ * @param reactPanel - Editor view providing writing factories and selection.
  * @param parentId - Container that receives the new child.
  * @returns Complete inserted writing block.
  */
-export function appendWritingBlock(editorView: EditorViewApi, parentId: string): EditorBlock {
+export function appendWritingBlock(reactPanel: ReactPanelApi, parentId: string): EditorBlock {
   let child: EditorBlock | undefined;
-  editorView.runtime.history.batchUpdates(() => {
-    editorView.runtime.blocks.updateBlock(parentId, { listProps: { collapsed: false } });
-    child = editorView.runtime.blocks.insertBlock(editorView.runtime.createDefaultBlock());
-    editorView.runtime.blocks.moveBlocks([child.id], parentId, "inside");
-    editorView.selection.set(createCaretSelection(child.id, 0));
+  reactPanel.batchUpdates(() => {
+    reactPanel.blocks.updateBlock(parentId, { listProps: { collapsed: false } });
+    child = reactPanel.blocks.insertBlock(reactPanel.editor.createDefaultBlock(), { parentId });
+    reactPanel.selection.set(createCaretSelection(child.id, 0));
   });
   return child!;
 }
@@ -104,23 +115,30 @@ export function appendWritingBlock(editorView: EditorViewApi, parentId: string):
  * conversion. A temporary valid subtree supplies restricted structural children
  * before the temporary parent block is removed in the same history batch.
  *
- * @param editorView - Editor view owning block definitions and mutations.
+ * @param reactPanel - Editor view owning block definitions and mutations.
  * @param blockId - Existing leaf block whose native type changes.
  * @param input - Destination container input supplying its type and children.
  * @returns Nothing; missing or non-leaf blocks remain unchanged.
  */
 export function convertLeafToContainer(
-  editorView: EditorViewApi,
+  reactPanel: ReactPanelApi,
   blockId: string,
   input: EditorBlockInput,
 ): void {
-  const block = editorView.runtime.blocks.getBlockNode(blockId);
-  if (!block || editorView.runtime.blocks.hasChildren(blockId)) return;
-  editorView.runtime.history.batchUpdates(() => {
-    const templateId = editorView.runtime.blocks.insertBlock(input, blockId).id;
-    const childIds = editorView.runtime.blocks.getBlockNode(templateId)?.childIds ?? [];
-    editorView.runtime.blocks.setBlockType(blockId, input.type);
-    if (childIds.length) editorView.runtime.blocks.moveBlocks(childIds, blockId, "inside");
-    editorView.runtime.blocks.removeBlock(templateId);
+  const block = reactPanel.blocks.getBlockNode(blockId);
+  if (!block || reactPanel.blocks.hasChildren(blockId)) {
+    return;
+  }
+  reactPanel.batchUpdates(() => {
+    const destination = reactPanel.blocks.canRemove(blockId)
+      ? reactPanel.blocks.getInsertionDestinationAfter(blockId)
+      : { parentId: blockId };
+    const templateId = reactPanel.blocks.insertBlock(input, destination).id;
+    const childIds = reactPanel.blocks.getBlockNode(templateId)?.childIds ?? [];
+    reactPanel.blocks.setBlockType(blockId, input.type);
+    if (childIds.length) {
+      reactPanel.blocks.moveBlocks([...childIds], blockId, "inside");
+    }
+    reactPanel.blocks.removeBlock(templateId);
   });
 }

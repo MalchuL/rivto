@@ -1,17 +1,13 @@
 /**
  * Host-configurable contracts for creating and recognizing empty writing
- * blocks. Page keyboard extensions consume this policy through EditorViewApi
+ * blocks. Page keyboard extensions consume this policy through ReactPanelApi
  * instead of hardcoding a native writing type.
  *
  * @module
  */
 import type { IsEmptyBlock } from "./types";
 
-export type {
-  CreateDefaultBlock,
-  EmptyBlockCandidate,
-  IsEmptyBlock
-} from "./types";
+export type { CreateDefaultBlock, EmptyBlockCandidate, IsEmptyBlock } from "./types";
 
 /**
  * Builds an empty-block predicate for a host-supplied writing type.

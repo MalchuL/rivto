@@ -21,7 +21,11 @@ const PAGE_DRAG_PREVIEW_MORE_CLASS = "page-drag-preview-more";
  * @param depth - Current relative nesting depth used by recursive calls.
  * @returns Pre-order entries suitable for direct preview rendering.
  */
-function flattenPreview(block: Block, childrenVisible: (block: Block) => boolean, depth = 0): PreviewEntry[] {
+function flattenPreview(
+  block: Block,
+  childrenVisible: (block: Block) => boolean,
+  depth = 0,
+): PreviewEntry[] {
   return [
     { block, depth },
     ...(!childrenVisible(block)
@@ -56,13 +60,18 @@ export function PageDragPreview({
   const entries = blocks.flatMap((block) => flattenPreview(block, childrenVisible));
   const hiddenCount = Math.max(
     0,
-    blocks.reduce((total, block) => total + subtreeSize(block), 0) - Math.min(entries.length, MAX_PREVIEW_BLOCKS),
+    blocks.reduce((total, block) => total + subtreeSize(block), 0) -
+      Math.min(entries.length, MAX_PREVIEW_BLOCKS),
   );
 
   return (
     <>
       {entries.slice(0, MAX_PREVIEW_BLOCKS).map(({ block, depth }) => (
-        <div key={block.id} className={`${PAGE_DRAG_PREVIEW_BLOCK_CLASS} my-1`} style={{ marginLeft: depth * 20 }}>
+        <div
+          key={block.id}
+          className={`${PAGE_DRAG_PREVIEW_BLOCK_CLASS} my-1`}
+          style={{ marginLeft: depth * 20 }}
+        >
           <div className={PAGE_DRAG_PREVIEW_CONTENT_CLASS}>{block.content || block.type}</div>
         </div>
       ))}

@@ -74,11 +74,16 @@ export class DocumentModelImpl implements DocumentModel {
     // Skip local origin so we do not open a
     // second normalize transaction after every local write (redundant work and
     // extra undo stacks). Repair only foreign merges.
-    this.unsubscribeFromUpdates = this.crdt.on("update", (_update: unknown, updateOrigin?: unknown) => {
-      if (this.crdt.isLocalOrigin(updateOrigin)) return;
-      blocks.normalize();
-      elements.normalize();
-    });
+    this.unsubscribeFromUpdates = this.crdt.on(
+      "update",
+      (_update: unknown, updateOrigin?: unknown) => {
+        if (this.crdt.isLocalOrigin(updateOrigin)) {
+          return;
+        }
+        blocks.normalize();
+        elements.normalize();
+      },
+    );
   }
 
   /**
@@ -124,7 +129,11 @@ export class DocumentModelImpl implements DocumentModel {
     return {
       version: 9,
       blocks: clone(this.blocks.getBlocks()),
-      elements: this.elements.getElementNodes().map(({ id, type, childIds, frame, zIndex, props }) => clone({ id, type, childIds, frame, zIndex, props })),
+      elements: this.elements
+        .getElementNodes()
+        .map(({ id, type, childIds, frame, zIndex, props }) =>
+          clone({ id, type, childIds, frame, zIndex, props }),
+        ),
       rootElementIds: [...this.elements.getRootIds()],
       pluginData: this.pluginData.getAll(),
     };
@@ -149,21 +158,40 @@ export class DocumentModelImpl implements DocumentModel {
     if (snapshot.version !== 9) {
       throw new Error(`Unsupported Rivto document snapshot version: ${String(snapshot.version)}`);
     }
-    if ((snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
-      (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))) {
+    if (
+      (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
+      (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))
+    ) {
       throw new Error("Unsupported Rivto document snapshot");
     }
     const rootElementIds = snapshot.rootElementIds ?? this.elements.getRootIds();
-    if (snapshot.blocks) this.blocks.validateBlocks(snapshot.blocks);
-    if (snapshot.elements) this.elements.validateElements(snapshot.elements);
-    this.elements.validateHierarchy(snapshot.elements ?? this.elements.getElementNodes(), rootElementIds);
-    if (snapshot.pluginData) assertPortableRecord(snapshot.pluginData, "pluginData");
+    if (snapshot.blocks) {
+      this.blocks.validateBlocks(snapshot.blocks);
+    }
+    if (snapshot.elements) {
+      this.elements.validateElements(snapshot.elements);
+    }
+    this.elements.validateHierarchy(
+      snapshot.elements ?? this.elements.getElementNodes(),
+      rootElementIds,
+    );
+    if (snapshot.pluginData) {
+      assertPortableRecord(snapshot.pluginData, "pluginData");
+    }
 
     this.crdt.transact(() => {
-      if (snapshot.rootElementIds) this.elements.loadRootIds(snapshot.rootElementIds);
-      if (snapshot.blocks) this.blocks.loadBlocks(snapshot.blocks);
-      if (snapshot.elements) this.elements.loadElements(snapshot.elements);
-      if (snapshot.pluginData) this.pluginData.load(snapshot.pluginData);
+      if (snapshot.rootElementIds) {
+        this.elements.loadRootIds(snapshot.rootElementIds);
+      }
+      if (snapshot.blocks) {
+        this.blocks.loadBlocks(snapshot.blocks);
+      }
+      if (snapshot.elements) {
+        this.elements.loadElements(snapshot.elements);
+      }
+      if (snapshot.pluginData) {
+        this.pluginData.load(snapshot.pluginData);
+      }
     });
   }
 
@@ -191,7 +219,11 @@ export class DocumentModelImpl implements DocumentModel {
     } catch (error) {
       errors.push(error);
     }
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Document teardown failed");
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Document teardown failed");
+    }
   }
 }

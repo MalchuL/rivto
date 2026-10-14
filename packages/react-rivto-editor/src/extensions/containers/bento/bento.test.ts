@@ -13,20 +13,34 @@ import { bentoExtension, createBentoBlockInput } from "./bento";
 
 test("slash converts the current block to Bento in place", async () => {
   const editor = await createTestCoreEditor();
-  const editorView = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
+  const reactPanel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), bentoExtension()],
+  });
   const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  editorView.slashCommands.execute("block.bento.insert", { blockId });
-  expect(editor.blocks.getBlockNode(blockId)).toMatchObject({ id: blockId, type: "bento", content: "" });
-  editorView.runtime.destroy();
+  reactPanel.slashCommands.execute("block.bento.insert", { blockId });
+  expect(editor.blocks.getBlockNode(blockId)).toMatchObject({
+    id: blockId,
+    type: "bento",
+    content: "",
+  });
+  reactPanel.editor.destroy();
   editor.destroy();
 });
 
 test("Bento preserves tile identity and width through moves, undo and serialization", async () => {
   const editor = await createTestCoreEditor();
-  const editorView = createReactEditor({ editor, extensions: [defaultWritingBlockExtension(), bentoExtension()] });
+  const reactPanel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), bentoExtension()],
+  });
   const board = editor.blocks.insertBlock(createBentoBlockInput()).id;
   expect(editor.blocks.getBlockNode(board)?.content).toBe("");
-  const tile = editor.blocks.insertBlock({ type: "paragraph", content: "Tile", props: { bentoWidth: 440 } }).id;
+  const tile = editor.blocks.insertBlock({
+    type: "paragraph",
+    content: "Tile",
+    props: { bentoWidth: 440 },
+  }).id;
   editor.blocks.moveBlocks([tile], board, "inside");
   editor.history.clear();
   editor.blocks.updateBlock(tile, { props: { bentoWidth: 600 } });
@@ -44,10 +58,10 @@ test("Bento preserves tile identity and width through moves, undo and serializat
   expect(editor.blocks.getParentId(tile)).toBe(board);
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Other" }).id;
   editor.blocks.moveBlocks([nested], board, "inside");
-  indentBlocks(editorView, [nested]);
+  indentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(board);
   editor.blocks.indentBlock(nested);
   expect(editor.blocks.getParentId(nested)).toBe(tile);
-  editorView.runtime.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });

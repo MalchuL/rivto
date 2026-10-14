@@ -41,17 +41,23 @@ export class BlockListPropsManager implements BlockListPropsManagerApi {
    * @returns Idempotent disposer for this registration.
    */
   register(registration: ListPropsRegistration): () => void {
-    if (!registration.id) throw new Error("List property registration ID is required");
+    if (!registration.id) {
+      throw new Error("List property registration ID is required");
+    }
     if (this.has(registration.id)) {
       throw new Error(`List property registration ${registration.id} is already registered`);
     }
     this.registrations.push(registration);
     let active = true;
     return () => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
       const index = this.registrations.indexOf(registration);
-      if (index >= 0) this.registrations.splice(index, 1);
+      if (index >= 0) {
+        this.registrations.splice(index, 1);
+      }
     };
   }
 
@@ -100,6 +106,10 @@ export class BlockListPropsManager implements BlockListPropsManagerApi {
    * @returns Detached record with defaults applied in registration order.
    */
   private applyDefaults(candidate: BlockListProps): BlockListProps {
-    return Object.assign({}, ...this.registrations.map(({ defaults }) => defaults ?? {}), candidate);
+    return Object.assign(
+      {},
+      ...this.registrations.map(({ defaults }) => defaults ?? {}),
+      candidate,
+    );
   }
 }
