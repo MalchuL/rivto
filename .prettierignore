@@ -1,0 +1,16 @@
+**/node_modules/
+**/dist/
+**/out/
+**/release/
+**/coverage/
+**/.next/
+**/.turbo/
+**/.pnpm-store/
+**/.stuff/
+playwright-report/
+test-results/
+reports/
+**/pnpm-lock.yaml
+**/encore.gen/
+**/encore.gen.ts
+**/next-env.d.ts

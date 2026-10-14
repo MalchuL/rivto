@@ -54,7 +54,13 @@ Use concrete names that describe the implemented behavior and reuse existing dom
 
 Avoid nested or chained ternary operators. Use `if`/`else` or early returns for multiple conditions; a single simple ternary is fine.
 
-Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Straightforward private helpers do not need boilerplate JSDoc.
+Keep functions and methods within 50 lines, including blank lines and comment-only lines. ESLint reports longer functions as warnings only; warnings do not fail lint or CI.
+
+Place all private class methods at the bottom of the class, after every other member. This includes static private methods and JavaScript `#private` methods. Keep the relative order of other members unless another rule requires a change.
+
+Every method must have a TypeScript JSDoc docstring (`/** ... */`) directly above its declaration, including private methods, constructors, getters, setters, object methods, interface method signatures, and function-valued class fields.
+
+Document public APIs and non-obvious internal contracts with TypeScript JSDoc (`/** ... */`) directly above the declaration. Describe the actual behavior, relevant constraints and side effects, each parameter's meaning, and the return value (including missing-value behavior). Add `@throws` for meaningful failure conditions. Explain defaults, units, identity, mutation, or transaction behavior when relevant; do not repeat TypeScript types or invent guarantees. Keep docs current when behavior changes. Private helpers also require meaningful documentation of their behavior, parameters, and return values.
 
 For example, `useBlock` in `packages/react-rivto-editor/src/hooks/blocks/use-block.ts` subscribes to a recursive snapshot and returns ID-bound commands. Its documentation can describe that contract as follows:
 

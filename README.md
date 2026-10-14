@@ -187,13 +187,25 @@ Run from the repository root:
 ```sh
 pnpm demo:check                         # Demo TypeScript check
 pnpm check-types                        # Workspace TypeScript checks
-pnpm lint                               # Editor package lint
+pnpm lint                              # Repository JavaScript/TypeScript lint
+pnpm lint:fix                          # Apply ESLint fixes
+pnpm format:check                      # Check formatting
+pnpm format                            # Apply Prettier formatting
 pnpm test                               # CRDT, model, graph, and core tests
 pnpm --filter @chulane/rivto-react test   # React tests
 pnpm exec playwright install chromium firefox
 pnpm test:e2e                           # Builds demo, then tests both browsers
 pnpm build                              # Package outputs and documentation site
 ```
+
+ESLint checks packages, apps, demo, docs, browser tests, and tooling. It rejects
+nested ternaries, requires JSDoc for every method, and requires private class
+methods to appear after other members. Functions over 50 lines produce warnings
+only, counting blank lines and comments; lint warnings do not fail CI. The ordering rule uses
+[typescript-eslint member ordering](https://typescript-eslint.io/rules/member-ordering/).
+Prettier checks supported source, configuration, and documentation files; generated
+output and lockfiles are excluded. CI runs both lint and formatting checks.
+Run the fix commands explicitly when ready to resolve existing violations.
 
 ## Further reading
 
