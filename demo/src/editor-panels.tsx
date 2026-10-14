@@ -1,4 +1,4 @@
-import { BlockNavigationContext } from "./extensions/block-navigation";
+import { BlockHandleContext } from "@chulane/rivto-react";
 import { Fragment, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ModeManager } from "@chulane/rivto";
 import type { Panel } from "./panel-types";
@@ -130,9 +130,9 @@ export function DemoEditorPanels({
         rootElementId={active.panel.rootElementId}
         mode={active.mode}
       >
-        <BlockNavigationContext.Provider value={openBlock}>
+        <BlockHandleContext.Provider value={{ onOpen: openBlock }}>
           {children}
-        </BlockNavigationContext.Provider>
+        </BlockHandleContext.Provider>
       </EditorPanel>
     </>
   );

@@ -81,7 +81,7 @@ function blockUnderCursor(page: Page, point: { x: number; y: number }): Promise<
  */
 async function holdDragMidViewport(page: Page, block: Locator): Promise<{ x: number; y: number }> {
   const row = block.locator(":scope > .page-block-row");
-  const handle = block.locator(":scope > .page-block-row .page-drag-handle");
+  const handle = block.locator(":scope > .page-block-row .block-handle");
   await block.hover();
   await handle.hover();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");

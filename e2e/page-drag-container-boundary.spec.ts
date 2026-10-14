@@ -48,7 +48,7 @@ for (const mode of ["block", "edgeless"] as const) {
           await page.locator('[data-editor-mode="edgeless"]').click();
         }
         const source = page.locator(`[data-block-id="${ids.source}"]`).first();
-        const handle = source.locator(":scope > .page-block-row .page-drag-handle");
+        const handle = source.locator(":scope > .page-block-row .block-handle");
         await source.locator(":scope > .page-block-row").hover();
         await handle.hover();
         const from = (await handle.boundingBox())!;
@@ -146,7 +146,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const first = page.locator(`[data-block-id="${ids.siblings[0]}"]`).first();
     const second = page.locator(`[data-block-id="${ids.siblings[1]}"]`).first();
     const handle = page
-      .locator(`[data-block-id="${ids.source}"] > .page-block-row .page-drag-handle`)
+      .locator(`[data-block-id="${ids.source}"] > .page-block-row .block-handle`)
       .first();
     await page.locator(`[data-block-id="${ids.source}"] > .page-block-row`).first().hover();
     await handle.hover();
@@ -239,7 +239,7 @@ for (const mode of ["block", "edgeless"] as const) {
         .first()
         .boundingBox())!;
       const handle = page
-        .locator(`[data-block-id="${ids.source}"] > .page-block-row .page-drag-handle`)
+        .locator(`[data-block-id="${ids.source}"] > .page-block-row .block-handle`)
         .first();
       await page.locator(`[data-block-id="${ids.source}"] > .page-block-row`).first().hover();
       await handle.hover();

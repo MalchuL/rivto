@@ -16,6 +16,7 @@ for (const repeat of [0, 200]) {
     await expect(
       page.locator('[data-journal-document="today"] [data-block-content]').first(),
     ).toBeVisible();
+    await page.getByRole("checkbox", { name: "Block numbers", exact: true }).check();
     const id = await page.evaluate(() => {
       const { editor } = (
         window as unknown as {

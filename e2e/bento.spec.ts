@@ -6,7 +6,7 @@ const RESIZE_RIGHT = "Resize Bento tile from the right";
 const RESIZE_LEFT = "Resize Bento tile from the left";
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
-const PAGE_DRAG_HANDLE_CLASS = "page-drag-handle";
+const PAGE_DRAG_HANDLE_CLASS = "block-handle";
 // Child-region IDs have a per-view prefix; select direct tiles by the children container class.
 const BENTO_TILES_SELECTOR = ":scope > .page-block-children > [data-block-id]";
 
@@ -176,7 +176,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     const next = tiles.nth(2);
     const sourceId = await source.getAttribute("data-block-id");
     const targetId = await target.getAttribute("data-block-id");
-    const handleClass = "page-drag-handle";
+    const handleClass = "block-handle";
     const handle = source.locator(`:scope > .${ROW_CLASS} .${handleClass}`);
     await source.hover();
     await handle.hover();
@@ -291,7 +291,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
     .filter({ has: page.getByText("From page", { exact: true }) })
     .first();
   const target = tiles.first();
-  const handleClass = "page-drag-handle";
+  const handleClass = "block-handle";
   const handle = source.locator(`:scope > .${ROW_CLASS} .${handleClass}`);
   await source.hover();
   await handle.hover();

@@ -2150,7 +2150,7 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
   const source = page.locator(blockIdSelector(firstId));
   const target = page.locator(blockIdSelector(targetId));
   await source.locator(":scope > .page-block-row").hover();
-  const handle = source.locator(":scope > .page-block-row .page-drag-handle");
+  const handle = source.locator(":scope > .page-block-row .block-handle");
   await handle.hover();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   const handleBox = await handle.boundingBox();
@@ -2244,9 +2244,7 @@ test("reuses page Enter and structural drag inside a canvas card", async ({ page
   const target = directChildren.nth(1);
   const sourceId = await source.getAttribute(BLOCK_ID_ATTRIBUTE);
   const targetId = await target.getAttribute(BLOCK_ID_ATTRIBUTE);
-  const handleBox = await source
-    .locator(":scope > .page-block-row .page-drag-handle")
-    .boundingBox();
+  const handleBox = await source.locator(":scope > .page-block-row .block-handle").boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
   if (!sourceId || !targetId || !handleBox || !targetBox) {
     throw new Error("Expected nested drag geometry");
@@ -2347,7 +2345,7 @@ test("keeps an indented block drag handle visible while moving onto it", async (
     .first();
   const nested = cardChildren(card).first();
   const row = nested.locator(":scope > .page-block-row");
-  const handle = row.locator(":scope .page-drag-handle");
+  const handle = row.locator(":scope .block-handle");
 
   const box = await handle.boundingBox();
   const bodyBox = await cardChrome(card).boundingBox();
@@ -2413,7 +2411,7 @@ test("moves a card by dragging from the left of an indented nested block", async
         `Expected nested block hit, got ${hitBlock?.getAttribute("data-block-id") ?? "none"}`,
       );
     }
-    if (hit.closest("[data-block-content], .page-drag-handle, button, [contenteditable=true]")) {
+    if (hit.closest("[data-block-content], .block-handle, button, [contenteditable=true]")) {
       throw new Error("Expected non-control nested chrome");
     }
     return { x, y };
@@ -2451,7 +2449,7 @@ test("moves a card by dragging from the left of an indented nested block", async
     .toBe(true);
 
   // Structural handles must still light up across the whole indented line.
-  const handle = nested.locator(":scope > .page-block-row .page-drag-handle");
+  const handle = nested.locator(":scope > .page-block-row .block-handle");
   const bodyBox = await cardChrome(card).boundingBox();
   const handleBox = await handle.boundingBox();
   if (!bodyBox || !handleBox) {
@@ -2527,7 +2525,7 @@ test("maps a zoomed cross-card drop to the block under the pointer", async ({ pa
   }
   const target = targetCard.locator(blockIdSelector(targetId));
   await source.locator(":scope > .page-block-row").hover();
-  const handle = source.locator(":scope > .page-block-row .page-drag-handle");
+  const handle = source.locator(":scope > .page-block-row .block-handle");
   await handle.hover();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   const handleBox = await handle.boundingBox();
@@ -2576,9 +2574,7 @@ test("does not choose a structural drop target over blank canvas", async ({ page
   const source = cardChildren(card).first();
   const sourceId = await source.getAttribute(BLOCK_ID_ATTRIBUTE);
   const parentId = await card.getAttribute("data-edgeless-root");
-  const handleBox = await source
-    .locator(":scope > .page-block-row .page-drag-handle")
-    .boundingBox();
+  const handleBox = await source.locator(":scope > .page-block-row .block-handle").boundingBox();
   const viewportBox = await page.locator(".edgeless-viewport").boundingBox();
   if (!sourceId || !parentId || !handleBox || !viewportBox) {
     throw new Error("Expected blank-canvas drag geometry");

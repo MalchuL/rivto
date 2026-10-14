@@ -9,7 +9,32 @@
 import type { PanelAPI } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import { usePanel, type BlockSlotProps, type ReactEditorExtension } from "@chulane/rivto-react";
-import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+
+const BlockNumbersVisibleContext = createContext(false);
+
+/** Makes demo gutter numbers visible or hidden without changing editor data. */
+export function BlockNumbersVisibleProvider({
+  visible,
+  children,
+}: {
+  readonly visible: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <BlockNumbersVisibleContext.Provider value={visible}>
+      {children}
+    </BlockNumbersVisibleContext.Provider>
+  );
+}
 
 const DEMO_BLOCK_NUMBER_CLASS = "demo-block-number";
 
@@ -123,7 +148,13 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
 }
 
 /** Draws the block's document-order number in the page's left gutter. */
-function BlockNumberSlot({ block }: BlockSlotProps) {
+function BlockNumberSlot(props: BlockSlotProps) {
+  const visible = useContext(BlockNumbersVisibleContext);
+  return visible ? <BlockNumberLabel {...props} /> : null;
+}
+
+/** Subscribes to and draws a visible block's document-order number. */
+function BlockNumberLabel({ block }: BlockSlotProps) {
   const ordinal = useBlockOrdinal(block);
   if (!ordinal) {
     return null;

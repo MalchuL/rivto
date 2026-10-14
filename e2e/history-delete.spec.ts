@@ -312,9 +312,7 @@ test("focused block controls do not delete an existing structural selection", as
   await page.keyboard.press("Delete");
   await expect(blockById(page, selectedId!)).toBeVisible();
 
-  const dragHandle = blockById(page, selectedId!).locator(
-    ":scope > .page-block-row .page-drag-handle",
-  );
+  const dragHandle = blockById(page, selectedId!).locator(":scope > .page-block-row .block-handle");
   await dragHandle.focus();
   await page.keyboard.press("Backspace");
   await expect(blockById(page, selectedId!)).toBeVisible();

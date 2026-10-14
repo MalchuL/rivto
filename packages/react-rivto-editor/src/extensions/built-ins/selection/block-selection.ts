@@ -1,3 +1,4 @@
+import { BLOCK_HANDLE_SELECTOR } from "../../../components/block-handle/constants";
 import { isStructuralSelection } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
@@ -144,7 +145,7 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
       }
       if (
         !(event.target instanceof Element) ||
-        event.target.closest(".page-drag-handle, [data-collapse-toggle]")
+        event.target.closest(`${BLOCK_HANDLE_SELECTOR}, [data-collapse-toggle]`)
       ) {
         return false;
       }

@@ -39,10 +39,7 @@ async function seed(page: Page, repeat = 0) {
 async function open(page: Page, id: string) {
   const block = page.locator(`[data-journal-document="today"] [data-block-id="${id}"]`).first();
   await block.locator(":scope > .page-block-row").hover();
-  await block
-    .locator(":scope > .page-block-row")
-    .getByRole("button", { name: "Open block", exact: true })
-    .click();
+  await block.locator(":scope > .page-block-row").locator(".block-handle").click();
   await expect(page.locator(`[data-panel-root="${id}"]`)).toBeVisible();
 }
 
@@ -155,16 +152,16 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
   ).toBe(444);
 });
 
-test("clicking the drag handle does not navigate", async ({ page }) => {
+test("clicking the universal handle navigates", async ({ page }) => {
   const ids = await seed(page);
   const row = page
     .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
     .first();
   await row.hover();
-  await row.locator(".page-drag-handle").click();
+  await row.locator(".block-handle").click();
   await expect(page.locator('[data-journal-document="today"] [data-panel-root]')).toHaveAttribute(
     "data-panel-root",
-    "",
+    ids.root,
   );
 });
 
@@ -173,7 +170,7 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
   const handle = page
     .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"]`)
     .first()
-    .locator(":scope > .page-block-row .page-drag-handle");
+    .locator(":scope > .page-block-row .block-handle");
   await page
     .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
     .first()
@@ -288,7 +285,7 @@ test("opens a Panel from the application button with the keyboard", async ({ pag
   const ids = await seed(page);
   const handle = page
     .locator(
-      `[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row button[aria-label="Open block"]`,
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row .block-handle`,
     )
     .first();
   await handle.focus();

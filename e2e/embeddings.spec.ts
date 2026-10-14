@@ -500,7 +500,7 @@ async function dragRow(
 ): Promise<void> {
   await destination.scrollIntoViewIfNeeded();
   await source.hover();
-  const handle = source.locator(":scope > .rivto-slot > .page-drag-handle");
+  const handle = source.locator(":scope > .rivto-slot > .block-handle");
   await handle.hover();
   // Keep the drop away from viewport edges so autoscroll does not move it during the gesture.
   await destination.evaluate((element) =>
@@ -533,13 +533,14 @@ test("embedded row hover exposes only its own reachable drag handle", async ({ p
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const child = region.locator(`[data-block-id="${room}:child-0"]`);
   await child.locator(":scope > .page-block-row").hover();
-  const handle = child.getByRole("button", { name: "Move block: Source child 0", exact: true });
+  const handle = child.getByRole("button", { name: "Open block: Source child 0", exact: true });
   await expect(handle).toHaveCSS("opacity", "1");
+  await expect(host.locator(":scope > .page-block-row > .rivto-slot > .block-handle")).toHaveCSS(
+    "opacity",
+    "0",
+  );
   await expect(
-    host.locator(":scope > .page-block-row > .rivto-slot > .page-drag-handle"),
-  ).toHaveCSS("opacity", "0");
-  await expect(
-    region.getByRole("button", { name: "Move block: Source child 1", exact: true }),
+    region.getByRole("button", { name: "Open block: Source child 1", exact: true }),
   ).toHaveCSS("opacity", "0");
   await handle.hover();
   expect(
@@ -1579,7 +1580,7 @@ test("source drag handles move children through shared commands without moving t
 }) => {
   const room = await openDemo(page);
   const region = page.getByRole("region", { name: "Block editor" }).first();
-  const handle = region.getByRole("button", { name: "Move block: Source child 0", exact: true });
+  const handle = region.getByRole("button", { name: "Open block: Source child 0", exact: true });
   const target = region.locator(`[data-block-id="${room}:child-1"]`);
   await region.locator(`[data-block-id="${room}:child-0"] > .page-block-row`).hover();
   await handle.hover();

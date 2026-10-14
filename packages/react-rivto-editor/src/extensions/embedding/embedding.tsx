@@ -1,3 +1,5 @@
+import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
+import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
 import { Link2Icon } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
@@ -205,6 +207,21 @@ export function embeddingExtension(): ReactEditorExtension {
   return {
     id: "block.embedding",
     setup: (reactEditor) => {
+      reactEditor.blockContextMenu.register({
+        id: "embedding.copy",
+        title: "Copy block embedding",
+        order: 70,
+        execute: async ({ reactPanel, rootIds }) => {
+          const bundle = clipboardContentBundle({
+            blocks: rootIds.map((id) => ({
+              type: EMBEDDING_BLOCK_TYPE,
+              props: { targetDocumentId: reactPanel.editor.getDocument().id, targetBlockId: id },
+            })),
+          });
+          bundle.sourceDocumentId = reactPanel.editor.getDocument().id;
+          await writeClipboardBundle(reactPanel.editor, bundle);
+        },
+      });
       const dispose = reactEditor.blockTypes.register({
         definition: {
           type: EMBEDDING_BLOCK_TYPE,

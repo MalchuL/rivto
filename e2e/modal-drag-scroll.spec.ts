@@ -10,12 +10,12 @@ for (const type of ["bento", "kanban"]) {
       .getByRole("button", { name: `Expand ${type === "bento" ? "Bento" : "Kanban"}`, exact: true })
       .click();
     const modal = page.locator("dialog:modal");
-    const handleClass = "page-drag-handle";
+    const handleClass = "block-handle";
     const handles = modal.locator(`.${handleClass}`);
     const handle =
       type === "bento"
         ? handles.nth(1)
-        : modal.locator('[data-block-type="paragraph"] .page-drag-handle').first();
+        : modal.locator('[data-block-type="paragraph"] .block-handle').first();
     await handle.locator("xpath=ancestor::*[@data-block-id][1]").hover();
     await handle.hover();
     const from = (await handle.boundingBox())!;

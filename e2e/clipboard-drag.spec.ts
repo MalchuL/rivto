@@ -456,7 +456,7 @@ test("drags selected sibling roots together", async ({ page }) => {
     .locator("[data-block-content]")
     .click({ modifiers: ["Control"] });
 
-  const handle = blocks.nth(0).locator(".page-drag-handle");
+  const handle = blocks.nth(0).locator(".block-handle");
   const target = blocks.nth(4);
   const handleBox = await handle.boundingBox();
   const targetBox = await target.boundingBox();

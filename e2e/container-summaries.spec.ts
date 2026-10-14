@@ -6,7 +6,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_SURFACE_CLASS = "page-surface";
-const DRAG_HANDLE_CLASS = "page-drag-handle";
+const DRAG_HANDLE_CLASS = "block-handle";
 const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
 
 test("slash converts the current root to each structural container", async ({ page }) => {
@@ -233,7 +233,7 @@ test("reveals root container handles across their body and lateral whitespace", 
     });
     const hitLabel = await page.evaluate(
       ({ x, y }) =>
-        document.elementFromPoint(x, y)?.closest(".page-drag-handle")?.getAttribute("aria-label"),
+        document.elementFromPoint(x, y)?.closest(".block-handle")?.getAttribute("aria-label"),
       {
         x: handleBox.x + handleBox.width / 2,
         y: handleBox.y + handleBox.height / 2,
@@ -268,7 +268,7 @@ test("reveals root container handles across their body and lateral whitespace", 
       });
       const childHitLabel = await page.evaluate(
         ({ x, y }) =>
-          document.elementFromPoint(x, y)?.closest(".page-drag-handle")?.getAttribute("aria-label"),
+          document.elementFromPoint(x, y)?.closest(".block-handle")?.getAttribute("aria-label"),
         {
           x: childBox.x + childBox.width / 2,
           y: childBox.y + childBox.height / 2,

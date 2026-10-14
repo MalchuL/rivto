@@ -95,7 +95,7 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
   const columns = board.locator('[data-block-type="columns-column"]');
   const source = columns.nth(1).locator('[data-block-type="paragraph"]').first();
   const sourceRow = source.locator(":scope > .page-block-row");
-  const handle = sourceRow.locator(".page-drag-handle");
+  const handle = sourceRow.locator(".block-handle");
   const target = columns.first();
   await sourceRow.hover();
   await handle.hover();
@@ -146,8 +146,8 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
 
   const column = page.locator('[data-block-type="columns-column"]').first();
   const children = column.locator(":scope > .page-block-children > .page-block");
-  const collapsibleHandle = children.nth(0).locator(":scope > .page-block-row .page-drag-handle");
-  const siblingHandle = children.nth(1).locator(":scope > .page-block-row .page-drag-handle");
+  const collapsibleHandle = children.nth(0).locator(":scope > .page-block-row .block-handle");
+  const siblingHandle = children.nth(1).locator(":scope > .page-block-row .block-handle");
   const collapsibleBox = (await collapsibleHandle.boundingBox())!;
   const siblingBox = (await siblingHandle.boundingBox())!;
   const siblingRowBox = (await children.nth(1).locator(":scope > .page-block-row").boundingBox())!;

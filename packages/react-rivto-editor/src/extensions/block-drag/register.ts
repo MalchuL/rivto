@@ -1,12 +1,12 @@
 import type { ReactEditorApi } from "../../editor/types";
-/** Runtime registration for page block drag wrappers and handles. */
+/** Runtime registration for page block drag wrappers and handle mechanics. */
 import { createElement, type ReactNode } from "react";
 import { PageDragProvider } from "./provider";
-import { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";
+import { PageDragBlockWrapper } from "./surface";
 import type { PageDragExtensionOptions } from "./types";
 
 /**
- * Installs the page drag provider, block wrappers, and handle slot.
+ * Installs the page drag provider and block wrappers used by the independent universal handle.
  *
  * @param reactEditor - Runtime receiving the drag registrations.
  * @param options - Gesture and placement configuration.
@@ -21,9 +21,4 @@ export function registerPageDrag(
   reactEditor.surfaces.registerEditorWrapper(DragBoundary);
   reactEditor.surfaces.registerBlockWrapper("block", PageDragBlockWrapper);
   reactEditor.surfaces.registerBlockWrapper("edgeless", PageDragBlockWrapper);
-  reactEditor.surfaces.registerBlockSlot({
-    position: "left-top",
-    priority: 200,
-    component: PageDragBlockSlot,
-  });
 }

@@ -1,3 +1,4 @@
+import type { ReactPanelApi } from "../../../panels/types";
 import type { ReactEditorApi } from "../../../editor/types";
 /**
  * Routes Backspace and Delete for expanded text and whole-block selections.
@@ -49,31 +50,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
       },
     },
     ({ reactPanel, root }) => {
-      const current = reactPanel.selection.get();
-      reactPanel.batchUpdates(() => {
-        if (current && isStructuralSelection(current)) {
-          const ids = getSelectedBlockIds(current);
-          const seen = new Set<BlockBehavior>();
-          // A non-default outcome claims the whole selection and skips generic deletion.
-          let claimed = false;
-          for (const id of ids) {
-            const behavior = reactPanel.editor.blockBehaviors.resolve(id);
-            if (seen.has(behavior)) {
-              continue;
-            }
-            seen.add(behavior);
-            const context = createBlockBehaviorContext(reactPanel, id, root, current);
-            if (context && behavior.onStructuralDelete(context, ids) !== "default") {
-              claimed = true;
-              break;
-            }
-          }
-          if (claimed) {
-            return;
-          }
-        }
-        reactPanel.selection.delete();
-      });
+      deletePanelSelection(reactPanel, root);
       // Keep keyboard ownership inside Rivto immediately when a normal browser
       // briefly focuses a block deletion just removed. This does not address
       // Cursor Browser intercepting Ctrl/Cmd+Z before the page receives it; see
@@ -88,4 +65,33 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
       return true;
     },
   );
+}
+
+/** Deletes captured structural targets through the same container policies as keyboard deletion. */
+export function deletePanelSelection(reactPanel: ReactPanelApi, root: HTMLElement): void {
+  const current = reactPanel.selection.get();
+  reactPanel.batchUpdates(() => {
+    if (current && isStructuralSelection(current)) {
+      const ids = getSelectedBlockIds(current);
+      const seen = new Set<BlockBehavior>();
+      // A non-default outcome claims the whole selection and skips generic deletion.
+      let claimed = false;
+      for (const id of ids) {
+        const behavior = reactPanel.editor.blockBehaviors.resolve(id);
+        if (seen.has(behavior)) {
+          continue;
+        }
+        seen.add(behavior);
+        const context = createBlockBehaviorContext(reactPanel, id, root, current);
+        if (context && behavior.onStructuralDelete(context, ids) !== "default") {
+          claimed = true;
+          break;
+        }
+      }
+      if (claimed) {
+        return;
+      }
+    }
+    reactPanel.selection.delete();
+  });
 }

@@ -148,7 +148,7 @@
   order: -1;
 }
 
-[data-block-type="kanban"] .page-drag-handle {
+[data-block-type="kanban"] .block-handle {
   color: var(--rivto-kanban-muted-foreground);
   border-radius: 5px;
   transition:
@@ -156,7 +156,7 @@
     background-color 150ms ease;
 }
 
-[data-block-type="kanban"] .page-drag-handle:hover {
+[data-block-type="kanban"] .block-handle:hover {
   color: var(--rivto-kanban-accent);
   background: var(--rivto-kanban-drag-background);
 }

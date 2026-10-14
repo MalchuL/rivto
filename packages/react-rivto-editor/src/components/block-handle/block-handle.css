@@ -1,0 +1,156 @@
+.block-handle {
+  position: absolute;
+  top: 0;
+  left: -28px;
+  /* Reach the block edge so the handle stays visible while the pointer moves
+     from the row onto the button. */
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--rivto-muted-foreground);
+  background: transparent;
+  cursor: grab;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Children live outside their parent's row, so only the line under the cursor
+   or owning the caret reveals its handle. */
+.page-block-row:hover > .rivto-slot > .block-handle,
+.page-block-row:focus-within > .rivto-slot > .block-handle,
+.block-handle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Scope editing feedback to this row, excluding controls and descendant blocks. */
+.page-block-row:has([contenteditable]:not([contenteditable="false"]):focus)
+  > .rivto-slot
+  > .block-handle {
+  color: var(--rivto-accent);
+}
+
+.block-handle:active {
+  cursor: grabbing;
+}
+
+.block-handle {
+  gap: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.block-handle[data-draggable] {
+  cursor: grab;
+}
+.block-handle[data-collapsed],
+.block-handle[aria-expanded="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.block-handle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.block-handle-icon * {
+  pointer-events: none;
+}
+.block-handle-grip {
+  width: 16px;
+  height: 16px;
+}
+.block-handle:hover .block-handle-icon,
+.block-handle:focus-visible .block-handle-icon {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.block-handle[data-collapsed] .block-handle-icon,
+.page-block-row:has([contenteditable]:not([contenteditable="false"]):focus)
+  > .rivto-slot
+  > .block-handle
+  > .block-handle-icon {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 8%, transparent);
+}
+.block-handle:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 1px;
+}
+.block-context-menu {
+  min-width: 248px;
+  z-index: 1000;
+}
+.block-context-menu-item {
+  min-height: 32px;
+}
+.block-color-swatches {
+  display: flex;
+  gap: 5px;
+  padding: 3px 8px 10px;
+}
+.block-color-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 50%;
+  background: var(--block-background);
+  cursor: pointer;
+}
+.block-color-swatch[data-highlighted] {
+  background: var(--block-background);
+  color: inherit;
+}
+.block-color-swatch[aria-pressed="true"],
+.block-color-swatch:focus-visible {
+  box-shadow:
+    0 0 0 1px var(--rivto-background),
+    0 0 0 3px var(--rivto-accent);
+}
+
+:root {
+  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
+  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
+  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
+  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
+  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
+  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
+  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
+}
+[data-block-id][data-block-background] {
+  border-radius: 8px;
+}
+[data-block-background="gray"] {
+  background-color: var(--rivto-block-gray);
+}
+[data-block-background="red"] {
+  background-color: var(--rivto-block-red);
+}
+[data-block-background="orange"] {
+  background-color: var(--rivto-block-orange);
+}
+[data-block-background="yellow"] {
+  background-color: var(--rivto-block-yellow);
+}
+[data-block-background="green"] {
+  background-color: var(--rivto-block-green);
+}
+[data-block-background="blue"] {
+  background-color: var(--rivto-block-blue);
+}
+[data-block-background="purple"] {
+  background-color: var(--rivto-block-purple);
+}

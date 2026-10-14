@@ -168,9 +168,6 @@ body {
 .multi-editor-pane .demo-toolbar-controls {
   gap: 6px;
 }
-.multi-editor-pane .demo-block-id-toggle {
-  display: none;
-}
 .multi-editor-pane > .page-surface {
   min-height: 360px;
 }

@@ -1,3 +1,4 @@
+import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
@@ -171,6 +172,8 @@ export class ReactEditor implements ReactEditorApi {
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: KeyboardManager;
   /** React-owned slash-command registry. */
+  /** Dedicated extension-owned block menu contributions. */
+  readonly blockContextMenu: BlockContextMenuRegistry;
   readonly slashCommands: SlashCommandRegistry;
   private destroyed = false;
   /** Maintains the document's block elements and their default canvas geometry.
@@ -203,9 +206,11 @@ export class ReactEditor implements ReactEditorApi {
     this.keyboard = keyboard;
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;
+    this.blockContextMenu = new BlockContextMenuRegistry(extensions);
     // Release shared registrations after extension cleanup has finished using them.
     extensions.registerCleanup(() => {
       slashCommands.destroy();
+      this.blockContextMenu.destroy();
       keyboard.destroy();
       events.destroy();
       this.panels.destroy();

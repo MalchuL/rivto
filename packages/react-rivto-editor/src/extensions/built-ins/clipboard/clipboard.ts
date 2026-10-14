@@ -1,3 +1,8 @@
+import { registerBlockClipboardActions } from "../block-handle/actions";
+import {
+  browserClipboardFormats,
+  readClipboardEnvelope,
+} from "../../../managers/clipboard/browser-clipboard";
 import type { ReactEditorApi } from "../../../editor/types";
 import { clipboardContentBundle } from "../../../managers/clipboard/clipboard-content";
 /**
@@ -73,6 +78,7 @@ export function registerClipboard(
   reactEditor: ReactEditorApi,
   options: ClipboardExtensionOptions = {},
 ): () => void {
+  registerBlockClipboardActions(reactEditor);
   const unregisterElementPaste = reactEditor.pasteStrategies.register(
     ELEMENT_PASTE_STRATEGY_ID,
     new ElementPasteStrategy(reactEditor),
@@ -117,7 +123,7 @@ export function registerClipboard(
     event: ClipboardEvent,
     bundle: ClipboardBundle,
   ): void => {
-    const portable = reactPanel.editor.clipboardFormats.formatBundle(bundle);
+    const portable = browserClipboardFormats(reactPanel.editor, bundle);
     const structured = JSON.stringify(bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", portable.html);
@@ -157,7 +163,9 @@ export function registerClipboard(
     let structured: string | undefined;
     if (!plainText) {
       structured =
-        event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) || fallbackStructuredClipboard(event);
+        event.clipboardData?.getData(RIVTO_CLIPBOARD_MIME) ||
+        readClipboardEnvelope(event.clipboardData?.getData("text/html") ?? "") ||
+        fallbackStructuredClipboard(event);
     }
     const canvas = canvasSelection(reactPanel);
     // Paste has only two outcomes:

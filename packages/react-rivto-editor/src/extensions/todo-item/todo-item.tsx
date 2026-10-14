@@ -59,6 +59,24 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
     id: "block.todo-item",
     setup: (reactEditor) => {
       const disposers = [
+        reactEditor.blockContextMenu.register({
+          id: "type.todo-item",
+          title: "Convert to TODO item",
+          order: 30,
+          isAvailable: ({ reactPanel, blockIds }) =>
+            blockIds.every((id) => {
+              const block = reactPanel.blocks.getBlockNode(id);
+              return Boolean(
+                block &&
+                block.type !== TODO_ITEM_BLOCK_TYPE &&
+                block.type !== TODO_STORAGE_BLOCK_TYPE,
+              );
+            }),
+          execute: ({ reactPanel, blockIds }) =>
+            reactPanel.batchUpdates(() => {
+              blockIds.forEach((id) => reactPanel.blocks.setBlockType(id, TODO_ITEM_BLOCK_TYPE));
+            }),
+        }),
         reactEditor.blockTypes.register({
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,

@@ -1,3 +1,4 @@
+import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
 import type { ReactPanel } from "./react-panel";
 import type { DocumentModel } from "@chulane/document-model";
 import type { PanelAPI, ModeManagerApi } from "@chulane/rivto";
@@ -44,6 +45,8 @@ export interface ReactPanelApi extends PanelAPI {
   /** Reads the selection owned by this panel and synchronizes its DOM caret and highlights. */
   readonly selection: PanelSelectionApi;
   /** Filters and executes shared command definitions using this panel as their context. */
+  /** Menu actions bound to this panel and captured structural targets. */
+  readonly blockContextMenu: PanelBlockContextMenuManager;
   readonly slashCommands: PanelSlashCommandsApi;
   /** Observes deactivation so transient UI closes when another occurrence receives focus. */
   subscribeDeactivation(listener: () => void): () => void;
