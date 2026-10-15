@@ -55,7 +55,7 @@ async function menu(page: Page, id: string) {
   await expect(page.getByRole("menu").first()).toBeVisible();
 }
 
-test("menu colors selected subtrees, retains child colors, and supports keyboard opening", async ({
+test("menu colors selected subtrees, retains child colors, and supports keyboard actions", async ({
   page,
 }) => {
   const ids = await seed(page);
@@ -89,7 +89,7 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
     .locator(`[data-block-id="${ids.parent}"] > .page-block-row .block-handle`)
     .first();
   await handle.focus();
-  await page.keyboard.press("Shift+F10");
+  await handle.click({ button: "right" });
   await expect(page.getByRole("menu").first()).toBeVisible();
   const defaultColor = page.getByRole("menuitem", { name: "Default", exact: true });
   await defaultColor.focus();
@@ -99,7 +99,7 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
     "blue",
   );
   await handle.focus();
-  await page.keyboard.press("Shift+F10");
+  await handle.click({ button: "right" });
   await page.keyboard.press("Escape");
   await expect(handle).toBeFocused();
 });

@@ -85,7 +85,8 @@ Extensions register dedicated contributions with `editor.blockContextMenu.regist
 Registration returns an idempotent disposer and follows extension cleanup. Entries
 have stable `id`, `title`, optional `order` (ascending), `parentId`, `isAvailable`,
 and a `kind`: action (default), submenu, separator, or custom. Actions supply
-`execute`; custom entries supply `render`. Submenus receive children registered
+`execute`, which returns `void` for synchronous work or `Promise<void>` for asynchronous completion;
+custom entries supply `render`. Submenus receive children registered
 with their ID as `parentId`. Register submenu parents before their children.
 Custom content owns its controls' accessibility and uses the supplied `close`
 callback when interaction is complete. Only the active menu mounts its contents.

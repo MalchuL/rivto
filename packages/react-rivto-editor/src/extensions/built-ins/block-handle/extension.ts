@@ -6,7 +6,8 @@ import { registerBlockBackground } from "./colors";
  * Creates the extension installing universal block handles and background colors.
  *
  * Setup registers the left-top handle slot, the background property and custom
- * swatches, and separators for the built-in action groups. Opening a block uses
+ * swatches, and separators for the built-in action groups. The handle opens its menu
+ * through React context-menu events. Opening a block uses
  * the host's BlockHandleContext callback. Dragging is optional and supplied by
  * pageDragExtension; this extension does not install drag sensors.
  *

@@ -54,8 +54,8 @@ export const BlockHandleContext = createContext<BlockHandleOptions>({});
  * drag accessibility attributes through its ref, without spreading sensor props.
  * Ancestor-dependent visibility and collapsed presentation live in block-handle.css.
  * Component callbacks override context callbacks. A completed or cancelled
- * drag suppresses the following click; right-click and keyboard context-menu
- * invocation capture structural targets before mounting the menu.
+ * drag suppresses the following click; context-menu events capture structural
+ * targets before mounting the menu and moving focus to its actions.
  *
  * @param props - Current slot snapshot and optional application overrides.
  * @param props.block - Detached block snapshot whose ID binds interactions.
@@ -165,9 +165,10 @@ function useBlockHandleDrag(blockId: string) {
  * Builds button handlers separating navigation, menus, and drag activation.
  *
  * Pointer presses reset click suppression without preventing the drag sensor's
- * events. Context-menu events prevent the native menu; keyboard invocation uses
- * the handle's lower-left viewport corner. Enter clears stale suppression only
- * when a keyboard drag is not active, leaving drag completion to the sensor.
+ * events. React context-menu events prevent the native menu and open block actions
+ * directly using the viewport coordinates supplied by the browser. Enter clears
+ * stale suppression only when a keyboard drag is not active, leaving drag
+ * completion to the sensor.
  *
  * @param suppressClick - Mutable flag set when this block participates in a drag.
  * @param open - Host navigation callback invoked by an unsuppressed click.
@@ -203,7 +204,10 @@ function handleEvents(
       }
     },
     /**
-     * Suppresses the browser menu and opens block actions at the pointer position.
+     * Suppresses the browser menu and opens block actions at the event coordinates.
+     *
+     * Browser-generated context-menu events use this handler regardless of their
+     * input source; it captures targets before focus moves into the menu.
      *
      * @param event - Context-menu event supplying viewport coordinates.
      * @returns No value after updating suppression or invoking the relevant callback.
@@ -214,17 +218,13 @@ function handleEvents(
       menu(event.clientX, event.clientY);
     },
     /**
-     * Opens keyboard-invoked menus and preserves Enter ownership during keyboard dragging.
+     * Preserves Enter ownership during keyboard dragging and clears stale click suppression.
      *
-     * @param event - Keyboard event checked for ContextMenu, Shift+F10, or Enter.
+     * @param event - Keyboard event checked for the button's native Enter activation.
      * @returns No value after updating suppression or invoking the relevant callback.
      */
     onKeyDown: (event) => {
-      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-        event.preventDefault();
-        const rect = event.currentTarget.getBoundingClientRect();
-        menu(rect.left, rect.bottom);
-      } else if (event.key === "Enter" && !dragging()) {
+      if (event.key === "Enter" && !dragging()) {
         suppressClick.current = false;
       }
     },

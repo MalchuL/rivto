@@ -91,7 +91,7 @@ test("registration cleanup and stale targets prevent execution", async () => {
     /**
      * Records execution so cleanup and stale-target checks can detect unwanted calls.
      *
-     * @returns After incrementing the test-local invocation count.
+     * @returns No value after incrementing the test-local invocation count.
      */
     execute: () => {
       calls++;
@@ -108,4 +108,48 @@ test("registration cleanup and stale targets prevent execution", async () => {
   );
   f.panel.editor.destroy();
   await f.core.destroy();
+});
+
+test("execution waits for the action and propagates its asynchronous failure", async () => {
+  const f = await fixture();
+  try {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const failure = new Error("Clipboard write failed");
+    f.panel.editor.blockContextMenu.register({
+      id: "async-failure",
+      title: "Async failure",
+      /**
+       * Defers failure until the test releases the simulated asynchronous operation.
+       *
+       * @returns A promise rejecting with the original failure after the gate opens.
+       */
+      execute: async () => {
+        await gate;
+        throw failure;
+      },
+    });
+    let settled = false;
+    const pending = f.panel.blockContextMenu.execute(
+      "async-failure",
+      blockMenuTargets(f.panel, f.parent.id),
+    );
+    void pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish();
+    await expect(pending).rejects.toBe(failure);
+  } finally {
+    f.panel.editor.destroy();
+    await f.core.destroy();
+  }
 });
