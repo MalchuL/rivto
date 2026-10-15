@@ -85,9 +85,9 @@ for (const repeat of [0, 200]) {
       await expect(detail).toHaveText(`Command ${index}`);
       await expect(originalDetail).toHaveText(`Command ${index}`);
     }
+    console.log(`journal embedding ${browserName} repeat=${repeat} ${JSON.stringify(samples)}`);
     expect(samples.map(({ command }) => command).sort((a, b) => a - b)[2]).toBeLessThan(25);
     expect(samples.map(({ render }) => render).sort((a, b) => a - b)[2]).toBeLessThan(100);
-    console.log(`journal embedding ${browserName} repeat=${repeat} ${JSON.stringify(samples)}`);
     await page.evaluate(() =>
       (
         window as unknown as { __rivtoDemo: JournalInspection }

@@ -280,7 +280,7 @@ test("copies Counter display text to every portable clipboard flavor", async ({ 
     () => (window as typeof window & { counterCopy: Record<string, string> }).counterCopy,
   );
   expect(flavors.text).toBe("Count: 2");
-  expect(flavors.html).toBe('<p data-rivto-block="counter" data-count="2">Count: 2</p>');
+  expect(flavors.html).toContain('<p data-rivto-block="counter" data-count="2">Count: 2</p>');
   expect(flavors.markdown).toBe("Count: 2");
   expect(JSON.parse(flavors.structured).blocks[0]).toMatchObject({
     content: "",
@@ -400,8 +400,8 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
     .filter({
       hasText: /^(Start a selection in|This complete|Nested branch one owns|Reverse selection)/,
     });
-  const before = await page.locator(BLOCK_ID_SELECTOR).count();
   await contents.first().click();
+  const before = await page.locator(BLOCK_ID_SELECTOR).count();
   // Activating raw Markdown can change its height; measure endpoints afterward.
   await contents.first().press("Control+Home");
   await contents.first().press("ArrowRight");

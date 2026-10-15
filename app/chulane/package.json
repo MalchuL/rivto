@@ -21,7 +21,8 @@
   "scripts": {
     "build": "tsup && node ./scripts/copy-styles.mjs",
     "dev": "tsup --watch --onSuccess \"node ./scripts/copy-styles.mjs\"",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs"
   },
   "peerDependencies": {
     "react": "^19.0.0",

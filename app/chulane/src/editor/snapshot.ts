@@ -8,15 +8,17 @@
  */
 
 import type { EditorBlock, EditorSnapshot } from "@chulane/rivto";
+import { DOCUMENT_SNAPSHOT_VERSION } from "@chulane/document-model";
 
 /** Matches `DEFAULT_WRITING_BLOCK_TYPE` without importing the React package. */
 const WRITING_BLOCK_TYPE = "paragraph";
 
 /** Empty portable document stored for new pages. */
 export const EMPTY_EDITOR_SNAPSHOT: EditorSnapshot = {
-  version: 6,
+  version: DOCUMENT_SNAPSHOT_VERSION,
   blocks: [],
   elements: [],
+  rootElementIds: [],
 };
 
 /** JSON form of {@link EMPTY_EDITOR_SNAPSHOT} used as the default page body. */
@@ -88,9 +90,10 @@ function seedBlock(input: SeedWritingBlock, index: number): EditorBlock {
  */
 export function serializeSeedSnapshot(blocks: readonly SeedWritingBlock[]): string {
   const snapshot: EditorSnapshot = {
-    version: 6,
+    version: DOCUMENT_SNAPSHOT_VERSION,
     blocks: blocks.map(seedBlock),
     elements: [],
+    rootElementIds: [],
   };
   return JSON.stringify(snapshot);
 }
@@ -98,8 +101,13 @@ export function serializeSeedSnapshot(blocks: readonly SeedWritingBlock[]): stri
 /**
  * Parses stored page content as a Rivto snapshot.
  *
+ * Uses the current document schema and preserves ordered canvas roots. Empty
+ * content creates an empty snapshot; block and element validation remains owned
+ * by the document model when the snapshot is loaded.
+ *
  * @param content - `Page.content` string.
- * @returns A snapshot when the string is valid v6 JSON; otherwise null.
+ * @returns A snapshot when the string contains current-version JSON with a block
+ * array; otherwise null. Omitted elements and canvas roots default to empty arrays.
  */
 export function parseEditorSnapshot(content: string): EditorSnapshot | null {
   const trimmed = content.trim();
@@ -112,7 +120,7 @@ export function parseEditorSnapshot(content: string): EditorSnapshot | null {
       !parsed ||
       typeof parsed !== "object" ||
       !("version" in parsed) ||
-      (parsed as { version: unknown }).version !== 6 ||
+      (parsed as { version: unknown }).version !== DOCUMENT_SNAPSHOT_VERSION ||
       !("blocks" in parsed) ||
       !Array.isArray((parsed as { blocks: unknown }).blocks)
     ) {
@@ -120,9 +128,10 @@ export function parseEditorSnapshot(content: string): EditorSnapshot | null {
     }
     const record = parsed as Partial<EditorSnapshot>;
     return {
-      version: 6,
+      version: DOCUMENT_SNAPSHOT_VERSION,
       blocks: record.blocks ?? [],
       elements: record.elements ?? [],
+      rootElementIds: record.rootElementIds ?? [],
       ...(record.pluginData ? { pluginData: record.pluginData } : {}),
     };
   } catch {

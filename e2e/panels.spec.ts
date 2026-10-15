@@ -408,12 +408,19 @@ for (const repeat of [0, 200]) {
     );
     const row = block.locator(":scope > .page-block-row");
     const box = await row.boundingBox();
-    if (!box) {
+    const chromeBox = await card.locator(":scope > .edgeless-card-content").boundingBox();
+    if (!box || !chromeBox) {
       throw new Error("Panel block row is missing");
     }
-    // The row's empty right edge belongs to the block, outside its editable text.
-    const x = box.x + box.width - 2;
+    // The left hover strip belongs to the row; Markdown's editor covers its right edge.
+    const x = chromeBox.x + 2;
     const y = box.y + box.height / 2;
+    expect(
+      await row.evaluate((element, { x, y }) => document.elementFromPoint(x, y) === element, {
+        x,
+        y,
+      }),
+    ).toBe(true);
     await page.keyboard.down("Alt");
     await page.mouse.move(x, y);
     await page.mouse.down();

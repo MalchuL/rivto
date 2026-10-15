@@ -8,7 +8,7 @@
 import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { createDocumentEditor, ModeManager } from "@chulane/rivto";
-import { DocumentModelImpl } from "@chulane/document-model";
+import { DOCUMENT_SNAPSHOT_VERSION, DocumentModelImpl } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
 import {
   createReactEditor,
@@ -301,7 +301,13 @@ function App() {
         }
       } else if (action === "new") {
         if (await canReplace()) {
-          editor.load({ version: 6, blocks: [], elements: [], pluginData: {} });
+          editor.load({
+            version: DOCUMENT_SNAPSHOT_VERSION,
+            blocks: [],
+            elements: [],
+            rootElementIds: [],
+            pluginData: {},
+          });
           editor.blocks.insertBlock({ type: "paragraph", content: "" });
           editor.history.clear();
           latestTitle.current = "Untitled";
