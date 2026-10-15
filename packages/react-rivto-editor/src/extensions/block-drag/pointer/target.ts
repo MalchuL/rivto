@@ -1,3 +1,4 @@
+import { blockMoveDestination } from "../placement/utils";
 import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
@@ -42,7 +43,8 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
       return [];
     }
     const parent = dom.getParent(element);
-    const behavior = reactPanel.editor.blockBehaviors.resolve(id);
+    const type = reactPanel.blocks.getBlockNode(id)?.type;
+    const dragOptions = (type && reactPanel.editor.blockTypes.getDragOptions(type)) || {};
     return [
       {
         id,
@@ -53,10 +55,10 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
         get rect() {
           return element.getBoundingClientRect();
         },
-        axis: behavior.dropAxis,
+        axis: dragOptions.dropAxis,
         fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
-        acceptsBody: Boolean(behavior.acceptsDropContainer),
-        options: behavior.dropPlacement,
+        acceptsBody: Boolean(dragOptions.acceptsDropContainer),
+        options: dragOptions.dropPlacement,
         hasRenderedChildren: Boolean(
           element.querySelector(":scope > .page-block-children > [data-block-id]"),
         ),
@@ -123,12 +125,14 @@ export function resolveSurfaceDrop(
     options,
     (destination) =>
       (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null) &&
-      reactPanel.editor.blockBehaviors.acceptsDrop(
-        panelRoot && destination.parentId === null
-          ? { ...destination, parentId: panelRoot }
-          : destination,
+      reactPanel.editor.blockBehaviors.canMove({
         sources,
-      ),
+        destination: blockMoveDestination(
+          panelRoot && destination.parentId === null
+            ? { ...destination, parentId: panelRoot }
+            : destination,
+        ),
+      }),
   );
   if (placement?.kind !== "between") {
     return placement;

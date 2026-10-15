@@ -20,14 +20,19 @@
       "types": "./dist/esm/extensions.d.ts",
       "default": "./dist/esm/extensions.js"
     },
+    "./block-factories": {
+      "import": "./dist/esm/block-factories.js",
+      "types": "./dist/esm/block-factories.d.ts",
+      "default": "./dist/esm/block-factories.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm build:js && pnpm build:styles",
-    "build:js": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
+    "build:js": "tsup src/index.ts src/extensions.ts src/block-factories.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
     "build:styles": "tailwindcss -i src/styles/index.css -o dist/styles.css --minify",
-    "dev": "tsup src/index.ts src/extensions.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
+    "dev": "tsup src/index.ts src/extensions.ts src/block-factories.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
     "dev:styles": "tailwindcss -i src/styles/index.css -o dist/styles.css --watch",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",

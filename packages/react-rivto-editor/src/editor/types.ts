@@ -15,10 +15,7 @@ import type {
 import type { DocumentModel } from "@chulane/document-model";
 import type { BlockReference, BlockResolution } from "../extensions/embedding/types";
 import type { BlockElementProjection } from "../elements/block-element-projection";
-import type {
-  CreateDefaultBlock,
-  IsEmptyBlock,
-} from "../extensions/built-ins/page/default-writing-block/types";
+import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
@@ -118,24 +115,26 @@ export interface ReactEditorApi extends DocumentEditorAPI {
    * Enter, trailing insertion, separators, and clipboard operations share this factory.
    * The host configures it through {@link installDefaultWriting}.
    *
-   * Throws until {@link installDefaultWriting} runs.
-   */
-  readonly createDefaultBlock: CreateDefaultBlock;
-  /** Checks whether a block is an empty writing block according to the installed extension.
+   * The creation method throws until {@link installDefaultWriting} runs.
+   *
+   * Checks whether a block is an empty writing block according to the installed extension.
    *
    * Enter outdent, list reset, and related operations share this predicate.
    * The host configures it through {@link installDefaultWriting}.
    *
-   * Throws until {@link installDefaultWriting} runs.
+   * The emptiness predicate throws until {@link installDefaultWriting} runs.
+   *
+   * The recognition method identifies this writing role without checking emptiness.
+   * It also throws until {@link installDefaultWriting} runs.
    */
-  readonly isEmptyBlock: IsEmptyBlock;
+  readonly defaultWritingBlockFactory: BlockFactory;
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RenderersApi;
-  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  /** Operation-aware outline and drop behaviors selected from current block data. */
   readonly blockBehaviors: BlockBehaviorsApi;
   /** Atomic React block-type and presentation registration. */
   readonly blockTypes: BlockTypesApi;
-  /** Registers list-property validation and keyboard behavior with the core policy manager.
+  /** Registers persisted list-property defaults and validation with the core policy manager.
    * Registrations are removed when their React extension is disposed. */
   readonly blockListProps: BlockListPropsApi;
   /** React-owned portable clipboard formatter and parser registry. */
@@ -166,13 +165,10 @@ export interface ReactEditorApi extends DocumentEditorAPI {
    *
    * Called by `defaultWritingBlockExtension` to configure empty writing blocks
    * for all rendered occurrences of this document.
-   * @param options - Replacement factories for empty writing blocks.
+   * @param defaultWritingBlockFactory - Replacement creation, recognition, and emptiness contract for empty writing blocks.
    * @returns Disposer that restores the previous factories.
    */
-  installDefaultWriting(options: {
-    createDefaultBlock: CreateDefaultBlock;
-    isEmptyBlock: IsEmptyBlock;
-  }): () => void;
+  installDefaultWriting(defaultWritingBlockFactory: BlockFactory): () => void;
   /**
    * Releases React managers while the lifecycle owner retains the core and document.
    *

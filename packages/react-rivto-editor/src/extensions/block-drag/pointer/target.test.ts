@@ -58,10 +58,12 @@ function surface(items: DropLayoutBlock[]) {
     contains: (element: HTMLElement) => [...elements.values()].includes(element),
   } as unknown as HTMLElement;
   const reactPanel = {
-    blocks: { getBlockNode: () => undefined },
+    blocks: { getBlockNode: (id: string) => ({ type: id }) },
     editor: {
-      blockBehaviors: {
-        resolve: (id: string) => {
+      blockBehaviors: { canMove: () => true },
+      blockTypes: {
+        getDefinition: () => undefined,
+        getDragOptions: (id: string) => {
           const entry = items.find((candidate) => candidate.id === id)!;
           return {
             dropAxis: entry.axis,
@@ -82,7 +84,7 @@ test.each([2, 2000])(
       item("a", 0),
       item("b", 40),
       item("other", 80, { rect: rect(80, count * 40 + 40) }),
-      ...Array.from({ length: count }, (_, index) =>
+      ...Array.from({ length: count }, (value, index) =>
         item(`child-${index}`, 120 + index * 40, { parentId: "other" }),
       ),
     ];
@@ -147,7 +149,7 @@ test.each([2, 2000])(
     const root = { id: "branch", children: [] } as unknown as EditorBlock;
     let nodeReads = 0;
     let forestReads = 0;
-    const forest = Array.from({ length: count }, (_, index) => ({
+    const forest = Array.from({ length: count }, (value, index) => ({
       id: `other-${index}`,
       children: [],
     }));
@@ -183,7 +185,7 @@ test("retains hidden siblings when dropping before a filtered container child", 
     item("storage", 0, { acceptsBody: true, axis: "vertical", rect: rect(0, 160) }),
     item("visible", 40, { parentId: "storage" }),
   ]);
-  fixture.reactPanel.editor.blockBehaviors.acceptsDrop = () => true;
+  fixture.reactPanel.editor.blockBehaviors.canMove = () => true;
   const blocks = [
     {
       id: "storage",
@@ -239,8 +241,9 @@ test("embedded placement accepts children but refuses gaps outside the displayed
       getBlocks: () => [branch],
     },
     editor: {
+      ...fixture.reactPanel.editor,
       getDocument: () => ({ id: "A" }),
-      blockBehaviors: { ...fixture.reactPanel.editor.blockBehaviors, acceptsDrop: () => true },
+      blockBehaviors: { ...fixture.reactPanel.editor.blockBehaviors, canMove: () => true },
     },
   }) as ReactPanelApi;
   expect(
@@ -294,7 +297,7 @@ test("pointer drops use the visible canvas card instead of an overlapping card b
     ownerDocument: { elementFromPoint: () => ({ closest: () => card }) },
     contains: (element: HTMLElement) => element === card || contains(element),
   });
-  Object.assign(fixture.reactPanel.editor.blockBehaviors, { acceptsDrop: () => true });
+  Object.assign(fixture.reactPanel.editor.blockBehaviors, { canMove: () => true });
   expect(
     resolveSurfaceDrop(
       fixture.root,

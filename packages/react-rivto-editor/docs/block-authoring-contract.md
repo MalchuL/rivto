@@ -236,28 +236,49 @@ const attributes = useBlockSelectionAnchor(blockId);
 return <div {...attributes} className={BOARD_BODY_CLASS} />;
 ```
 
-Container behavior is declared separately with `ContainerBlockBehavior`:
+Container behavior is declared separately by extending the abstract `ContainerBlockBehavior`.
+Implement `isAvailable(context)` to select the intended native type; registration
+no longer supplies an implicit type restriction. The base provides container
+Enter handling, without inheriting generic outline actions. Movement restrictions
+belong to the optional `canMove(context)` method. Applicability always receives
+`{ editor, block }`, with current detached fields and no discriminator or method
+name. A native behavior selects its type directly through `block.type`. The
+registry considers moved sources followed by the receiving parent using this same
+contract; the first matching candidate selects a registration, whose canMove runs once. Movement
+arguments stay in `BlockMoveContext`: sources, destination, editor, and the parent
+resolved once by the registry, including null at the document root. Foreign source
+fields are used directly rather than resolving their IDs in the destination document.
+Every applicable permission must allow the move; an omitted hook adds no restriction.
 
-- `dropAxis` describes direct-child layout;
-- `acceptsDropContainer` enables drops on the full body, including empty fields;
-- `dropChildTypes` restricts direct children accepted by dragging (omit for unrestricted content);
-- `dropParentTypes` restricts where a dragged structural shell may be placed;
-- `acceptsDrop({ destination, sources, editor })` validates an exact destination
-  against source snapshots, including sources from another document;
-- containment metadata describes fixed or free outline behavior;
+Register geometric options separately in `blockTypes.register({ definition, render,
+behavior, drag })`. They are consumed only by the optional page-drag extension:
 
-The shared resolver walks the measured hierarchy. Each sibling gap carries its
+- `drag.dropAxis` describes direct-child layout;
+- `drag.acceptsDropContainer` enables drops on the full body, including empty fields;
+- `drag.dropPlacement` tunes child placement, horizontal depth pixels, and edge zones;
+- `drag.showHandleOnContainerHover` reveals the handle when hovering anywhere in a container;
+- containment metadata describes fixed or free outline behavior, independently of geometry;
+- `behavior.canMove({ sources, destination, parent, editor })` checks semantic
+  placement for keyboard moves and dragging. Destination uses core `parentId` and
+  optional `beforeId`, with omitted beforeId meaning append. It has no drop role
+  or geometry; returning false vetoes movement regardless of priority.
+
+The shared drag resolver walks the measured hierarchy. Each sibling gap carries its
 parent and both neighbors; body regions carry their accepting parent. Layout axes
 never imply type acceptance. Kanban and Columns background outside lanes rejects
 ordinary content, while lane interiors accept it. Container boundaries select
-sibling gaps at every nesting level. Feedback and commit share the same resolved
-destination; a destination invalidated before release cancels the move.
+sibling gaps at every nesting level. Feedback and commit convert the resolved gap
+to the same core destination for canMove. Drag separately retains adjacency and depth
+for indicator geometry; a destination invalidated before release cancels the move.
 
-For example, a Kanban view declares `dropAxis = "horizontal"` and
-`dropChildTypes = [KANBAN_COLUMN_BLOCK_TYPE]`; its column view declares
-`dropParentTypes = [KANBAN_BLOCK_TYPE]`. These are drag policies, not persisted
-schema constraints. Custom views receive the destination parent even when the
-pointer approached a neighboring child's edge.
+For example, a Kanban registration declares `drag.dropAxis: "horizontal"`. Its
+behavior allows only kanban-column sources when receiving children. The column
+behavior permits a moved column only when the receiving parent is kanban. These
+are React interaction policies, not persisted schema constraints; core commands
+still validate document hierarchy. Custom behaviors see the actual destination
+parent even when a pointer approached a neighboring child's edge. Keyboard moves
+and Tab/Shift+Tab use the same permission query; outdent validates both the lifted
+roots and the following siblings it adopts before applying any mutation.
 
 Do not map `block.children`, create a parallel child store, or register a second
 drag system in the renderer.

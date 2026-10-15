@@ -1,3 +1,4 @@
+import type { BlockDragOptions } from "../../extensions/block-drag/block-drag-options";
 import type { BlockDefinition } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
@@ -60,14 +61,18 @@ export interface ReactBlockRegistration {
   /** React content renderer selected by all registered surfaces. */
   readonly render: BlockRenderer;
   /**
-   * Keyboard and drag operations for blocks with definition.type.
+   * Editing and movement integration owned together with this block definition.
    *
-   * The same instance is used for every block of this type in the document.
+   * The same instance is reused for every block selected by isAvailable(context).
    * BlockTypeManager registers it with runtime.blockBehaviors and removes it with
-   * this registration. Omit it to use DefaultBlockBehavior; methods returning
-   * "default" also delegate to that implementation through the behavior dispatcher.
+   * this registration. The instance must select its own native types; registration
+   * does not add an implicit definition.type guard. Omit it to let other applicable
+   * registrations, including DefaultBlockBehavior, handle operations. Methods returning
+   * "default" continue to later applicable instances through the behavior dispatcher.
    */
   readonly behavior?: BlockBehavior;
+  /** Optional geometry consumed only when the page-drag extension is installed. */
+  readonly drag?: BlockDragOptions;
   /** Optional in-place conversion entry added to the shared slash manager. */
   readonly slashCommand?: ReactBlockSlashCommand;
   /** Whether root blocks of this type partition React's edgeless block elements. */

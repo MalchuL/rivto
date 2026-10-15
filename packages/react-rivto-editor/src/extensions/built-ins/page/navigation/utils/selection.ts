@@ -82,7 +82,8 @@ export function textSelectionEdge(
     navigationOutlineBlocks(editor, selection.focusBlockId),
     null,
     false,
-    (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
+    // Order text-selection endpoints using the same visible outline as keyboard navigation.
+    (block) => !reactPanel.editor.blockBehaviors.childrenVisible(block),
   ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);

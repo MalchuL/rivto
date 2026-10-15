@@ -7,7 +7,7 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
 
-import { indentBlocks, outdentBlocks } from "../../../block-behaviors/ops/outline-ops";
+import { indentBlocks, outdentBlocks } from "../../../block-behaviors/utils/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { kanbanExtension } from "./kanban";
 

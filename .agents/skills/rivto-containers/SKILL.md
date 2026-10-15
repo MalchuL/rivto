@@ -197,7 +197,7 @@ Use `runtime.blocks` and `runtime.editor.blocks`; never mutate detached snapshot
 or call `editor.document` from a view or extension.
 
 - Wrap multi-step user actions in `editor.batchUpdates` so undo sees one action.
-- Use `runtime.createDefaultBlock()` rather than hardcoding `paragraph`.
+- Use `runtime.defaultWritingBlockFactory.createEmptyBlock()` rather than hardcoding `paragraph`.
 - The insertion API creates siblings. When adding the first nested block or a
   restricted shell, insert through a valid portable subtree or insert a legal
   root and move it `"inside"` in the same batch.

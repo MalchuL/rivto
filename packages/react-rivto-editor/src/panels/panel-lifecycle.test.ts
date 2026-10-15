@@ -1,3 +1,4 @@
+import { DefaultBlockBehavior } from "../block-behaviors/default-block-behavior";
 import { ReactPanel } from "./react-panel";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
@@ -943,7 +944,7 @@ test.each([10, 2000])(
         {
           id: "branch",
           type: "paragraph",
-          children: Array.from({ length: count }, (_, index) => ({
+          children: Array.from({ length: count }, (value, index) => ({
             id: `child-${index}`,
             type: "paragraph",
             content: "Child",
@@ -985,7 +986,7 @@ test.each([10, 2000])(
     api.selection.set(createCaretSelection("same-id", 0));
     expect(f.a.editor.selection.get()).toBeUndefined();
     api.selection.set(
-      createStructuralSelection(Array.from({ length: count }, (_, index) => `child-${index}`)),
+      createStructuralSelection(Array.from({ length: count }, (value, index) => `child-${index}`)),
     );
     expect(api.selection.snapshot()?.blocks).toHaveLength(count);
     expect(full.getSnapshot().api!.selection.snapshot()).toBeUndefined();
@@ -1047,8 +1048,18 @@ test("panel behavior resolves against its own document before any DOM root is mo
   const f = await fixture();
   const a = f.a.editor;
   const b = f.b.editor;
-  expect(a.blockBehaviors.resolve("same-id")).toBe(a.blockBehaviors.fallback);
-  expect(b.blockBehaviors.resolve("same-id")).toBe(b.blockBehaviors.fallback);
+  expect(
+    a.blockBehaviors.resolveAll({
+      editor: a,
+      block: a.blocks.getBlockNode("same-id")!,
+    })[0],
+  ).toBeInstanceOf(DefaultBlockBehavior);
+  expect(
+    b.blockBehaviors.resolveAll({
+      editor: b,
+      block: b.blocks.getBlockNode("same-id")!,
+    })[0],
+  ).toBeInstanceOf(DefaultBlockBehavior);
   expect(a.blockListProps.prepare({})).toEqual({});
   expect(() => a.blockListProps.validate({})).not.toThrow();
   await f.a.release();

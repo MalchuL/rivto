@@ -7,7 +7,7 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
 
-import { indentBlocks } from "../../../block-behaviors/ops/outline-ops";
+import { indentBlocks } from "../../../block-behaviors/utils/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput } from "./bento";
 

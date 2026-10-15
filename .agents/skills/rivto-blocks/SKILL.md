@@ -235,7 +235,7 @@ Keep repeated or cross-file HTML class names in named constants.
   views must not call document-model internals or import Yjs.
 - Wrap multi-step user actions in `reactEditor.batchUpdates` so undo observes
   one action.
-- Use `reactEditor.createDefaultBlock()` instead of hardcoding `paragraph`.
+- Use `reactEditor.defaultWritingBlockFactory.createEmptyBlock()` instead of hardcoding `paragraph`.
 - Persist only durable state. Pointer resize or slider motion may use local DOM
   or React preview state, then commit one validated property update at the end.
 - Use registered block slots for perimeter controls and block wrappers for

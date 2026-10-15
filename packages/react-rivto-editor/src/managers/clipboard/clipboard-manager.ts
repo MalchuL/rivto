@@ -608,7 +608,8 @@ export class ClipboardManager {
           }
         });
       } else if (converter?.format) {
-        const writingType = defaultBlockType ?? this.editor.createDefaultBlock().type;
+        const writingType =
+          defaultBlockType ?? this.editor.defaultWritingBlockFactory.createEmptyBlock().type;
         const formats = this.editor.clipboardFormats.formatElement(node, bundle);
         const parsed = this.editor.clipboardFormats.parseContent(
           { html: formats.html, text: formats.plain },

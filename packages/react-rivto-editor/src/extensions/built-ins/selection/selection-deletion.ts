@@ -1,4 +1,5 @@
 import type { ReactPanelApi } from "../../../panels/types";
+import { dispatchBlockAction } from "../../../block-behaviors/utils/dispatch";
 import type { ReactEditorApi } from "../../../editor/types";
 /**
  * Routes Backspace and Delete for expanded text and whole-block selections.
@@ -8,7 +9,7 @@ import type { ReactEditorApi } from "../../../editor/types";
  * @module
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../block-behaviors/context";
+import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
 import type { BlockBehavior } from "../../../block-behaviors/types";
 import {
   BUILTIN_KEYMAP,
@@ -91,13 +92,26 @@ export function deletePanelSelection(reactPanel: ReactPanelApi, root: HTMLElemen
       // A non-default outcome claims the whole selection and skips generic deletion.
       let claimed = false;
       for (const id of ids) {
-        const behavior = reactPanel.editor.blockBehaviors.resolve(id);
-        if (seen.has(behavior)) {
+        const block = reactPanel.blocks.getBlockNode(id);
+        if (!block) {
           continue;
         }
-        seen.add(behavior);
+        const availability = {
+          editor: reactPanel.editor,
+          block,
+        };
+        const behaviors = reactPanel.editor.blockBehaviors
+          .resolveAll(availability)
+          .filter((behavior) => behavior.onStructuralDelete && !seen.has(behavior));
+        if (!behaviors.length) {
+          continue;
+        }
         const context = createBlockBehaviorContext(reactPanel, id, root, current);
-        if (context && behavior.onStructuralDelete(context, ids) !== "default") {
+        if (!context) {
+          continue;
+        }
+        behaviors.forEach((behavior) => seen.add(behavior));
+        if (dispatchBlockAction(behaviors, availability, "onStructuralDelete", context, ids)) {
           claimed = true;
           break;
         }

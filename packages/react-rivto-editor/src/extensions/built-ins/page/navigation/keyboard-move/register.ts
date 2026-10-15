@@ -24,7 +24,8 @@ import {
  * @returns No value.
  */
 export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
-  const isCollapsed = (block: EditorBlock) => !reactEditor.blockListProps.childrenVisible(block);
+  // Resolve move groups and destinations from the visible outline, skipping collapsed descendants.
+  const isCollapsed = (block: EditorBlock) => !reactEditor.blockBehaviors.childrenVisible(block);
   const move = (
     reactPanel: ReactPanelApi,
     root: HTMLElement,
@@ -42,6 +43,23 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
     const placement = keyboardMovePlacement(outline, roots.ids, direction, isCollapsed);
     if (!placement) {
       return false;
+    }
+    const destination =
+      placement.position === "before"
+        ? {
+            parentId: reactPanel.document.blocks.getParentId(placement.targetId) ?? null,
+            beforeId: placement.targetId,
+          }
+        : reactPanel.document.blocks.getInsertionDestinationAfter(placement.targetId);
+    const sources = roots.ids.flatMap((id) => {
+      const block = reactPanel.blocks.getBlockNode(id);
+      return block ? [block] : [];
+    });
+    if (
+      sources.length !== roots.ids.length ||
+      !reactEditor.blockBehaviors.canMove({ sources, destination })
+    ) {
+      return true;
     }
     reactPanel.blocks.moveBlocks(roots.ids, placement.targetId, placement.position);
     if (roots.grouped && roots.selection) {

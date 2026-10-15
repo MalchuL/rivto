@@ -107,6 +107,11 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
           },
           render: TodoStorage,
           behavior: todoStorageBehavior,
+          drag: {
+            dropAxis: "vertical",
+            acceptsDropContainer: true,
+            showHandleOnContainerHover: true,
+          },
           slashCommand: {
             id: "type.todo-storage",
             title: "TODO storage",

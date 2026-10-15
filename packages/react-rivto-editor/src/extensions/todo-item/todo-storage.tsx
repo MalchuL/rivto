@@ -1,3 +1,4 @@
+import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
 /**
  * Provides TODO-storage data rules, direct-child filtering, status ordering,
  * toolbar presentation, and the complete-card wrapper shared by page and
@@ -19,7 +20,7 @@ import {
   type MouseEvent,
 } from "react";
 import { z } from "zod";
-import { createBlockBehaviorContext } from "../../block-behaviors/context";
+import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
 import { ContainerBlockBehavior } from "../../block-behaviors";
 import type { BlockWrapperProps } from "../../blocks";
 import { Button } from "../../components/ui/button";
@@ -108,8 +109,20 @@ interface TodoStorageContextValue {
 
 const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(undefined);
 
+/** Vertical-container behavior restricted to TODO storage blocks. */
+class TodoStorageBehavior extends ContainerBlockBehavior {
+  /**
+   * Selects TODO storage without applying its container actions to ordinary task blocks.
+   * @param context - Current detached block fields and runtime; applicability is independent of the called method.
+   * @returns True only for the TODO storage native type.
+   */
+  override isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return context.block.type === TODO_STORAGE_BLOCK_TYPE;
+  }
+}
+
 /** Shared vertical-container behavior used by keyboard and drag dispatchers. */
-export const todoStorageBehavior = new ContainerBlockBehavior();
+export const todoStorageBehavior = new TodoStorageBehavior();
 
 /** Creates persisted defaults without sharing the mutable status-order array. */
 export function createTodoStorageProps(): TodoStorageProps {

@@ -1,3 +1,4 @@
+import type { BlockDragOptions } from "../../extensions/block-drag/block-drag-options";
 import type { BlockDefinition } from "@chulane/rivto";
 import type { ReactBlockRegistration } from "./types";
 
@@ -17,6 +18,12 @@ export interface BlockTypesApi {
    * @returns Whether a registration was removed.
    */
   delete(type: string): boolean;
+  /**
+   * Reads optional page-drag geometry without enabling dragging.
+   * @param type - Persisted native block type.
+   * @returns Registered geometry, or undefined when the type has no drag options.
+   */
+  getDragOptions(type: string): BlockDragOptions | undefined;
   /** Reports whether a registered type partitions root block elements. */
   separatesBlockElements(type: string): boolean;
   /** Returns the first separator type registered for automatic card creation. */

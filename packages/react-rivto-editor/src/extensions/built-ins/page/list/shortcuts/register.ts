@@ -1,6 +1,7 @@
 import { registerBlockListActions } from "../../../block-handle/actions";
-import { focusCaret, scheduleBlockFocus } from "../../../../../block-behaviors/ops/focus-ops";
-import { convertEmptyToList } from "../../../../../block-behaviors/ops/text-ops";
+import { CheckboxBlockBehavior } from "../checkbox-block-behavior";
+import { NumberedListBlockBehavior } from "../numbered-list-block-behavior";
+import { ListBlockBehavior } from "../list-block-behavior";
 import type { ReactEditorApi } from "../../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
@@ -48,42 +49,14 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
 
   reactEditor.blockListProps.register({
     id: "list",
-    prepareSplit: (block) => {
-      let type: BlockListType = "list";
-      if (block.listProps.type === "checkbox") {
-        type = "checkbox";
-      } else if (isNumberedListType(block.listProps.type)) {
-        type = "numbered_list";
-      }
-      return { type, checked: false };
-    },
-    onSplit: ({ reactPanel, block, root }) => {
-      if (
-        reactPanel.editor.isEmptyBlock(block) &&
-        (block.listProps.type === "checkbox" || isNumberedListType(block.listProps.type))
-      ) {
-        // The first Enter removes only the visible list state; the block keeps
-        // its outline position and unrelated properties for the next press.
-        reactPanel.blocks.deleteListProps(block.id, ["type", "checked"]);
-        focusCaret(reactPanel, root, block.id, 0);
-        return true;
-      }
-      if (
-        !reactPanel.blocks.getParentId(block.id) &&
-        reactPanel.editor.isEmptyBlock(block) &&
-        block.listProps.type !== "list"
-      ) {
-        convertEmptyToList(reactPanel, block.id);
-        scheduleBlockFocus(reactPanel, root, block.id, 0);
-        return true;
-      }
-      return false;
-    },
     defaults: { type: "list", checked: false },
     isValid: (candidate) =>
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
       typeof candidate.checked === "boolean",
   });
+  reactEditor.blockBehaviors.register(new CheckboxBlockBehavior(), -100);
+  reactEditor.blockBehaviors.register(new NumberedListBlockBehavior(), -100);
+  reactEditor.blockBehaviors.register(new ListBlockBehavior(), -100);
   reactEditor.surfaces.registerBlockSlot({
     position: "start",
     priority: 300,

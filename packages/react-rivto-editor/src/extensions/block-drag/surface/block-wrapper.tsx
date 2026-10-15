@@ -21,7 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import type { DropAxis } from "../../../block-behaviors/types";
+import type { DropAxis } from "../block-drag-options";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
 import { useReactPanel } from "../../../hooks";
 import { findParentBlock } from "../../../managers/events/block-dom";
@@ -44,7 +44,7 @@ const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
  * edgeless surfaces never import it. The button alone activates the draggable
  * sensor, so editable content retains ordinary caret and selection behavior.
  *
- * Views with a dropAxis and no dropParentTypes mark their shell with
+ * Types with showHandleOnContainerHover mark their shell with
  * `data-drag-container`, enabling full-container handle hover without naming
  * block types in CSS. Structural rows and lanes retain row-only hover. The
  * marker is removed when the view stops qualifying or this wrapper unmounts.
@@ -57,17 +57,20 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const targetBehavior = reactPanel.editor.blockBehaviors.resolve(block.id);
-  const isLayoutRoot =
-    targetBehavior.dropAxis !== undefined && targetBehavior.dropParentTypes === undefined;
-  const parentBehavior = parentId ? reactPanel.editor.blockBehaviors.resolve(parentId) : undefined;
+  const dragOptions = reactPanel.editor.blockTypes.getDragOptions(block.type) ?? {};
+  const isLayoutRoot = dragOptions.showHandleOnContainerHover === true;
+  const parentDragOptions = parentId
+    ? reactPanel.editor.blockTypes.getDragOptions(
+        reactPanel.blocks.getBlockNode(parentId)?.type ?? "",
+      )
+    : undefined;
   const parentOutline = parentId ? blockContainment(reactPanel, parentId)?.childOutline : undefined;
-  const axis = parentOutline === "fixed" ? parentBehavior?.dropAxis : undefined;
+  const axis = parentOutline === "fixed" ? parentDragOptions?.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
-  const dropNode = sortable || targetBehavior.acceptsDropContainer ? blockElement : row;
+  const dropNode = sortable || dragOptions.acceptsDropContainer ? blockElement : row;
 
   // Layout roots reveal their handle across the whole container. Structural
-  // rows and lanes declare dropParentTypes and retain ordinary row hover.
+  // rows and lanes retain ordinary row hover.
   // Body-drop acceptance is independent: Columns rejects body drops but still
   // needs container hover. Keep this marker owned and cleaned up by dragging.
   useLayoutEffect(() => {

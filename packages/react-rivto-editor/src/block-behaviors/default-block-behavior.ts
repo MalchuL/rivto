@@ -1,3 +1,4 @@
+import type { BlockBehaviorAvailabilityContext } from "./types";
 /**
  * Generic outline behavior shared by every unregistered or unconstrained block.
  *
@@ -17,77 +18,40 @@ import {
   findPreviousEditableBlock,
   findRenderedBlock,
 } from "../managers/events/block-dom";
-import { focusCaret, scheduleBlockFocus } from "./ops/focus-ops";
-import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
-import { mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
-import type {
-  BlockBehavior,
-  BlockBehaviorContext,
-  BlockBehaviorOutcome,
-  BlockDropContext,
-  DropAxis,
-} from "./types";
+import { scheduleBlockFocus } from "./utils/focus-ops";
+import { indentBlocks, outdentBlocks } from "./utils/outline-ops";
+import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";
+import type { BlockBehavior, BlockBehaviorContext, BlockBehaviorOutcome } from "./types";
 
 /**
- * Default block behavior used when a type registers no specialized behavior.
+ * Default block behavior used after higher-priority applicable handlers defer.
  *
- * Instances are stateless. {@link BlockBehaviorRegistry} keeps one shared fallback.
+ * Instances are stateless. {@link BlockBehaviorRegistry} installs one instance as an ordinary low-priority registration.
  */
 export class DefaultBlockBehavior implements BlockBehavior {
-  /** Child layout direction used for drag placement, if this type defines one. */
-  readonly dropAxis?: DropAxis;
-  readonly dropChildTypes?: readonly string[];
-  readonly dropParentTypes?: readonly string[];
-  /** Whether the complete BlockView is a drop target, including empty lanes. */
-  readonly acceptsDropContainer: boolean = false;
+  /**
+   * Makes generic outline handling available after higher-priority behaviors defer.
+   * @param context - Current block fields and runtime; generic behavior has no applicability restriction.
+   * @returns Always true, including for unknown native types.
+   */
+  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return true;
+  }
 
   /**
-   * Splits at the caret, clears an empty list marker, or lifts one outline level.
+   * Splits at the caret or lifts one outline level after specialized behaviors defer.
+   *
+   * Uses the writing factory's continuation defaults. List behaviors supply their
+   * own properties to the same shared algorithm. The caller owns the transaction;
+   * model selection updates immediately and DOM focus is scheduled after rendering.
    *
    * @param context - Block that owns the Enter event.
    * @param target - Caret or structural keyboard target.
-   * @returns `"handled"` after a list action, insertion, or outdent attempt, including when containment prevents the move.
+   * @returns `"handled"` after insertion or an outdent attempt, including when containment prevents the move.
+   * @throws If delegated block mutation, hierarchy, or list-property validation fails.
    */
   onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
-    const { reactPanel, block, root } = context;
-    const { isEmptyBlock } = reactPanel.editor;
-    if (reactPanel.editor.blockListProps.onSplit(context)) {
-      return "handled";
-    }
-    if (isEmptyBlock(block) && reactPanel.blocks.canOutdent(block.id)) {
-      // Lift one permitted level per Enter, stopping at container outline floors.
-      outdentBlocks(reactPanel, [block.id]);
-      focusCaret(reactPanel, root, block.id, 0);
-      return "handled";
-    }
-    const splitAt = target.collapsed
-      ? Math.min(target.offset ?? 0, block.content.length)
-      : block.content.length;
-    const nextBlock = splitBlockAt(reactPanel, block, splitAt);
-    // Core mode can be edgeless while Enter comes from a page embedding.
-    // Only extend the canvas card's block range when editing its edgeless view.
-    if (
-      reactPanel.blocks.canRemove(block.id) &&
-      block.children.length > 0 &&
-      reactPanel.editor.blockListProps.childrenVisible(block)
-    ) {
-      // Insertion created a sibling. Indent then prepend so Enter places the
-      // new writing block as the first visible child.
-      reactPanel.blocks.indentBlock(nextBlock.id);
-      reactPanel.blocks.moveBlock(nextBlock.id, null);
-    } else if (
-      reactPanel.events.getSurfaceType() === "edgeless" &&
-      reactPanel.blocks.getRootIds().includes(block.id)
-    ) {
-      const element = reactPanel.elements
-        .getElementNodes()
-        .find((candidate) => candidate.type === "block" && candidate.props.endBlockId === block.id);
-      if (element) {
-        reactPanel.elements.updateElement(element.id, { props: { endBlockId: nextBlock.id } });
-      }
-    }
-    scheduleBlockFocus(reactPanel, root, nextBlock.id, 0);
-    return "handled";
+    return splitBlock(context, target);
   }
 
   /**
@@ -175,7 +139,8 @@ export class DefaultBlockBehavior implements BlockBehavior {
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
     const { reactPanel, block, root } = context;
-    if (!reactPanel.editor.blockListProps.childrenVisible(block)) {
+    // Forward Delete must not merge across a collapsed branch whose children are hidden from the caret.
+    if (!reactPanel.editor.blockBehaviors.childrenVisible(block)) {
       return "default";
     }
     const scope = navigationDomRoot(root, block.id);
@@ -196,6 +161,8 @@ export class DefaultBlockBehavior implements BlockBehavior {
    *
    * @param context - Empty custom block with no previous editable sibling.
    * @param target - Collapsed caret at offset zero.
+   * Custom blocks keep the existing empty-text eligibility rule. Specialized
+   * behavior may refuse reset through its onResetEmpty implementation.
    * @returns `"handled"` when the type was reset; `"default"` for nonempty blocks, writing blocks, or blocks with an editable predecessor.
    */
   onResetEmpty(
@@ -203,7 +170,12 @@ export class DefaultBlockBehavior implements BlockBehavior {
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
     const { reactPanel, block, root } = context;
-    if (block.content !== "" || reactPanel.editor.isEmptyBlock(block)) {
+    if (block.content !== "") {
+      return "default";
+    }
+    const candidate = reactPanel.blocks.getBlockNode(block.id)!;
+    const defaultWritingBlockFactory = reactPanel.editor.defaultWritingBlockFactory;
+    if (defaultWritingBlockFactory.isEmptyBlock(candidate)) {
       return "default";
     }
     const scope = navigationDomRoot(root, block.id);
@@ -218,24 +190,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
   /**
    * Generic blocks do not relocate children before a structural delete.
    *
-   * @param _context - Unused selected-block context.
-   * @param _ids - Unused structural selection.
+   * @param context - Unused selected-block context.
+   * @param ids - Unused structural selection.
    * @returns `"default"` so the shared selection-deletion path proceeds.
    */
-  onStructuralDelete(
-    _context: BlockBehaviorContext,
-    _ids: readonly string[],
-  ): BlockBehaviorOutcome {
+  onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
     return "default";
-  }
-
-  /**
-   * Generic blocks accept children through their editable row.
-   *
-   * @param _context - Unused drop destination.
-   * @returns `true`; full-body container targeting is controlled separately.
-   */
-  acceptsDrop(_context: BlockDropContext): boolean {
-    return true;
   }
 }

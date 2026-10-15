@@ -22,3 +22,5 @@ export {
 export { PageDragProvider, type PageDragExtensionOptions } from "./provider";
 export { registerPageDrag } from "./register";
 export { PageDragBlockSlot, PageDragBlockWrapper } from "./surface";
+
+export type { BlockDragOptions, BlockDropPlacementOptions, DropAxis } from "./block-drag-options";

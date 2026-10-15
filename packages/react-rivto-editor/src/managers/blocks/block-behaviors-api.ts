@@ -1,67 +1,55 @@
-import type { EditorBlock } from "@chulane/rivto";
 import type {
   BlockBehavior,
   BlockBehaviorAction,
-  BlockDropDestination,
+  BlockBehaviorAvailabilityContext,
+  BlockBehaviorData,
+  BlockMoveContext,
 } from "../../block-behaviors/types";
 
-/** Per-type outline, split, and drop behavior resolved by page dispatchers. */
+/** Outline, split, and movement behavior selected from current detached block data. */
 export interface BlockBehaviorsApi {
   /**
-   * Resolves the context block's behavior and falls back when it defers.
+   * Runs the context block's prioritized behavior chain until handled or rejected.
    * @param action - Semantic operation to invoke.
    * @param args - Block context and operation-specific arguments.
    * @returns True when the operation was handled or explicitly rejected.
    */
   dispatch<Action extends BlockBehaviorAction>(
     action: Action,
-    ...args: Parameters<BlockBehavior[Action]>
+    ...args: Parameters<NonNullable<BlockBehavior[Action]>>
   ): boolean;
   /**
-   * Registers one shared behavior instance for a persisted block type.
-   * @param type - Non-empty type name, unique within this registry.
-   * @param behavior - Instance used by every block of this type; read per-block state from context.
-   * @returns Idempotent disposer, also released with the registering extension.
-   * @throws If the type is empty, already registered, or the runtime is destroyed.
+   * Registers an instance whose isAvailable context determines applicability.
+   * @param behavior - Instance reused by matching blocks; read per-block state from context.
+   * @param priority - Finite order, default 0; larger values run first and ties keep registration order.
+   * @returns Idempotent exact-registration disposer, also released with its extension.
+   * @throws If priority is nonfinite or the runtime is destroyed.
    */
-  register(type: string, behavior: BlockBehavior): () => void;
+  register(behavior: BlockBehavior, priority?: number): () => void;
   /**
-   * Removes the behavior registered for a persisted block type.
-   * @param type - Exact registered type name to remove.
-   * @returns Whether a registration was found and disposed.
-   * @throws If the runtime is destroyed.
+   * Selects applicable behaviors using current detached block fields and runtime.
+   * @param context - Common editor and block context, without method names, discriminators, or movement arguments.
+   * @returns Instances in descending priority, stable at ties; applicability is reevaluated on every call.
    */
-  delete(type: string): boolean;
+  resolveAll(context: BlockBehaviorAvailabilityContext): readonly BlockBehavior[];
   /**
-   * Looks up an exact type registration without using the default behavior.
-   * @param type - Persisted block type name.
-   * @returns Registered instance, or undefined when no behavior is registered for this type.
+   * Checks child visibility for rendering and traversal.
+   * Rendering, navigation, selection, Enter/Delete, and drag previews use the same
+   * query to agree on the visible outline. With no applicable visibility hooks,
+   * children stay visible, including when the optional collapse extension is absent.
+   * @param block - Persisted parent fields without requiring child subtrees.
+   * @returns True unless an applicable behavior explicitly hides the children.
    */
-  get(type: string): BlockBehavior | undefined;
+  childrenVisible(block: BlockBehaviorData): boolean;
   /**
-   * Checks whether a behavior is explicitly registered for a type.
-   * @param type - Persisted block type name.
-   * @returns Whether an exact registration exists; the shared fallback does not count.
+   * Checks semantic movement independently of its keyboard or pointer origin.
+   * Source data is used directly, including foreign-document snapshots. The receiving
+   * parent is read once. The common availability predicate checks sources and parent; each
+   * matching registration calls canMove at most once, in priority order, stopping at the first veto.
+   * All applicable hooks must permit the move. This does not
+   * replace core hierarchy validation or mutate the document.
+   * @param request - Nonempty moved roots and a core insertion destination.
+   * @returns False for empty sources, a missing parent or insertion neighbor, or a hook veto.
    */
-  has(type: string): boolean;
-  /**
-   * Reads a block's current type and selects its interaction behavior.
-   * @param blockId - ID of the block whose type should be read.
-   * @returns Registered instance, or fallback for missing blocks and unregistered types.
-   * Returning a fallback does not establish that the block exists or can be edited.
-   */
-  resolve(blockId: string): BlockBehavior;
-  /**
-   * Checks behavior restrictions for source blocks at a destination parent.
-   *
-   * Checks allowed child types, allowed parent types, and the parent's acceptsDrop()
-   * hook. This is not a complete hierarchy check; callers still validate the move.
-   * @param destination - Child position or container receiving the dragged roots.
-   * @param sources - Source snapshots, possibly from another document.
-   * @returns False for empty sources, a missing destination parent, or a refused type
-   * or hook check; true when all behavior restrictions permit the drop.
-   */
-  acceptsDrop(destination: BlockDropDestination, sources: readonly EditorBlock[]): boolean;
-  /** Shared generic behavior used when a type registers no specialization. */
-  readonly fallback: BlockBehavior;
+  canMove(request: Pick<BlockMoveContext, "sources" | "destination">): boolean;
 }

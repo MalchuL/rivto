@@ -9,9 +9,7 @@
 
 import type { EditorBlock, EditorSnapshot } from "@chulane/rivto";
 import { DOCUMENT_SNAPSHOT_VERSION } from "@chulane/document-model";
-
-/** Matches `DEFAULT_WRITING_BLOCK_TYPE` without importing the React package. */
-const WRITING_BLOCK_TYPE = "paragraph";
+import { paragraphBlockFactory } from "@chulane/rivto-react/block-factories";
 
 /** Empty portable document stored for new pages. */
 export const EMPTY_EDITOR_SNAPSHOT: EditorSnapshot = {
@@ -73,7 +71,7 @@ function seedBlock(input: SeedWritingBlock, index: number): EditorBlock {
         };
   return {
     id: `seed-${index + 1}`,
-    type: WRITING_BLOCK_TYPE,
+    type: paragraphBlockFactory.createEmptyBlock().type,
     listProps,
     props: {},
     pluginData: {},

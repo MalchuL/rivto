@@ -1,3 +1,4 @@
+import { createBlockFactory } from "../block-factories";
 import { PanelElements } from "@chulane/rivto";
 import type { ReactPanelApi } from "../panels/types";
 import type { BlockElementProps } from "./types";
@@ -154,7 +155,7 @@ function maximumWeightMatching(weights: readonly (readonly number[])[]): number[
 function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]): number[] {
   const rowsByCard = new Map<number, number[]>();
   scores.forEach((row, index) =>
-    row.forEach((_, card) => {
+    row.forEach((weight, card) => {
       const rows = rowsByCard.get(card) ?? [];
       rows.push(index);
       rowsByCard.set(card, rows);
@@ -162,7 +163,7 @@ function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]):
   );
   const result = Array<number>(scores.length).fill(-1);
   const visited = new Set<number>();
-  scores.forEach((_, start) => {
+  scores.forEach((rowScores, start) => {
     if (visited.has(start)) {
       return;
     }
@@ -170,7 +171,7 @@ function matchConnectedSegments(scores: readonly ReadonlyMap<number, number>[]):
     const cards = new Set<number>();
     visited.add(start);
     for (const row of rows) {
-      scores[row]!.forEach((_, card) => {
+      scores[row]!.forEach((weight, card) => {
         if (cards.has(card)) {
           return;
         }
@@ -305,14 +306,15 @@ export function insertBlockElementSeparator(
   if (!type) {
     throw new Error("No block element separator type is registered");
   }
+  const blockElementSeparator = createBlockFactory(type);
   if ("editor" in editor) {
     const destination = editor.blocks.canRemove(afterId)
       ? editor.blocks.getInsertionDestinationAfter(afterId)
       : { parentId: afterId };
-    return editor.blocks.insertBlock({ type, content: "" }, destination);
+    return editor.blocks.insertBlock(blockElementSeparator.createEmptyBlock(), destination);
   }
   return editor.blocks.insertBlock(
-    { type, content: "" },
+    blockElementSeparator.createEmptyBlock(),
     editor.blocks.getInsertionDestinationAfter(afterId),
   );
 }

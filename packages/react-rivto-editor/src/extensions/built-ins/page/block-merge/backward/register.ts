@@ -1,6 +1,6 @@
 import type { ReactEditorApi } from "../../../../../editor/types";
 /** Keyboard registration for backward block merging at a content boundary. */
-import { createBlockBehaviorContext } from "../../../../../block-behaviors/context";
+import { createBlockBehaviorContext } from "../../../../../block-behaviors/utils/context";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,

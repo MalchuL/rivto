@@ -128,8 +128,29 @@ await storage.destroy();
 Markdown renderer + slash conversion) and can override that command's `id`,
 `title`, `group`, keywords, or availability while omitted fields retain their
 defaults. Hosts that skip `standardPreset` must install
-`defaultWritingBlockExtension` (or call `installDefaultWriting`) before
+`defaultWritingBlockExtension` (or call `installDefaultWriting` with a `BlockFactory`) before
 keyboard/clipboard paths that create writing blocks.
+
+`writing.factory` accepts a `BlockFactory` with `createEmptyBlock()`, `isBlock(block)`,
+and `isEmptyBlock(block)`. Access the installed object through
+`reactEditor.defaultWritingBlockFactory`. The default emptiness policy checks the configured
+native type and empty text; properties, plugin data, and children do not change that
+policy. Clipboard creation and reset conversion retain their type-only use of the
+writing factory, while ordinary insertion uses the complete returned input.
+
+Custom reset keeps its empty-text eligibility check and the installed writing
+predicate. Specialized blocks may refuse reset through the existing `onResetEmpty()`
+behavior; general block registrations have no factory field or factory lookup.
+Separator registrations retain `separatesBlockElements: true` metadata. Automatic
+card insertion reads the first registered separator type and uses a type-matching
+factory to create its input; factories are not stored with block types. Separator
+commands still reuse any empty leaf, while keyboard caret fallback still checks
+text length independently of semantic block emptiness.
+
+For seed construction without a React runtime, import `paragraphBlockFactory`,
+`separatorBlockFactory`, or `createBlockFactory(type)` from
+`@chulane/rivto-react/block-factories`. Each creation returns a fresh detached input;
+insertion or snapshot builders remain responsible for IDs and placement.
 
 `standardPreset()` installs page editing: the page surface, selection bridges,
 history, clipboard, slash commands, navigation, indent/outdent,
@@ -424,6 +445,25 @@ Use `runtime.blockBehaviors` to register or resolve `BlockBehavior` implementati
 `ContainerBlockBehavior` supplies the shared container behavior. A complete block
 registration uses `behavior`, alongside `definition` and `render`.
 The `BlockView` React component still renders the block shell.
+Several behaviors can be registered with
+`runtime.blockBehaviors.register(behavior, priority = 0)`. Each implements
+`isAvailable({ editor, block })` using current detached block fields. Every method
+uses the same availability context without a discriminator or operation name.
+During movement, the registry tests source blocks and the receiving parent and
+calls each matching registration's canMove method once. Only canMove receives
+sources, destination, editor, and the resolved parent as its BlockMoveContext.
+The called method owns any operation-specific eligibility. Higher priorities run first,
+with stable registration order at ties. Native behaviors use `0`, list/collapse
+use `-100`, and `DefaultBlockBehavior` is an ordinary registration at `-1000`.
+Container behaviors implement their own native-type predicates and do not inherit
+generic outline actions. Inherited methods receive no special dispatch treatment.
+Use `dispatch()` for actions, `resolveAll(context)` for applicable instances, and
+`canMove({ sources, destination })` for semantic movement permissions. The move
+query is independent of dragging; all applicable hooks must allow it. Geometry
+belongs to the optional `drag` field of block-type registration and is read through
+`blockTypes.getDragOptions(type)`. Availability is not cached by native type. List split inheritance and Enter transitions belong to separate
+checkbox, numbered-list, and ordinary-list behaviors; property defaults and
+validation remain in `blockListProps`.
 
 Public manager contracts use the `Api` suffix and live next to their owning
 manager: for example, `BlocksApi`, `BlockBehaviorsApi`, `PanelEventsApi`,

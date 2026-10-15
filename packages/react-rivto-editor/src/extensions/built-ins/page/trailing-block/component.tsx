@@ -24,7 +24,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
   }
 
   return createPortal(
-    Array.from({ length: count }, (_, index) => {
+    Array.from({ length: count }, (value, index) => {
       const amount = index + 1;
       return (
         <Button
@@ -39,7 +39,7 @@ export function TrailingBlock({ count }: TrailingBlockProps) {
             reactPanel.batchUpdates(() => {
               for (let current = 0; current < amount; current += 1) {
                 id = reactPanel.blocks.insertBlock(
-                  reactPanel.editor.createDefaultBlock(),
+                  reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
                   reactPanel.blocks.getInsertionDestinationAfter(id || undefined),
                 ).id;
               }

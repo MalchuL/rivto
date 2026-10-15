@@ -79,7 +79,10 @@ export function createPageEditor(options: {
   } else {
     const leftover = extractPageText(options.snapshot);
     if (leftover) {
-      editor.blocks.insertBlock({ type: "paragraph", content: leftover });
+      editor.blocks.insertBlock({
+        ...reactEditor.defaultWritingBlockFactory.createEmptyBlock(),
+        content: leftover,
+      });
       editor.history.clear();
     }
   }

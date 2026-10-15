@@ -9,7 +9,7 @@ import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
+import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
 import type { BlockWrapperProps } from "../../../blocks";
 import { editorControlProps } from "../../../constants";
 import {
@@ -202,9 +202,12 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
   const addCard = () => {
     let cardId = "";
     reactPanel.batchUpdates(() => {
-      cardId = reactPanel.blocks.insertBlock(reactPanel.editor.createDefaultBlock(), {
-        parentId: blockId,
-      }).id;
+      cardId = reactPanel.blocks.insertBlock(
+        reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
+        {
+          parentId: blockId,
+        },
+      ).id;
       reactPanel.selection.set(createCaretSelection(cardId, 0));
     });
     requestAnimationFrame(() => {
@@ -281,6 +284,11 @@ export function kanbanExtension(): ReactEditorExtension {
           },
           render: Kanban,
           behavior: kanbanBehavior,
+          drag: {
+            dropAxis: "horizontal",
+            acceptsDropContainer: true,
+            showHandleOnContainerHover: true,
+          },
         }),
         reactEditor.blockTypes.register({
           definition: {
@@ -290,6 +298,7 @@ export function kanbanExtension(): ReactEditorExtension {
           },
           render: KanbanColumn,
           behavior: kanbanColumnBehavior,
+          drag: { dropAxis: "vertical", acceptsDropContainer: true },
         }),
         reactEditor.slashCommands.register({
           id: "block.kanban.insert",

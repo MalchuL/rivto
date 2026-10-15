@@ -86,13 +86,16 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
       isSelected={selected}
       content={<BlockContent renderer={Content} blockId={block.id} />}
     >
-      {childIds.length > 0 && reactPanel.editor.blockListProps.childrenVisible(block) && (
-        <div id={childrenId} className="page-block-children">
-          {childIds.map((childId) => (
-            <MemoBlockTreeNode key={childId} blockId={childId} />
-          ))}
-        </div>
-      )}
+      {
+        // Rendering and keyboard navigation must agree on which children are shown.
+        childIds.length > 0 && reactPanel.editor.blockBehaviors.childrenVisible(block) && (
+          <div id={childrenId} className="page-block-children">
+            {childIds.map((childId) => (
+              <MemoBlockTreeNode key={childId} blockId={childId} />
+            ))}
+          </div>
+        )
+      }
     </BlockWrapper>
   );
 }

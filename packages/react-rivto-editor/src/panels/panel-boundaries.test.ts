@@ -1,6 +1,6 @@
 import { ReactPanel } from "./react-panel";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
-import { convertLeafToContainer } from "../block-behaviors/ops/outline-ops";
+import { convertLeafToContainer } from "../block-behaviors/utils/outline-ops";
 import { createReactEditor } from "../editor/react-editor";
 import { createTestCoreEditor } from "../test-utils";
 import { ChildrenPanel } from "@chulane/rivto";

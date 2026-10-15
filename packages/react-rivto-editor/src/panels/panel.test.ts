@@ -1,6 +1,6 @@
 import { edgelessPreset } from "../extensions/edgeless";
 import { ReactPanel } from "./react-panel";
-import { outdentBlocks } from "../block-behaviors/ops/outline-ops";
+import { outdentBlocks } from "../block-behaviors/utils/outline-ops";
 import { createTestCoreEditor, createTestReactEditor } from "../test-utils";
 import { ChildrenPanel } from "@chulane/rivto";
 import { PanelElements } from "@chulane/rivto";

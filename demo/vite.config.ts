@@ -23,6 +23,12 @@ export default defineConfig({
         ),
       },
       {
+        find: "@chulane/rivto-react/block-factories",
+        replacement: fileURLToPath(
+          new URL("../packages/react-rivto-editor/src/block-factories.ts", import.meta.url),
+        ),
+      },
+      {
         find: /^@chulane\/rivto-react$/,
         replacement: fileURLToPath(
           new URL("../packages/react-rivto-editor/src/index.ts", import.meta.url),

@@ -299,11 +299,11 @@ for (const mode of ["block", "edgeless"] as const) {
           };
         }
       ).__rivtoDemo;
-      // Reuse a layout view that rejects body drops, under a type unknown to CSS.
+      // Reuse layout metadata that rejects body drops, with explicit applicability for a type unknown to CSS.
       reactEditor.blockTypes.register({
         definition: { type: "test-container", title: "Custom container" },
         render: reactEditor.renderers.get("paragraph")!,
-        behavior: reactEditor.blockBehaviors.get("columns")!,
+        drag: { ...reactEditor.blockTypes.getDragOptions("columns") },
       });
       const block = editor.blocks.insertBlock({
         type: "test-container",

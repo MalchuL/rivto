@@ -1,3 +1,4 @@
+import type { BlockDragOptions } from "../../extensions/block-drag/block-drag-options";
 import type { RegistrationOwner } from "../extensions/types";
 /**
  * Owns atomic React block-type registration and presentation metadata.
@@ -12,6 +13,7 @@ import { getBlockContainment, type ReactBlockRegistration } from "./types";
 
 /** Coordinates one block type's core definition and React presentation. */
 export class BlockTypeManager implements BlockTypesApi {
+  private readonly dragOptions = new Map<string, BlockDragOptions>();
   private readonly registrations = new Map<string, () => void>();
   private readonly blockElementSeparatorTypes = new Set<string>();
 
@@ -31,7 +33,7 @@ export class BlockTypeManager implements BlockTypesApi {
    * Registers definition, renderer, optional behavior, and type conversion atomically.
    * @param registration - Complete custom block integration.
    * @returns Idempotent disposer releasing every installed part in reverse.
-   * @throws On definition, renderer, behavior, or slash-command conflicts.
+   * @throws On invalid definitions or renderer/slash-command conflicts; installed resources roll back on any failure.
    */
   register(registration: ReactBlockRegistration): () => void {
     const { renderers, slashCommands, blockBehaviors } = this.reactEditor;
@@ -69,8 +71,12 @@ export class BlockTypeManager implements BlockTypesApi {
           ),
         );
       }
+      if (registration.drag) {
+        this.dragOptions.set(definition.type, registration.drag);
+        disposers.push(() => this.dragOptions.delete(definition.type));
+      }
       if (behavior) {
-        disposers.push(blockBehaviors.register(definition.type, behavior));
+        disposers.push(blockBehaviors.register(behavior));
       }
       if (registration.separatesBlockElements) {
         this.blockElementSeparatorTypes.add(definition.type);
@@ -123,6 +129,15 @@ export class BlockTypeManager implements BlockTypesApi {
     }
     dispose();
     return true;
+  }
+
+  /**
+   * Reads optional geometry without enabling the drag extension.
+   * @param type - Persisted native block type.
+   * @returns Its registered drag options, or undefined when none were supplied.
+   */
+  getDragOptions(type: string): BlockDragOptions | undefined {
+    return this.dragOptions.get(type);
   }
 
   /** @param type - Persisted block type. @returns Its registered core definition. */

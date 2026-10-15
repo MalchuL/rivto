@@ -367,7 +367,7 @@ function EdgelessSurfaceContent({
         afterId = insertBlockElementSeparator(reactPanel, last.id).id;
       }
       id = reactPanel.blocks.insertBlock(
-        reactPanel.editor.createDefaultBlock(),
+        reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
         reactPanel.blocks.getInsertionDestinationAfter(afterId),
       ).id;
       reactPanel.elements.insertElement({

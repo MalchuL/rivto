@@ -8,8 +8,8 @@
 import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent } from "react";
-import { createBlockBehaviorContext } from "../../../block-behaviors/context";
-import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
+import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
+import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
 import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
@@ -284,6 +284,11 @@ export function columnsExtension(): ReactEditorExtension {
         },
         render: Columns,
         behavior: columnsBehavior,
+        drag: {
+          dropAxis: "horizontal",
+          acceptsDropContainer: false,
+          showHandleOnContainerHover: true,
+        },
       });
       reactEditor.blockTypes.register({
         definition: {
@@ -293,6 +298,7 @@ export function columnsExtension(): ReactEditorExtension {
         },
         render: ColumnsColumn,
         behavior: columnsColumnBehavior,
+        drag: { acceptsDropContainer: true },
       });
       reactEditor.surfaces.registerBlockSlot({
         position: "right",

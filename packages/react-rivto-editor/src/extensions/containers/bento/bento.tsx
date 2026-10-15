@@ -19,9 +19,9 @@ import { BLOCK_ID_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
 import { useBlockNode, useBlockSelectionAnchor, useReactPanel, usePanel } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
-import { bentoBehavior } from "./bento-behavior";
+import { BENTO_BLOCK_TYPE, bentoBehavior } from "./bento-behavior";
 
-export const BENTO_BLOCK_TYPE = "bento";
+export { BENTO_BLOCK_TYPE } from "./bento-behavior";
 const WIDTH_PROPERTY = "--rivto-bento-width";
 const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
 const RESIZE_EDGE_ATTRIBUTE = "data-bento-resize-edge";
@@ -406,6 +406,7 @@ export function bentoExtension(): ReactEditorExtension {
           },
           render: Bento,
           behavior: bentoBehavior,
+          drag: { dropAxis: "grid", acceptsDropContainer: true, showHandleOnContainerHover: true },
           slashCommand: {
             id: "block.bento.insert",
             title: "Bento",

@@ -18,7 +18,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { convertLeafToContainer } from "../../../block-behaviors/ops/outline-ops";
+import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import {
   BlockElementRefProvider,
@@ -174,7 +174,7 @@ export function insertTableRow(reactPanel: ReactPanelApi, rowId: string): Editor
     return undefined;
   }
   const columns = Math.max(1, ...table.children.map((row) => row.children.length));
-  const widths = Array.from({ length: columns }, (_, column) =>
+  const widths = Array.from({ length: columns }, (value, column) =>
     columnWidth(
       table.children.find((row) => row.children[column])?.children[column]?.props.tableColumnWidth,
     ),
@@ -624,6 +624,11 @@ export function tableExtension(): ReactEditorExtension {
         },
         render: Table,
         behavior: tableBehavior,
+        drag: {
+          dropAxis: "vertical",
+          acceptsDropContainer: true,
+          showHandleOnContainerHover: true,
+        },
       });
       reactEditor.blockTypes.register({
         definition: {
@@ -633,6 +638,7 @@ export function tableExtension(): ReactEditorExtension {
         },
         render: TableRow,
         behavior: tableRowBehavior,
+        drag: { dropAxis: "horizontal", acceptsDropContainer: true },
       });
       reactEditor.blockTypes.register({
         definition: {
@@ -642,6 +648,7 @@ export function tableExtension(): ReactEditorExtension {
         },
         render: TableCell,
         behavior: tableCellBehavior,
+        drag: { acceptsDropContainer: true },
       });
       reactEditor.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
       reactEditor.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);

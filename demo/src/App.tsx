@@ -1,4 +1,5 @@
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
+import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
@@ -11,6 +12,7 @@ import {
   type EditorElementNode,
 } from "@chulane/rivto";
 import {
+  DEFAULT_WRITING_BLOCK_TYPE,
   BENTO_BLOCK_TYPE,
   bulletThreadingExtension,
   COLUMNS_BLOCK_TYPE,
@@ -19,7 +21,6 @@ import {
   createReactEditor,
   createKanbanBlockInput,
   createTableBlockInput,
-  DEFAULT_WRITING_BLOCK_TYPE,
   edgelessPreset,
   EditorStorage,
   EditorStorageContext,
@@ -30,7 +31,6 @@ import {
   KEYBOARD_BINDING_IDS,
   pageDragExtension,
   PageSurface,
-  SEPARATOR_BLOCK_TYPE,
   standardPreset,
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
@@ -432,12 +432,12 @@ async function createDemoEditor() {
     __rivtoDemo: { token: demoToken, editor, reactEditor },
   });
   const introId = editor.blocks.insertBlock({
-    type: DEFAULT_WRITING_BLOCK_TYPE,
+    ...paragraphBlockFactory.createEmptyBlock(),
     content: "**Rivto editor**",
   }).id;
   const paragraphId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content:
         "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
     },
@@ -446,7 +446,7 @@ async function createDemoEditor() {
 
   const selectionStartId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content:
         "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
     },
@@ -454,7 +454,7 @@ async function createDemoEditor() {
   ).id;
   const middleParagraphId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content:
         "This complete **Markdown paragraph** should be included between partial selections.",
     },
@@ -462,14 +462,14 @@ async function createDemoEditor() {
   ).id;
   const listId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Nested branch one owns several Markdown children.",
     },
     editor.blocks.getInsertionDestinationAfter(middleParagraphId),
   ).id;
   const childId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Level 2: this child owns another nested branch.",
     },
     editor.blocks.getInsertionDestinationAfter(listId),
@@ -477,7 +477,7 @@ async function createDemoEditor() {
   editor.blocks.indentBlock(childId);
   const grandchildId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Level 3: selection now crosses two indentation boundaries.",
     },
     editor.blocks.getInsertionDestinationAfter(childId),
@@ -485,7 +485,7 @@ async function createDemoEditor() {
   editor.blocks.indentBlock(grandchildId);
   const greatGrandchildId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Level 4: deepest item for recursive rendering and outdent checks.",
     },
     editor.blocks.getInsertionDestinationAfter(grandchildId),
@@ -493,7 +493,7 @@ async function createDemoEditor() {
   editor.blocks.indentBlock(greatGrandchildId);
   editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Level 2: sibling after the deep branch.",
     },
     editor.blocks.getInsertionDestinationAfter(childId),
@@ -501,21 +501,21 @@ async function createDemoEditor() {
 
   const reverseSelectionId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Reverse selection should preserve the browser's anchor and focus direction.",
     },
     editor.blocks.getInsertionDestinationAfter(listId),
   ).id;
   const secondBranchId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Nested branch two is a second independent structure.",
     },
     editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
   ).id;
   const numberedChildId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Second branch level 2 child.",
     },
     editor.blocks.getInsertionDestinationAfter(secondBranchId),
@@ -523,7 +523,7 @@ async function createDemoEditor() {
   editor.blocks.indentBlock(numberedChildId);
   const numberedGrandchildId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Second branch level 3 descendant.",
     },
     editor.blocks.getInsertionDestinationAfter(numberedChildId),
@@ -531,7 +531,7 @@ async function createDemoEditor() {
   editor.blocks.indentBlock(numberedGrandchildId);
   editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Second branch level 2 sibling.",
     },
     editor.blocks.getInsertionDestinationAfter(numberedChildId),
@@ -554,21 +554,21 @@ async function createDemoEditor() {
   ).id;
   const finalId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Finish the selection in the middle of this sentence, then try copy or cut.",
     },
     editor.blocks.getInsertionDestinationAfter(selectionEndId),
   ).id;
   const slashId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Type `/` anywhere here to open searchable slash commands.",
     },
     editor.blocks.getInsertionDestinationAfter(finalId),
   ).id;
   const uncheckedId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Try the interactive checkbox",
       listProps: { type: "checkbox", checked: false },
     },
@@ -576,7 +576,7 @@ async function createDemoEditor() {
   ).id;
   const checkedId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Completed checkbox item",
       listProps: { type: "checkbox", checked: true },
     },
@@ -584,7 +584,7 @@ async function createDemoEditor() {
   ).id;
   const numberedStartId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Start a numbered sequence",
       listProps: { type: "start_numbered_list" },
     },
@@ -592,7 +592,7 @@ async function createDemoEditor() {
   ).id;
   const numberedNextId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Continue the adjacent sequence",
       listProps: { type: "numbered_list" },
     },
@@ -600,14 +600,14 @@ async function createDemoEditor() {
   ).id;
   const numberedGapId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Ordinary content between numbered items",
     },
     editor.blocks.getInsertionDestinationAfter(numberedNextId),
   ).id;
   const numberedContinueId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Continue numbering across the ordinary block",
       listProps: { type: "continue_numbered_list" },
     },
@@ -617,7 +617,7 @@ async function createDemoEditor() {
   // The explicit separator is visible in block mode and partitions cards only
   // because its React block plugin declares `separatesBlockElements`.
   editor.blocks.insertBlock(
-    { type: SEPARATOR_BLOCK_TYPE, content: "" },
+    separatorBlockFactory.createEmptyBlock(),
     editor.blocks.getInsertionDestinationAfter(reverseSelectionId),
   );
   editor.elements.insertElement({
@@ -636,15 +636,19 @@ async function createDemoEditor() {
     {
       ...createBentoBlockInput(),
       children: [
-        { type: DEFAULT_WRITING_BLOCK_TYPE, content: "A small idea", props: { bentoWidth: 220 } },
         {
-          type: DEFAULT_WRITING_BLOCK_TYPE,
+          ...paragraphBlockFactory.createEmptyBlock(),
+          content: "A small idea",
+          props: { bentoWidth: 220 },
+        },
+        {
+          ...paragraphBlockFactory.createEmptyBlock(),
           content:
             "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
           props: { bentoWidth: 400 },
         },
         {
-          type: DEFAULT_WRITING_BLOCK_TYPE,
+          ...paragraphBlockFactory.createEmptyBlock(),
           content:
             "Drag blocks between tiles, nest them inside, or move them back into the editor.",
         },
@@ -663,7 +667,7 @@ async function createDemoEditor() {
   const column = editor.blocks.getBlock(kanbanId)!.children[0]!;
   const cardId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Drag me between columns or back into the editor",
     },
     editor.blocks.getInsertionDestinationAfter(kanbanId),
@@ -676,7 +680,7 @@ async function createDemoEditor() {
   const columnsBoard = editor.blocks.getBlock(columnsId)!;
   const leftColumnId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content:
         "Left column. Add more blocks here, or use the settings control to change the column count.",
     },
@@ -684,7 +688,7 @@ async function createDemoEditor() {
   ).id;
   const rightColumnId = editor.blocks.insertBlock(
     {
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "Right column. Deleting a column moves its blocks into the remaining column.",
     },
     editor.blocks.getInsertionDestinationAfter(columnsId),
@@ -704,7 +708,7 @@ async function createDemoEditor() {
       let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
         afterId = editor.blocks.insertBlock(
-          { type: SEPARATOR_BLOCK_TYPE, content: "" },
+          separatorBlockFactory.createEmptyBlock(),
           editor.blocks.getInsertionDestinationAfter(afterId),
         ).id;
         afterId =
@@ -1419,12 +1423,12 @@ async function createSyncedPeer(
   });
   if (side === "left" && !editor.blocks.getRootIds().length) {
     const introId = editor.blocks.insertBlock({
-      type: DEFAULT_WRITING_BLOCK_TYPE,
+      ...paragraphBlockFactory.createEmptyBlock(),
       content: "**Synced demo** — edit here or in the other pane.",
     }).id;
     editor.blocks.insertBlock(
       {
-        type: DEFAULT_WRITING_BLOCK_TYPE,
+        ...paragraphBlockFactory.createEmptyBlock(),
         content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
       },
       editor.blocks.getInsertionDestinationAfter(introId),
@@ -1434,7 +1438,7 @@ async function createSyncedPeer(
       for (let index = 0; index < repeatCount; index += 1) {
         afterId = editor.blocks.insertBlock(
           {
-            type: DEFAULT_WRITING_BLOCK_TYPE,
+            ...paragraphBlockFactory.createEmptyBlock(),
             content: `Synced repeated block ${index + 1}`,
           },
           editor.blocks.getInsertionDestinationAfter(afterId),

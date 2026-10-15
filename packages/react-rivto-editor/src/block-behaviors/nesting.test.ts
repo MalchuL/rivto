@@ -1,3 +1,4 @@
+import { BentoBehavior } from "../extensions/containers/bento/bento-behavior";
 import { createTestReactEditor as createReactEditor } from "../test-utils";
 /**
  * Nested container matrix: kanban in bento, bento in bento, columns in a
@@ -29,7 +30,7 @@ import {
   tableExtension,
 } from "../extensions/containers/table/table";
 import { getBlockContainment } from "../managers/blocks/types";
-import { indentBlocks, outdentBlocks } from "./ops/outline-ops";
+import { indentBlocks, outdentBlocks } from "./utils/outline-ops";
 
 async function createNestedRuntime() {
   const editor = await createTestCoreEditor();
@@ -82,9 +83,18 @@ test("kanban inside bento freezes tiles and floors cards at the column", async (
   editor.blocks.moveBlocks([card], editor.blocks.getBlock(kanban)!.children[1]!.id, "inside");
   expect(editor.blocks.getParentId(card)).toBe(editor.blocks.getBlock(kanban)!.children[1]!.id);
 
-  expect(reactPanel.editor.blockBehaviors.resolve(bento).dropAxis).toBe("grid");
-  expect(reactPanel.editor.blockBehaviors.resolve(kanban).dropAxis).toBe("horizontal");
-  expect(reactPanel.editor.blockBehaviors.resolve(column.id).dropAxis).toBe("vertical");
+  expect(
+    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(bento)!.type)!
+      .dropAxis,
+  ).toBe("grid");
+  expect(
+    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(kanban)!.type)!
+      .dropAxis,
+  ).toBe("horizontal");
+  expect(
+    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(column.id)!.type)!
+      .dropAxis,
+  ).toBe("vertical");
   const fromPage = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
   editor.blocks.moveBlocks([fromPage], bento, "inside");
   expect(editor.blocks.getParentId(fromPage)).toBe(bento);
@@ -110,7 +120,14 @@ test("bento inside bento keeps each board as its own floor", async () => {
   expect(editor.blocks.getParentId(tile)).toBeNull();
   editor.history.undo();
   expect(editor.blocks.getParentId(tile)).toBe(inner);
-  expect(reactPanel.editor.blockBehaviors.has(BENTO_BLOCK_TYPE)).toBe(true);
+  expect(
+    reactPanel.editor.blockBehaviors
+      .resolveAll({
+        editor: reactPanel.editor,
+        block: editor.blocks.getBlockNode(outer)!,
+      })
+      .some((behavior) => behavior instanceof BentoBehavior),
+  ).toBe(true);
   reactPanel.editor.destroy();
   editor.destroy();
 });
@@ -139,7 +156,10 @@ test("columns inside a kanban column allow indent under the lane only", async ()
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
   expect(getBlockContainment(editor.blockRegistry.get("columns"))?.childOutline).toBe("fixed");
   expect(getBlockContainment(editor.blockRegistry.get("columns-column"))?.outlineFloor).toBe(true);
-  expect(reactPanel.editor.blockBehaviors.resolve(columns).dropAxis).toBe("horizontal");
+  expect(
+    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(columns)!.type)!
+      .dropAxis,
+  ).toBe("horizontal");
   reactPanel.editor.destroy();
   editor.destroy();
 });
@@ -164,7 +184,10 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
   expect(editor.blocks.getParentId(row.id)).toBe(table);
   outdentBlocks(reactPanel, [cell.id]);
   expect(editor.blocks.getParentId(cell.id)).toBe(row.id);
-  expect(reactPanel.editor.blockBehaviors.resolve(table).dropAxis).toBe("vertical");
+  expect(
+    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(table)!.type)!
+      .dropAxis,
+  ).toBe("vertical");
   expect(getBlockContainment(editor.blockRegistry.get(TABLE_CELL_BLOCK_TYPE))?.outlineFloor).toBe(
     true,
   );

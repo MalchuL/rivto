@@ -79,7 +79,10 @@ describe("todoItemExtension", () => {
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);
-    expect(reactPanel.editor.blockBehaviors.resolve(empty).dropAxis).toBe("vertical");
+    expect(
+      reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(empty)!.type)!
+        .dropAxis,
+    ).toBe("vertical");
     expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
       containment: { childOutline: "free", outlineFloor: true },
     });
@@ -102,7 +105,7 @@ describe("todoItemExtension", () => {
 
   test("wires a supplied properties modal into the registered renderer", async () => {
     const editor = await createDocumentEditor();
-    const CustomModal = (_props: TodoItemPropertiesModalProps) => null;
+    const CustomModal = (props: TodoItemPropertiesModalProps) => null;
     const reactPanel = createReactEditor({
       editor,
       extensions: [todoItemExtension({ propertiesModal: CustomModal })],

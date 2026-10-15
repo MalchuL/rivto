@@ -136,7 +136,10 @@ export function PageDragProvider({
           root={root}
           controller={controller}
           blocks={activeBlocks}
-          childrenVisible={(block) => reactPanel.editor.blockListProps.childrenVisible(block)}
+          childrenVisible={
+            // Keep the overlay consistent with the source surface's child visibility.
+            (block) => reactPanel.editor.blockBehaviors.childrenVisible(block)
+          }
         />
       </DragDropProvider>
     </PageDragStateContext.Provider>
