@@ -1,3 +1,4 @@
+import { registerBlockListActions } from "../../../block-handle/actions";
 import { focusCaret, scheduleBlockFocus } from "../../../../../block-behaviors/ops/focus-ops";
 import { convertEmptyToList } from "../../../../../block-behaviors/ops/text-ops";
 import type { ReactEditorApi } from "../../../../../editor/types";
@@ -23,6 +24,7 @@ import { listShortcutPatch } from "./utils";
  * @returns No value.
  */
 export function registerListShortcuts(reactEditor: ReactEditorApi): void {
+  registerBlockListActions(reactEditor);
   const listCommands: readonly { type: BlockListType; title: string }[] = [
     { type: "list", title: "List" },
     { type: "checkbox", title: "Checkbox" },

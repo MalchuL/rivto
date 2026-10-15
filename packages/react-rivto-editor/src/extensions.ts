@@ -77,3 +77,5 @@ export {
   embeddingExtension,
   type EmbeddingProps,
 } from "./extensions/embedding/embedding";
+
+export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";

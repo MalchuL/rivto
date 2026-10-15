@@ -1,7 +1,7 @@
 /** Regression checks for portable files, collapsed hierarchy and complex export. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { exportMarkdown, parseDocument, type DocumentFile } from "../renderer/documents";
+import { exportMarkdown, parseDocument, type DocumentFile } from "../renderer/documents.ts";
 import type { EditorBlock } from "@chulane/rivto";
 
 /** Builds a complete block for export tests.
@@ -22,7 +22,7 @@ function document(blocks: EditorBlock[]): DocumentFile {
     format: "rivto-document",
     version: 1,
     title: "Notes",
-    snapshot: { version: 6, blocks, elements: [] },
+    snapshot: { version: 9, blocks, elements: [], rootElementIds: [] },
   };
 }
 
@@ -81,7 +81,8 @@ test("file envelopes and raw snapshots round trip, malformed and future files re
   for (const value of [
     "{",
     "{}",
-    '{"version":5,"blocks":[],"elements":[]}',
+    '{"version":6,"blocks":[],"elements":[]}',
+    JSON.stringify({ ...original.snapshot, rootElementIds: null }),
     JSON.stringify({ ...original, version: 2 }),
     JSON.stringify(document([{ children: null } as never])),
   ]) {

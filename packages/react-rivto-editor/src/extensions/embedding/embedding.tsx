@@ -1,3 +1,5 @@
+import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
+import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
 import { Link2Icon } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
@@ -204,7 +206,40 @@ function EmbeddingBody({ block }: BlockSlotProps) {
 export function embeddingExtension(): ReactEditorExtension {
   return {
     id: "block.embedding",
+    /**
+     * Registers embedding copying, block rendering, controls, and clipboard conversion.
+     *
+     * @param reactEditor - Host editor receiving the embedding registrations.
+     * @returns Cleanup for converters, slots, and block type; the menu registration
+     * is released by the extension registration lifecycle.
+     * @throws If a delegated registration fails.
+     */
     setup: (reactEditor) => {
+      reactEditor.blockContextMenu.register({
+        id: "embedding.copy",
+        title: "Copy block embedding",
+        order: 70,
+        /**
+         * Copies live embedding references for the captured root blocks.
+         *
+         * Each reference carries the source document ID and block ID; source
+         * content is not cloned or changed. Normal paste creates reference blocks.
+         *
+         * @param context - Invoking panel and ancestor-deduplicated source roots.
+         * @returns Completion of the browser clipboard write.
+         * @throws If formatting or browser clipboard access fails.
+         */
+        execute: async ({ reactPanel, rootIds }) => {
+          const bundle = clipboardContentBundle({
+            blocks: rootIds.map((id) => ({
+              type: EMBEDDING_BLOCK_TYPE,
+              props: { targetDocumentId: reactPanel.editor.getDocument().id, targetBlockId: id },
+            })),
+          });
+          bundle.sourceDocumentId = reactPanel.editor.getDocument().id;
+          await writeClipboardBundle(reactPanel.editor, bundle);
+        },
+      });
       const dispose = reactEditor.blockTypes.register({
         definition: {
           type: EMBEDDING_BLOCK_TYPE,

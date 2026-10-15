@@ -1,7 +1,7 @@
 import { type BlockSlotProps, type ReactEditorExtension } from "@chulane/rivto-react";
 import { createContext, useContext, type ReactNode } from "react";
 
-const BlockIdsVisibleContext = createContext(true);
+const BlockIdsVisibleContext = createContext(false);
 
 /** Makes demo block ID labels visible or hidden without changing editor data. */
 export function BlockIdsVisibleProvider({

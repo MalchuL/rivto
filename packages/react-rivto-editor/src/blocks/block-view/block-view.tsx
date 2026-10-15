@@ -56,6 +56,7 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function Blo
       ref={ref}
       data-block-id={block.id}
       data-block-type={block.type}
+      data-block-background={block.listProps.backgroundColor || undefined}
       data-block-selected={isSelected ? "true" : undefined}
     >
       {children}

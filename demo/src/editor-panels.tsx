@@ -1,4 +1,4 @@
-import { BlockNavigationContext } from "./extensions/block-navigation";
+import { BlockHandleContext } from "@chulane/rivto-react";
 import { Fragment, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ModeManager } from "@chulane/rivto";
 import type { Panel } from "./panel-types";
@@ -22,6 +22,14 @@ interface DemoPanel {
  * Application navigation example with a separate element group for each opened block.
  * Panel records and modes are retained while the demo is mounted; element groups
  * belong to the document and are reused when returning through breadcrumbs.
+ *
+ * Opening a new block creates its persisted element group without an undo entry.
+ * The caller retains ownership of the supplied editor.
+ *
+ * @param props - Navigation host configuration; remaining options pass to EditorPanel.
+ * @param props.editor - Editor shared by the retained panel records.
+ * @param props.children - Content rendered within the active panel.
+ * @returns Breadcrumb navigation and active panel with handle-driven block opening.
  */
 export function DemoEditorPanels({
   editor,
@@ -130,9 +138,9 @@ export function DemoEditorPanels({
         rootElementId={active.panel.rootElementId}
         mode={active.mode}
       >
-        <BlockNavigationContext.Provider value={openBlock}>
+        <BlockHandleContext.Provider value={{ onOpen: openBlock }}>
           {children}
-        </BlockNavigationContext.Provider>
+        </BlockHandleContext.Provider>
       </EditorPanel>
     </>
   );

@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const ROW_CLASS = "page-block-row";
-const HANDLE_CLASS = "page-drag-handle";
+const HANDLE_CLASS = "block-handle";
 const DROP_INDICATOR_CLASS = "page-drop-indicator";
 
 /**

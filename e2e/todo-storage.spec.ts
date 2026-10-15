@@ -61,9 +61,9 @@ test("keeps the storage surface inside its selection and aligns root controls", 
     )
     .first();
   const [referenceHandle, referenceToggle, storageHandle, storageToggle] = await Promise.all([
-    referenceRow.locator(".page-drag-handle").boundingBox(),
+    referenceRow.locator(".block-handle").boundingBox(),
     referenceRow.locator("[data-collapse-toggle]").boundingBox(),
-    storage.locator(":scope > .page-block-row .page-drag-handle").boundingBox(),
+    storage.locator(":scope > .page-block-row .block-handle").boundingBox(),
     storage.locator(":scope > .page-block-row [data-collapse-toggle]").boundingBox(),
   ]);
   if (!referenceHandle || !referenceToggle || !storageHandle || !storageToggle) {
@@ -323,7 +323,7 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
     .locator('[data-block-type="todo-item"]')
     .filter({ hasText: "Build the editor extension" });
   const sourceRow = source.locator(":scope > .page-block-row");
-  const handle = source.locator(".page-drag-handle");
+  const handle = source.locator(".block-handle");
   await sourceRow.hover();
   await handle.hover();
   const handleBox = await handle.boundingBox();
@@ -378,7 +378,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
     .locator("[data-block-content]:focus")
     .locator("xpath=ancestor::*[@data-block-id][1]");
   const sourceId = await source.getAttribute("data-block-id");
-  const handleBox = await source.locator(".page-drag-handle").boundingBox();
+  const handleBox = await source.locator(".block-handle").boundingBox();
   const dropBox = await dropField.boundingBox();
   if (!sourceId || !handleBox || !dropBox) {
     throw new Error("Expected source and empty-storage drag geometry");

@@ -57,8 +57,46 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
   const PropertiesModal = options.propertiesModal ?? DefaultTodoItemPropertiesModal;
   return {
     id: "block.todo-item",
+    /**
+     * Registers TODO conversion, block types, surface wrappers, and prompt recognition.
+     *
+     * @param reactEditor - Editor receiving TODO behavior and rendering registrations.
+     * @returns Cleanup releasing the collected registrations in reverse order.
+     * @throws If a delegated registration or prompt-controller setup fails.
+     */
     setup: (reactEditor) => {
       const disposers = [
+        reactEditor.blockContextMenu.register({
+          id: "type.todo-item",
+          title: "Convert to TODO item",
+          order: 30,
+          /**
+           * Allows conversion only when every captured block exists and is not already a TODO type.
+           *
+           * @param context - Invoking panel and explicit selected block IDs.
+           * @returns True when no target is a TODO item or TODO storage block.
+           */
+          isAvailable: ({ reactPanel, blockIds }) =>
+            blockIds.every((id) => {
+              const block = reactPanel.blocks.getBlockNode(id);
+              return Boolean(
+                block &&
+                block.type !== TODO_ITEM_BLOCK_TYPE &&
+                block.type !== TODO_STORAGE_BLOCK_TYPE,
+              );
+            }),
+          /**
+           * Converts captured blocks to TODO items through one panel batch.
+           *
+           * @param context - Invoking panel and explicit selected block IDs.
+           * @returns No value after the block-type updates complete.
+           * @throws If a target cannot be converted through the panel's block operations.
+           */
+          execute: ({ reactPanel, blockIds }) =>
+            reactPanel.batchUpdates(() => {
+              blockIds.forEach((id) => reactPanel.blocks.setBlockType(id, TODO_ITEM_BLOCK_TYPE));
+            }),
+        }),
         reactEditor.blockTypes.register({
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,

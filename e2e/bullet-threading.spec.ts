@@ -15,7 +15,7 @@ test("draws one continuous top-level line to the focused root", async ({ page })
   expect(await roots.count()).toBeGreaterThan(2);
   expect((d.match(/\bM /g) ?? []).length).toBe(1);
   const endpointX = await focused
-    .locator(":scope > .page-block-row .page-collapse-toggle")
+    .locator(":scope > .page-block-row .block-handle")
     .evaluate((control) => {
       const rect = control.getBoundingClientRect();
       const overlay = document
@@ -28,6 +28,23 @@ test("draws one continuous top-level line to the focused root", async ({ page })
   expect(trunkX).toBeLessThan(endpointX);
   expect(endpointX - trunkX).toBeCloseTo(12, 1);
   expect(Number(d.split(" H ").at(-1))).toBeCloseTo(endpointX, 1);
+  await focused.locator(":scope > .page-block-row .block-handle").evaluate((control) => {
+    (control as HTMLElement).style.display = "none";
+    window.dispatchEvent(new Event("resize"));
+  });
+  const fallbackX = await focused
+    .locator(":scope > .page-block-row .page-collapse-toggle")
+    .evaluate((control) => {
+      const rect = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return rect.x + rect.width / 2 - overlay.x;
+    });
+  await expect
+    .poll(async () => Number((await path.getAttribute("d"))?.split(" H ").at(-1)))
+    .toBeCloseTo(fallbackX, 1);
 });
 
 test("threads only the focused page ancestry and follows its controls", async ({ page }) => {
@@ -49,10 +66,10 @@ test("threads only the focused page ancestry and follows its controls", async ({
     )!;
     const child = parent.querySelector(":scope > .page-block-children > .page-block")!;
     const toggle = parent
-      .querySelector(":scope > .page-block-row .page-collapse-toggle")!
+      .querySelector(":scope > .page-block-row .block-handle")!
       .getBoundingClientRect();
     const childToggle = child
-      .querySelector(":scope > .page-block-row .page-collapse-toggle")!
+      .querySelector(":scope > .page-block-row .block-handle")!
       .getBoundingClientRect();
     const overlay = document
       .querySelector("[data-bullet-threading] path:not([d=''])")!
@@ -73,7 +90,7 @@ test("threads only the focused page ancestry and follows its controls", async ({
   const leaf = child.locator(".page-block:not(:has(> .page-block-children))").first();
   await leaf.locator(":scope > .page-block-row [data-block-content]").click();
   const leafDragX = await leaf
-    .locator(":scope > .page-block-row .page-drag-handle")
+    .locator(":scope > .page-block-row .block-handle")
     .evaluate((control) => {
       const rect = control.getBoundingClientRect();
       const overlay = document
@@ -95,7 +112,7 @@ test("threads only the focused page ancestry and follows its controls", async ({
   });
   expect(await path.getAttribute("d")).toBe(pathBeforeScroll);
   const alignedAfterScroll = await leaf
-    .locator(":scope > .page-block-row .page-drag-handle")
+    .locator(":scope > .page-block-row .block-handle")
     .evaluate((control) => {
       const anchor = control.getBoundingClientRect();
       const overlay = document
@@ -147,7 +164,7 @@ test("repositions the path for a nested scroll container", async ({ page }) => {
     /Q [\d.-]+ ([\d.-]+) [\d.-]+ [\d.-]+ H [\d.-]+$/.exec((await path.getAttribute("d"))!)![1],
   );
   const anchorY = await leaf
-    .locator(":scope > .page-block-row .page-drag-handle")
+    .locator(":scope > .page-block-row .block-handle")
     .evaluate((control) => {
       const rect = control.getBoundingClientRect();
       const overlay = document
@@ -171,7 +188,7 @@ test("wrapped and direct container roots keep the root line but stop before desc
     const d = (await path.getAttribute("d"))!;
     expect((d.match(/\bM /g) ?? []).length).toBe(1);
     const anchor = await container
-      .locator(":scope > .page-block-row .page-collapse-toggle")
+      .locator(":scope > .page-block-row .block-handle")
       .evaluate((control) => {
         const rect = control.getBoundingClientRect();
         const overlay = document

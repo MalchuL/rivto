@@ -21,8 +21,17 @@ async function snapshot(editor: Locator): Promise<Snapshot> {
   ) as Snapshot;
 }
 
+/**
+ * Drags a block's universal handle onto the requested area of another row.
+ *
+ * @param source - Block containing the source handle.
+ * @param target - Block whose direct page row receives the drop.
+ * @param edge - Row center by default, or the narrow before/after insertion edge.
+ * @returns Resolves after mouse release; callers assert the resulting document change.
+ * @throws If either bounding box is unavailable or browser input fails.
+ */
 async function drag(source: Locator, target: Locator, edge: "body" | "before" | "after" = "body") {
-  const handleBox = await source.locator(".page-drag-handle").boundingBox();
+  const handleBox = await source.locator(".block-handle").boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected drag geometry");
@@ -165,7 +174,7 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   const emptyLeft = multiEditor(page, "left");
   const emptyRight = multiEditor(page, "right");
   const source = emptyLeft.locator(blockIdSelector("left-counter"));
-  const sourceBox = await source.locator(".page-drag-handle").boundingBox();
+  const sourceBox = await source.locator(".block-handle").boundingBox();
   const targetBox = await emptyRight.locator(".page-surface").boundingBox();
   if (!sourceBox || !targetBox) {
     throw new Error("Expected empty-page drag geometry");

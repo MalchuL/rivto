@@ -33,6 +33,8 @@
 @import "../blocks/block-modal/block-modal.css" layer(components);
 @import "../blocks/markdown/markdown.css" layer(components);
 
+@import "../components/block-handle/block-handle.css" layer(components);
+
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);
 @import "../extensions/bullet-threading/bullet-threading.css" layer(components);

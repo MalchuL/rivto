@@ -21,43 +21,9 @@
   );
 }
 
-.page-drag-handle {
-  position: absolute;
-  top: 0;
-  left: -28px;
-  /* Reach the block edge so the handle stays visible while the pointer moves
-     from the row onto the button. */
-  width: 28px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  color: var(--rivto-muted-foreground);
-  background: transparent;
-  cursor: grab;
-  opacity: 0;
-  pointer-events: none;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* Children live outside their parent's row, so only the line under the cursor
-   or owning the caret reveals its handle. */
-.page-block-row:hover > .rivto-slot > .page-drag-handle,
-.page-block-row:focus-within > .rivto-slot > .page-drag-handle,
-.page-drag-handle:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.page-drag-handle:active {
-  cursor: grabbing;
-}
-
 /* Layout roots keep only their direct handle's hitbox pointer-active while
    transparent so re-entering the handle recovers hover without a fast move. */
-[data-drag-container] > .page-block-row > .rivto-slot > .page-drag-handle {
+[data-drag-container] > .page-block-row > .rivto-slot > .block-handle {
   pointer-events: auto;
 }
 
@@ -93,7 +59,7 @@
   content: none;
 }
 
-[data-drag-container]:hover > .page-block-row > .rivto-slot > .page-drag-handle {
+[data-drag-container]:hover > .page-block-row > .rivto-slot > .block-handle {
   opacity: 1;
 }
 

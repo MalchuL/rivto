@@ -55,9 +55,15 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
   await expect(startSlot.locator(":scope > *")).toHaveCount(1);
   await expect(startSlot.locator(":scope > *").nth(0)).toHaveClass(/page-list-checkbox/);
   await expect(leftTopSlot.locator(":scope > *")).toHaveCount(1);
-  await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/page-drag-handle/);
+  await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/block-handle/);
+  await page.getByRole("checkbox", { name: "Block IDs", exact: true }).check();
   await expect(endSlot.locator(":scope > .demo-block-id")).toHaveCount(1);
-  await expect(endSlot.getByRole("button", { name: "Open block", exact: true })).toHaveCount(1);
+  await expect(
+    leftTopSlot.getByRole("button", {
+      name: "Open block: Try the interactive checkbox",
+      exact: true,
+    }),
+  ).toHaveCount(1);
 
   const checkboxContent = checkboxBlock.locator(":scope > .page-block-row [data-block-content]");
   const checkboxControl = startSlot.locator(".page-list-checkbox");
@@ -72,7 +78,7 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
       numberedContent.boundingBox(),
       numberedMarker.boundingBox(),
       row.boundingBox(),
-      leftTopSlot.locator(".page-drag-handle").boundingBox(),
+      leftTopSlot.locator(".block-handle").boundingBox(),
     ]);
   if (!checkboxBox || !checkboxControlBox || !numberedBox || !markerBox || !rowBox || !dragBox) {
     throw new Error("Expected slot geometry");

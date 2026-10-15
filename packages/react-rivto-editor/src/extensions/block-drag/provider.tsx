@@ -99,7 +99,18 @@ export function PageDragProvider({
           new PointerActivationConstraints.Distance({ value: activationDistance }),
         ],
       }),
-      KeyboardSensor.configure({ offset: KEYBOARD_STEP }),
+      KeyboardSensor.configure({
+        offset: KEYBOARD_STEP,
+        keyboardCodes: {
+          start: ["Space"],
+          cancel: ["Escape"],
+          end: ["Space", "Enter", "Tab"],
+          up: ["ArrowUp"],
+          down: ["ArrowDown"],
+          left: ["ArrowLeft"],
+          right: ["ArrowRight"],
+        },
+      }),
     ],
     [activationDistance],
   );

@@ -1,3 +1,4 @@
+import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
 import type { ElementTypesApi } from "../managers/elements/types";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -153,6 +154,8 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   readonly panels: PanelRegistry;
   /** Semantic keyboard bindings and runtime keymap overrides. */
   readonly keyboard: KeyboardManager;
+  /** Dedicated extension-owned block menu contributions. */
+  readonly blockContextMenu: BlockContextMenuRegistry;
   /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandRegistry;
   /** Maintains the document's block elements and their default canvas geometry.

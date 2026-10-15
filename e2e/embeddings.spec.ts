@@ -85,9 +85,9 @@ for (const repeat of [0, 200]) {
       await expect(detail).toHaveText(`Command ${index}`);
       await expect(originalDetail).toHaveText(`Command ${index}`);
     }
+    console.log(`journal embedding ${browserName} repeat=${repeat} ${JSON.stringify(samples)}`);
     expect(samples.map(({ command }) => command).sort((a, b) => a - b)[2]).toBeLessThan(25);
     expect(samples.map(({ render }) => render).sort((a, b) => a - b)[2]).toBeLessThan(100);
-    console.log(`journal embedding ${browserName} repeat=${repeat} ${JSON.stringify(samples)}`);
     await page.evaluate(() =>
       (
         window as unknown as { __rivtoDemo: JournalInspection }
@@ -491,7 +491,18 @@ for (const canvas of [false, true]) {
   });
 }
 
-/** Moves the real mouse from a row's handle to another row; the caller checks feedback and releases it. */
+/**
+ * Moves the real mouse from a row's handle to another row; the caller checks feedback and releases it.
+ *
+ * Scrolls the destination away from viewport edges to avoid drag autoscroll.
+ *
+ * @param page - Browser page receiving the pointer gesture.
+ * @param source - Source page row containing a direct handle slot.
+ * @param destination - Page row receiving the held pointer.
+ * @param before - Targets the top insertion edge instead of the row center when true.
+ * @returns Resolves after confirming active drag and destination hit testing; the mouse remains down.
+ * @throws If geometry is missing, browser input fails, or either drag assertion fails.
+ */
 async function dragRow(
   page: Page,
   source: Locator,
@@ -500,7 +511,7 @@ async function dragRow(
 ): Promise<void> {
   await destination.scrollIntoViewIfNeeded();
   await source.hover();
-  const handle = source.locator(":scope > .rivto-slot > .page-drag-handle");
+  const handle = source.locator(":scope > .rivto-slot > .block-handle");
   await handle.hover();
   // Keep the drop away from viewport edges so autoscroll does not move it during the gesture.
   await destination.evaluate((element) =>
@@ -533,13 +544,14 @@ test("embedded row hover exposes only its own reachable drag handle", async ({ p
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const child = region.locator(`[data-block-id="${room}:child-0"]`);
   await child.locator(":scope > .page-block-row").hover();
-  const handle = child.getByRole("button", { name: "Move block: Source child 0", exact: true });
+  const handle = child.getByRole("button", { name: "Open block: Source child 0", exact: true });
   await expect(handle).toHaveCSS("opacity", "1");
+  await expect(host.locator(":scope > .page-block-row > .rivto-slot > .block-handle")).toHaveCSS(
+    "opacity",
+    "0",
+  );
   await expect(
-    host.locator(":scope > .page-block-row > .rivto-slot > .page-drag-handle"),
-  ).toHaveCSS("opacity", "0");
-  await expect(
-    region.getByRole("button", { name: "Move block: Source child 1", exact: true }),
+    region.getByRole("button", { name: "Open block: Source child 1", exact: true }),
   ).toHaveCSS("opacity", "0");
   await handle.hover();
   expect(
@@ -1579,7 +1591,7 @@ test("source drag handles move children through shared commands without moving t
 }) => {
   const room = await openDemo(page);
   const region = page.getByRole("region", { name: "Block editor" }).first();
-  const handle = region.getByRole("button", { name: "Move block: Source child 0", exact: true });
+  const handle = region.getByRole("button", { name: "Open block: Source child 0", exact: true });
   const target = region.locator(`[data-block-id="${room}:child-1"]`);
   await region.locator(`[data-block-id="${room}:child-0"] > .page-block-row`).hover();
   await handle.hover();

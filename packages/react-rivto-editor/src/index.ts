@@ -268,3 +268,15 @@ export type {
 } from "./managers/edgeless-toolbar/types";
 export { EdgelessToolButton } from "./components/edgeless/tool-button";
 export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/tool-button";
+
+export {
+  BlockHandle,
+  BlockHandleContext,
+  type BlockHandleOptions,
+} from "./components/block-handle/block-handle";
+export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";
+export type {
+  BlockContextMenuContext,
+  BlockContextMenuRenderContext,
+  BlockContextMenuEntry,
+} from "./managers/block-context-menu/types";

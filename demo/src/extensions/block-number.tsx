@@ -9,7 +9,42 @@
 import type { PanelAPI } from "@chulane/rivto";
 import type { DocumentModel } from "@chulane/document-model";
 import { usePanel, type BlockSlotProps, type ReactEditorExtension } from "@chulane/rivto-react";
-import { useCallback, useRef, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+
+const BlockNumbersVisibleContext = createContext(false);
+
+/**
+ * Controls demo gutter-number visibility without changing editor data.
+ *
+ * Hidden slots do not mount their number labels, avoiding ordinal subscriptions
+ * until labels are shown. Visibility is scoped to this provider's descendants.
+ *
+ * @param props - Visibility setting and subtree receiving it.
+ * @param props.visible - Whether descendant page slots should render gutter numbers.
+ * @param props.children - Editor subtree sharing the visibility setting.
+ * @returns A context provider around the supplied children.
+ */
+export function BlockNumbersVisibleProvider({
+  visible,
+  children,
+}: {
+  readonly visible: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <BlockNumbersVisibleContext.Provider value={visible}>
+      {children}
+    </BlockNumbersVisibleContext.Provider>
+  );
+}
 
 const DEMO_BLOCK_NUMBER_CLASS = "demo-block-number";
 
@@ -122,8 +157,29 @@ function useBlockOrdinal(block: BlockSlotProps["block"]): BlockOrdinal | undefin
   return useSyncExternalStore(subscribe, getBlockOrderSnapshot, getBlockOrderSnapshot);
 }
 
-/** Draws the block's document-order number in the page's left gutter. */
-function BlockNumberSlot({ block }: BlockSlotProps) {
+/**
+ * Conditionally mounts a block's document-order number in the page's left gutter.
+ *
+ * @param props - Current block slot context forwarded to the visible label.
+ * @returns A subscribed label when the visibility context is true, otherwise null.
+ * Hidden slots do not subscribe to ordinal changes.
+ */
+function BlockNumberSlot(props: BlockSlotProps) {
+  const visible = useContext(BlockNumbersVisibleContext);
+  return visible ? <BlockNumberLabel {...props} /> : null;
+}
+
+/**
+ * Subscribes to and draws a visible block's document-order number.
+ *
+ * The depth CSS variable keeps nested labels aligned in their ancestor's gutter.
+ *
+ * @param props - Slot context supplying the block snapshot.
+ * @param props.block - Block whose ID resolves its cached document-order ordinal.
+ * @returns The ordinal label, or null when the block is absent from the numbered outline.
+ * @throws If no panel or loaded document is available to resolve the ordinal.
+ */
+function BlockNumberLabel({ block }: BlockSlotProps) {
   const ordinal = useBlockOrdinal(block);
   if (!ordinal) {
     return null;

@@ -213,7 +213,7 @@ test("skips offscreen content paint while keeping block shells and TODO fields m
   });
   const handle = page
     .locator('[data-block-id="perf-root-0"]')
-    .getByRole("button", { name: /^Move block:/ });
+    .getByRole("button", { name: /^Open block:/ });
   await handle.scrollIntoViewIfNeeded();
   const box = await handle.boundingBox();
   if (!box) {
@@ -596,7 +596,7 @@ test("drops on a root first mounted after scrolling during drag", async ({ page 
   await seedOutlineDocument(page, 0);
   const handle = page
     .locator('[data-block-id="perf-root-0"]')
-    .getByRole("button", { name: /^Move block:/ });
+    .getByRole("button", { name: /^Open block:/ });
   await handle.scrollIntoViewIfNeeded();
   const source = await handle.boundingBox();
   if (!source) {
@@ -683,7 +683,7 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.locator('[data-editor-mode="edgeless"]').click();
     }
 
-    const source = page.getByRole("button", { name: "Move block: Performance block **0**" });
+    const source = page.getByRole("button", { name: "Open block: Performance block **0**" });
     const blockSelector =
       mode === "block"
         ? `.${PAGE_SURFACE_CLASS} > [data-block-id]`
@@ -860,7 +860,7 @@ for (const mode of ["block", "edgeless"] as const) {
     }
     const handle = page
       .locator('[data-block-id="perf-b0-c0"]')
-      .getByRole("button", { name: /^Move block:/ });
+      .getByRole("button", { name: /^Open block:/ });
     await handle.scrollIntoViewIfNeeded();
     const from = await handle.boundingBox();
     if (!from) {
@@ -951,7 +951,7 @@ test("keeps the preview in step with repeated moves across 2,000 flat blocks", a
   await seedOutlineDocument(page, 0);
   const handle = page
     .locator('[data-block-id="perf-root-0"]')
-    .getByRole("button", { name: /^Move block:/ });
+    .getByRole("button", { name: /^Open block:/ });
   await handle.scrollIntoViewIfNeeded();
   await handle.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const from = await handle.boundingBox();
@@ -1035,7 +1035,7 @@ test("keeps auto-scroll frames responsive while dragging 2,000 flat blocks", asy
   await seedOutlineDocument(page, 0);
   const handle = page
     .locator('[data-block-id="perf-root-0"]')
-    .getByRole("button", { name: /^Move block:/ });
+    .getByRole("button", { name: /^Open block:/ });
   await handle.scrollIntoViewIfNeeded();
   const from = await handle.boundingBox();
   if (!from) {
@@ -1109,7 +1109,7 @@ for (const mode of ["block", "edgeless"] as const) {
       }
       const source = page
         .locator(`[data-block-id="${siblings[0]}"]`)
-        .getByRole("button", { name: /^Move block:/ });
+        .getByRole("button", { name: /^Open block:/ });
       await source.scrollIntoViewIfNeeded();
       await page.evaluate(
         () =>
@@ -1266,7 +1266,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const source = page.locator('[data-block-id="perf-b0-c998"]');
     const target = page.locator(`[data-block-id="perf-b1"] > .${PAGE_BLOCK_ROW_CLASS}`);
     await target.scrollIntoViewIfNeeded();
-    const handle = source.getByRole("button", { name: /^Move block:/ });
+    const handle = source.getByRole("button", { name: /^Open block:/ });
     await handle.scrollIntoViewIfNeeded();
     const from = await handle.boundingBox();
     const to = await target.boundingBox();

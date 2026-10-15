@@ -3,14 +3,14 @@ import { expect, test } from "@playwright/test";
 for (const repeat of [0, 200]) {
   test(`drag handle keeps compact icon geometry, repeat=${repeat}`, async ({ page }) => {
     await page.goto(`/?repeat=${repeat}`);
-    const handle = page.locator(".page-drag-handle").first();
+    const handle = page.locator(".block-handle").first();
     await handle.locator("..").locator("..").hover();
     await handle.hover();
     await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
     const geometry = await handle.evaluate((element) => {
       const style = getComputedStyle(element);
       const box = element.getBoundingClientRect();
-      const icon = element.querySelector("svg")!.getBoundingClientRect();
+      const icon = element.querySelector(".block-handle-grip")!.getBoundingClientRect();
       return {
         width: box.width,
         height: box.height,
@@ -32,7 +32,7 @@ for (const repeat of [0, 200]) {
     const box = (await handle.boundingBox())!;
     expect(
       await page.evaluate(
-        ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".page-drag-handle")),
+        ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".block-handle")),
         { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       ),
     ).toBe(true);

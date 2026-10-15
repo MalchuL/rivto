@@ -33,6 +33,7 @@ test("moves the caret across journal editors at page boundaries", async ({ page 
 
   const lastToday = today.locator("[data-block-content]").last();
   const firstYesterday = yesterday.locator("[data-block-content]").first();
+  await expect(firstYesterday).toBeVisible();
   await lastToday.click();
   await page.keyboard.press("End");
   await page.keyboard.press("ArrowDown");

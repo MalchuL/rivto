@@ -1,3 +1,4 @@
+import { blockHandleExtension } from "./block-handle/extension";
 /**
  * Public built-in extension catalog.
  *
@@ -331,6 +332,7 @@ export const standardPreset = (options: StandardPresetOptions = {}): ReactEditor
   const trailingBlockCount = options.trailingBlockCount ?? 3;
   const extensions = [
     defaultWritingBlockExtension(options.writing),
+    blockHandleExtension(),
     errorBlockExtension(),
     separatorBlockExtension(),
     historyExtension(),

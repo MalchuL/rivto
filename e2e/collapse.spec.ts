@@ -31,10 +31,10 @@ test("toggles an accessible collapsed subtree without exposing hidden rows", asy
   const childValue = await childText.textContent();
 
   await expect(leftTopSlot.locator(":scope > *")).toHaveCount(2);
-  await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/page-drag-handle/);
+  await expect(leftTopSlot.locator(":scope > *").nth(0)).toHaveClass(/block-handle/);
   await expect(leftTopSlot.locator(":scope > *").nth(1)).toHaveClass(/page-collapse-toggle/);
   const [dragBox, toggleBox, contentBox] = await Promise.all([
-    leftTopSlot.locator(".page-drag-handle").boundingBox(),
+    leftTopSlot.locator(".block-handle").boundingBox(),
     toggle.boundingBox(),
     content.boundingBox(),
   ]);
@@ -169,9 +169,7 @@ test("drops inside a collapsed parent and keeps the moved subtree hidden", async
   await target.scrollIntoViewIfNeeded();
 
   await source.locator(":scope > .page-block-row").hover();
-  const handleBox = await source
-    .locator(":scope > .page-block-row .page-drag-handle")
-    .boundingBox();
+  const handleBox = await source.locator(":scope > .page-block-row .block-handle").boundingBox();
   const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected drag geometry");

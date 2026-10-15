@@ -1,3 +1,4 @@
+import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
 import type { DocumentModel } from "@chulane/document-model";
 import { ModeManager, EmbeddingPanel, type PanelAPI, type ModeManagerApi } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
@@ -49,6 +50,8 @@ export class ReactPanel implements ReactPanelApi {
   readonly events: PanelEventManager;
   readonly keyboard: PanelKeyboardManager;
   readonly clipboard: PanelClipboardManager;
+  /** Menu actions bound to this panel and captured structural targets. */
+  readonly blockContextMenu: PanelBlockContextMenuManager;
   readonly slashCommands: PanelSlashCommandManager;
   readonly id = crypto.randomUUID();
   private selectionManager: PanelSelectionManager;
@@ -92,6 +95,7 @@ export class ReactPanel implements ReactPanelApi {
     this.keyboard = new PanelKeyboardManager(editor.keyboard, this);
     this.selectionManager = new PanelSelectionManager(this, this.corePanel.document.selection);
     this.clipboard = new PanelClipboardManager(editor.clipboard, this);
+    this.blockContextMenu = new PanelBlockContextMenuManager(this);
     this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
     try {
       /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */

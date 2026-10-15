@@ -1,3 +1,4 @@
+import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
@@ -49,8 +50,7 @@ import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
 import { blockIdExtension, BlockIdsVisibleProvider } from "./extensions/block-id";
-import { blockNavigationExtension } from "./extensions/block-navigation";
-import { blockNumberExtension } from "./extensions/block-number";
+import { blockNumberExtension, BlockNumbersVisibleProvider } from "./extensions/block-number";
 import {
   createReviewElementInput,
   reviewReportExtensions,
@@ -142,18 +142,22 @@ function demoRepeatCount(): number {
  * Resolves the demo thread endpoint from the controls rendered in one block row.
  *
  * @param block - Rendered block shell being measured.
- * @returns Visible collapse toggle, its drag-handle fallback, or null.
+ * @returns The universal handle when it has nonzero layout dimensions, otherwise
+ * a collapse toggle with nonzero dimensions, or null when neither is available.
+ * Opacity is not checked, so a hover-hidden handle still supplies a stable anchor.
  */
 function demoThreadAnchor(block: Element): Element | null {
   const row = block.querySelector(":scope > .page-block-row");
-  const collapse = row?.querySelector(".page-collapse-toggle");
-  if (collapse) {
-    const rect = collapse.getBoundingClientRect();
-    if (rect.width && rect.height) {
-      return collapse;
+  for (const selector of [BLOCK_HANDLE_SELECTOR, ".page-collapse-toggle"]) {
+    const control = row?.querySelector(selector);
+    if (control) {
+      const rect = control.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        return control;
+      }
     }
   }
-  return row?.querySelector(".page-drag-handle") ?? null;
+  return null;
 }
 
 /**
@@ -360,6 +364,10 @@ async function destroyDemoEditor(runtime: {
  * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
  * Optional `?repeat=N` clones the second edgeless card N extra times, each
  * preceded by a separator so reconciliation mounts N additional cards.
+ *
+ * @returns Seeded journal resources and editor cache after initialization and history reset.
+ * The caller owns their cleanup through destroyDemoEditor.
+ * @throws If storage initialization, editor creation, or document seeding fails.
  */
 async function createDemoEditor() {
   const resources = await createDemoDocument();
@@ -379,6 +387,12 @@ async function createDemoEditor() {
       prepared.delete(id);
       return document ?? resources.storage.openDocument(id);
     },
+    /**
+     * Installs the demo renderers and interactions for a cached document editor.
+     *
+     * @param documentEditor - Core editor whose lifecycle is managed by EditorStorage.
+     * @returns React editor retained and disposed by the owning cache.
+     */
     createEditor: (documentEditor) => {
       return createReactEditor({
         editor: documentEditor,
@@ -400,7 +414,6 @@ async function createDemoEditor() {
           ...edgelessPreset({ visuals: edgelessOptions }),
           mindmapExtension(),
           blockIdExtension(),
-          blockNavigationExtension(),
           blockNumberExtension(),
           ...customBlockExtensions,
           embeddingExtension(),
@@ -822,20 +835,42 @@ function JournalDate({ date }: { readonly date: Date }) {
 /**
  * Shared chrome above each demo editor (mode, block IDs, delete, undo).
  *
- * Needed so visitors can flip Page ↔ Edgeless, toggle debug block IDs, and
+ * Needed so visitors can flip Page ↔ Edgeless, toggle debug block IDs and numbering, and
  * exercise delete/undo without digging into keyboard shortcuts. Reused by
  * journal, multi-editor, and sync surfaces.
+ *
+ * @param props - Editor actions and host-controlled display settings.
+ * @param props.editor - Core editor receiving delete, undo, and snapshot operations.
+ * @param props.showBlockIds - Whether debug block IDs are visible.
+ * @param props.onShowBlockIdsChange - Receives the requested ID visibility.
+ * @param props.showBlockNumbers - Whether gutter numbers are visible.
+ * @param props.onShowBlockNumbersChange - Receives the requested number visibility.
+ * @param props.virtualizePageThreshold - Current page virtualization setting, when exposed.
+ * @param props.onVirtualizePageThresholdChange - Receives the requested virtualization setting.
+ * @param props.virtualizePageOverscan - Current number of extra page rows to render.
+ * @param props.onVirtualizePageOverscanChange - Receives the requested extra-row count.
+ * @returns Toolbar controls and any report-restoration error, within the active panel.
  */
 function DemoToolbar({
   editor,
   showBlockIds,
   onShowBlockIdsChange,
+  showBlockNumbers,
+  onShowBlockNumbersChange,
   virtualizePageThreshold,
   onVirtualizePageThresholdChange,
   virtualizePageOverscan,
   onVirtualizePageOverscanChange,
 }: {
   readonly editor: DocumentEditorAPI;
+  readonly showBlockNumbers: boolean;
+  /**
+   * Requests a host-owned change to gutter-number visibility.
+   *
+   * @param visible - Checked state selected by the toolbar checkbox.
+   * @returns No value; the host supplies the updated showBlockNumbers prop.
+   */
+  readonly onShowBlockNumbersChange: (visible: boolean) => void;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
   readonly virtualizePageThreshold?: boolean | number;
@@ -902,6 +937,14 @@ function DemoToolbar({
             onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}
           />
           Block IDs
+        </label>
+        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          <input
+            type="checkbox"
+            checked={showBlockNumbers}
+            onChange={(event) => onShowBlockNumbersChange(event.currentTarget.checked)}
+          />
+          Block numbers
         </label>
         {onVirtualizePageThresholdChange && (
           <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
@@ -991,6 +1034,9 @@ function DemoToolbar({
  *
  * Needed as the primary product walkthrough — two editors, shared toolbar
  * patterns, and lifecycle cleanup when the page unmounts.
+ *
+ * @returns Loading or initialization-error feedback, then two journal surfaces.
+ * The component disposes created runtimes on unmount, including late completions.
  */
 function JournalDemoApp() {
   const [runtime, setRuntime] = useState<{
@@ -998,7 +1044,8 @@ function JournalDemoApp() {
     yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>>;
   }>();
   const [error, setError] = useState<string>();
-  const [showBlockIds, setShowBlockIds] = useState(true);
+  const [showBlockIds, setShowBlockIds] = useState(false);
+  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
   const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
   const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
   const [dates] = useState(() => {
@@ -1050,40 +1097,44 @@ function JournalDemoApp() {
   const { today: todayEditor, yesterday: yesterdayEditor } = runtime;
 
   return (
-    <BlockIdsVisibleProvider visible={showBlockIds}>
-      <div className="journal-stack">
-        {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
-        <section className="journal-document" data-journal-document="today">
-          <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-            <DemoEditorPanels
-              editor={todayEditor.reactEditor}
-              virtualizePageThreshold={virtualizePageThreshold}
-              virtualizePageOverscan={virtualizePageOverscan}
-            >
-              <DemoToolbar
-                editor={todayEditor.editor}
-                showBlockIds={showBlockIds}
-                onShowBlockIdsChange={setShowBlockIds}
+    <BlockNumbersVisibleProvider visible={showBlockNumbers}>
+      <BlockIdsVisibleProvider visible={showBlockIds}>
+        <div className="journal-stack">
+          {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
+          <section className="journal-document" data-journal-document="today">
+            <EditorStorageContext.Provider value={todayEditor.editorStorage}>
+              <DemoEditorPanels
+                editor={todayEditor.reactEditor}
                 virtualizePageThreshold={virtualizePageThreshold}
-                onVirtualizePageThresholdChange={setVirtualizePageThreshold}
                 virtualizePageOverscan={virtualizePageOverscan}
-                onVirtualizePageOverscanChange={setVirtualizePageOverscan}
-              />
-              <RevisionsPanel />
-              <KeyboardPanel />
-              <JournalDate date={dates.today} />
-              <DemoEditorSurface />
-            </DemoEditorPanels>
-          </EditorStorageContext.Provider>
-        </section>
-        <section className="journal-document" data-journal-document="yesterday">
-          <EditorPanel editor={yesterdayEditor.reactEditor}>
-            <JournalDate date={dates.yesterday} />
-            <PageSurface />
-          </EditorPanel>
-        </section>
-      </div>
-    </BlockIdsVisibleProvider>
+              >
+                <DemoToolbar
+                  editor={todayEditor.editor}
+                  showBlockIds={showBlockIds}
+                  onShowBlockIdsChange={setShowBlockIds}
+                  showBlockNumbers={showBlockNumbers}
+                  onShowBlockNumbersChange={setShowBlockNumbers}
+                  virtualizePageThreshold={virtualizePageThreshold}
+                  onVirtualizePageThresholdChange={setVirtualizePageThreshold}
+                  virtualizePageOverscan={virtualizePageOverscan}
+                  onVirtualizePageOverscanChange={setVirtualizePageOverscan}
+                />
+                <RevisionsPanel />
+                <KeyboardPanel />
+                <JournalDate date={dates.today} />
+                <DemoEditorSurface />
+              </DemoEditorPanels>
+            </EditorStorageContext.Provider>
+          </section>
+          <section className="journal-document" data-journal-document="yesterday">
+            <EditorPanel editor={yesterdayEditor.reactEditor}>
+              <JournalDate date={dates.yesterday} />
+              <PageSurface />
+            </EditorPanel>
+          </section>
+        </div>
+      </BlockIdsVisibleProvider>
+    </BlockNumbersVisibleProvider>
   );
 }
 
@@ -1181,7 +1232,16 @@ function DocumentStateDump({ editor }: { readonly editor: DocumentEditorAPI }) {
   );
 }
 
-/** One pane of `?editors=2` (toolbar + document dump for e2e). */
+/**
+ * One pane of `?editors=2` (toolbar + document dump for e2e).
+ *
+ * Owns debug-label visibility; the parent owns the supplied runtime's lifetime.
+ *
+ * @param props - Pane identity and initialized editor resources.
+ * @param props.side - Stable left/right identity used to scope browser assertions.
+ * @param props.runtime - Core and React editors created for this pane.
+ * @returns Independent editor surface, toolbar, revisions, and serialized document state.
+ */
 function MultiEditorPane({
   side,
   runtime,
@@ -1189,22 +1249,27 @@ function MultiEditorPane({
   readonly side: "left" | "right";
   readonly runtime: Awaited<ReturnType<typeof createMultiEditor>>;
 }) {
-  const [showBlockIds, setShowBlockIds] = useState(true);
+  const [showBlockIds, setShowBlockIds] = useState(false);
+  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
   return (
     // `data-multi-editor` is used by e2e to scope left/right locators.
     <section className="multi-editor-pane" data-multi-editor={side}>
-      <BlockIdsVisibleProvider visible={showBlockIds}>
-        <EditorPanel editor={runtime.reactEditor}>
-          <DemoToolbar
-            editor={runtime.editor}
-            showBlockIds={showBlockIds}
-            onShowBlockIdsChange={setShowBlockIds}
-          />
-          <RevisionsPanel />
-          <DocumentStateDump editor={runtime.editor} />
-          <DemoEditorSurface />
-        </EditorPanel>
-      </BlockIdsVisibleProvider>
+      <BlockNumbersVisibleProvider visible={showBlockNumbers}>
+        <BlockIdsVisibleProvider visible={showBlockIds}>
+          <EditorPanel editor={runtime.reactEditor}>
+            <DemoToolbar
+              editor={runtime.editor}
+              showBlockIds={showBlockIds}
+              onShowBlockIdsChange={setShowBlockIds}
+              showBlockNumbers={showBlockNumbers}
+              onShowBlockNumbersChange={setShowBlockNumbers}
+            />
+            <RevisionsPanel />
+            <DocumentStateDump editor={runtime.editor} />
+            <DemoEditorSurface />
+          </EditorPanel>
+        </BlockIdsVisibleProvider>
+      </BlockNumbersVisibleProvider>
     </section>
   );
 }
@@ -1386,6 +1451,9 @@ async function createSyncedPeer(
  *
  * Needed to verify same-origin Yjs sync over BroadcastChannel: two panes on
  * this page, plus more peers if another tab opens the same URL.
+ *
+ * @returns Loading or initialization-error feedback, then two synchronized editor panes.
+ * The component closes created peers on unmount, including late completions.
  */
 function SyncEditorsApp() {
   const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
@@ -1395,7 +1463,8 @@ function SyncEditorsApp() {
     right: Awaited<ReturnType<typeof createSyncedPeer>>;
   }>();
   const [error, setError] = useState<string>();
-  const [showBlockIds, setShowBlockIds] = useState(true);
+  const [showBlockIds, setShowBlockIds] = useState(false);
+  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
   useEffect(() => {
     let active = true;
     const request = new AbortController();
@@ -1443,17 +1512,21 @@ function SyncEditorsApp() {
         {(["left", "right"] as const).map((side) => (
           // `data-editor-sync` is used by e2e to scope sync panes.
           <section key={side} className="multi-editor-pane" data-editor-sync={side}>
-            <BlockIdsVisibleProvider visible={showBlockIds}>
-              <EditorPanel editor={peers[side].reactEditor}>
-                <DemoToolbar
-                  editor={peers[side].editor}
-                  showBlockIds={showBlockIds}
-                  onShowBlockIdsChange={setShowBlockIds}
-                />
-                <RevisionsPanel />
-                <DemoEditorSurface />
-              </EditorPanel>
-            </BlockIdsVisibleProvider>
+            <BlockNumbersVisibleProvider visible={showBlockNumbers}>
+              <BlockIdsVisibleProvider visible={showBlockIds}>
+                <EditorPanel editor={peers[side].reactEditor}>
+                  <DemoToolbar
+                    editor={peers[side].editor}
+                    showBlockIds={showBlockIds}
+                    onShowBlockIdsChange={setShowBlockIds}
+                    showBlockNumbers={showBlockNumbers}
+                    onShowBlockNumbersChange={setShowBlockNumbers}
+                  />
+                  <RevisionsPanel />
+                  <DemoEditorSurface />
+                </EditorPanel>
+              </BlockIdsVisibleProvider>
+            </BlockNumbersVisibleProvider>
           </section>
         ))}
       </div>

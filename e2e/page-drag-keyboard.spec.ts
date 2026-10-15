@@ -39,7 +39,7 @@ async function pickUpFirstRoot(page: Page, editor: Locator, steps: number): Prom
   const handle = editor
     .locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
     .first()
-    .locator(":scope > .page-block-row .page-drag-handle");
+    .locator(":scope > .page-block-row .block-handle");
   await handle.focus();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
   await page.keyboard.press("Space");

@@ -13,7 +13,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { EditorSnapshot, DocumentEditorAPI } from "@chulane/rivto";
 
 const ROW_CLASS = "page-block-row";
-const HANDLE_CLASS = "page-drag-handle";
+const HANDLE_CLASS = "block-handle";
 const LINE_CLASS = "page-drop-indicator";
 const CHILD_DROP_INDENT = 24;
 const REPORT_PARENT_ID = "a7666f59-e2f6-4b4e-8103-dc7225fdc94c";

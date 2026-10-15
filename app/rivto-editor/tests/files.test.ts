@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { atomicWrite, readDocument, fingerprint, MAX_FILE_BYTES } from "../src/files";
+import { atomicWrite, readDocument, fingerprint, MAX_FILE_BYTES } from "../src/files.ts";
 
 test("atomic writes round trip Unicode, replace existing data and leave no temp files", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rivto-files-"));

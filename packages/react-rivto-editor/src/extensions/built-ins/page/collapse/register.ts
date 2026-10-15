@@ -1,3 +1,4 @@
+import { registerBlockCollapseActions } from "../../block-handle/actions";
 import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
@@ -20,6 +21,7 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditorApi): () => void {
+  registerBlockCollapseActions(reactEditor);
   reactEditor.slashCommands.register({
     id: "block.collapse",
     title: "Collapse block",

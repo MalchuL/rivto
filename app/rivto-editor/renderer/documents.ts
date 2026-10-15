@@ -5,6 +5,7 @@
  * become readable hierarchy, while boards and grids become Markdown tables.
  */
 import type { EditorBlock, EditorSnapshot } from "@chulane/rivto";
+import { DOCUMENT_SNAPSHOT_VERSION } from "@chulane/document-model";
 
 export interface DocumentFile {
   format: "rivto-document";
@@ -13,9 +14,16 @@ export interface DocumentFile {
   snapshot: EditorSnapshot;
 }
 
-/** Parses the app envelope or a raw demo snapshot without mutating an editor.
+/**
+ * Parses the app envelope or a raw demo snapshot without mutating an editor.
+ *
+ * Accepts the current document schema, including its ordered canvas roots, and
+ * bounds block count and depth before the core loader validates record contents.
+ *
  * @param text - JSON from disk or draft storage.
  * @returns Envelope whose snapshot still requires the core loader's validation.
+ * @throws If JSON, envelope metadata, snapshot sections, or block hierarchy are
+ * malformed, unsupported, or exceed the documented count and depth bounds.
  */
 export function parseDocument(text: string): DocumentFile {
   const value = JSON.parse(text);
@@ -29,11 +37,12 @@ export function parseDocument(text: string): DocumentFile {
   const snapshot = envelope ? value.snapshot : value;
   if (
     !snapshot ||
-    snapshot.version !== 6 ||
+    snapshot.version !== DOCUMENT_SNAPSHOT_VERSION ||
     !Array.isArray(snapshot.blocks) ||
-    !Array.isArray(snapshot.elements)
+    !Array.isArray(snapshot.elements) ||
+    !Array.isArray(snapshot.rootElementIds)
   ) {
-    throw new Error("Expected a Rivto v6 document snapshot.");
+    throw new Error(`Expected a Rivto v${DOCUMENT_SNAPSHOT_VERSION} document snapshot.`);
   }
   // The core rejects invalid block/element data; this bound also prevents deeply
   // nested untrusted JSON from exhausting recursive validation or rendering.
