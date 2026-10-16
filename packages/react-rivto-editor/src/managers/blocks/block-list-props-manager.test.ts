@@ -8,7 +8,7 @@ import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 test("custom onSplit owns continuation properties and is released with its extension", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const core = await createTestCoreEditor();
+  const core = await createTestCoreEditor({ registerWritingBlock: false });
   const editor = createTestReactEditor({
     editor: core,
     extensions: [defaultWritingBlockExtension()],

@@ -126,7 +126,7 @@ test("failed registration releases separator metadata with other contributions",
 });
 
 test("custom reset refusal belongs to the existing block behavior", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const panel = createTestReactEditor({ editor, extensions: [defaultWritingBlockExtension()] });
   try {
     panel.editor.blockTypes.register({
@@ -153,7 +153,7 @@ test("custom reset refusal belongs to the existing block behavior", async () => 
 });
 
 test("reset skips host predicates when text is nonempty", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   let calls = 0;
   const panel = createTestReactEditor({
     editor,
@@ -175,7 +175,7 @@ test("reset skips host predicates when text is nonempty", async () => {
     const selection = createCaretSelection(id, 0);
     const context = createBlockBehaviorContext(panel, id, {} as HTMLElement, selection)!;
     expect(new DefaultBlockBehavior().onResetEmpty(context, firstKeyboardTarget(selection)!)).toBe(
-      "default",
+      "unhandled",
     );
     expect(calls).toBe(0);
   } finally {
@@ -187,7 +187,7 @@ test("reset skips host predicates when text is nonempty", async () => {
 test.each(["image", "paragraph"])(
   "reset keeps existing conversion semantics for %s",
   async (type) => {
-    const editor = await createTestCoreEditor();
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
     let calls = 0;

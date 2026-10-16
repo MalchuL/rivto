@@ -1,3 +1,4 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
 import type { BlockMoveContext } from "../../../block-behaviors/types";
 import { canMoveBlockType } from "../../../block-behaviors/utils/move";
 import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/types";
@@ -11,7 +12,7 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  * @module
  */
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
+import type { BlockBehaviorContext } from "../../../block-behaviors/types";
 import type { KeyboardSelectionTarget } from "../../../managers";
 
 export const TABLE_BLOCK_TYPE = "table";
@@ -22,6 +23,34 @@ export const TABLE_CELL_BLOCK_TYPE = "table-cell";
  * Behavior registered for the `table` board type.
  */
 export class TableBehavior extends ContainerBlockBehavior {
+  /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
@@ -45,6 +74,34 @@ export class TableBehavior extends ContainerBlockBehavior {
  * Behavior registered for the `table-row` type.
  */
 export class TableRowBehavior extends ContainerBlockBehavior {
+  /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
@@ -73,6 +130,20 @@ export class TableRowBehavior extends ContainerBlockBehavior {
  * Behavior registered for the `table-cell` type.
  */
 export class TableCellBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.

@@ -161,7 +161,17 @@ export type { BlockListPropsManagerApi };
 
 /** Public native block-definition registry contract. */
 export interface BlockRegistryManagerApi {
-  /** @param definition - Native type definition. @returns Its disposer. */
+  /**
+   * Registers the exact complete native definition until its disposer runs.
+   *
+   * Initial observer failures unregister the definition before escaping. If a
+   * rollback observer also fails, both errors are reported after removal.
+   *
+   * @param definition - Complete definition with a unique, non-empty native type.
+   * @returns Idempotent disposer removing this exact definition and notifying observers.
+   * @throws If the type is invalid or duplicated, or a lifecycle observer throws.
+   * Initial and rollback observer failures are combined in an AggregateError.
+   */
   defineBlock(definition: BlockDefinition): () => void;
   /** @param listener - Registry listener. @returns Its disposer. */
   subscribe(listener: () => void): () => void;

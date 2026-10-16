@@ -1,3 +1,4 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
 import type { BlockMoveContext } from "../../../block-behaviors/types";
 import { canMoveBlockType } from "../../../block-behaviors/utils/move";
 import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/types";
@@ -13,7 +14,7 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
+import type { BlockBehaviorContext } from "../../../block-behaviors/types";
 import type { ReactPanelApi } from "../../../panels/types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
@@ -65,6 +66,34 @@ export function relocateColumnContents(
  */
 export class ColumnsBehavior extends ContainerBlockBehavior {
   /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
    * @returns True only for the COLUMNS_BLOCK_TYPE native type.
@@ -88,6 +117,20 @@ export class ColumnsBehavior extends ContainerBlockBehavior {
  */
 export class ColumnsColumnBehavior extends ContainerBlockBehavior {
   /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
    * @returns True only for the COLUMNS_COLUMN_BLOCK_TYPE native type.
@@ -110,7 +153,7 @@ export class ColumnsColumnBehavior extends ContainerBlockBehavior {
    *
    * @param context - One selected column whose view was resolved.
    * @param ids - Complete structural selection about to be removed.
-   * @returns `"default"` so the shared deletion path still removes the shells.
+   * @returns `"unhandled"` so the shared deletion path still removes the shells.
    */
   onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
     const columnIds = ids.filter(
@@ -119,7 +162,7 @@ export class ColumnsColumnBehavior extends ContainerBlockBehavior {
     if (columnIds.length) {
       relocateColumnContents(context.reactPanel, columnIds);
     }
-    return "default";
+    return "unhandled";
   }
 }
 

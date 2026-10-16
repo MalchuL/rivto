@@ -10,14 +10,7 @@
 export { ContainerBlockBehavior } from "./container-block-behavior";
 export { createBlockBehaviorContext } from "./utils/context";
 export { DefaultBlockBehavior } from "./default-block-behavior";
-export { dispatchBlockAction } from "./utils/dispatch";
 export { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
-export {
-  indentBlocks,
-  appendWritingBlock,
-  outdentBlocks,
-  outdentUntilBoundary,
-} from "./utils/outline-ops";
 export {
   convertEmptyToList,
   mergeBlocks,
@@ -28,6 +21,7 @@ export type {
   BlockBehavior,
   BlockBehaviorAction,
   BlockBehaviorContext,
+  BlockOutlineContext,
   BlockBehaviorData,
   BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,

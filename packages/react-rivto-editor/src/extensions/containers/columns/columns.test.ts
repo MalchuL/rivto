@@ -19,7 +19,7 @@ import {
 } from "./columns";
 
 async function createColumnsRuntime() {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), columnsExtension()],

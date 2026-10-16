@@ -21,17 +21,16 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import type { DropAxis } from "../block-drag-options";
+import { getBlockDragOptions, type DropAxis } from "../block-drag-options";
 import { BlockElementRefProvider, type BlockWrapperProps } from "../../../blocks";
 import { useReactPanel } from "../../../hooks";
 import { findParentBlock } from "../../../managers/events/block-dom";
 import { PageDropIndicator } from "../placement/indicator";
 import { PageDragItemContext, PageDragStateContext } from "../state";
 import type { DropPlacementStore, PageDragHandle } from "../types";
-import { blockContainment } from "../utils/containment";
+import { useBlockTypeMetadata } from "../../../hooks/blocks/use-block-type-metadata";
 
 const PAGE_BLOCK_ROW_CLASS = "page-block-row";
-const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
 
 /**
  * Decorates one BlockTree-owned BlockView with structural drag behavior.
@@ -44,10 +43,10 @@ const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
  * edgeless surfaces never import it. The button alone activates the draggable
  * sensor, so editable content retains ordinary caret and selection behavior.
  *
- * Types with showHandleOnContainerHover mark their shell with
- * `data-drag-container`, enabling full-container handle hover without naming
- * block types in CSS. Structural rows and lanes retain row-only hover. The
- * marker is removed when the view stops qualifying or this wrapper unmounts.
+ * Placement metadata selects row or full-body geometry independently of handle
+ * presentation. Container-hover visibility belongs to the optional universal
+ * handle extension, which owns its own marker and cleanup even without dragging.
+ * Structural rows and lanes retain their independently registered geometry.
  *
  * @param props - Block snapshot and the next ordered decorator or shared shell.
  * @returns A DOM-free ref provider plus row-portalled drag controls.
@@ -57,29 +56,12 @@ export function PageDragBlockWrapper({ block, children }: BlockWrapperProps) {
   const [blockElement, setBlockElement] = useState<HTMLDivElement | null>(null);
   const row = blockElement?.querySelector<HTMLElement>(`:scope > .${PAGE_BLOCK_ROW_CLASS}`) ?? null;
   const parentId = blockElement ? findParentBlock(blockElement)?.dataset.blockId : undefined;
-  const dragOptions = reactPanel.editor.blockTypes.getDragOptions(block.type) ?? {};
-  const isLayoutRoot = dragOptions.showHandleOnContainerHover === true;
-  const parentDragOptions = parentId
-    ? reactPanel.editor.blockTypes.getDragOptions(
-        reactPanel.blocks.getBlockNode(parentId)?.type ?? "",
-      )
-    : undefined;
-  const parentOutline = parentId ? blockContainment(reactPanel, parentId)?.childOutline : undefined;
-  const axis = parentOutline === "fixed" ? parentDragOptions?.dropAxis : undefined;
+  const dragOptions = getBlockDragOptions(useBlockTypeMetadata(block.type)) ?? {};
+  const parentType = parentId ? reactPanel.blocks.getBlockNode(parentId)?.type : undefined;
+  const parentDragOptions = getBlockDragOptions(useBlockTypeMetadata(parentType));
+  const axis = parentDragOptions?.fixed ? parentDragOptions.dropAxis : undefined;
   const sortable = axis === "vertical" || axis === "horizontal" || axis === "grid";
   const dropNode = sortable || dragOptions.acceptsDropContainer ? blockElement : row;
-
-  // Layout roots reveal their handle across the whole container. Structural
-  // rows and lanes retain ordinary row hover.
-  // Body-drop acceptance is independent: Columns rejects body drops but still
-  // needs container hover. Keep this marker owned and cleaned up by dragging.
-  useLayoutEffect(() => {
-    if (!blockElement || !isLayoutRoot) {
-      return;
-    }
-    blockElement.setAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
-    return () => blockElement.removeAttribute(DRAG_CONTAINER_ATTRIBUTE);
-  }, [blockElement, isLayoutRoot]);
 
   return (
     <BlockElementRefProvider elementRef={setBlockElement}>

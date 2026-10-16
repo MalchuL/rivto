@@ -1,10 +1,14 @@
 import { createCaretSelection } from "@chulane/rivto";
-import { defaultWritingBlockExtension } from "../../extensions/built-ins/built-ins";
-import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
-import { indentBlocks, outdentBlocks } from "./outline-ops";
+import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
+import {
+  createTestCoreEditor,
+  createTestReactEditor,
+  indentBlocks,
+  outdentBlocks,
+} from "../test-utils";
 
 test("indent permissions work without dragging and preserve selection and undo", async () => {
-  const core = await createTestCoreEditor();
+  const core = await createTestCoreEditor({ registerWritingBlock: false });
   const panel = createTestReactEditor({
     editor: core,
     extensions: [defaultWritingBlockExtension()],
@@ -53,7 +57,7 @@ test("indent permissions work without dragging and preserve selection and undo",
 test.each(["lift", "tail"])(
   "outdent preflights %s before mutating either placement",
   async (veto) => {
-    const core = await createTestCoreEditor();
+    const core = await createTestCoreEditor({ registerWritingBlock: false });
     const panel = createTestReactEditor({
       editor: core,
       extensions: [defaultWritingBlockExtension()],

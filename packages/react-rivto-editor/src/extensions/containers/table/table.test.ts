@@ -19,7 +19,7 @@ import {
 } from "./table";
 
 test("inserts rectangular rows and columns as draggable ordinary blocks", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],

@@ -37,7 +37,7 @@ class RejectingBlockBehavior implements BlockBehavior {
 }
 
 test("resolve falls back to DefaultBlockBehavior and indent stays free at the root", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension()],
@@ -62,7 +62,7 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
 });
 
 test("asks the resolved behavior whether a drop is accepted", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const rejectingBehavior = new RejectingBlockBehavior();
   const reactPanel = createReactEditor({
     editor,
@@ -92,7 +92,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
   async (type) => {
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-    const editor = await createTestCoreEditor();
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
@@ -155,7 +155,7 @@ test.each(["block", "edgeless"] as const)(
   async (mode) => {
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-    const editor = await createTestCoreEditor();
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
@@ -184,7 +184,7 @@ test.each(["block", "edgeless"] as const)(
 test("empty checkbox clearing follows the host writing predicate for another block type", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [
@@ -219,7 +219,7 @@ test("empty checkbox clearing follows the host writing predicate for another blo
 test("contentless custom blocks do not lose checkbox state on Enter", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   editor.blockRegistry.defineBlock({ type: "custom-control" });
   const reactPanel = createReactEditor({
     editor,
@@ -244,7 +244,7 @@ test("contentless custom blocks do not lose checkbox state on Enter", async () =
 test("empty block Enter respects an outline floor", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
@@ -270,7 +270,7 @@ test("empty block Enter respects an outline floor", async () => {
 test("drop validation checks the destination parent and every source snapshot", async () => {
   const { kanbanExtension } = await import("../extensions/containers/kanban/kanban");
   const { columnsExtension } = await import("../extensions/containers/columns/columns");
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [

@@ -3,13 +3,14 @@
  *
  * Container behaviors, when empty, insert a first child
  * on Enter instead of splitting. Subclasses specialize movement and delete
- * relocation; React definition metadata owns containment. They return `"default"` when the generic outline
+ * relocation and parent outline interception. Concrete parent handlers own
+ * nesting restrictions; the base does not impose them. They return `"unhandled"` when the generic outline
  * path should run.
  *
  * @module
  */
+import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { scheduleBlockFocus } from "./utils/focus-ops";
-import { appendWritingBlock } from "./utils/outline-ops";
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,
@@ -37,11 +38,11 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
    *
    * @param context - Empty container that owns the Enter event.
    * @param target - Keyboard target; unused once emptiness is confirmed.
-   * @returns `"handled"` when a child was inserted, otherwise `"default"`.
+   * @returns `"handled"` when a child was inserted, otherwise `"unhandled"`.
    */
   onSplit(context: BlockBehaviorContext, target: KeyboardSelectionTarget): BlockBehaviorOutcome {
     if (context.block.children.length > 0) {
-      return "default";
+      return "unhandled";
     }
     return this.appendWritingBlock(context);
   }
@@ -49,15 +50,28 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
   /**
    * Appends a default writing block to this container and schedules its caret focus.
    *
-   * The helper expands the container, creates and moves the child, and sets model
-   * selection in one history batch. DOM focus is restored after React renders it.
+   * Expands the container, inserts the child directly inside it, and sets model
+   * selection to offset zero in one history batch. Insertion validates the local
+   * parent; no temporary document-root placement is observable during creation.
+   * DOM focus is restored after React renders the child.
    * When called by onSplit the container is empty, so the appended child is also first.
+   *
    * @param context - Container snapshot, receiving editor view, and its DOM root.
    * @returns "handled" after insertion and scheduling focus at offset zero.
+   * @throws If a delegated block update, insertion, selection change, or focus scheduling fails.
    */
   appendWritingBlock(context: BlockBehaviorContext): BlockBehaviorOutcome {
-    const child = appendWritingBlock(context.reactPanel, context.block.id);
-    scheduleBlockFocus(context.reactPanel, context.root, child.id, 0);
+    const { reactPanel, block, root } = context;
+    let child: EditorBlock | undefined;
+    reactPanel.batchUpdates(() => {
+      reactPanel.blocks.updateBlock(block.id, { listProps: { collapsed: false } });
+      child = reactPanel.blocks.insertBlock(
+        reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
+        { parentId: block.id },
+      );
+      reactPanel.selection.set(createCaretSelection(child.id, 0));
+    });
+    scheduleBlockFocus(reactPanel, root, child!.id, 0);
     return "handled";
   }
 }

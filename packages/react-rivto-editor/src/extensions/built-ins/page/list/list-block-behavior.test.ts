@@ -28,7 +28,7 @@ const modes = [
 test.each([...modes, "unknown"])(
   "list behaviors select exactly one owner for marker %s",
   async (type) => {
-    const core = await createTestCoreEditor();
+    const core = await createTestCoreEditor({ registerWritingBlock: false });
     const panel = createTestReactEditor({
       editor: core,
       extensions: [defaultWritingBlockExtension()],
@@ -61,7 +61,7 @@ test.each(
 )(
   "onSplit inherits marker $type in $mode, overrides factory list properties, and remains undoable",
   async ({ type, mode }) => {
-    const core = await createTestCoreEditor();
+    const core = await createTestCoreEditor({ registerWritingBlock: false });
     const factory = {
       ...createBlockFactory("paragraph"),
       /** @returns Writing input with intentional list overrides that split policy must replace. */

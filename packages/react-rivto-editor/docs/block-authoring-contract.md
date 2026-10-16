@@ -250,14 +250,30 @@ resolved once by the registry, including null at the document root. Foreign sour
 fields are used directly rather than resolving their IDs in the destination document.
 Every applicable permission must allow the move; an omitted hook adds no restriction.
 
-Register geometric options separately in `blockTypes.register({ definition, render,
-behavior, drag })`. They are consumed only by the optional page-drag extension:
+Register extension annotations in `blockTypes.register({ definition, render, behavior })`,
+inside `definition.metadata`. Core API does not change: React registers the complete
+definition object directly, including its metadata, without copying or merging records.
+Each native type has one registration owner; an already defined type is a conflict.
+Disposal removes the owned definition together with its presentation. Subscribe
+through `blockTypes.subscribe()` for creation and removal of complete definitions;
+these notifications also update annotation readers. Subscriptions disconnect when
+their React runtime is destroyed; direct metadata mutation does not notify readers.
 
-- `drag.dropAxis` describes direct-child layout;
-- `drag.acceptsDropContainer` enables drops on the full body, including empty fields;
-- `drag.dropPlacement` tunes child placement, horizontal depth pixels, and edge zones;
-- `drag.showHandleOnContainerHover` reveals the handle when hovering anywhere in a container;
-- containment metadata describes fixed or free outline behavior, independently of geometry;
+Import `PAGE_DRAG_METADATA_KEY` and `BLOCK_HANDLE_METADATA_KEY` from
+`@chulane/rivto-react` or `@chulane/rivto-react/extensions`. They identify the
+`drag.page` and `block.handle` metadata namespaces and match their extension IDs.
+
+- `metadata[PAGE_DRAG_METADATA_KEY].dropAxis` describes direct-child layout;
+- `metadata[PAGE_DRAG_METADATA_KEY].acceptsDropContainer` enables drops on the full body;
+- `metadata[PAGE_DRAG_METADATA_KEY].dropPlacement.allowChildPlacement` overrides nesting only;
+- `childDropIndent` and `gapDropZone` are extension-wide pixel settings (24 and 8);
+- `metadata[PAGE_DRAG_METADATA_KEY].fixed` describes structural drag geometry, not permissions;
+- `metadata[BLOCK_HANDLE_METADATA_KEY].showOnContainerHover` reveals the universal handle across
+  the container body, including when the drag extension is absent;
+- `onChildIndent` and `onChildOutdent` intercept outline operations on a parent's
+  children before their own `onIndent` or `onOutdent` chain. Each receives the full
+  requested group and the parent's shallow `BlockOutlineContext`. `unhandled`
+  continues, while `handled` or `rejected` stops the complete operation;
 - `behavior.canMove({ sources, destination, parent, editor })` checks semantic
   placement for keyboard moves and dragging. Destination uses core `parentId` and
   optional `beforeId`, with omitted beforeId meaning append. It has no drop role
@@ -271,7 +287,7 @@ sibling gaps at every nesting level. Feedback and commit convert the resolved ga
 to the same core destination for canMove. Drag separately retains adjacency and depth
 for indicator geometry; a destination invalidated before release cancels the move.
 
-For example, a Kanban registration declares `drag.dropAxis: "horizontal"`. Its
+For example, a Kanban registration declares `metadata[PAGE_DRAG_METADATA_KEY].dropAxis: "horizontal"`. Its
 behavior allows only kanban-column sources when receiving children. The column
 behavior permits a moved column only when the receiving parent is kanban. These
 are React interaction policies, not persisted schema constraints; core commands

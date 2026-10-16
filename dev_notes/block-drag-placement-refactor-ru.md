@@ -1,6 +1,6 @@
 # Перетаскивание блоков: предложенные и реализованные изменения
 
-> Исторический отчёт до semantic move refactor. Текущий контракт: `canMove({ sources, destination })` и отдельная `ReactBlockRegistration.drag`; подробности — [block-behavior-chain.md](block-behavior-chain.md).
+> Исторический отчёт до semantic move refactor. Текущий контракт: `canMove({ sources, destination })` и отдельная `definition.metadata[PAGE_DRAG_METADATA_KEY]`; подробности — [block-behavior-chain.md](block-behavior-chain.md).
 
 **Статус: реализовано в текущих изменениях рабочей ветки.** Документ описывает
 предложенный подход, фактическую реализацию и результаты проверки. Это отчёт

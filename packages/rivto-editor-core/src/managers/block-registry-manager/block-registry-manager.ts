@@ -105,9 +105,15 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
   /**
    * Defines one native block type until the returned disposer is called.
    *
+   * The exact supplied definition is published, including opaque metadata. If
+   * an initial lifecycle observer throws, the definition is unregistered before
+   * the error escapes. A failing rollback notification is reported alongside
+   * the initial failure after the owned registry entry has been released.
+   *
    * @param definition - Definition for a unique, non-empty native type.
    * @returns Idempotent function that unregisters this exact definition.
-   * @throws If the type is empty or already registered.
+   * @throws If the type is empty, already registered, or an initial observer throws.
+   * Initial and rollback observer failures are combined in an AggregateError.
    */
   defineBlock(definition: BlockDefinition): () => void {
     if (!definition.type) {
@@ -130,14 +136,32 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
       this.notify();
     };
     this.removeDefinitions.add(dispose);
-    this.notify();
+    try {
+      // The definition is already visible; a synchronous listener can throw
+      // before the caller receives its disposer.
+      this.notify();
+    } catch (error) {
+      // The caller will not receive a disposer after this failure, so undo
+      // the registry entry. Listener side effects are outside this rollback.
+      try {
+        // Removal also notifies readers that the definition is gone. dispose()
+        // releases the entry and retained cleanup before this second notify.
+        dispose();
+      } catch (rollbackError) {
+        // A rollback listener can fail too; report both errors so it cannot
+        // replace the original registration failure.
+        throw new AggregateError([error, rollbackError], "Block definition registration failed");
+      }
+      throw error;
+    }
     return dispose;
   }
 
   /**
    * Subscribes to block-definition lifecycle changes.
    *
-   * The listener runs after a definition is successfully added or removed.
+   * The listener runs after a definition has been added or removed. If an initial
+   * observer throws, registration rolls back and publishes the removal as well.
    * Calling the returned function repeatedly is safe.
    *
    * @param listener - Callback invoked after the registry changes.

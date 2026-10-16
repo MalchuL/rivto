@@ -42,7 +42,7 @@ const EmptyEditorWrapper: ComponentType<{ readonly children?: ReactNode }> = ({ 
 
 describe("ReactPanelApi", () => {
   test("components select document roots, children or the protected embedded root", async () => {
-    const core = await createEditor();
+    const core = await createEditor({ registerWritingBlock: false });
     const editor = createRuntime({ editor: core, extensions: [standardPreset()] });
     const root = core.blocks.insertBlock({
       type: "paragraph",
@@ -395,13 +395,12 @@ describe("ReactPanelApi", () => {
   });
 
   test("registers list slash commands that atomically reset checkbox state", async () => {
-    const editor = await createEditor();
+    const editor = await createEditor({ registerWritingBlock: false });
+    const reactPanel = createReactEditor({ editor, extensions: [standardPreset()] });
     const blockId = editor.blocks.insertBlock({
       type: "paragraph",
       listProps: { type: "checkbox", checked: true },
     }).id;
-    const reactPanel = createReactEditor({ editor, extensions: [standardPreset()] });
-
     expect(reactPanel.slashCommands.getAll({ blockId }).map(({ id }) => id)).toEqual(
       expect.arrayContaining([
         "list.list",
@@ -419,7 +418,7 @@ describe("ReactPanelApi", () => {
   });
 
   test("configures the default paragraph slash command", async () => {
-    const editor = await createEditor();
+    const editor = await createEditor({ registerWritingBlock: false });
     editor.blockRegistry.defineBlock({ type: "test.source" });
     const blockId = editor.blocks.insertBlock({ type: "test.source" }).id;
     const reactPanel = createReactEditor({
@@ -663,7 +662,7 @@ describe("ReactPanelApi", () => {
   });
 
   test("standardPreset excludes optional edgeless and drag extensions", async () => {
-    const editor = await createEditor();
+    const editor = await createEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [standardPreset()],
@@ -682,7 +681,7 @@ describe("ReactPanelApi", () => {
   });
 
   test("installs optional edgeless and block drag extensions explicitly", async () => {
-    const editor = await createEditor();
+    const editor = await createEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [standardPreset(), pageDragExtension(), ...edgelessPreset()],

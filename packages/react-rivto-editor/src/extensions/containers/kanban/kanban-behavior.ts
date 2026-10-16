@@ -1,3 +1,4 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
 import type { BlockMoveContext } from "../../../block-behaviors/types";
 import { canMoveBlockType } from "../../../block-behaviors/utils/move";
 import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/types";
@@ -21,6 +22,34 @@ export const KANBAN_COLUMN_BLOCK_TYPE = "kanban-column";
  */
 export class KanbanBehavior extends ContainerBlockBehavior {
   /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
    * @returns True only for the KANBAN_BLOCK_TYPE native type.
@@ -43,6 +72,20 @@ export class KanbanBehavior extends ContainerBlockBehavior {
  * Behavior registered for the `kanban-column` type.
  */
 export class KanbanColumnBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.

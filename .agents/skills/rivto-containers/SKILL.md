@@ -21,10 +21,14 @@ owners; do not rely only on this guide:
   structural selection anchors.
 - `packages/react-rivto-editor/src/views/container-view.ts` and
   `src/views/types.ts` — container keyboard and drop behavior.
-- `packages/react-rivto-editor/src/views/ops/outline-ops.ts` — shared hierarchy
-  operations and seeded in-place conversion.
+- `packages/react-rivto-editor/src/block-behaviors/default-block-behavior.ts` —
+  standard indent/outdent algorithms and their permission preflight.
+- `packages/react-rivto-editor/src/block-behaviors/container-block-behavior.ts` —
+  shared empty-container child insertion, selection and deferred DOM focus.
+- `packages/react-rivto-editor/src/extensions/containers/convert-leaf-to-container.ts` —
+  seeded in-place conversion shared by container slash commands.
 - `packages/react-rivto-editor/src/managers/blocks/block-types.ts` — block
-  registration and containment metadata.
+  registration and parent outline handlers.
 - `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
   defaults, property schemas, and `allowedParents`.
 - `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
@@ -126,45 +130,57 @@ Editable structural titles use ordinary `useBlockEditing(blockId)` and persisted
 `content`. Interactive nested controls use the hook's
 `preventTextEditingAttributes` where needed.
 
-## Declare behavior with block views
+## Declare behavior and extension annotations
 
-Extend `ContainerBlockView` instead of adding type switches to page keyboard or
-drag extensions. It already:
+Extend `ContainerBlockBehavior` instead of adding type switches to page keyboard
+or drag extensions. Register the behavior with `blockTypes.register()`; it already:
 
-- exposes a full-body empty-container drop target;
 - inserts and focuses a host-provided default writing block on Enter when empty;
-- falls through to `BaseBlockView` for ordinary outline behavior.
+- defers ordinary outline actions to the registered `DefaultBlockBehavior`;
+- leaves move and parent outline restrictions to the concrete native behavior.
 
-Set `dropAxis` to match direct-child layout:
+Full-body empty-container drop targets belong to the optional drag extension and
+are configured through `definition.metadata[PAGE_DRAG_METADATA_KEY]`, independently of behavior.
+Set its `dropAxis` to match direct-child layout:
 
 - `"vertical"` for stacked children;
 - `"horizontal"` for lanes or cells in a row;
 - `"grid"` for wrapping tiles;
 - `undefined` when sibling sorting is not meaningful.
 
-Set `acceptsDropContainer = false` when the shell itself must not accept body
-drops. Declare `dropChildTypes` on fixed-shell owners and `dropParentTypes` on
-structural children; the axis does not imply type acceptance. The shared resolver
-validates explicit sibling gaps or body destinations against source snapshots.
-Override `acceptsDrop({ destination, sources, reactEditor })` only for additional
-semantic restrictions. It runs on the destination parent's view, not a neighbor's. Override semantic methods only for a demonstrated difference. Examples:
+Set `metadata[PAGE_DRAG_METADATA_KEY].acceptsDropContainer = false` when the shell must not
+accept body drops. Implement `canMove({ destination, sources, parent, editor })`
+on fixed-shell owners and structural children; an axis does not imply type
+acceptance. The shared resolver validates explicit sibling gaps or body destinations
+against source snapshots. Each applicable behavior inspects the actual receiving
+parent, not a neighboring block's edge. Any false veto prevents the move for both
+keyboard and dragging. Override semantic methods only for a demonstrated difference. Examples:
 
 - Table cells override `onSplit` because Enter always inserts a nested writing
   block rather than splitting cell text.
 - Columns shells override `onStructuralDelete` to relocate nested content before
   deletion.
 
-Register containment metadata on definitions:
+Implement outline restrictions in the concrete parent behavior:
 
-- `childOutline: "fixed"` prevents direct structural children from being
-  indented into or outdented past siblings.
-- `childOutline: "free"` permits ordinary nesting within the container.
-- `outlineFloor: true` prevents Shift+Tab from lifting descendants past the
-  owning lane or cell.
+- `onChildIndent` returns `rejected` when structural children must not nest into siblings.
+- `onChildOutdent` returns `rejected` for fixed structural children and for content
+  that must not lift beyond its owning lane, cell, or TODO storage.
+- Both hooks receive the parent's shallow `BlockOutlineContext` and the complete
+  requested ID group. `unhandled` continues to the child chain; `handled` or `rejected`
+  stops the whole operation, including Enter and Backspace paths.
 
-Containment metadata governs outline interactions. `allowedParents` governs
-model validity. They solve different problems and fixed structures commonly
-need both.
+Parent handlers govern outline interactions. `allowedParents` governs model
+validity. They solve different problems and fixed structures commonly need both.
+Metadata contains extension presentation only: `metadata[PAGE_DRAG_METADATA_KEY]` supplies
+`dropAxis`, `acceptsDropContainer`, and `fixed` geometry; it is not permission.
+`metadata[BLOCK_HANDLE_METADATA_KEY].showOnContainerHover` supplies universal handle hover.
+React `blockTypes.register()` owns the complete definition, including metadata,
+and passes it directly to core without merging annotation contributions.
+Registering an already defined native type is a conflict; cleanup removes the
+owned definition together with its presentation. Core lifecycle notifications
+update metadata readers through `blockTypes.subscribe()`.
+Core API remains unchanged; no `registerMetadata` is required.
 
 ## Create and convert correctly
 

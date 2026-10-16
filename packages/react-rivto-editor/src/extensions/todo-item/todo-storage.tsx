@@ -1,3 +1,4 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../block-behaviors/types";
 import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
 /**
  * Provides TODO-storage data rules, direct-child filtering, status ordering,
@@ -111,6 +112,20 @@ const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(un
 
 /** Vertical-container behavior restricted to TODO storage blocks. */
 class TodoStorageBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects TODO storage without applying its container actions to ordinary task blocks.
    * @param context - Current detached block fields and runtime; applicability is independent of the called method.

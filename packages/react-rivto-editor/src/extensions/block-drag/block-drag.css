@@ -1,14 +1,13 @@
 /*
  * Page drag extension presentation.
  *
- * The drag handle is revealed by ancestor state (row hover, focus-within,
- * container hover) and container roots extend that hover across full-height
- * side strips, so its resting and revealed states live here rather than in
- * utilities that would outrank the structural selectors. Drop indicators and
+ * Universal-handle ancestor visibility and full-height container hover live in
+ * the independent handle stylesheet, with its own extension-owned marker.
+ * Drag placement styles stay scoped to the existing structural shell. Drop indicators and
  * the drag overlay are positioned by data attributes written by the drag
  * placement resolver.
- * The drag wrapper marks layout roots with data-drag-container from registered
- * view behavior, so these rules also apply to host-defined container types.
+ * Handle presentation does not require this extension. Drop feedback applies
+ * to native and host-defined types through the same canonical placement data.
  */
 :root {
   --rivto-drop-indicator-thickness: 4px;
@@ -19,48 +18,6 @@
     var(--rivto-drop-indicator-color) 8%,
     transparent
   );
-}
-
-/* Layout roots keep only their direct handle's hitbox pointer-active while
-   transparent so re-entering the handle recovers hover without a fast move. */
-[data-drag-container] > .page-block-row > .rivto-slot > .block-handle {
-  pointer-events: auto;
-}
-
-[data-drag-container] {
-  position: relative;
-}
-
-/* Root rows are only one line tall; side strips extend their hover behavior
-   beside the full container without covering its interactive body. */
-[data-drag-container]::before,
-[data-drag-container]::after {
-  position: absolute;
-  z-index: 0;
-  top: 0;
-  bottom: 0;
-  width: 100vw;
-  background: transparent;
-  content: "";
-}
-
-[data-drag-container]::before {
-  right: 100%;
-}
-
-[data-drag-container]::after {
-  left: 100%;
-}
-
-/* Canvas cards have independent hit areas. Page-wide container strips would
-   intercept neighboring cards and inflate the card's horizontal scrollport. */
-.edgeless-card [data-drag-container]::before,
-.edgeless-card [data-drag-container]::after {
-  content: none;
-}
-
-[data-drag-container]:hover > .page-block-row > .rivto-slot > .block-handle {
-  opacity: 1;
 }
 
 [data-dragging] {

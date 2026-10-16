@@ -4,8 +4,8 @@ import type { ReactPanelApi } from "../panels/types";
 import type { ReactEditorApi } from "../editor/types";
 import type { KeyboardSelectionTarget } from "../managers";
 
-/** handled stops dispatch, default continues the behavior chain, and rejected refuses the action. */
-export type BlockBehaviorOutcome = "handled" | "default" | "rejected";
+/** handled stops dispatch, unhandled continues the behavior chain, and rejected refuses the action. */
+export type BlockBehaviorOutcome = "handled" | "unhandled" | "rejected";
 
 /**
  * Block, selection, and DOM context supplied to a keyboard behavior method.
@@ -13,7 +13,7 @@ export type BlockBehaviorOutcome = "handled" | "default" | "rejected";
  * `block` is a detached snapshot of the block whose data selected the behavior for this operation.
  * Selection is captured by the caller, while panel remains a live API.
  * Handlers inspect ancestors separately when they need a parent or a container
- * whose outlineFloor metadata prevents children from being outdented further.
+ * whose onChildOutdent handler prevents children from being outdented further.
  */
 export interface BlockBehaviorContext {
   /** Editor view supplying selection, block behaviors, and shared writing factories. */
@@ -30,6 +30,18 @@ export interface BlockBehaviorContext {
 
 /** Persisted block fields used for applicability without reading a recursive subtree. */
 export type BlockBehaviorData = Readonly<Omit<EditorBlock, "children">>;
+
+/** Shallow operation context shared by child and parent outline handlers. */
+export interface BlockOutlineContext {
+  /** Live occurrence supplying document commands and selection. */
+  readonly reactPanel: ReactPanelApi;
+  /** Detached leading block, or its parent when invoking an onChild handler. */
+  readonly block: BlockBehaviorData;
+  /** Parent of the context block, or null at the document root. */
+  readonly parentId: string | null;
+  /** Selection captured for the complete group operation. */
+  readonly selection: Selection | undefined;
+}
 
 /** Current block data for selecting a behavior, shared by every method. */
 export interface BlockBehaviorAvailabilityContext {
@@ -62,11 +74,13 @@ export interface BlockMoveContext {
  * rather than storing the last edited block on the behavior object. Rendering remains
  * in the extension's React component; mutations use the document managers.
  *
- * Returning "default" asks dispatch to try the next applicable registered behavior. Returning "handled"
+ * Returning "unhandled" asks dispatch to try the next applicable registered behavior. Returning "handled"
  * or "rejected" stops further editor handling; the keyboard handler can then prevent
  * the browser's default action. "handled" may also represent a deliberate no-op,
  * such as refusing to indent past a container limit. "rejected" explicitly refuses
- * the action without applying its mutation. These results do not themselves create
+ * the action without applying its mutation. An "unhandled" handler may perform
+ * preparatory mutations, such as relocating column contents before generic deletion
+ * completes the action. These results do not themselves create
  * a transaction or call preventDefault; the calling handler controls those steps.
  *
  * Omitted action methods defer to the next behavior. DefaultBlockBehavior is an
@@ -97,7 +111,7 @@ export interface BlockBehavior {
    * Splits the current block or inserts a sibling/child after Enter.
    *
    * The handling method owns continuation properties and document mutations;
-   * the caller owns the transaction. Returning "default" delegates the entire
+   * the caller owns the transaction. Returning "unhandled" delegates the entire
    * split to the next applicable behavior rather than merging property patches.
    *
    * @param context - Resolved block and editing runtime.
@@ -112,7 +126,7 @@ export interface BlockBehavior {
    * @param ids - Outline identifiers to indent together.
    * @returns Whether the behavior handled, refused, or deferred the indent.
    */
-  onIndent?(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome;
+  onIndent?(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome;
   /**
    * Lifts the supplied identifiers to their grandparent.
    *
@@ -120,7 +134,32 @@ export interface BlockBehavior {
    * @param ids - Outline identifiers to outdent together.
    * @returns Whether the behavior handled, refused, or deferred the outdent.
    */
-  onOutdent?(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome;
+  onOutdent?(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome;
+  /**
+   * Intercepts indent of the leading block's children before their own behavior runs.
+   *
+   * Handlers may perform their own mutation and return handled, refuse with
+   * rejected, or continue with unhandled. The caller owns the transaction. Use
+   * panel block commands for custom execution, not the semantic indent helper,
+   * which would dispatch this operation again.
+   *
+   * @param context - Current parent fields and live panel, without reading its subtree.
+   * @param ids - Complete identifiers requested by this group operation.
+   * @returns Whether the parent handled, rejected, or deferred the entire operation.
+   */
+  onChildIndent?(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome;
+  /**
+   * Intercepts outdent of the leading block's children before their own behavior runs.
+   *
+   * Enter, Backspace and explicit outdent share this path. Handlers may mutate
+   * through panel commands and claim the operation; they must not call the semantic
+   * outdent helper recursively. The caller owns the transaction.
+   *
+   * @param context - Current parent fields and live panel, without reading its subtree.
+   * @param ids - Complete identifiers requested by this group operation.
+   * @returns Whether the parent handled, rejected, or deferred the entire operation.
+   */
+  onChildOutdent?(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome;
   /**
    * Outdents a nested block when Backspace is pressed at offset zero.
    *
@@ -168,9 +207,14 @@ export interface BlockBehavior {
   /**
    * Prepares structurally selected blocks immediately before they are deleted.
    *
-   * @param context - One selected block whose behavior was resolved.
-   * @param ids - Complete structural selection about to be removed.
-   * @returns `"handled"` when the behavior already deleted, otherwise `"default"`.
+   * Registry dispatch consults this behavior on its first matching selected block
+   * and skips it for later blocks in the same request. Every handler receives the
+   * whole group. The first handled or rejected outcome claims the selection;
+   * generic deletion runs only when all applicable handlers defer.
+   *
+   * @param context - One selected block whose behavior was resolved, with its full snapshot.
+   * @param ids - Complete structural selection about to be removed, in the supplied order.
+   * @returns Handled when the behavior claims deletion, rejected to refuse it, or unhandled to defer.
    */
   onStructuralDelete?(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome;
   /**
@@ -189,6 +233,8 @@ export type BlockBehaviorAction =
   | "onSplit"
   | "onIndent"
   | "onOutdent"
+  | "onChildIndent"
+  | "onChildOutdent"
   | "onOutdentAtStart"
   | "onMergeBackward"
   | "onMergeForward"

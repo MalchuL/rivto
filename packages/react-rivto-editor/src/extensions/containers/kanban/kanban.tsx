@@ -5,11 +5,13 @@
  * The shared block tree and drag extension render and move every card in both modes.
  * @module
  */
+import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { createCaretSelection } from "@chulane/rivto";
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
+import { convertLeafToContainer } from "../convert-leaf-to-container";
 import type { BlockWrapperProps } from "../../../blocks";
 import { editorControlProps } from "../../../constants";
 import {
@@ -280,25 +282,28 @@ export function kanbanExtension(): ReactEditorExtension {
           definition: {
             type: KANBAN_BLOCK_TYPE,
             title: "Kanban",
-            metadata: { containment: { childOutline: "fixed" } },
+            metadata: {
+              [PAGE_DRAG_METADATA_KEY]: {
+                dropAxis: "horizontal",
+                acceptsDropContainer: true,
+                fixed: true,
+              },
+              [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+            },
           },
           render: Kanban,
           behavior: kanbanBehavior,
-          drag: {
-            dropAxis: "horizontal",
-            acceptsDropContainer: true,
-            showHandleOnContainerHover: true,
-          },
         }),
         reactEditor.blockTypes.register({
           definition: {
             type: KANBAN_COLUMN_BLOCK_TYPE,
             title: "Kanban column",
-            metadata: { containment: { childOutline: "free", outlineFloor: true } },
+            metadata: {
+              [PAGE_DRAG_METADATA_KEY]: { dropAxis: "vertical", acceptsDropContainer: true },
+            },
           },
           render: KanbanColumn,
           behavior: kanbanColumnBehavior,
-          drag: { dropAxis: "vertical", acceptsDropContainer: true },
         }),
         reactEditor.slashCommands.register({
           id: "block.kanban.insert",

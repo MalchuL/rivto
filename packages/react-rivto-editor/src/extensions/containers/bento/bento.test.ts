@@ -1,18 +1,20 @@
-import { createTestReactEditor as createReactEditor } from "../../../test-utils";
+import {
+  createTestReactEditor as createReactEditor,
+  createTestCoreEditor,
+  indentBlocks,
+} from "../../../test-utils";
 /**
  * Verifies Bento uses ordinary persisted hierarchy and props, including undo,
  * clipboard and snapshot round trips rather than a separate tile store.
  * @module
  */
 import { createStructuralSelection } from "@chulane/rivto";
-import { createTestCoreEditor } from "../../../test-utils";
 
-import { indentBlocks } from "../../../block-behaviors/utils/outline-ops";
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import { bentoExtension, createBentoBlockInput } from "./bento";
 
 test("slash converts the current block to Bento in place", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), bentoExtension()],
@@ -29,7 +31,7 @@ test("slash converts the current block to Bento in place", async () => {
 });
 
 test("Bento preserves tile identity and width through moves, undo and serialization", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), bentoExtension()],

@@ -12,7 +12,7 @@ import type { ReactPanelApi } from "../../panels/types";
 import type { KeyboardSelectionTarget } from "../../managers/events/selection";
 import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
-import { outdentBlocks } from "./outline-ops";
+import { createBlockOutlineContext } from "./context";
 
 /**
  * Slices a block at a caret and inserts a following writing block.
@@ -60,11 +60,13 @@ export function splitBlockAt(
  * branches receive the new block as their first child; collapsed branches keep
  * it as a sibling. Edgeless root splits extend the containing card's range.
  * Model selection changes immediately and DOM focus is scheduled after rendering.
+ * Empty-block outdent resolves fresh shallow fields and current model selection,
+ * then dispatches parent and child handlers in its own nested panel batch.
  *
  * @param context - Source snapshot, live panel commands, and editing surface root.
  * @param target - Captured caret; a noncollapsed structural target splits at the end.
  * @param listProps - Continuation list properties, or undefined to use writing defaults.
- * @returns `"handled"` after insertion or an outdent attempt, including containment no-ops.
+ * @returns `"handled"` after insertion or an outdent attempt, including attempts rejected by parent outline handlers.
  * @throws If delegated block mutation, hierarchy, or list-property validation fails.
  */
 export function splitBlock(
@@ -80,7 +82,16 @@ export function splitBlock(
     reactPanel.blocks.canOutdent(block.id)
   ) {
     // Lift one permitted level per Enter, stopping at container outline floors.
-    outdentBlocks(reactPanel, [block.id]);
+    const outlineContext = createBlockOutlineContext(
+      reactPanel,
+      block.id,
+      reactPanel.selection.get(),
+    );
+    if (outlineContext) {
+      reactPanel.batchUpdates(() =>
+        reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [block.id]),
+      );
+    }
     focusCaret(reactPanel, root, block.id, 0);
     return "handled";
   }

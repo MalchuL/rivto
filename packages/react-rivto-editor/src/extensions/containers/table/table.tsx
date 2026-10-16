@@ -5,6 +5,8 @@
  * snapshots, and undo behavior remain owned by the existing editor managers.
  * @module
  */
+import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { PlusIcon } from "lucide-react";
 import {
@@ -18,7 +20,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
+import { convertLeafToContainer } from "../convert-leaf-to-container";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import {
   BlockElementRefProvider,
@@ -620,35 +622,41 @@ export function tableExtension(): ReactEditorExtension {
         definition: {
           type: TABLE_BLOCK_TYPE,
           title: "Table",
-          metadata: { containment: { childOutline: "fixed" } },
+          metadata: {
+            [PAGE_DRAG_METADATA_KEY]: {
+              dropAxis: "vertical",
+              acceptsDropContainer: true,
+              fixed: true,
+            },
+            [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+          },
         },
         render: Table,
         behavior: tableBehavior,
-        drag: {
-          dropAxis: "vertical",
-          acceptsDropContainer: true,
-          showHandleOnContainerHover: true,
-        },
       });
       reactEditor.blockTypes.register({
         definition: {
           type: TABLE_ROW_BLOCK_TYPE,
           title: "Table row",
-          metadata: { containment: { childOutline: "fixed" } },
+          metadata: {
+            [PAGE_DRAG_METADATA_KEY]: {
+              dropAxis: "horizontal",
+              acceptsDropContainer: true,
+              fixed: true,
+            },
+          },
         },
         render: TableRow,
         behavior: tableRowBehavior,
-        drag: { dropAxis: "horizontal", acceptsDropContainer: true },
       });
       reactEditor.blockTypes.register({
         definition: {
           type: TABLE_CELL_BLOCK_TYPE,
           title: "Table cell",
-          metadata: { containment: { childOutline: "free", outlineFloor: true } },
+          metadata: { [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true } },
         },
         render: TableCell,
         behavior: tableCellBehavior,
-        drag: { acceptsDropContainer: true },
       });
       reactEditor.surfaces.registerBlockWrapper("block", TableCellWidthWrapper);
       reactEditor.surfaces.registerBlockWrapper("edgeless", TableCellWidthWrapper);

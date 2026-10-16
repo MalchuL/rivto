@@ -1,3 +1,4 @@
+import { PAGE_DRAG_METADATA_KEY } from "../block-drag-options";
 import type { EditorBlock } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
 import { resolveCrossDocumentPageRootPlacement } from "../cross-document/placement";
@@ -62,13 +63,18 @@ function surface(items: DropLayoutBlock[]) {
     editor: {
       blockBehaviors: { canMove: () => true },
       blockTypes: {
-        getDefinition: () => undefined,
-        getDragOptions: (id: string) => {
+        getDefinition: (id: string) => {
           const entry = items.find((candidate) => candidate.id === id)!;
           return {
-            dropAxis: entry.axis,
-            acceptsDropContainer: entry.acceptsBody,
-            dropPlacement: entry.options,
+            type: id,
+            metadata: {
+              [PAGE_DRAG_METADATA_KEY]: {
+                dropAxis: entry.axis,
+                acceptsDropContainer: entry.acceptsBody,
+                fixed: entry.fixed,
+                dropPlacement: entry.options,
+              },
+            },
           };
         },
       },

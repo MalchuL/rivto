@@ -1,16 +1,22 @@
+import type { ReactPanelApi } from "../panels/types";
+import { getBlockDragOptions } from "../extensions/block-drag/block-drag-options";
 import { BentoBehavior } from "../extensions/containers/bento/bento-behavior";
-import { createTestReactEditor as createReactEditor } from "../test-utils";
+import {
+  createTestReactEditor as createReactEditor,
+  createTestCoreEditor,
+  indentBlocks,
+  outdentBlocks,
+} from "../test-utils";
 /**
  * Nested container matrix: kanban in bento, bento in bento, columns in a
  * kanban column, table in a bento tile, and bento in a table cell.
  *
  * Each case checks Tab/Shift+Tab at every relevant depth and a lateral move
- * that must remain legal. React definition metadata owns containment. Explicit
+ * that must remain legal. Concrete parent behavior handlers own outline restrictions. Explicit
  * drag/`moveBlocks` may leave a floor.
  *
  * @module
  */
-import { createTestCoreEditor } from "../test-utils";
 
 import { defaultWritingBlockExtension } from "../extensions/built-ins/built-ins";
 import {
@@ -29,11 +35,9 @@ import {
   TABLE_CELL_BLOCK_TYPE,
   tableExtension,
 } from "../extensions/containers/table/table";
-import { getBlockContainment } from "../managers/blocks/types";
-import { indentBlocks, outdentBlocks } from "./utils/outline-ops";
 
 async function createNestedRuntime() {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [
@@ -84,16 +88,22 @@ test("kanban inside bento freezes tiles and floors cards at the column", async (
   expect(editor.blocks.getParentId(card)).toBe(editor.blocks.getBlock(kanban)!.children[1]!.id);
 
   expect(
-    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(bento)!.type)!
-      .dropAxis,
+    getBlockDragOptions(
+      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(bento)!.type)
+        ?.metadata,
+    )!.dropAxis,
   ).toBe("grid");
   expect(
-    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(kanban)!.type)!
-      .dropAxis,
+    getBlockDragOptions(
+      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(kanban)!.type)
+        ?.metadata,
+    )!.dropAxis,
   ).toBe("horizontal");
   expect(
-    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(column.id)!.type)!
-      .dropAxis,
+    getBlockDragOptions(
+      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(column.id)!.type)
+        ?.metadata,
+    )!.dropAxis,
   ).toBe("vertical");
   const fromPage = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
   editor.blocks.moveBlocks([fromPage], bento, "inside");
@@ -154,11 +164,13 @@ test("columns inside a kanban column allow indent under the lane only", async ()
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
   outdentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
-  expect(getBlockContainment(editor.blockRegistry.get("columns"))?.childOutline).toBe("fixed");
-  expect(getBlockContainment(editor.blockRegistry.get("columns-column"))?.outlineFloor).toBe(true);
+  expect(getBlockDragOptions(editor.blockRegistry.get("columns")?.metadata)?.fixed).toBe(true);
+  expectParentOutdentRejected(reactPanel, lane.id);
   expect(
-    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(columns)!.type)!
-      .dropAxis,
+    getBlockDragOptions(
+      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(columns)!.type)
+        ?.metadata,
+    )!.dropAxis,
   ).toBe("horizontal");
   reactPanel.editor.destroy();
   editor.destroy();
@@ -185,15 +197,40 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
   outdentBlocks(reactPanel, [cell.id]);
   expect(editor.blocks.getParentId(cell.id)).toBe(row.id);
   expect(
-    reactPanel.editor.blockTypes.getDragOptions(reactPanel.blocks.getBlockNode(table)!.type)!
-      .dropAxis,
+    getBlockDragOptions(
+      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(table)!.type)
+        ?.metadata,
+    )!.dropAxis,
   ).toBe("vertical");
-  expect(getBlockContainment(editor.blockRegistry.get(TABLE_CELL_BLOCK_TYPE))?.outlineFloor).toBe(
-    true,
-  );
+  expectParentOutdentRejected(reactPanel, cell.id);
   expect(editor.blocks.getBlockNode(bento)?.type).toBe(BENTO_BLOCK_TYPE);
   expect(editor.blocks.getBlockNode(table)?.type).toBe(TABLE_BLOCK_TYPE);
   expect(editor.blocks.getBlockNode(cell.id)?.type).toBe(TABLE_CELL_BLOCK_TYPE);
   reactPanel.editor.destroy();
   editor.destroy();
 });
+
+/**
+ * Confirms native parent behavior rejects lifting its direct children.
+ *
+ * @param panel - Headless occurrence whose native behavior chain is queried.
+ * @param id - Container identity supplying the former outline-floor policy.
+ * @returns After asserting the parent's explicit rejection outcome.
+ */
+function expectParentOutdentRejected(panel: ReactPanelApi, id: string): void {
+  const block = panel.blocks.getBlockNode(id)!;
+  const behavior = panel.editor.blockBehaviors
+    .resolveAll({ editor: panel.editor, block })
+    .find((candidate) => candidate.onChildOutdent);
+  expect(
+    behavior?.onChildOutdent?.(
+      {
+        reactPanel: panel,
+        block,
+        parentId: panel.blocks.getParentId(id) ?? null,
+        selection: undefined,
+      },
+      block.childIds,
+    ),
+  ).toBe("rejected");
+}

@@ -11,7 +11,7 @@ import {
 import type { DropBlock } from "../placement/types";
 import { resolveBeforeDropPlacement, resolveSiblingAfterDropPlacement } from "../placement/utils";
 import type { DropPlacement, PointerCoordinates } from "../types";
-import { blockContainment } from "../utils/containment";
+import { getBlockDragOptions } from "../block-drag-options";
 
 /**
  * Returns the tree displayed by this view without changing document operations.
@@ -30,7 +30,7 @@ export function getDropBlocks(reactPanel: ReactPanelApi): EditorBlock[] {
  * them. Each access reads the live DOM; no geometry survives between calculations.
  *
  * @param root - Surface element containing the rendered destination blocks.
- * @param reactPanel - Destination React view providing block-view behavior and containment.
+ * @param reactPanel - Destination React view providing semantic move permissions and extension geometry annotations.
  * @returns Rendered block identities and layout policies with live viewport
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
@@ -44,7 +44,9 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
     }
     const parent = dom.getParent(element);
     const type = reactPanel.blocks.getBlockNode(id)?.type;
-    const dragOptions = (type && reactPanel.editor.blockTypes.getDragOptions(type)) || {};
+    const dragOptions =
+      (type && getBlockDragOptions(reactPanel.editor.blockTypes.getDefinition(type)?.metadata)) ||
+      {};
     return [
       {
         id,
@@ -56,7 +58,7 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
           return element.getBoundingClientRect();
         },
         axis: dragOptions.dropAxis,
-        fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
+        fixed: dragOptions.fixed === true,
         acceptsBody: Boolean(dragOptions.acceptsDropContainer),
         options: dragOptions.dropPlacement,
         hasRenderedChildren: Boolean(

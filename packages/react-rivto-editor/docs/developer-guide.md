@@ -460,8 +460,16 @@ generic outline actions. Inherited methods receive no special dispatch treatment
 Use `dispatch()` for actions, `resolveAll(context)` for applicable instances, and
 `canMove({ sources, destination })` for semantic movement permissions. The move
 query is independent of dragging; all applicable hooks must allow it. Geometry
-belongs to the optional `drag` field of block-type registration and is read through
-`blockTypes.getDragOptions(type)`. Availability is not cached by native type. List split inheritance and Enter transitions belong to separate
+belongs to `definition.metadata[PAGE_DRAG_METADATA_KEY]` and is read by the optional drag
+extension through `blockTypes.getDefinition(type)?.metadata`. Universal handle
+hover uses `metadata[BLOCK_HANDLE_METADATA_KEY]` independently of dragging. React registration
+owns the complete definition and passes its metadata directly to the existing core
+registry; core API stays unchanged. Registering an already defined native type is
+a conflict. Cleanup removes the owned definition together with its presentation.
+`blockTypes.subscribe()` observes creation and removal of definitions, including their
+metadata, and disconnects automatically when its React runtime is destroyed. Parent
+`onChildIndent`/`onChildOutdent` chains run before child outline handlers; all use
+shallow `BlockOutlineContext`, and handled/rejected stop the complete operation. Availability is not cached by native type. List split inheritance and Enter transitions belong to separate
 checkbox, numbered-list, and ordinary-list behaviors; property defaults and
 validation remain in `blockListProps`.
 

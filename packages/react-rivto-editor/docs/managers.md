@@ -119,7 +119,7 @@ and interaction registration retain their own extension cleanup.
 required `isAvailable(context)` predicate. Larger priorities run first; ties keep
 registration order. Native behaviors use `0`, list/collapse use `-100`, and the
 ordinary `DefaultBlockBehavior` registration uses `-1000`. These values are not
-reserved. Omitted methods and `"default"` continue the chain; `"handled"` and
+reserved. Omitted methods and `"unhandled"` continue the chain; `"handled"` and
 `"rejected"` stop it. Inherited methods are invoked normally, without inspecting
 method identities or inserting a special fallback. Each disposer removes its
 exact registration. Type-indexed `get`, `has`, `delete`, and `fallback` are removed.
@@ -138,11 +138,41 @@ IDs collide with local IDs; applicability never resolves source IDs locally.
 Use `dispatch()` for actions and `resolveAll(context)` for applicable instances.
 Native container behaviors implement their own applicability and specialize only
 demonstrated differences; the container base no longer inherits generic outline
-actions. Geometry is registered separately as `blockTypes.register({ definition,
-render, behavior, drag })`. `blockTypes.getDragOptions(type)` returns that optional
-configuration or undefined. Its lifecycle, including failed-registration rollback,
-is owned by the type registration. Registering geometry does not enable dragging.
+actions. Geometry is registered through `definition.metadata[PAGE_DRAG_METADATA_KEY]` and
+read by the optional drag extension from `blockTypes.getDefinition(type)?.metadata`.
+Universal handle presentation uses `metadata[BLOCK_HANDLE_METADATA_KEY]`, independently of drag.
+React registration owns the complete core definition, including metadata, and
+registers the supplied object directly without copying or merging annotation records.
+An already registered native type is a conflict, including a definition created
+directly in core or by another React runtime. Cleanup removes the owned definition
+with its presentation, and rollback releases installed resources after setup failures.
+`blockTypes.subscribe()` observes creation and removal of complete definitions;
+metadata readers update through these same core lifecycle notifications. Subscriptions
+disconnect automatically after registration teardown when the React runtime is destroyed.
+No core registration API is added. Metadata does not enable an extension.
 The former behavior `resolve(blockId)` metadata query is removed.
+
+Outline dispatch first invokes the current parent's `onChildIndent` or
+`onChildOutdent`, then the leading child's chain if every parent handler defers.
+Both chains use stable priority ordering and the unchanged requested ID group.
+`handled` and `rejected` stop dispatch. Enter and Backspace resolve fresh shallow
+contexts and invoke this same entry point inside a panel batch. Parent restrictions belong to concrete container behaviors,
+not geometry annotations or the generic container base. Standard indent/outdent
+algorithms live directly in `DefaultBlockBehavior.onIndent` and `onOutdent`, with
+private helpers for selected roots and shallow move permissions. Keyboard callers
+prepare contexts and dispatch requests directly; headless test helpers live only
+in `test-utils.ts`. Container child insertion belongs to
+`ContainerBlockBehavior.appendWritingBlock`, while seeded slash conversion is
+shared through `extensions/containers/convert-leaf-to-container.ts`. Core eligibility, tail-adoption preflight and handled no-ops
+remain unchanged, without redispatch from the default implementation.
+
+Structural deletion also uses `blockBehaviors.dispatch("onStructuralDelete", context, ids)`.
+The registry visits the supplied IDs in order, skips missing blocks, and consults
+each distinct matching behavior on its first selected block only. All handlers
+receive the complete group. Handled/rejected claims the selection; universal
+deferral leaves generic deletion with the selection extension. Batching and DOM
+focus stay with that extension. Chain execution is a private registry method;
+there is no separate `dispatchBlockAction` utility.
 
 `canMove({ sources, destination })` accepts shallow moved-root fields and the core
 `BlockDestination { parentId, beforeId? }`: omitted beforeId appends. It resolves

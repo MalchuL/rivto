@@ -24,7 +24,7 @@ to the change:
   interactive-control opt-out.
 - `packages/react-rivto-editor/src/managers/blocks/types.ts` and
   `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
-  registration, defaults, schemas, parent restrictions, and containment metadata.
+  registration, defaults, schemas, parent restrictions, and parent outline handlers.
 - `packages/react-rivto-editor/src/extensions/block-drag/` — shared handles,
   hit testing, drop geometry, and placement. Do not build another drag path.
 - `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
@@ -262,9 +262,9 @@ containers by preserving the shared shell and by remaining width-flexible:
 
 If the new block itself owns children, load `rivto-containers` and follow its
 additional rules. In particular: children remain native `EditorBlock.children`,
-`BlockTree` alone renders them, `ContainerBlockView` declares drop behavior,
+`BlockTree` alone renders them, extension metadata declares drag geometry,
 `dropAxis` matches direct-child layout, `allowedParents` protects stored shape,
-and containment metadata (`childOutline`, `outlineFloor`) protects outline
+and parent behavior handlers (`onChildIndent`, `onChildOutdent`) protect outline
 interactions. Reset the shared `24px` child margin only on layout roots or
 structural shells whose children intentionally align to the container edge.
 

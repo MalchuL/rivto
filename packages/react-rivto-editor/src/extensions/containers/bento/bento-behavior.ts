@@ -1,3 +1,4 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
 import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/types";
 /**
  * Bento board view: a flat grid whose tiles cannot Tab-indent or Tab-outdent.
@@ -17,6 +18,34 @@ export const BENTO_BLOCK_TYPE = "bento";
  * Behavior registered for the `bento` block type.
  */
 export class BentoBehavior extends ContainerBlockBehavior {
+  /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
   /**
    * Selects this native container independently of the registration's owner.
    * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.

@@ -125,7 +125,6 @@ export {
 export type {
   BlockClipboardConverter,
   BlockClipboardFields,
-  BlockContainment,
   BlockRenderer,
   BlockSlotPosition,
   BlockSlotProps,
@@ -179,6 +178,7 @@ export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors"
 export type {
   BlockBehavior,
   BlockBehaviorContext,
+  BlockOutlineContext,
   BlockBehaviorData,
   BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
@@ -276,8 +276,14 @@ export type {
   BlockContextMenuRenderContext,
   BlockContextMenuEntry,
 } from "./managers/block-context-menu/types";
-export type {
-  BlockDragOptions,
-  BlockDropPlacementOptions,
-  DropAxis,
+export {
+  PAGE_DRAG_METADATA_KEY,
+  type BlockDragOptions,
+  type BlockDropPlacementOptions,
+  type DropAxis,
 } from "./extensions/block-drag/block-drag-options";
+
+export {
+  BLOCK_HANDLE_METADATA_KEY,
+  type BlockHandleMetadata,
+} from "./extensions/built-ins/block-handle/metadata";

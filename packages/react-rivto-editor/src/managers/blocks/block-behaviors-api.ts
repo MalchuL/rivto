@@ -10,9 +10,21 @@ import type {
 export interface BlockBehaviorsApi {
   /**
    * Runs the context block's prioritized behavior chain until handled or rejected.
+   *
+   * Indent and outdent dispatch the corresponding child-operation handler on the
+   * live parent first, then continue with the context block only on deferral.
+   * Parent interception is one level deep and preserves the full requested ID
+   * group and captured selection. The caller owns transaction batching.
+   * Structural deletion visits the complete supplied group in its existing order.
+   * Behaviors already consulted for one selected block are skipped for later ones;
+   * every handler receives the full group. Missing IDs are ignored and the first
+   * handled or rejected outcome claims the whole selection. Universal deferral
+   * returns false so the caller can perform generic deletion.
+   *
    * @param action - Semantic operation to invoke.
    * @param args - Block context and operation-specific arguments.
    * @returns True when the operation was handled or explicitly rejected.
+   * @throws If a behavior or delegated block operation fails.
    */
   dispatch<Action extends BlockBehaviorAction>(
     action: Action,

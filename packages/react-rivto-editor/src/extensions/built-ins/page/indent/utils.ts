@@ -2,13 +2,13 @@
  * Tab / Shift+Tab dispatch for outline indent and outdent.
  *
  * Eligibility stays here so a focused toolbar cannot indent. The resolved
- * block view performs the semantic move; React definition metadata turns an
- * illegal indent or floor lift into a no-op.
+ * behavior chain performs the semantic move; parent outline handlers and move
+ * permissions turn an illegal indent or floor lift into a no-op.
  *
  * @module
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../../block-behaviors";
+import { createBlockOutlineContext } from "../../../../block-behaviors/utils/context";
 import type { ReactPanelApi } from "../../../../panels/types";
 import {
   firstKeyboardTarget,
@@ -188,7 +188,7 @@ export function applyIndentShortcut(
     return false;
   }
 
-  const context = createBlockBehaviorContext(reactPanel, target.blockId, root, selection);
+  const context = createBlockOutlineContext(reactPanel, target.blockId, selection);
   if (!context) {
     return false;
   }

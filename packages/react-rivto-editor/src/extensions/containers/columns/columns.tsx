@@ -5,11 +5,13 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
+import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
 import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { type KeyboardEvent, type MouseEvent } from "react";
 import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
-import { convertLeafToContainer } from "../../../block-behaviors/utils/outline-ops";
+import { convertLeafToContainer } from "../convert-leaf-to-container";
 import { Button } from "../../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
@@ -280,25 +282,26 @@ export function columnsExtension(): ReactEditorExtension {
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
-          metadata: { containment: { childOutline: "fixed" } },
+          metadata: {
+            [PAGE_DRAG_METADATA_KEY]: {
+              dropAxis: "horizontal",
+              acceptsDropContainer: false,
+              fixed: true,
+            },
+            [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+          },
         },
         render: Columns,
         behavior: columnsBehavior,
-        drag: {
-          dropAxis: "horizontal",
-          acceptsDropContainer: false,
-          showHandleOnContainerHover: true,
-        },
       });
       reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
-          metadata: { containment: { childOutline: "free", outlineFloor: true } },
+          metadata: { [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true } },
         },
         render: ColumnsColumn,
         behavior: columnsColumnBehavior,
-        drag: { acceptsDropContainer: true },
       });
       reactEditor.surfaces.registerBlockSlot({
         position: "right",

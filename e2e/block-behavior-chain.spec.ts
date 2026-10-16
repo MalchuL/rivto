@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactEditorApi } from "../packages/react-rivto-editor/src/editor/types";
 
-for (const outcome of ["default", "handled"] as const) {
+for (const outcome of ["unhandled", "handled"] as const) {
   test(`shared structural deletion runs once across types and ${outcome} controls deletion`, async ({
     page,
   }) => {
@@ -59,11 +59,11 @@ for (const outcome of ["default", "handled"] as const) {
       }, ids);
     await expect.poll(read).toEqual({
       calls: [ids.selected],
-      present: outcome === "default" ? [false, false] : [true, true],
-      parent: outcome === "default" ? ids.left : ids.selected[1],
+      present: outcome === "unhandled" ? [false, false] : [true, true],
+      parent: outcome === "unhandled" ? ids.left : ids.selected[1],
       content: ids.childContent,
     });
-    if (outcome === "default") {
+    if (outcome === "unhandled") {
       await page.keyboard.press("Control+z");
       await expect.poll(async () => (await read()).present).toEqual([true, true]);
       await expect.poll(async () => (await read()).parent).toBe(ids.selected[1]);

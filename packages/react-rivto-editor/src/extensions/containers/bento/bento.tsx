@@ -7,6 +7,8 @@
  *
  * @module
  */
+import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
 import type { EditorBlockInput } from "@chulane/rivto";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -402,11 +404,18 @@ export function bentoExtension(): ReactEditorExtension {
           definition: {
             type: BENTO_BLOCK_TYPE,
             title: "Bento",
-            metadata: { containment: { childOutline: "fixed", outlineFloor: true } },
+            metadata: {
+              [PAGE_DRAG_METADATA_KEY]: {
+                dropAxis: "grid",
+                acceptsDropContainer: true,
+                fixed: true,
+              },
+              [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+            },
           },
           render: Bento,
           behavior: bentoBehavior,
-          drag: { dropAxis: "grid", acceptsDropContainer: true, showHandleOnContainerHover: true },
+
           slashCommand: {
             id: "block.bento.insert",
             title: "Bento",
