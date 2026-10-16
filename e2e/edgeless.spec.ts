@@ -3278,7 +3278,7 @@ test("keeps block card geometry stable when React re-renders mid-resize", async 
   // pointer is still down — this used to wipe geometry via the lock style prop.
   await page.locator(".edgeless-viewport").dispatchEvent("wheel", {
     ctrlKey: true,
-    deltaY: -Math.log(1.1) / 0.002,
+    deltaY: -Math.log(1.1) / 0.006,
     clientX: preview.x,
     clientY: preview.y,
   });
