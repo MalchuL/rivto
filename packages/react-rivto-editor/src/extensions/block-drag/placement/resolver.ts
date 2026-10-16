@@ -44,6 +44,7 @@ function contains(rect: DropRect, point: PointerCoordinates): boolean {
  * bodies. Outline gaps may change depth with horizontal pointer movement;
  * fixed layouts and container bodies bound that movement. Accepted gaps carry
  * line geometry, while inside placements identify the highlighted block body.
+ * Grid tile rows do not add outline gaps inside the tile's outer sorting rim.
  *
  * @param measured - Rendered block geometry and per-view child-layout policies.
  * @param blocks - Destination tree participating in resolution, with moved subtrees excluded.
@@ -322,12 +323,15 @@ export function resolveDropPlacement(
       if (item.fixed) {
         return gap(parent, index + (pointer.y >= item.row.top + item.row.height / 2 ? 1 : 0));
       }
-      const rowEdge = Math.min(options(parent).gapDropZone, item.row.height / 3);
-      if (pointer.y < item.row.top + rowEdge) {
-        return gap(parent, index, true);
-      }
-      if (pointer.y > item.row.bottom - rowEdge) {
-        return children.get(item.id)?.length ? gap(item, 0) : gap(parent, index + 1, true);
+      // Padded grid tiles already reserve their outer edges for sibling gaps.
+      if (axis !== "grid") {
+        const rowEdge = Math.min(options(parent).gapDropZone, item.row.height / 3);
+        if (pointer.y < item.row.top + rowEdge) {
+          return gap(parent, index, true);
+        }
+        if (pointer.y > item.row.bottom - rowEdge) {
+          return children.get(item.id)?.length ? gap(item, 0) : gap(parent, index + 1, true);
+        }
       }
       // Either the owning list or the item can disable nesting, in which
       // case the row center continues to sort by halves.
