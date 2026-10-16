@@ -653,11 +653,13 @@ export class EdgelessTransformController {
   /**
    * Appends a reusable arrow marker to the overlay defs.
    *
+   * The triangle tip at (8, 4) extends one stroke width beyond the path endpoint for both orientations.
+   *
    * @param defs - Overlay defs element.
    * @param id - Marker element ID, stable for the gesture.
    * @param stroke - Fill color matching the connector stroke.
    * @param start - True for the source-end marker.
-   * @returns Nothing.
+   * @returns Appends the marker with its outward tip offset to the overlay definitions.
    */
   private appendMarker = (
     defs: SVGDefsElement,
@@ -669,7 +671,7 @@ export class EdgelessTransformController {
     marker.setAttribute("id", id);
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX", start ? "1" : "7");
+    marker.setAttribute("refX", "7");
     marker.setAttribute("refY", "4");
     marker.setAttribute("orient", start ? "auto-start-reverse" : "auto");
     const tip = defs.ownerDocument.createElementNS(SVG_NS, "path");
