@@ -9,6 +9,7 @@ import {
   normalizeRotation,
   normalizeUprightLabelAngle,
   polylineCutsNodes,
+  rotatePoint,
   segmentIntersectsFrame,
   segmentIntersectsRotatedFrame,
   snapFrame,
@@ -20,6 +21,45 @@ import {
 import { shapeStrokePad } from "./shape-stroke";
 
 describe("edgeless visual geometry", () => {
+  test.each([0, -0, 360, -720, NaN, Infinity, -Infinity])(
+    "preserves point coordinates for identity rotation %s",
+    (rotation) => {
+      const point = { x: 0.1, y: -0.2 };
+      const center = { x: 1e16, y: -1e16 };
+      const rotated = rotatePoint(point, center, rotation);
+      expect(rotated).toEqual(point);
+      expect(rotated).not.toBe(point);
+    },
+  );
+
+  test.each([90, -90, 450])("still rotates around the center for %s degrees", (rotation) => {
+    const rotated = rotatePoint({ x: 12, y: 20 }, { x: 10, y: 20 }, rotation);
+    expect(rotated.x).toBeCloseTo(10);
+    expect(rotated.y).toBeCloseTo(rotation === -90 ? 18 : 22);
+  });
+
+  test.each([2, 200])("resolves %s unrotated connector anchors without trigonometry", (count) => {
+    const originals = { sin: Math.sin, cos: Math.cos };
+    let calls = 0;
+    for (const method of ["sin", "cos"] as const) {
+      Math[method] = (radians) => {
+        calls++;
+        return originals[method](radians);
+      };
+    }
+    try {
+      for (let index = 0; index < count; index++) {
+        expect(nearestAnchor({ x: 20, y: 20, width: 100, height: 60 }, { x: 119, y: 50 })).toEqual({
+          x: 1,
+          y: 0.5,
+        });
+      }
+      expect(calls).toBe(0);
+    } finally {
+      Object.assign(Math, originals);
+    }
+  });
+
   test("builds connector routes that leave node interiors", () => {
     const sourceFrame = { x: 0, y: 0, width: 40, height: 40 };
     const targetFrame = { x: 120, y: 0, width: 40, height: 40 };

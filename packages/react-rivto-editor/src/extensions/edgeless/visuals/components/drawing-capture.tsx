@@ -6,6 +6,9 @@ import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-poin
 
 /**
  * Full-plane SVG that captures drawing/eraser/connector/place gestures.
+ *
+ * Connector preview arrowheads extend their triangle tips one stroke width beyond the draft path endpoints.
+ *
  * @param props - Current tool, drawing and connector drafts, attachment markers and gesture pointer handlers.
  * @returns Plane-sized SVG capture layer with local drawing/connector feedback; placement content uses ElementCreationPreview.
  */
@@ -111,7 +114,7 @@ export function DrawingCapture({
                 id="edgeless-connector-preview-start"
                 markerWidth="8"
                 markerHeight="8"
-                refX="1"
+                refX="7"
                 refY="4"
                 orient="auto-start-reverse"
               >

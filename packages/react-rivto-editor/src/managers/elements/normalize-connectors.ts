@@ -16,6 +16,8 @@ import { connectorFrame, endpointPoint } from "../../elements/visuals/utils/geom
  * connector frames. Missing targets are detached at their stored positions unless
  * orphan deletion is requested. Only changed records are written; a reentrancy
  * guard prevents these writes from recursively reconciling the document.
+ * References to the connector itself or its ancestors are detached at their stored
+ * positions so attachment geometry cannot depend on the connector's own frame.
  * Registration does not perform an initial reconciliation.
  *
  * @param editor - React editor whose complete document supplies connector targets.
@@ -65,6 +67,7 @@ export function registerConnectorNormalization(
    * its stored position. The delete policy instead removes the connector when
    * either target is missing. Frames include route and target bounds, and unchanged
    * endpoint/frame values do not cause storage writes.
+   * Self and ancestor attachments are detached independently of the orphan policy.
    */
   function normalizeConnectors(): void {
     editor.elements
@@ -81,14 +84,21 @@ export function registerConnectorNormalization(
       )
       .forEach((connector) => {
         let missing = false;
+        const ancestors = new Set([connector.id]);
+        let parent = editor.elements.getParentId(connector.id);
+        while (parent) {
+          ancestors.add(parent);
+          parent = editor.elements.getParentId(parent);
+        }
         const resolve = (endpoint: ConnectorEndpoint): ConnectorEndpoint => {
           if (!endpoint.elementId) {
             return endpoint;
           }
           const inSubtree = editor.elements.getElementNode(endpoint.elementId) !== undefined;
-          const frame = inSubtree ? geometry.bounds(endpoint.elementId) : undefined;
+          const circular = ancestors.has(endpoint.elementId);
+          const frame = inSubtree && !circular ? geometry.bounds(endpoint.elementId) : undefined;
           if (!frame) {
-            missing = true;
+            missing ||= !circular;
             const detached = { ...endpoint };
             delete detached.elementId;
             return detached;

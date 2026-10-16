@@ -71,6 +71,11 @@ export function DrawingContent(props: ElementRenderProps) {
 }
 /**
  * Renders routed connector geometry, its editable label, and selected endpoint controls.
+ *
+ * Endpoint hover rings paint below the path and arrowheads so they do not cover connector ink.
+ * Non-finite waypoints or non-positive SVG viewport dimensions omit the connector content.
+ * Both arrow markers extend their triangle tip one stroke width beyond the corresponding path endpoint.
+ *
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
@@ -95,6 +100,12 @@ export function ConnectorContent(props: ElementRenderProps) {
     sourceBound,
     targetBound,
   ).map((point) => ({ x: point.x - visual.frame.x, y: point.y - visual.frame.y }));
+  if (
+    !points.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y)) ||
+    ![visual.frame.width, visual.frame.height].every((size) => Number.isFinite(size) && size > 0)
+  ) {
+    return null;
+  }
   const path =
     visual.route === "curve"
       ? `M ${points[0]!.x} ${points[0]!.y} C ${points[1]!.x} ${points[1]!.y}, ${points[2]!.x} ${points[2]!.y}, ${points[3]!.x} ${points[3]!.y}`
@@ -120,7 +131,7 @@ export function ConnectorContent(props: ElementRenderProps) {
             id={markerStart}
             markerWidth="8"
             markerHeight="8"
-            refX="1"
+            refX="7"
             refY="4"
             orient="auto-start-reverse"
           >
@@ -128,6 +139,20 @@ export function ConnectorContent(props: ElementRenderProps) {
           </marker>
         </defs>
         <path className="edgeless-connector-hit" d={path} />
+        {props.selected &&
+          (["source", "target"] as const).map((key) => {
+            const point = (key === "source" ? source : target).position;
+            return (
+              <circle
+                key={key}
+                className="edgeless-connector-endpoint-highlight"
+                data-edgeless-connector-endpoint-highlight={key}
+                cx={point.x - visual.frame.x}
+                cy={point.y - visual.frame.y}
+                r={9}
+              />
+            );
+          })}
         <path
           className="edgeless-connector-stroke"
           data-line-style={visual.lineStyle}

@@ -24,7 +24,7 @@
    and placement coverage away from newly exposed viewport regions. */
 .edgeless-drawing-capture {
   position: absolute;
-  z-index: 0;
+  z-index: 2147483639;
   inset: auto;
   top: var(--edgeless-capture-top, 0);
   left: var(--edgeless-capture-left, 0);
@@ -34,7 +34,6 @@
 }
 
 .edgeless-drawing-capture[data-active] {
-  z-index: 2147483639;
   cursor: crosshair;
   pointer-events: auto;
   touch-action: none;

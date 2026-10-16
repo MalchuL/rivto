@@ -17,7 +17,12 @@ import type { EdgelessTransformController } from "./edgeless-transform";
  * Mounts Moveable controls for dragging selected HTML elements, resizing, and rotation.
  * The editor owns selection, persisted geometry, connector previews, and undo;
  * Moveable computes gesture geometry and keeps its controls outside the target.
+ *
+ * A single element with absolute geometry uses its renderer's controls; Moveable's
+ * default lines and control box do not intercept pointer input for that selection.
+ *
  * @param props - Panel-local transform controller installed by the edgeless extension.
+ * @param props.controller - Supplies move targets and previews or commits gestures for the panel.
  * @returns Controls in the canvas plane, or nothing outside an eligible selection.
  */
 export function EdgelessTransformControls({
@@ -161,6 +166,7 @@ export function EdgelessTransformControls({
       return;
     }
     box.setAttribute("data-editor-control", "");
+    box.style.pointerEvents = id && !eligible ? "none" : "";
     if (id) {
       box.setAttribute("data-edgeless-controls-for", id);
     }
@@ -211,7 +217,7 @@ export function EdgelessTransformControls({
     };
     box.addEventListener("keydown", key);
     return () => box.removeEventListener("keydown", key);
-  }, [targets, id]);
+  }, [targets, id, eligible]);
 
   const guidelines = useMemo(() => {
     if (!settings.align || !plane) {
@@ -346,7 +352,7 @@ export function EdgelessTransformControls({
       resizable={Boolean(eligible)}
       keepRatio={isGroup || shift}
       rotatable={Boolean(eligible)}
-      hideDefaultLines={targets.length === 0}
+      hideDefaultLines={targets.length === 0 || Boolean(id && !eligible)}
       hideChildMoveableDefaultLines
       passDragArea
       renderDirections={["n", "e", "s", "w", "nw", "ne", "sw", "se"]}
