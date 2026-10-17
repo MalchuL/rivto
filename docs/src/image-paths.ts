@@ -17,7 +17,7 @@ const MARKDOWN_MIRROR_PREFIX = "/markdown/";
 export function resolveImagesForEditor(markdown: string, pagePath: string): string {
   return markdown.replace(
     IMAGE_DESTINATION_PATTERN,
-    function replaceImagePath(_match, opening: string, rawSource: string, closing: string) {
+    function replaceImagePath(match, opening: string, rawSource: string, closing: string) {
       const source = unwrapAngleBrackets(rawSource);
       if (isExternalSource(source)) {
         return `${opening}${rawSource}${closing}`;
@@ -42,7 +42,7 @@ export function resolveImagesForEditor(markdown: string, pagePath: string): stri
 export function restoreImagesForFile(markdown: string, pagePath: string): string {
   return markdown.replace(
     IMAGE_DESTINATION_PATTERN,
-    function restoreImagePath(_match, opening: string, rawSource: string, closing: string) {
+    function restoreImagePath(match, opening: string, rawSource: string, closing: string) {
       const source = unwrapAngleBrackets(rawSource);
       if (!source.startsWith(MARKDOWN_MIRROR_PREFIX)) {
         return `${opening}${rawSource}${closing}`;

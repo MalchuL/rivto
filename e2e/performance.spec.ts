@@ -72,7 +72,7 @@ async function seedOutlineDocument(page: Page, branches: number): Promise<string
         for (let branch = 0; branch < count; branch += 1) {
           const children = Array.from(
             { length: childrenPerBranch + (branch < (2_000 - count) % count ? 1 : 0) },
-            (_, index) => ({
+            (value, index) => ({
               id: `perf-b${branch}-c${index}`,
               type: "paragraph",
               content: `Child ${branch}-${index}`,
@@ -92,7 +92,7 @@ async function seedOutlineDocument(page: Page, branches: number): Promise<string
         }
       }
     });
-    return Array.from({ length: 6 }, (_, index) =>
+    return Array.from({ length: 6 }, (value, index) =>
       count ? `perf-b0-c${index}` : `perf-root-${index}`,
     );
   }, branches);
@@ -287,7 +287,9 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
       .get()
       ?.blocks.map((block) => block.id),
   );
-  expect(selectedIds).toEqual(Array.from({ length: 100 }, (_, index) => `perf-root-${index + 1}`));
+  expect(selectedIds).toEqual(
+    Array.from({ length: 100 }, (value, index) => `perf-root-${index + 1}`),
+  );
 
   const beforeIndent = await last.evaluate((element) => ({
     top: element.getBoundingClientRect().top,
@@ -305,7 +307,9 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
         __rivtoDemo: { editor: DocumentEditorAPI };
       }
     ).__rivtoDemo.editor.blocks;
-    return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
+    return Array.from({ length: 100 }, (value, index) =>
+      blocks.getParentId(`perf-root-${index + 1}`),
+    );
   });
   expect(indentedParents).toEqual(Array.from({ length: 100 }, () => "perf-root-0"));
 
@@ -316,7 +320,9 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
         __rivtoDemo: { editor: DocumentEditorAPI };
       }
     ).__rivtoDemo.editor.blocks;
-    return Array.from({ length: 100 }, (_, index) => blocks.getParentId(`perf-root-${index + 1}`));
+    return Array.from({ length: 100 }, (value, index) =>
+      blocks.getParentId(`perf-root-${index + 1}`),
+    );
   });
   expect(outdentedParents).toEqual(Array.from({ length: 100 }, () => null));
 
@@ -799,7 +805,7 @@ for (const mode of ["block", "edgeless"] as const) {
           __rivtoDemo: { editor: DocumentEditorAPI };
         }
       ).__rivtoDemo.editor;
-      const ids = Array.from({ length: 100 }, (_, index) => `perf-b0-c${index + 100}`);
+      const ids = Array.from({ length: 100 }, (value, index) => `perf-b0-c${index + 100}`);
       /**
        * Measures a structural command and the next two browser frames.
        * @param action - Synchronous editor command to measure.
@@ -835,7 +841,7 @@ for (const mode of ["block", "edgeless"] as const) {
     });
     expect(times.parent).toBeNull();
     expect(times.tailParent).toBe("perf-b0-c199");
-    const movedIds = Array.from({ length: 100 }, (_, index) => `perf-b0-c${index + 100}`);
+    const movedIds = Array.from({ length: 100 }, (value, index) => `perf-b0-c${index + 100}`);
     expect(times.afterMove).toEqual(["perf-b0-c500", ...movedIds]);
     expect(times.afterIndent).toEqual(movedIds);
     expect(times.afterOutdent).toEqual(["perf-b0-c500", ...movedIds]);

@@ -16,7 +16,7 @@ async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
       .editor;
     const columns = [8, 1, 3].map((count) => ({
       type: "columns-column",
-      children: Array.from({ length: count }, (_, index) => ({
+      children: Array.from({ length: count }, (value, index) => ({
         type: "paragraph",
         content: `Line ${index + 1}`,
       })),

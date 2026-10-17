@@ -40,7 +40,7 @@ it.each([10, 2000])(
     const root = editor.elements.insertElement({
       type: "group",
       zIndex: 0,
-      children: Array.from({ length: count }, (_, i) => ({
+      children: Array.from({ length: count }, (value, i) => ({
         id: `node-${i}`,
         type: "shape",
         zIndex: 0,

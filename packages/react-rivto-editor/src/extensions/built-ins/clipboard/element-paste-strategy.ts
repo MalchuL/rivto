@@ -62,10 +62,10 @@ export class ElementPasteStrategy implements PasteStrategy {
   /**
    * Accepts edgeless pastes that carry canvas elements or selected block objects.
    * @param context - Shared clipboard payload and paste intent.
-   * @param _placement - Unused; canvas geometry is copied from source frames.
+   * @param placement - Unused; canvas geometry is copied from source frames.
    * @returns True when this strategy should run after any block insertion.
    */
-  matches(context: PasteContext, _placement: PastePlacement): boolean {
+  matches(context: PasteContext, placement: PastePlacement): boolean {
     // Core mode can be edgeless even when paste targets a page embedding.
     // Use the receiving surface so page paste does not create canvas elements.
     if ("editor" in this.editor && this.editor.events.getSurfaceType() !== "edgeless") {
@@ -87,10 +87,10 @@ export class ElementPasteStrategy implements PasteStrategy {
   /**
    * Recreates selected clipboard elements with a small visible offset.
    * @param context - Shared clipboard payload and paste intent.
-   * @param _placement - Unused; canvas geometry is copied from source frames.
+   * @param placement - Unused; canvas geometry is copied from source frames.
    * @returns Proposed selection containing newly created canvas elements.
    */
-  paste(context: PasteContext, _placement: PastePlacement): PasteResult | undefined {
+  paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined {
     const bundle = context.bundle;
     if (!bundle) {
       return undefined;

@@ -87,7 +87,7 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     // Tiny local probe so packaged health checks can detect the shell process.
-    createServer((_req, res) => {
+    createServer((request, res) => {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("rivto-desktop");
     }).listen(0);

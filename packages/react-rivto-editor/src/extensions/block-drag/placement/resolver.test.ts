@@ -39,7 +39,7 @@ function resolve(
   items: DropLayoutBlock[],
   x: number,
   y: number,
-  accepts = (_: CanonicalDropPlacement) => true,
+  accepts = (placement: CanonicalDropPlacement) => true,
   options = defaults,
 ) {
   return resolveDropPlacement(items, tree(items), { x, y }, options, accepts);

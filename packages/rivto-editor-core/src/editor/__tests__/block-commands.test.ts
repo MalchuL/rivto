@@ -676,7 +676,7 @@ describe("DocumentEditor block manager", () => {
     const editor = await createDocumentEditor();
     const ids = Array.from(
       { length: 16 },
-      (_, index) =>
+      (value, index) =>
         editor.blocks.insertBlock({
           type: "paragraph",
           content: `Block ${index}`,

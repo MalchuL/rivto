@@ -361,7 +361,9 @@ export function EdgelessTransformControls({
       useResizeObserver
       zoom={1 / settings.zoom}
       snappable={shift || (!alt && (settings.snap || settings.align))}
-      snapRotationDegrees={shift ? Array.from({ length: 25 }, (_, index) => index * 15 - 180) : []}
+      snapRotationDegrees={
+        shift ? Array.from({ length: 25 }, (value, index) => index * 15 - 180) : []
+      }
       snapRotationThreshold={shift ? 7.5 : 0}
       snapDirections={{
         left: true,

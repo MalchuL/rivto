@@ -19,7 +19,7 @@ test.each([
       type: "paragraph",
       children: [{ id: "child", type: "paragraph", content: "Child" }],
     },
-    ...Array.from({ length: count }, (_, index) => ({
+    ...Array.from({ length: count }, (value, index) => ({
       id: `extra-${index}`,
       type: "paragraph",
       content: "Extra",

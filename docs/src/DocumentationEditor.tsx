@@ -100,12 +100,12 @@ export function DocumentationEditor({
       /**
        * Routes clicks on links through the latest documentation navigation callback.
        *
-       * @param _view - ProseMirror view; unused by this handler.
-       * @param _position - ProseMirror document position; unused by this handler.
+       * @param view - ProseMirror view; unused by this handler.
+       * @param position - ProseMirror document position; unused by this handler.
        * @param event - Native or React event supplying the current input.
        * @returns Whether navigation consumed the click.
        */
-      handleClick(_view, _position, event) {
+      handleClick(view, position, event) {
         const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
         const href = link?.getAttribute("href");
         return href ? onNavigateLinkRef.current(href) : false;
@@ -113,11 +113,11 @@ export function DocumentationEditor({
       /**
        * Intercepts image files from the clipboard and starts asynchronous image insertion.
        *
-       * @param _view - ProseMirror view; unused by this handler.
+       * @param view - ProseMirror view; unused by this handler.
        * @param event - Native or React event supplying the current input.
        * @returns True for an image paste, or false to retain normal paste handling.
        */
-      handlePaste(_view, event) {
+      handlePaste(view, event) {
         const images = extractClipboardImages(event.clipboardData);
         if (images.length === 0) {
           return false;
@@ -129,11 +129,11 @@ export function DocumentationEditor({
       /**
        * Intercepts dropped image files and starts asynchronous image insertion.
        *
-       * @param _view - ProseMirror view; unused by this handler.
+       * @param view - ProseMirror view; unused by this handler.
        * @param event - Native or React event supplying the current input.
        * @returns True for an image drop, or false to retain normal drop handling.
        */
-      handleDrop(_view, event) {
+      handleDrop(view, event) {
         const images = extractClipboardImages(event.dataTransfer);
         if (images.length === 0) {
           return false;

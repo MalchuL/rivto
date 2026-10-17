@@ -203,8 +203,8 @@ export function usePresetDrag({
         ghost.dataset.kind = active.payload.kind;
         event.currentTarget.ownerDocument.body.append(ghost);
         active.ghost = ghost;
-        const { kind, frame: _frame, ...props } = active.payload;
-        void _frame;
+        const { kind, frame: presetFrame, ...props } = active.payload;
+        void presetFrame;
         setPreview({ host: ghost, input: { type: kind, props }, frame: snapped.frame });
       }
       if (root) {

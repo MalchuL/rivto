@@ -103,8 +103,8 @@ export function useDrawingGesture({
         throw new Error("Element creation factory returned a different type");
       }
     } else if (tool.tool === "place") {
-      const { tool: _tool, kind, ...props } = tool;
-      void _tool;
+      const { tool: toolType, kind, ...props } = tool;
+      void toolType;
       input = { type: kind, props };
     } else {
       throw new Error("Current tool does not place an element");

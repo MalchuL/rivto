@@ -123,7 +123,7 @@ export function MarkdownContent({
   );
   const components = useMemo<Components>(
     () => ({
-      a: ({ node: _node, href = "", ...props }) => (
+      a: ({ node, href = "", ...props }) => (
         <a
           {...editorControlProps}
           {...props}

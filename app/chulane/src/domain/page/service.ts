@@ -76,7 +76,7 @@ export const pageService = {
     if (!existing) {
       throw new Error(`Page not found: ${input.id}`);
     }
-    const { id: _id, ...patch } = input;
+    const { id, ...patch } = input;
     const updated: Page = {
       ...existing,
       ...(patch.projectId !== undefined ? { projectId: patch.projectId } : {}),

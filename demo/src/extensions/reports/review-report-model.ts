@@ -398,7 +398,7 @@ export function captureElementReviewSnapshot(
 
 /** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
 function createReviewSnapshot(
-  _editor: DocumentEditorAPI,
+  editor: DocumentEditorAPI,
   blocks: EditorBlock[],
   elements: EditorElementNode[],
 ): EditorSnapshot {

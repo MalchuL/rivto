@@ -28,7 +28,7 @@ export function slashSearchDistance(queryLength: number): number {
 
 /** Small dependency-free Levenshtein implementation for short menu strings. */
 export function levenshtein(left: string, right: string): number {
-  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  let previous = Array.from({ length: right.length + 1 }, (value, index) => index);
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
     const current = [leftIndex];
     for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {

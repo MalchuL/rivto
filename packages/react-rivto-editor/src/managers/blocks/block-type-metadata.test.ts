@@ -287,7 +287,7 @@ test.each([1, 200])(
   async (count) => {
     const core = await createTestCoreEditor();
     const panel = createTestReactEditor({ editor: core });
-    const types = Array.from({ length: count }, (_, index) => `owned-${index}`);
+    const types = Array.from({ length: count }, (value, index) => `owned-${index}`);
     for (const type of types) {
       panel.editor.blockTypes.register({
         definition: { type, metadata: { owner: "test" } },
