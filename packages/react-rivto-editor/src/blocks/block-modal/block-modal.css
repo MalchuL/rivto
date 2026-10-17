@@ -46,6 +46,8 @@
 }
 
 .rivto-block-modal-content > .page-surface {
+  /* Contain root margins so they do not add to the full-height surface. */
+  display: flow-root;
   width: 100%;
   min-height: 100%;
   margin: 0;
@@ -55,4 +57,14 @@
   box-shadow: none;
   /* Root controls extend into the dialog padding beyond the page surface. */
   overflow: visible;
+}
+
+/* Viewport-wide hover targets must not enlarge the dialog's scroll bounds. */
+.rivto-block-modal-content .page-block-row::before {
+  inset-inline: 0;
+}
+
+.rivto-block-modal-content [data-block-handle-container]::before,
+.rivto-block-modal-content [data-block-handle-container]::after {
+  width: 24px;
 }
