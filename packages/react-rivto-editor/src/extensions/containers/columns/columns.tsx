@@ -9,10 +9,13 @@ import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata
 import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
 import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent } from "react";
+import { useId, type KeyboardEvent, type MouseEvent } from "react";
+import { z } from "zod";
 import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
 import { convertLeafToContainer } from "../convert-leaf-to-container";
 import { Button } from "../../../components/ui/button";
+import { Checkbox } from "../../../components/ui/checkbox";
+import { Label } from "../../../components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
@@ -47,6 +50,7 @@ const SETTINGS_CLASS = "rivto-columns-settings relative inline-flex";
 const PANEL_CLASS = "rivto-columns-settings-panel w-56 p-4";
 const COUNT_CLASS = "rivto-columns-count mt-2 flex items-center justify-between gap-2";
 const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
+const DIVIDERS_CLASS = "rivto-columns-dividers";
 
 /**
  * Rejects counts that would create an empty or overflowing column board.
@@ -145,8 +149,15 @@ export function setColumnsCount(
 
 /**
  * Occupies the board content slot and summarizes hidden columns when collapsed.
+ *
+ * Divider visibility is reflected on this board's selection region for the
+ * shared page and edgeless layout stylesheet. Missing preferences show dividers.
+ *
  * @param props - Identity of the persisted board; content is intentionally empty.
- * @returns Structural selection region and a compact collapsed summary.
+ * @param props.blockId - Stable ID of the board to observe.
+ * @returns Structural selection region and a compact collapsed summary, or null
+ * when the board no longer exists.
+ * @throws If rendered outside an editor panel.
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode(blockId);
@@ -157,7 +168,11 @@ export function Columns({ blockId }: { readonly blockId: string }) {
   }
   const count = block.childIds.length;
   return (
-    <div {...attributes} className={COLUMNS_CLASS}>
+    <div
+      {...attributes}
+      className={COLUMNS_CLASS}
+      data-show-dividers={block.props.showDividers !== false}
+    >
       {block.listProps.collapsed === true && (
         <>
           <strong>Columns</strong>
@@ -212,12 +227,61 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
 }
 
 /**
+ * Changes the board's column count with the existing relocation and undo rules.
+ *
+ * @param props - Board identity and its current number of columns.
+ * @param props.blockId - Stable ID of the board to resize.
+ * @param props.count - Live count used to disable the supported range boundaries.
+ * @returns Count display and buttons for adding or removing a column.
+ * @throws If rendered outside an editor panel or a delegated count change fails.
+ */
+function ColumnsCountControls({ blockId, count }: { blockId: string; count: number }) {
+  const reactPanel = useReactPanel();
+  return (
+    <div className={COUNT_CLASS}>
+      <Button
+        {...editorControlProps}
+        variant="outline"
+        size="icon-sm"
+        type="button"
+        aria-label="Remove column"
+        disabled={count <= COLUMNS_MIN_COUNT}
+        onClick={() => setColumnsCount(reactPanel, blockId, count - 1)}
+      >
+        <MinusIcon />
+      </Button>
+      <output className={COUNT_VALUE_CLASS} aria-live="polite">
+        {count}
+      </output>
+      <Button
+        {...editorControlProps}
+        variant="outline"
+        size="icon-sm"
+        type="button"
+        aria-label="Add column"
+        disabled={count >= COLUMNS_MAX_COUNT}
+        onClick={() => setColumnsCount(reactPanel, blockId, count + 1)}
+      >
+        <PlusIcon />
+      </Button>
+    </div>
+  );
+}
+
+/**
  * Provides the right-side control that changes how many columns the board owns.
+ *
+ * The divider checkbox persists its preference through the panel's block manager
+ * and shares the ordinary history, clipboard, and snapshot behavior.
+ *
  * @param props - Live board snapshot.
- * @returns Settings button and count panel.
+ * @param props.block - Board whose column count and divider visibility are edited.
+ * @returns Settings button and count panel with a divider visibility checkbox.
+ * @throws If rendered outside an editor panel or a delegated block update fails.
  */
 function ColumnsControls({ block }: BlockSlotProps) {
   const reactPanel = useReactPanel();
+  const dividersId = useId();
   const count = block.childIds.filter(
     (childId) => reactPanel.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
   ).length;
@@ -235,35 +299,27 @@ function ColumnsControls({ block }: BlockSlotProps) {
             <SettingsIcon />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className={PANEL_CLASS} role="group" aria-label="Column count">
+        <PopoverContent
+          align="end"
+          className={PANEL_CLASS}
+          role="group"
+          aria-label="Columns settings"
+        >
           <strong>Columns</strong>
-          <div className={COUNT_CLASS}>
-            <Button
+          <ColumnsCountControls blockId={block.id} count={count} />
+          <Label htmlFor={dividersId} className={DIVIDERS_CLASS}>
+            <Checkbox
               {...editorControlProps}
-              variant="outline"
-              size="icon-sm"
-              type="button"
-              aria-label="Remove column"
-              disabled={count <= COLUMNS_MIN_COUNT}
-              onClick={() => setColumnsCount(reactPanel, block.id, count - 1)}
-            >
-              <MinusIcon />
-            </Button>
-            <output className={COUNT_VALUE_CLASS} aria-live="polite">
-              {count}
-            </output>
-            <Button
-              {...editorControlProps}
-              variant="outline"
-              size="icon-sm"
-              type="button"
-              aria-label="Add column"
-              disabled={count >= COLUMNS_MAX_COUNT}
-              onClick={() => setColumnsCount(reactPanel, block.id, count + 1)}
-            >
-              <PlusIcon />
-            </Button>
-          </div>
+              id={dividersId}
+              checked={block.props.showDividers !== false}
+              onCheckedChange={(checked) =>
+                reactPanel.blocks.updateBlock(block.id, {
+                  props: { ...block.props, showDividers: checked === true },
+                })
+              }
+            />
+            Show dividers
+          </Label>
         </PopoverContent>
       </Popover>
     </div>
@@ -282,6 +338,8 @@ export function columnsExtension(): ReactEditorExtension {
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
+          defaultProps: { showDividers: true },
+          propSchema: z.object({ showDividers: z.boolean().default(true) }),
           metadata: {
             [PAGE_DRAG_METADATA_KEY]: {
               dropAxis: "horizontal",

@@ -28,7 +28,7 @@
 
 [data-block-type="columns"] > .page-block-children {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 24px;
   width: 100%;
   min-width: 0;
@@ -54,6 +54,22 @@
   width: 1px;
   background: var(--rivto-border);
   pointer-events: none;
+}
+
+[data-block-type="columns"]:has(
+    > .page-block-row > .rivto-block-content-flow > .rivto-columns[data-show-dividers="false"]
+  )
+  > .page-block-children
+  > .page-block
+  + .page-block::before {
+  content: none;
+}
+
+.rivto-columns-dividers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 [data-block-type="columns"] > .page-block-children .page-block-row::before {

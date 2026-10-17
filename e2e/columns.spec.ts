@@ -1,6 +1,84 @@
 /** Browser regression for headerless columns layout and column-count settings. */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+
+/**
+ * Opens a board with unequal content heights on the requested demo surface.
+ *
+ * @param page - Browser page whose default demo document is replaced.
+ * @param mode - Page or edgeless presentation of the same three-column board.
+ * @returns Resolves once the document is seeded and the surface is selected.
+ */
+async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
+  await page.goto("/");
+  await page.evaluate((mode) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const columns = [8, 1, 3].map((count) => ({
+      type: "columns-column",
+      children: Array.from({ length: count }, (_, index) => ({
+        type: "paragraph",
+        content: `Line ${index + 1}`,
+      })),
+    }));
+    const id = editor.blocks.insertBlock({ type: "columns", children: columns }).id;
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(id)!],
+      elements: [],
+    });
+    if (mode === "edgeless") {
+      editor.elements.insertElement({
+        type: "block",
+        zIndex: 0,
+        frame: { x: 20, y: 20, width: 950, height: 500 },
+        props: { startBlockId: id, endBlockId: id },
+      });
+    }
+  }, mode);
+  await page.locator(`[data-editor-mode="${mode}"]`).click();
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`extends every divider to the tallest column in ${mode} mode`, async ({ page }) => {
+    await openUnequalColumns(page, mode);
+    const board = page.locator('[data-block-type="columns"]').first();
+    await board.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        board.locator(":scope > .page-block-children > .page-block").evaluateAll((columns) => {
+          const maximum = Math.max(
+            ...columns.map((column) => column.getBoundingClientRect().height),
+          );
+          return columns.slice(1).map((column) => {
+            const divider = getComputedStyle(column, "::before");
+            return Math.abs(parseFloat(divider.height) + 24 - maximum);
+          });
+        }),
+      )
+      .toEqual([0, 0]);
+
+    await board.getByRole("button", { name: "Columns settings" }).click();
+    const checkbox = page.getByRole("checkbox", { name: "Show dividers" });
+    await expect(checkbox).toBeChecked();
+    await checkbox.uncheck();
+    /**
+     * Reads only this board's generated dividers, excluding any nested boards.
+     *
+     * @returns Current pseudo-element content for each divider after the first lane.
+     */
+    const separatorContent = () =>
+      board
+        .locator(":scope > .page-block-children > .page-block")
+        .evaluateAll((columns) =>
+          columns.slice(1).map((column) => getComputedStyle(column, "::before").content),
+        );
+    await expect.poll(separatorContent).toEqual(["none", "none"]);
+    await checkbox.check();
+    await expect.poll(separatorContent).toEqual(['""', '""']);
+  });
+}
 
 test("keeps nested blocks when settings remove a column and does not scroll horizontally", async ({
   page,
@@ -47,7 +125,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   await expect(columns.first()).toContainText("Right column");
 });
 
-test("creates a writing block on empty-column click and then wraps its content", async ({
+test("creates a writing block on empty-column click without retaining the empty control height", async ({
   page,
 }) => {
   await page.goto("/");
@@ -71,7 +149,10 @@ test("creates a writing block on empty-column click and then wraps its content",
   await expect(first.locator(":scope > .page-block-children")).toHaveCount(0);
   await first.getByRole("button", { name: "Column", exact: true }).click();
   await expect(first.locator(":scope > .page-block-children > .page-block")).toHaveCount(1);
-  expect((await first.boundingBox())!.height).toBeLessThan((await second.boundingBox())!.height);
+  await expect(first.locator(":scope > .page-block-row")).toBeHidden();
+  const content = first.locator(":scope > .page-block-children");
+  expect((await content.boundingBox())!.height).toBeLessThan((await second.boundingBox())!.height);
+  expect((await first.boundingBox())!.height).toBe((await second.boundingBox())!.height);
 });
 
 test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
