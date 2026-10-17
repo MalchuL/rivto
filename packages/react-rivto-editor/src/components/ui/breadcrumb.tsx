@@ -7,12 +7,19 @@ function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
   return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;
 }
 
+/**
+ * Renders breadcrumb items without native ordered-list numbering.
+ *
+ * @param props - Ordered-list attributes and optional utility classes.
+ * @param props.className - Additional classes applied to the list.
+ * @returns Wrapping navigation list with shadcn/ui spacing and typography.
+ */
 function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
   return (
     <ol
       data-slot="breadcrumb-list"
       className={cn(
-        "flex flex-wrap items-center gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5",
+        "flex list-none flex-wrap items-center gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5",
         className,
       )}
       {...props}

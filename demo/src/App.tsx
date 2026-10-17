@@ -1109,24 +1109,33 @@ function JournalDemoApp() {
             <EditorStorageContext.Provider value={todayEditor.editorStorage}>
               <DemoEditorPanels
                 editor={todayEditor.reactEditor}
+                documentTitle={
+                  <time dateTime={localDateKey(dates.today)}>
+                    {new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(dates.today)}
+                  </time>
+                }
                 virtualizePageThreshold={virtualizePageThreshold}
                 virtualizePageOverscan={virtualizePageOverscan}
               >
-                <DemoToolbar
-                  editor={todayEditor.editor}
-                  showBlockIds={showBlockIds}
-                  onShowBlockIdsChange={setShowBlockIds}
-                  showBlockNumbers={showBlockNumbers}
-                  onShowBlockNumbersChange={setShowBlockNumbers}
-                  virtualizePageThreshold={virtualizePageThreshold}
-                  onVirtualizePageThresholdChange={setVirtualizePageThreshold}
-                  virtualizePageOverscan={virtualizePageOverscan}
-                  onVirtualizePageOverscanChange={setVirtualizePageOverscan}
-                />
-                <RevisionsPanel />
-                <KeyboardPanel />
-                <JournalDate date={dates.today} />
-                <DemoEditorSurface />
+                {(header) => (
+                  <>
+                    <DemoToolbar
+                      editor={todayEditor.editor}
+                      showBlockIds={showBlockIds}
+                      onShowBlockIdsChange={setShowBlockIds}
+                      showBlockNumbers={showBlockNumbers}
+                      onShowBlockNumbersChange={setShowBlockNumbers}
+                      virtualizePageThreshold={virtualizePageThreshold}
+                      onVirtualizePageThresholdChange={setVirtualizePageThreshold}
+                      virtualizePageOverscan={virtualizePageOverscan}
+                      onVirtualizePageOverscanChange={setVirtualizePageOverscan}
+                    />
+                    <RevisionsPanel />
+                    <KeyboardPanel />
+                    {header}
+                    <DemoEditorSurface />
+                  </>
+                )}
               </DemoEditorPanels>
             </EditorStorageContext.Provider>
           </section>
