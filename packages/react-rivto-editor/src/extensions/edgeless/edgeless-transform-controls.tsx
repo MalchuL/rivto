@@ -52,6 +52,8 @@ export function EdgelessTransformControls({
   const isGroup = element?.type === "group";
   const groupAngle =
     typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+  // Disable grid snapping for rotated elements because it breaks drag and resize interactions.
+  const snapGrid = !alt && settings.snap && groupAngle === 0 ? settings.grid : 0;
   // Persisted group identity must survive having just one remaining target.
   const groupData = useMemo(
     () => (isGroup ? { rotation: groupAngle, children: [] } : undefined),
@@ -380,8 +382,8 @@ export function EdgelessTransformControls({
       snapHorizontalThreshold={8 / settings.zoom}
       snapVerticalThreshold={8 / settings.zoom}
       snapGap={false}
-      snapGridWidth={!alt && settings.snap ? settings.grid : 0}
-      snapGridHeight={!alt && settings.snap ? settings.grid : 0}
+      snapGridWidth={snapGrid}
+      snapGridHeight={snapGrid}
       elementGuidelines={alt ? [] : guidelines}
       onDragStart={(event) => {
         if (!controller.isMoving(reactPanel) && !startEdgeDrag(event.inputEvent)) {

@@ -846,6 +846,65 @@ test("resizes visuals on one axis and rotates them with Shift snapping", async (
     .toEqual([1, 0, 0, 1]);
 });
 
+for (const repeat of [1, 200]) {
+  test(`disables grid snapping for rotated visuals (repeat=${repeat})`, async ({ page }) => {
+    await page.goto(`/?repeat=${repeat}`);
+    await switchMode(page, "edgeless");
+    const rectangle = await createVisual(page, "Rectangle");
+    await page.getByRole("button", { name: "Disable object alignment" }).click();
+    const rotate = page.locator("[data-edgeless-controls-for] [data-edgeless-rotation-handle]");
+    await rotate.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect
+      .poll(() =>
+        rectangle.evaluate((element) => {
+          const matrix = new DOMMatrix(getComputedStyle(element).transform);
+          return Math.round((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI);
+        }),
+      )
+      .toBe(1);
+    const durations: number[] = [];
+    for (let sample = 0; sample < 3; sample++) {
+      const before = await visualFrame(rectangle);
+      const box = await rectangle.boundingBox();
+      if (!box) {
+        throw new Error("Expected rotated rectangle geometry");
+      }
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      const started = performance.now();
+      await page.mouse.move(x + 7, y + 7);
+      await page.mouse.up();
+      const after = await visualFrame(rectangle);
+      expect(after.x - before.x).toBeCloseTo(7, 1);
+      expect(after.y - before.y).toBeCloseTo(7, 1);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+      durations.push(performance.now() - started);
+    }
+    console.log(`rotated drag repeat=${repeat}: ${JSON.stringify(durations)} ms`);
+    await rotate.focus();
+    await page.keyboard.press("ArrowLeft");
+    const box = await rectangle.boundingBox();
+    if (!box) {
+      throw new Error("Expected unrotated rectangle geometry");
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 7, box.y + box.height / 2 + 7);
+    await page.mouse.up();
+    const snapped = await visualFrame(rectangle);
+    expect(snapped.x / 20).toBeCloseTo(Math.round(snapped.x / 20), 5);
+    expect(snapped.y / 20).toBeCloseTo(Math.round(snapped.y / 20), 5);
+  });
+}
+
 test("keeps a connector label in the connector layer order", async ({ page }) => {
   await switchMode(page, "edgeless");
   const sourceConnectorId = await page
