@@ -228,7 +228,9 @@ export class ClipboardManager {
       if (strategy instanceof ElementPasteStrategy) {
         bound = new ElementPasteStrategy(reactPanel, convertedElements, created);
       } else if (strategy instanceof BlockPasteStrategy) {
-        bound = new BlockPasteStrategy(pasteDocument);
+        bound = new BlockPasteStrategy(pasteDocument, (block) =>
+          this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
+        );
       } else if (strategy instanceof TextPasteStrategy) {
         bound = new TextPasteStrategy(pasteDocument);
       } else if (strategy instanceof PreserveNewlinesPasteStrategy) {

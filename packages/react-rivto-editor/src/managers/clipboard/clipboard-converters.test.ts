@@ -1,5 +1,7 @@
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
+import { paragraphBlockFactory } from "../../block-factories";
+import { defaultWritingBlockExtension } from "../../extensions/built-ins/built-ins";
 import { slashCommandExtension } from "../../extensions/built-ins/built-ins";
 import { edgelessSelectionExtension } from "../../extensions/edgeless";
 import { edgelessVisualsExtension } from "../../extensions/edgeless/visuals";
@@ -585,3 +587,48 @@ test("cleanup keeps an existing text destination when a later strategy fails", a
   stop();
   f.close();
 });
+
+test.each(["paragraph", "todo-item", "custom", "host-policy"])(
+  "block paste uses the writing factory emptiness policy: %s",
+  async (type) => {
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
+    const panel = createTestReactEditor({
+      editor,
+      extensions: [
+        defaultWritingBlockExtension({
+          factory: {
+            ...paragraphBlockFactory,
+            /**
+             * Preserves paragraphs carrying host-owned state.
+             *
+             * @param block - Current block snapshot checked for replacement.
+             * @returns Whether the default policy accepts the block and no state must be kept.
+             */
+            isEmptyBlock: (block) => paragraphBlockFactory.isEmptyBlock(block) && !block.props.keep,
+          },
+        }),
+      ],
+    });
+    try {
+      if (type === "todo-item" || type === "custom") {
+        editor.blockRegistry.defineBlock({ type });
+      }
+      const source = panel.blocks.insertBlock({ type: "paragraph", content: "Copied" });
+      const bundle = panel.clipboard.copy(createStructuralSelection([source.id]))!;
+      const target = panel.blocks.insertBlock({
+        type: type === "host-policy" ? "paragraph" : type,
+        props: type === "host-policy" ? { keep: true } : {},
+      });
+      panel.clipboard.paste({ bundle, textTarget: createCaretSelection(target.id, 0) });
+      expect(panel.blocks.hasBlock(target.id)).toBe(type !== "paragraph");
+      expect(panel.blocks.getBlocks().filter((block) => block.content === "Copied")).toHaveLength(
+        2,
+      );
+      editor.history.undo();
+      expect(panel.blocks.getBlockNode(target.id)).toMatchObject({ props: target.props });
+    } finally {
+      panel.editor.destroy();
+      editor.destroy();
+    }
+  },
+);

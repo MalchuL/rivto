@@ -7,9 +7,13 @@ import type { BlockDestination } from "@chulane/document-model";
  * and owns insertion for that case. Ranges come from {@link PasteContext.selection}.
  */
 import type { DocumentEditorAPI } from "../../../editor/types";
-import { createCaretSelection, createStructuralSelection } from "../../selection-manager";
+import {
+  createCaretSelection,
+  createStructuralSelection,
+  isCaretSelection,
+} from "../../selection-manager";
 import type { EditorPosition } from "../../selection-manager";
-import type { EditorBlockInput } from "../../../editor/model";
+import type { EditorBlockInput, EditorBlockNode } from "../../../editor/model";
 
 import { cloneSelectedTopLevelSubtrees } from "../utils";
 import type {
@@ -196,9 +200,15 @@ export class PreserveNewlinesPasteStrategy implements PasteStrategy {
 export class BlockPasteStrategy implements PasteStrategy {
   /**
    * Creates the block strategy.
+   *
    * @param editor - Editor providing block and selection operations.
+   * @param isEmptyBlock - Host policy receiving a current flat block snapshot and returning
+   * whether it is an empty writing block. Omission disables empty-block replacement.
    */
-  constructor(private readonly editor: DocumentEditorAPI) {}
+  constructor(
+    private readonly editor: DocumentEditorAPI,
+    private readonly isEmptyBlock?: (block: EditorBlockNode) => boolean,
+  ) {}
 
   /**
    * Accepts a block forest that should remain structural.
@@ -216,9 +226,16 @@ export class BlockPasteStrategy implements PasteStrategy {
 
   /**
    * Inserts remapped roots at a resolved structural destination.
+   *
+   * A collapsed caret in a host-recognized empty leaf replaces that leaf when inserting beside
+   * it. Structural selections, blocks with children, and explicit destinations
+   * elsewhere retain the original block. Removal follows successful import and
+   * shares the clipboard manager's transaction and undo step.
+   *
    * @param context - Shared clipboard payload.
    * @param placement - Host destination completed from the current selection.
-   * @returns Inserted root ids.
+   * @returns Structural selection of inserted roots and their ID map, or undefined without inserted blocks.
+   * @throws If delegated block import or empty-block removal fails.
    */
   paste(context: PasteContext, placement: PastePlacement): PasteResult | undefined {
     const bundle = context.bundle;
@@ -232,6 +249,23 @@ export class BlockPasteStrategy implements PasteStrategy {
         : this.editor.blocks.getInsertionDestinationAfter(resolved.afterId);
     const imported = importClipboardBlocks(this.editor, context, bundle.blocks, destination);
     const insertedIds = imported.roots.map(({ id }) => id);
+    const active = context.selection;
+    const target = resolved.afterId ? this.editor.blocks.getBlockNode(resolved.afterId) : undefined;
+    // After a successful import, replace only the empty writing block at the caret.
+    // The host's emptiness policy excludes meaningful blocks such as TODOs even when their text is empty.
+    // Keep structural selections and descendants; an explicit destination elsewhere or insertion
+    // redirected inside a protected panel root must not remove the original caret block.
+    if (
+      insertedIds.length &&
+      active &&
+      isCaretSelection(active) &&
+      target?.id === active.blocks[0]?.id &&
+      this.isEmptyBlock?.(target) &&
+      target.childIds.length === 0 &&
+      destination.parentId === this.editor.blocks.getParentId(target.id)
+    ) {
+      this.editor.blocks.removeBlock(target.id);
+    }
     return insertedIds.length
       ? { proposedSelection: createStructuralSelection(insertedIds), blockIdMap: imported.idMap }
       : undefined;
