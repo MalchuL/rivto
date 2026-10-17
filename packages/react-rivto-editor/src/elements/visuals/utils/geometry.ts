@@ -68,13 +68,20 @@ export function normalizeRotation(rotation: number): number {
 /**
  * Rotates one canvas point around a center by clockwise CSS degrees.
  *
+ * Identity rotations skip trigonometry and center-relative arithmetic, preserving
+ * the input coordinates exactly while returning a separate point object.
+ *
  * @param point - Canvas point to rotate.
  * @param center - Fixed center of rotation.
- * @param rotation - Clockwise rotation in degrees.
- * @returns The rotated canvas point.
+ * @param rotation - Clockwise rotation in degrees; non-finite input means zero.
+ * @returns A new rotated canvas point, unchanged for normalized zero rotation.
  */
 export function rotatePoint(point: Point, center: Point, rotation: number): Point {
-  const radians = (normalizeRotation(rotation) * Math.PI) / 180;
+  const degrees = normalizeRotation(rotation);
+  if (degrees === 0) {
+    return { x: point.x, y: point.y };
+  }
+  const radians = (degrees * Math.PI) / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
   const x = point.x - center.x;

@@ -192,6 +192,12 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
   drawingRef.current = drawing;
   const [reconnectHover, setReconnectHover] = useState<ConnectorHover | null>(null);
 
+  /**
+   * Resolves a reconnect pointer to an eligible attachment or a free canvas endpoint.
+   *
+   * @param event - Pointer position in viewport pixels.
+   * @returns Current attachment geometry, or a free endpoint when no target is hit.
+   */
   const resolveEndpoint = useCallback(
     (event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
       const point = canvasPoint(event, root, zoom);
@@ -203,6 +209,12 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     [root, zoom],
   );
 
+  /**
+   * Shows the eligible reconnect target's bounds and anchors, or clears feedback on completion.
+   *
+   * @param event - Pointer position in viewport pixels; null clears feedback.
+   * @returns Updates panel-local attachment feedback without document writes.
+   */
   const onReconnectHover = useCallback(
     (event: Pick<PointerEvent, "clientX" | "clientY"> | null) => {
       if (!event) {
