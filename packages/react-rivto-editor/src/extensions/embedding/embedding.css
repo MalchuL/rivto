@@ -7,6 +7,20 @@
   border-radius: var(--rivto-radius);
 }
 
+.rivto-embedding-status {
+  box-sizing: border-box;
+  min-height: var(--rivto-default-block-height);
+  padding: 8px;
+  line-height: 1.5;
+}
+
+.rivto-embedding-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* The shared shell paints whole-subtree selection. Let that background show
    through when the reference itself or one of its outline ancestors is selected. */
 .page-block:where([data-block-type="embedding"][data-block-selected])

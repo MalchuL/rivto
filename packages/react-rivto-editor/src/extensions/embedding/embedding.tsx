@@ -1,7 +1,7 @@
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
-import { Link2Icon } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Link2Icon, RefreshCwIcon } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -14,12 +14,47 @@ import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";
 import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 import { PageSurface } from "../../surfaces/page";
+import type { BlockWrapperProps } from "../../blocks";
 
 /** Persisted block type for a live reference to another workspace block. */
 export const EMBEDDING_BLOCK_TYPE = "embedding";
 const EMBEDDING_CLASS = "rivto-embedding";
 const EMBEDDED_SURFACE_CLASS = "rivto-embedded-surface";
+const EMBEDDING_STATUS_CLASS = "rivto-embedding-status";
+const EMBEDDING_SETTINGS_HEADER_CLASS = "rivto-embedding-settings-header";
+const REFRESH_EVENT = "refresh";
 const ancestryContext = createContext<readonly string[]>([]);
+const refreshEventsContext = createContext<EventTarget | undefined>(undefined);
+
+/**
+ * Shares refresh requests between one embedding's settings and body slots.
+ *
+ * The event target belongs to this rendered occurrence and adds no DOM wrapper.
+ *
+ * @param props - Rendered embedding shell and its descendants.
+ * @param props.children - Existing shell to render inside the refresh boundary.
+ * @returns The unchanged shell with an occurrence-local refresh event target.
+ */
+function EmbeddingRefreshBoundary({ children }: { readonly children: ReactNode }) {
+  const [events] = useState(() => new EventTarget());
+  return <refreshEventsContext.Provider value={events}>{children}</refreshEventsContext.Provider>;
+}
+
+/**
+ * Gives embedding shells a refresh boundary while passing other block shells through.
+ *
+ * @param props - Current block node and already-rendered shared shell.
+ * @param props.block - Node whose type determines whether refresh state is needed.
+ * @param props.children - Shared shell, rendered exactly once.
+ * @returns A refresh boundary for an embedding, or the unchanged shell.
+ */
+function EmbeddingWrapper({ block, children }: BlockWrapperProps) {
+  return block.type === EMBEDDING_BLOCK_TYPE ? (
+    <EmbeddingRefreshBoundary>{children}</EmbeddingRefreshBoundary>
+  ) : (
+    children
+  );
+}
 
 /** Native embedding props; an empty target is an unconfigured reference. */
 export interface EmbeddingProps extends Record<string, unknown> {
@@ -42,9 +77,20 @@ function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
   );
 }
 
-/** Edits the reference in a right-slot popover, saving both IDs as one document update. */
+/**
+ * Edits the reference in a right-slot popover, saving both IDs as one document update.
+ *
+ * Refresh requests use the saved reference and leave unsaved form fields intact.
+ * The refresh button restarts only this occurrence's reference search and failed load.
+ *
+ * @param props - Right-slot context supplied by the host block tree.
+ * @param props.block - Embedding node supplying the saved document and block IDs.
+ * @returns Settings trigger and popover with reference fields and an icon-only refresh button.
+ * @throws If rendered outside an editor panel or a delegated save operation fails.
+ */
 function EmbeddingControls({ block }: BlockSlotProps) {
   const panel = usePanel();
+  const refreshEvents = useContext(refreshEventsContext);
   const [open, setOpen] = useState(false);
   const props = block.props as EmbeddingProps;
   return (
@@ -76,11 +122,25 @@ function EmbeddingControls({ block }: BlockSlotProps) {
             setOpen(false);
           }}
         >
-          <div>
-            <div className="text-sm font-medium">Embedding settings</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Choose the document and block to show here.
-            </p>
+          <div className={EMBEDDING_SETTINGS_HEADER_CLASS}>
+            <div>
+              <div className="text-sm font-medium">Embedding settings</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Choose the document and block to show here.
+              </p>
+            </div>
+            <Button
+              {...editorControlProps}
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Refresh embedding"
+              title="Refresh embedding"
+              disabled={!refreshEvents || !props.targetDocumentId || !props.targetBlockId}
+              onClick={() => refreshEvents?.dispatchEvent(new Event(REFRESH_EVENT))}
+            >
+              <RefreshCwIcon aria-hidden="true" />
+            </Button>
           </div>
           <label className="flex flex-col gap-1.5 text-sm">
             Document ID
@@ -111,7 +171,22 @@ function EmbeddingControls({ block }: BlockSlotProps) {
   );
 }
 
-/** Acquires and renders the editable source subtree below the reference row. */
+/**
+ * Resolves a reference and renders its editable source subtree below the reference row.
+ *
+ * Location searches and source acquisitions publish an unavailable or error
+ * status after one attempt. The retained source editor belongs to storage;
+ * changing the reference or unmounting releases this consumer and its lookup.
+ * Reference ancestry prevents recursive acquisition without changing persisted IDs.
+ * Settings refresh restarts lookup and failed acquisition while retaining a
+ * successfully loaded source editor and its document history.
+ *
+ * @param props - Body-slot context supplied by the host block tree.
+ * @param props.block - Reference block whose props contain the target document and block IDs.
+ * @returns Source subtree, or a status for pending, unavailable, unconfigured,
+ * recursive, or failed references.
+ * @throws If rendered outside an editor panel.
+ */
 function EmbeddingBody({ block }: BlockSlotProps) {
   const blockId = block.id;
   const panel = usePanel();
@@ -120,9 +195,11 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
   const ownAddress = JSON.stringify([panel.document.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
+  const refreshEvents = useContext(refreshEventsContext);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [location, setLocation] = useState<
-    BlockResolution & { targetAddress: string; error?: unknown }
-  >({ targetAddress: "", ambiguous: false });
+    BlockResolution & { targetAddress: string; settled: boolean; error?: unknown }
+  >({ targetAddress: "", settled: false, ambiguous: false });
   const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
   const locationIsCurrent = location.targetAddress === targetAddress;
   const cycle =
@@ -132,7 +209,12 @@ function EmbeddingBody({ block }: BlockSlotProps) {
     [ancestors, ownAddress, resolvedAddress],
   );
   useEffect(() => {
-    setLocation({ targetAddress, ambiguous: false });
+    setLocation((previous) => {
+      if (previous.targetAddress === targetAddress) {
+        return { ...previous, settled: false, error: undefined };
+      }
+      return { targetAddress, settled: false, ambiguous: false };
+    });
     if (!targetDocumentId || !targetBlockId || !references) {
       return;
     }
@@ -142,21 +224,40 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         setLocation((previous) => {
           if (
             previous.targetAddress === targetAddress &&
+            previous.settled &&
             previous.documentId === resolution.documentId &&
             previous.ambiguous === resolution.ambiguous &&
             previous.error === error
           ) {
             return previous;
           }
-          return { targetAddress, ...resolution, error };
+          return { targetAddress, settled: true, ...resolution, error };
         });
       },
     );
-  }, [targetAddress, targetDocumentId, targetBlockId, references]);
+  }, [targetAddress, targetDocumentId, targetBlockId, references, refreshVersion]);
   const { editor: source, error: sourceError } = useAcquiredEditor(
     references,
-    cycle ? undefined : location.documentId,
+    cycle || !locationIsCurrent ? undefined : location.documentId,
   );
+  useEffect(() => {
+    /**
+     * Restarts lookup and clears a failed acquisition without releasing a loaded editor.
+     *
+     * @returns Cleared local lookup status and a new search request for the saved reference.
+     */
+    const refresh = () => {
+      setLocation((previous) => ({
+        ...previous,
+        documentId: source?.getDocument().id,
+        settled: false,
+        error: undefined,
+      }));
+      setRefreshVersion((version) => version + 1);
+    };
+    refreshEvents?.addEventListener(REFRESH_EVENT, refresh);
+    return () => refreshEvents?.removeEventListener(REFRESH_EVENT, refresh);
+  }, [refreshEvents, source]);
   const error = location.error ?? sourceError;
   let message = "Loading embedded block…";
   if (!targetDocumentId || !targetBlockId) {
@@ -167,11 +268,15 @@ function EmbeddingBody({ block }: BlockSlotProps) {
     message = "Block resolution is unavailable.";
   } else if (error) {
     message = "Unable to load referenced block.";
+  } else if (locationIsCurrent && location.settled && !location.documentId) {
+    message = "Referenced block is unavailable.";
   }
   return (
     <>
       {locationIsCurrent && location.ambiguous && (
-        <div role="status">Multiple documents contain this block; showing the first match.</div>
+        <div role="status" className={EMBEDDING_STATUS_CLASS}>
+          Multiple documents contain this block; showing the first match.
+        </div>
       )}
       {!cycle &&
       targetBlockId &&
@@ -180,7 +285,11 @@ function EmbeddingBody({ block }: BlockSlotProps) {
       source &&
       source.getDocument().id === location.documentId ? (
         <ancestryContext.Provider value={ancestry}>
-          {Boolean(error) && <div role="status">Unable to load referenced block.</div>}
+          {Boolean(error) && (
+            <div role="status" className={EMBEDDING_STATUS_CLASS}>
+              Unable to load referenced block.
+            </div>
+          )}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
             <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}>
               <PageSurface />
@@ -188,7 +297,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
           </div>
         </ancestryContext.Provider>
       ) : (
-        <div role="status" className="px-2 pb-2">
+        <div role="status" className={EMBEDDING_STATUS_CLASS}>
           {message}
         </div>
       )}
@@ -210,7 +319,7 @@ export function embeddingExtension(): ReactEditorExtension {
      * Registers embedding copying, block rendering, controls, and clipboard conversion.
      *
      * @param reactEditor - Host editor receiving the embedding registrations.
-     * @returns Cleanup for converters, slots, and block type; the menu registration
+     * @returns Cleanup for converters, slots, refresh wrappers, and block type; the menu registration
      * is released by the extension registration lifecycle.
      * @throws If a delegated registration fails.
      */
@@ -260,6 +369,11 @@ export function embeddingExtension(): ReactEditorExtension {
         component: EmbeddingControls,
         when: ({ block }) => block.type === EMBEDDING_BLOCK_TYPE,
       });
+      const pageWrapper = reactEditor.surfaces.registerBlockWrapper("block", EmbeddingWrapper);
+      const edgelessWrapper = reactEditor.surfaces.registerBlockWrapper(
+        "edgeless",
+        EmbeddingWrapper,
+      );
       const clipboard = reactEditor.clipboard.registerBlockConverter(EMBEDDING_BLOCK_TYPE, {
         format: ({ block }, current) => ({
           ...current,
@@ -292,6 +406,8 @@ export function embeddingExtension(): ReactEditorExtension {
       });
       return () => {
         clipboard();
+        edgelessWrapper();
+        pageWrapper();
         controls();
         body();
         dispose();
