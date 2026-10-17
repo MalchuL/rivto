@@ -15,7 +15,12 @@ import {
 } from "./cross-document/target";
 import type { DropLayoutOptions } from "./placement/resolver";
 import type { CanonicalDropPlacement } from "./placement/types";
-import { dropMoveTarget, excludeDropSubtrees, isCurrentDropDestination } from "./placement/utils";
+import {
+  blockMoveDestination,
+  dropMoveTarget,
+  excludeDropSubtrees,
+  isCurrentDropDestination,
+} from "./placement/utils";
 import { getDropBlocks, resolveSurfaceDrop } from "./pointer/target";
 import { trackGesturePointer } from "./pointer/tracker";
 import type {
@@ -183,7 +188,8 @@ export class PageDragController {
       blocks,
       reactPanel.selection.get(),
       String(source.id),
-      (block) => !reactPanel.editor.blockListProps.childrenVisible(block),
+      // Group dragged roots using the visible outline; a collapsed subtree still travels with its root.
+      (block) => !reactPanel.editor.blockBehaviors.childrenVisible(block),
     );
     this.activeMove = move;
     const KeyboardEventType = root?.ownerDocument.defaultView?.KeyboardEvent;
@@ -210,7 +216,7 @@ export class PageDragController {
    *
    * @param manager - Manager owning the live operation.
    */
-  handleDragMove = (_event: unknown, manager: DragDropManager) => {
+  handleDragMove = (event: unknown, manager: DragDropManager) => {
     if (this.pointerTracker) {
       this.updatePlacement(manager.dragOperation);
     } else {
@@ -260,7 +266,10 @@ export class PageDragController {
     const valid =
       placement &&
       sources.length === move?.ids.length &&
-      reactPanel.editor.blockBehaviors.acceptsDrop(placement, sources) &&
+      reactPanel.editor.blockBehaviors.canMove({
+        sources,
+        destination: blockMoveDestination(placement),
+      }) &&
       isCurrentDropDestination(
         excludeDropSubtrees(getDropBlocks(reactPanel), new Set(move.ids)),
         placement,
@@ -268,10 +277,10 @@ export class PageDragController {
     const validCrossDocument =
       crossDocument &&
       sources.length === move?.ids.length &&
-      crossDocument.controller.reactPanel.editor.blockBehaviors.acceptsDrop(
-        crossDocument.destination,
+      crossDocument.controller.reactPanel.editor.blockBehaviors.canMove({
         sources,
-      ) &&
+        destination: blockMoveDestination(crossDocument.destination),
+      }) &&
       isCurrentDropDestination(
         excludeDropSubtrees(
           getDropBlocks(crossDocument.controller.reactPanel),

@@ -1,3 +1,7 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../../block-behaviors/types";
+import type { BlockMoveContext } from "../../../block-behaviors/types";
+import { canMoveBlockType } from "../../../block-behaviors/utils/move";
+import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/types";
 /**
  * Columns board and lane views.
  *
@@ -10,11 +14,7 @@
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { ContainerBlockBehavior } from "../../../block-behaviors/container-block-behavior";
-import type {
-  BlockBehaviorContext,
-  BlockBehaviorOutcome,
-  DropAxis,
-} from "../../../block-behaviors/types";
+import type { BlockBehaviorContext } from "../../../block-behaviors/types";
 import type { ReactPanelApi } from "../../../panels/types";
 
 export const COLUMNS_BLOCK_TYPE = "columns";
@@ -65,36 +65,104 @@ export function relocateColumnContents(
  * Behavior registered for the `columns` board type.
  */
 export class ColumnsBehavior extends ContainerBlockBehavior {
-  override readonly dropChildTypes = [COLUMNS_COLUMN_BLOCK_TYPE];
-  override readonly dropAxis: DropAxis = "horizontal";
-  override readonly acceptsDropContainer: boolean = false;
+  /**
+   * Preserves the fixed depth of direct structural children.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildIndent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Selects this native container independently of the registration's owner.
+   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
+   * @returns True only for the COLUMNS_BLOCK_TYPE native type.
+   */
+  override isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return context.block.type === COLUMNS_BLOCK_TYPE;
+  }
+
+  /**
+   * Preserves this native shell's parent and child restrictions for any movement input.
+   * @param context - Sources and destination with the current receiving parent.
+   * @returns Whether this shell permits the requested movement.
+   */
+  canMove(context: BlockMoveContext): boolean {
+    return canMoveBlockType(context, COLUMNS_BLOCK_TYPE, undefined, [COLUMNS_COLUMN_BLOCK_TYPE]);
+  }
 }
 
 /**
  * Behavior registered for the `columns-column` lane type.
  */
 export class ColumnsColumnBehavior extends ContainerBlockBehavior {
-  override readonly dropParentTypes = [COLUMNS_BLOCK_TYPE];
-  override readonly dropAxis: DropAxis | undefined = undefined;
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Selects this native container independently of the registration's owner.
+   * @param context - Current block fields; the registry also supplies each moved source and receiving parent separately.
+   * @returns True only for the COLUMNS_COLUMN_BLOCK_TYPE native type.
+   */
+  override isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return context.block.type === COLUMNS_COLUMN_BLOCK_TYPE;
+  }
+
+  /**
+   * Keeps moved structural shells inside their native parent type.
+   * @param context - Sources and the resolved receiving parent.
+   * @returns Whether every shell retains an allowed parent.
+   */
+  canMove(context: BlockMoveContext): boolean {
+    return canMoveBlockType(context, COLUMNS_COLUMN_BLOCK_TYPE, [COLUMNS_BLOCK_TYPE]);
+  }
 
   /**
    * Relocates lane contents so a structural delete does not drop nested blocks.
    *
    * @param context - One selected column whose view was resolved.
    * @param ids - Complete structural selection about to be removed.
-   * @returns `"default"` so the shared deletion path still removes the shells.
+   * @returns `"unhandled"` so the shared deletion path still removes the shells.
    */
-  override onStructuralDelete(
-    context: BlockBehaviorContext,
-    ids: readonly string[],
-  ): BlockBehaviorOutcome {
+  onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
     const columnIds = ids.filter(
       (id) => context.reactPanel.blocks.getBlockNode(id)?.type === context.block.type,
     );
     if (columnIds.length) {
       relocateColumnContents(context.reactPanel, columnIds);
     }
-    return "default";
+    return "unhandled";
   }
 }
 

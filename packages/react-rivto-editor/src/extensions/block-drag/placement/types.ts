@@ -1,4 +1,16 @@
-import type { BlockDropDestination } from "../../../block-behaviors/types";
+/** A stable destination in one parent's ordered child list. */
+export type CanonicalDropPlacement =
+  | {
+      readonly kind: "between";
+      readonly parentId: string | null;
+      readonly previousId: string | null;
+      readonly nextId: string | null;
+      readonly depth: number;
+    }
+  | {
+      readonly kind: "inside";
+      readonly parentId: string;
+    };
 
 /** Minimal recursive shape needed to resolve outline drop positions. */
 export interface DropBlock {
@@ -7,13 +19,10 @@ export interface DropBlock {
 }
 
 /** One canonical gap in a parent's ordered child list. */
-export type BetweenDropPlacement = Extract<BlockDropDestination, { readonly kind: "between" }>;
+export type BetweenDropPlacement = Extract<CanonicalDropPlacement, { readonly kind: "between" }>;
 
 /** Placement that appends moved roots as children of one block. */
-export type InsideDropPlacement = Extract<BlockDropDestination, { readonly kind: "inside" }>;
-
-/** Semantic placement used by React drag feedback. */
-export type CanonicalDropPlacement = BlockDropDestination;
+export type InsideDropPlacement = Extract<CanonicalDropPlacement, { readonly kind: "inside" }>;
 
 /** Existing core move-command target derived from a semantic placement. */
 export interface DropMoveTarget {

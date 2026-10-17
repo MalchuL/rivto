@@ -8,8 +8,7 @@ import type { ReactEditorApi } from "../../../editor/types";
  * @module
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockBehaviorContext } from "../../../block-behaviors/context";
-import type { BlockBehavior } from "../../../block-behaviors/types";
+import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
 import {
   BUILTIN_KEYMAP,
   focusSelectionCaret,
@@ -73,36 +72,30 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
 /**
  * Deletes the panel's current selection using registered container policies.
  *
- * For structural selections, each distinct block behavior is consulted once. The
- * first non-default outcome claims the whole selection and suppresses generic
- * deletion. Otherwise selection.delete handles the selection, including expanded
+ * For structural selections, the behavior registry consults each distinct block
+ * behavior once. The first handled or rejected outcome claims the whole selection and
+ * suppresses generic deletion. Otherwise selection.delete handles the selection, including expanded
  * text. Policy calls and deletion share one panel batch; focus is left to callers.
  *
  * @param reactPanel - Occurrence whose current selection and block behaviors are used.
  * @param root - Mounted surface root passed to structural-deletion behavior contexts.
  * @returns No value after the selected behavior or generic deletion completes.
+ * @throws If context resolution, a behavior handler or delegated selection deletion fails.
  */
 export function deletePanelSelection(reactPanel: ReactPanelApi, root: HTMLElement): void {
   const current = reactPanel.selection.get();
   reactPanel.batchUpdates(() => {
     if (current && isStructuralSelection(current)) {
       const ids = getSelectedBlockIds(current);
-      const seen = new Set<BlockBehavior>();
-      // A non-default outcome claims the whole selection and skips generic deletion.
-      let claimed = false;
-      for (const id of ids) {
-        const behavior = reactPanel.editor.blockBehaviors.resolve(id);
-        if (seen.has(behavior)) {
-          continue;
-        }
-        seen.add(behavior);
-        const context = createBlockBehaviorContext(reactPanel, id, root, current);
-        if (context && behavior.onStructuralDelete(context, ids) !== "default") {
-          claimed = true;
-          break;
-        }
-      }
-      if (claimed) {
+      const firstId = ids.find((id) => reactPanel.blocks.getBlockNode(id));
+      const context = firstId
+        ? createBlockBehaviorContext(reactPanel, firstId, root, current)
+        : undefined;
+      // A handled or rejected outcome claims the whole selection and skips generic deletion.
+      if (
+        context &&
+        reactPanel.editor.blockBehaviors.dispatch("onStructuralDelete", context, ids)
+      ) {
         return;
       }
     }

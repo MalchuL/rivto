@@ -65,10 +65,10 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   expect(markup).toContain('data-block-selection-anchor=""');
   expect(markup).toContain('data-slot-position="body"');
   expect(
-    reactEditor.blockBehaviors.acceptsDrop(
-      { kind: "between", parentId: reference.id, previousId: null, nextId: null, depth: 1 },
-      [source.blocks.getBlock("target")!],
-    ),
+    reactEditor.blockBehaviors.canMove({
+      destination: { parentId: reference.id },
+      sources: [source.blocks.getBlock("target")!],
+    }),
   ).toBe(true);
   const sourceEditor = (await runtime.acquireEditor(source.id)).editor;
   crossDocumentBlockTransfer(sourceEditor, editor, ["target"], {

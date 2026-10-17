@@ -154,7 +154,7 @@ test.each([
   async (title, extension, input) => {
     const editor = await createEditor();
     editor.blocks.insertBlock({ id: "host", type: "paragraph", content: "Host" });
-    const sourceCore = await createEditor();
+    const sourceCore = await createEditor({ registerWritingBlock: false });
     const { standardPreset } = await import("../../extensions/built-ins/built-ins");
     const reactPanel = createReactEditor({
       editor: sourceCore,

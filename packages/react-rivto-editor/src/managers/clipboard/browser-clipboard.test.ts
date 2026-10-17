@@ -50,8 +50,8 @@ function clipboard(write: (data: Record<string, Blob>[]) => Promise<void>) {
 }
 
 test("embedding copy emits only selected roots and pastes qualified references into another document", async () => {
-  const source = await createTestCoreEditor();
-  const target = await createTestCoreEditor();
+  const source = await createTestCoreEditor({ registerWritingBlock: false });
+  const target = await createTestCoreEditor({ registerWritingBlock: false });
   const a = createTestReactEditor({
     editor: source,
     extensions: [standardPreset(), embeddingExtension()],
@@ -93,7 +93,7 @@ test("embedding copy emits only selected roots and pastes qualified references i
 });
 
 test("denied clipboard writes leave cut targets and their descendants intact", async () => {
-  const core = await createTestCoreEditor();
+  const core = await createTestCoreEditor({ registerWritingBlock: false });
   const panel = createTestReactEditor({ editor: core, extensions: [standardPreset()] });
   const block = panel.blocks.insertBlock({
     type: "paragraph",

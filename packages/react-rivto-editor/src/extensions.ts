@@ -36,10 +36,9 @@ export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors"
 export type {
   BlockBehavior,
   BlockBehaviorContext,
+  BlockOutlineContext,
   BlockBehaviorOutcome,
-  BlockDropContext,
-  BlockDropPlacementOptions,
-  DropAxis,
+  BlockMoveContext,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export {
@@ -79,3 +78,21 @@ export {
 } from "./extensions/embedding/embedding";
 
 export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";
+export {
+  createBlockFactory,
+  paragraphBlockFactory,
+  separatorBlockFactory,
+} from "./block-factories";
+export type { BlockFactory } from "./block-factories";
+
+export {
+  PAGE_DRAG_METADATA_KEY,
+  type BlockDragOptions,
+  type BlockDropPlacementOptions,
+  type DropAxis,
+} from "./extensions/block-drag/block-drag-options";
+
+export {
+  BLOCK_HANDLE_METADATA_KEY,
+  type BlockHandleMetadata,
+} from "./extensions/built-ins/block-handle/metadata";

@@ -154,3 +154,45 @@
 [data-block-background="purple"] {
   background-color: var(--rivto-block-purple);
 }
+
+/* Layout roots keep only their direct handle's hitbox pointer-active while
+   transparent so re-entering the handle recovers hover without a fast move. */
+[data-block-handle-container] > .page-block-row > .rivto-slot > .block-handle {
+  pointer-events: auto;
+}
+
+[data-block-handle-container] {
+  position: relative;
+}
+
+/* Root rows are only one line tall; side strips extend their hover behavior
+   beside the full container without covering its interactive body. */
+[data-block-handle-container]::before,
+[data-block-handle-container]::after {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 100vw;
+  background: transparent;
+  content: "";
+}
+
+[data-block-handle-container]::before {
+  right: 100%;
+}
+
+[data-block-handle-container]::after {
+  left: 100%;
+}
+
+/* Canvas cards have independent hit areas. Page-wide container strips would
+   intercept neighboring cards and inflate the card's horizontal scrollport. */
+.edgeless-card [data-block-handle-container]::before,
+.edgeless-card [data-block-handle-container]::after {
+  content: none;
+}
+
+[data-block-handle-container]:hover > .page-block-row > .rivto-slot > .block-handle {
+  opacity: 1;
+}

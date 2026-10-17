@@ -170,7 +170,8 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
         current,
         blockId,
         mode === "edgeless",
-        (candidate) => !reactPanel.editor.blockListProps.childrenVisible(candidate),
+        // Use the shared collapse policy; the preceding edgeless flag controls inclusion of hidden descendants.
+        (candidate) => !reactPanel.editor.blockBehaviors.childrenVisible(candidate),
       );
       const canvas = mode === "edgeless" ? findEdgelessRuntime(reactPanel) : undefined;
       if (next && canvas) {

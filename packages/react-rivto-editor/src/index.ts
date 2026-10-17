@@ -32,17 +32,14 @@ export {
   createErrorBlockInput,
   errorBlockExtension,
 } from "./extensions/built-ins/error/error-block";
+export { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block";
+export type { DefaultWritingBlockOptions } from "./extensions/built-ins/page/default-writing-block";
 export {
-  DEFAULT_WRITING_BLOCK_TYPE,
-  createIsEmptyDefaultBlock,
-  resolveIsEmptyBlock,
-} from "./extensions/built-ins/page/default-writing-block";
-export type {
-  CreateDefaultBlock,
-  DefaultWritingBlockOptions,
-  EmptyBlockCandidate,
-  IsEmptyBlock,
-} from "./extensions/built-ins/page/default-writing-block";
+  createBlockFactory,
+  paragraphBlockFactory,
+  separatorBlockFactory,
+} from "./block-factories";
+export type { BlockFactory } from "./block-factories";
 export {
   BLOCK_LIST_TYPES,
   DEFAULT_BLOCK_LIST_PROPS,
@@ -128,7 +125,6 @@ export {
 export type {
   BlockClipboardConverter,
   BlockClipboardFields,
-  BlockContainment,
   BlockRenderer,
   BlockSlotPosition,
   BlockSlotProps,
@@ -182,11 +178,11 @@ export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors"
 export type {
   BlockBehavior,
   BlockBehaviorContext,
+  BlockOutlineContext,
+  BlockBehaviorData,
+  BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
-  BlockDropContext,
-  BlockDropDestination,
-  BlockDropPlacementOptions,
-  DropAxis,
+  BlockMoveContext,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export {
@@ -280,3 +276,14 @@ export type {
   BlockContextMenuRenderContext,
   BlockContextMenuEntry,
 } from "./managers/block-context-menu/types";
+export {
+  PAGE_DRAG_METADATA_KEY,
+  type BlockDragOptions,
+  type BlockDropPlacementOptions,
+  type DropAxis,
+} from "./extensions/block-drag/block-drag-options";
+
+export {
+  BLOCK_HANDLE_METADATA_KEY,
+  type BlockHandleMetadata,
+} from "./extensions/built-ins/block-handle/metadata";

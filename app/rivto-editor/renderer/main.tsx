@@ -112,7 +112,7 @@ function createSession() {
       "The recovery draft could not be loaded. It has been retained in local storage; open a saved JSON document to continue.";
   }
   if (!recovered) {
-    editor.blocks.insertBlock({ type: "paragraph", content: "" });
+    editor.blocks.insertBlock(reactEditor.defaultWritingBlockFactory.createEmptyBlock());
   }
   editor.history.clear();
   return { document, panelMode, editor, reactEditor, settings, title, recovered, error };
@@ -308,7 +308,7 @@ function App() {
             rootElementIds: [],
             pluginData: {},
           });
-          editor.blocks.insertBlock({ type: "paragraph", content: "" });
+          editor.blocks.insertBlock(reactEditor.defaultWritingBlockFactory.createEmptyBlock());
           editor.history.clear();
           latestTitle.current = "Untitled";
           setTitle("Untitled");

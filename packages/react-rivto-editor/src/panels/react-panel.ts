@@ -24,7 +24,8 @@ import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
  * retains the acquisition; without storage the caller keeps owning the React editor.
  * The panel's rootBlockId limits selection and navigation to one subtree.
  * Its registered DOM root determines which panel receives local events and shortcuts.
- * Selection reads are empty when another registered panel owns the current selection.
+ * Selection get/snapshot reads are empty when another registered panel owns the current selection.
+ * Whole-block coverage remains visible through isBlockSelected in every occurrence.
  *
  * Manager methods and subscriptions keep using their original document after a
  * focus change. Transaction callbacks are synchronous: after awaiting external work,

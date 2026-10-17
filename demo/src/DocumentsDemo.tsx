@@ -1,3 +1,4 @@
+import { paragraphBlockFactory } from "@chulane/rivto-react/block-factories";
 import { ModeManager } from "@chulane/rivto";
 import { BroadcastChannelProvider, WebRTCProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
@@ -149,17 +150,24 @@ export function DocumentsDemo() {
         await create("source", [
           {
             id: sourceId,
-            type: "paragraph",
+            ...paragraphBlockFactory.createEmptyBlock(),
             content: "Source text",
-            children: Array.from({ length: 2 + Number(params.get("repeat") ?? 0) }, (_, index) => ({
-              id: `${room}:child-${index}`,
-              type: "paragraph",
-              content: `Source child ${index}`,
-            })),
+            children: Array.from(
+              { length: 2 + Number(params.get("repeat") ?? 0) },
+              (value, index) => ({
+                id: `${room}:child-${index}`,
+                ...paragraphBlockFactory.createEmptyBlock(),
+                content: `Source child ${index}`,
+              }),
+            ),
           },
         ]);
         await create("references", [
-          { id: `${room}:reference-heading`, type: "paragraph", content: "Live source references" },
+          {
+            id: `${room}:reference-heading`,
+            ...paragraphBlockFactory.createEmptyBlock(),
+            content: "Live source references",
+          },
           {
             id: `${room}:embed-1`,
             type: EMBEDDING_BLOCK_TYPE,
@@ -178,7 +186,11 @@ export function DocumentsDemo() {
       if (user) {
         const id = `private-${user}`;
         await create(id, [
-          { id: `${room}:source-block`, type: "paragraph", content: `Only opened by ${user}` },
+          {
+            id: `${room}:source-block`,
+            ...paragraphBlockFactory.createEmptyBlock(),
+            content: `Only opened by ${user}`,
+          },
         ]);
         await open(id);
       }

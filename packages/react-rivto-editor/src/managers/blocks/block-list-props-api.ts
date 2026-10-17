@@ -1,27 +1,13 @@
-import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
-import type { BlockBehaviorContext } from "../../block-behaviors/types";
+import type { BlockListPropsManagerApi } from "@chulane/rivto";
 
 /** Core list-property policy whose registrations are owned by the active React extension. */
-export type BlockListPropsRegistration = Parameters<BlockListPropsManagerApi["register"]>[0] & {
-  /** Returns inherited properties for the following split block; omitted leaves writing defaults intact. */
-  readonly prepareSplit?: (block: EditorBlock) => Record<string, unknown>;
-  /** Handles a split before the ordinary outline action. True stops the fallback; the caller owns the transaction. */
-  readonly onSplit?: (context: BlockBehaviorContext) => boolean;
-  /** Returns false to hide this block's children. Omitted leaves them visible. */
-  readonly childrenVisible?: (block: Pick<EditorBlockNode, "listProps">) => boolean;
-};
+export type BlockListPropsRegistration = Parameters<BlockListPropsManagerApi["register"]>[0];
 
-/** Core property validation combined with optional React outline behavior. */
+/** Core property defaults and validation owned by the active React extension. */
 export interface BlockListPropsApi extends Omit<BlockListPropsManagerApi, "register"> {
-  /** Registers property validation and presentation behavior together; returns their owned cleanup. */
+  /** Registers property defaults and validation; returns their owned cleanup. */
   register(registration: BlockListPropsRegistration): () => void;
   /** Releases this React manager's registrations; caller-owned core policies remain installed.
-   * @returns No value after removing owned validation and presentation behavior. */
+   * @returns No value after removing owned property defaults and validation. */
   destroy(): void;
-  /** Returns merged split properties in registration order, or undefined when no extension supplies them. */
-  prepareSplit(block: EditorBlock): Record<string, unknown> | undefined;
-  /** Runs split handlers in registration order until one handles the request. */
-  onSplit(context: BlockBehaviorContext): boolean;
-  /** Returns true unless an installed behavior hides the block's children. */
-  childrenVisible(block: Pick<EditorBlockNode, "listProps">): boolean;
 }

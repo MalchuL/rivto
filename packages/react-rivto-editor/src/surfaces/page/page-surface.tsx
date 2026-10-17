@@ -251,7 +251,8 @@ function VirtualPageRoots({
         ): Array<{ id: string; length: number }> =>
           blocks.flatMap((block) => [
             { id: block.id, length: block.content.length },
-            ...(!reactPanel.editor.blockListProps.childrenVisible(block)
+            // Selection ranges must follow the visible outline, including children not currently mounted.
+            ...(!reactPanel.editor.blockBehaviors.childrenVisible(block)
               ? []
               : visit(block.children)),
           ]);

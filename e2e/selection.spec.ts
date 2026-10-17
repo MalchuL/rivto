@@ -457,7 +457,7 @@ test("Shift click ranges complete blocks", async ({ page }) => {
   const contents = selectionTextContents(page);
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
-  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(3);
 });
 
 test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {

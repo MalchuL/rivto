@@ -1,6 +1,6 @@
 import type { ReactEditorApi } from "../../../../editor/types";
 /** Keyboard registration for outdenting a nested block at its start boundary. */
-import { createBlockBehaviorContext } from "../../../../block-behaviors/context";
+import { createBlockBehaviorContext } from "../../../../block-behaviors/utils/context";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,

@@ -32,7 +32,8 @@ import {
  * @returns No value.
  */
 export function registerBlockSelectionNavigation(reactEditor: ReactEditorApi): void {
-  const isCollapsed = (block: EditorBlock) => !reactEditor.blockListProps.childrenVisible(block);
+  // Arrow navigation and range extension must skip descendants hidden by the shared visibility policy.
+  const isCollapsed = (block: EditorBlock) => !reactEditor.blockBehaviors.childrenVisible(block);
   const move = (
     reactPanel: ReactPanelApi,
     root: HTMLElement,

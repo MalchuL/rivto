@@ -1,3 +1,4 @@
+import { blockMoveDestination } from "../placement/utils";
 import { PanelDOM, isInPanel } from "../../../managers/events/panel-dom";
 /** Measures one active surface and resolves its explicit drop regions. */
 import type { EditorBlock } from "@chulane/rivto";
@@ -10,7 +11,7 @@ import {
 import type { DropBlock } from "../placement/types";
 import { resolveBeforeDropPlacement, resolveSiblingAfterDropPlacement } from "../placement/utils";
 import type { DropPlacement, PointerCoordinates } from "../types";
-import { blockContainment } from "../utils/containment";
+import { getBlockDragOptions } from "../block-drag-options";
 
 /**
  * Returns the tree displayed by this view without changing document operations.
@@ -29,7 +30,7 @@ export function getDropBlocks(reactPanel: ReactPanelApi): EditorBlock[] {
  * them. Each access reads the live DOM; no geometry survives between calculations.
  *
  * @param root - Surface element containing the rendered destination blocks.
- * @param reactPanel - Destination React view providing block-view behavior and containment.
+ * @param reactPanel - Destination React view providing semantic move permissions and extension geometry annotations.
  * @returns Rendered block identities and layout policies with live viewport
  * rectangle getters; blocks without a direct page row or client rectangles are omitted.
  */
@@ -42,7 +43,10 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
       return [];
     }
     const parent = dom.getParent(element);
-    const behavior = reactPanel.editor.blockBehaviors.resolve(id);
+    const type = reactPanel.blocks.getBlockNode(id)?.type;
+    const dragOptions =
+      (type && getBlockDragOptions(reactPanel.editor.blockTypes.getDefinition(type)?.metadata)) ||
+      {};
     return [
       {
         id,
@@ -53,10 +57,10 @@ export function collectDropLayout(root: HTMLElement, reactPanel: ReactPanelApi):
         get rect() {
           return element.getBoundingClientRect();
         },
-        axis: behavior.dropAxis,
-        fixed: blockContainment(reactPanel, id)?.childOutline === "fixed",
-        acceptsBody: Boolean(behavior.acceptsDropContainer),
-        options: behavior.dropPlacement,
+        axis: dragOptions.dropAxis,
+        fixed: dragOptions.fixed === true,
+        acceptsBody: Boolean(dragOptions.acceptsDropContainer),
+        options: dragOptions.dropPlacement,
         hasRenderedChildren: Boolean(
           element.querySelector(":scope > .page-block-children > [data-block-id]"),
         ),
@@ -123,12 +127,14 @@ export function resolveSurfaceDrop(
     options,
     (destination) =>
       (!reactPanel.rootBlockId || Boolean(panelRoot) || destination.parentId !== null) &&
-      reactPanel.editor.blockBehaviors.acceptsDrop(
-        panelRoot && destination.parentId === null
-          ? { ...destination, parentId: panelRoot }
-          : destination,
+      reactPanel.editor.blockBehaviors.canMove({
         sources,
-      ),
+        destination: blockMoveDestination(
+          panelRoot && destination.parentId === null
+            ? { ...destination, parentId: panelRoot }
+            : destination,
+        ),
+      }),
   );
   if (placement?.kind !== "between") {
     return placement;

@@ -228,7 +228,9 @@ export class ClipboardManager {
       if (strategy instanceof ElementPasteStrategy) {
         bound = new ElementPasteStrategy(reactPanel, convertedElements, created);
       } else if (strategy instanceof BlockPasteStrategy) {
-        bound = new BlockPasteStrategy(pasteDocument);
+        bound = new BlockPasteStrategy(pasteDocument, (block) =>
+          this.editor.defaultWritingBlockFactory.isEmptyBlock(block),
+        );
       } else if (strategy instanceof TextPasteStrategy) {
         bound = new TextPasteStrategy(pasteDocument);
       } else if (strategy instanceof PreserveNewlinesPasteStrategy) {
@@ -608,7 +610,8 @@ export class ClipboardManager {
           }
         });
       } else if (converter?.format) {
-        const writingType = defaultBlockType ?? this.editor.createDefaultBlock().type;
+        const writingType =
+          defaultBlockType ?? this.editor.defaultWritingBlockFactory.createEmptyBlock().type;
         const formats = this.editor.clipboardFormats.formatElement(node, bundle);
         const parsed = this.editor.clipboardFormats.parseContent(
           { html: formats.html, text: formats.plain },

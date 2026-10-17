@@ -1,4 +1,5 @@
 import { registerBlockCollapseActions } from "../../block-handle/actions";
+import { CollapseBlockBehavior } from "./collapse-block-behavior";
 import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
@@ -56,10 +57,10 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
 
   reactEditor.blockListProps.register({
     id: "collapse",
-    childrenVisible: (block) => block.listProps.collapsed !== true,
     defaults: { collapsed: false },
     isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
+  reactEditor.blockBehaviors.register(new CollapseBlockBehavior(), -100);
   reactEditor.surfaces.registerBlockSlot({
     position: "left-top",
     priority: 100,

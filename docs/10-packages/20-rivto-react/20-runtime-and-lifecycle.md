@@ -57,8 +57,9 @@ Managers создаются до setup расширений; extensions уста
 Ошибка setup очищает уже созданные registrations. Дубликаты extension IDs и конфликтующие
 регистрации приводят к исключению. Core и модель остаются у вызывающего владельца.
 
-`createDefaultBlock` и `isEmptyBlock` выбрасывают исключение до установки writing extension.
-`installDefaultWriting({ createDefaultBlock, isEmptyBlock })` возвращает disposer,
+`defaultWritingBlockFactory.createEmptyBlock()`, `defaultWritingBlockFactory.isBlock()` и
+`defaultWritingBlockFactory.isEmptyBlock()` выбрасывают исключение до установки writing extension.
+`installDefaultWriting(defaultWritingBlockFactory)` возвращает disposer,
 восстанавливающий предыдущие factories. Обычно его вызывает defaultWritingBlockExtension.
 
 `destroy()` идемпотентен. Отменяет DOM restoration, снимает extensions и shared registrations,

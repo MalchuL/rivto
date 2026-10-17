@@ -5,7 +5,7 @@ import {
   testCaret,
   testRange,
 } from "../../editor/test-utils";
-import { PasteStrategyRegistry } from "./strategies";
+import { BlockPasteStrategy, PasteStrategyRegistry } from "./strategies";
 import { CLIPBOARD_BUNDLE_VERSION } from "./clipboard-data";
 
 describe("core ClipboardManager", () => {
@@ -208,6 +208,53 @@ describe("core ClipboardManager", () => {
     target.destroy();
     editor.destroy();
   });
+
+  it.each(["caret", "structural", "children", "nonempty", "elsewhere"])(
+    "replaces only an empty leaf at the paste caret: %s",
+    async (scenario) => {
+      const editor = await createDocumentEditor();
+      editor.clipboard.pasteStrategies.register(
+        "paste.blocks",
+        new BlockPasteStrategy(
+          editor,
+          (block) => block.type === "paragraph" && block.content === "",
+        ),
+      );
+      const source = editor.blocks.insertBlock({ type: "paragraph", content: "Copied" });
+      const bundle = editor.clipboard.copy(createStructuralSelection([source.id]))!;
+      const target = editor.blocks.insertBlock({
+        type: "paragraph",
+        content: scenario === "nonempty" ? "Keep" : "",
+        children: scenario === "children" ? [{ type: "paragraph", content: "Child" }] : [],
+      });
+      const before = editor.blocks.getBlocks();
+      const updates = jest.fn();
+      editor.subscribe(updates);
+      editor.clipboard.paste({
+        bundle,
+        textTarget:
+          scenario === "structural"
+            ? createStructuralSelection([target.id])
+            : testCaret(target.id, 0),
+        placement: scenario === "elsewhere" ? { afterId: source.id } : undefined,
+      });
+      expect(editor.blocks.hasBlock(target.id)).toBe(scenario !== "caret");
+      let expected = ["Copied", target.content, "Copied"];
+      if (scenario === "caret") {
+        expected = ["Copied", "Copied"];
+      } else if (scenario === "elsewhere") {
+        expected = ["Copied", "Copied", ""];
+      }
+      expect(editor.blocks.getBlocks().map((block) => block.content)).toEqual(expected);
+      expect(updates).toHaveBeenCalledTimes(1);
+      expect(editor.selection.get()?.blocks).toHaveLength(1);
+      editor.history.undo();
+      expect(editor.blocks.getBlocks()).toEqual(before);
+      editor.history.redo();
+      expect(editor.blocks.hasBlock(target.id)).toBe(scenario !== "caret");
+      editor.destroy();
+    },
+  );
 
   it("prefers structured data over plain text", async () => {
     const source = await createDocumentEditor();

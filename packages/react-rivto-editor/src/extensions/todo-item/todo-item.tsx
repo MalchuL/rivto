@@ -6,6 +6,8 @@
  *
  * @module
  */
+import { BLOCK_HANDLE_METADATA_KEY } from "../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY } from "../block-drag/block-drag-options";
 import type { ReactEditorExtension } from "../../managers";
 import {
   TODO_ITEM_BLOCK_TYPE,
@@ -103,10 +105,14 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
             title: "TODO storage",
             defaultProps: createTodoStorageProps,
             propSchema: todoStoragePropsSchema,
-            metadata: { containment: { childOutline: "free", outlineFloor: true } },
+            metadata: {
+              [PAGE_DRAG_METADATA_KEY]: { dropAxis: "vertical", acceptsDropContainer: true },
+              [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+            },
           },
           render: TodoStorage,
           behavior: todoStorageBehavior,
+
           slashCommand: {
             id: "type.todo-storage",
             title: "TODO storage",

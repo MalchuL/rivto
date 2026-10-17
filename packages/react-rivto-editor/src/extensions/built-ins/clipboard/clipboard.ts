@@ -38,7 +38,7 @@ export interface ClipboardExtensionOptions {
   /**
    * Block type used when plain text creates additional blocks.
    *
-   * When omitted, uses `panel.createDefaultBlock().type` at paste time.
+   * When omitted, uses `panel.defaultWritingBlockFactory.createEmptyBlock().type` at paste time.
    */
   readonly defaultBlockType?: string;
   /**
@@ -90,7 +90,7 @@ export function registerClipboard(
     new ElementPasteStrategy(reactEditor),
   );
   const resolveDefaultBlockType = (): string =>
-    options.defaultBlockType ?? reactEditor.createDefaultBlock().type;
+    options.defaultBlockType ?? reactEditor.defaultWritingBlockFactory.createEmptyBlock().type;
   // ClipboardEvent does not expose keyboard modifiers. Remember only the
   // immediately preceding paste shortcut, then consume it in `paste` below.
   let pasteAsPlainText = false;

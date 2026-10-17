@@ -17,7 +17,7 @@ const PAGE_DRAG_PREVIEW_MORE_CLASS = "page-drag-preview-more";
  * Flattens one subtree in visible page order while retaining relative depth.
  *
  * @param block - Root snapshot to flatten.
- * @param childrenVisible - Shared list behavior deciding whether descendants stay visible.
+ * @param childrenVisible - Shared block behavior query matching child visibility on the source surface.
  * @param depth - Current relative nesting depth used by recursive calls.
  * @returns Pre-order entries suitable for direct preview rendering.
  */
@@ -28,6 +28,7 @@ function flattenPreview(
 ): PreviewEntry[] {
   return [
     { block, depth },
+    // Hide collapsed descendants in the preview; subtreeSize still counts the complete transported subtree.
     ...(!childrenVisible(block)
       ? []
       : block.children.flatMap((child) => flattenPreview(child, childrenVisible, depth + 1))),

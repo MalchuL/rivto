@@ -1,8 +1,15 @@
+import {
+  BLOCK_HANDLE_CONTAINER_ATTRIBUTE,
+  BLOCK_HANDLE_METADATA_KEY,
+  type BlockHandleMetadata,
+} from "../../extensions/built-ins/block-handle/metadata";
+import { useBlockTypeMetadata } from "../../hooks/blocks/use-block-type-metadata";
 import { BLOCK_HANDLE_CLASS } from "./constants";
 import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -13,7 +20,7 @@ import {
 import type { EditorBlockNode } from "@chulane/rivto";
 import type { BlockSlotProps } from "../../managers";
 import { useReactPanel } from "../../hooks";
-import { editorControlProps } from "../../constants";
+import { BLOCK_ID_SELECTOR, editorControlProps } from "../../constants";
 import { PageDragItemContext } from "../../extensions/block-drag/state";
 import { blockMenuTargets } from "../../managers/block-context-menu/targets";
 import type { BlockContextMenuContext } from "../../managers/block-context-menu/types";
@@ -68,6 +75,25 @@ export function BlockHandle({ block, onOpen, renderIcon }: BlockSlotProps & Bloc
   const options = useContext(BlockHandleContext);
   const reactPanel = useReactPanel();
   const { item, button, suppressClick, ref } = useBlockHandleDrag(block.id);
+  const metadata = useBlockTypeMetadata(block.type);
+  const presentation = metadata?.[BLOCK_HANDLE_METADATA_KEY] as BlockHandleMetadata | undefined;
+  const showOnContainerHover = presentation?.showOnContainerHover === true;
+  /**
+   * Marks this handle's existing shell for full-container hover presentation.
+   *
+   * The button ref already identifies the owning occurrence, so no additional
+   * decorator or layout wrapper is needed. Drag installation is independent.
+   *
+   * @returns Cleanup removing the marker, or undefined without a shell/option.
+   */
+  useLayoutEffect(() => {
+    const element = button.current?.closest<HTMLElement>(BLOCK_ID_SELECTOR);
+    if (!element || !showOnContainerHover) {
+      return;
+    }
+    element.setAttribute(BLOCK_HANDLE_CONTAINER_ATTRIBUTE, "");
+    return () => element.removeAttribute(BLOCK_HANDLE_CONTAINER_ATTRIBUTE);
+  }, [button, showOnContainerHover]);
   const [menu, setMenu] = useState<{ context: BlockContextMenuContext; x: number; y: number }>();
   /**
    * Captures structural selection targets before mounting the menu at an anchor.

@@ -8,24 +8,22 @@
  * @module
  */
 export { ContainerBlockBehavior } from "./container-block-behavior";
-export { createBlockBehaviorContext } from "./context";
+export { createBlockBehaviorContext } from "./utils/context";
 export { DefaultBlockBehavior } from "./default-block-behavior";
-export { dispatchBlockAction } from "./dispatch";
-export { focusCaret, scheduleBlockFocus } from "./ops/focus-ops";
+export { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 export {
-  indentBlocks,
-  appendWritingBlock,
-  outdentBlocks,
-  outdentUntilBoundary,
-} from "./ops/outline-ops";
-export { convertEmptyToList, mergeBlocks, resetToWritingType, splitBlockAt } from "./ops/text-ops";
+  convertEmptyToList,
+  mergeBlocks,
+  resetToWritingType,
+  splitBlockAt,
+} from "./utils/text-ops";
 export type {
   BlockBehavior,
   BlockBehaviorAction,
   BlockBehaviorContext,
+  BlockOutlineContext,
+  BlockBehaviorData,
+  BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
-  BlockDropContext,
-  BlockDropDestination,
-  BlockDropPlacementOptions,
-  DropAxis,
+  BlockMoveContext,
 } from "./types";

@@ -3006,7 +3006,7 @@ test("deletes successive structural block selections immediately", async ({ page
   }
   // Seeded canvas shapes may overlap the left side after deleting the branch.
   await secondContent.click({ modifiers: ["Control"], position: { x: secondBox.width - 8, y: 8 } });
-  await expect(stableCard.locator("[data-block-id][data-block-selected]")).toHaveCount(1);
+  await expect(stableCard.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(1);
 
   await page.keyboard.press("Delete");
   await expect(

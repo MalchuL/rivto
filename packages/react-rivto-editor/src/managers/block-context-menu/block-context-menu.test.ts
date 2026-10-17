@@ -11,7 +11,7 @@ import { todoItemExtension } from "../../extensions/todo-item/todo-item";
  * root. The test owns destruction of both runtimes after its assertions.
  */
 async function fixture() {
-  const core = await createTestCoreEditor();
+  const core = await createTestCoreEditor({ registerWritingBlock: false });
   const panel = createTestReactEditor({
     editor: core,
     extensions: [standardPreset(), todoItemExtension()],

@@ -46,11 +46,11 @@ export function removeEmptyBlockAfterStructuralPredecessor(
   root: HTMLElement,
   blockId: string,
 ): boolean {
-  const { isEmptyBlock } = reactPanel.editor;
+  const { defaultWritingBlockFactory } = reactPanel.editor;
   const block = reactPanel.blocks.getBlockNode(blockId);
   if (
     !block ||
-    !isEmptyBlock(block) ||
+    !defaultWritingBlockFactory.isEmptyBlock(block) ||
     !reactPanel.blocks.canRemove(block.id) ||
     block.listProps.collapsed === true ||
     !reactPanel.blocks.getRootIds().includes(block.id)

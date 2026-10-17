@@ -53,8 +53,10 @@ Properties options:
 - `title` default `"Paragraph"`;
 - `render` default `MarkdownContent`;
 - `slashCommand` partial override;
-- `createDefaultBlock` для Enter/trailing/separator/clipboard;
-- `isEmptyBlock` для reset/outdent behavior;
+- `factory: BlockFactory` объединяет создание и распознавание writing blocks;
+- `factory.createEmptyBlock()` используется для Enter/trailing/separator, а clipboard сохраняет прежнее использование только типа;
+- `factory.isEmptyBlock()` используется для reset/outdent behavior;
+- `factory.isBlock()` распознаёт native type независимо от пустоты;
 - `onMarkdownLinkClick({ blockId, href, event })` для host routing.
 
 ## Individual built-ins
@@ -82,7 +84,7 @@ import {
 
 ## Extension ordering
 
-Setup идёт слева направо, cleanup — справа налево. Dependencies ставьте раньше consumers. Например, custom behavior, использующий `createDefaultBlock`, должен идти после `defaultWritingBlockExtension`; в preset этот порядок уже соблюдён.
+Setup идёт слева направо, cleanup — справа налево. Dependencies ставьте раньше consumers. Например, custom behavior, использующий `defaultWritingBlockFactory.createEmptyBlock()`, должен идти после `defaultWritingBlockExtension`; в preset этот порядок уже соблюдён.
 
 ## Mounted UI и wrappers
 

@@ -16,10 +16,7 @@ import type { ReactEditorApi } from "./types";
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
-import type {
-  CreateDefaultBlock,
-  IsEmptyBlock,
-} from "../extensions/built-ins/page/default-writing-block/types";
+import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
@@ -127,24 +124,35 @@ export class ReactEditor implements ReactEditorApi {
    * Enter, trailing insertion, separators, and clipboard operations share this factory.
    * The host configures it through {@link installDefaultWriting}.
    *
-   * Throws until {@link installDefaultWriting} runs.
-   */
-  createDefaultBlock: CreateDefaultBlock = () => {
-    throw new Error(WRITING_NOT_INSTALLED);
-  };
-  /** Checks whether a block is an empty writing block according to the installed extension.
+   * The creation method throws until {@link installDefaultWriting} runs.
+   *
+   * Checks whether a block is an empty writing block according to the installed extension.
    *
    * Enter outdent, list reset, and related operations share this predicate.
    * The host configures it through {@link installDefaultWriting}.
    *
-   * Throws until {@link installDefaultWriting} runs.
+   * The emptiness predicate throws until {@link installDefaultWriting} runs.
+   *
+   * The recognition method identifies this writing role without checking emptiness.
+   * It also throws until {@link installDefaultWriting} runs.
    */
-  isEmptyBlock: IsEmptyBlock = () => {
-    throw new Error(WRITING_NOT_INSTALLED);
+  defaultWritingBlockFactory: BlockFactory = {
+    /** @inheritdoc BlockFactory.createEmptyBlock */
+    createEmptyBlock: () => {
+      throw new Error(WRITING_NOT_INSTALLED);
+    },
+    /** @inheritdoc BlockFactory.isBlock */
+    isBlock: () => {
+      throw new Error(WRITING_NOT_INSTALLED);
+    },
+    /** @inheritdoc BlockFactory.isEmptyBlock */
+    isEmptyBlock: () => {
+      throw new Error(WRITING_NOT_INSTALLED);
+    },
   };
   /** Content renderers indexed by persisted block type. */
   readonly renderers: RenderersApi;
-  /** Per-type outline and drop behavior resolved by page dispatchers. */
+  /** Operation-aware outline and drop behaviors selected from current block data. */
   readonly blockBehaviors: BlockBehaviorsApi;
   /** Atomic React block-type and presentation registration. */
   readonly blockTypes: BlockTypesApi;
@@ -245,20 +253,14 @@ export class ReactEditor implements ReactEditorApi {
    *
    * Called by `defaultWritingBlockExtension` to configure empty writing blocks
    * for all rendered occurrences of this document.
-   * @param options - Replacement factories for empty writing blocks.
+   * @param defaultWritingBlockFactory - Replacement creation, recognition, and emptiness contract for empty writing blocks.
    * @returns Disposer that restores the previous factories.
    */
-  installDefaultWriting(options: {
-    createDefaultBlock: CreateDefaultBlock;
-    isEmptyBlock: IsEmptyBlock;
-  }): () => void {
-    const previousCreate = this.createDefaultBlock;
-    const previousIsEmpty = this.isEmptyBlock;
-    this.createDefaultBlock = options.createDefaultBlock;
-    this.isEmptyBlock = options.isEmptyBlock;
+  installDefaultWriting(defaultWritingBlockFactory: BlockFactory): () => void {
+    const previous = this.defaultWritingBlockFactory;
+    this.defaultWritingBlockFactory = defaultWritingBlockFactory;
     return () => {
-      this.createDefaultBlock = previousCreate;
-      this.isEmptyBlock = previousIsEmpty;
+      this.defaultWritingBlockFactory = previous;
     };
   }
 

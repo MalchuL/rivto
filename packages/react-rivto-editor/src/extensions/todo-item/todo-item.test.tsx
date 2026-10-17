@@ -1,4 +1,10 @@
-import { createTestReactEditor as createReactEditor } from "../../test-utils";
+import { BLOCK_HANDLE_METADATA_KEY } from "../built-ins/block-handle/metadata";
+import { PAGE_DRAG_METADATA_KEY, getBlockDragOptions } from "../block-drag/block-drag-options";
+import {
+  createTestReactEditor as createReactEditor,
+  indentBlocks,
+  createTestCoreEditor as createDocumentEditor,
+} from "../../test-utils";
 /**
  * Verifies TODO extension registration, dynamic metadata, validation, prompt
  * configuration, and custom modal wiring without duplicating browser event
@@ -8,8 +14,6 @@ import { createTestReactEditor as createReactEditor } from "../../test-utils";
  */
 import type { ReactElement } from "react";
 
-import { indentBlocks } from "../../block-behaviors";
-import { createTestCoreEditor as createDocumentEditor } from "../../test-utils";
 import {
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -79,9 +83,15 @@ describe("todoItemExtension", () => {
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);
-    expect(reactPanel.editor.blockBehaviors.resolve(empty).dropAxis).toBe("vertical");
+    expect(
+      getBlockDragOptions(
+        reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(empty)!.type)
+          ?.metadata,
+      )!.dropAxis,
+    ).toBe("vertical");
     expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
-      containment: { childOutline: "free", outlineFloor: true },
+      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "vertical", acceptsDropContainer: true },
+      [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
     });
 
     const firstTodo = editor.blocks.insertBlock({
@@ -102,7 +112,7 @@ describe("todoItemExtension", () => {
 
   test("wires a supplied properties modal into the registered renderer", async () => {
     const editor = await createDocumentEditor();
-    const CustomModal = (_props: TodoItemPropertiesModalProps) => null;
+    const CustomModal = (props: TodoItemPropertiesModalProps) => null;
     const reactPanel = createReactEditor({
       editor,
       extensions: [todoItemExtension({ propertiesModal: CustomModal })],

@@ -9,6 +9,9 @@
       "@chulane/crdt-doc": ["../../packages/crdt-doc/src/index.ts"],
       "@chulane/document-model": ["../../packages/document-model/src/index.ts"],
       "@chulane/rivto": ["../../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-react/block-factories": [
+        "../../packages/react-rivto-editor/src/block-factories.ts"
+      ],
       "@chulane/rivto-react": ["../../packages/react-rivto-editor/src/index.ts"],
       "react": ["../../packages/react-rivto-editor/node_modules/@types/react/index.d.ts"],
       "react/jsx-runtime": [

@@ -395,3 +395,116 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
   expect(twoImage).not.toEqual(oneImage);
   expect(threeImage).not.toEqual(twoImage);
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["checkbox", "start_numbered_list"] as const) {
+    for (const collapsed of [false, true]) {
+      test(`Enter continues ${type} with collapsed=${collapsed} in ${mode}`, async ({ page }) => {
+        const ids = await page.evaluate(
+          ({ mode, type, collapsed }) => {
+            const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+              .__rivtoDemo.editor;
+            const source = editor.blocks.insertBlock({
+              type: "paragraph",
+              content: "abcd",
+              listProps: { type, checked: true, collapsed, custom: "keep" },
+              children: [{ type: "paragraph", content: "Existing child" }],
+            });
+            editor.load({ ...editor.dump(), blocks: [source], elements: [], rootElementIds: [] });
+            const card =
+              mode === "edgeless"
+                ? editor.elements.insertElement({
+                    type: "block",
+                    zIndex: 0,
+                    frame: { x: 20, y: 20, width: 900, height: 600 },
+                    props: { startBlockId: source.id, endBlockId: source.id },
+                  }).id
+                : undefined;
+            return { source: source.id, child: source.children[0]!.id, card };
+          },
+          { mode, type, collapsed },
+        );
+        if (mode === "edgeless") {
+          await page.locator('[data-editor-mode="edgeless"]').click();
+        }
+        const content = page
+          .locator(blockIdSelector(ids.source))
+          .first()
+          .locator(":scope > .page-block-row [data-block-content]")
+          .first();
+        await content.click();
+        await page.keyboard.press("Home");
+        await page.keyboard.press("ArrowRight");
+        await page.keyboard.press("ArrowRight");
+        await page.evaluate(() => {
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.history.clear();
+        });
+        await page.keyboard.press("Enter");
+        const state = await page.evaluate((ids) => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          const nextId = editor.selection.snapshot()!.focusBlockId!;
+          return {
+            source: editor.blocks.getBlockNode(ids.source),
+            next: editor.blocks.getBlockNode(nextId)!,
+            parent: editor.blocks.getParentId(nextId),
+            cardEnd: ids.card
+              ? editor.elements.getElementNode(ids.card)?.props.endBlockId
+              : undefined,
+          };
+        }, ids);
+        expect(state.source?.content).toBe("ab");
+        expect(state.source?.listProps).toMatchObject({
+          type,
+          checked: true,
+          collapsed,
+          custom: "keep",
+        });
+        expect(state.next.content).toBe("cd");
+        expect(state.next.listProps).toMatchObject({
+          type: type === "checkbox" ? "checkbox" : "numbered_list",
+          checked: false,
+        });
+        expect(state.next.listProps.custom).toBeUndefined();
+        expect(state.parent).toBe(collapsed ? null : ids.source);
+        expect(state.source?.childIds).toEqual(
+          collapsed ? [ids.child] : [state.next.id, ids.child],
+        );
+        if (mode === "edgeless") {
+          expect(state.cardEnd).toBe(collapsed ? state.next.id : ids.source);
+        }
+        await expect(
+          page
+            .locator(blockIdSelector(state.next.id))
+            .first()
+            .locator(":scope > .page-block-row [data-block-content]")
+            .first(),
+        ).toBeFocused();
+        await expect.poll(() => page.evaluate(() => document.getSelection()?.focusOffset)).toBe(0);
+        await page.keyboard.press("Control+z");
+        await expect(content).toHaveText("abcd");
+        const restored = await page.evaluate(
+          ({ ids, nextId }) => {
+            const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+              .__rivtoDemo.editor;
+            return {
+              nextExists: editor.blocks.hasBlock(nextId),
+              children: editor.blocks.getBlockNode(ids.source)?.childIds,
+              cardEnd: ids.card
+                ? editor.elements.getElementNode(ids.card)?.props.endBlockId
+                : undefined,
+            };
+          },
+          { ids, nextId: state.next.id },
+        );
+        expect(restored.nextExists).toBe(false);
+        expect(restored.children).toEqual([ids.child]);
+        if (mode === "edgeless") {
+          expect(restored.cardEnd).toBe(ids.source);
+        }
+      });
+    }
+  }
+}

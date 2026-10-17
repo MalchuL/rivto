@@ -10,7 +10,7 @@ import { SEPARATOR_BLOCK_TYPE, SeparatorBlock, separatorBlockExtension } from ".
 
 describe("separator block extension", () => {
   test("registers a contentless accessible separator renderer", async () => {
-    const editor = await createDocumentEditor();
+    const editor = await createDocumentEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
@@ -27,7 +27,7 @@ describe("separator block extension", () => {
   });
 
   test("inserts a separator after content and focuses a new writing block", async () => {
-    const editor = await createDocumentEditor();
+    const editor = await createDocumentEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
@@ -49,7 +49,7 @@ describe("separator block extension", () => {
   });
 
   test("converts an empty leaf into a separator before inserting writing", async () => {
-    const editor = await createDocumentEditor();
+    const editor = await createDocumentEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],

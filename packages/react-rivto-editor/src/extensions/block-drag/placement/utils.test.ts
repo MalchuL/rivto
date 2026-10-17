@@ -72,7 +72,7 @@ test("translates start, middle, end, empty, root, and inside placements", () => 
   });
 });
 
-test("block-view placement values override global defaults", () => {
+test("child-placement policy overrides defaults while distances remain global", () => {
   expect(resolveBlockDropPlacementOptions(24, 8, undefined, false)).toEqual({
     allowChildPlacement: false,
     childDropIndent: 24,
@@ -84,20 +84,18 @@ test("block-view placement values override global defaults", () => {
       8,
       {
         allowChildPlacement: true,
-        childDropIndent: 40,
-        gapDropZone: 12,
       },
       false,
     ),
   ).toEqual({
     allowChildPlacement: true,
-    childDropIndent: 40,
-    gapDropZone: 12,
+    childDropIndent: 24,
+    gapDropZone: 8,
   });
-  expect(resolveBlockDropPlacementOptions(24, 8, { gapDropZone: 12 }, false)).toEqual({
+  expect(resolveBlockDropPlacementOptions(24, 8, {}, false)).toEqual({
     allowChildPlacement: false,
     childDropIndent: 24,
-    gapDropZone: 12,
+    gapDropZone: 8,
   });
 });
 

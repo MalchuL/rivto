@@ -32,6 +32,10 @@ const nextConfig: NextConfig = {
       // Match demo/vite.config.ts: resolve editor packages to workspace
       // sources so app work does not require a parallel package build.
       "@chulane/rivto-react/styles.css": rivtoReactCss,
+      "@chulane/rivto-react/block-factories": path.join(
+        repoRoot,
+        "packages/react-rivto-editor/src/block-factories.ts",
+      ),
       "@chulane/rivto-react": rivtoReactSrc,
       "@chulane/rivto": rivtoCoreSrc,
       "@chulane/document-model": rivtoDocumentModelSrc,

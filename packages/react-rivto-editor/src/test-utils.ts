@@ -1,3 +1,5 @@
+import type { ReactPanelApi } from "./panels/types";
+import { createBlockOutlineContext } from "./block-behaviors/utils/context";
 import { ReactPanel } from "./panels/react-panel";
 import { YjsDoc } from "@chulane/crdt-doc";
 import {
@@ -55,17 +57,30 @@ const modes = new WeakMap<DocumentEditorAPI, EditorMode>();
  *
  * Core no longer auto-installs a writing block; production hosts use
  * defaultWritingBlockExtension / standardPreset.
+ * Set registerWritingBlock to false when the React extensions own this type;
+ * their complete registration must not collide with a fixture definition.
+ *
  * @param options - Optional model and test presentation kind; defaults to an owned empty model.
+ * @param options.registerWritingBlock - Whether to define the fixture paragraph type in core; defaults to true.
  * @returns Document API whose test destruction closes the core and owned document.
  */
 export async function createTestCoreEditor(
-  options: Partial<CreateDocumentEditorOptions> & { mode?: EditorMode } = {},
+  options: Partial<CreateDocumentEditorOptions> & {
+    mode?: EditorMode;
+    registerWritingBlock?: boolean;
+  } = {},
 ): Promise<DocumentEditorAPI> {
   const document =
     options.document ??
     new DocumentModelImpl(new YjsDoc(`rivto-react-test-${crypto.randomUUID()}`));
-  const core = createDocumentEditor({ ...options, document });
-  core.blockRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE, title: "Paragraph" });
+  const { registerWritingBlock = true, ...coreOptions } = options;
+  const core = createDocumentEditor({ ...coreOptions, document });
+  if (registerWritingBlock) {
+    core.blockRegistry.defineBlock({
+      type: DEFAULT_WRITING_BLOCK_TYPE,
+      title: "Paragraph",
+    });
+  }
   const proxy = new Proxy(core, {
     /**
      * Binds fixture editor members and provides destruction that also releases the fixture document.
@@ -91,7 +106,9 @@ export async function createTestCoreEditor(
 
 /** Creates a React runtime bound directly to the fixture's document. */
 export function createTestReactEditor(
-  options: Omit<CreateReactEditorOptions, "editor"> & { readonly editor: DocumentEditorAPI },
+  options: Omit<CreateReactEditorOptions, "editor"> & {
+    readonly editor: DocumentEditorAPI;
+  },
 ): ReactPanel {
   const runtime = createReactEditor(options);
   const editor = new ReactPanel(runtime, new ChildrenPanel(options.editor, {}), {
@@ -102,7 +119,18 @@ export function createTestReactEditor(
   return editor;
 }
 
-/** Opens seeded test models under one cache; storage only loads later identities. */
+/**
+ * Opens seeded test models under one cache; storage only loads later identities.
+ *
+ * React extensions register their complete definitions first. A fixture paragraph
+ * definition is added afterward only when the extensions did not install one.
+ *
+ * @param models - Already loaded models consumed once before delegating to storage.
+ * @param storage - Optional owner used to open and discover later document identities.
+ * @param options - React settings or a factory evaluated for each new runtime.
+ * @returns Initialized editor cache with every seeded model acquired.
+ * @throws If delegated editor creation, definition registration, or model acquisition fails.
+ */
 export async function createTestMultiEditor(
   models: readonly DocumentModel[],
   storage?: DocumentStorage,
@@ -120,10 +148,20 @@ export async function createTestMultiEditor(
       }
       return storage ? storage.openDocument(id) : new DocumentModelImpl(new YjsDoc(id));
     },
+    /**
+     * Creates React registrations before filling in the fixture writing type.
+     *
+     * @param editor - Core runtime owned by the cache.
+     * @returns Runtime with a paragraph definition supplied by extensions or the fixture.
+     * @throws If extension setup or definition registration fails.
+     */
     createEditor: (editor) => {
-      editor.blockRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE });
       const configuration = typeof options === "function" ? options() : options;
-      return createReactEditor({ ...configuration, editor });
+      const runtime = createReactEditor({ ...configuration, editor });
+      if (!editor.blockRegistry.has(DEFAULT_WRITING_BLOCK_TYPE)) {
+        editor.blockRegistry.defineBlock({ type: DEFAULT_WRITING_BLOCK_TYPE });
+      }
+      return runtime;
     },
     lookupDocumentIds: storage
       ? (id, lookupOptions) => storage.findDocumentIdsWithBlock(id, lookupOptions)
@@ -132,4 +170,46 @@ export async function createTestMultiEditor(
   });
   await Promise.all(models.map((model) => runtime.acquireEditor(model.id)));
   return runtime;
+}
+
+/**
+ * Dispatches a headless test indent through parent and child behaviors in one panel batch.
+ *
+ * The first requested block selects the parent and child chains, preserving
+ * the existing group anchor. Missing leading blocks produce no mutation.
+ *
+ * @param reactPanel - Occurrence providing current shallow block fields and commands.
+ * @param ids - Complete group identifiers, passed unchanged to the handlers.
+ * @returns After the claimed operation or standard indent completes.
+ * @throws If a behavior or delegated block mutation fails.
+ */
+export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
+  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
+  if (!context) {
+    return;
+  }
+  reactPanel.batchUpdates(() =>
+    reactPanel.editor.blockBehaviors.dispatch("onIndent", context, ids),
+  );
+}
+
+/**
+ * Dispatches a headless test outdent through parent and child behaviors in one panel batch.
+ *
+ * Exercises the same parent interception as Enter and Backspace without DOM setup.
+ * The first requested block remains the operation's group anchor.
+ *
+ * @param reactPanel - Occurrence providing current shallow block fields and commands.
+ * @param ids - Complete group identifiers, passed unchanged to the handlers.
+ * @returns After the claimed operation or standard outdent completes; empty groups and missing leading blocks are ignored.
+ * @throws If a behavior or delegated block mutation fails.
+ */
+export function outdentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
+  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
+  if (!context) {
+    return;
+  }
+  reactPanel.batchUpdates(() =>
+    reactPanel.editor.blockBehaviors.dispatch("onOutdent", context, ids),
+  );
 }

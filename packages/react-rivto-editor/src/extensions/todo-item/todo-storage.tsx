@@ -1,3 +1,5 @@
+import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../block-behaviors/types";
+import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
 /**
  * Provides TODO-storage data rules, direct-child filtering, status ordering,
  * toolbar presentation, and the complete-card wrapper shared by page and
@@ -19,7 +21,7 @@ import {
   type MouseEvent,
 } from "react";
 import { z } from "zod";
-import { createBlockBehaviorContext } from "../../block-behaviors/context";
+import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
 import { ContainerBlockBehavior } from "../../block-behaviors";
 import type { BlockWrapperProps } from "../../blocks";
 import { Button } from "../../components/ui/button";
@@ -108,8 +110,34 @@ interface TodoStorageContextValue {
 
 const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(undefined);
 
+/** Vertical-container behavior restricted to TODO storage blocks. */
+class TodoStorageBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps direct children within this container during outline outdent.
+   *
+   * This outline restriction does not prevent independently permitted dragging.
+   * The handler rejects the complete requested group before child behavior runs.
+   *
+   * @param context - Current container fields and the live invoking panel.
+   * @param ids - Complete child group requested by the outline operation.
+   * @returns Rejected without mutating the document.
+   */
+  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+    return "rejected";
+  }
+
+  /**
+   * Selects TODO storage without applying its container actions to ordinary task blocks.
+   * @param context - Current detached block fields and runtime; applicability is independent of the called method.
+   * @returns True only for the TODO storage native type.
+   */
+  override isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return context.block.type === TODO_STORAGE_BLOCK_TYPE;
+  }
+}
+
 /** Shared vertical-container behavior used by keyboard and drag dispatchers. */
-export const todoStorageBehavior = new ContainerBlockBehavior();
+export const todoStorageBehavior = new TodoStorageBehavior();
 
 /** Creates persisted defaults without sharing the mutable status-order array. */
 export function createTodoStorageProps(): TodoStorageProps {

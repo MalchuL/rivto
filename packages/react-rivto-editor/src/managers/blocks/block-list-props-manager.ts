@@ -1,11 +1,9 @@
 import type { RegistrationOwner } from "../extensions/types";
-import type { BlockListPropsManagerApi, EditorBlock, EditorBlockNode } from "@chulane/rivto";
-import type { BlockBehaviorContext } from "../../block-behaviors/types";
+import type { BlockListPropsManagerApi } from "@chulane/rivto";
 import type { BlockListPropsApi, BlockListPropsRegistration } from "./block-list-props-api";
 
-/** Owns React list behavior while the core manager validates persisted properties. */
+/** Owns extension registrations for persisted property defaults and validation. */
 export class BlockListPropsManager implements BlockListPropsApi {
-  private readonly registrations = new Set<BlockListPropsRegistration>();
   private readonly disposers = new Set<() => void>();
 
   /** @param extensions - Extension lifecycle owner. @param core - Existing property validation manager. */
@@ -15,9 +13,9 @@ export class BlockListPropsManager implements BlockListPropsApi {
   ) {}
 
   /**
-   * Registers property validation and optional outline behavior as one owned resource.
-   * @param registration - Defaults, validation, and optional rendering/split callbacks.
-   * @returns Idempotent cleanup removing both validation and behavior.
+   * Registers property defaults and validation as one owned resource.
+   * @param registration - Defaults and validation for persisted properties.
+   * @returns Idempotent cleanup removing property defaults and validation.
    * @throws When the core rejects a duplicate or invalid registration.
    */
   register(registration: BlockListPropsRegistration): () => void {
@@ -27,10 +25,8 @@ export class BlockListPropsManager implements BlockListPropsApi {
       defaults: registration.defaults,
       isValid: registration.isValid,
     });
-    this.registrations.add(registration);
     const dispose = this.extensions.registerCleanup(() => {
       this.disposers.delete(dispose);
-      this.registrations.delete(registration);
       release();
     });
     this.disposers.add(dispose);
@@ -59,36 +55,5 @@ export class BlockListPropsManager implements BlockListPropsApi {
     candidate: Parameters<BlockListPropsManagerApi["prepare"]>[0],
   ): ReturnType<BlockListPropsManagerApi["prepare"]> {
     return this.core.prepare(candidate);
-  }
-
-  /** @param block - Source of a text split. @returns Inherited properties, or undefined to retain writing defaults. */
-  prepareSplit(block: EditorBlock): Record<string, unknown> | undefined {
-    let properties: Record<string, unknown> | undefined;
-    for (const registration of this.registrations) {
-      if (registration.prepareSplit) {
-        properties = { ...properties, ...registration.prepareSplit(block) };
-      }
-    }
-    return properties;
-  }
-
-  /** @param context - Current block and view. @returns True when an extension handled the split. */
-  onSplit(context: BlockBehaviorContext): boolean {
-    for (const registration of this.registrations) {
-      if (registration.onSplit?.(context)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** @param block - Block properties being rendered or traversed. @returns Whether every installed behavior permits its children. */
-  childrenVisible(block: Pick<EditorBlockNode, "listProps">): boolean {
-    for (const registration of this.registrations) {
-      if (registration.childrenVisible?.(block) === false) {
-        return false;
-      }
-    }
-    return true;
   }
 }

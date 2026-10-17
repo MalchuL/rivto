@@ -1,3 +1,5 @@
+import { CheckboxBlockBehavior } from "../extensions/built-ins/page/list/checkbox-block-behavior";
+import { createBlockFactory } from "../block-factories";
 import { createTestReactEditor as createReactEditor } from "../test-utils";
 /**
  * Generic behavior fallback and dispatcher wiring for unregistered block types.
@@ -13,24 +15,29 @@ import {
 } from "../extensions/built-ins/built-ins";
 import { createTableBlockInput, tableExtension } from "../extensions/containers/table/table";
 import { firstKeyboardTarget } from "../managers/events/selection";
-import { createBlockBehaviorContext } from "./context";
+import { createBlockBehaviorContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
-import type { BlockDropContext } from "./types";
+import type { BlockBehavior, BlockBehaviorAvailabilityContext, BlockMoveContext } from "./types";
 
-class RejectingBlockBehavior extends DefaultBlockBehavior {
+class RejectingBlockBehavior implements BlockBehavior {
+  /** @param context - Block being checked. @returns Whether this paragraph behavior applies. */
+  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+    return context.block.type === "paragraph";
+  }
+
   /**
    * Rejects every drop so the registry path can be checked.
    *
-   * @param _context - Unused candidate destination.
+   * @param context - Unused candidate destination.
    * @returns Always `false`.
    */
-  override acceptsDrop(_context: BlockDropContext): boolean {
+  canMove(context: BlockMoveContext): boolean {
     return false;
   }
 }
 
 test("resolve falls back to DefaultBlockBehavior and indent stays free at the root", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension()],
@@ -40,8 +47,12 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
     { type: "paragraph", content: "Second" },
     editor.blocks.getInsertionDestinationAfter(first),
   ).id;
-  expect(reactPanel.editor.blockBehaviors.resolve(second)).toBeInstanceOf(DefaultBlockBehavior);
-  expect(reactPanel.editor.blockBehaviors.has("paragraph")).toBe(false);
+  const behaviors = reactPanel.editor.blockBehaviors.resolveAll({
+    editor: reactPanel.editor,
+    block: editor.blocks.getBlockNode(second)!,
+  });
+  expect(behaviors[0]).toBeInstanceOf(DefaultBlockBehavior);
+  expect(behaviors.some((behavior) => !(behavior instanceof DefaultBlockBehavior))).toBe(false);
   editor.blocks.indentBlock(second);
   expect(editor.blocks.getParentId(second)).toBe(first);
   editor.blocks.outdentBlock(second);
@@ -51,7 +62,7 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
 });
 
 test("asks the resolved behavior whether a drop is accepted", async () => {
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const rejectingBehavior = new RejectingBlockBehavior();
   const reactPanel = createReactEditor({
     editor,
@@ -59,16 +70,17 @@ test("asks the resolved behavior whether a drop is accepted", async () => {
       defaultWritingBlockExtension(),
       {
         id: "test.reject-drop",
-        setup: (reactEditor) => reactEditor.blockBehaviors.register("paragraph", rejectingBehavior),
+        setup: (reactEditor) => reactEditor.blockBehaviors.register(rejectingBehavior),
       },
     ],
   });
   const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
   expect(
-    reactPanel.editor.blockBehaviors.acceptsDrop({ kind: "inside", parentId: targetId }, [
-      editor.blocks.getBlock(targetId)!,
-    ]),
+    reactPanel.editor.blockBehaviors.canMove({
+      destination: { parentId: targetId },
+      sources: [editor.blocks.getBlock(targetId)!],
+    }),
   ).toBe(false);
 
   reactPanel.editor.destroy();
@@ -80,7 +92,7 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
   async (type) => {
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-    const editor = await createTestCoreEditor();
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
@@ -100,7 +112,6 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
         editor.blocks.getInsertionDestinationAfter(parent),
       ).id;
       editor.blocks.indentBlock(child);
-      const behavior = new DefaultBlockBehavior();
       /** @returns Nothing after dispatching one Enter from a fresh block snapshot. */
       const pressEnter = () => {
         const selection = createCaretSelection(child, 0);
@@ -111,7 +122,9 @@ test.each(["checkbox", "numbered_list", "start_numbered_list", "continue_numbere
           selection,
         )!;
         const target = firstKeyboardTarget(selection)!;
-        editor.history.batchUpdates(() => behavior.onSplit(context, target));
+        editor.history.batchUpdates(() =>
+          reactPanel.editor.blockBehaviors.dispatch("onSplit", context, target),
+        );
       };
 
       pressEnter();
@@ -142,7 +155,7 @@ test.each(["block", "edgeless"] as const)(
   async (mode) => {
     const originalFrame = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-    const editor = await createTestCoreEditor();
+    const editor = await createTestCoreEditor({ registerWritingBlock: false });
     const reactPanel = createReactEditor({
       editor,
       extensions: [defaultWritingBlockExtension(), listShortcutsExtension()],
@@ -155,7 +168,7 @@ test.each(["block", "edgeless"] as const)(
       }).id;
       const selection = createCaretSelection(id, 0);
       const context = createBlockBehaviorContext(reactPanel, id, {} as HTMLElement, selection)!;
-      expect(new DefaultBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
+      expect(new CheckboxBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
         "handled",
       );
       expect(editor.blocks.getParentId(id)).toBeNull();
@@ -171,13 +184,16 @@ test.each(["block", "edgeless"] as const)(
 test("empty checkbox clearing follows the host writing predicate for another block type", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [
       defaultWritingBlockExtension({
         type: "note",
-        isEmptyBlock: (block) => block.type === "note" && block.content === "",
+        factory: {
+          ...createBlockFactory("note"),
+          isEmptyBlock: (block) => block.type === "note" && block.content === "",
+        },
       }),
       listShortcutsExtension(),
     ],
@@ -189,7 +205,7 @@ test("empty checkbox clearing follows the host writing predicate for another blo
     }).id;
     const selection = createCaretSelection(id, 0);
     const context = createBlockBehaviorContext(reactPanel, id, {} as HTMLElement, selection)!;
-    expect(new DefaultBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
+    expect(new CheckboxBlockBehavior().onSplit(context, firstKeyboardTarget(selection)!)).toBe(
       "handled",
     );
     expect(editor.blocks.getBlockNode(id)?.listProps.type).toBeUndefined();
@@ -203,7 +219,7 @@ test("empty checkbox clearing follows the host writing predicate for another blo
 test("contentless custom blocks do not lose checkbox state on Enter", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   editor.blockRegistry.defineBlock({ type: "custom-control" });
   const reactPanel = createReactEditor({
     editor,
@@ -228,7 +244,7 @@ test("contentless custom blocks do not lose checkbox state on Enter", async () =
 test("empty block Enter respects an outline floor", async () => {
   const originalFrame = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (() => 1) as typeof requestAnimationFrame;
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), tableExtension()],
@@ -254,7 +270,7 @@ test("empty block Enter respects an outline floor", async () => {
 test("drop validation checks the destination parent and every source snapshot", async () => {
   const { kanbanExtension } = await import("../extensions/containers/kanban/kanban");
   const { columnsExtension } = await import("../extensions/containers/columns/columns");
-  const editor = await createTestCoreEditor();
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
   const reactPanel = createReactEditor({
     editor,
     extensions: [
@@ -277,24 +293,27 @@ test("drop validation checks the destination parent and every source snapshot", 
       });
       const shell = editor.blocks.getBlock(parent.id)!.children[0]!;
       const content = editor.blocks.insertBlock({ type: "paragraph" });
-      const destination = {
-        kind: "between",
-        parentId: parent.id,
-        previousId: shell.id,
-        nextId: null,
-        depth: 1,
-      } as const;
-      expect(reactPanel.editor.blockBehaviors.acceptsDrop(destination, [content])).toBe(false);
+      const destination = { parentId: parent.id };
       expect(
-        reactPanel.editor.blockBehaviors.acceptsDrop(destination, [
-          { ...shell, id: "foreign-shell" },
-        ]),
+        reactPanel.editor.blockBehaviors.canMove({ destination: destination, sources: [content] }),
+      ).toBe(false);
+      expect(
+        reactPanel.editor.blockBehaviors.canMove({
+          destination: destination,
+          sources: [{ ...shell, id: "foreign-shell" }],
+        }),
       ).toBe(true);
-      expect(reactPanel.editor.blockBehaviors.acceptsDrop(destination, [shell, content])).toBe(
-        false,
-      );
       expect(
-        reactPanel.editor.blockBehaviors.acceptsDrop({ ...destination, parentId: null }, [shell]),
+        reactPanel.editor.blockBehaviors.canMove({
+          destination: destination,
+          sources: [shell, content],
+        }),
+      ).toBe(false);
+      expect(
+        reactPanel.editor.blockBehaviors.canMove({
+          destination: { ...destination, parentId: null },
+          sources: [shell],
+        }),
       ).toBe(false);
       if (
         shellType === "kanban-column" ||
@@ -302,9 +321,10 @@ test("drop validation checks the destination parent and every source snapshot", 
         shellType === "table-cell"
       ) {
         expect(
-          reactPanel.editor.blockBehaviors.acceptsDrop({ kind: "inside", parentId: shell.id }, [
-            { ...content, id: "foreign-content" },
-          ]),
+          reactPanel.editor.blockBehaviors.canMove({
+            destination: { parentId: shell.id },
+            sources: [{ ...content, id: "foreign-content" }],
+          }),
         ).toBe(true);
       }
     }

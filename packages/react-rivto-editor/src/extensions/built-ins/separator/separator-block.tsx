@@ -17,10 +17,11 @@ import {
   KEYBOARD_BINDING_IDS,
   type ReactEditorExtension,
 } from "../../../managers";
-import type { CreateDefaultBlock } from "../page/default-writing-block";
+import { separatorBlockFactory, type BlockFactory } from "../../../block-factories";
+import { SEPARATOR_BLOCK_TYPE } from "./constants";
 
-/** Persisted native type installed by the built-in separator extension. */
-export const SEPARATOR_BLOCK_TYPE = "separator";
+export { SEPARATOR_BLOCK_TYPE } from "./constants";
+
 const SEPARATOR_BLOCK_CLASS = "rivto-separator-block";
 const SEPARATOR_LINE_CLASS = "rivto-separator-line";
 const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
@@ -67,15 +68,15 @@ export function SeparatorBlock() {
  *
  * @param reactPanel - Editor view providing the registered separator type.
  * @param blockId - Active block before which editing should continue.
- * @param separatorType - Plugin-owned persisted separator type.
- * @param createDefaultBlock - Factory for the follow-up writing block.
+ * @param separatorBlockFactory - Plugin-owned factory for persisted separators.
+ * @param defaultWritingBlockFactory - Factory for the follow-up writing block.
  * @returns Complete new writing block, or undefined when the active block is missing.
  */
 function insertSeparator(
   reactPanel: ReactPanelApi,
   blockId: string,
-  separatorType: string,
-  createDefaultBlock: CreateDefaultBlock,
+  separatorBlockFactory: BlockFactory,
+  defaultWritingBlockFactory: BlockFactory,
 ): EditorBlock | undefined {
   const block = reactPanel.blocks.getBlockNode(blockId);
   if (!block) {
@@ -86,15 +87,14 @@ function insertSeparator(
   reactPanel.batchUpdates(() => {
     if (!block.content && !reactPanel.blocks.hasChildren(blockId)) {
       separatorId = block.id;
-      reactPanel.blocks.setBlockType(separatorId, separatorType);
+      reactPanel.blocks.setBlockType(separatorId, separatorBlockFactory.createEmptyBlock().type);
       reactPanel.blocks.updateBlock(separatorId, {
         listProps: { collapsed: false, type: "list", checked: false },
       });
     } else {
       separatorId = reactPanel.blocks.insertBlock(
         {
-          type: separatorType,
-          content: "",
+          ...separatorBlockFactory.createEmptyBlock(),
           listProps: { type: "list", checked: false },
         },
         reactPanel.blocks.canRemove(block.id)
@@ -103,7 +103,7 @@ function insertSeparator(
       ).id;
     }
     writing = reactPanel.blocks.insertBlock(
-      createDefaultBlock(),
+      defaultWritingBlockFactory.createEmptyBlock(),
       reactPanel.blocks.canRemove(separatorId)
         ? reactPanel.blocks.getInsertionDestinationAfter(separatorId)
         : { parentId: separatorId },
@@ -122,13 +122,12 @@ function insertSeparator(
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
   setup: (reactEditor) => {
-    const createDefaultBlock = () => reactEditor.createDefaultBlock();
     const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
       const writing = insertSeparator(
         reactPanel,
         blockId,
-        SEPARATOR_BLOCK_TYPE,
-        createDefaultBlock,
+        separatorBlockFactory,
+        reactEditor.defaultWritingBlockFactory,
       );
       const root = reactPanel.events.getRoot();
       if (writing && root) {
@@ -146,7 +145,9 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         clipboard: {
           format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
           parseHTML: (element) =>
-            element.tagName === "HR" ? { blocks: [{ type: SEPARATOR_BLOCK_TYPE }] } : undefined,
+            element.tagName === "HR"
+              ? { blocks: [{ type: separatorBlockFactory.createEmptyBlock().type }] }
+              : undefined,
         },
       }),
       reactEditor.slashCommands.register({
@@ -174,8 +175,8 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
           const writing = insertSeparator(
             reactPanel,
             target.blockId,
-            SEPARATOR_BLOCK_TYPE,
-            createDefaultBlock,
+            separatorBlockFactory,
+            reactEditor.defaultWritingBlockFactory,
           );
           if (!writing) {
             return false;

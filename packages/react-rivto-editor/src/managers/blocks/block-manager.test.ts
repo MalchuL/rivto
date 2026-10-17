@@ -1,10 +1,9 @@
+import { PAGE_DRAG_METADATA_KEY } from "../../extensions/block-drag/block-drag-options";
 import type { ComponentType } from "react";
 import {
   createTestCoreEditor as createEditor,
   createTestReactEditor as createReactEditor,
 } from "../../test-utils";
-
-import { DefaultBlockBehavior } from "../../block-behaviors";
 
 const Renderer: ComponentType<{ blockId: string }> = () => null;
 
@@ -39,23 +38,41 @@ describe("BlockManager", () => {
     editor.destroy();
   });
 
-  test("rejects containment that disagrees with an existing core definition", async () => {
+  test("rejects an existing core definition without changing its model rules or metadata", async () => {
     const editor = await createEditor();
+    const metadata = {
+      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "horizontal", fixed: true },
+      custom: { values: [1, 2] },
+    };
     editor.blockRegistry.defineBlock({
       type: "test.existing",
-      metadata: { containment: { childOutline: "fixed" } },
+      title: "Existing",
+      metadata,
     });
+    const definition = editor.blockRegistry.get("test.existing")!;
     const reactPanel = createReactEditor({ editor });
-
+    const incoming = {
+      [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true },
+      custom: { values: [3] },
+    };
     expect(() =>
       reactPanel.editor.blockTypes.register({
-        definition: { type: "test.existing", metadata: { containment: { childOutline: "free" } } },
+        definition: { type: "test.existing", metadata: incoming },
         render: Renderer,
-        behavior: new DefaultBlockBehavior(),
       }),
-    ).toThrow(/containment.*does not match/);
+    ).toThrow("Block type test.existing is already registered");
+    expect(editor.blockRegistry.get("test.existing")).toBe(definition);
+    expect(definition.title).toBe("Existing");
+    expect(definition.metadata).toBe(metadata);
+    expect(metadata).toEqual({
+      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "horizontal", fixed: true },
+      custom: { values: [1, 2] },
+    });
+    expect(incoming).toEqual({
+      [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true },
+      custom: { values: [3] },
+    });
     expect(reactPanel.editor.renderers.has("test.existing")).toBe(false);
-
     reactPanel.editor.destroy();
     editor.destroy();
   });

@@ -44,6 +44,8 @@ export function EditorLifecycleTest() {
        */
       setup(editor) {
         counts.setup++;
+        // Expose this isolated fixture's runtime for browser checks without dragging.
+        Object.assign(window, { __rivtoLifecycleEditor: editor });
         const maintainBlockCards = editor.blockElements.maintainBlockCards.bind(
           editor.blockElements,
         );
@@ -69,6 +71,10 @@ export function EditorLifecycleTest() {
         };
         return () => {
           counts.cleanup++;
+          const fixture = window as unknown as { __rivtoLifecycleEditor?: typeof editor };
+          if (fixture.__rivtoLifecycleEditor === editor) {
+            delete fixture.__rivtoLifecycleEditor;
+          }
         };
       },
     }),

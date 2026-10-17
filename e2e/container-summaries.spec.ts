@@ -2,12 +2,13 @@
 import { expect, test } from "@playwright/test";
 import type { ReactEditor } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { BLOCK_HANDLE_METADATA_KEY } from "../packages/react-rivto-editor/src/extensions/built-ins/block-handle/metadata";
 
 const ROW_CLASS = "page-block-row";
 const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
 const PAGE_SURFACE_CLASS = "page-surface";
 const DRAG_HANDLE_CLASS = "block-handle";
-const DRAG_CONTAINER_ATTRIBUTE = "data-drag-container";
+const DRAG_CONTAINER_ATTRIBUTE = "data-block-handle-container";
 
 test("slash converts the current root to each structural container", async ({ page }) => {
   for (const [query, command, type] of [
@@ -299,11 +300,14 @@ for (const mode of ["block", "edgeless"] as const) {
           };
         }
       ).__rivtoDemo;
-      // Reuse a layout view that rejects body drops, under a type unknown to CSS.
+      // Reuse layout metadata that rejects body drops, with explicit applicability for a type unknown to CSS.
       reactEditor.blockTypes.register({
-        definition: { type: "test-container", title: "Custom container" },
+        definition: {
+          type: "test-container",
+          title: "Custom container",
+          metadata: { ...reactEditor.blockTypes.getDefinition("columns")?.metadata },
+        },
         render: reactEditor.renderers.get("paragraph")!,
-        behavior: reactEditor.blockBehaviors.get("columns")!,
       });
       const block = editor.blocks.insertBlock({
         type: "test-container",
@@ -356,3 +360,59 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(handle).toHaveCSS("pointer-events", "none");
   });
 }
+
+test("container handle metadata updates both views without the drag extension", async ({
+  page,
+}) => {
+  await page.goto("/?editorLifecycle=1");
+  await expect(page.locator('[data-lifecycle-state="ready"]')).toBeVisible();
+  await page.evaluate((metadataKey) => {
+    const editor = (window as unknown as { __rivtoLifecycleEditor: ReactEditor })
+      .__rivtoLifecycleEditor;
+    editor.blockTypes.register({
+      definition: {
+        type: "hover-container",
+        metadata: { [metadataKey]: { showOnContainerHover: true } },
+      },
+      render: editor.renderers.get("paragraph")!,
+    });
+    editor.blocks.insertBlock({
+      id: "hover-container",
+      type: "hover-container",
+      content: "Hover container",
+      children: [{ type: "paragraph", content: "Hover body" }],
+    });
+  }, BLOCK_HANDLE_METADATA_KEY);
+  const blocks = page.locator('[data-block-id="hover-container"]');
+  await expect(blocks).toHaveCount(2);
+  for (const block of await blocks.all()) {
+    const handle = block.locator(":scope > .page-block-row .block-handle");
+    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
+    await expect(handle).not.toHaveAttribute("data-draggable");
+    await block.locator(":scope > .page-block-children").hover();
+    await expect(handle).toHaveCSS("opacity", "1");
+    await handle.click({ button: "right" });
+    await expect(page.getByRole("menu").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
+  await page.evaluate((metadataKey) => {
+    const editor = (window as unknown as { __rivtoLifecycleEditor: ReactEditor })
+      .__rivtoLifecycleEditor;
+    const definition = editor.blockTypes.getDefinition("hover-container")!;
+    editor.blockTypes.delete("hover-container");
+    editor.blockTypes.register({
+      definition: {
+        type: "hover-container",
+        metadata: { ...definition.metadata, [metadataKey]: { showOnContainerHover: false } },
+      },
+      render: editor.renderers.get("paragraph")!,
+    });
+  }, BLOCK_HANDLE_METADATA_KEY);
+  // Escape restores menu focus to the handle; move focus away before testing idle visibility.
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  for (const block of await blocks.all()) {
+    await expect(block).not.toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE);
+    await page.mouse.move(0, 0);
+    await expect(block.locator(":scope > .page-block-row .block-handle")).toHaveCSS("opacity", "0");
+  }
+});

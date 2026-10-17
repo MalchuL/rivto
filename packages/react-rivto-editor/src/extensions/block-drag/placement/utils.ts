@@ -1,3 +1,4 @@
+import type { BlockDestination } from "@chulane/document-model";
 /**
  * Canonical page-drag placement independent from core move-command syntax.
  *
@@ -7,7 +8,7 @@
  *
  * @module
  */
-import type { BlockDropPlacementOptions } from "../../../block-behaviors/types";
+import type { BlockDropPlacementOptions } from "../block-drag-options";
 import type {
   BetweenDropPlacement,
   CanonicalDropPlacement,
@@ -52,11 +53,14 @@ export function excludeDropSubtrees(
 }
 
 /**
- * Applies one block view's placement overrides to provider defaults.
+ * Applies a block's child-placement policy while keeping distances global.
+ *
+ * Distances come only from the extension and are clamped before pointer geometry.
+ * Per-block annotations may override nesting permission, not zone dimensions.
  *
  * @param childDropIndent - Global pixels per requested child depth.
  * @param gapDropZone - Global item-edge zone for sibling placement.
- * @param override - Target or parent view overrides.
+ * @param override - Target or parent annotation overriding child placement only.
  * @param allowChildPlacement - Global child-placement policy.
  * @returns Positive, safe values consumed by pointer geometry.
  */
@@ -68,8 +72,8 @@ export function resolveBlockDropPlacementOptions(
 ): ResolvedDropPlacementOptions {
   return {
     allowChildPlacement: override?.allowChildPlacement ?? allowChildPlacement,
-    childDropIndent: Math.max(1, override?.childDropIndent ?? childDropIndent),
-    gapDropZone: Math.max(0, override?.gapDropZone ?? gapDropZone),
+    childDropIndent: Math.max(1, childDropIndent),
+    gapDropZone: Math.max(0, gapDropZone),
   };
 }
 
@@ -280,4 +284,16 @@ export function isCurrentDropDestination(
     ? siblings.findIndex(({ id }) => id === placement.previousId) + 1
     : 0;
   return (!placement.previousId || index > 0) && (siblings[index]?.id ?? null) === placement.nextId;
+}
+
+/**
+ * Converts drag adjacency into the core insertion position used by semantic permissions.
+ * @param placement - Canonical child container or sibling gap.
+ * @returns Destination parent and, for a gap with a next sibling, its beforeId.
+ */
+export function blockMoveDestination(placement: CanonicalDropPlacement): BlockDestination {
+  if (placement.kind === "between" && placement.nextId !== null) {
+    return { parentId: placement.parentId, beforeId: placement.nextId };
+  }
+  return { parentId: placement.parentId };
 }

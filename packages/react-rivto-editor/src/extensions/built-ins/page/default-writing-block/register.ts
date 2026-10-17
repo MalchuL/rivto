@@ -4,13 +4,12 @@ import type { ReactEditorApi } from "../../../../editor/types";
  *
  * @module
  */
-import type { EditorBlockInput } from "@chulane/rivto";
+import { createBlockFactory } from "../../../../block-factories";
 import { createElement } from "react";
 import { MarkdownContent } from "../../../../blocks/markdown/markdown";
 import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
 import { DEFAULT_WRITING_BLOCK_TYPE } from "./constants";
 import type { DefaultWritingBlockOptions } from "./types";
-import { resolveIsEmptyBlock } from "./utils";
 
 /**
  * Installs writing factories, rendering, and slash conversion.
@@ -25,9 +24,7 @@ export function registerDefaultWritingBlock(
 ): () => void {
   const type = options.type ?? DEFAULT_WRITING_BLOCK_TYPE;
   const title = options.title ?? "Paragraph";
-  const createDefaultBlock =
-    options.createDefaultBlock ?? ((): EditorBlockInput => ({ type, content: "" }));
-  const isEmptyBlock = resolveIsEmptyBlock(options.isEmptyBlock, type);
+  const defaultWritingBlockFactory = options.factory ?? createBlockFactory(type);
   const slashCommand: ReactBlockSlashCommand = {
     title: "Markdown",
     group: "Turn into",
@@ -40,7 +37,7 @@ export function registerDefaultWritingBlock(
       ? (props) =>
           createElement(MarkdownContent, { ...props, onLinkClick: options.onMarkdownLinkClick })
       : MarkdownContent);
-  const restoreWriting = reactEditor.installDefaultWriting({ createDefaultBlock, isEmptyBlock });
+  const restoreWriting = reactEditor.installDefaultWriting(defaultWritingBlockFactory);
   const unregisterBlock = reactEditor.blockTypes.register({
     definition: { type, title },
     render,
