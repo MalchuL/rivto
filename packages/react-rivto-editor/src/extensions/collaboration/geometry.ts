@@ -137,20 +137,22 @@ function adjacentBlocks(dom: PanelDOM, previous: HTMLElement, next: HTMLElement)
 }
 
 /**
- * Joins consecutive selected rows into rectangles without enclosing unselected descendants.
+ * Joins a selected parent's consecutive selected descendants without enclosing unselected rows.
  *
  * Only mounted selected blocks are measured. Side-by-side or overlapping rows
- * retain separate outlines, as do rows separated by an unselected block.
+ * retain separate outlines, as do rows separated by an unselected block. Each
+ * group starts at a selected ancestor; sibling or unrelated roots remain separate.
  *
  * @param dom - Receiving panel's DOM boundary.
  * @param ids - Fully selected block IDs; input order does not affect grouping.
- * @returns Viewport rectangles for consecutive vertical groups of selected rows.
+ * @returns Viewport rectangles for consecutive vertical groups within selected subtrees.
  */
 function blockRects(dom: PanelDOM, ids: string[]): PresenceRect[] {
   const blocks = ids.map((id) => dom.findBlock(id)).filter((block) => block !== null);
   blocks.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1));
   const result: PresenceRect[] = [];
   let previous: HTMLElement | undefined;
+  let groupRoot: HTMLElement | undefined;
   for (const block of blocks) {
     // The recursive shell includes descendants that this participant may not have selected.
     const target = dom.getRow(block) ?? block;
@@ -159,6 +161,7 @@ function blockRects(dom: PanelDOM, ids: string[]): PresenceRect[] {
     if (
       previous &&
       group &&
+      groupRoot?.contains(block) &&
       rect.height > 0 &&
       group.height > 0 &&
       rect.y >= group.y + group.height - 1 &&
@@ -172,6 +175,8 @@ function blockRects(dom: PanelDOM, ids: string[]): PresenceRect[] {
       group.height = rect.y + rect.height - group.y;
     } else {
       result.push(rect);
+      // Adjacency alone must not join independent blocks or sibling subtrees.
+      groupRoot = block;
     }
     previous = block;
   }

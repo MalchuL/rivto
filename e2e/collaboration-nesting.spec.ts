@@ -25,12 +25,14 @@ for (const mode of ["Page", "Edgeless"] as const) {
         const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
         editor.blocks.moveBlock(grandchild, child!, "inside");
         editor.blocks.moveBlock(sibling, parent!, "inside");
-        return [parent!, child!, grandchild, sibling];
+        const outside = editor.blocks.insertBlock({ type: "paragraph", content: "Outside" }).id;
+        editor.blocks.moveBlock(outside, parent!, "after");
+        return [parent!, child!, grandchild, sibling, outside];
       });
       await expect(
         right.locator(`[data-block-id="${ids[0]}"] [data-block-id="${ids[1]}"]`),
       ).toHaveCount(1);
-      await expect(right.locator("[data-block-content]")).toHaveCount(4 + repeat);
+      await expect(right.locator("[data-block-content]")).toHaveCount(5 + repeat);
       if (mode === "Edgeless") {
         await left.getByRole("button", { name: mode, exact: true }).click();
         await right.getByRole("button", { name: mode, exact: true }).click();
@@ -44,8 +46,10 @@ for (const mode of ["Page", "Edgeless"] as const) {
         [[ids[0]!, ids[1]!]],
         [[ids[0]!], [ids[2]!]],
         [[ids[1]!], [ids[3]!]],
-        [[ids[2]!, ids[3]!]],
-        [ids],
+        [[ids[2]!], [ids[3]!]],
+        [ids.slice(0, 4)],
+        [ids.slice(0, 4), [ids[4]!]],
+        [[ids[3]!], [ids[4]!]],
       ]) {
         const selectedIds = groups.flat();
         await page.evaluate((selectedIds) => {

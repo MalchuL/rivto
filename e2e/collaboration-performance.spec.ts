@@ -163,7 +163,7 @@ for (const mode of [
         }),
       );
       if (mode.endsWith("blocks")) {
-        await expect(page.locator('[data-collaboration-kind="object"]')).toHaveCount(1);
+        await expect(page.locator('[data-collaboration-kind="object"]')).toHaveCount(2);
         await expect(right.locator("[data-collaboration-text]")).toHaveCount(0);
       } else {
         await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(1);
