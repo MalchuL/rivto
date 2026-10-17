@@ -46,6 +46,8 @@ import { EdgelessSnappingStore } from "./snapping-store";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
+/** Exponential zoom sensitivity per wheel delta unit. */
+const WHEEL_ZOOM_SENSITIVITY = 0.006;
 /** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
 const MAX_GRID_DOT_FADE = 0.7;
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
@@ -453,16 +455,37 @@ function EdgelessSurfaceContent({
 
   useDOMEvent(
     {
-      id: "edgeless.zoom.wheel",
+      id: "edgeless.viewport.wheel",
       type: "wheel",
       passive: false,
     },
+    /**
+     * Pans by wheel deltas or zooms around the pointer with Ctrl or Meta held.
+     *
+     * Fixed-height card content and canvas controls retain native scrolling.
+     *
+     * @param input - Resolved editor event containing the native wheel gesture.
+     * @returns Whether the gesture was consumed and its default should be prevented.
+     */
     ({ raw: event }) => {
       // Wheel modifier policy is a pointer gesture rather than a key binding.
       if (!event.ctrlKey && !event.metaKey) {
-        return false;
+        if (
+          event.target instanceof Element &&
+          event.target.closest(
+            '[data-edgeless-ui], [data-auto-height="false"] [data-edgeless-card-content]',
+          )
+        ) {
+          return false;
+        }
+        setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY }));
+      } else {
+        zoomAt(
+          zoom * Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY),
+          event.clientX,
+          event.clientY,
+        );
       }
-      zoomAt(zoom * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY);
       return true;
     },
   );

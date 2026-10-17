@@ -1210,7 +1210,9 @@ test("cycles stop before recursive acquisition and target changes release the pr
     .getByRole("textbox", { name: "Target block ID", exact: true })
     .fill("unknown-block");
   await settings.getByRole("button", { name: "Save embedding" }).click();
-  await expect(page.getByText("Loading embedded block…", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("Referenced block is unavailable.", { exact: true }).first(),
+  ).toBeVisible();
 });
 
 test("an acyclic reference to another embedding resolves its source", async ({ page }) => {

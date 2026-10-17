@@ -83,10 +83,7 @@ for (const repeat of [0, 200]) {
     await breadcrumbs.getByRole("button", { name: "Panel section", exact: true }).press("Enter");
     await expect(child).toHaveText("Shared child edited");
     const canvas = await today.locator("[data-panel-root]").getAttribute("data-panel-element-root");
-    await today
-      .getByRole("navigation")
-      .getByRole("button", { name: "Document", exact: true })
-      .click();
+    await today.getByRole("navigation").getByRole("button").first().click();
     await open(page, ids.root);
     await expect(today.locator("[data-panel-root]")).toHaveAttribute(
       "data-panel-element-root",
@@ -108,6 +105,8 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
   await expect(today.locator(`[data-block-id="${childId}"]`)).toHaveCount(1);
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();
   await expect(today.locator("[data-edgeless-root]")).toHaveCount(1);
+  await expect(today.getByRole("heading", { name: "Panel child", exact: true })).toBeVisible();
+  await expect(today.getByRole("navigation", { name: "Panel breadcrumbs" })).toBeVisible();
   const elementRoot = await today
     .locator("[data-panel-root]")
     .getAttribute("data-panel-element-root");
@@ -139,10 +138,7 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
       original.cardId,
     ),
   ).toEqual(original.other);
-  await today
-    .getByRole("navigation")
-    .getByRole("button", { name: "Document", exact: true })
-    .click();
+  await today.getByRole("navigation").getByRole("button").first().click();
   await expect(today.locator(".page-surface").first()).toBeVisible();
   await open(page, ids.child);
   await expect(today.locator("[data-edgeless-root]")).toHaveCount(1);
@@ -436,3 +432,66 @@ for (const repeat of [0, 200]) {
     expect(after.y).toBeCloseTo(before.y + 30, 1);
   });
 }
+
+for (const repeat of [0, 200]) {
+  test(`shows the complete panel path as a standalone page, repeat=${repeat}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const ids = await seed(page, repeat);
+    const today = page.locator('[data-journal-document="today"]');
+    const documentTitle = await today.locator("h1").innerText();
+    await open(page, ids.branch);
+    const breadcrumbs = today.getByRole("navigation", { name: "Panel breadcrumbs" });
+    await expect(breadcrumbs.locator('[data-slot="breadcrumb-item"]')).toHaveText([
+      documentTitle,
+      "Panel section",
+      "Panel branch",
+    ]);
+    await expect(breadcrumbs.getByRole("list")).toHaveCSS("list-style-type", "none");
+    await expect(today.locator("h1")).toHaveText("Panel branch");
+    await expect(today.locator("h1 time")).toHaveCount(0);
+    await expect(page.locator('[data-journal-document="yesterday"]')).toBeHidden();
+    const toolbar = await today.locator(".demo-header").boundingBox();
+    const navigation = await breadcrumbs.boundingBox();
+    const heading = await today.locator("h1").boundingBox();
+    expect(navigation!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
+    expect(heading!.y).toBeGreaterThanOrEqual(navigation!.y + navigation!.height);
+    await breadcrumbs.getByRole("button", { name: "Panel section", exact: true }).press("Enter");
+    await expect(today.locator("h1")).toHaveText("Panel section");
+    await breadcrumbs.getByRole("button").first().click();
+    await expect(today.locator("h1 time")).toBeVisible();
+    await expect(page.locator('[data-journal-document="yesterday"]')).toBeVisible();
+  });
+}
+
+test("keeps the panel path live when blocks change or disappear", async ({ page }) => {
+  const ids = await seed(page);
+  await open(page, ids.branch);
+  const today = page.locator('[data-journal-document="today"]');
+  const breadcrumbs = today.getByRole("navigation", { name: "Panel breadcrumbs" });
+  await page.evaluate((ids) => {
+    const blocks = (window as unknown as Inspection).__rivtoDemo.editor.blocks;
+    blocks.updateBlock(ids.root, { content: "Renamed parent" });
+    blocks.updateBlock(ids.branch, { content: "Renamed panel" });
+  }, ids);
+  await expect(today.locator("h1")).toHaveText("Renamed panel");
+  await expect(breadcrumbs.getByRole("button", { name: "Renamed parent" })).toBeVisible();
+  await page.evaluate((ids) => {
+    (window as unknown as Inspection).__rivtoDemo.editor.blocks.moveBlock(
+      ids.branch,
+      ids.child,
+      "inside",
+    );
+  }, ids);
+  await expect(breadcrumbs.locator('[data-slot="breadcrumb-item"]')).toHaveText([
+    /.+/,
+    "Renamed parent",
+    "Panel child",
+    "Renamed panel",
+  ]);
+  await page.evaluate((id) => {
+    (window as unknown as Inspection).__rivtoDemo.editor.blocks.removeBlock(id);
+  }, ids.branch);
+  await expect(today.locator("[data-panel-root]")).toHaveAttribute("data-panel-root", "");
+  await expect(today.locator("h1 time")).toBeVisible();
+  await expect(page.locator('[data-journal-document="yesterday"]')).toBeVisible();
+});

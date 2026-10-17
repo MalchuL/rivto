@@ -225,7 +225,7 @@ test.each([10, 2000])(
     f.a.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
-      children: Array.from({ length: count }, (_, index): BlockInput => ({
+      children: Array.from({ length: count }, (value, index): BlockInput => ({
         id: `child-${index}`,
         type: "paragraph",
       })),

@@ -113,3 +113,30 @@ test("validates requested column counts", () => {
   expect(() => createColumnsBlockInput(7)).toThrow("Columns count must be an integer from 1 to 6");
   expect(createColumnsBlockInput(3).children).toHaveLength(3);
 });
+
+test("validates and preserves divider visibility through history, snapshots, and clipboard", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
+  const id = editor.blocks.insertBlock(createColumnsBlockInput()).id;
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(true);
+  expect(() => editor.blocks.updateBlock(id, { props: { showDividers: "no" } })).toThrow();
+
+  editor.history.clear();
+  editor.blocks.updateBlock(id, { props: { showDividers: false, custom: "preserved" } });
+  editor.history.undo();
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(true);
+  editor.history.redo();
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(false);
+
+  const snapshot = editor.dump();
+  editor.load(snapshot);
+  expect(editor.blocks.getBlockNode(id)?.props).toEqual({
+    showDividers: false,
+    custom: "preserved",
+  });
+  const copied = editor.clipboard.copy(createStructuralSelection([id]));
+  expect(copied?.blocks[0]?.props.showDividers).toBe(false);
+  expect(copied?.blocks[0]?.children).toHaveLength(2);
+
+  reactPanel.editor.destroy();
+  editor.destroy();
+});

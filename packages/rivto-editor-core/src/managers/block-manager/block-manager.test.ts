@@ -251,7 +251,7 @@ describe("block feature ownership independent of presentation", () => {
     editor.blocks.insertBlock({
       id: "parent",
       type: "paragraph",
-      children: Array.from({ length: 128 }, (_, index) => ({
+      children: Array.from({ length: 128 }, (value, index) => ({
         id: `child-${index}`,
         type: "paragraph",
       })),

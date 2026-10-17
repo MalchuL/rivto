@@ -274,6 +274,16 @@ function pickBest(
 /**
  * Builds connector waypoints in absolute canvas space.
  * Routes avoid cutting through the two attached node frames (not other obstacles).
+ * Coincident endpoints form a visible loop extending along the source anchor's outward normal.
+ *
+ * @param source - Source endpoint in canvas units.
+ * @param target - Target endpoint in canvas units.
+ * @param route - Straight, orthogonal or cubic connector routing.
+ * @param sourceAnchor - Normalized source attachment; absent or interior anchors infer an outward direction.
+ * @param targetAnchor - Normalized target attachment used by non-loop routes.
+ * @param sourceFrame - Optional source bounds to avoid with non-loop routes.
+ * @param targetFrame - Optional target bounds to avoid with non-loop routes.
+ * @returns Route waypoints, with four cubic control points for curves and a polyline otherwise.
  */
 export function connectorPoints(
   source: Point,
@@ -288,6 +298,26 @@ export function connectorPoints(
   const end = exitPoint(target, targetAnchor, source);
   const exit = start.point;
   const entry = end.point;
+
+  if (source.x === target.x && source.y === target.y) {
+    const outward = { x: start.dir.x * OFFSET * 2, y: start.dir.y * OFFSET * 2 };
+    const side = { x: outward.y, y: -outward.x };
+    if (route === "curve") {
+      return [
+        source,
+        { x: source.x + outward.x + side.x, y: source.y + outward.y + side.y },
+        { x: source.x + outward.x - side.x, y: source.y + outward.y - side.y },
+        target,
+      ];
+    }
+    return [
+      source,
+      { x: source.x + outward.x, y: source.y + outward.y },
+      { x: source.x + outward.x + side.x, y: source.y + outward.y + side.y },
+      { x: source.x + side.x, y: source.y + side.y },
+      target,
+    ];
+  }
 
   if (route === "curve") {
     const distance = Math.hypot(target.x - source.x, target.y - source.y);
@@ -326,7 +356,18 @@ export function connectorPoints(
   );
 }
 
-/** SVG path `d` from absolute or local waypoints. */
+/**
+ * Builds SVG path data from absolute or local connector coordinates.
+ *
+ * @param source - Source position in the coordinate system used by the SVG.
+ * @param target - Target position in the same coordinate system.
+ * @param route - Connector routing style.
+ * @param sourceAnchor - Optional normalized source attachment.
+ * @param targetAnchor - Optional normalized target attachment.
+ * @param sourceFrame - Optional source bounds in the same coordinate system.
+ * @param targetFrame - Optional target bounds in the same coordinate system.
+ * @returns SVG path data, or an empty string when a waypoint or its displacement is non-finite.
+ */
 export function connectorPath(
   source: Point,
   target: Point,
@@ -345,6 +386,9 @@ export function connectorPath(
     sourceFrame,
     targetFrame,
   );
+  if (!points.every(({ x, y }) => Number.isFinite(x - source.x) && Number.isFinite(y - source.y))) {
+    return "";
+  }
   if (route === "curve") {
     const c1 = points[1]!;
     const c2 = points[2]!;

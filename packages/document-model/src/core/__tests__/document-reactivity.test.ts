@@ -17,7 +17,7 @@ describe("document reactivity", () => {
       const model = new DocumentModelImpl(doc);
       model.loadSnapshot({
         version: 9,
-        blocks: Array.from({ length: count }, (_, index) => ({
+        blocks: Array.from({ length: count }, (value, index) => ({
           id: `block-${index}`,
           type: "paragraph",
           content: "",

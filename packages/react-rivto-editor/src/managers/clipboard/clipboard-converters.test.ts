@@ -250,11 +250,11 @@ test("Cut formats before deleting and supplies its receiving panel to converters
     /**
      * Checks that cut converters receive their panel and cut operation.
      *
-     * @param _block - Source block; unused by this fixture converter.
+     * @param block - Source block; unused by this fixture converter.
      * @param context - Clipboard operation metadata and source-to-destination identity mappings.
      * @returns An empty property patch.
      */
-    copy(_block, context) {
+    copy(block, context) {
       expect(context.operation).toBe("cut");
       expect(context.reactPanel).toBe(f.reactPanel);
       return {};
@@ -278,7 +278,7 @@ for (const unrelated of [0, 200]) {
   test(`converter work follows the copied subtree, not ${unrelated} unrelated blocks`, async () => {
     const f = await fixture();
     f.editor.blocks.importForest(
-      Array.from({ length: unrelated }, (_, index) => ({
+      Array.from({ length: unrelated }, (value, index) => ({
         id: `other-${index}`,
         type: "paragraph",
         content: "other",
@@ -347,11 +347,11 @@ test("all converters see the same element map when an empty block card is omitte
     /**
      * Captures the element ID map seen by the block paste converter.
      *
-     * @param _block - Source block; unused by this fixture converter.
+     * @param block - Source block; unused by this fixture converter.
      * @param context - Clipboard operation metadata and source-to-destination identity mappings.
      * @returns An empty property patch.
      */
-    paste(_block, context) {
+    paste(block, context) {
       seen = [...context.elementIdMap.keys()];
       return {};
     },
@@ -467,11 +467,11 @@ test("slash Duplicate uses block converters and keeps the entire operation undoa
     /**
      * Records whether the converter is called for copy, cut, or duplicate.
      *
-     * @param _block - Source block; unused by this fixture converter.
+     * @param block - Source block; unused by this fixture converter.
      * @param context - Clipboard operation metadata and source-to-destination identity mappings.
      * @returns An empty property patch.
      */
-    copy(_block, context) {
+    copy(block, context) {
       operations.push(context.operation);
       return {};
     },

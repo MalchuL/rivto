@@ -23,7 +23,7 @@ function Slider({
   "aria-labelledby": ariaLabelledBy,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
-  const _values = React.useMemo(() => {
+  const values = React.useMemo(() => {
     if (Array.isArray(value)) {
       return value;
     }
@@ -59,7 +59,7 @@ function Slider({
           )}
         />
       </SliderPrimitive.Track>
-      {Array.from({ length: _values.length }, (_, index) => (
+      {Array.from({ length: values.length }, (value, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}

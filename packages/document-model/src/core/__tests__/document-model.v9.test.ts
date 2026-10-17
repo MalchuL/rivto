@@ -361,7 +361,7 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
   it.each([3, 200])("moves %i contiguous siblings with one deletion and insertion", (count) => {
     const doc = new YjsDoc("range-move");
     const model = new DocumentModelImpl(doc);
-    const ids = Array.from({ length: count }, (_, index) => `block-${index}`);
+    const ids = Array.from({ length: count }, (value, index) => `block-${index}`);
     model.blocks.insertBlock({ id: "target", type: "paragraph" });
     ids.forEach((id) => model.blocks.insertBlock({ id, type: "paragraph" }));
     model.blocks.insertBlock({ id: "tail", type: "paragraph" });

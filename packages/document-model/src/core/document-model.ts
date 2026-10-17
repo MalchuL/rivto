@@ -76,7 +76,7 @@ export class DocumentModelImpl implements DocumentModel {
     // extra undo stacks). Repair only foreign merges.
     this.unsubscribeFromUpdates = this.crdt.on(
       "update",
-      (_update: unknown, updateOrigin?: unknown) => {
+      (update: unknown, updateOrigin?: unknown) => {
         if (this.crdt.isLocalOrigin(updateOrigin)) {
           return;
         }

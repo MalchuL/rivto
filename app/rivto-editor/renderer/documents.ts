@@ -107,7 +107,7 @@ function table(rows: string[][]): string {
     return "";
   }
   const lines = rows.map(
-    (row) => `| ${Array.from({ length: width }, (_, index) => row[index] ?? "").join(" | ")} |`,
+    (row) => `| ${Array.from({ length: width }, (value, index) => row[index] ?? "").join(" | ")} |`,
   );
   lines.splice(1, 0, `| ${Array(width).fill("---").join(" | ")} |`);
   return lines.join("\n");
@@ -127,7 +127,7 @@ function blockMarkdown(block: EditorBlock, depth: number): string {
       columns.map((column) => cellText(column.content)),
       ...Array.from(
         { length: Math.max(0, ...columns.map((column) => column.children.length)) },
-        (_, row) =>
+        (value, row) =>
           columns.map((column) => (column.children[row] ? cellTree(column.children[row]) : "")),
       ),
     ]);

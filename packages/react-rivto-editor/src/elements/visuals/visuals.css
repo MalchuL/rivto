@@ -275,3 +275,18 @@
   pointer-events: auto;
   cursor: crosshair;
 }
+
+.edgeless-connector-endpoint-highlight {
+  fill: none;
+  stroke: var(--rivto-accent);
+  stroke-width: 1.5px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.edgeless-visual:has([data-edgeless-connector-endpoint="source"]:is(:hover, :focus-visible))
+  [data-edgeless-connector-endpoint-highlight="source"],
+.edgeless-visual:has([data-edgeless-connector-endpoint="target"]:is(:hover, :focus-visible))
+  [data-edgeless-connector-endpoint-highlight="target"] {
+  opacity: 1;
+}

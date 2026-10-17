@@ -122,7 +122,7 @@ it.each([10, 2000])(
       type: "container",
       id: "root",
       zIndex: 0,
-      children: Array.from({ length: count }, (_, i) => ({ ...shape, id: `child-${i}` })),
+      children: Array.from({ length: count }, (value, i) => ({ ...shape, id: `child-${i}` })),
     });
     const before = model.elements.getElement("root")!;
     const reads = jest.spyOn(model.elements, "getElementNode");
@@ -170,7 +170,7 @@ it.each([10, 2000])(
       ...tree,
       children: [
         tree.children![0]!,
-        ...Array.from({ length: count }, (_, i) => ({ ...shape, id: `sibling-${i}` })),
+        ...Array.from({ length: count }, (value, i) => ({ ...shape, id: `sibling-${i}` })),
       ],
     });
     const doc = new YjsDoc("preloaded-tree");

@@ -94,7 +94,7 @@ it.each([10, 2000])(
     a.blocks.insertBlock({
       id: "a",
       type: "paragraph",
-      children: Array.from({ length: count }, (_, index) => ({
+      children: Array.from({ length: count }, (value, index) => ({
         id: `a-${index}`,
         type: "paragraph",
       })),
@@ -453,7 +453,7 @@ it.each([10, 2000])(
     a.getDocument().blocks.insertBlock({
       id: "same",
       type: "opaque",
-      children: Array.from({ length: count }, (_, index) => ({
+      children: Array.from({ length: count }, (value, index) => ({
         id: `child-${index}`,
         type: "opaque",
       })),

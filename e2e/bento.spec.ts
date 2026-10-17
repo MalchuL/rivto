@@ -55,7 +55,7 @@ for (const mode of ["block", "edgeless"]) {
     await expect(tiles.first()).toHaveCSS("flex-grow", "0");
     await expect(tiles.first()).toHaveCSS("flex-basis", "220px");
     await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
-    await expect(page.locator("dialog:modal")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /^Expanded / })).toBeVisible();
     const first = tiles.first();
     await first.hover();
     const rightHandle = first.getByRole("separator", { name: RESIZE_RIGHT });
@@ -73,7 +73,7 @@ for (const mode of ["block", "edgeless"]) {
     await page.keyboard.type("New tile");
     await expect(tiles.nth(1)).toContainText("New tile");
     await board.getByRole("button", { name: "Collapse Bento", exact: true }).click();
-    await expect(page.locator("dialog:modal")).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: /^Expanded / })).toHaveCount(0);
     // Width preferences survive snapshot reload, and tiles shrink to their surface.
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

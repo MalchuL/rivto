@@ -9,7 +9,7 @@ for (const type of ["bento", "kanban"]) {
     await board
       .getByRole("button", { name: `Expand ${type === "bento" ? "Bento" : "Kanban"}`, exact: true })
       .click();
-    const modal = page.locator("dialog:modal");
+    const modal = page.getByRole("dialog", { name: /^Expanded / });
     const handleClass = "block-handle";
     const handles = modal.locator(`.${handleClass}`);
     const handle =

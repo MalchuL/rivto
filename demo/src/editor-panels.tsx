@@ -1,5 +1,12 @@
 import { BlockHandleContext } from "@chulane/rivto-react";
-import { Fragment, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { ModeManager } from "@chulane/rivto";
 import type { Panel } from "./panel-types";
 import { EditorPanel, type ReactEditorApi, type EditorPanelProps } from "@chulane/rivto-react";
@@ -28,16 +35,25 @@ interface DemoPanel {
  *
  * @param props - Navigation host configuration; remaining options pass to EditorPanel.
  * @param props.editor - Editor shared by the retained panel records.
- * @param props.children - Content rendered within the active panel.
+ * @param props.documentTitle - Journal date displayed as the document title and root breadcrumb.
+ * @param props.children - Renders panel content with navigation and its current heading.
  * @returns Breadcrumb navigation and active panel with handle-driven block opening.
  */
 export function DemoEditorPanels({
   editor,
   children,
+  documentTitle,
   ...props
-}: Omit<EditorPanelProps, "editor" | "panel" | "mode"> & {
+}: Omit<EditorPanelProps, "editor" | "panel" | "mode" | "children"> & {
   editor: ReactEditorApi;
-  children: ReactNode;
+  documentTitle: ReactNode;
+  /**
+   * Places navigation and the heading within the active panel chrome.
+   *
+   * @param header - Breadcrumb navigation and the current page heading.
+   * @returns Toolbar, supplied header, and editor surface in display order.
+   */
+  children: (header: ReactNode) => ReactNode;
 }) {
   const [state, setState] = useState(() => {
     const root: DemoPanel = {
@@ -49,10 +65,10 @@ export function DemoEditorPanels({
       },
       mode: new ModeManager(),
     };
-    return { entries: new Map<string | null, DemoPanel>([[null, root]]), history: [root] };
+    return { entries: new Map<string | null, DemoPanel>([[null, root]]), active: root };
   });
   const openBlock = useCallback(
-    (blockId: string) => {
+    (blockId: string | null) => {
       let next = state.entries.get(blockId);
       if (!next) {
         // Navigation creates a container without adding an undo step for opening a Panel.
@@ -70,82 +86,114 @@ export function DemoEditorPanels({
             rootBlockId: blockId,
             rootElementId: group.id,
           },
-          mode: new ModeManager(state.history.at(-1)!.mode.get()),
+          mode: new ModeManager(state.active.mode.get()),
         };
       }
       const destination = next;
       setState((previous) => {
-        if (previous.history.at(-1) === destination) {
+        if (previous.active === destination) {
           return previous;
         }
         const entries = new Map(previous.entries);
         entries.set(blockId, destination);
-        return { entries, history: [...previous.history, destination] };
+        return { entries, active: destination };
       });
     },
     [editor, state],
   );
-  const active = state.history.at(-1)!;
+  const { active } = state;
+  const blockId = active.panel.rootBlockId;
+  const path = usePanelPath(editor, blockId);
+  useEffect(() => {
+    if (blockId && !editor.blocks.getBlockNode(blockId)) {
+      openBlock(null);
+    }
+  }, [editor, blockId, path, openBlock]);
+  const header = (
+    <header
+      className="demo-panel-header"
+      data-panel-root={blockId ?? ""}
+      data-panel-element-root={active.panel.rootElementId ?? ""}
+    >
+      {blockId && (
+        <Breadcrumb aria-label="Panel breadcrumbs" className="rivto-ui demo-panel-breadcrumb">
+          <BreadcrumbList>
+            {[null, ...(JSON.parse(path) as string[])].map((id, index, ids) => (
+              <Fragment key={id ?? "document"}>
+                {index > 0 && <BreadcrumbSeparator />}
+                <BreadcrumbItem>
+                  {index === ids.length - 1 ? (
+                    <BreadcrumbPage>
+                      <PanelTitle editor={editor} blockId={id} />
+                    </BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink asChild>
+                      <button type="button" onClick={() => openBlock(id)}>
+                        {id ? <PanelTitle editor={editor} blockId={id} /> : documentTitle}
+                      </button>
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            ))}
+          </BreadcrumbList>
+        </Breadcrumb>
+      )}
+      <h1 className="journal-date">
+        {blockId ? <PanelTitle editor={editor} blockId={blockId} /> : documentTitle}
+      </h1>
+    </header>
+  );
   return (
-    <>
-      <header
-        data-panel-root={active.panel.rootBlockId ?? ""}
-        data-panel-element-root={active.panel.rootElementId ?? ""}
-      >
-        {state.history.length > 1 && (
-          <Breadcrumb aria-label="Panel breadcrumbs">
-            <BreadcrumbList>
-              {state.history.map((entry, index) => (
-                <Fragment key={`${entry.panel.id}:${index}`}>
-                  {index > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbItem>
-                    {index === state.history.length - 1 ? (
-                      <BreadcrumbPage>
-                        <PanelTitle editor={editor} blockId={entry.panel.rootBlockId} />
-                      </BreadcrumbPage>
-                    ) : (
-                      <BreadcrumbLink asChild>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setState((previous) => ({
-                              ...previous,
-                              history: previous.history.slice(0, index + 1),
-                            }))
-                          }
-                        >
-                          <PanelTitle editor={editor} blockId={entry.panel.rootBlockId} />
-                        </button>
-                      </BreadcrumbLink>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
-        )}
-        {active.panel.rootBlockId && (
-          <h2>
-            <PanelTitle editor={editor} blockId={active.panel.rootBlockId} />
-          </h2>
-        )}
-      </header>
-      <EditorPanel
-        {...props}
-        key={active.panel.id}
-        editor={editor}
-        rootBlockId={active.panel.rootBlockId ?? undefined}
-        rootElementId={active.panel.rootElementId}
-        mode={active.mode}
-      >
-        <BlockHandleContext.Provider value={{ onOpen: openBlock }}>
-          {children}
-        </BlockHandleContext.Provider>
-      </EditorPanel>
-    </>
+    <EditorPanel
+      {...props}
+      key={active.panel.id}
+      editor={editor}
+      rootBlockId={blockId ?? undefined}
+      rootElementId={active.panel.rootElementId}
+      mode={active.mode}
+    >
+      <BlockHandleContext.Provider value={{ onOpen: openBlock }}>
+        {children(header)}
+      </BlockHandleContext.Provider>
+    </EditorPanel>
   );
 }
 
+/**
+ * Observes the active block's ancestor IDs without reading the document forest.
+ *
+ * The serialized snapshot remains equal across unrelated structure changes.
+ *
+ * @param editor - Editor whose live hierarchy supplies the path.
+ * @param blockId - Open block ID, or null for the document.
+ * @returns Serialized ancestor IDs in document-to-block order, including the block.
+ */
+function usePanelPath(editor: ReactEditorApi, blockId: string | null): string {
+  const subscribe = useCallback(
+    (listener: () => void) => editor.blocks.subscribeStructure(listener),
+    [editor],
+  );
+  const snapshot = useCallback(() => {
+    const ids: string[] = [];
+    let id = blockId;
+    while (id && editor.blocks.getBlockNode(id)) {
+      ids.unshift(id);
+      id = editor.blocks.getParentId(id) ?? null;
+    }
+    return JSON.stringify(ids);
+  }, [editor, blockId]);
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/**
+ * Observes a block's own content for a live heading or breadcrumb label.
+ *
+ * @param props - Label source.
+ * @param props.editor - Editor containing the block.
+ * @param props.blockId - Persisted block ID, or null for the document fallback.
+ * @returns Block content, its type when empty, or a missing-block label.
+ */
 function PanelTitle({ editor, blockId }: { editor: ReactEditorApi; blockId: string | null }) {
   const subscribe = useCallback(
     (listener: () => void) =>

@@ -39,7 +39,7 @@ function resolve(
   items: DropLayoutBlock[],
   x: number,
   y: number,
-  accepts = (_: CanonicalDropPlacement) => true,
+  accepts = (placement: CanonicalDropPlacement) => true,
   options = defaults,
 ) {
   return resolveDropPlacement(items, tree(items), { x, y }, options, accepts);
@@ -141,6 +141,37 @@ test("grid gaps follow document order across wrapped rows", () => {
     line: { axis: "horizontal" },
   });
   expect(resolve(items, 80, 80)).toMatchObject({ kind: "inside", parentId: "a" });
+});
+
+test("padded grid tile rows keep body drops inside the hovered tile", () => {
+  const items = [
+    item("grid", 0, 300, { fixed: true, acceptsBody: true, axis: "grid" }),
+    item("a", 40, 100, {
+      parentId: "grid",
+      row: rect(52, 24, 12, 156),
+      rect: rect(40, 100, 0, 180),
+    }),
+    item("b", 40, 100, {
+      parentId: "grid",
+      row: rect(52, 24, 212, 156),
+      rect: rect(40, 100, 200, 180),
+    }),
+    item("nested", 92, 24, {
+      parentId: "b",
+      row: rect(92, 24, 224, 144),
+      rect: rect(92, 24, 224, 144),
+    }),
+  ];
+  for (let y = 52; y <= 76; y++) {
+    expect(resolve(items, 290, y)).toMatchObject({ kind: "inside", parentId: "b" });
+  }
+  expect(resolve(items, 290, 104)).toMatchObject({ kind: "inside", parentId: "nested" });
+  expect(resolve(items, 204, 64)).toMatchObject({
+    kind: "between",
+    parentId: "grid",
+    previousId: "a",
+    nextId: "b",
+  });
 });
 
 test("outline depths stay on the same subtree boundary", () => {

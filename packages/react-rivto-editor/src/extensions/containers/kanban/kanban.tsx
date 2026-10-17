@@ -256,7 +256,9 @@ function KanbanColumn({ blockId }: { readonly blockId: string }) {
  */
 function KanbanDialog({ block, children }: BlockWrapperProps) {
   return block.type === KANBAN_BLOCK_TYPE ? (
-    <BlockModal label="Kanban">{children}</BlockModal>
+    <BlockModal blockId={block.id} label="Kanban">
+      {children}
+    </BlockModal>
   ) : (
     children
   );

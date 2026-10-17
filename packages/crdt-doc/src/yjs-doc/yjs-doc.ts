@@ -267,7 +267,7 @@ export class YjsDoc implements CRDTDoc {
   toJSON(): BasicType {
     const snapshot: Record<string, BasicType> = {};
 
-    this.doc.share.forEach((_, key) => {
+    this.doc.share.forEach((rootType, key) => {
       const value = this.doc.get(key);
       // If the value is an AbstractType (might be in synced docs), we need to convert it to a JSON object.
       if (value.constructor.name === "AbstractType") {
@@ -316,7 +316,7 @@ export class YjsDoc implements CRDTDoc {
     this.doc.transact(() => {
       // Clear collaborative contents of known typed roots. Deleting
       // `doc.share` is not a CRDT operation and is invisible to peers.
-      this.doc.share.forEach((_, key) => this.clearTypedRoot(key));
+      this.doc.share.forEach((rootType, key) => this.clearTypedRoot(key));
       entries.forEach(([key, value]) => {
         if (value instanceof Map) {
           const map = this.getMap(key);

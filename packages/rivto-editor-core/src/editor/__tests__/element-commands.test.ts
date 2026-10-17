@@ -12,7 +12,7 @@ describe("DocumentEditor element commands", () => {
 
   it("creates, patches, snapshots, and removes generic elements", async () => {
     const editor = await createDocumentEditor();
-    const { childIds: _childIds, ...fields } = input;
+    const { childIds, ...fields } = input;
     expect(editor.elements.insertElement(input)).toEqual({ ...fields, children: [] });
     const updated = editor.elements.updateElement("shape", {
       frame: { x: 30 },

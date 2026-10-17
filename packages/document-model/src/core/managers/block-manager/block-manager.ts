@@ -123,7 +123,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction));
     // The roots array is not a field on any block, so these events have an
     // empty path and cannot name a parent for `invalidateBlocks`.
-    this.roots.observe((_events, transaction) => this.onRootsChanged(transaction));
+    this.roots.observe((events, transaction) => this.onRootsChanged(transaction));
   }
 
   /** @returns Monotonic revision incremented by block data or hierarchy changes. */

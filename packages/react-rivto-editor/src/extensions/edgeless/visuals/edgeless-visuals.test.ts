@@ -646,6 +646,41 @@ describe("edgelessVisualsExtension", () => {
     editor.destroy();
   });
 
+  test.each(["detach", "delete"] as const)(
+    "detaches ancestor attachments without applying the %s orphan policy",
+    async (orphanConnectors) => {
+      const editor = await createDocumentEditor({ mode: "edgeless" });
+      const reactEditor = createReactEditor({
+        editor,
+        extensions: [
+          edgelessSelectionExtension(),
+          edgelessVisualsExtension({ toolbar: false, orphanConnectors }),
+        ],
+      });
+      const operations = observeOperations(reactEditor);
+      const rectangle = operations.create({ kind: "rectangle" });
+      const point = { x: 120, y: 180 };
+      const endpoint = { anchor: { x: 0.5, y: 0.5 }, position: point };
+      const connector = operations.create({
+        kind: "connector",
+        route: "curve",
+        source: endpoint,
+        target: endpoint,
+      });
+      operations.select([rectangle.id, connector.id]);
+      const group = operations.group();
+      operations.updateProperties(connector.id, { source: { ...endpoint, elementId: group.id } });
+      const updated = editor.elements.getElementNode(connector.id)!;
+      expect(updated.props.source).toEqual(endpoint);
+      expect(updated.frame.width).toBeGreaterThan(1);
+      expect(updated.frame.height).toBeGreaterThan(1);
+      operations.updateProperties(rectangle.id, { text: "Still editable" });
+      expect(editor.elements.getElementNode(connector.id)?.frame).toEqual(updated.frame);
+      reactEditor.destroy();
+      editor.destroy();
+    },
+  );
+
   test("remembers last place and drawing tools per category", async () => {
     const editor = await createDocumentEditor({ mode: "edgeless" });
     // Selection only — exercise category memory on a dedicated edgeless operations instance.

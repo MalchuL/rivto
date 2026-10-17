@@ -206,7 +206,7 @@ for (const kind of ["block", "report", "shape"] as const) {
     }, id);
     await today.locator(".edgeless-viewport").dispatchEvent("wheel", {
       ctrlKey: true,
-      deltaY: -Math.log(1.1) / 0.002,
+      deltaY: -Math.log(1.1) / 0.006,
       clientX: object.x,
       clientY: object.y,
     });

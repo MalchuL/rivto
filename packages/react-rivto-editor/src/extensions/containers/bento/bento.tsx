@@ -387,7 +387,13 @@ function BentoWrapper({ block, children }: BlockWrapperProps) {
     ) : (
       subtree
     );
-  return isBoard ? <BlockModal label="Bento">{children}</BlockModal> : withHandles;
+  return isBoard ? (
+    <BlockModal blockId={block.id} label="Bento">
+      {children}
+    </BlockModal>
+  ) : (
+    withHandles
+  );
 }
 
 /**

@@ -103,8 +103,8 @@ export function useDrawingGesture({
         throw new Error("Element creation factory returned a different type");
       }
     } else if (tool.tool === "place") {
-      const { tool: _tool, kind, ...props } = tool;
-      void _tool;
+      const { tool: toolType, kind, ...props } = tool;
+      void toolType;
       input = { type: kind, props };
     } else {
       throw new Error("Current tool does not place an element");
@@ -146,6 +146,12 @@ export function useDrawingGesture({
       snapOptions(altKey),
     );
 
+  /**
+   * Resolves the topmost hit object and its outermost group as an attachment target.
+   *
+   * @param point - Pointer position in canvas units, including the outside attachment allowance.
+   * @returns Topmost hit's outermost eligible group, or the hit itself; undefined when no object is hit.
+   */
   const objectAt = (point: CanvasPoint): string | undefined => {
     const candidates = edgelessOperation.elements
       .getElementNodes()
@@ -182,9 +188,16 @@ export function useDrawingGesture({
     };
   };
 
-  const hoverFor = (point: CanvasPoint, excludeId?: string): ConnectorHover | null => {
+  /**
+   * Builds attachment feedback using the same target resolution as endpoint commitment.
+   * Source attachments remain eligible so a gesture can return to its starting anchor and form a loop.
+   *
+   * @param point - Pointer position in canvas units.
+   * @returns Target bounds and anchors, or null when no eligible target is hit.
+   */
+  const hoverFor = (point: CanvasPoint): ConnectorHover | null => {
     const id = objectAt(point);
-    if (!id || id === excludeId) {
+    if (!id) {
       return null;
     }
     const frame = edgelessOperation.getFrame(id);
@@ -196,7 +209,7 @@ export function useDrawingGesture({
     return {
       elementId: id,
       frame,
-      outline: inflateFrame(edgelessOperation.getBounds(id) ?? frame, attachPad),
+      outline: edgelessOperation.getBounds(id) ?? frame,
       anchors: edgeAnchors(frame, rotation).map((anchor) => ({
         x: anchor.x,
         y: anchor.y,
@@ -306,8 +319,7 @@ export function useDrawingGesture({
       }
       active.points.push(point);
       const targetId = objectAt(point);
-      active.target =
-        targetId && targetId !== active.source?.elementId ? endpoint(targetId, point) : undefined;
+      active.target = targetId ? endpoint(targetId, point) : undefined;
       setConnectorPreview({
         source: active.source!.position,
         target: active.target?.position ?? point,
@@ -321,7 +333,7 @@ export function useDrawingGesture({
           ? edgelessOperation.getBounds(active.target.elementId)
           : undefined,
       });
-      setConnectorHover(hoverFor(point, active.source?.elementId));
+      setConnectorHover(hoverFor(point));
       return;
     }
 

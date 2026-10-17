@@ -19,7 +19,7 @@ export async function waitWithAbort<Result>(
   }
   signal.throwIfAborted();
   let onAbort!: () => void;
-  const cancelled = new Promise<never>((_resolve, reject) => {
+  const cancelled = new Promise<never>((resolve, reject) => {
     onAbort = () => reject(signal.reason);
     signal.addEventListener("abort", onAbort, { once: true });
   });

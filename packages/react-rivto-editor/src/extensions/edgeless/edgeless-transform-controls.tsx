@@ -17,7 +17,12 @@ import type { EdgelessTransformController } from "./edgeless-transform";
  * Mounts Moveable controls for dragging selected HTML elements, resizing, and rotation.
  * The editor owns selection, persisted geometry, connector previews, and undo;
  * Moveable computes gesture geometry and keeps its controls outside the target.
+ *
+ * A single element with absolute geometry uses its renderer's controls; Moveable's
+ * default lines and control box do not intercept pointer input for that selection.
+ *
  * @param props - Panel-local transform controller installed by the edgeless extension.
+ * @param props.controller - Supplies move targets and previews or commits gestures for the panel.
  * @returns Controls in the canvas plane, or nothing outside an eligible selection.
  */
 export function EdgelessTransformControls({
@@ -47,6 +52,8 @@ export function EdgelessTransformControls({
   const isGroup = element?.type === "group";
   const groupAngle =
     typeof element?.props.rotation === "number" ? normalizeRotation(element.props.rotation) : 0;
+  // Disable grid snapping for rotated elements because it breaks drag and resize interactions.
+  const snapGrid = !alt && settings.snap && groupAngle === 0 ? settings.grid : 0;
   // Persisted group identity must survive having just one remaining target.
   const groupData = useMemo(
     () => (isGroup ? { rotation: groupAngle, children: [] } : undefined),
@@ -161,6 +168,7 @@ export function EdgelessTransformControls({
       return;
     }
     box.setAttribute("data-editor-control", "");
+    box.style.pointerEvents = id && !eligible ? "none" : "";
     if (id) {
       box.setAttribute("data-edgeless-controls-for", id);
     }
@@ -211,7 +219,7 @@ export function EdgelessTransformControls({
     };
     box.addEventListener("keydown", key);
     return () => box.removeEventListener("keydown", key);
-  }, [targets, id]);
+  }, [targets, id, eligible]);
 
   const guidelines = useMemo(() => {
     if (!settings.align || !plane) {
@@ -346,14 +354,16 @@ export function EdgelessTransformControls({
       resizable={Boolean(eligible)}
       keepRatio={isGroup || shift}
       rotatable={Boolean(eligible)}
-      hideDefaultLines={targets.length === 0}
+      hideDefaultLines={targets.length === 0 || Boolean(id && !eligible)}
       hideChildMoveableDefaultLines
       passDragArea
       renderDirections={["n", "e", "s", "w", "nw", "ne", "sw", "se"]}
       useResizeObserver
       zoom={1 / settings.zoom}
       snappable={shift || (!alt && (settings.snap || settings.align))}
-      snapRotationDegrees={shift ? Array.from({ length: 25 }, (_, index) => index * 15 - 180) : []}
+      snapRotationDegrees={
+        shift ? Array.from({ length: 25 }, (value, index) => index * 15 - 180) : []
+      }
       snapRotationThreshold={shift ? 7.5 : 0}
       snapDirections={{
         left: true,
@@ -374,8 +384,8 @@ export function EdgelessTransformControls({
       snapHorizontalThreshold={8 / settings.zoom}
       snapVerticalThreshold={8 / settings.zoom}
       snapGap={false}
-      snapGridWidth={!alt && settings.snap ? settings.grid : 0}
-      snapGridHeight={!alt && settings.snap ? settings.grid : 0}
+      snapGridWidth={snapGrid}
+      snapGridHeight={snapGrid}
       elementGuidelines={alt ? [] : guidelines}
       onDragStart={(event) => {
         if (!controller.isMoving(reactPanel) && !startEdgeDrag(event.inputEvent)) {

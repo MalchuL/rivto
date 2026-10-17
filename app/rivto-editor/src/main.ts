@@ -75,7 +75,7 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
     },
   });
-  mainWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+  mainWindow.webContents.session.setPermissionRequestHandler((contents, permission, callback) =>
     callback(false),
   );
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

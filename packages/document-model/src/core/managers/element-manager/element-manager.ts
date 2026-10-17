@@ -579,12 +579,12 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * Subclasses call super first, then use the returned IDs for their added work;
    * record readers see current transaction state without a collection scan.
    * @param events - Changes relative to the element storage map, including deleted keys.
-   * @param _transaction - Commit identity available to subclasses; the default manager publishes at the update event.
+   * @param transaction - Commit identity available to subclasses; the default manager publishes at the update event.
    * @returns Changed or deleted element IDs; the default manager performs no external persistence.
    */
   protected onRecordsChanged(
     events: readonly CRDTObserveEvent[],
-    _transaction: unknown,
+    transaction: unknown,
   ): ReadonlySet<string> {
     const changedIds = new Set<string>();
     let membershipChanged = false;
