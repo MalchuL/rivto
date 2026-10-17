@@ -201,7 +201,9 @@ test("closing an inactive shared panel preserves the active panel's presence", a
       ).__rivtoDocuments;
       const panel = [...runtime.panes].find((panel) => panel.id === "source")!;
       const collaboration = panel.reactEditor.getDocument().collaboration;
-      return collaboration.getStates().get(collaboration.clientId);
+      return panel.reactEditor.collaboration
+        .getParticipants()
+        .find((peer) => peer.clientId === collaboration.clientId);
     });
   await expect.poll(state).toHaveProperty("selection");
   const before = await state();
@@ -467,7 +469,9 @@ for (const repeat of [0, 200]) {
           }
         ).__rivtoSync;
         const channel = left.editor.getDocument().collaboration;
-        return channel.getStates().get(channel.clientId)?.selection;
+        return left.editor.collaboration
+          .getParticipants()
+          .find((peer) => peer.clientId === channel.clientId)?.selection;
       });
       await page.evaluate((side) => {
         const inspected = window as unknown as {
@@ -481,7 +485,11 @@ for (const repeat of [0, 200]) {
         inspected.__modeTiming = metrics;
         const channel = inspected.__rivtoSync.left.reactEditor.getDocument().collaboration;
         channel.subscribe(() => {
-          if (!channel.getStates().get(channel.clientId)?.selection) {
+          if (
+            !inspected.__rivtoSync.left.reactEditor.collaboration
+              .getParticipants()
+              .find((peer) => peer.clientId === channel.clientId)?.selection
+          ) {
             metrics.missing++;
           }
         });
@@ -533,7 +541,9 @@ for (const repeat of [0, 200]) {
               }
             ).__rivtoSync;
             const channel = left.editor.getDocument().collaboration;
-            return channel.getStates().get(channel.clientId)?.selection;
+            return left.editor.collaboration
+              .getParticipants()
+              .find((peer) => peer.clientId === channel.clientId)?.selection;
           }),
         ).toEqual(selected);
       }

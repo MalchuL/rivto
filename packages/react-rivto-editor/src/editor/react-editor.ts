@@ -87,6 +87,14 @@ export class ReactEditor implements ReactEditorApi {
   get commands(): DocumentEditorAPI["commands"] {
     return this.core.commands;
   }
+  /**
+   * Exposes the core's participant manager without taking ownership of agent registrations.
+   *
+   * @returns Headless collaboration manager shared by all panels of this editor.
+   */
+  get collaboration(): DocumentEditorAPI["collaboration"] {
+    return this.core.collaboration;
+  }
   /** @inheritdoc DocumentEditorAPI.selection */
   get selection(): DocumentEditorAPI["selection"] {
     return this.core.selection;

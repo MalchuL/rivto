@@ -1,8 +1,9 @@
 import { resolveSelectionEndpoints } from "../../managers/selection/selection-endpoints";
 import type { DocumentModel } from "@chulane/document-model";
-import { PanelDOM, findPanelElements } from "../../managers/events/panel-dom";
+import { PanelDOM, findPanelElements, isInPanel } from "../../managers/events/panel-dom";
+import { BLOCK_ID_SELECTOR } from "../../constants";
 import { pointAtOffset } from "../../managers/selection/editor-dom-selection";
-import { decodeSelection, type Presence } from "./state";
+import type { CollaborationParticipantState as Presence } from "@chulane/rivto";
 
 /** Attribute owned exclusively by the collaboration renderer on raw text hosts. */
 export const COLLABORATION_TEXT_ATTRIBUTE = "data-collaboration-text";
@@ -53,10 +54,10 @@ function textRects(content: HTMLElement, start: number, end: number): PresenceRe
 }
 
 /**
- * Resolves a peer's pointer into the viewer's surface coordinates.
+ * Resolves a participant's pointer into the viewer's surface coordinates.
  *
  * @param root - Receiving panel root.
- * @param presence - Validated remote state.
+ * @param presence - Validated local-agent or remote participant state.
  * @returns Screen-space pointer, or undefined for another mode or missing content.
  */
 function pointerRect(root: HTMLElement, presence: Presence): PresenceRect | undefined {
@@ -99,11 +100,90 @@ function pointerRect(root: HTMLElement, presence: Presence): PresenceRect | unde
 }
 
 /**
- * Measures only the mounted entities referenced by a remote selection.
+ * Checks whether two selected shells are consecutive in one rendered document region.
+ *
+ * Stops at the first block, including an unselected descendant. Embedded panel
+ * contents and separate canvas cards never bridge a selection decoration.
+ *
+ * @param dom - Receiving panel's DOM boundary.
+ * @param previous - Earlier selected shell in DOM order.
+ * @param next - Candidate shell to join to the previous decoration.
+ * @returns Whether no intervening block, body slot, or canvas-card boundary separates them.
+ */
+function adjacentBlocks(dom: PanelDOM, previous: HTMLElement, next: HTMLElement): boolean {
+  if (
+    dom.getBody(previous) ||
+    previous.closest("[data-edgeless-object-id]") !== next.closest("[data-edgeless-object-id]")
+  ) {
+    return false;
+  }
+  const walker = dom.root.ownerDocument.createTreeWalker(dom.root, NodeFilter.SHOW_ELEMENT, {
+    /**
+     * Includes block shells while pruning nested document occurrences.
+     *
+     * @param node - Element visited within the receiving panel.
+     * @returns Accept for shells, skip for wrappers, or reject for another panel.
+     */
+    acceptNode(node) {
+      const element = node as Element;
+      if (!isInPanel(dom.root, element)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return element.matches(BLOCK_ID_SELECTOR) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    },
+  });
+  walker.currentNode = previous;
+  return walker.nextNode() === next;
+}
+
+/**
+ * Joins consecutive selected rows into rectangles without enclosing unselected descendants.
+ *
+ * Only mounted selected blocks are measured. Side-by-side or overlapping rows
+ * retain separate outlines, as do rows separated by an unselected block.
+ *
+ * @param dom - Receiving panel's DOM boundary.
+ * @param ids - Fully selected block IDs; input order does not affect grouping.
+ * @returns Viewport rectangles for consecutive vertical groups of selected rows.
+ */
+function blockRects(dom: PanelDOM, ids: string[]): PresenceRect[] {
+  const blocks = ids.map((id) => dom.findBlock(id)).filter((block) => block !== null);
+  blocks.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1));
+  const result: PresenceRect[] = [];
+  let previous: HTMLElement | undefined;
+  for (const block of blocks) {
+    // The recursive shell includes descendants that this participant may not have selected.
+    const target = dom.getRow(block) ?? block;
+    const rect = box(target.getBoundingClientRect(), "object");
+    const group = result.at(-1);
+    if (
+      previous &&
+      group &&
+      rect.height > 0 &&
+      group.height > 0 &&
+      rect.y >= group.y + group.height - 1 &&
+      rect.x < group.x + group.width &&
+      rect.x + rect.width > group.x &&
+      adjacentBlocks(dom, previous, block)
+    ) {
+      const right = Math.max(group.x + group.width, rect.x + rect.width);
+      group.x = Math.min(group.x, rect.x);
+      group.width = right - group.x;
+      group.height = rect.y + rect.height - group.y;
+    } else {
+      result.push(rect);
+    }
+    previous = block;
+  }
+  return result;
+}
+
+/**
+ * Measures only the mounted entities referenced by a participant selection.
  *
  * @param root - Receiving panel root, excluding embedded document occurrences.
  * @param document - Current shared content used to resolve text anchors.
- * @param presence - Validated remote state.
+ * @param presence - Validated local-agent or remote participant state.
  * @returns Decorations in viewport coordinates; unavailable targets are omitted.
  */
 export function measurePresence(
@@ -114,14 +194,15 @@ export function measurePresence(
   const dom = new PanelDOM(root);
   const result: PresenceRect[] = [];
   if (presence.selection) {
-    const selection = decodeSelection(document, presence.selection);
+    const selection = presence.selection;
+    result.push(
+      ...blockRects(
+        dom,
+        selection.blocks.filter((range) => range.end === -1).map((range) => range.id),
+      ),
+    );
     for (const range of selection.blocks) {
-      if (range.end === -1) {
-        const block = dom.findBlock(range.id);
-        if (block) {
-          result.push(box(block.getBoundingClientRect(), "object"));
-        }
-      } else {
+      if (range.end !== -1) {
         const content = dom.findContent(range.id);
         if (content) {
           result.push(...textRects(content, range.start, range.end));

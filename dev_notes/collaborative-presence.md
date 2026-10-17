@@ -73,12 +73,76 @@ User IDs and names must be nonempty, names at most 128 characters, IDs at most 5
 characters, and colors six-digit hex values. Connection IDs are separate from
 host user IDs, so two tabs of one user do not overwrite one another.
 
+### Humans and headless agents
+
+Both `DocumentEditorAPI` and the React runtime expose `editor.collaboration`.
+The manager is implemented in core, independent of React, browser events and
+native Yjs imports. A session is the existing transport connection. A participant
+is one independent cursor/selection inside that session; `user.id` is display
+identity and does not determine registration ownership.
+
+```ts
+const agent = editor.collaboration.registerParticipant({
+  id: "reviewer-1",
+  user: { id: "ai-reviewer", name: "Reviewer", color: "#16a34a" },
+});
+
+agent.setSelection({
+  type: "selection",
+  blocks: [{ id: blockId, start: 5, end: 12 }],
+});
+agent.setPointer({ type: "canvas", x: 200, y: 150 });
+
+const state = agent.getState();
+const participants = editor.collaboration.getParticipants();
+agent.clear();   // Withdraw temporarily; later setters republish this same registration.
+agent.dispose(); // Withdraw permanently and free this session-local participant ID.
+```
+
+Registration publishes an empty block-mode presence and reserves its ID until
+`dispose()`, even while cleared. Duplicate IDs in the same document session are
+rejected, including across managers borrowing that model. Multiple participants
+may share a user ID; the overlay key is the pair `(clientId, participantId)`.
+A session envelope supports up to 1024 published participants. Invalid remote
+session envelopes are ignored; duplicate remote IDs are rendered only once.
+
+`setSelection` accepts normal core selections, preserves direction, and internally
+encodes text boundaries as CRDT positions. Reading state resolves those anchors
+against current content and omits deleted targets. It never changes the local
+editor selection, focus, document content or history. `setPointer` publishes
+immediately: headless callers control their update rate. Canvas coordinates are
+unscaled world coordinates and select edgeless mode. Panel coordinates are CSS
+pixels in panel content; block coordinates are fractions of that block's bounds;
+both select block mode. `setMode` changes mode and clears only the pointer.
+`getState()` returns detached retained state even while cleared; setters/getters
+throw after disposal. `dispose()` is idempotent and old handles cannot withdraw a
+replacement registered under the same ID. Destroying the core disposes its own
+registrations, leaving registrations owned by other managers intact.
+
+`collaborationExtension({ user })` remains the ordinary human setup. It registers
+a generated participant ID, owns DOM publication and renders every other valid
+participant, including agents in its own session. Browser blur, hidden tabs and
+panel cleanup clear only that human participant. Destroying the React extension
+disposes only its human registration; headless agent lifetime belongs to its
+caller or the core editor. Provider departure/expiry removes the entire session
+and therefore all of its participants from other clients.
+
+The Awareness payload now contains `participants: [{ id, user, mode, pointer,
+selection }]` instead of one top-level presence. This is a transient protocol
+change: communicating clients must use the same new format. There is no snapshot
+schema change or persisted-data migration. `CollaborationParticipant`,
+`CollaborationParticipantState`, `CollaborationPointer`, `CollaborationUser` and
+`CollaborationManagerApi` are exported by `@chulane/rivto`; the React package retains
+its existing `CollaborationUser` export.
+
 `CRDTDoc.collaboration` exposes connection identity, `setLocalState`, `getStates`,
 and `subscribe`. `DocumentModel.collaboration` exposes the same adapter-neutral
 capability. Returned states are detached. Presence subscriptions do not emit
-document-change notifications. The channel is reserved for the extension's
-complete local presence record while that extension is installed; it is not an
-API for independently overwriting that record from multiple features.
+document-change notifications. Core's participant manager owns the session's
+`participants` field and merges each participant update into the current envelope.
+Other top-level application fields are preserved. Calling raw `setLocalState`
+still replaces the complete envelope; integrations should use participant handles
+rather than independently overwrite another feature's presence record.
 
 Yjs owns one lazily created Awareness instance per adapter. It lives beside the
 Y.Doc, not in a Y.Map. Native encoded snapshots, portable model snapshots, JSON
@@ -580,3 +644,35 @@ movement, stable pointer identity and reduced motion. This verifies the existing
 animation behavior at the default timings, not a new end-to-end latency benchmark.
 Custom timing is covered by deterministic timer/animation tests. Safari pinch-zoom
 alignment remains a separate unresolved issue; this change does not address it.
+
+## Independent participant verification
+
+Core tests cover human/two-agent isolation, unchanged snapshots and local selection,
+zero document notifications, CRDT-anchor movement and deletion, detached reads,
+reserved/duplicate IDs, disposal and ID reuse, invalid input, malformed incoming
+states and cleanup after a transport callback throws. React lifecycle tests cover
+human-only teardown and rollback of a registration when UI mounting fails.
+The migrated anchor/schema tests now live beside the headless manager in core.
+
+Final core and React suites passed 127 and 436 tests respectively. Core/React
+package builds (including declarations), production demo build, TypeScript and
+formatting passed; focused ESLint reported only function-length warnings. All 150
+collaboration, focus, participant and sync browser cases passed with 12 workers in
+Chromium and Firefox. Eight final serial participant checks also passed in both
+modes at default size and repeat=200. They verify two local agents in both peers,
+human focus loss, agent withdrawal/republication/disposal and no document writes
+during repeated agent pointer updates. Updates are immediate core API calls;
+DOM timing uses two frames and overlay identity/count checks, not a claim that
+EMA has completely settled at that time.
+
+A separate serial run passed all 12 existing pointer performance cases in page,
+canvas and page whitespace, at default size and repeat=200. End-to-end pointer
+samples include the default 50 ms throttle, EMA settling and two subsequent
+frames: medians were 202–220.3 ms, sample ranges 200–233 ms, within the unchanged
+250 ms budget. Synchronous channel publication took at most 0.2 ms in Chromium
+and 1 ms in Firefox, with zero full-forest reads and zero document updates.
+Sixteen serial human-focus/agent checks also passed; human focus-transfer medians
+were 29.8–32.4 ms, comparable to the previously recorded 28.9–33.4 ms range.
+Safari and Electron were not tested. Safari pinch-zoom alignment remains a separate
+unresolved issue. Older clients using the single-participant envelope must be
+updated to exchange presence with this version.

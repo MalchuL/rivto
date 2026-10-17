@@ -21,3 +21,42 @@ test("accepts omitted timing, zero timing and independent custom timing", () => 
     collaborationExtension({ user, pointerThrottleMs: 100, pointerSmoothingMs: 80 }),
   ).not.toThrow();
 });
+
+test("extension cleanup disposes its human while retaining independently registered agents", async () => {
+  const { YjsDoc } = await import("@chulane/crdt-doc");
+  const { DocumentModelImpl } = await import("@chulane/document-model");
+  const { createDocumentEditor } = await import("@chulane/rivto");
+  const document = new DocumentModelImpl(new YjsDoc("extension-ownership"));
+  const core = createDocumentEditor({ document });
+  try {
+    const agent = core.collaboration.registerParticipant({ id: "agent", user });
+    agent.setPointer({ type: "canvas", x: 10, y: 20 });
+    expect(() =>
+      collaborationExtension({ user }).setup({
+        collaboration: core.collaboration,
+        extensions: {
+          mount: () => {
+            throw new Error("mount failed");
+          },
+        },
+      } as unknown as import("../../editor/types").ReactEditorApi),
+    ).toThrow("mount failed");
+    expect(core.collaboration.getParticipants()).toEqual([agent.getState()]);
+    const cleanup = collaborationExtension({ user }).setup({
+      collaboration: core.collaboration,
+      extensions: { mount: () => () => undefined },
+    } as unknown as import("../../editor/types").ReactEditorApi);
+    expect(core.collaboration.getParticipants()).toHaveLength(2);
+    cleanup?.();
+    expect(core.collaboration.getParticipants()).toEqual([agent.getState()]);
+    agent.setPointer({ type: "canvas", x: 30, y: 40 });
+    expect(core.collaboration.getParticipants()[0]!.pointer).toEqual({
+      type: "canvas",
+      x: 30,
+      y: 40,
+    });
+  } finally {
+    await core.destroy();
+    await document.destroy();
+  }
+});

@@ -1,17 +1,13 @@
 import type { ReactPanelApi } from "../../panels/types";
 import { PanelDOM, isInPanel } from "../../managers/events/panel-dom";
 import { canvasPoint } from "../../elements/visuals/utils/canvas-point";
-import {
-  encodeSelection,
-  decodeSelection,
-  presenceSchema,
-  type Presence,
-  type CollaborationUser,
-} from "./state";
+import type { CollaborationParticipant, CollaborationPointer, EditorMode } from "@chulane/rivto";
 
 /** Shared ownership between mounted panels of one extension instance. */
 export interface PresenceOwner {
   panel?: ReactPanelApi;
+  /** Local human registration; sibling agents have independent ownership. */
+  participant: CollaborationParticipant;
 }
 
 /**
@@ -25,8 +21,8 @@ export interface PresenceOwner {
 function pointerAt(
   root: HTMLElement,
   event: PointerEvent,
-  mode: Presence["mode"],
-): Presence["pointer"] {
+  mode: EditorMode,
+): CollaborationPointer | null {
   if (mode === "edgeless") {
     return { type: "canvas", ...canvasPoint(event, root) };
   }
@@ -64,9 +60,9 @@ function pointerAt(
  */
 function trackPointer(
   root: HTMLElement,
-  mode: Presence["mode"],
+  mode: EditorMode,
   active: () => boolean,
-  update: (pointer: Presence["pointer"]) => void,
+  update: (pointer: CollaborationPointer | null) => void,
   pointerThrottleMs: number,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -139,13 +135,13 @@ function captureNative(panel: ReactPanelApi, root: HTMLElement, event: Event): v
  * using older anchors, including during typing, deletion, and text replacement.
  *
  * @param panel - Panel owning the captured selection and native caret.
- * @param anchored - Relative positions captured before the content update.
+ * @param participant - Owner of retained CRDT text anchors for the local human.
  * @param active - Reports whether panel focus and IME state still allow restoration.
  * @returns Queues restoration only when the captured selection remains current.
  */
 function restoreAnchors(
   panel: ReactPanelApi,
-  anchored: Presence["selection"],
+  participant: CollaborationParticipant,
   active: () => boolean,
 ): void {
   const before = panel.selection.snapshot();
@@ -155,10 +151,13 @@ function restoreAnchors(
     return;
   }
   queueMicrotask(() => {
-    if (!active() || !before || !anchored || panel.selection.snapshot() !== before) {
+    if (!active() || !before || panel.selection.snapshot() !== before) {
       return;
     }
-    const resolved = decodeSelection(panel.document.getDocument(), anchored);
+    const resolved = participant.getState().selection;
+    if (!resolved) {
+      return;
+    }
     if (JSON.stringify(resolved.blocks) !== JSON.stringify(before.blocks)) {
       panel.selection.set({ ...before, blocks: resolved.blocks });
       panel.selection.scheduleIfSelectionUnchanged(() =>
@@ -174,22 +173,20 @@ function restoreAnchors(
  * @param panel - Existing local selection owner.
  * @param root - Mounted surface receiving keyboard, focus and composition events.
  * @param active - Reports whether this panel owns publication.
- * @param update - Receives encoded selection changes, excluding plugin namespaces.
+ * @param participant - Human registration receiving selections, excluding plugin namespaces.
  * @returns Cleanup releasing model subscriptions and native gesture listeners.
  */
 function trackSelection(
   panel: ReactPanelApi,
   root: HTMLElement,
   active: () => boolean,
-  update: (selection: Presence["selection"]) => void,
+  participant: CollaborationParticipant,
 ): () => void {
   let composing = false;
-  let anchored: Presence["selection"] = null;
   const canRestore = () => active() && !composing;
   const changed = () => {
     if (canRestore()) {
-      anchored = encodeSelection(panel.document.getDocument(), panel.selection.get());
-      update(anchored);
+      participant.setSelection(panel.selection.get() ?? null);
     }
   };
   const capture = (event: Event) => {
@@ -211,7 +208,7 @@ function trackSelection(
     .subscribe(() =>
       restoreAnchors(
         panel,
-        anchored,
+        participant,
         () => canRestore() && root.contains(root.ownerDocument.activeElement),
       ),
     );
@@ -238,12 +235,11 @@ function trackSelection(
  * Publishes one mounted panel while respecting active-panel and cleanup ownership.
  *
  * Switching surface modes or moving focus to another editor preserves the owner's
- * shared selection and drops only its pointer. The replacement publisher resumes that selection from awareness;
+ * shared selection and drops only its pointer. The replacement publisher resumes the same registration and its CRDT anchors;
  * cleanup checks the committed root before treating replacement as panel removal.
  *
  * @param panel - Panel whose selection and pointer are observed.
  * @param root - Its mounted surface, excluding nested panel occurrences.
- * @param user - Validated host identity.
  * @param owner - Shared publisher ownership across panels of this extension.
  * @param mode - Rendered surface mode.
  * @param pointerThrottleMs - Validated interval for outgoing pointer updates, in milliseconds.
@@ -252,40 +248,26 @@ function trackSelection(
 export function publishPresence(
   panel: ReactPanelApi,
   root: HTMLElement,
-  user: CollaborationUser,
   owner: PresenceOwner,
-  mode: Presence["mode"],
+  mode: EditorMode,
   pointerThrottleMs: number,
 ): () => void {
-  const collaboration = panel.document.getDocument().collaboration;
-  // Surface replacement destroys the old publisher, but its selection still belongs
-  // to this panel. Resume it from Awareness only for the same owner, so another
-  // panel cannot inherit a selection it never published.
-  const previous = presenceSchema.safeParse(
-    owner.panel === panel ? collaboration.getStates().get(collaboration.clientId) : undefined,
-  );
-  let state: Presence = {
-    user,
-    mode,
-    pointer: null,
-    selection: previous.success ? previous.data.selection : null,
-  };
+  // Surface replacement destroys the old publisher, but the selection belongs
+  // to the same human registration. Its CRDT anchors survive surface replacement
+  // without borrowing selection from another participant or editor session.
+  // Each agent owns a different registration, so human cleanup cannot erase it.
+  // Panel ownership still prevents an inactive surface from clearing the human.
+  const participant = owner.participant;
   let alive = true;
   const active = () =>
     alive &&
     root.ownerDocument.hasFocus() &&
     panel.editor.panels.getActive() === panel &&
     !root.ownerDocument.hidden;
-  const send = (patch: Partial<Presence>) => {
-    owner.panel = panel;
-    state = { ...state, ...patch };
-    collaboration.setLocalState(state);
-  };
   const clear = () => {
-    state = { ...state, pointer: null, selection: null };
     if (owner.panel === panel) {
       owner.panel = undefined;
-      collaboration.setLocalState(null);
+      participant.clear();
     }
   };
   const visibility = () => {
@@ -297,10 +279,24 @@ export function publishPresence(
     root,
     mode,
     active,
-    (pointer) => send({ pointer }),
+    (pointer) => {
+      owner.panel = panel;
+      participant.setPointer(pointer);
+    },
     pointerThrottleMs,
   );
-  const stopSelection = trackSelection(panel, root, active, (selection) => send({ selection }));
+  const stopSelection = trackSelection(
+    panel,
+    root,
+    () => {
+      if (active()) {
+        owner.panel = panel;
+        return true;
+      }
+      return false;
+    },
+    participant,
+  );
   // The live mode changes before the old surface unregisters. Comparing it with
   // this publisher's captured mode identifies replacement even while its root is absent.
   // A mounted panel losing focus also retains its user's selection: another user's
@@ -308,7 +304,7 @@ export function publishPresence(
   // Selection anchors survive both transitions; pointer coordinates belong to the old surface.
   const stopDeactivation = panel.subscribeDeactivation(() => {
     if (owner.panel === panel && (panel.mode.get() !== mode || panel.events.getRoot())) {
-      send({ mode: panel.mode.get(), pointer: null });
+      participant.setMode(panel.mode.get());
     } else {
       clear();
     }

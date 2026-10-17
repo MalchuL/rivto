@@ -1,11 +1,15 @@
 import type { DocumentModel } from "@chulane/document-model";
 import { PanelDOM } from "../../managers/events/panel-dom";
-import { presenceSchema, decodeSelection, type Presence, type CollaborationUser } from "./state";
+import type {
+  CollaborationManagerApi,
+  CollaborationParticipantState as Presence,
+  CollaborationUser,
+} from "@chulane/rivto";
 import { COLLABORATION_TEXT_ATTRIBUTE, measurePresence, type PresenceRect } from "./geometry";
 
-/** Screen-space geometry for one connected remote client. */
+/** Screen-space geometry for one participant, identified by its session and participant IDs. */
 export interface PeerGeometry {
-  id: number;
+  id: string;
   user: CollaborationUser;
   rects: PresenceRect[];
 }
@@ -19,21 +23,15 @@ export interface PresenceGeometry {
  * Marks mounted raw text hosts while selected by any participant, restoring untouched hosts on cleanup.
  *
  * @param root - Receiving panel root.
- * @param document - Current model used to ignore unresolved text anchors.
  * @param peers - Validated local and remote states.
  * @param marked - Hosts marked during the preceding measurement.
  * @returns Reconciles only changed markers; no document data is modified.
  */
-function markText(
-  root: HTMLElement,
-  document: DocumentModel,
-  peers: Presence[],
-  marked: Set<HTMLElement>,
-): void {
+function markText(root: HTMLElement, peers: readonly Presence[], marked: Set<HTMLElement>): void {
   const next = new Set<HTMLElement>();
   const dom = new PanelDOM(root);
   for (const peer of peers) {
-    for (const block of peer.selection ? decodeSelection(document, peer.selection).blocks : []) {
+    for (const block of peer.selection?.blocks ?? []) {
       if (block.end !== -1) {
         const content = dom.findContent(block.id);
         if (content) {
@@ -62,34 +60,32 @@ function markText(
  * @param root - Receiving panel surface.
  * @param document - Model owning presence and stable text anchors.
  * @param marked - Raw Markdown hosts currently revealed for precise cursor geometry.
- * @returns Current bounds and decorations for validated remote peers.
+ * @param collaboration - Core manager resolving participants from every session.
+ * @param localParticipantId - Human participant excluded from overlays in its own session.
+ * @returns Current bounds and decorations for other participants, including local agents.
  */
 function measure(
   root: HTMLElement,
   document: DocumentModel,
   marked: Set<HTMLElement>,
+  collaboration: CollaborationManagerApi,
+  localParticipantId: string,
 ): PresenceGeometry {
-  const collaboration = document.collaboration;
-  const participants = Array.from(collaboration.getStates()).flatMap(([id, state]) => {
-    const parsed = presenceSchema.safeParse(state);
-    return parsed.success ? [{ id, state: parsed.data }] : [];
-  });
+  const participants = collaboration.getParticipants();
   // Retained local selections need the same source layout as their remote highlights.
   // Otherwise blur restores preview only locally and shared card heights oscillate.
-  markText(
-    root,
-    document,
-    participants.map((peer) => peer.state),
-    marked,
-  );
+  markText(root, participants, marked);
   return {
     bounds: root.getBoundingClientRect(),
     peers: participants
-      .filter((peer) => peer.id !== collaboration.clientId)
+      .filter(
+        (peer) =>
+          peer.clientId !== document.collaboration.clientId || peer.id !== localParticipantId,
+      )
       .map((peer) => ({
-        id: peer.id,
-        user: peer.state.user,
-        rects: measurePresence(root, document, peer.state),
+        id: `${peer.clientId}:${peer.id}`,
+        user: peer.user,
+        rects: measurePresence(root, document, peer),
       })),
   };
 }
@@ -99,12 +95,16 @@ function measure(
  *
  * @param root - Mounted panel, excluding nested panel selection lookup.
  * @param document - Current shared document and transient channel.
+ * @param collaboration - Core manager resolving participants from every session.
+ * @param localParticipantId - Human registration to exclude from its own overlays.
  * @param listener - Receives measured screen geometry after relevant changes.
  * @returns Cleanup releasing observers, scheduled frames, and raw-text presentation markers.
  */
 export function observePresence(
   root: HTMLElement,
   document: DocumentModel,
+  collaboration: CollaborationManagerApi,
+  localParticipantId: string,
   listener: (geometry: PresenceGeometry) => void,
 ): () => void {
   const window = root.ownerDocument.defaultView!;
@@ -113,7 +113,7 @@ export function observePresence(
   const schedule = () => {
     frame ??= window.requestAnimationFrame(() => {
       frame = undefined;
-      listener(measure(root, document, marked));
+      listener(measure(root, document, marked, collaboration, localParticipantId));
     });
   };
   const unsubscribe = document.collaboration.subscribe(schedule);

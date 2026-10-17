@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditorApi } from "@chulane/rivto-react";
 
 interface PresenceMetrics {
   started: number;
@@ -10,25 +11,49 @@ interface PresenceMetrics {
 }
 type InspectedWindow = Window & {
   __presenceMetrics: PresenceMetrics;
-  __rivtoSync: { left: { editor: DocumentEditorAPI }; right: { editor: DocumentEditorAPI } };
+  __rivtoSync: {
+    left: { editor: DocumentEditorAPI; reactEditor: ReactEditorApi };
+    right: { editor: DocumentEditorAPI };
+  };
 };
 
-for (const mode of ["Page", "Edgeless", "Page whitespace"] as const) {
+for (const mode of [
+  "Page",
+  "Edgeless",
+  "Page whitespace",
+  "Page blocks",
+  "Edgeless blocks",
+] as const) {
   for (const repeat of [0, 200]) {
     test(`presence cost in ${mode}, repeat=${repeat}`, async ({ page }, testInfo) => {
       await page.goto(`/?sync=1&repeat=${repeat}&room=presence-cost-${crypto.randomUUID()}`);
       const left = page.locator('[data-editor-sync="left"]');
       const right = page.locator('[data-editor-sync="right"]');
       await expect(right.locator("[data-block-content]")).toHaveCount(2 + repeat);
-      if (mode === "Edgeless") {
-        await left.getByRole("button", { name: mode, exact: true }).click();
-        await right.getByRole("button", { name: mode, exact: true }).click();
+      if (mode.startsWith("Edgeless")) {
+        await left.getByRole("button", { name: "Edgeless", exact: true }).click();
+        await right.getByRole("button", { name: "Edgeless", exact: true }).click();
       }
       const text = left.locator("[data-block-content]").first();
       await text.click();
       await page.keyboard.press("Home");
       await page.keyboard.press("ArrowRight");
       await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(1);
+      if (mode.endsWith("blocks")) {
+        await page.evaluate(() => {
+          const panel = (
+            window as unknown as InspectedWindow
+          ).__rivtoSync.left.reactEditor.panels.getActive()!;
+          const ids = panel.document.blocks.getRootIds().slice(0, 2);
+          panel.selection.set({
+            type: "selection",
+            blocks: ids.map((id) => ({ id, start: 0, end: -1 })),
+            anchorBlockId: ids[0]!,
+            focusBlockId: ids[1]!,
+          });
+        });
+        await expect(page.locator('[data-collaboration-kind="object"]').first()).toBeVisible();
+      }
       await page.evaluate(() => {
         const inspected = window as unknown as InspectedWindow;
         const metrics: PresenceMetrics = {
@@ -109,10 +134,11 @@ for (const mode of ["Page", "Edgeless", "Page whitespace"] as const) {
         await expect
           .poll(() =>
             page.evaluate(() => {
-              const collaboration = (
-                window as unknown as InspectedWindow
-              ).__rivtoSync.left.editor.getDocument().collaboration;
-              return collaboration.getStates().get(collaboration.clientId)?.pointer;
+              const editor = (window as unknown as InspectedWindow).__rivtoSync.left.editor;
+              const clientId = editor.getDocument().collaboration.clientId;
+              return editor.collaboration
+                .getParticipants()
+                .find((peer) => peer.clientId === clientId)?.pointer;
             }),
           )
           .toHaveProperty("type", "panel");
@@ -125,8 +151,6 @@ for (const mode of ["Page", "Edgeless", "Page whitespace"] as const) {
       expect(metrics.forestReads).toBe(0);
       expect(metrics.documentUpdates).toBe(0);
       await expect(page.locator('[data-collaboration-kind="pointer"]')).toHaveCount(1);
-      await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(1);
-      await expect(right.locator("[data-collaboration-text]")).toHaveCount(1);
       console.log(
         JSON.stringify({
           browser: testInfo.project.name,
@@ -138,6 +162,13 @@ for (const mode of ["Page", "Edgeless", "Page whitespace"] as const) {
           documentUpdates: metrics.documentUpdates,
         }),
       );
+      if (mode.endsWith("blocks")) {
+        await expect(page.locator('[data-collaboration-kind="object"]')).toHaveCount(1);
+        await expect(right.locator("[data-collaboration-text]")).toHaveCount(0);
+      } else {
+        await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(1);
+        await expect(right.locator("[data-collaboration-text]")).toHaveCount(1);
+      }
     });
   }
 }

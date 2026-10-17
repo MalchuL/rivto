@@ -3,7 +3,6 @@ import { createPointerMotion } from "./pointer-motion";
 import { createPortal } from "react-dom";
 import { useEditorRoot, useReactPanel } from "../../hooks";
 import { SurfaceContext } from "../../surfaces/surface";
-import type { CollaborationUser } from "./state";
 import type { PresenceRect } from "./geometry";
 import { observePresence, type PresenceGeometry, type PeerGeometry } from "./observe";
 import { publishPresence, type PresenceOwner } from "./publish";
@@ -74,19 +73,16 @@ function PresenceDecoration({
  * Mounts a clipped, non-interactive overlay for one panel's remote collaborators.
  *
  * @param props - Host identity and publisher ownership shared across this extension's panels.
- * @param props.user - Validated collaborator display identity.
  * @param props.owner - Active publisher ownership protecting inactive-panel cleanup.
  * @param props.pointerThrottleMs - Validated outgoing pointer interval in milliseconds.
  * @param props.pointerSmoothingMs - Validated incoming pointer smoothing time constant in milliseconds.
  * @returns A portal containing remote pointers, carets, and selection highlights.
  */
 export function CollaborationOverlay({
-  user,
   owner,
   pointerThrottleMs,
   pointerSmoothingMs,
 }: {
-  user: CollaborationUser;
   owner: PresenceOwner;
   pointerThrottleMs: number;
   pointerSmoothingMs: number;
@@ -99,13 +95,19 @@ export function CollaborationOverlay({
     if (!root) {
       return;
     }
-    const stopObserving = observePresence(root, panel.document.getDocument(), setGeometry);
-    const stopPublishing = publishPresence(panel, root, user, owner, mode, pointerThrottleMs);
+    const stopObserving = observePresence(
+      root,
+      panel.document.getDocument(),
+      panel.editor.collaboration,
+      owner.participant.id,
+      setGeometry,
+    );
+    const stopPublishing = publishPresence(panel, root, owner, mode, pointerThrottleMs);
     return () => {
       stopPublishing();
       stopObserving();
     };
-  }, [root, panel, mode, owner, user, pointerThrottleMs]);
+  }, [root, panel, mode, owner, pointerThrottleMs]);
   if (!root || !geometry) {
     return null;
   }
