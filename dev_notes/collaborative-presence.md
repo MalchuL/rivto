@@ -102,7 +102,9 @@ No second retry, clock, heartbeat, or expiration mechanism was added.
 - The active panel publishes its selection. Panel instances share publisher
   ownership, so disposing an inactive panel cannot erase another panel's state.
 - Window blur, a hidden tab, panel deactivation and active-panel disposal withdraw
-  presence. Pointer exit removes only the pointer.
+  presence. Pointer exit removes only the pointer. Replacing the same panel's
+  surface during a mode switch preserves its shared selection and drops its
+  pointer; it is not treated as leaving the document.
 - Pointer movement coalesces geometry reads and publication to one update every
   50 ms. Selection changes publish immediately.
 - Edgeless pointers use canvas coordinates. Document pointers use stable block IDs
@@ -382,3 +384,166 @@ text and caret checked on every character. Median synchronous content updates
 were 0.2–0.3 ms in Chromium and 0–1 ms in Firefox, with six updates for six typed
 characters and zero full-forest reads. No valid before-fix typing latency is
 reported because the baseline failed the caret correctness assertion.
+
+## Remote highlights across surface mode changes
+
+Switching the selection author's panel from block to edgeless removed its surface
+root and deactivated its publisher, which withdrew the entire Awareness state.
+React could also mount an intermediate overlay with the previous root before
+publishing the replacement root; that overlay's cleanup withdrew presence again.
+The receiving panel then lost the remote highlight even though the author had not
+changed the selected content. Switching only the viewer's mode did not reproduce
+the loss in the original regression.
+
+The publisher now distinguishes a mode change from ordinary deactivation, updating
+the presentation mode and clearing only its pointer. A replacement publisher for
+the same owning panel resumes the existing selection from Awareness. Effect
+cleanup checks the panel's committed root in a microtask, withdrawing presence
+only when the panel really has no root. Runtime extension cleanup, disabled or removed
+panels, window blur and hidden tabs still withdraw presence. Local
+browser selection and the persisted document model were not changed.
+
+The original source-switch regression failed in Chromium and Firefox with 12
+workers and again serially. After the fix, all 42 collaboration/sync behavior
+cases passed with 12 workers. Coverage includes repeated switches by both author
+and viewer, normal and 200-additional-block documents, unchanged selection payloads
+without intermediate withdrawal, blur cleanup, and closing a panel in the same
+turn as a mode change. All 422 React unit tests passed. The production demo build,
+React typecheck, formatting and focused lint passed, with function-length warnings.
+Safari and Electron were not tested. The failing before-fix source-switch case
+has no valid performance comparison because it discarded the required highlight.
+
+Eight serial production checks passed after extending each case to eight switches
+on port 5183. The first round trip was warmup; the six remaining samples include
+mode setting, surface replacement and two animation frames. Chromium author/viewer
+medians were 31.4/31.8 ms at normal size (ranges 30.1–31.7/31.5–32.2 ms) and
+70.2/70.7 ms with 200 extra blocks (63.2–78.4/63.2–78.2 ms). Firefox medians were
+39.5/39 ms (30–49/30–48 ms) and 91.5/86.5 ms (80–114/80–98 ms), respectively.
+Synchronous mode setters took at most 0.1 ms in Chromium and 1 ms in Firefox.
+All cases retained identical selection payloads and recorded zero intermediate
+presence withdrawals while switching modes.
+
+## Independent highlights when focus moves between editors
+
+Clicking Olga's lower block deactivated Vlad's publisher and withdrew his upper
+block selection. A mounted, enabled panel now retains its published selection
+when another editor gains focus, while discarding its pointer. The existing
+ownership and removal checks still withdraw presence for disabled or closed panels.
+Document updates restore native selection only inside the focused editor, so a
+retained highlight cannot pull the caret back into an inactive editor.
+
+Raw Markdown presentation now includes the local published selection as well as
+remote selections. Otherwise an inactive author's block switched back to preview
+while receivers displayed source text. In edgeless this produced different card
+heights and repeated shared frame updates. Both views now retain source geometry
+until that selection is withdrawn; overlay decorations remain remote-only.
+
+The regression first failed in both browsers, in page and edgeless modes, both
+with 12 workers and serially. It selects different blocks in the two editors,
+checks both remote highlights, applies a remote edit without stealing focus,
+and alternates real clicks six times. It also asserts zero document updates
+during focus switching, at default size and with 200 additional blocks.
+
+Final verification: all 50 collaboration/sync browser cases passed with 12 workers
+in Chromium and Firefox; all 422 React unit tests passed. Production demo build,
+React typecheck and focused lint passed (function-length warnings only). Eight
+serial production focus checks also passed. Chromium page/edgeless medians were
+31.1/30.2 ms normally (ranges 30–31.4/29.8–30.6), and 29.6/31.1 ms with 200 extra
+blocks (28.8–29.7/30–33.2). Firefox medians were 32/31 ms normally (30–32/31–33),
+and 30/30 ms with 200 extra blocks (29–31/28–30). Timing runs from pointerdown
+through two animation frames, with both remote highlights checked after each
+click. Synchronous selection updates took at most 0.2 ms in Chromium and 1 ms
+in Firefox. Every measured case recorded zero document updates. The original
+implementation cannot supply a valid latency baseline because it loses the
+required highlight. Safari and Electron remain untested.
+
+## Expanded independent-selection regression coverage
+
+`e2e/collaboration-focus.spec.ts` adds six scenarios across all four combinations
+of page and edgeless surfaces (24 cases, 48 browser executions): overlapping
+ranges with one collapsed, moving ranges between blocks and removing stale source
+markers, typing/replacement and undo after focus transfer, deleting one selected
+block while preserving the other selection, hiding/resuming the tab, and repeated
+surface replacements with two retained selections. Input is real pointer/keyboard
+input except for deleting a block through the public manager and simulating tab
+visibility, which headless browsers do not reliably change for background tabs.
+Ctrl+Home selects the start of the focused block rather than the start of a wrapped
+visual line. Tests assert peer identity/color, rendered highlights, raw source
+markers, or synchronized content as appropriate; no failure is skipped or marked
+as expected.
+
+On the current production preview, the 12-worker run passed 45/48 executions.
+Three Firefox failures remained: deleting the upper selected block when the right
+editor uses edgeless (both left modes), and alternating surface replacements from
+left-edgeless/right-page. A serial Firefox run of deletion, mode replacement and
+visibility cases passed 10/12: deletion with both editors in edgeless and the
+left-edgeless/right-page replacement failure reproduced; the page/edgeless deletion
+case passed serially. These reveal outstanding behavior, not a green regression
+suite. Failure assertions report missing selection overlays or source markers;
+root causes have not been established in this test-only follow-up.
+
+The new file passes TypeScript using the demo's workspace path mappings,
+Prettier, and ESLint (one function-length warning for the describe callback).
+No runtime code changed in this follow-up, so previous production timing and unit
+results were not rerun. Safari, Electron and real OS tab visibility were not tested.
+
+## Text-anchor geometry regression coverage
+
+A further 20 cases in `e2e/collaboration-focus.spec.ts` exercise backward selections,
+ASCII and Unicode/emoji prefix insertion, prefix deletion, and undo/redo of another
+participant's prefix edit. Each runs in all four page/edgeless combinations.
+Assertions compare the remote highlight's actual bounding box against a DOM Range
+in the receiver's Markdown source, with less than two CSS pixels of rounding
+tolerance. Backward selection also checks that the named remote caret sits at the
+range's left endpoint. Prefix insertion/deletion checks synchronized content and
+the active native caret offset; emoji offsets explicitly use UTF-16 code units.
+These test retained anchors after actual keyboard edits, not just marker counts.
+
+All 40 new Chromium/Firefox executions passed with 12 workers. The added tests
+pass TypeScript with the demo workspace mappings, Prettier, and ESLint (only the
+existing describe-callback length warning). This follow-up changes tests and notes
+only; runtime performance measurements are not applicable to this change.
+
+The combined collaboration-focus, collaboration and sync run passed 133/138
+executions with 12 workers. All five failures were in the earlier deletion/mode
+replacement scenarios: two Chromium deletion cases, two Firefox deletion cases,
+and one Firefox mode-replacement case. Rerunning exactly those failures with one
+worker passed both Chromium cases; both Firefox deletion cases and the Firefox
+mode-replacement case failed again. No production changes or skipped assertions
+were introduced to hide these outstanding failures.
+
+## Fix for retained selections lost during native DOM replacement
+
+The deletion and mode-replacement failures share a native selection lifecycle
+cause. Firefox can discard its DOM range when a card or surface is remounted.
+The document-level `selectionchange` handler then receives no readable selection
+and clears model selection even for a panel that no longer owns browser focus.
+That model clear is published through Awareness and removes the remote highlight.
+A before-fix trace of deleting the upper card showed both publishers withdrawing
+their selections, even though the lower selected block survived.
+
+`TextSelectionController.onSelectionChange` now clears an unreadable native text
+selection only if that panel's root still contains its owner document's active
+element. Explicit model clears and focused native selection changes retain their
+existing behavior. The fix is in the shared native-selection handler, so it also
+protects editors without the collaboration extension. Comments and JSDoc explain
+why DOM detachment must not discard retained model selection.
+
+All 16 focused deletion/mode-replacement checks passed in Chromium and Firefox
+with 12 workers. The broader collaboration, sync, selection and history-delete
+run passed 221/222 checks; the Firefox WebRTC peer-close timeout seen in earlier
+runs recurred and passed when rerun alone with one worker. All 422 React unit
+tests passed, as did the production demo build, React typecheck and focused lint
+(function-length warnings only). A Firefox screenshot after upper-card deletion
+also confirmed the surviving lower block's yellow Olga highlight. Safari and
+Electron remain untested; the intermittent WebRTC cleanup timeout is not resolved
+by this selection fix.
+
+All 16 serial production timing checks passed at default size and repeat=200.
+Focus-transfer medians were 28.9–33.4 ms across Chromium/Firefox and both modes
+(sample range 28–34.2 ms), with zero document updates. Mode-replacement medians
+were 31.7–47 ms normally and 70.3–84 ms at repeat=200 (sample ranges 29.8–48 and
+62.8–113 ms), with zero transient presence withdrawals. Synchronous setters took
+at most 0.2 ms in Chromium and 1 ms in Firefox. These are the same interaction
+paths and build setup as the earlier measurements; the previously failing
+Firefox scenarios have no valid latency baseline because correctness failed.

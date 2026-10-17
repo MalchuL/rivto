@@ -36,11 +36,10 @@ for (const mode of ["Page", "Edgeless"] as const) {
     await page.mouse.move(1, 1);
     await expect(page.locator('[data-collaboration-kind="pointer"]')).toHaveCount(0);
     await right.locator(content).first().click();
-    await expect(page.locator('[data-collaboration-kind="caret"]')).toContainText("Olga");
-    await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCSS(
-      "color",
-      "rgb(234, 179, 8)",
-    );
+    await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(2);
+    await expect(
+      page.locator('[data-collaboration-kind="caret"]').filter({ hasText: "Olga" }),
+    ).toHaveCSS("color", "rgb(234, 179, 8)");
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     await expect(page.locator("[data-collaboration-kind]")).toHaveCount(0);
     await expect(right.locator("[data-collaboration-text]")).toHaveCount(0);
@@ -438,4 +437,289 @@ for (const mode of ["Page", "Edgeless"] as const) {
       (await text.textContent()) ?? "",
     );
   });
+}
+
+for (const repeat of [0, 200]) {
+  for (const side of ["left", "right"] as const) {
+    test(`retains remote selection highlights when ${side} switches surface modes, repeat=${repeat}`, async ({
+      page,
+    }) => {
+      await page.goto(`/?sync=1&repeat=${repeat}&room=mode-presence-${crypto.randomUUID()}`);
+      const left = page.locator('[data-editor-sync="left"]');
+      const right = page.locator('[data-editor-sync="right"]');
+      await expect(right.locator("[data-block-content]")).toHaveCount(2 + repeat);
+      await left.locator("[data-block-content]").first().click();
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+ArrowRight");
+      await page.keyboard.press("Shift+ArrowRight");
+      const highlight = page.locator('[data-collaboration-kind="selection"]');
+      await expect(highlight).toHaveCount(1);
+      const selected = await page.evaluate(() => {
+        const { left } = (
+          window as unknown as {
+            __rivtoSync: { left: { editor: import("@chulane/rivto").DocumentEditorAPI } };
+          }
+        ).__rivtoSync;
+        const channel = left.editor.getDocument().collaboration;
+        return channel.getStates().get(channel.clientId)?.selection;
+      });
+      await page.evaluate((side) => {
+        const inspected = window as unknown as {
+          __rivtoSync: Record<
+            string,
+            { reactEditor: import("@chulane/rivto-react").ReactEditorApi }
+          >;
+          __modeTiming: { started: number; synchronous: number[]; missing: number };
+        };
+        const metrics = { started: 0, synchronous: [] as number[], missing: 0 };
+        inspected.__modeTiming = metrics;
+        const channel = inspected.__rivtoSync.left.reactEditor.getDocument().collaboration;
+        channel.subscribe(() => {
+          if (!channel.getStates().get(channel.clientId)?.selection) {
+            metrics.missing++;
+          }
+        });
+        const mode = inspected.__rivtoSync[side].reactEditor.panels.getDefault()!.mode;
+        const set = mode.set.bind(mode);
+        mode.set = (next) => {
+          metrics.started = performance.now();
+          set(next);
+          metrics.synchronous.push(performance.now() - metrics.started);
+        };
+      }, side);
+      const samples: number[] = [];
+      const switching = page.locator(`[data-editor-sync="${side}"]`);
+      for (const mode of [
+        "Edgeless",
+        "Page",
+        "Edgeless",
+        "Page",
+        "Edgeless",
+        "Page",
+        "Edgeless",
+        "Page",
+      ]) {
+        await switching.getByRole("button", { name: mode, exact: true }).click();
+        samples.push(
+          await page.evaluate(
+            () =>
+              new Promise<number>((resolve) => {
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() =>
+                    resolve(
+                      performance.now() -
+                        (window as unknown as { __modeTiming: { started: number } }).__modeTiming
+                          .started,
+                    ),
+                  ),
+                );
+              }),
+          ),
+        );
+        await expect(highlight).toHaveCount(1);
+        await expect(highlight).toBeVisible();
+        await expect(right.locator("[data-collaboration-text]")).toHaveCount(1);
+        expect(
+          await page.evaluate(() => {
+            const { left } = (
+              window as unknown as {
+                __rivtoSync: { left: { editor: import("@chulane/rivto").DocumentEditorAPI } };
+              }
+            ).__rivtoSync;
+            const channel = left.editor.getDocument().collaboration;
+            return channel.getStates().get(channel.clientId)?.selection;
+          }),
+        ).toEqual(selected);
+      }
+      const metrics = await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __modeTiming: { synchronous: number[]; missing: number };
+            }
+          ).__modeTiming,
+      );
+      expect(metrics.missing).toBe(0);
+      console.log(JSON.stringify({ side, repeat, samples, ...metrics }));
+      await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+      await expect(highlight).toHaveCount(0);
+    });
+  }
+}
+
+test("withdraws presence when a panel closes during a mode change", async ({ page }) => {
+  await page.goto(`/?embeddings=1&room=mode-close-${crypto.randomUUID()}`);
+  const source = page.locator('[data-document-pane="source"]');
+  await source.locator("[data-block-content]").first().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.evaluate(() => {
+    const runtime = (
+      window as unknown as {
+        __rivtoDocuments: {
+          panes: Set<{ id: string; reactEditor: import("@chulane/rivto-react").ReactEditorApi }>;
+        };
+      }
+    ).__rivtoDocuments;
+    const editor = [...runtime.panes].find((pane) => pane.id === "source")!.reactEditor;
+    const channel = editor.getDocument().collaboration;
+    (window as unknown as { __readClosedPresence: () => unknown }).__readClosedPresence = () =>
+      channel.getStates().get(channel.clientId);
+    editor.panels.getActive()!.mode.set("edgeless");
+    document.querySelector<HTMLButtonElement>('[data-document-pane="source"] > button')!.click();
+  });
+  await expect(source).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            __readClosedPresence: () => unknown;
+          }
+        ).__readClosedPresence(),
+      ),
+    )
+    .toBeUndefined();
+});
+
+for (const repeat of [0, 200]) {
+  for (const mode of ["Page", "Edgeless"] as const) {
+    test(`keeps both collaborators' highlights when focus moves between editors in ${mode}, repeat=${repeat}`, async ({
+      page,
+    }) => {
+      await page.goto(`/?sync=1&repeat=${repeat}&room=two-selections-${crypto.randomUUID()}`);
+      const left = page.locator('[data-editor-sync="left"]');
+      const right = page.locator('[data-editor-sync="right"]');
+      await expect(right.locator("[data-block-content]")).toHaveCount(2 + repeat);
+      if (mode === "Edgeless") {
+        await left.getByRole("button", { name: mode, exact: true }).click();
+        await right.getByRole("button", { name: mode, exact: true }).click();
+      }
+      await left.locator("[data-block-content]").first().click();
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+ArrowRight");
+      await page.keyboard.press("Shift+ArrowRight");
+      await expect(right.locator("[data-block-content]").first()).toHaveAttribute(
+        "data-collaboration-text",
+        "",
+      );
+      await right.locator("[data-block-content]").nth(1).click();
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+ArrowRight");
+      await page.keyboard.press("Shift+ArrowRight");
+      await expect(left.locator("[data-block-content]").nth(1)).toHaveAttribute(
+        "data-collaboration-text",
+        "",
+      );
+      await expect(right.locator("[data-block-content]").first()).toHaveAttribute(
+        "data-collaboration-text",
+        "",
+      );
+      await expect(page.locator('[data-collaboration-kind="selection"]')).toHaveCount(2);
+      await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(2);
+      await page.evaluate(() => {
+        const { right } = (
+          window as unknown as {
+            __rivtoSync: { right: { editor: import("@chulane/rivto").DocumentEditorAPI } };
+          }
+        ).__rivtoSync;
+        const doc = right.editor.getDocument();
+        doc.blocks.insertText(doc.blocks.getRootIds()[0]!, 0, "REMOTE ");
+      });
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            window
+              .getSelection()
+              ?.focusNode?.parentElement?.closest<HTMLElement>("[data-editor-sync]")?.dataset
+              .editorSync,
+        ),
+      ).toBe("right");
+      await expect(page.locator('[data-collaboration-kind="selection"]')).toHaveCount(2);
+      await page.evaluate(() => {
+        const inspected = window as unknown as {
+          __rivtoSync: Record<
+            string,
+            { reactEditor: import("@chulane/rivto-react").ReactEditorApi }
+          >;
+          __focusTiming: { started: number; synchronous: number[]; updates: number };
+        };
+        const metrics = { started: 0, synchronous: [] as number[], updates: 0 };
+        inspected.__focusTiming = metrics;
+        document.addEventListener(
+          "pointerdown",
+          () => {
+            metrics.started = performance.now();
+          },
+          true,
+        );
+        for (const peer of Object.values(inspected.__rivtoSync)) {
+          const editor = peer.reactEditor;
+          editor.getDocument().subscribe(() => metrics.updates++);
+          const selection = editor.panels.getDefault()!.selection;
+          const set = selection.set.bind(selection);
+          selection.set = (value) => {
+            const start = performance.now();
+            set(value);
+            metrics.synchronous.push(performance.now() - start);
+          };
+        }
+      });
+      const samples: number[] = [];
+      for (let index = 0; index < 6; index++) {
+        const text =
+          index % 2 === 0
+            ? left.locator("[data-block-content]").first()
+            : right.locator("[data-block-content]").nth(1);
+        await text.click();
+        samples.push(
+          await page.evaluate(
+            () =>
+              new Promise<number>((resolve) => {
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() =>
+                    resolve(
+                      performance.now() -
+                        (window as unknown as { __focusTiming: { started: number } }).__focusTiming
+                          .started,
+                    ),
+                  ),
+                );
+              }),
+          ),
+        );
+        await expect(left.locator("[data-block-content]").nth(1)).toHaveAttribute(
+          "data-collaboration-text",
+          "",
+        );
+        await expect(right.locator("[data-block-content]").first()).toHaveAttribute(
+          "data-collaboration-text",
+          "",
+        );
+        await expect(page.locator('[data-collaboration-kind="caret"]')).toHaveCount(2);
+      }
+      const metrics = await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __focusTiming: { synchronous: number[]; updates: number };
+            }
+          ).__focusTiming,
+      );
+      expect(metrics.updates).toBe(0);
+      console.log(JSON.stringify({ mode, repeat, samples: samples.slice(1), ...metrics }));
+      await page.evaluate(() => {
+        // Synthetic blur must also model focus loss so pending pointer timers cannot republish.
+        Object.defineProperty(document, "hasFocus", { value: () => false });
+        window.dispatchEvent(new Event("blur"));
+      });
+      await expect(page.locator("[data-collaboration-kind]")).toHaveCount(0);
+    });
+  }
 }

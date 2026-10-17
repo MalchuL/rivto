@@ -1,7 +1,13 @@
 import type { ReactPanelApi } from "../../panels/types";
 import { PanelDOM, isInPanel } from "../../managers/events/panel-dom";
 import { canvasPoint } from "../../elements/visuals/utils/canvas-point";
-import { encodeSelection, decodeSelection, type Presence, type CollaborationUser } from "./state";
+import {
+  encodeSelection,
+  decodeSelection,
+  presenceSchema,
+  type Presence,
+  type CollaborationUser,
+} from "./state";
 
 /** Shared ownership between mounted panels of one extension instance. */
 export interface PresenceOwner {
@@ -197,9 +203,16 @@ function trackSelection(
     queueMicrotask(() => capture(event));
   };
   const unsubscribeSelection = panel.selection.subscribe(changed);
+  // Retained remote highlights must not restore native focus into an inactive editor.
   const unsubscribeDocument = panel.document
     .getDocument()
-    .subscribe(() => restoreAnchors(panel, anchored, canRestore));
+    .subscribe(() =>
+      restoreAnchors(
+        panel,
+        anchored,
+        () => canRestore() && root.contains(root.ownerDocument.activeElement),
+      ),
+    );
   const listeners = {
     keyup: capture,
     pointerup: capture,
@@ -222,6 +235,10 @@ function trackSelection(
 /**
  * Publishes one mounted panel while respecting active-panel and cleanup ownership.
  *
+ * Switching surface modes or moving focus to another editor preserves the owner's
+ * shared selection and drops only its pointer. The replacement publisher resumes that selection from awareness;
+ * cleanup checks the committed root before treating replacement as panel removal.
+ *
  * @param panel - Panel whose selection and pointer are observed.
  * @param root - Its mounted surface, excluding nested panel occurrences.
  * @param user - Validated host identity.
@@ -237,7 +254,18 @@ export function publishPresence(
   mode: Presence["mode"],
 ): () => void {
   const collaboration = panel.document.getDocument().collaboration;
-  let state: Presence = { user, mode, pointer: null, selection: null };
+  // Surface replacement destroys the old publisher, but its selection still belongs
+  // to this panel. Resume it from Awareness only for the same owner, so another
+  // panel cannot inherit a selection it never published.
+  const previous = presenceSchema.safeParse(
+    owner.panel === panel ? collaboration.getStates().get(collaboration.clientId) : undefined,
+  );
+  let state: Presence = {
+    user,
+    mode,
+    pointer: null,
+    selection: previous.success ? previous.data.selection : null,
+  };
   let alive = true;
   const active = () =>
     alive &&
@@ -263,13 +291,33 @@ export function publishPresence(
   };
   const stopPointer = trackPointer(root, mode, active, (pointer) => send({ pointer }));
   const stopSelection = trackSelection(panel, root, active, (selection) => send({ selection }));
-  const stopDeactivation = panel.subscribeDeactivation(clear);
+  // The live mode changes before the old surface unregisters. Comparing it with
+  // this publisher's captured mode identifies replacement even while its root is absent.
+  // A mounted panel losing focus also retains its user's selection: another user's
+  // interaction must not erase that highlight. Disabled panels still have no active root.
+  // Selection anchors survive both transitions; pointer coordinates belong to the old surface.
+  const stopDeactivation = panel.subscribeDeactivation(() => {
+    if (owner.panel === panel && (panel.mode.get() !== mode || panel.events.getRoot())) {
+      send({ mode: panel.mode.get(), pointer: null });
+    } else {
+      clear();
+    }
+  });
   const window = root.ownerDocument.defaultView!;
   root.ownerDocument.addEventListener("visibilitychange", visibility);
   window.addEventListener("blur", clear);
   return () => {
     alive = false;
-    clear();
+    // Root refs settle before this check, including intermediate effects during a mode switch.
+    // React can mount an intermediate publisher with the previous root before exposing
+    // the new one. Immediate cleanup would erase the selection resumed by its successor.
+    // Inspect the panel's current root, not this effect's captured root: a replacement
+    // keeps presence alive, while closing the panel leaves no root and withdraws it.
+    queueMicrotask(() => {
+      if (!panel.events.getRoot()) {
+        clear();
+      }
+    });
     stopPointer();
     stopSelection();
     stopDeactivation();

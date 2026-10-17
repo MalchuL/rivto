@@ -16,11 +16,11 @@ export interface PresenceGeometry {
 }
 
 /**
- * Marks mounted raw text hosts while remotely selected, restoring untouched hosts on cleanup.
+ * Marks mounted raw text hosts while selected by any participant, restoring untouched hosts on cleanup.
  *
  * @param root - Receiving panel root.
  * @param document - Current model used to ignore unresolved text anchors.
- * @param peers - Validated remote states.
+ * @param peers - Validated local and remote states.
  * @param marked - Hosts marked during the preceding measurement.
  * @returns Reconciles only changed markers; no document data is modified.
  */
@@ -70,23 +70,27 @@ function measure(
   marked: Set<HTMLElement>,
 ): PresenceGeometry {
   const collaboration = document.collaboration;
-  const peers = Array.from(collaboration.getStates()).flatMap(([id, state]) => {
+  const participants = Array.from(collaboration.getStates()).flatMap(([id, state]) => {
     const parsed = presenceSchema.safeParse(state);
-    return id !== collaboration.clientId && parsed.success ? [{ id, state: parsed.data }] : [];
+    return parsed.success ? [{ id, state: parsed.data }] : [];
   });
+  // Retained local selections need the same source layout as their remote highlights.
+  // Otherwise blur restores preview only locally and shared card heights oscillate.
   markText(
     root,
     document,
-    peers.map((peer) => peer.state),
+    participants.map((peer) => peer.state),
     marked,
   );
   return {
     bounds: root.getBoundingClientRect(),
-    peers: peers.map((peer) => ({
-      id: peer.id,
-      user: peer.state.user,
-      rects: measurePresence(root, document, peer.state),
-    })),
+    peers: participants
+      .filter((peer) => peer.id !== collaboration.clientId)
+      .map((peer) => ({
+        id: peer.id,
+        user: peer.state.user,
+        rects: measurePresence(root, document, peer.state),
+      })),
   };
 }
 
