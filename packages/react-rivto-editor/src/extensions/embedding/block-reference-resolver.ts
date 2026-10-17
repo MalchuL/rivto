@@ -46,13 +46,19 @@ export class BlockReferenceResolver {
 
   /**
    * Observes the resolved document without acquiring or loading its content.
+   *
    * The last known identity is retained after deletion so an acquiring view can
    * keep source history alive. Direct references observe only their preferred
    * source; unresolved or fallback references observe loaded candidates as well.
    * Ordinary text changes do not perform another location search.
+   * Each search publishes its result or error without scheduling another attempt.
+   * The first notification follows completion of the initial search; subscribing
+   * does not publish a synthetic missing result before that search completes.
+   *
    * @param reference - Persisted preferred document and document-local target ID.
-   * @param listener - Receives the current resolution, absence while unresolved, or a lookup error.
-   * @returns Cleanup cancelling searches and removing node/storage subscriptions.
+   * @param listener - Receives a completed resolution, missing location, or lookup error.
+   * @returns Cleanup cancelling pending searches and removing node/storage subscriptions.
+   * @throws If this resolver has been destroyed.
    */
   subscribeBlockLocation(
     reference: BlockReference,
@@ -63,7 +69,16 @@ export class BlockReferenceResolver {
     const watched = new Map<DocumentModel, () => void>();
     let location: BlockResolution = { ambiguous: false };
     let failed = false;
+    let settled = false;
     let generation = 0;
+    /**
+     * Starts one location search and supersedes results from earlier searches.
+     *
+     * Registry and source-presence changes may start another search through
+     * the subscriptions below; failed or missing results do not schedule one.
+     *
+     * @returns Scheduling of one lookup and publication of its current result or error.
+     */
     const search = () => {
       const current = ++generation;
       // CRDT structure observers can run before every record in a transaction is visible.
@@ -80,11 +95,13 @@ export class BlockReferenceResolver {
               ? result
               : { ...result, documentId: location.documentId };
             if (
+              !settled ||
               next.documentId !== location.documentId ||
               next.ambiguous !== location.ambiguous ||
               failed
             ) {
               failed = false;
+              settled = true;
               location = next;
               listener(next);
               watch();
@@ -146,7 +163,6 @@ export class BlockReferenceResolver {
       watched.clear();
     };
     this.locationSubscriptions.add(cleanup);
-    listener(location);
     refresh();
     return cleanup;
   }
