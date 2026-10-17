@@ -154,6 +154,38 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
+   * Anchors a block content boundary without exposing its CRDT text.
+   *
+   * @param id - Existing block identity.
+   * @param offset - Valid UTF-16 boundary in the block content.
+   * @param association - Zero follows the next character; -1 follows the preceding character.
+   * @returns Opaque position token independent of subsequent character insertions.
+   * @throws If the block is missing or the offset is invalid.
+   */
+  createTextPosition(id: string, offset: number, association: -1 | 0 = 0): string {
+    return this.requiredText(this.requiredBlock(id), "content").createRelativePosition(
+      offset,
+      association,
+    );
+  }
+
+  /**
+   * Resolves a text anchor only when its block still exists in the document.
+   *
+   * @param id - Block identity that originally owned the anchor.
+   * @param position - Opaque shared-text position token.
+   * @returns Current UTF-16 boundary, or undefined for missing blocks or invalid anchors.
+   */
+  resolveTextPosition(id: string, position: string): number | undefined {
+    if (!this.isPlaced(id)) {
+      return undefined;
+    }
+    const block = this.storage.get(id);
+    const text = block?.get("content");
+    return isCRDTText(text) ? text.resolveRelativePosition(position) : undefined;
+  }
+
+  /**
    * Returns one placed block. Cached index paths are validated lazily, so
    * moves and remote changes need no eager cache maintenance.
    *
@@ -456,6 +488,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   /**
    * Patch only supplied block fields. Nested CRDT containers stay alive so
    * unrelated concurrent edits are not discarded by whole-object replacement.
+   * Content patches reconcile only changed text, preserving unchanged CRDT anchors.
    *
    * @param id - ID of the block to update.
    * @param patch - Fields to validate and apply.
@@ -471,7 +504,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    *
    * Every target, collapse value, and property patch is validated before the
    * first shared write. Duplicate IDs are allowed and observe preceding
-   * property patches from the same batch.
+   * property patches from the same batch. Content patches retain unchanged text
+   * items and their relative positions using the same reconciliation as setBlockText.
    *
    * @param updates - Ordered block IDs and partial field updates.
    * @throws If a target is missing or a supplied value fails validation.
@@ -522,7 +556,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
           assignMap(this.requiredMap(block, "pluginData"), patch.pluginData, false);
         }
         if (patch.content !== undefined) {
-          assignText(this.requiredText(block, "content"), patch.content);
+          this.setBlockText(id, patch.content);
         }
         results.push(this.readBlockNode(block, id));
       });

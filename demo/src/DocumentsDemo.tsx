@@ -1,3 +1,4 @@
+import { collaborationExtension } from "@chulane/rivto-react";
 import { ModeManager } from "@chulane/rivto";
 import { BroadcastChannelProvider, WebRTCProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
@@ -72,6 +73,11 @@ export function DocumentsDemo() {
         }
       },
     });
+    const user = {
+      id: crypto.randomUUID(),
+      name: `Guest ${Math.floor(Math.random() * 1000)}`,
+      color: "#7c3aed",
+    };
     const prepared = new Map<string, DocumentModel>();
     const editor = new EditorStorage({
       openDocument: async (id) => {
@@ -93,6 +99,7 @@ export function DocumentsDemo() {
           editor,
           extensions: [
             standardPreset(),
+            collaborationExtension({ user }),
             pageDragExtension(),
             ...edgelessPreset(),
             embeddingExtension(),

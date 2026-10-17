@@ -688,6 +688,10 @@ class TextSelectionController {
   /**
    * Mirrors browser selection changes unless a canvas gesture, synthetic drag, or pending restoration owns selection.
    *
+   * An unreadable native range clears text selection only while this panel retains
+   * focus. Surface replacement and card reparenting can otherwise discard the
+   * browser range without changing the user's retained model selection.
+   *
    * @param input - Panel and surface mode receiving the browser selectionchange.
    * @returns False to leave the native event unclaimed.
    */
@@ -714,11 +718,15 @@ class TextSelectionController {
     } else if (!(mode === "edgeless" && findEdgelessRuntime(reactPanel)?.get().active)) {
       // Losing the browser range keeps a structural selection and clears carets.
       const current = reactPanel.selection.get();
+      const root = reactPanel.events.getRoot();
       // Reparenting may detach native endpoints before the scheduled restore.
       // Keep that model selection; explicit core clears still invalidate it.
       if (
         current &&
         !isStructuralSelection(current) &&
+        // Firefox drops native ranges when cards or surfaces are remounted. An
+        // unfocused panel must retain its model selection and remote highlight.
+        root?.contains(root.ownerDocument.activeElement) &&
         !reactPanel.selection.hasPendingSelectionCallback
       ) {
         reactPanel.selection.clear();

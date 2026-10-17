@@ -280,3 +280,8 @@ export type {
   BlockContextMenuRenderContext,
   BlockContextMenuEntry,
 } from "./managers/block-context-menu/types";
+
+export {
+  collaborationExtension,
+  type CollaborationUser,
+} from "./extensions/collaboration/extension";

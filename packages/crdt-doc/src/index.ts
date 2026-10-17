@@ -34,3 +34,5 @@ export type {
 
 export { YjsDocumentRegistry } from "./yjs-doc/document-registry";
 export type { DocumentCRDTRegistry } from "./types/document-registry";
+
+export type { Collaboration, CollaborationState } from "./types/collaboration";

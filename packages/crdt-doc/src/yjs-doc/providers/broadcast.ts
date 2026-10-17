@@ -1,3 +1,4 @@
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 import * as Y from "yjs";
 import type { CRDTDoc, Provider } from "../../types";
 import { YjsDoc } from "../yjs-doc";
@@ -14,7 +15,8 @@ import { YjsDoc } from "../yjs-doc";
 type BroadcastMessage =
   | { readonly type: "sync-step1"; readonly stateVector: Uint8Array; readonly expectReply: boolean }
   | { readonly type: "sync-step2"; readonly update: Uint8Array }
-  | { readonly type: "update"; readonly update: Uint8Array };
+  | { readonly type: "update"; readonly update: Uint8Array }
+  | { readonly type: "awareness"; readonly update: Uint8Array };
 
 /**
  * Syncs Yjs documents on the same origin without a network server.
@@ -28,6 +30,7 @@ export class BroadcastChannelProvider implements Provider {
 
   private channel: BroadcastChannel | null = null;
   private ydoc: Y.Doc | null = null;
+  private awareness: Awareness | null = null;
 
   /**
    * Creates a local same-origin sync provider.
@@ -39,10 +42,14 @@ export class BroadcastChannelProvider implements Provider {
   }
 
   /**
-   * Connects the provider to the given CRDT document.
+   * Connects the provider to the given CRDT document and transient awareness channel.
    *
-   * @param doc - The CRDT document to connect to.
-   * @returns A Promise that resolves when the connection is established.
+   * Increments the local presence clock for reconnect and announces document and
+   * awareness state after installing listeners. It does not wait for remote peers.
+   *
+   * @param doc - The Yjs-backed CRDT document to connect to.
+   * @returns A promise resolved after local listeners and the join handshake are installed.
+   * @throws If the adapter is incompatible, already connected, or BroadcastChannel setup fails.
    */
   async connect(doc: CRDTDoc): Promise<void> {
     if (!(doc instanceof YjsDoc)) {
@@ -53,10 +60,13 @@ export class BroadcastChannelProvider implements Provider {
     }
 
     this.ydoc = doc.doc;
+    this.awareness = doc.collaboration.awareness;
     this.channel = new BroadcastChannel(`rivto:${this.roomId}`);
     this.ydoc.on("update", this.handleDocUpdate);
+    this.awareness.on("update", this.handleAwarenessUpdate);
     // Listen before announcing so a same-tick peer reply is not dropped.
     this.channel.addEventListener("message", this.handleChannelMessage);
+    this.awareness.setLocalState(this.awareness.getLocalState());
     this.channel.postMessage({
       type: "sync-step1",
       stateVector: Y.encodeStateVector(this.ydoc),
@@ -65,10 +75,14 @@ export class BroadcastChannelProvider implements Provider {
   }
 
   /**
-   * Disconnects the provider from the given CRDT document.
+   * Disconnects the provider after sending a departure on this transport only.
    *
-   * @param doc - The CRDT document to disconnect from.
-   * @returns A Promise that resolves when the disconnection is complete.
+   * Other providers retain the document's local awareness state. The departure is
+   * posted before listeners are removed and the channel is closed.
+   *
+   * @param doc - The Yjs-backed CRDT document to disconnect from.
+   * @returns A promise resolved after local subscriptions and the channel are released.
+   * @throws If the adapter is incompatible, disconnected, or posting the departure fails.
    */
   async disconnect(doc: CRDTDoc): Promise<void> {
     if (!(doc instanceof YjsDoc)) {
@@ -78,12 +92,42 @@ export class BroadcastChannelProvider implements Provider {
       throw new Error("Provider not connected");
     }
 
+    if (this.awareness) {
+      // Send departure only on this transport; other attached providers stay present.
+      this.channel.postMessage({
+        type: "awareness",
+        update: encodeAwarenessUpdate(this.awareness, [this.awareness.clientID], new Map()),
+      } satisfies BroadcastMessage);
+      this.awareness.off("update", this.handleAwarenessUpdate);
+      this.awareness = null;
+    }
     this.ydoc.off("update", this.handleDocUpdate);
     this.channel.removeEventListener("message", this.handleChannelMessage);
     this.channel.close();
     this.channel = null;
     this.ydoc = null;
   }
+
+  /**
+   * Relays awareness heartbeats and changes without feeding them back to their source.
+   *
+   * @param changes - Client IDs whose presence changed or expired.
+   * @param origin - Source transport used to suppress echo.
+   * @returns Sends one transient message when this transport is connected.
+   */
+  private readonly handleAwarenessUpdate = (
+    changes: { added: number[]; updated: number[]; removed: number[] },
+    origin: unknown,
+  ): void => {
+    if (origin === this || !this.channel || !this.awareness) {
+      return;
+    }
+    const clients = [...changes.added, ...changes.updated, ...changes.removed];
+    this.channel.postMessage({
+      type: "awareness",
+      update: encodeAwarenessUpdate(this.awareness, clients),
+    } satisfies BroadcastMessage);
+  };
 
   /**
    * Broadcasts local Yjs updates while suppressing updates originating from this provider.
@@ -112,7 +156,23 @@ export class BroadcastChannelProvider implements Provider {
       return;
     }
 
+    if (message.type === "awareness") {
+      if (this.awareness && message.update instanceof Uint8Array) {
+        try {
+          applyAwarenessUpdate(this.awareness, message.update, this);
+        } catch {
+          // Malformed transport data must not interrupt document synchronization.
+        }
+      }
+      return;
+    }
     if (message.type === "sync-step1") {
+      if (this.awareness) {
+        this.channel.postMessage({
+          type: "awareness",
+          update: encodeAwarenessUpdate(this.awareness, [...this.awareness.getStates().keys()]),
+        } satisfies BroadcastMessage);
+      }
       const update = Y.encodeStateAsUpdate(this.ydoc, new Uint8Array(message.stateVector));
       if (update.byteLength > 0) {
         this.channel.postMessage({ type: "sync-step2", update } satisfies BroadcastMessage);

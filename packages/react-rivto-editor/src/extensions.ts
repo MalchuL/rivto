@@ -79,3 +79,8 @@ export {
 } from "./extensions/embedding/embedding";
 
 export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";
+
+export {
+  collaborationExtension,
+  type CollaborationUser,
+} from "./extensions/collaboration/extension";
