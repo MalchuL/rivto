@@ -40,6 +40,63 @@ test("renders plain writing text and keeps Markdown list syntax", async ({ page 
   ).toHaveText("item");
 });
 
+for (const mode of ["block", "edgeless"]) {
+  for (const repeat of [0, 200]) {
+    test(`inline code keeps paragraph height while editing (${mode}, repeat=${repeat})`, async ({
+      page,
+    }) => {
+      await page.goto(`/?repeat=${repeat}`);
+      await page.locator(`[data-editor-mode="${mode}"]`).click();
+      const preview = page
+        .locator(".markdown-content")
+        .filter({ has: page.locator(".markdown-preview p > code") })
+        .first();
+      const id = await preview.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+      if (!id) {
+        throw new Error("Expected block ID");
+      }
+      const block = page
+        .locator(blockIdSelector(id))
+        .locator(":scope > .page-block-row .markdown-content");
+      const editor = block.locator(".markdown-editor");
+      await block.scrollIntoViewIfNeeded();
+      const before = await block.boundingBox();
+      await editor.click();
+      await expect(editor).toBeFocused();
+      await expect(block.locator(".markdown-preview")).toHaveCount(0);
+      await expect(editor).toContainText("`inline code`");
+      expect((await block.boundingBox())?.height).toBe(before?.height);
+      await editor.evaluate((element) => (element as HTMLElement).blur());
+      await expect(block.locator(".markdown-preview p > code")).toHaveText("inline code");
+      expect((await block.boundingBox())?.height).toBe(before?.height);
+    });
+  }
+}
+
+for (const width of [1280, 1281]) {
+  for (const repeat of [0, 200]) {
+    test(`plain text keeps its painted position on focus (width=${width}, repeat=${repeat})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/?repeat=${repeat}`);
+      const editor = page
+        .locator(".markdown-editor")
+        .filter({ hasText: "Nested branch one owns several Markdown children." })
+        .first();
+      const content = editor.locator("..");
+      // Settle deferred layout before comparing the text's painted position.
+      await content.screenshot();
+      const before = await content.screenshot();
+      await editor.click();
+      await expect(editor).toBeFocused();
+      expect((await content.screenshot()).equals(before)).toBe(true);
+      await editor.evaluate((element) => (element as HTMLElement).blur());
+      expect((await content.screenshot()).equals(before)).toBe(true);
+    });
+  }
+}
+
 test("preserves an existing caret during an external text update", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
   const id = await block.getAttribute(BLOCK_ID_ATTRIBUTE);
