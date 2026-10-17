@@ -11,10 +11,11 @@ import { useReactPanel } from "../editor/use-react-panel";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
- * Returns whether a block is in an active whole-block selection.
+ * Returns whether a block is in the document's shared whole-block selection.
  *
  * Text selections return false even when an endpoint is inside this block, so
- * a caret or text range does not paint the complete block as selected.
+ * a caret or text range does not paint the complete block as selected. All mounted
+ * occurrences share this coverage, including inactive panels and embeddings.
  *
  * @param blockId - Stable ID whose whole-block membership is queried.
  * @returns True only while a structural selection contains `blockId`.

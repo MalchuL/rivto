@@ -2,7 +2,8 @@ import type { Selection } from "@chulane/rivto";
 
 /** Selection commands and DOM synchronization for one EditorPanel.
  * The model selection is shared by the document. Reads expose it only in the active
- * panel (or the default panel before activation) and within that panel's subtree. */
+ * panel (or the default panel before activation) and within that panel's subtree,
+ * except isBlockSelected, which exposes shared whole-block coverage for rendering. */
 export interface PanelSelectionApi {
   /** @returns A detached selection, or undefined when empty or owned by another panel. */
   get(): Selection | undefined;
@@ -25,7 +26,16 @@ export interface PanelSelectionApi {
    * Returns undefined when empty, outside this subtree, or owned by another panel.
    * Use get() when a detached copy is needed; do not mutate this snapshot. */
   snapshot(): Selection | undefined;
-  /** @param id - Block identifier. @returns Whether the block has structural coverage. */
+  /**
+   * Reads whole-block coverage shared by all panels of this document.
+   *
+   * Coverage does not depend on the active panel or containment of the complete
+   * selection; it does not grant ownership for commands or DOM restoration.
+   *
+   * @param id - Document-local block identifier.
+   * @returns Whether the shared structural selection covers the block. Carets
+   * and text ranges return false.
+   */
   isBlockSelected(id: string): boolean;
   /** @param id - Element identifier. @returns Whether the element is selected. */
   isElementSelected(id: string): boolean;

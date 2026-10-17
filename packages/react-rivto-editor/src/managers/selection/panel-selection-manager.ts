@@ -48,7 +48,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   /** @returns Detached current selection, or undefined when empty, outside this subtree,
    * or owned by another panel. */
   get(): Selection | undefined {
-    return this.ownsSelection() ? this.coreSelection.get() : undefined;
+    return this.isSelectionInActivePanel() ? this.coreSelection.get() : undefined;
   }
 
   /**
@@ -82,7 +82,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   /** Deletes selected content through core only when this panel owns the selection.
    * Does nothing when the selection is empty, outside this subtree, or owned by another panel. */
   delete(): void {
-    if (!this.ownsSelection()) {
+    if (!this.isSelectionInActivePanel()) {
       return;
     }
     const selection = this.coreSelection.get();
@@ -99,17 +99,26 @@ export class PanelSelectionManager implements PanelSelectionApi {
   /** @returns Immutable core selection snapshot with stable identity until selection changes,
    * or undefined when empty, outside this subtree, or owned by another panel. */
   snapshot(): Selection | undefined {
-    return this.ownsSelection() ? this.coreSelection.snapshot() : undefined;
+    return this.isSelectionInActivePanel() ? this.coreSelection.snapshot() : undefined;
   }
 
-  /** @returns Whether a block has structural selection coverage. */
+  /**
+   * Reads whole-block coverage from the document's shared selection in every panel.
+   *
+   * This visual query does not require active-panel ownership or containment of
+   * the complete selection. Commands and DOM restoration retain their own scope.
+   *
+   * @param id - Document-local block ID whose structural coverage is queried.
+   * @returns Whether the shared structural selection covers the block, including
+   * when another panel owns the selection. Text ranges and carets return false.
+   */
   isBlockSelected(id: string): boolean {
-    return this.ownsSelection() && this.coreSelection.isBlockSelected(id);
+    return this.coreSelection.isBlockSelected(id);
   }
 
   /** @returns Whether an element belongs to the current selection. */
   isElementSelected(id: string): boolean {
-    return this.ownsSelection() && this.coreSelection.isElementSelected(id);
+    return this.isSelectionInActivePanel() && this.coreSelection.isElementSelected(id);
   }
 
   /**
@@ -263,12 +272,23 @@ export class PanelSelectionManager implements PanelSelectionApi {
   }
 
   /**
-   * Checks active-root ownership and caches subtree containment by selection identity and block revision.
+   * Checks whether this is the active or default panel and contains the complete shared selection.
    *
-   * @returns Whether this panel owns the current core selection.
+   * Ownership requires the last activated root, or the default root when no active
+   * root is remembered, to match this panel's root. The shared selection must exist
+   * and every selected block and element must belong to this panel's boundaries.
+   * Subtree containment is cached by selection identity and block revision.
+   *
+   * This guards get(), snapshot(), delete(), and isElementSelected(); it does not
+   * assign ownership or focus a panel. isBlockSelected() deliberately bypasses it so an original block
+   * and its embeddings can all display the same structural selection.
+   *
+   * @returns Whether the root matches and the complete current selection is contained
+   * in this panel. Returns false for an absent selection or a selection outside its boundaries.
    */
-  private ownsSelection(): boolean {
+  private isSelectionInActivePanel(): boolean {
     const root = this.reactPanel.events.getRoot();
+    // Prefer the user's last active occurrence; the default only fills an absent active root.
     if (
       (this.reactPanel.editor.panels.getActiveRoot() ??
         this.reactPanel.editor.panels.getDefaultRoot()) !== root

@@ -1006,9 +1006,32 @@ test.each([10, 2000])(
     };
     for (let index = 0; index < count; index += 1) {
       expect(api.selection.isBlockSelected(`child-${index}`)).toBe(true);
+      expect(full.getSnapshot().api!.selection.isBlockSelected(`child-${index}`)).toBe(true);
+      expect(duplicate.getSnapshot().api!.selection.isBlockSelected(`child-${index}`)).toBe(true);
     }
     expect(parents).toBe(0);
     expect(forests).toBe(0);
+
+    const fullApi = full.getSnapshot().api!;
+    const duplicateApi = duplicate.getSnapshot().api!;
+    // Inactive panels paint coverage without gaining command ownership.
+    fullApi.selection.delete();
+    expect(f.a.document.blocks.hasBlock("child-0")).toBe(true);
+    fullRoot.dispatchEvent(event("focusin", fullRoot));
+    fullApi.selection.set(createStructuralSelection(["child-0", "same-id"]));
+    expect(api.selection.isBlockSelected("child-0")).toBe(true);
+    expect(duplicateApi.selection.isBlockSelected("child-0")).toBe(true);
+    expect(api.selection.snapshot()).toBeUndefined();
+    expect(f.b.editor.selection.isBlockSelected("same-id")).toBe(false);
+    fullApi.selection.clear();
+    for (const panel of [api, fullApi, duplicateApi]) {
+      expect(panel.selection.isBlockSelected("child-0")).toBe(false);
+    }
+    embeddedRoot.dispatchEvent(event("focusin", embeddedRoot));
+    api.selection.set(createCaretSelection("child-0", 0));
+    for (const panel of [api, fullApi, duplicateApi]) {
+      expect(panel.selection.isBlockSelected("child-0")).toBe(false);
+    }
 
     api.selection.set(createCaretSelection("child-0", 0));
     // A hidden document ancestor is outside the embedding's displayed subtree.

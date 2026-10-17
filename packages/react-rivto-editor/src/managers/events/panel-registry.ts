@@ -10,7 +10,15 @@ import { PANEL_SELECTOR } from "./panel-dom";
 const pointerRoots = new WeakMap<Document, HTMLElement>();
 const pointerEventRoots = new WeakMap<Event, HTMLElement>();
 
-/** Owns mounted document roots, focus, and event routing between their panels. */
+/**
+ * Owns mounted document roots, focus, and event routing between their panels.
+ *
+ * Each ReactEditor instance owns its own registry; this is not a global registry
+ * of every editor on the page. Panels register with the editor supplying their
+ * document, independently of where their DOM roots are nested. An embedding of
+ * document A inside document B therefore registers with A's editor, alongside
+ * any full-document panels of A, rather than with the surrounding editor of B.
+ */
 export class PanelRegistry {
   private activeRoot: HTMLElement | null = null;
   private pointerRoot?: HTMLElement;
@@ -43,21 +51,52 @@ export class PanelRegistry {
       this.rootListeners.delete(listener);
     };
   }
-  /** Returns the API for the last activated registered panel. The panel remains remembered
-   * when focus leaves the editor. Returns undefined before activation, after its root
-   * is removed, or when that root was registered without an API. */
+  /**
+   * Returns the API of the last activated panel registered with this document editor.
+   *
+   * Activation follows focus, pointer-down, input, or keyboard events routed to a
+   * panel. Hover alone does not activate it. The panel remains remembered when
+   * focus leaves the editor; this is not a query for the browser's focused element.
+   * This method does not fall back to getDefault() or activate another panel.
+   *
+   * @returns The last activated panel's API, or undefined before activation, after
+   * its root is removed, or when that root was registered without an API.
+   */
   getActive(): ReactPanelApi | undefined {
     return this.activeRoot ? this.getApi(this.activeRoot) : undefined;
   }
-  /** Returns the first registered full-document panel, falling back to the first subtree.
-   * Returns undefined when no root is registered or the chosen root has no API.
-   * This choice does not depend on which panel is active. */
+  /**
+   * Returns the API of the preferred registered panel without consulting activation history.
+   *
+   * Uses getDefaultRoot(): the first registered full-document panel takes priority
+   * over subtree panels, including embeddings. If no full-document panel exists,
+   * the first registered subtree is used. Reading this default does not activate it
+   * or change the panel remembered by getActive().
+   *
+   * @returns The chosen panel's API, or undefined when no root is registered or
+   * the chosen root has no API. A missing API does not select a different root.
+   */
   getDefault(): ReactPanelApi | undefined {
     const root = this.getDefaultRoot();
     return root ? this.getApi(root) : undefined;
   }
-  /** Returns the last activated registered root without applying a fallback, or null
-   * before activation and after that root is removed. */
+  /**
+   * Returns the DOM root of the last activated panel registered with this document editor.
+   *
+   * Focus, pointer-down, input, and keyboard events can activate a panel; hover
+   * alone cannot. The root remains remembered when browser focus leaves the editor.
+   * For example, interacting with an embedding makes its root active even while
+   * getDefaultRoot() still prefers a mounted full-document panel.
+   *
+   * The remembered root belongs to this ReactEditor's registry. It can be an
+   * embedding rendered inside another editor's DOM, but it cannot be a panel
+   * registered only with that other editor. Activating another editor's panel
+   * leaves this registry's last active root remembered rather than replacing it.
+   *
+   * @returns The remembered root, or null before activation and after that root
+   * is removed. No default is applied; callers that need an initial fallback can
+   * use getActiveRoot() ?? getDefaultRoot().
+   */
   getActiveRoot(): HTMLElement | null {
     return this.activeRoot;
   }
@@ -79,7 +118,17 @@ export class PanelRegistry {
     return this.panels.get(root)?.api;
   }
 
-  /** @returns A mounted full-document surface, independent of interaction; falls back to the first subtree when no full document is mounted. */
+  /**
+   * Chooses a registered DOM root by panel scope and registration order, independently of interaction.
+   *
+   * Prefers the first full-document panel (registered without rootBlockId), even
+   * if an embedding registered earlier. When only subtree panels are mounted,
+   * uses the first of those. The choice is recomputed from current registrations;
+   * it neither reads nor changes the last activated root or browser focus.
+   *
+   * @returns The first registered full-document root, otherwise the first registered
+   * subtree root, or null when no panels are registered.
+   */
   getDefaultRoot(): HTMLElement | null {
     // Child refs mount first. Prefer the full document over an embedding until
     // an interaction explicitly activates one of its subtree occurrences.
@@ -212,6 +261,8 @@ export class PanelRegistry {
     if (boundary && !this.panels.has(boundary) && !this.pointerRoot) {
       // Another editor can take focus without discarding this editor's selection.
       // Keep the last occurrence so returning to it can extend that selection.
+      // The foreign boundary must not become this registry's activeRoot, even
+      // when its DOM is nested inside one of this editor's registered panels.
       if (activatesPanel) {
         if (this.activeRoot) {
           this.panels.get(this.activeRoot)?.deactivate?.();

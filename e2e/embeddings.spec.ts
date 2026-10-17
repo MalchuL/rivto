@@ -1933,3 +1933,174 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
   await expect(page.getByText("Recursive block reference.", { exact: true })).toHaveCount(0);
   await expect(embeds.first().locator("[data-block-content]").first()).toHaveText("Source text");
 });
+
+for (const repeat of [0, 200]) {
+  for (const canvas of [false, true]) {
+    test(`structural selection is shared with the original in ${canvas ? "edgeless" : "page"} repeat=${repeat}`, async ({
+      page,
+      browserName,
+    }) => {
+      test.setTimeout(120_000);
+      page.setDefaultTimeout(10_000);
+      await page.goto(`/?repeat=${repeat}`);
+      const today = page.locator('[data-journal-document="today"]');
+      const region = today.getByRole("region", { name: "Block editor" });
+      await expect(region.locator("[data-block-id]")).toHaveCount(5, { timeout: 30_000 });
+      if (canvas) {
+        await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+        await expect(region.locator("[data-block-id]")).toHaveCount(5, { timeout: 30_000 });
+      }
+      const embedded = region.locator("[data-block-id]").first();
+      const id = await embedded.getAttribute("data-block-id");
+      const occurrences = today.locator(`[data-block-id="${id}"]`);
+      await expect(occurrences).toHaveCount(2);
+      const samples = [];
+      for (let index = 0; index < 3; index += 1) {
+        const row = embedded.locator(":scope > .page-block-row");
+        await row.hover();
+        const start = Date.now();
+        await row.locator(":scope > .rivto-slot > .block-handle").click({ button: "right" });
+        await expect(embedded).toHaveAttribute("data-block-selected", "true");
+        const timing = await page.evaluate(async () => {
+          const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+          const selection = editor.selection.get()!;
+          editor.selection.clear();
+          const start = performance.now();
+          editor.selection.set(selection);
+          const command = performance.now() - start;
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          return { command, render: performance.now() - start };
+        });
+        samples.push({ ...timing, pointer: Date.now() - start });
+        await page.keyboard.press("Escape");
+      }
+      console.log(
+        `shared selection ${browserName} ${canvas ? "edgeless" : "page"} repeat=${repeat} ${JSON.stringify(samples)}`,
+      );
+      for (const occurrence of await occurrences.all()) {
+        await expect(occurrence).toHaveAttribute("data-block-selected", "true");
+      }
+      await page.evaluate(() =>
+        (
+          window as unknown as { __rivtoDemo: JournalInspection }
+        ).__rivtoDemo.editor.selection.clear(),
+      );
+      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+      const originalIndex = await occurrences.evaluateAll((elements) =>
+        elements.findIndex(
+          (element) => !element.closest('[role="region"][aria-label="Block editor"]'),
+        ),
+      );
+      expect(originalIndex).toBeGreaterThanOrEqual(0);
+      const originalRow = occurrences.nth(originalIndex).locator(":scope > .page-block-row");
+      // Canvas cards can overlap the original; target its menu handler after focusing it.
+      const originalHandle = originalRow.locator(":scope > .rivto-slot > .block-handle");
+      await originalHandle.focus();
+      await originalHandle.dispatchEvent("contextmenu", { button: 2 });
+      for (const occurrence of await occurrences.all()) {
+        await expect(occurrence).toHaveAttribute("data-block-selected", "true");
+      }
+      await page.keyboard.press("Escape");
+      const text = embedded.locator(":scope > .page-block-row [data-block-content]").first();
+      await text.click();
+      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+      expect(
+        await region.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
+      ).toBe(true);
+      await text.press("Home");
+      await text.press("Shift+ArrowRight");
+      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+      expect(
+        await region.evaluate((element) =>
+          element.contains(element.ownerDocument.getSelection()?.anchorNode ?? null),
+        ),
+      ).toBe(true);
+    });
+  }
+}
+
+for (const repeat of [0, 200]) {
+  for (const canvas of [false, true]) {
+    test(`cross-document structural selection reaches the source and both embeddings in ${canvas ? "edgeless" : "page"} repeat=${repeat}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      page.setDefaultTimeout(10_000);
+      const room = await openDemo(page, repeat);
+      const source = page.locator('[data-document-pane="source"]');
+      const references = page.locator('[data-document-pane="references"]');
+      const childId = `${room}:child-0`;
+      // Equal IDs in separate documents must not share structural coverage.
+      await page.evaluate((id) => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        editor
+          .getEditor("references")!
+          .blocks.insertBlock({ id, type: "paragraph", content: "Unrelated host block" });
+      }, childId);
+      if (canvas) {
+        await source.getByRole("button", { name: "Toggle mode", exact: true }).click();
+        await references.getByRole("button", { name: "Toggle mode", exact: true }).click();
+        // Keep both reference cards above the canvas toolbar for real pointer input.
+        const zoom = references.getByRole("toolbar", { name: "Canvas zoom" });
+        for (let index = 0; index < 3; index += 1) {
+          await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
+        }
+      }
+      const embeds = references.getByRole("region", { name: "Block editor" });
+      await expect(embeds).toHaveCount(2);
+      const views = [embeds.first(), source, embeds.nth(1)];
+      const unrelated = references
+        .locator(`[data-block-id="${childId}"]`)
+        .filter({ hasText: "Unrelated host block" });
+      await expect(unrelated).toHaveCount(1);
+      await page.evaluate((roomId) => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        editor.getEditor("source")!.selection.set({
+          type: "selection",
+          blocks: [0, 1].map((index) => ({ id: `${roomId}:child-${index}`, start: 0, end: -1 })),
+          anchorBlockId: `${roomId}:child-0`,
+          focusBlockId: `${roomId}:child-1`,
+        });
+      }, room);
+      for (const view of views) {
+        await expect(view.locator("[data-block-selected]")).toHaveCount(2);
+      }
+      await expect(unrelated).not.toHaveAttribute("data-block-selected");
+      await page.evaluate(() => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        editor.getEditor("source")!.selection.clear();
+      });
+      await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+      for (const view of views) {
+        const row = view.locator(`[data-block-id="${childId}"] > .page-block-row`);
+        await row.hover({ position: { x: 6, y: 6 } });
+        await row.locator(":scope > .rivto-slot > .block-handle").click({ button: "right" });
+        for (const occurrence of views) {
+          await expect(occurrence.locator(`[data-block-id="${childId}"]`)).toHaveAttribute(
+            "data-block-selected",
+            "true",
+          );
+        }
+        await expect(unrelated).not.toHaveAttribute("data-block-selected");
+        expect(
+          await page.evaluate(() => {
+            const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+              .__rivtoDocuments;
+            return editor.getEditor("references")!.selection.get();
+          }),
+        ).toBeUndefined();
+        await page.keyboard.press("Escape");
+        await row.locator("[data-block-content]").click({ position: { x: 10, y: 8 } });
+        await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+        expect(
+          await view.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
+        ).toBe(true);
+      }
+    });
+  }
+}
