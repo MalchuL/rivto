@@ -51,6 +51,8 @@ export default tseslint.config(
   {
     plugins: { jsdoc },
     rules: {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "off",
       "no-nested-ternary": "error",
       "max-lines-per-function": ["warn", 50],
       "jsdoc/require-jsdoc": ["error", methodDocumentation],
@@ -84,10 +86,6 @@ export default tseslint.config(
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { args: "none", ignoreRestSiblings: true },
-      ],
     },
   },
   {
@@ -197,7 +195,6 @@ export default tseslint.config(
     ],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
-      "@typescript-eslint/no-unused-vars": "off",
     },
   },
   prettier,

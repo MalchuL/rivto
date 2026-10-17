@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR } from "./dom-markers";
+import { BLOCK_ID_SELECTOR, HOST_BLOCK_ID_SELECTOR } from "./dom-markers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -31,7 +31,7 @@ test("creates every paragraph through the chosen trailing insertion target", asy
     const row = roots.nth(index).locator(":scope > .page-block-row");
     await row.click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
   }
-  await expect(page.locator("[data-block-selected]")).toHaveCount(count);
+  await expect(page.locator(`${HOST_BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(count);
 
   await page.keyboard.press("Delete");
   await expect(roots).toHaveCount(0);

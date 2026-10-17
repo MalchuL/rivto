@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR, blockIdSelector } from "./dom-markers";
+import {
+  BLOCK_ID_ATTRIBUTE,
+  BLOCK_ID_SELECTOR,
+  HOST_BLOCK_ID_SELECTOR,
+  blockIdSelector,
+} from "./dom-markers";
 
 interface ClipboardBlock {
   children: ClipboardBlock[];
@@ -78,7 +83,7 @@ test("supports collapse keys for editing and multi-block selection", async ({ pa
   await page.keyboard.press("Control+;");
   await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
   await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(2);
+  await expect(page.locator(`${HOST_BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(2);
 });
 
 test("moves a hidden caret selection to its collapsed parent", async ({ page }) => {
@@ -89,7 +94,7 @@ test("moves a hidden caret selection to its collapsed parent", async ({ page }) 
   await parent.locator(":scope > .page-block-row [data-collapse-toggle]").click();
 
   await expect(parent).toHaveAttribute("data-block-selected", "true");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+  await expect(page.locator(`${HOST_BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => getSelection()?.rangeCount ?? 0)).toBe(0);
 });
 

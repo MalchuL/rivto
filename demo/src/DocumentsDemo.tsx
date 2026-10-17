@@ -152,11 +152,14 @@ export function DocumentsDemo() {
             id: sourceId,
             ...paragraphBlockFactory.createEmptyBlock(),
             content: "Source text",
-            children: Array.from({ length: 2 + Number(params.get("repeat") ?? 0) }, (value, index) => ({
-              id: `${room}:child-${index}`,
-              ...paragraphBlockFactory.createEmptyBlock(),
-              content: `Source child ${index}`,
-            })),
+            children: Array.from(
+              { length: 2 + Number(params.get("repeat") ?? 0) },
+              (value, index) => ({
+                id: `${room}:child-${index}`,
+                ...paragraphBlockFactory.createEmptyBlock(),
+                content: `Source child ${index}`,
+              }),
+            ),
           },
         ]);
         await create("references", [
