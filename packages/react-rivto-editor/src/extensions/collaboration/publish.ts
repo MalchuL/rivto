@@ -50,7 +50,7 @@ function pointerAt(
 }
 
 /**
- * Coalesces pointer geometry reads and publication to one update every 50 ms.
+ * Coalesces pointer geometry reads and publication using the configured interval.
  *
  * Captured scroll events remeasure the last pointer against current content,
  * including scrollable ancestors. Leaving the surface discards that position.
@@ -59,6 +59,7 @@ function pointerAt(
  * @param mode - Coordinate system of the surface.
  * @param active - Reports whether this panel may currently publish.
  * @param update - Receives the latest point or null on pointer exit.
+ * @param pointerThrottleMs - Validated timer delay in milliseconds; zero flushes on the next timer task.
  * @returns Cleanup cancelling pending work and native listeners.
  */
 function trackPointer(
@@ -66,6 +67,7 @@ function trackPointer(
   mode: Presence["mode"],
   active: () => boolean,
   update: (pointer: Presence["pointer"]) => void,
+  pointerThrottleMs: number,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: PointerEvent | undefined;
@@ -79,7 +81,7 @@ function trackPointer(
       if (active() && pending) {
         update(pointerAt(root, pending, mode));
       }
-    }, 50);
+    }, pointerThrottleMs);
   };
   const leave = () => {
     clearTimeout(timer);
@@ -244,6 +246,7 @@ function trackSelection(
  * @param user - Validated host identity.
  * @param owner - Shared publisher ownership across panels of this extension.
  * @param mode - Rendered surface mode.
+ * @param pointerThrottleMs - Validated interval for outgoing pointer updates, in milliseconds.
  * @returns Cleanup withdrawing only presence owned by this panel.
  */
 export function publishPresence(
@@ -252,6 +255,7 @@ export function publishPresence(
   user: CollaborationUser,
   owner: PresenceOwner,
   mode: Presence["mode"],
+  pointerThrottleMs: number,
 ): () => void {
   const collaboration = panel.document.getDocument().collaboration;
   // Surface replacement destroys the old publisher, but its selection still belongs
@@ -289,7 +293,13 @@ export function publishPresence(
       clear();
     }
   };
-  const stopPointer = trackPointer(root, mode, active, (pointer) => send({ pointer }));
+  const stopPointer = trackPointer(
+    root,
+    mode,
+    active,
+    (pointer) => send({ pointer }),
+    pointerThrottleMs,
+  );
   const stopSelection = trackSelection(panel, root, active, (selection) => send({ selection }));
   // The live mode changes before the old surface unregisters. Comparing it with
   // this publisher's captured mode identifies replacement even while its root is absent.

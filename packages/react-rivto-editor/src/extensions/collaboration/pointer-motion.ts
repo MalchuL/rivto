@@ -1,5 +1,3 @@
-/** Time constant in milliseconds; elapsed time makes smoothing independent of refresh rate. */
-const SMOOTHING_MS = 20;
 /** Subpixel residual at which animation stops without snapping to the network position. */
 const REST_DISTANCE = 0.25;
 
@@ -7,12 +5,13 @@ const REST_DISTANCE = 0.25;
  * Owns the displayed pointer position and follows network targets using exponential smoothing.
  *
  * Only this controller writes the transform. Incoming targets never overwrite an
- * already displayed position. First appearance and reduced motion are immediate.
+ * already displayed position. First appearance, zero smoothing and reduced motion are immediate.
  *
  * @param element - Mounted pointer decoration owned by this controller.
+ * @param smoothingMs - Validated finite nonnegative EMA time constant in milliseconds; zero disables animation. Elapsed time keeps smoothing independent of refresh rate.
  * @returns Target updater and cleanup cancelling frames and the media-query listener.
  */
-export function createPointerMotion(element: HTMLElement) {
+export function createPointerMotion(element: HTMLElement, smoothingMs: number) {
   const window = element.ownerDocument.defaultView!;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   let current: { x: number; y: number } | undefined;
@@ -35,7 +34,7 @@ export function createPointerMotion(element: HTMLElement) {
    */
   function tick(now: number): void {
     frame = undefined;
-    const alpha = -Math.expm1(-(now - last) / SMOOTHING_MS);
+    const alpha = -Math.expm1(-(now - last) / smoothingMs);
     last = now;
     current!.x += (target.x - current!.x) * alpha;
     current!.y += (target.y - current!.y) * alpha;
@@ -49,11 +48,11 @@ export function createPointerMotion(element: HTMLElement) {
    *
    * @param x - Target horizontal position relative to the panel, in CSS pixels.
    * @param y - Target vertical position relative to the panel, in CSS pixels.
-   * @returns Starts smoothing, or places the pointer immediately when motion is reduced.
+   * @returns Starts smoothing, or places the pointer immediately when motion is reduced or smoothing is zero.
    */
   function update(x: number, y: number): void {
     target = { x, y };
-    if (!current || reduced.matches) {
+    if (!current || reduced.matches || smoothingMs === 0) {
       if (frame !== undefined) {
         window.cancelAnimationFrame(frame);
         frame = undefined;

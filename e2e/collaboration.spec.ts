@@ -322,63 +322,69 @@ test("keeps page pointers in panel whitespace through scrolling and clears them 
   await expect(pointer).toHaveCount(0);
 });
 
-for (const mode of ["Page", "Edgeless"] as const) {
-  test(`interpolates remote pointers and respects reduced motion in ${mode}`, async ({ page }) => {
-    await page.goto(`/?sync=1&room=smooth-${crypto.randomUUID()}`);
-    const left = page.locator('[data-editor-sync="left"]');
-    const right = page.locator('[data-editor-sync="right"]');
-    await expect(right.locator("[data-block-content]")).toHaveCount(2);
-    if (mode === "Edgeless") {
-      await left.getByRole("button", { name: mode, exact: true }).click();
-      await right.getByRole("button", { name: mode, exact: true }).click();
-    }
-    const text = left.locator("[data-block-content]").first();
-    await text.click();
-    const bounds = (await text.boundingBox())!;
-    await page.mouse.move(bounds.x + 30, bounds.y + 10);
-    const pointer = page.locator('[data-collaboration-kind="pointer"]');
-    await expect(pointer).toHaveCount(1);
-    await pointer.evaluate((element) => {
-      (window as unknown as { __cursorFrames: Promise<number[]> }).__cursorFrames = new Promise(
-        (resolve) => {
-          const values: number[] = [element.getBoundingClientRect().x];
-          const sample = () => {
-            values.push(element.getBoundingClientRect().x);
-            if (values.length < 35) {
-              requestAnimationFrame(sample);
-            } else {
-              resolve(values);
-            }
-          };
-          requestAnimationFrame(sample);
-        },
+for (const repeat of [0, 200]) {
+  for (const mode of ["Page", "Edgeless"] as const) {
+    test(`interpolates remote pointers and respects reduced motion in ${mode}, repeat=${repeat}`, async ({
+      page,
+    }) => {
+      await page.goto(`/?sync=1&repeat=${repeat}&room=smooth-${crypto.randomUUID()}`);
+      const left = page.locator('[data-editor-sync="left"]');
+      const right = page.locator('[data-editor-sync="right"]');
+      await expect(right.locator("[data-block-content]")).toHaveCount(2 + repeat);
+      if (mode === "Edgeless") {
+        await left.getByRole("button", { name: mode, exact: true }).click();
+        await right.getByRole("button", { name: mode, exact: true }).click();
+      }
+      const text = left.locator("[data-block-content]").first();
+      await text.click();
+      const bounds = (await text.boundingBox())!;
+      await page.mouse.move(bounds.x + 30, bounds.y + 10);
+      const pointer = page.locator('[data-collaboration-kind="pointer"]');
+      await expect(pointer).toHaveCount(1);
+      await pointer.evaluate((element) => {
+        (window as unknown as { __cursorFrames: Promise<number[]> }).__cursorFrames = new Promise(
+          (resolve) => {
+            const values: number[] = [element.getBoundingClientRect().x];
+            const sample = () => {
+              values.push(element.getBoundingClientRect().x);
+              if (values.length < 35) {
+                requestAnimationFrame(sample);
+              } else {
+                resolve(values);
+              }
+            };
+            requestAnimationFrame(sample);
+          },
+        );
+      });
+      await page.mouse.move(bounds.x + 150, bounds.y + 10);
+      const positions = await page.evaluate(
+        () => (window as unknown as { __cursorFrames: Promise<number[]> }).__cursorFrames,
       );
+      const first = positions[0]!;
+      const last = positions.at(-1)!;
+      expect(last - first).toBeGreaterThan(80);
+      expect(positions.filter((x) => x > first + 2 && x < last - 2).length).toBeGreaterThanOrEqual(
+        2,
+      );
+      const steps = positions.slice(1).map((x, index) => ({ x, delta: x - positions[index]! }));
+      const maximumStep = Math.max(...steps.map(({ delta }) => delta));
+      const laterSteps = steps.filter(
+        ({ x, delta }) =>
+          delta > 0.5 && x > first + (last - first) * 0.6 && x < first + (last - first) * 0.9,
+      );
+      expect(laterSteps.length).toBeGreaterThan(0);
+      expect(Math.max(...laterSteps.map(({ delta }) => delta))).toBeLessThan(maximumStep * 0.8);
+      const pointerNode = await pointer.elementHandle();
+      await page.keyboard.press("Shift+ArrowRight");
+      await expect(page.locator('[data-collaboration-kind="selection"]').first()).toBeVisible();
+      expect(await pointerNode!.evaluate((element) => element.isConnected)).toBe(true);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect(pointer).toHaveCSS("transition-duration", "0s");
+      await page.mouse.move(1, 1);
+      await expect(pointer).toHaveCount(0);
     });
-    await page.mouse.move(bounds.x + 150, bounds.y + 10);
-    const positions = await page.evaluate(
-      () => (window as unknown as { __cursorFrames: Promise<number[]> }).__cursorFrames,
-    );
-    const first = positions[0]!;
-    const last = positions.at(-1)!;
-    expect(last - first).toBeGreaterThan(80);
-    expect(positions.filter((x) => x > first + 2 && x < last - 2).length).toBeGreaterThanOrEqual(2);
-    const steps = positions.slice(1).map((x, index) => ({ x, delta: x - positions[index]! }));
-    const maximumStep = Math.max(...steps.map(({ delta }) => delta));
-    const laterSteps = steps.filter(
-      ({ x, delta }) =>
-        delta > 0.5 && x > first + (last - first) * 0.6 && x < first + (last - first) * 0.9,
-    );
-    expect(laterSteps.length).toBeGreaterThan(0);
-    expect(Math.max(...laterSteps.map(({ delta }) => delta))).toBeLessThan(maximumStep * 0.8);
-    const pointerNode = await pointer.elementHandle();
-    await page.keyboard.press("Shift+ArrowRight");
-    await expect(page.locator('[data-collaboration-kind="selection"]').first()).toBeVisible();
-    expect(await pointerNode!.evaluate((element) => element.isConnected)).toBe(true);
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await expect(pointer).toHaveCSS("transition-duration", "0s");
-    await page.mouse.move(1, 1);
-    await expect(pointer).toHaveCount(0);
-  });
+  }
 }
 
 for (const mode of ["Page", "Edgeless"] as const) {

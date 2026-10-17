@@ -15,16 +15,19 @@ import { publishPresence, type PresenceOwner } from "./publish";
  * @param props.peer - Validated connection identity and display colors.
  * @param props.rect - Screen-space rectangle and decoration kind.
  * @param props.bounds - Screen-space panel bounds used for translation.
+ * @param props.pointerSmoothingMs - Validated incoming pointer smoothing time constant in milliseconds.
  * @returns A decorative element; text is rendered safely through React.
  */
 function PresenceDecoration({
   peer,
   rect,
   bounds,
+  pointerSmoothingMs,
 }: {
   peer: PeerGeometry;
   rect: PresenceRect;
   bounds: DOMRect;
+  pointerSmoothingMs: number;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const motion = useRef<ReturnType<typeof createPointerMotion> | undefined>(undefined);
@@ -32,13 +35,13 @@ function PresenceDecoration({
     if (rect.kind !== "pointer") {
       return;
     }
-    const controller = createPointerMotion(element.current!);
+    const controller = createPointerMotion(element.current!, pointerSmoothingMs);
     motion.current = controller;
     return () => {
       controller.dispose();
       motion.current = undefined;
     };
-  }, [rect.kind]);
+  }, [rect.kind, pointerSmoothingMs]);
   useLayoutEffect(() => {
     motion.current?.update(rect.x - bounds.left, rect.y - bounds.top);
   }, [rect.x, rect.y, bounds.left, bounds.top]);
@@ -73,14 +76,20 @@ function PresenceDecoration({
  * @param props - Host identity and publisher ownership shared across this extension's panels.
  * @param props.user - Validated collaborator display identity.
  * @param props.owner - Active publisher ownership protecting inactive-panel cleanup.
+ * @param props.pointerThrottleMs - Validated outgoing pointer interval in milliseconds.
+ * @param props.pointerSmoothingMs - Validated incoming pointer smoothing time constant in milliseconds.
  * @returns A portal containing remote pointers, carets, and selection highlights.
  */
 export function CollaborationOverlay({
   user,
   owner,
+  pointerThrottleMs,
+  pointerSmoothingMs,
 }: {
   user: CollaborationUser;
   owner: PresenceOwner;
+  pointerThrottleMs: number;
+  pointerSmoothingMs: number;
 }) {
   const panel = useReactPanel();
   const { element: root } = useEditorRoot();
@@ -91,12 +100,12 @@ export function CollaborationOverlay({
       return;
     }
     const stopObserving = observePresence(root, panel.document.getDocument(), setGeometry);
-    const stopPublishing = publishPresence(panel, root, user, owner, mode);
+    const stopPublishing = publishPresence(panel, root, user, owner, mode, pointerThrottleMs);
     return () => {
       stopPublishing();
       stopObserving();
     };
-  }, [root, panel, mode, owner, user]);
+  }, [root, panel, mode, owner, user, pointerThrottleMs]);
   if (!root || !geometry) {
     return null;
   }
@@ -116,6 +125,7 @@ export function CollaborationOverlay({
             peer={peer}
             rect={rect}
             bounds={bounds}
+            pointerSmoothingMs={pointerSmoothingMs}
           />
         )),
       )}

@@ -3,9 +3,10 @@ import { createPointerMotion } from "./pointer-motion";
 /**
  * Provides a deterministic animation clock and media preference for the real controller.
  *
+ * @param smoothingMs - EMA time constant under test; defaults to the extension default.
  * @returns Pointer controller, painted coordinates, and explicit frame/preference controls.
  */
-function fixture() {
+function fixture(smoothingMs = 20) {
   let time = 0;
   let sequence = 0;
   const frames = new Map<number, FrameRequestCallback>();
@@ -30,7 +31,7 @@ function fixture() {
     },
   };
   return {
-    motion: createPointerMotion(element as unknown as HTMLElement),
+    motion: createPointerMotion(element as unknown as HTMLElement, smoothingMs),
     point: () => element.style.transform.match(/-?[\d.]+/g)!.map(Number),
     pending: () => frames.size,
     listeners: () => listeners.size,
@@ -109,4 +110,26 @@ test("reduced motion jumps immediately and disposal releases pending animation",
   moving.advance(100);
   expect(moving.point()).toEqual([0, 0]);
   expect(moving.pending()).toBe(0);
+});
+
+test("zero smoothing places every target immediately without scheduling frames", () => {
+  const f = fixture(0);
+  f.motion.update(0, 0);
+  f.motion.update(120, -60);
+  expect(f.point()).toEqual([120, -60]);
+  expect(f.pending()).toBe(0);
+  f.motion.update(-10, 30);
+  expect(f.point()).toEqual([-10, 30]);
+  expect(f.pending()).toBe(0);
+  f.motion.dispose();
+});
+
+test.each([10, 80, 250])("uses the configured %i ms exponential time constant", (smoothingMs) => {
+  const f = fixture(smoothingMs);
+  f.motion.update(0, 0);
+  f.motion.update(100, 50);
+  f.advance(smoothingMs);
+  expect(f.point()[0]).toBeCloseTo(100 * (1 - Math.exp(-1)), 8);
+  expect(f.point()[1]).toBeCloseTo(50 * (1 - Math.exp(-1)), 8);
+  f.motion.dispose();
 });

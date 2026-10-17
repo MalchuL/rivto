@@ -45,6 +45,8 @@ const reactEditor = createReactEditor({
     ...edgelessPreset(),
     collaborationExtension({
       user: { id: "user-42", name: "Vlad", color: "#7c3aed" },
+      pointerThrottleMs: 50,
+      pointerSmoothingMs: 20,
     }),
   ],
 });
@@ -55,6 +57,17 @@ Import `collaborationExtension` and `CollaborationUser` from
 stylesheet. The host still attaches BroadcastChannel or WebRTC providers through
 its existing document storage setup. Installing the extension does not create a
 server, attach providers, or authenticate a display identity.
+
+Pointer timing is captured when the extension is created. Both options are optional:
+`pointerThrottleMs` defaults to 50 ms for outgoing pointer publication;
+`pointerSmoothingMs` defaults to a 20 ms EMA time constant for incoming pointers.
+A zero throttle coalesces movement until the next timer task; it does not promise
+synchronous delivery. Zero smoothing places each received target immediately.
+Reduced-motion preferences still disable animation regardless of the configured
+positive smoothing value. Text selections and carets are unaffected by these
+pointer settings. Negative, non-finite, and nonnumeric values are rejected;
+throttle values above 2147483647 ms are rejected to prevent timer overflow.
+Neither option is saved in the document, snapshots or Awareness state.
 
 User IDs and names must be nonempty, names at most 128 characters, IDs at most 512
 characters, and colors six-digit hex values. Connection IDs are separate from
@@ -547,3 +560,23 @@ were 31.7–47 ms normally and 70.3–84 ms at repeat=200 (sample ranges 29.8–
 at most 0.2 ms in Chromium and 1 ms in Firefox. These are the same interaction
 paths and build setup as the earlier measurements; the previously failing
 Firefox scenarios have no valid latency baseline because correctness failed.
+
+## Configurable pointer timing verification
+
+The extension accepts optional `pointerThrottleMs` and `pointerSmoothingMs`, with
+unchanged defaults of 50 and 20 ms. Focused tests exercise actual publisher timers
+at 0, 5 and 125 ms, checking latest-position coalescing and cancellation on cleanup.
+Motion tests verify the EMA response at several time constants, zero-animation
+behavior, and reduced-motion precedence. Invalid timing and timer overflow are
+rejected before extension setup.
+
+All 439 React tests passed; the publisher tests were rerun after aligning their
+Jest import with the repository's ESM convention. Typecheck, production demo build,
+formatting and lint passed (function-length warnings only). All 142 collaboration,
+focus and sync browser cases passed with 12 workers. Eight serial production
+pointer-animation checks passed in Chromium and Firefox across page/edgeless and
+normal/repeat=200 fixtures, checking intermediate animation frames, decaying
+movement, stable pointer identity and reduced motion. This verifies the existing
+animation behavior at the default timings, not a new end-to-end latency benchmark.
+Custom timing is covered by deterministic timer/animation tests. Safari pinch-zoom
+alignment remains a separate unresolved issue; this change does not address it.
