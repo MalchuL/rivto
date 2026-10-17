@@ -1,8 +1,10 @@
 /**
  * Optional equal-width column layout around ordinary document blocks. Nested
  * blocks keep the shared BlockTree shell; this extension only arranges column
- * shells side by side. Removing a column relocates its children instead of
- * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
+ * shells side by side. When the board itself is narrower than 16rem, the lanes
+ * stack so their text stays inside the page. Removing a column relocates its
+ * children instead of deleting them. Drag, clipboard, snapshots, and undo
+ * remain owned by core.
  * @module
  */
 import { type EditorBlockInput } from "@chulane/rivto";

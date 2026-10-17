@@ -40,6 +40,9 @@
 
 @media (max-width: 640px) {
   .page-surface {
-    padding: 32px 24px;
+    /* Keep the horizontal padding from the base rule. 24px was narrower than
+       the 8px block padding plus the 20px collapse toggle and 28px drag
+       handle, so those controls painted outside the surface. */
+    padding-block: 32px;
   }
 }
