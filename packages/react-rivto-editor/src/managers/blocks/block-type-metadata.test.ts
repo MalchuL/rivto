@@ -2,6 +2,7 @@ import { BLOCK_HANDLE_METADATA_KEY } from "../../extensions/built-ins/block-hand
 import { PAGE_DRAG_METADATA_KEY } from "../../extensions/block-drag/block-drag-options";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { z } from "zod";
+import type { ReactBlockDefinitionMetadata } from "./types";
 
 test("registers the exact complete definition and publishes metadata through core lifecycle", async () => {
   const core = await createTestCoreEditor();
@@ -11,7 +12,7 @@ test("registers the exact complete definition and publishes metadata through cor
     [PAGE_DRAG_METADATA_KEY]: { fixed: true, dropAxis: "horizontal" },
     [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
     custom: { values: [1, 2], opaque },
-  };
+  } satisfies ReactBlockDefinitionMetadata;
   const definition = { type: "complete", metadata };
   const observed: unknown[] = [];
   const unsubscribe = panel.editor.blockTypes.subscribe(() => {

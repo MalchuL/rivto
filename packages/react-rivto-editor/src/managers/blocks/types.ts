@@ -3,9 +3,28 @@ import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
 import type { BlockBehavior } from "../../block-behaviors/types";
 import type { BlockClipboardConverter } from "../clipboard/types";
+import type {
+  BlockDragOptions,
+  PAGE_DRAG_METADATA_KEY,
+} from "../../extensions/block-drag/block-drag-options";
+import type {
+  BlockHandleMetadata,
+  BLOCK_HANDLE_METADATA_KEY,
+} from "../../extensions/built-ins/block-handle/metadata";
 
-/** Opaque runtime annotations interpreted only by their owning integrations. */
-export type ReactBlockDefinitionMetadata = Readonly<Record<string, unknown>>;
+/**
+ * Runtime annotations interpreted only by their owning integrations.
+ *
+ * Current drag and handle namespaces use their extension option types. Other
+ * keys accept opaque values through the record intersection. These annotations
+ * do not install their owning extensions or add runtime validation.
+ */
+export type ReactBlockDefinitionMetadata = Readonly<
+  {
+    [PAGE_DRAG_METADATA_KEY]?: BlockDragOptions;
+    [BLOCK_HANDLE_METADATA_KEY]?: BlockHandleMetadata;
+  } & Record<string, unknown>
+>;
 
 /** Complete core definition, including annotations supplied by its owning React registration. */
 export interface ReactBlockDefinition extends BlockDefinition {
