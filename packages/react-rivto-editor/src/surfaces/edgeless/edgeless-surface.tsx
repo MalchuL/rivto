@@ -548,20 +548,7 @@ function EdgelessSurfaceContent({
       <div
         className="edgeless-plane"
         data-edgeless-plane="true"
-        style={
-          {
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            // Move and size the capture box against the plane transform so it
-            // continues covering the viewport after any pan or zoom. The offset
-            // variables below restore absolute canvas coordinates inside that box.
-            "--edgeless-capture-left": `${-pan.x / zoom}px`,
-            "--edgeless-capture-top": `${-pan.y / zoom}px`,
-            "--edgeless-capture-width": `${100 / zoom}%`,
-            "--edgeless-capture-height": `${100 / zoom}%`,
-            "--edgeless-capture-offset-x": `${pan.x / zoom}px`,
-            "--edgeless-capture-offset-y": `${pan.y / zoom}px`,
-          } as CSSProperties
-        }
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
       >
         {/* Element boundary IDs resolve against current root order; inserted
             roots between them render without rewriting element props. */}

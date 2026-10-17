@@ -1,4 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useEditorRoot } from "../../../../hooks/editor/use-editor-root";
 import type { ConnectorLineStyle, EdgelessVisualTool } from "../../../../elements/visuals/types";
 import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gesture";
 import { connectorPath } from "../../../../elements/visuals/utils/geometry";
@@ -9,8 +10,30 @@ import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-poin
  *
  * Connector preview arrowheads extend their triangle tips one stroke width beyond the draft path endpoints.
  *
+ * Observes the editor root's pan and zoom attributes, keeping counter-transform
+ * variables on this SVG so viewport gestures do not invalidate card styles.
+ * The observer disconnects when the root changes or this layer unmounts.
+ *
  * @param props - Current tool, drawing and connector drafts, attachment markers and gesture pointer handlers.
+ * @param props.tool - Active canvas tool; select and pan do not capture drawing gestures.
+ * @param props.zoom - Viewport scale used to keep preview strokes at screen size.
+ * @param props.preview - Drawing draft points in canvas coordinates.
+ * @param props.connectorPreview - Connector draft geometry, or null without a draft.
+ * @param props.connectorHover - Attachment feedback, or null without a hovered target.
+ * @param props.drawingStroke - Drawing draft stroke color.
+ * @param props.drawingStrokeWidth - Drawing draft stroke width in screen pixels.
+ * @param props.drawingOpacity - Drawing draft opacity.
+ * @param props.connectorStroke - Connector draft stroke color.
+ * @param props.connectorStrokeWidth - Connector draft stroke width in screen pixels.
+ * @param props.connectorLineStyle - Connector draft line pattern; defaults to solid.
+ * @param props.connectorStartStyle - Start marker; defaults to none.
+ * @param props.connectorEndStyle - End marker; defaults to an arrow.
+ * @param props.onPointerDown - Starts a gesture with the SVG pointer event.
+ * @param props.onPointerMove - Updates a gesture with the SVG pointer event.
+ * @param props.onPointerUp - Completes or cancels a gesture with the SVG pointer event.
+ * @param props.onPointerLeave - Clears attachment feedback when the pointer leaves.
  * @returns Plane-sized SVG capture layer with local drawing/connector feedback; placement content uses ElementCreationPreview.
+ * @throws If rendered outside an EditorPanel or EditorEmbed subtree.
  */
 export function DrawingCapture({
   tool,
@@ -67,9 +90,45 @@ export function DrawingCapture({
    */
   onPointerLeave(): void;
 }) {
+  const { element: root } = useEditorRoot();
+  const capture = useRef<SVGSVGElement | null>(null);
+  useLayoutEffect(() => {
+    const svg = capture.current;
+    if (!root || !svg) {
+      return;
+    }
+    /**
+     * Keeps capture geometry local so viewport changes do not restyle every card.
+     *
+     * Move and size the capture box against the plane transform so it
+     * continues covering the viewport after any pan or zoom. The offset
+     * variables below restore absolute canvas coordinates inside that box.
+     *
+     * @returns Updates only the SVG's viewport coverage and preview origin.
+     */
+    const refresh = (): void => {
+      const scale = Number(root.dataset.edgelessZoom) || 1;
+      const x = Number(root.dataset.edgelessPanX) || 0;
+      const y = Number(root.dataset.edgelessPanY) || 0;
+      svg.style.setProperty("--edgeless-capture-left", `${-x / scale}px`);
+      svg.style.setProperty("--edgeless-capture-top", `${-y / scale}px`);
+      svg.style.setProperty("--edgeless-capture-width", `${100 / scale}%`);
+      svg.style.setProperty("--edgeless-capture-height", `${100 / scale}%`);
+      svg.style.setProperty("--edgeless-capture-offset-x", `${x / scale}px`);
+      svg.style.setProperty("--edgeless-capture-offset-y", `${y / scale}px`);
+    };
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-edgeless-zoom", "data-edgeless-pan-x", "data-edgeless-pan-y"],
+    });
+    return () => observer.disconnect();
+  }, [root]);
   const captureActive = tool.tool !== "select" && tool.tool !== "pan";
   return (
     <svg
+      ref={capture}
       className="edgeless-drawing-capture"
       data-active={captureActive || undefined}
       onPointerDown={onPointerDown}
