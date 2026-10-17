@@ -28,12 +28,14 @@
 
 [data-block-type="columns"] > .page-block-children {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 24px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   margin: 0;
+  container-type: inline-size;
 }
 
 [data-block-type="columns"] > .page-block-children > .page-block {
@@ -54,6 +56,21 @@
   width: 1px;
   background: var(--rivto-border);
   pointer-events: none;
+}
+
+/* A board narrower than 16rem cannot keep three lanes beside a 24px indent
+   and the block padding without giving the text less than one character.
+   Stack the lanes instead of letting that text paint into the next column.
+   These declarations follow the shared lane rules so they win at equal specificity. */
+@container (max-width: 16rem) {
+  [data-block-type="columns"] > .page-block-children > .page-block {
+    flex-basis: 100%;
+    min-width: 100%;
+  }
+
+  [data-block-type="columns"] > .page-block-children > .page-block + .page-block::before {
+    content: none;
+  }
 }
 
 [data-block-type="columns"] > .page-block-children .page-block-row::before {

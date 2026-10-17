@@ -7,5 +7,6 @@ node_modules/
 .eslintcache
 playwright-report/
 test-results/
+storybook-static/
 /reports/
 .pnpm-store/

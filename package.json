@@ -21,6 +21,7 @@
     "test:eslint-rules": "node --test eslint-rules/*.test.js",
     "test": "pnpm --filter @chulane/crdt-doc test && pnpm --filter @chulane/document-model test && pnpm --filter @chulane/graph-runtime test && pnpm --filter @chulane/block-graph test && pnpm --filter @chulane/rivto test",
     "test:e2e": "pnpm demo:build && playwright test --project=chromium --project=firefox",
+    "test:storybook": "pnpm --filter @chulane/rivto-react test:storybook",
     "check-types:core": "pnpm --filter @chulane/crdt-doc build && pnpm --filter @chulane/crdt-doc check-types && pnpm --filter @chulane/document-model check-types && pnpm --filter @chulane/graph-runtime check-types && pnpm --filter @chulane/block-graph check-types && pnpm --filter @chulane/rivto check-types",
     "check-types": "pnpm check-types:core && pnpm --filter @chulane/rivto-react check-types && pnpm --dir demo check-types && pnpm docs:check",
     "lint:fix": "pnpm lint --fix",

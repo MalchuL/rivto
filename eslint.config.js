@@ -40,6 +40,7 @@ export default tseslint.config(
       "**/.pnpm-store/**",
       "playwright-report/**",
       "test-results/**",
+      "storybook-static/**",
       "reports/**",
       "**/encore.gen/**",
       "**/encore.gen.ts",

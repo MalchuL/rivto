@@ -70,6 +70,9 @@
   line-height: 1.5;
   outline: none;
   white-space: pre-wrap;
+  /* Idle previews wrap formatted text. The raw editor uses this same class,
+     so an unbroken token must break here too instead of painting past the column. */
+  overflow-wrap: anywhere;
 }
 
 /* A page block owns its recursively rendered children, so decorating the

@@ -10,6 +10,8 @@ packages:
 
 allowBuilds:
   "@parcel/watcher": false
+  "@swc/core": true
   electron: true
   esbuild: true
   sharp: true
+  unrs-resolver: true
