@@ -19,7 +19,9 @@ const EDGELESS_CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
  * @returns Whether dnd-kit may scroll the element.
  */
 export function canPageDragAutoScroll(element: Element): boolean {
-  const modal = element.ownerDocument.querySelector("dialog:modal");
+  const modal = element.ownerDocument.querySelector(
+    'dialog:modal, [role="dialog"][aria-modal="true"]',
+  );
   return (
     (!modal || modal.contains(element)) &&
     !(element instanceof HTMLElement && element.matches(EDGELESS_CARD_CONTENT_SELECTOR))

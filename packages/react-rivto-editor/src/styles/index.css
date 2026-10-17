@@ -30,7 +30,7 @@
 @import "../blocks/block-tree/block-tree.css" layer(components);
 @import "../blocks/owner-slots/owner-slots.css" layer(components);
 @import "../blocks/block-slot-controls/block-slot-controls.css" layer(components);
-@import "../blocks/block-modal/block-modal.css" layer(components);
+@import "../blocks/block-modal/block-modal.css" layer(utilities);
 @import "../blocks/markdown/markdown.css" layer(components);
 
 @import "../components/block-handle/block-handle.css" layer(components);

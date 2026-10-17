@@ -1,12 +1,12 @@
 /*
  * Structural rules for the shared container block modal (`BlockModal`).
  *
- * The modal is a native `<dialog>` that stays mounted while switching between
- * inline (`show()`) and top-layer (`showModal()`) presentation, so selection,
- * editing, and drag registrations survive expansion. Tailwind utilities cannot
- * target the `:modal` and `::backdrop` pseudo-classes of that element or
- * correct the user-agent dialog centering, so those rules live here. Colors
- * come from the shared `--rivto-*` tokens.
+ * The inline wrapper and shadcn dialog render the same document-backed board
+ * through separate panels. The dialog owns a scoped page surface and delegates
+ * editor input to that surface while Radix owns backdrop dismissal,
+ * focus trapping and scroll locking. Feature styles set board-sized geometry;
+ * shadcn supplies the overlay and dialog appearance. Colors come from the
+ * shared `--rivto-*` tokens, including inside the dialog-owned portal.
  */
 .rivto-block-modal {
   position: static;
@@ -23,14 +23,18 @@
   overflow: visible;
 }
 
-/* Correct the native dialog's inline centering so root controls align. */
-.page-surface > .rivto-block-modal:not(:modal) > .page-block {
+/* Keep root controls anchored to the inline board wrapper. */
+.page-surface > .rivto-block-modal > .page-block {
   position: relative;
 }
 
-.rivto-block-modal:modal {
+.rivto-block-modal-content[data-slot="dialog-content"] {
+  @apply translate-x-0 translate-y-0;
   position: fixed;
   inset: 3vh 3vw;
+  display: block;
+  max-width: none;
+  animation: none;
   width: 94vw;
   height: 94vh;
   /* Extra right padding leaves room for the expand button in the right slot. */
@@ -41,6 +45,14 @@
   box-shadow: 0 24px 80px rgb(9 30 66 / 30%);
 }
 
-.rivto-block-modal::backdrop {
-  background: rgb(9 30 66 / 55%);
+.rivto-block-modal-content > .page-surface {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  /* Root controls extend into the dialog padding beyond the page surface. */
+  overflow: visible;
 }

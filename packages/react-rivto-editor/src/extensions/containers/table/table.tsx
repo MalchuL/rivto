@@ -327,13 +327,15 @@ function TableCellWidthWrapper({ block, children }: BlockWrapperProps) {
 }
 
 /**
- * Reuses the shared native full-mode dialog for table subtrees.
+ * Reuses the shared modal subtree panel for expanded table editing.
  * @param props - Current block and its already-rendered recursive subtree.
  * @returns Expandable table or the unchanged non-table subtree.
  */
 function TableDialog({ block, children }: BlockWrapperProps) {
   return block.type === TABLE_BLOCK_TYPE ? (
-    <BlockModal label="Table">{children}</BlockModal>
+    <BlockModal blockId={block.id} label="Table">
+      {children}
+    </BlockModal>
   ) : (
     children
   );
