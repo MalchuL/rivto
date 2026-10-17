@@ -9,6 +9,7 @@ interface LoadingInspection {
   acquisitions: number;
   loadedLookups: number;
   recover?: boolean;
+  failLoadedLookup?: boolean;
   finish?: () => void;
 }
 
@@ -44,6 +45,9 @@ async function insertReference(page: Page, scenario: Scenario): Promise<void> {
       }
       if (editor.getEditor("load-source")) {
         state.loadedLookups++;
+        if (state.failLoadedLookup) {
+          throw new Error("loaded source lookup failure");
+        }
         return resolve(reference, options);
       }
       state.lookups++;
@@ -117,6 +121,7 @@ for (const mode of ["page", "edgeless"] as const) {
           ? "Referenced block is unavailable."
           : "Unable to load referenced block.",
       );
+      await expect(embedding.getByRole("status").locator(".lucide-triangle-alert")).toBeVisible();
       await embedding.hover();
       await embedding.getByRole("button", { name: "Edit embedding", exact: true }).click();
       const settings = page.getByRole("dialog", { name: "Embedding settings" });
@@ -187,6 +192,14 @@ for (const mode of ["page", "edgeless"] as const) {
         }),
       ).toBe(true);
       await expect(source).toHaveText("Loaded source");
+      await page.evaluate(() => {
+        (
+          window as unknown as { __embeddingLoadTest: LoadingInspection }
+        ).__embeddingLoadTest.failLoadedLookup = true;
+      });
+      await refresh.click();
+      await expect(embedding.getByRole("status")).toHaveText("Unable to load referenced block.");
+      await expect(embedding.getByRole("status").locator(".lucide-triangle-alert")).toBeVisible();
     });
   }
 }
