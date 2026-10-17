@@ -1,3 +1,4 @@
+import { collaborationExtension } from "@chulane/rivto-react";
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
@@ -1407,6 +1408,13 @@ async function createSyncedPeer(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      collaborationExtension({
+        user: {
+          id: side,
+          name: side === "left" ? "Vlad" : "Olga",
+          color: side === "left" ? "#7c3aed" : "#eab308",
+        },
+      }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1482,6 +1490,7 @@ function SyncEditorsApp() {
         return;
       }
       created.push(right);
+      Object.assign(window, { __rivtoSync: { left, right } });
       setPeers({ left, right });
     })().catch((failure) => {
       if (active) {
@@ -1491,6 +1500,7 @@ function SyncEditorsApp() {
     return () => {
       active = false;
       request.abort();
+      delete (window as unknown as { __rivtoSync?: unknown }).__rivtoSync;
       created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
     };
   }, [roomId, repeatCount]);

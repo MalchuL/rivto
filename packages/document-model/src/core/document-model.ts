@@ -26,6 +26,8 @@ import { assertPortableRecord, clone } from "./utils";
 export class DocumentModelImpl implements DocumentModel {
   /** Descriptive model identifier; persistence remains controlled by the CRDT document. */
   readonly id: string;
+  /** Transient client presence owned by the CRDT adapter. */
+  readonly collaboration: CRDTDoc["collaboration"];
   /** Adapter-neutral collaborative document containing canonical shared state. */
   private readonly crdt: CRDTDoc;
   /** Block records, text, hierarchy, and block snapshot behavior. */
@@ -53,6 +55,7 @@ export class DocumentModelImpl implements DocumentModel {
    */
   constructor(crdt: CRDTDoc) {
     this.crdt = crdt;
+    this.collaboration = crdt.collaboration;
     this.id = crdt.id;
     const blocks = this.createBlockManager(crdt);
     const elements = this.createElementManager(crdt);

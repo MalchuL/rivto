@@ -101,6 +101,41 @@ export class YjsText extends YjsBasic<Y.Text> implements CRDTText {
   }
 
   /**
+   * Anchors a UTF-16 boundary to the current collaborative text.
+   *
+   * @param offset - Integer boundary between zero and the current text length.
+   * @param association - Zero follows the character after the boundary; -1 follows the preceding character.
+   * @returns Opaque JSON-compatible token for resolving against this same text.
+   * @throws If the text is detached or the offset is invalid.
+   */
+  createRelativePosition(offset: number, association: -1 | 0 = 0): string {
+    this.checkIfNotAttached();
+    if (!Number.isInteger(offset) || offset < 0 || offset > this.length) {
+      throw new RangeError("Text position is outside the current content");
+    }
+    return JSON.stringify(Y.createRelativePositionFromTypeIndex(this.yjsObj, offset, association));
+  }
+
+  /**
+   * Resolves an opaque anchor against this text's current document.
+   *
+   * @param position - Token previously created from this shared text.
+   * @returns Current UTF-16 offset, or undefined for malformed, deleted, or foreign-text anchors.
+   */
+  resolveRelativePosition(position: string): number | undefined {
+    if (!this.yjsObj.doc) {
+      return undefined;
+    }
+    try {
+      const relative = Y.createRelativePositionFromJSON(JSON.parse(position));
+      const absolute = Y.createAbsolutePositionFromRelativePosition(relative, this.yjsObj.doc);
+      return absolute?.type === this.yjsObj ? absolute.index : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Checks if the text is not attached to a document.
    */
   private checkIfNotAttached(): void {

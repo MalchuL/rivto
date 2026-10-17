@@ -1,0 +1,40 @@
+/* Remote text offsets address Markdown source, so reveal the same source geometry. */
+.markdown-content:has(> [data-collaboration-text]) > [data-collaboration-text] {
+  position: static !important;
+  color: inherit !important;
+  overflow: visible !important;
+}
+.markdown-content:has(> [data-collaboration-text]) > .markdown-preview {
+  display: none;
+}
+
+[data-collaboration-overlay] {
+  position: fixed;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 40;
+}
+[data-collaboration-kind] {
+  position: absolute;
+  box-sizing: border-box;
+}
+[data-collaboration-kind="object"] {
+  border: 2px solid currentColor;
+}
+[data-collaboration-kind="caret"],
+[data-collaboration-kind="selection"] {
+  background: currentColor;
+}
+[data-collaboration-kind="selection"] {
+  opacity: 0.22;
+}
+[data-collaboration-kind] > span {
+  position: absolute;
+  left: 4px;
+  bottom: 100%;
+  color: white;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font: 11px/14px sans-serif;
+  white-space: nowrap;
+}

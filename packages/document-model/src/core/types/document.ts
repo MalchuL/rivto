@@ -1,3 +1,4 @@
+import type { Collaboration } from "@chulane/crdt-doc";
 /**
  * Defines the portable public document-model contract.
  *
@@ -176,6 +177,26 @@ export interface BlockDestination {
 }
 
 export interface DocumentBlockManagerApi {
+  /**
+   * Anchors a block content boundary without exposing its CRDT text.
+   *
+   * @param id - Existing block identity.
+   * @param offset - Valid UTF-16 boundary in the block content.
+   * @param association - Zero follows the next character; -1 follows the preceding character.
+   * @returns Opaque position token independent of subsequent character insertions.
+   * @throws If the block is missing or the offset is invalid.
+   */
+  createTextPosition(id: string, offset: number, association?: -1 | 0): string;
+
+  /**
+   * Resolves a text anchor only when its block still exists in the document.
+   *
+   * @param id - Block identity that originally owned the anchor.
+   * @param position - Opaque shared-text position token.
+   * @returns Current UTF-16 boundary, or undefined for missing blocks or invalid anchors.
+   */
+  resolveTextPosition(id: string, position: string): number | undefined;
+
   /** Monotonic block-data and hierarchy revision. */
   readonly revision: number;
   /** Whether the root block list is empty. */
@@ -624,6 +645,8 @@ export interface SnapshotUpdate {
  * history construction, and complete snapshot orchestration.
  */
 export interface DocumentModel {
+  /** Transient client presence; never included in snapshots or history. */
+  readonly collaboration: Collaboration;
   /** Descriptive document identifier that does not control persistence. */
   readonly id: string;
   /** Block records, text, hierarchy, and block snapshot operations. */

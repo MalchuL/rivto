@@ -577,7 +577,7 @@ export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelection
  * @param requestedOffset - UTF-16 offset from the start of that content's text.
  * @returns A Node (usually Text) plus offset inside it.
  */
-function pointAtOffset(
+export function pointAtOffset(
   content: HTMLElement,
   requestedOffset: number,
 ): { node: Node; offset: number } {

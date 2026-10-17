@@ -1,3 +1,4 @@
+import type { Collaboration } from "./collaboration";
 import { Serializible } from "./crdt";
 import { CRDTArray } from "./array";
 import { CRDTMap } from "./map";
@@ -16,6 +17,8 @@ export type Unsubscribe = () => void;
  * Provides methods for transaction control, access to CRDT types, and events.
  */
 export interface CRDTDoc extends Serializible {
+  /** Ephemeral client presence; excluded from serialization and history. */
+  readonly collaboration: Collaboration;
   /**
    * The unique id of the document.
    */
@@ -85,6 +88,10 @@ export interface CRDTDoc extends Serializible {
 
   /**
    * Detach a provider, inferring it when exactly one is attached.
+   *
+   * The last transport's departure clears cached remote presence while retaining
+   * local presence for reconnect. Document content is unaffected.
+   *
    * @param id - Optional provider ID, required when multiple providers are attached.
    * @returns A Promise that resolves when the provider is disconnected.
    */
