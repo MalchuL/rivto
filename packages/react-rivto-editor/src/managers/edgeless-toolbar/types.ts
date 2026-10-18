@@ -1,13 +1,22 @@
+import type { EdgelessCreationTool } from "../edgeless-tools/edgeless-creation-tool";
+import type {
+  ElementCreationDefaults,
+  RememberedElementProperties,
+} from "../elements/creation-defaults-types";
 import type { ComponentType, ReactNode, PointerEvent } from "react";
 import type { EdgelessToolButtonProps } from "../../components/edgeless/tool-button";
 import type { EdgelessOperations } from "../elements/edgeless-operations";
-import type { EdgelessVisualTool, PresetPayload } from "../../elements/visuals/types";
+import type { EdgelessTool, EdgelessToolOptions } from "../edgeless-tools/edgeless-tool";
+import type { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
+import type { EdgelessToolGroup } from "../edgeless-tools/edgeless-tool-group";
 import type { ReactPanelApi } from "../../panels/types";
 
 /** Context of the receiving canvas; registrations must not retain it across panel lifetimes. */
 export interface EdgelessToolbarContext {
   /** Mounted panel receiving activation and custom group contents. */
   readonly reactPanel: ReactPanelApi;
+  /** Surface-owned tool instances and activation lifecycle. */
+  readonly tools: EdgelessToolContext;
   /** Existing panel-bound operations; share these with renderers and property editors. */
   readonly operations: EdgelessOperations;
 }
@@ -24,15 +33,17 @@ export interface EdgelessToolbarTool {
   readonly group?: string;
   /** Ascending presentation order; defaults to zero, with registration order breaking ties. */
   readonly order?: number;
+  /** Marks the surface's fallback interaction; at most one installed tool may declare it. */
+  readonly default?: boolean;
   /**
-   * @param context - Receiving panel and its shared operations. Activate locally; do not create document content on menu selection.
+   * Creates one tool instance for the receiving surface.
+   *
+   * @param options - Stable surface dependencies and the resolved registered group.
+   * @returns An instance with the supplied registration identity; construction must not write the document.
    */
-  readonly activate: (context: EdgelessToolbarContext) => void;
-  /**
-   * @param tool - Current canvas interaction state.
-   * @returns Whether this entry represents that tool or preset. Must be pure.
-   */
-  readonly isActive: (tool: EdgelessVisualTool) => boolean;
+  readonly createTool: (options: EdgelessToolOptions) => EdgelessTool;
+  /** Optional preview override; ordinary registrations use the instance's renderPreview method. */
+  readonly preview?: ComponentType<{ readonly tool: EdgelessTool; readonly zoom: number }>;
   /**
    * Supplies optional pointer bindings, for example existing draggable placement presets.
    * Keyboard activation normally uses activate. A supplied click handler may preventDefault
@@ -53,11 +64,11 @@ export interface EdgelessToolbarRenderContext extends EdgelessToolbarContext {
   /**
    * Captures the primary pointer for a built-in placement preset without inserting content.
    * @param event - Pointer-down event from the shared tool button.
-   * @param payload - Built-in preset retained until release; movement starts the detached preview.
+   * @param tool - Registered surface instance supporting toolbar placement; movement starts its detached preview.
    */
   readonly startPresetDrag: (
     event: PointerEvent<HTMLButtonElement>,
-    payload: PresetPayload,
+    tool: EdgelessCreationTool,
   ) => void;
   /**
    * Moves the captured preview and snap guides without document writes.
@@ -78,9 +89,14 @@ export interface EdgelessToolbarRenderContext extends EdgelessToolbarContext {
 export interface EdgelessToolbarItem {
   /** Shared registration; treat it as read-only. */
   readonly tool: EdgelessToolbarTool;
-  /** Result of the registered isActive predicate for this panel’s current tool. */
+  /** Whether this registration identifies the surface’s active tool. */
   readonly active: boolean;
-  /** Activates this registered entry in the receiving panel. */
+  /**
+   * Activates this registered entry through the receiving surface context.
+   *
+   * @returns Switches tool instances without creating document content.
+   * @throws If the registration is no longer available or activation fails.
+   */
   readonly activate: () => void;
 }
 
@@ -88,6 +104,8 @@ export interface EdgelessToolbarItem {
 export interface EdgelessToolbarGroupProps extends EdgelessToolbarContext {
   /** All current members, including extension contributions, sorted by order then registration. */
   readonly items: readonly EdgelessToolbarItem[];
+  /** The receiving group instance, sharing settings with all its tools. */
+  readonly group: EdgelessToolGroup;
   /**
    * Renders a registered member with common active styling and pointer/keyboard behavior.
    * @param item - Member from this group's supplied items; do not construct another tool registration.
@@ -99,6 +117,10 @@ export interface EdgelessToolbarGroupProps extends EdgelessToolbarContext {
 
 /** One level of tools with an optional custom content layout. */
 export interface EdgelessToolbarGroup {
+  /** Initial group settings copied before session overrides; never mutated by canvas interaction. */
+  readonly creationDefaults?: ElementCreationDefaults;
+  /** Explicit group fields remembered after commits; frame dimensions need no visible controls. */
+  readonly rememberedProperties?: RememberedElementProperties;
   /** Unique ID within this registry category; group IDs and tool IDs have separate namespaces. */
   readonly id: string;
   /** Accessible name and native tooltip, also available to custom group layouts. */

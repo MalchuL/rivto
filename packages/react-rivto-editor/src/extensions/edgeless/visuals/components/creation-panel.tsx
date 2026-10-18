@@ -38,29 +38,26 @@ function CreationPanel({
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function ShapeTools(props: EdgelessToolbarGroupProps) {
-  const edgelessOperation = props.operations;
-  const defaults = edgelessOperation.getDefaults();
+  const defaults = props.group.getSettings().props!;
   return (
     <CreationPanel {...props}>
       <>
         <ColorControl
           label="Default fill"
-          value={defaults.shape.fill}
-          onChange={(fill) => edgelessOperation.setCreationDefaults("shape", { fill })}
+          value={String(defaults.fill)}
+          onChange={(fill) => props.group.setSettings({ props: { fill } })}
         />
         <ColorControl
           label="Default stroke"
-          value={defaults.shape.stroke}
-          onChange={(stroke) => edgelessOperation.setCreationDefaults("shape", { stroke })}
+          value={String(defaults.stroke)}
+          onChange={(stroke) => props.group.setSettings({ props: { stroke } })}
         />
         <SizeControl
           label="Default stroke width"
           preview="dot"
-          value={defaults.shape.strokeWidth}
+          value={defaults.strokeWidth}
           max={32}
-          onChange={(strokeWidth) =>
-            edgelessOperation.setCreationDefaults("shape", { strokeWidth })
-          }
+          onChange={(strokeWidth) => props.group.setSettings({ props: { strokeWidth } })}
         />
       </>
     </CreationPanel>
@@ -73,24 +70,21 @@ export function ShapeTools(props: EdgelessToolbarGroupProps) {
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function DrawingTools(props: EdgelessToolbarGroupProps) {
-  const edgelessOperation = props.operations;
-  const defaults = edgelessOperation.getDefaults();
+  const defaults = props.group.getSettings().props!;
   return (
     <CreationPanel {...props}>
       <>
         <ColorControl
           label="Default drawing color"
-          value={defaults.drawing.stroke}
-          onChange={(stroke) => edgelessOperation.setCreationDefaults("drawing", { stroke })}
+          value={String(defaults.stroke)}
+          onChange={(stroke) => props.group.setSettings({ props: { stroke } })}
         />
         <SizeControl
           label="Default drawing width"
           preview="dot"
-          value={defaults.drawing.strokeWidth}
+          value={defaults.strokeWidth}
           max={48}
-          onChange={(strokeWidth) =>
-            edgelessOperation.setCreationDefaults("drawing", { strokeWidth })
-          }
+          onChange={(strokeWidth) => props.group.setSettings({ props: { strokeWidth } })}
         />
       </>
     </CreationPanel>
@@ -105,8 +99,7 @@ export function DrawingTools(props: EdgelessToolbarGroupProps) {
 export function TextTools(
   props: EdgelessToolbarGroupProps & { readonly fonts: readonly EdgelessFontOption[] },
 ) {
-  const edgelessOperation = props.operations;
-  const defaults = edgelessOperation.getDefaults();
+  const defaults = props.group.getSettings().props!;
   const fontOptions = props.fonts;
   return (
     <CreationPanel {...props}>
@@ -116,9 +109,9 @@ export function TextTools(
           size="sm"
           className={SELECT_CLASS}
           aria-label="Default font"
-          value={defaults.text.fontFamily}
+          value={String(defaults.fontFamily)}
           onChange={(event) =>
-            edgelessOperation.setCreationDefaults("text", { fontFamily: event.currentTarget.value })
+            props.group.setSettings({ props: { fontFamily: event.currentTarget.value } })
           }
         >
           {fontOptions.map((font) => (
@@ -129,16 +122,16 @@ export function TextTools(
         </NativeSelect>
         <ColorControl
           label="Default text color"
-          value={defaults.text.color}
-          onChange={(color) => edgelessOperation.setCreationDefaults("text", { color })}
+          value={String(defaults.color)}
+          onChange={(color) => props.group.setSettings({ props: { color } })}
         />
         <SizeControl
           label="Default font size"
           preview="text"
-          value={defaults.text.fontSize}
+          value={defaults.fontSize}
           min={10}
           max={96}
-          onChange={(fontSize) => edgelessOperation.setCreationDefaults("text", { fontSize })}
+          onChange={(fontSize) => props.group.setSettings({ props: { fontSize } })}
         />
       </>
     </CreationPanel>
@@ -151,34 +144,33 @@ export function TextTools(
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function ConnectorTools(props: EdgelessToolbarGroupProps) {
-  const edgelessOperation = props.operations;
-  const defaults = edgelessOperation.getDefaults();
+  const defaults = props.group.getSettings().props!;
   return (
     <CreationPanel {...props}>
       <>
         <ColorControl
           label="Default connector color"
-          value={defaults.connector.stroke}
-          onChange={(stroke) => edgelessOperation.setCreationDefaults("connector", { stroke })}
+          value={String(defaults.stroke)}
+          onChange={(stroke) => props.group.setSettings({ props: { stroke } })}
         />
         <SizeControl
           label="Default connector width"
           preview="dot"
-          value={defaults.connector.strokeWidth}
+          value={defaults.strokeWidth}
           max={24}
-          onChange={(strokeWidth) =>
-            edgelessOperation.setCreationDefaults("connector", { strokeWidth })
-          }
+          onChange={(strokeWidth) => props.group.setSettings({ props: { strokeWidth } })}
         />
         <NativeSelect
           {...editorControlProps}
           size="sm"
           className={SELECT_CLASS}
           aria-label="Default connector line style"
-          value={defaults.connector.lineStyle}
+          value={String(defaults.lineStyle)}
           onChange={(event) =>
-            edgelessOperation.setCreationDefaults("connector", {
-              lineStyle: event.currentTarget.value as ConnectorLineStyle,
+            props.group.setSettings({
+              props: {
+                lineStyle: event.currentTarget.value as ConnectorLineStyle,
+              },
             })
           }
         >

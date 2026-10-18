@@ -1,4 +1,5 @@
-import type { EdgelessToolbarTool } from "../edgeless-toolbar/types";
+import { EdgelessCreationDefaults } from "./edgeless-creation-defaults";
+import type { CreationDefaultsScope, ElementCreationDefaults } from "./creation-defaults-types";
 import { ChildrenPanel } from "@chulane/rivto";
 import {
   type ClipboardBundle,
@@ -12,13 +13,10 @@ import { blockIdsOf } from "../../elements/block-element-projection";
 import { EdgelessSelectionRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
 import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
 import { ElementGeometry } from "../../elements/element-geometry";
-import { drawingDefaults, EdgelessToolState } from "./tool-state";
 import type {
   CreateVisualPayload,
   EdgelessAlignment,
   EdgelessReorder,
-  EdgelessVisualTool,
-  PresetPayload,
   UpdateVisualPayload,
   VisualFrame,
   VisualGroup,
@@ -50,37 +48,26 @@ export class EdgelessOperations {
     return this.reactPanel ? this.reactPanel.elements : this.runtime.elements;
   }
 
-  /**
-   * Reads the tool state's shared creation defaults.
-   *
-   * @returns Current palette defaults.
-   */
-  private get defaults() {
-    return this.tools.defaults;
-  }
   private readonly selection;
   private readonly listeners = new Set<() => void>();
   private unsubscribeDocument?: () => void;
-  private unsubscribeTools?: () => void;
   private unsubscribeTypes?: () => void;
-  private unsubscribeToolbar?: () => void;
   private revision = 0;
-  private readonly sharedCreationDefaults = new Map<string, Record<string, unknown>>();
-  private readonly creationDefaults = new Map<string, Record<string, unknown>>();
+  private unsubscribeCreationDefaults?: () => void;
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
 
   /**
    * Creates commands for one panel occurrence or the complete document.
    *
    * @param runtime - Owning React editor with first-class element storage.
-   * @param tools - Tool state owned by the edgeless representation; standalone operations get isolated defaults.
+   * @param creationDefaults - Surface-owned settings shared with transform controls; omitted values create an isolated session for standalone operations.
    * @param reactPanel - Fixed receiving occurrence; omitted only for document-level named commands.
    * @throws If the panel belongs to another React editor.
    */
   constructor(
     readonly runtime: ReactEditorApi,
     readonly reactPanel?: ReactPanelApi,
-    private readonly tools = new EdgelessToolState(runtime.edgelessToolbar),
+    private readonly creationDefaults = new EdgelessCreationDefaults(runtime),
   ) {
     if (reactPanel && reactPanel.editor !== runtime) {
       throw new Error("Canvas operations require a panel from the same React editor");
@@ -90,26 +77,14 @@ export class EdgelessOperations {
   }
 
   /**
-   * Observes document, element type, and local tool changes after mount; returns cleanup and permits a later mount.
+   * Observes document, element type and shared creation-settings changes after mount;
+   * returns cleanup and permits a later mount.
    *
    * @returns Cleanup that disconnects subscriptions and discards local previews.
    */
   observeChanges(): () => void {
-    const onTypesChange = () => {
-      const tool = this.tools.getTool();
-      if (tool.tool === "element" && !this.runtime.elementTypes.get(tool.type)?.creation) {
-        this.tools.setTool("select");
-      }
-      this.emit();
-    };
-    onTypesChange();
-    this.unsubscribeTypes = this.runtime.elementTypes.subscribe(onTypesChange);
-    this.tools.reconcileToolbar();
-    this.unsubscribeToolbar = this.runtime.edgelessToolbar.subscribe(() => {
-      this.tools.reconcileToolbar();
-      this.emit();
-    });
-    this.unsubscribeTools = this.tools.subscribe(() => this.emit());
+    this.unsubscribeTypes = this.runtime.elementTypes.subscribe(() => this.emit());
+    this.unsubscribeCreationDefaults = this.creationDefaults.subscribe(() => this.emit());
     this.unsubscribeDocument = this.runtime.subscribe(() => {
       this.emit();
     });
@@ -119,7 +94,7 @@ export class EdgelessOperations {
   /**
    * Snapshot token for React external-store subscriptions.
    *
-   * @returns Version incremented by document, type, tool, and preview notifications.
+   * @returns Version incremented by document, type, creation-settings and preview notifications.
    */
   getRevision(): number {
     return this.revision;
@@ -220,7 +195,9 @@ export class EdgelessOperations {
       .filter(([id]) => this.elements.hasElement(id))
       .map(([id, props]) => ({ id, patch: { props } }));
     const updated = this.elements.updateElements(updates);
-    updated.forEach((element) => this.remember(element.type, element.props));
+    updated.forEach((element, index) =>
+      this.rememberUpdatedProperties(element, updates[index]!.patch.props),
+    );
     this.propertyPreview.clear();
     this.emit();
   }
@@ -321,109 +298,31 @@ export class EdgelessOperations {
     );
   }
   /**
-   * Reads the creation tool owned by this mounted edgeless representation.
+   * Reads initial and current creation settings for this mounted representation.
    *
-   * @returns Current session creation tool; treat the returned object as read-only.
-   */
-  getTool(): EdgelessVisualTool {
-    return this.tools.getTool();
-  }
-  /**
-   * Reads the remembered size for placement gestures.
+   * Type values merge registered defaults, type memory and shared group settings.
+   * Values are detached; position and identity are never creation defaults.
    *
-   * @param fallback - Initial size from the creation factory; omitted values use the standard 160×120 size.
-   * @returns Detached remembered size, or the supplied/default initial size, in canvas units.
+   * @param scope - Registered type or group whose settings are requested.
+   * @returns Detached properties and optional dimensions used by creation menus and placement.
+   * @throws If a requested type is not registered.
    */
-  getPlaceSize(
-    fallback?: Pick<VisualFrame, "width" | "height">,
-  ): Pick<VisualFrame, "width" | "height"> {
-    return this.tools.getPlaceSize(fallback);
-  }
-  /**
-   * Remembers the final interactive drag size for the active place preset.
-   *
-   * @param frame - Final drag geometry in canvas units; only width and height are remembered.
-   */
-  rememberPlaceSize(frame: VisualFrame): void {
-    return this.tools.rememberPlaceSize(frame);
-  }
-  /**
-   * Reads creation properties remembered for this mounted edgeless representation.
-   *
-   * @returns Detached session defaults used by creation menus.
-   */
-  getDefaults() {
-    return this.tools.getDefaults();
-  }
-  /**
-   * Resolves the last activated entry for a creation-toolbar group (session memory).
-   *
-   * @param groupId - Registered toolbar group to inspect.
-   * @returns Shared registered entry, falling back to the group default or first tool;
-   * undefined when the group is absent or has no available members.
-   */
-  getGroupTool(groupId: string): EdgelessToolbarTool | undefined {
-    return this.tools.getGroupTool(groupId);
-  }
-  /**
-   * Activates the remembered entry, or the first available default, for a group.
-   *
-   * @param groupId - Toolbar group whose remembered tool becomes active.
-   * @throws If these operations have no receiving React panel.
-   */
-  activateToolbarGroup(groupId: string): void {
-    const entry = this.getGroupTool(groupId);
-    if (entry) {
-      this.activateToolbarTool(entry.id);
-    }
-  }
-  /**
-   * Activates a registered toolbar entry using this panel's shared operations.
-   *
-   * @param id - Registered tool identity; an absent entry is ignored.
-   * @throws If these operations have no receiving React panel.
-   */
-  activateToolbarTool(id: string): void {
-    const entry = this.runtime.edgelessToolbar.getTool(id);
-    if (!entry) {
-      return;
-    }
-    if (!this.reactPanel) {
-      throw new Error("Toolbar activation requires a React panel");
-    }
-    entry.activate({ operations: this, reactPanel: this.reactPanel });
-  }
-  /**
-   * Enters place mode for a toolbar preset (click, not drag-drop).
-   *
-   * @param payload - Toolbar preset; sticker style fields are retained in the active tool.
-   */
-  setPlaceTool(payload: PresetPayload): void {
-    return this.tools.setPlaceTool(payload);
+  getDefaults(scope: CreationDefaultsScope): ElementCreationDefaults {
+    return this.creationDefaults.get(scope);
   }
   /**
    * Updates local creation defaults without mutating document content.
    *
-   * Only keys already present in the selected defaults are copied; subscribers are notified.
+   * Only explicitly declared fields are accepted; validation runs before storage
+   * and subscribers are notified once after an effective settings change.
    *
-   * @param kind - Built-in visual category whose creation defaults change.
-   * @param patch - Property values to clone into the session defaults.
+   * @param scope - Registered type or group whose creation defaults change.
+   * @param patch - Properties and dimensions to clone into the session defaults.
+   * @returns Updates settings without mutating document content.
+   * @throws If fields are undeclared, dimensions are invalid or the registered settings policy rejects the values.
    */
-  setCreationDefaults(
-    kind: "shape" | "drawing" | "text" | "sticker" | "connector",
-    patch: Record<string, unknown>,
-  ): void {
-    return this.tools.setCreationDefaults(kind, patch);
-  }
-  /**
-   * Selects a brush and its complete visual preset for subsequent strokes.
-   *
-   * Re-selecting the current brush preserves its edited session properties.
-   *
-   * @param brush - Built-in brush preset to activate.
-   */
-  setDrawingBrush(brush: keyof typeof drawingDefaults): void {
-    return this.tools.setDrawingBrush(brush);
+  setCreationDefaults(scope: CreationDefaultsScope, patch: ElementCreationDefaults): void {
+    this.creationDefaults.set(scope, patch);
   }
   /**
    * Observes local canvas state invalidations without an initial callback.
@@ -451,10 +350,8 @@ export class EdgelessOperations {
     this.unsubscribeDocument = undefined;
     this.unsubscribeTypes?.();
     this.unsubscribeTypes = undefined;
-    this.unsubscribeToolbar?.();
-    this.unsubscribeToolbar = undefined;
-    this.unsubscribeTools?.();
-    this.unsubscribeTools = undefined;
+    this.unsubscribeCreationDefaults?.();
+    this.unsubscribeCreationDefaults = undefined;
     this.discardPropertyPreview();
     this.listeners.clear();
   }
@@ -501,7 +398,9 @@ export class EdgelessOperations {
     const prepared = this.prepareCreationInput({ ...input, zIndex });
     const element = this.elements.insertElement(prepared);
     this.selection.set([element.id]);
-    return this.elements.getElementNode(element.id)!;
+    const created = this.elements.getElementNode(element.id)!;
+    this.creationDefaults.remember(created.type, { props: created.props, frame: created.frame });
+    return created;
   }
 
   /**
@@ -518,7 +417,13 @@ export class EdgelessOperations {
     const { kind, frame, ...props } = payload;
     return this.createElement({
       type: kind,
-      frame: { ...DEFAULT_FRAME, ...frame },
+      frame: frame
+        ? this.frame({
+            ...DEFAULT_FRAME,
+            ...this.creationDefaults.get({ type: kind }).frame,
+            ...frame,
+          })
+        : undefined,
       zIndex: Math.max(0, ...this.elements.getElementNodes().map((element) => element.zIndex)) + 1,
       props,
     });
@@ -550,7 +455,7 @@ export class EdgelessOperations {
       frame: framePatch,
       props: safe,
     });
-    this.remember(current.type, safe);
+    this.rememberUpdatedProperties(updated, safe, framePatch);
     return updated;
   }
 
@@ -563,7 +468,7 @@ export class EdgelessOperations {
    */
   updateProperties(id: string, patch: Record<string, unknown>): EditorElementNode {
     const updated = this.elements.updateElement(id, { props: patch });
-    this.remember(updated.type, updated.props);
+    this.rememberUpdatedProperties(updated, patch);
     return updated;
   }
 
@@ -603,7 +508,8 @@ export class EdgelessOperations {
   /**
    * Scales the active selection to an exact outer size.
    *
-   * Group leaves scale around the selection bounds in one history batch. Missing
+   * Group leaves scale around the selection bounds in one validated batch, and successful
+   * resizes remember their final dimensions. Missing
    * bounds, nonpositive sizes, and degenerate selection bounds cause no change.
    *
    * @param width - Requested selection width in canvas units.
@@ -617,26 +523,34 @@ export class EdgelessOperations {
     }
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    this.runtime.history.batchUpdates(() =>
-      this.leaves(items).forEach((id) => {
-        const frame = this.element(id)?.frame;
-        if (!frame) {
-          return;
-        }
-        const center = {
-          x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX,
-          y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY,
-        };
-        const nextWidth = frame.width * scaleX;
-        const nextHeight = frame.height * scaleY;
-        this.setFrame(id, {
-          x: center.x - nextWidth / 2,
-          y: center.y - nextHeight / 2,
-          width: nextWidth,
-          height: nextHeight,
-        });
-      }),
-    );
+    const updates = this.leaves(items).flatMap((id) => {
+      const element = this.element(id);
+      if (!element || element.type === "group") {
+        return [];
+      }
+      const frame = element.frame;
+      const nextWidth = frame.width * scaleX;
+      const nextHeight = frame.height * scaleY;
+      return [
+        {
+          id,
+          patch: {
+            frame: this.frame({
+              x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX - nextWidth / 2,
+              y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY - nextHeight / 2,
+              width: nextWidth,
+              height: nextHeight,
+            }),
+          },
+        },
+      ];
+    });
+    const updated = this.elements.updateElements(updates);
+    if (scaleX !== 1 || scaleY !== 1) {
+      updated.forEach((element) =>
+        this.creationDefaults.remember(element.type, { frame: element.frame }),
+      );
+    }
   }
 
   /**
@@ -928,25 +842,6 @@ export class EdgelessOperations {
   }
 
   /**
-   * Activates one canvas interaction tool.
-   *
-   * Updates this panel’s local tool and notifies tool subscribers.
-   *
-   * @param value - Tool configuration, or select to return to selection mode.
-   * @throws If the requested element creation tool is unregistered or the tool configuration is unsupported.
-   */
-  setTool(value: EdgelessVisualTool | "select"): void {
-    if (
-      typeof value === "object" &&
-      value.tool === "element" &&
-      !this.runtime.elementTypes.get(value.type)?.creation
-    ) {
-      throw new Error(`Element creation tool ${value.type} is not registered`);
-    }
-    return this.tools.setTool(value);
-  }
-
-  /**
    * Replaces the active canvas selection with validated element references.
    *
    * @param value - Array of existing element IDs within this instance’s element scope.
@@ -1037,7 +932,39 @@ export class EdgelessOperations {
     return { ...element, frame: { ...element.frame }, props };
   }
 
-  /** Shares defaults and pure geometry preparation; persisted insertion owns its own single validation pass. */
+  /**
+   * Remembers final normalized values only for fields requested by a successful edit.
+   *
+   * @param element - Committed element returned by the manager.
+   * @param patch - Requested property keys; unrelated old styles are not remembered.
+   * @param frame - Requested dimensions, if this edit also changed geometry.
+   * @returns Updates the surface's declared creation settings.
+   */
+  private rememberUpdatedProperties(
+    element: EditorElementNode,
+    patch: Record<string, unknown>,
+    frame?: Partial<VisualFrame>,
+  ): void {
+    this.creationDefaults.remember(element.type, {
+      props: Object.fromEntries(Object.keys(patch).map((key) => [key, element.props[key]])),
+      frame: frame
+        ? Object.fromEntries(
+            Object.keys(frame).map((key) => [key, element.frame[key as keyof VisualFrame]]),
+          )
+        : undefined,
+    });
+  }
+
+  /**
+   * Shares defaults and pure geometry preparation between previews and insertion.
+   *
+   * Persisted insertion owns its own single validation pass. Explicit input wins
+   * over type and group memory; behavior.create receives the complete candidate.
+   *
+   * @param input - Detached creation request, optionally supplying geometry and properties.
+   * @returns Prepared input with a complete frame and copied properties.
+   * @throws If the type is unregistered or its creation behavior rejects the input.
+   */
   private prepareCreationInput(
     input: CreateElementInput,
   ): EditorElementInput & { frame: VisualFrame; props: Record<string, unknown> } {
@@ -1045,21 +972,16 @@ export class EdgelessOperations {
     if (!registration) {
       throw new Error(`Element type ${input.type} is not registered`);
     }
+    const session = this.creationDefaults.get({ type: input.type });
     const preparedInput = {
       ...copy(input),
-      frame: this.frame({ ...DEFAULT_FRAME, ...input.frame }),
+      frame: this.frame({ ...DEFAULT_FRAME, ...session.frame, ...input.frame }),
       zIndex: input.zIndex ?? 0,
     };
-    const sessionDefaults =
-      this.sessionDefaults(
-        registration.behavior?.defaultsGroup,
-        registration.definition.defaults,
-      ) ??
-      registration.definition.defaults ??
-      {};
     const defaults =
-      registration.behavior?.creationDefaults?.(sessionDefaults, preparedInput) ?? sessionDefaults;
-    const props = copy({ ...defaults, ...this.creationDefaults.get(input.type) });
+      registration.behavior?.creationDefaults?.(session.props ?? {}, preparedInput) ??
+      session.props;
+    const props = copy({ ...defaults });
     for (const [key, value] of Object.entries(input.props ?? {})) {
       if (value !== undefined || !(key in props)) {
         props[key] = copy(value);
@@ -1208,8 +1130,7 @@ export class EdgelessOperations {
     if (!element || element.type === "group") {
       return;
     }
-    const next = this.frame(frame);
-    this.elements.updateElement(id, { frame: next });
+    this.elements.updateElement(id, { frame: this.frame(frame) });
   }
   /**
    * Reads a selectable parent while stopping at the panel boundary.
@@ -1235,60 +1156,6 @@ export class EdgelessOperations {
       typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
       : 0;
-  }
-
-  /**
-   * Reads palette defaults or lazily initializes detached shared defaults for a creation group.
-   *
-   * @param group - Shared creation-default group; undefined disables group defaults.
-   * @param initial - Default properties copied when the shared group is first encountered.
-   * @returns Shared mutable defaults, or undefined when no group is supplied.
-   */
-  private sessionDefaults(
-    group?: string,
-    initial: Readonly<Record<string, unknown>> = {},
-  ): Record<string, unknown> | undefined {
-    if (!group) {
-      return undefined;
-    }
-    const paletteDefaults = this.tools.defaults as Record<string, Record<string, unknown>>;
-    if (Object.hasOwn(paletteDefaults, group)) {
-      return paletteDefaults[group];
-    }
-    let defaults = this.sharedCreationDefaults.get(group);
-    if (!defaults) {
-      defaults = copy(initial);
-      this.sharedCreationDefaults.set(group, defaults);
-    }
-    return defaults;
-  }
-
-  /**
-   * Copies configured remembered properties into shared and per-type creation defaults.
-   *
-   * @param type - Native event or registered editor type name.
-   * @param patch - Element properties whose configured creation defaults should be remembered.
-   */
-  private remember(type: string, patch: Record<string, unknown>): void {
-    const registration = this.runtime.elementTypes.get(type);
-    const shared = this.sessionDefaults(
-      registration?.behavior?.defaultsGroup,
-      registration?.definition.defaults,
-    );
-    if (shared) {
-      for (const key of Object.keys(shared)) {
-        if (key in patch) {
-          shared[key] = copy(patch[key]);
-        }
-      }
-    }
-    const remembered = this.creationDefaults.get(type) ?? {};
-    for (const key of registration?.rememberedProperties ?? []) {
-      if (key in patch) {
-        remembered[key] = copy(patch[key]);
-      }
-    }
-    this.creationDefaults.set(type, remembered);
   }
 
   /**

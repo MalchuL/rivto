@@ -1,7 +1,8 @@
 import { ChildrenPanel } from "@chulane/rivto";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { ReactPanel } from "../../panels/react-panel";
-import { EdgelessOperations } from "../elements/edgeless-operations";
+import { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
+import { EdgelessTool } from "../edgeless-tools/edgeless-tool";
 import { edgelessVisualsExtension } from "../../extensions/edgeless/visuals/extension";
 import type { EdgelessToolbarTool } from "./types";
 
@@ -12,8 +13,7 @@ it("orders mixed entries, defers unknown groups, rejects duplicates and cleans u
   const tool: EdgelessToolbarTool = {
     id: "single",
     title: "Single",
-    isActive: () => false,
-    activate: () => {},
+    createTool: (options) => new EdgelessTool(options),
   };
   let changes = 0;
   const stop = registry.subscribe(() => {
@@ -59,49 +59,48 @@ it("remembers group tools per panel, resets removed active tools and does not wr
   const core = await createTestCoreEditor();
   const first = createTestReactEditor({ editor: core, extensions: [edgelessVisualsExtension()] });
   const second = new ReactPanel(first.editor, new ChildrenPanel(core));
-  const a = new EdgelessOperations(first.editor, first);
-  const b = new EdgelessOperations(first.editor, second);
-  a.observeChanges();
-  b.observeChanges();
+  const a = new EdgelessToolContext(first);
+  const b = new EdgelessToolContext(second);
+  const stopA = a.observeChanges();
+  const stopB = b.observeChanges();
   const registry = first.editor.edgelessToolbar;
   let notifications = 0;
   const stop = core.subscribe(() => {
     notifications += 1;
   });
-  a.activateToolbarTool("ellipse");
-  a.setTool("select");
+  a.activate("ellipse");
+  a.reset();
   expect(a.getGroupTool("shapes")?.id).toBe("ellipse");
   expect(b.getGroupTool("shapes")?.id).toBe("rectangle");
-  a.activateToolbarGroup("shapes");
-  expect(a.getTool()).toEqual({ tool: "place", kind: "ellipse" });
-  b.activateToolbarGroup("drawing");
-  expect(b.getTool()).toEqual({ tool: "drawing", brush: "pen" });
+  a.activateGroup("shapes");
+  expect(a.active?.id).toBe("ellipse");
+  b.activateGroup("drawing");
+  expect(b.active?.id).toBe("pen");
   const release = registry.registerTool({
     id: "pan-preset",
     title: "Pan preset",
     group: "shapes",
-    isActive: (tool) => tool.tool === "pan",
-    activate: ({ operations }) => operations.setTool({ tool: "pan" }),
+    createTool: (options) => new EdgelessTool(options),
   });
-  a.activateToolbarTool("pan-preset");
+  a.activate("pan-preset");
   expect(a.getGroupTool("shapes")?.id).toBe("pan-preset");
   release();
-  expect(a.getTool()).toEqual({ tool: "select" });
-  expect(b.getTool()).toEqual({ tool: "drawing", brush: "pen" });
+  expect(a.active?.id).toBe("select");
+  expect(b.active?.id).toBe("pen");
   expect(a.getGroupTool("shapes")?.id).toBe("rectangle");
-  a.setTool({ tool: "pan" });
+  a.activate("pan");
   const releaseLate = registry.registerTool({
     id: "late-pan",
     title: "Late pan",
-    isActive: (tool) => tool.tool === "pan",
-    activate: ({ operations }) => operations.setTool({ tool: "pan" }),
+    createTool: (options) => new EdgelessTool(options),
   });
+  a.activate("late-pan");
   releaseLate();
-  expect(a.getTool()).toEqual({ tool: "select" });
+  expect(a.active?.id).toBe("select");
   expect(notifications).toBe(0);
   stop();
-  a.destroy();
-  b.destroy();
+  stopA();
+  stopB();
   second.destroy();
   await first.editor.destroy();
   await core.destroy();
@@ -119,8 +118,7 @@ it("bridges element creation atomically and rolls back definition installation o
   const conflict = registry.registerTool({
     id: "element:badge",
     title: "Conflict",
-    isActive: () => false,
-    activate: () => {},
+    createTool: (options) => new EdgelessTool(options),
   });
   expect(() => panel.editor.elementTypes.register(registration)).toThrow(/already exists/);
   expect(core.elementRegistry.get("badge")).toBeUndefined();

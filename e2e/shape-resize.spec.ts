@@ -131,6 +131,7 @@ for (const repeat of [0, 200]) {
         (original!.frame.width * previewHost.width) / originalHost.width,
         1,
       );
+      const committedFrame = (await stored())!.frame;
       const committedNode = (await node.boundingBox())!;
       for (const key of ["x", "y", "width", "height"] as const) {
         expect(committedNode[key]).toBeCloseTo(previewNode[key], 1);
@@ -152,6 +153,27 @@ for (const repeat of [0, 200]) {
       await page.mouse.up();
       expect(await stored()).toEqual(original);
       expect((await node.boundingBox())!.width).toBeCloseTo(originalNode.width, 1);
+
+      // Undo and cancellation do not replace the last committed Shapes dimensions.
+      const nextKind = kind === "Rectangle" ? "Ellipse" : "Rectangle";
+      await toolbar.getByRole("button", { name: "Shapes", exact: true }).click();
+      await toolbar.getByRole("button", { name: nextKind, exact: true }).click();
+      await page.mouse.move(bounds.x + 500, bounds.y + 220);
+      const preview = page.locator(`[data-edgeless-creation-preview="${nextKind.toLowerCase()}"]`);
+      await expect(preview).toBeVisible();
+      const nextPreview = (await preview.boundingBox())!;
+      expect(nextPreview.width).toBeCloseTo(previewHost.width, 1);
+      expect(nextPreview.height).toBeCloseTo(previewHost.height, 1);
+      await page.mouse.click(bounds.x + 500, bounds.y + 220);
+      const next = page.locator(`[data-edgeless-visual-kind="${nextKind.toLowerCase()}"]`).last();
+      const nextId = (await next.getAttribute("data-edgeless-object-id"))!;
+      const nextFrame = await page.evaluate((id) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return editor.elements.getElementNode(id)!.frame;
+      }, nextId);
+      expect(nextFrame.width).toBeCloseTo(committedFrame.width, 1);
+      expect(nextFrame.height).toBeCloseTo(committedFrame.height, 1);
     });
   }
 }

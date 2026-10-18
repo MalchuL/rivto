@@ -1,3 +1,4 @@
+import { EdgelessToolContext } from "../../../managers/edgeless-tools/edgeless-tool-context";
 import { TestPanel } from "../../../test-utils";
 import { ReactPanel } from "../../../panels/react-panel";
 import {
@@ -612,26 +613,26 @@ describe("edgelessVisualsExtension", () => {
     });
     expect(() =>
       editor.commands.execute("edgeless.tool.set", {
-        operations: reactPanelOperations,
-        payload: { tool: "pan" },
+        tools: new EdgelessToolContext(reactPanel),
+        payload: "pan",
       }),
     ).not.toThrow();
     expect(() =>
       editor.commands.execute("edgeless.tool.set", {
-        operations: reactPanelOperations,
+        tools: new EdgelessToolContext(reactPanel),
         payload: "select",
       }),
     ).not.toThrow();
     expect(() =>
       editor.commands.execute("edgeless.tool.set", {
-        operations: reactPanelOperations,
-        payload: { tool: "place", kind: "rectangle" },
+        tools: new EdgelessToolContext(reactPanel),
+        payload: "rectangle",
       }),
     ).not.toThrow();
     expect(() =>
       editor.commands.execute("edgeless.tool.set", {
-        operations: reactPanelOperations,
-        payload: { tool: "place", kind: "ellipse" },
+        tools: new EdgelessToolContext(reactPanel),
+        payload: "ellipse",
       }),
     ).not.toThrow();
     const blank = (
@@ -688,29 +689,43 @@ describe("edgelessVisualsExtension", () => {
       editor,
       extensions: [edgelessSelectionExtension(), edgelessVisualsExtension()],
     });
-    const reactPanelOperations = observeOperations(reactPanel);
+    const tools = new EdgelessToolContext(reactPanel);
+    const stopTools = tools.observeChanges();
+    const reactPanelOperations = tools.operations;
     const edgelessOperation = reactPanelOperations;
-    edgelessOperation.setPlaceTool({ kind: "ellipse" });
-    expect(edgelessOperation.getTool()).toEqual({ tool: "place", kind: "ellipse" });
-    edgelessOperation.rememberPlaceSize({ x: 0, y: 0, width: 90, height: 70 });
-    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 90, height: 70 });
-    edgelessOperation.setPlaceTool({ kind: "ellipse" });
-    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 90, height: 70 });
-    edgelessOperation.setPlaceTool({ kind: "rectangle" });
-    expect(edgelessOperation.getPlaceSize()).toEqual({ width: 160, height: 120 });
-    expect(edgelessOperation.getGroupTool("shapes")?.id).toBe("rectangle");
-    edgelessOperation.setDrawingBrush("marker");
-    expect(edgelessOperation.getGroupTool("drawing")?.id).toBe("marker");
+    tools.activate("ellipse");
+    expect(tools.active?.id).toBe("ellipse");
+    edgelessOperation.setCreationDefaults(
+      { group: "shapes" },
+      { frame: { width: 90, height: 70 } },
+    );
+    expect(edgelessOperation.getDefaults({ group: "shapes" }).frame).toEqual({
+      width: 90,
+      height: 70,
+    });
+    tools.activate("ellipse");
+    expect(edgelessOperation.getDefaults({ group: "shapes" }).frame).toEqual({
+      width: 90,
+      height: 70,
+    });
+    tools.activate("rectangle");
+    expect(edgelessOperation.getDefaults({ group: "shapes" }).frame).toEqual({
+      width: 90,
+      height: 70,
+    });
+    expect(tools.getGroupTool("shapes")?.id).toBe("rectangle");
+    tools.activate("marker");
+    expect(tools.getGroupTool("drawing")?.id).toBe("marker");
     editor.commands.execute("edgeless.tool.set", {
-      operations: reactPanelOperations,
+      tools,
       payload: "select",
     });
-    expect(edgelessOperation.getTool()).toEqual({ tool: "select" });
-    edgelessOperation.activateToolbarGroup("shapes");
-    expect(edgelessOperation.getTool()).toEqual({ tool: "place", kind: "rectangle" });
-    edgelessOperation.activateToolbarGroup("drawing");
-    expect(edgelessOperation.getTool()).toEqual({ tool: "drawing", brush: "marker" });
-    edgelessOperation.destroy();
+    expect(tools.active?.id).toBe("select");
+    tools.activateGroup("shapes");
+    expect(tools.active?.id).toBe("rectangle");
+    tools.activateGroup("drawing");
+    expect(tools.active?.id).toBe("marker");
+    stopTools();
     reactPanel.editor.destroy();
     editor.destroy();
   });
@@ -783,8 +798,8 @@ test("one set of edgeless operations binds model reads, writes, and selection to
   expect(second.runtime.selection.get()?.elements).toEqual([ellipse.id]);
   expect(first.runtime.selection.get()?.elements).toEqual([rectangle.id]);
   const revision = second.getRevision();
-  first.setTool({ tool: "place", kind: "ellipse" });
-  expect(second.getTool()).toMatchObject({ tool: "select" });
+  first.setCreationDefaults({ group: "shapes" }, { props: { fill: "red" } });
+  expect(second.getDefaults({ group: "shapes" }).props?.fill).not.toBe("red");
   expect(second.getRevision()).toBe(revision);
   expect(runtime.getDocument()).toBe(a);
   edgelessOperation.destroy();

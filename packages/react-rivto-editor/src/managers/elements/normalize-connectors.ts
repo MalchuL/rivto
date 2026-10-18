@@ -1,4 +1,4 @@
-import { createEdgelessDefaults } from "./tool-state";
+import { createEdgelessDefaults } from "../../elements/visuals/creation-defaults";
 import type { ReactEditorApi } from "../../editor/types";
 import { ElementGeometry } from "../../elements/element-geometry";
 import type {

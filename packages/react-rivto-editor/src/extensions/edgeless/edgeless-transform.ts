@@ -4,6 +4,8 @@ import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../co
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
+import { EdgelessCreationDefaultsContext } from "../../surfaces/edgeless/edgeless-tools-context";
+import type { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
 import { SurfaceContext } from "../../surfaces/surface";
 import { EdgelessTransformControls } from "./edgeless-transform-controls";
 import { ElementGeometry } from "../../elements/element-geometry";
@@ -37,13 +39,21 @@ import {
   rotatedFrameBounds,
 } from "../../elements/visuals/utils/geometry";
 
-/** Mounts controls only when this view renders an edgeless surface. */
+/**
+ * Mounts controls only when this view renders an edgeless surface.
+ *
+ * The controller receives the surface settings session and connects document
+ * gestures in a layout effect; page occurrences do not install these controls.
+ *
+ * @returns Mounted transform controls, or null outside edgeless mode.
+ */
 function TransformControls() {
   const mode = useContext(SurfaceContext);
+  const creationDefaults = useContext(EdgelessCreationDefaultsContext);
   const reactPanel = useReactPanel();
   const controller = useMemo(
-    () => new EdgelessTransformController(reactPanel.editor),
-    [reactPanel],
+    () => new EdgelessTransformController(reactPanel.editor, creationDefaults),
+    [reactPanel, creationDefaults],
   );
   // Claim object gestures before the passive marquee selection handlers change selection.
   useLayoutEffect(
@@ -202,8 +212,16 @@ export class EdgelessTransformController {
     (id) => this.rotation(id),
   );
 
-  /** @param reactEditor - Runtime receiving transform events and document commands. */
-  constructor(private readonly reactEditor: ReactEditorApi) {}
+  /**
+   * Creates gesture controls with optional surface-owned creation settings.
+   *
+   * @param reactEditor - Runtime receiving transform events and document commands.
+   * @param creationDefaults - Settings updated after committed resizes; omitted controls do not remember dimensions.
+   */
+  constructor(
+    private readonly reactEditor: ReactEditorApi,
+    private readonly creationDefaults?: EdgelessCreationDefaults | null,
+  ) {}
 
   /**
    * Captures editor state when a Moveable edge or handle starts a move, resize, or rotation.
@@ -997,6 +1015,20 @@ export class EdgelessTransformController {
             })),
           ),
         );
+        if (active.kind === "resize") {
+          for (const { id } of active.previews.values()) {
+            const element = this.elements.getElementNode(id);
+            const before = active.frames.get(id);
+            if (
+              element &&
+              before &&
+              !this.groupChildren(id).length &&
+              (before.width !== element.frame.width || before.height !== element.frame.height)
+            ) {
+              this.creationDefaults?.remember(element.type, { frame: element.frame });
+            }
+          }
+        }
       }
       return active.moved;
     }
@@ -1039,7 +1071,7 @@ export class EdgelessTransformController {
     if (event.button !== 0 || !(event.target instanceof Element)) {
       return false;
     }
-    if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") {
+    if (root.dataset.panningReady === "true" || root.dataset.edgelessPanTool === "true") {
       return false;
     }
     if (event.target.closest("[data-edgeless-ui]")) {

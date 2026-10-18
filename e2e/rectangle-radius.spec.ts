@@ -182,5 +182,12 @@ for (const repeat of [0, 200]) {
       "rx",
       "21",
     );
+    await toolbar.getByRole("button", { name: "Shapes", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Rectangle", exact: true }).click();
+    await page.mouse.move(bounds.x + 700, bounds.y + 400);
+    await expect(page.locator('[data-edgeless-creation-preview="rectangle"] rect')).toHaveAttribute(
+      "rx",
+      "3",
+    );
   });
 }

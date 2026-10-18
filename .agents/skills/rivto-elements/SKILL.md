@@ -172,14 +172,20 @@ Without `group`, the element gets a standalone button. A group describes `id`,
 `title`, `icon`, optional `order`, `defaultToolId` and `render`. Register shared
 groups once; another extension can add a tool to the group's ID without owning it.
 
-Use `registerTool` for a preset or interaction such as a brush, with `activate`
-and pure `isActive` callbacks. Keep activation local to the receiving panel and
-perform document writes only through the eventual placement/drawing operation.
+Use `registerTool` for a preset or interaction such as a brush, with a
+`createTool(options)` factory returning a surface-local `EdgelessTool` or
+`EdgelessCreationTool` instance. Active styling follows the registered ID. Keep
+activation local to the receiving surface and perform document writes only through
+the eventual placement/drawing operation. For new tools, changes to existing tools
+or contributions to existing groups, follow [rivto-tools](../rivto-tools/SKILL.md).
 Group and tool registrations return extension-owned disposers. Unknown groups
 hide their tools until installed; empty groups stay hidden. Removing an active
-tool selects Select without deleting document content.
+tool resolves the registered default without deleting document content. There is
+no hardcoded fallback name; an unavailable grouped default waits for its group.
 
-Custom group UI receives all `items`, `renderTool`, `operations` and `reactPanel`.
+Custom group UI receives all `items`, `renderTool`, `operations`, `reactPanel`,
+`tools` and the surface-local `group` instance. Read and write shared settings
+through `group.getSettings()` and `group.setSettings()` rather than another UI store.
 Render the complete supplied list so other extensions can contribute. Use
 `renderTool(item, children?)` to retain registered icons, active styling, accessible
 labels, keyboard activation and existing pointer drag behavior. `children` replaces
@@ -215,7 +221,8 @@ preview of a prospective placement. It may produce temporary data/IDs but must
 not insert records. The same raw input is retained through pointer movement and
 committed on release; do not call the factory separately for preview and commit.
 Its frame width/height supply the initial size, unless a completed drag has already
-established a remembered size for the active tool. Pointer placement supplies final
+established a remembered size under the registered type/group policy. Tool switches
+preserve that session memory. Pointer placement supplies final
 position and drag geometry. A cancelled gesture discards the input.
 
 Preparation shares defaults, remembered properties and pure `behavior.create`

@@ -1,3 +1,4 @@
+import type { RememberedElementProperties } from "./creation-defaults-types";
 import type { EdgelessOperations } from "./edgeless-operations";
 import type { EditableLabelFocusPoint } from "../../components";
 import type { ComponentType, ReactNode, RefObject } from "react";
@@ -7,11 +8,7 @@ import type {
   EditorElementInput,
   EditorElementNode,
 } from "@chulane/rivto";
-import type {
-  EdgelessAlignment,
-  EdgelessReorder,
-  EdgelessVisualTool,
-} from "../../elements/visuals/types";
+import type { EdgelessAlignment, EdgelessReorder } from "../../elements/visuals/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ElementClipboardConverter } from "../clipboard/types";
 
@@ -88,15 +85,15 @@ export interface ReactElementRegistration {
     readonly absoluteGeometry?: boolean;
     /**
      * Derives creation defaults before explicit properties are applied.
-     * @param defaults - Shared session values, or the registered definition defaults.
+     * @param defaults - Detached definition defaults merged with remembered type values and shared group settings.
      * @param input - Creation request with complete frame and stacking; treat it as read-only.
-     * @returns Defaults to merge with remembered values and explicit input properties.
+     * @returns Effective defaults derived from the merged session; explicit input properties are applied afterward.
      */
     readonly creationDefaults?: (
       defaults: Readonly<Record<string, unknown>>,
       input: EditorElementInput,
     ) => Record<string, unknown>;
-    /** Optional session-default group shared by related registered types, such as the two shapes. Independent of creation.group, which controls toolbar placement. */
+    /** Optional defaults-group registration shared by related types; falls back to creation.group. The group explicitly declares remembered fields independently of its visible controls. */
     readonly defaultsGroup?: string;
     /**
      * Declares references used when deriving grouping and layer membership.
@@ -137,7 +134,8 @@ export interface ReactElementRegistration {
     /**
      * Creates detached input for one prospective placement. Called on first preview, not per pointer sample;
      * the same input is committed on release. Must not mutate document state or allocate persisted records.
-     * Frame width/height set the initial preview size; the placement gesture supplies final geometry.
+     * Frame width/height set the initial preview fallback; remembered dimensions override it,
+     * and the placement gesture supplies final geometry.
      * @param reactPanel - Receiving mounted panel, for reading creation context without document writes.
      * @returns Detached creation request; final placement prepares defaults and validates before insertion.
      * @throws To reject preparing a placement; no element has been inserted by this factory.
@@ -146,8 +144,8 @@ export interface ReactElementRegistration {
   };
   /** Property panel contents. The surface supplies chrome, panel context, preview and undo lifecycle. */
   readonly properties?: ComponentType<ElementPropertiesProps>;
-  /** Property keys reused for subsequent creation in this canvas; content and geometry are opt-in. Values are remembered after property commits, not during previews, and reset with the operations instance. */
-  readonly rememberedProperties?: readonly string[];
+  /** Property keys reused for subsequent creation in this canvas; content and geometry are opt-in. Values are remembered after property commits, not during previews, and reset when the owning edgeless surface unmounts. */
+  readonly rememberedProperties?: RememberedElementProperties;
 }
 /** Shared type registrations; unregistering presentation never deletes persisted content. */
 export interface ElementTypesApi {
@@ -199,21 +197,7 @@ export interface EdgelessAPI {
    * @throws If the type is not registered, geometry is not finite and positive, or its definition rejects the input.
    */
   createElement(input: CreateElementInput): EditorElementNode;
-  /**
-   * Reads the creation tool owned by this mounted edgeless representation.
-   *
-   * @returns Current session creation tool; treat the returned object as read-only.
-   */
-  getTool(): EdgelessVisualTool;
-  /**
-   * Activates one canvas interaction tool.
-   *
-   * Updates this panel’s local tool and notifies tool subscribers.
-   *
-   * @param tool - Tool configuration, or select to return to selection mode.
-   * @throws If the requested element creation tool is unregistered or the tool configuration is unsupported.
-   */
-  setTool(tool: EdgelessVisualTool | "select"): void;
+
   /**
    * Moves the complete active selection by a canvas delta.
    *

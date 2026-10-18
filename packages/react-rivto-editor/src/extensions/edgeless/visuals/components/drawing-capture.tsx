@@ -1,94 +1,40 @@
-import { useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useLayoutEffect, useRef, type ReactNode, type PointerEventHandler } from "react";
 import { useEditorRoot } from "../../../../hooks/editor/use-editor-root";
-import type { ConnectorLineStyle, EdgelessVisualTool } from "../../../../elements/visuals/types";
-import type { ConnectorHover, ConnectorPreview } from "../hooks/use-drawing-gesture";
-import { connectorPath } from "../../../../elements/visuals/utils/geometry";
-import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 
 /**
- * Full-plane SVG that captures drawing/eraser/connector/place gestures.
+ * Covers the canvas viewport with an SVG event layer without knowing the active tool type.
  *
- * Connector preview arrowheads extend their triangle tips one stroke width beyond the draft path endpoints.
+ * Observes pan and zoom attributes and counter-transforms the capture box without
+ * invalidating card styles. Children use absolute canvas coordinates. Cleanup
+ * disconnects the observer when the root changes or the layer unmounts.
  *
- * Observes the editor root's pan and zoom attributes, keeping counter-transform
- * variables on this SVG so viewport gestures do not invalidate card styles.
- * The observer disconnects when the root changes or this layer unmounts.
- *
- * @param props - Current tool, drawing and connector drafts, attachment markers and gesture pointer handlers.
- * @param props.tool - Active canvas tool; select and pan do not capture drawing gestures.
- * @param props.zoom - Viewport scale used to keep preview strokes at screen size.
- * @param props.preview - Drawing draft points in canvas coordinates.
- * @param props.connectorPreview - Connector draft geometry, or null without a draft.
- * @param props.connectorHover - Attachment feedback, or null without a hovered target.
- * @param props.drawingStroke - Drawing draft stroke color.
- * @param props.drawingStrokeWidth - Drawing draft stroke width in screen pixels.
- * @param props.drawingOpacity - Drawing draft opacity.
- * @param props.connectorStroke - Connector draft stroke color.
- * @param props.connectorStrokeWidth - Connector draft stroke width in screen pixels.
- * @param props.connectorLineStyle - Connector draft line pattern; defaults to solid.
- * @param props.connectorStartStyle - Start marker; defaults to none.
- * @param props.connectorEndStyle - End marker; defaults to an arrow.
- * @param props.onPointerDown - Starts a gesture with the SVG pointer event.
- * @param props.onPointerMove - Updates a gesture with the SVG pointer event.
- * @param props.onPointerUp - Completes or cancels a gesture with the SVG pointer event.
- * @param props.onPointerLeave - Clears attachment feedback when the pointer leaves.
- * @returns Plane-sized SVG capture layer with local drawing/connector feedback; placement content uses ElementCreationPreview.
+ * @param props - Capture capability, optional pointer adapters and arbitrary SVG preview content.
+ * @param props.active - Whether the layer accepts pointer input; defaults to false.
+ * @param props.children - Optional SVG feedback in absolute canvas coordinates.
+ * @param props.onPointerDown - Offers a primary gesture to the tool adapter.
+ * @param props.onPointerMove - Routes hover and captured motion to the adapter.
+ * @param props.onPointerUp - Completes the accepted gesture through the adapter.
+ * @param props.onPointerCancel - Discards the accepted gesture on browser cancellation.
+ * @param props.onPointerLeave - Removes hover feedback when leaving the viewport.
+ * @returns Viewport-sized capture layer with a restored canvas origin.
  * @throws If rendered outside an EditorPanel or EditorEmbed subtree.
  */
 export function DrawingCapture({
-  tool,
-  zoom,
-  preview,
-  connectorPreview,
-  connectorHover,
-  drawingStroke,
-  drawingStrokeWidth,
-  drawingOpacity,
-  connectorStroke,
-  connectorStrokeWidth,
-  connectorLineStyle = "solid",
-  connectorStartStyle = "none",
-  connectorEndStyle = "arrow",
+  active = false,
+  children,
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onPointerCancel,
   onPointerLeave,
 }: {
-  tool: EdgelessVisualTool;
-  zoom: number;
-  preview: readonly CanvasPoint[];
-  connectorPreview: ConnectorPreview | null;
-  connectorHover: ConnectorHover | null;
-  drawingStroke: string;
-  drawingStrokeWidth: number;
-  drawingOpacity: number;
-  connectorStroke: string;
-  connectorStrokeWidth: number;
-  connectorLineStyle?: ConnectorLineStyle;
-  connectorStartStyle?: "none" | "arrow";
-  connectorEndStyle?: "none" | "arrow";
-  /**
-   * Starts the drawing or connector gesture at the pointer position.
-   *
-   * @param event - Native or React event supplying the current input.
-   */
-  onPointerDown(event: ReactPointerEvent<SVGSVGElement>): void;
-  /**
-   * Updates the drawing or connector gesture preview at the pointer position.
-   *
-   * @param event - Native or React event supplying the current input.
-   */
-  onPointerMove(event: ReactPointerEvent<SVGSVGElement>): void;
-  /**
-   * Completes the drawing or connector gesture at the pointer position.
-   *
-   * @param event - Native or React event supplying the current input.
-   */
-  onPointerUp(event: ReactPointerEvent<SVGSVGElement>): void;
-  /**
-   * Clears the drawing capture's pointer hover state.
-   */
-  onPointerLeave(): void;
+  readonly active?: boolean;
+  readonly children?: ReactNode;
+  readonly onPointerDown?: PointerEventHandler<SVGSVGElement>;
+  readonly onPointerMove?: PointerEventHandler<SVGSVGElement>;
+  readonly onPointerUp?: PointerEventHandler<SVGSVGElement>;
+  readonly onPointerCancel?: PointerEventHandler<SVGSVGElement>;
+  readonly onPointerLeave?: PointerEventHandler<SVGSVGElement>;
 }) {
   const { element: root } = useEditorRoot();
   const capture = useRef<SVGSVGElement | null>(null);
@@ -125,16 +71,15 @@ export function DrawingCapture({
     });
     return () => observer.disconnect();
   }, [root]);
-  const captureActive = tool.tool !== "select" && tool.tool !== "pan";
   return (
     <svg
       ref={capture}
       className="edgeless-drawing-capture"
-      data-active={captureActive || undefined}
+      data-active={active || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onPointerLeave={onPointerLeave}
     >
       {/* The capture box follows the viewport, while previews use absolute
@@ -145,92 +90,7 @@ export function DrawingCapture({
             "translate(var(--edgeless-capture-offset-x, 0px), var(--edgeless-capture-offset-y, 0px))",
         }}
       >
-        {preview.length > 1 && tool.tool === "drawing" && (
-          <path
-            d={preview.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ")}
-            fill="none"
-            stroke={drawingStroke}
-            strokeWidth={drawingStrokeWidth / zoom}
-            strokeLinecap="butt"
-            strokeLinejoin="round"
-            opacity={drawingOpacity}
-          />
-        )}
-        {connectorPreview && (
-          <>
-            <defs>
-              <marker
-                id="edgeless-connector-preview-end"
-                markerWidth="8"
-                markerHeight="8"
-                refX="7"
-                refY="4"
-                orient="auto"
-              >
-                <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
-              </marker>
-              <marker
-                id="edgeless-connector-preview-start"
-                markerWidth="8"
-                markerHeight="8"
-                refX="7"
-                refY="4"
-                orient="auto-start-reverse"
-              >
-                <path d="M0 0L8 4L0 8z" fill={connectorStroke} />
-              </marker>
-            </defs>
-            <path
-              data-edgeless-connector-preview-stroke="true"
-              data-line-style={connectorLineStyle}
-              d={connectorPath(
-                connectorPreview.source,
-                connectorPreview.target,
-                connectorPreview.route,
-                connectorPreview.sourceAnchor,
-                connectorPreview.targetAnchor,
-                connectorPreview.sourceFrame,
-                connectorPreview.targetFrame,
-              )}
-              fill="none"
-              stroke={connectorStroke}
-              strokeWidth={connectorStrokeWidth / zoom}
-              markerStart={
-                connectorStartStyle === "arrow"
-                  ? "url(#edgeless-connector-preview-start)"
-                  : undefined
-              }
-              markerEnd={
-                connectorEndStyle === "arrow" ? "url(#edgeless-connector-preview-end)" : undefined
-              }
-            />
-          </>
-        )}
-        {connectorHover && (
-          <g
-            className="edgeless-connector-anchors"
-            data-edgeless-connector-anchors={connectorHover.elementId}
-          >
-            <rect
-              className="edgeless-connector-target-outline"
-              x={connectorHover.outline.x}
-              y={connectorHover.outline.y}
-              width={connectorHover.outline.width}
-              height={connectorHover.outline.height}
-              rx={4 / zoom}
-            />
-            {connectorHover.anchors.map((anchor, index) => (
-              <circle
-                key={index}
-                className="edgeless-connector-anchor"
-                data-active={anchor.active || undefined}
-                cx={anchor.x}
-                cy={anchor.y}
-                r={anchor.active ? 5 / zoom : 3.5 / zoom}
-              />
-            ))}
-          </g>
-        )}
+        {children}
       </g>
     </svg>
   );

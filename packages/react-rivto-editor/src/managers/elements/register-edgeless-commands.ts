@@ -1,3 +1,4 @@
+import { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
 import type { ReactEditorApi } from "../../editor/types";
 import type { ReactPanelApi } from "../../panels/types";
 import { EdgelessOperations } from "./edgeless-operations";
@@ -7,10 +8,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * Installs named commands against an explicit document or supplied panel; never follows DOM focus.
  *
- * Canvas commands use { operations, payload } to retain local tools and defaults.
+ * Canvas document commands use { operations, payload } to retain local defaults.
  * Panel commands use { reactPanel, payload } with fresh creation defaults.
  * Document-only commands use fresh creation defaults. Tool selection requires a
- * supplied canvas operations because there is no document-wide interaction tool.
+ * { tools, payload } context and registered tool ID because interaction is surface-local.
  */
 export function registerEdgelessCommands(editor: ReactEditorApi): () => void {
   const registrations: Array<{
@@ -32,9 +33,6 @@ export function registerEdgelessCommands(editor: ReactEditorApi): () => void {
               throw new Error("Canvas operations require a panel from the same React editor");
             }
             return handler(operations, value.payload);
-          }
-          if (name === "edgeless.tool.set") {
-            throw new Error("Tool commands require explicit canvas operations");
           }
           if (isRecord(value) && "reactPanel" in value && "payload" in value) {
             const reactPanel = value.reactPanel as ReactPanelApi;
@@ -100,12 +98,23 @@ export function registerEdgelessCommands(editor: ReactEditorApi): () => void {
     }
     edgelessOperation.reorder(direction);
   });
-  register("edgeless.tool.set", (edgelessOperation, value) => {
-    const data = value as VisualCommandPayload<"edgeless.tool.set">;
-    if (!edgelessOperation.reactPanel) {
-      throw new Error("Tool commands require explicit canvas operations");
-    }
-    edgelessOperation.setTool(data);
-  });
+  if (!editor.commands.has("edgeless.tool.set")) {
+    registrations.push(
+      editor.commands.register("edgeless.tool.set", (value) => {
+        if (
+          !isRecord(value) ||
+          !(value.tools instanceof EdgelessToolContext) ||
+          value.tools.reactPanel.editor !== editor ||
+          typeof value.payload !== "string"
+        ) {
+          throw new Error(
+            "Tool commands require an explicit surface context and registered tool ID",
+          );
+        }
+        value.tools.activate(value.payload);
+        return;
+      }),
+    );
+  }
   return () => registrations.reverse().forEach((registration) => registration.dispose());
 }

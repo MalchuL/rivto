@@ -83,7 +83,6 @@ export type {
   EdgelessStickerOption,
   EdgelessVisual,
   EdgelessVisualCommandMap,
-  EdgelessVisualTool,
   OrphanConnectorBehavior,
   StickerVisual,
   UpdateVisualPayload,
@@ -287,3 +286,28 @@ export {
   BLOCK_HANDLE_METADATA_KEY,
   type BlockHandleMetadata,
 } from "./extensions/built-ins/block-handle/metadata";
+
+export type {
+  RememberedElementProperties,
+  ElementCreationDefaults,
+  CreationDefaultsScope,
+} from "./managers/elements/creation-defaults-types";
+
+export { EdgelessTool } from "./managers/edgeless-tools/edgeless-tool";
+export type {
+  EdgelessToolOptions,
+  EdgelessToolPointer,
+} from "./managers/edgeless-tools/edgeless-tool";
+export { EdgelessCreationTool } from "./managers/edgeless-tools/edgeless-creation-tool";
+export type {
+  EdgelessCreationToolOptions,
+  EdgelessCreationPlacement,
+} from "./managers/edgeless-tools/edgeless-creation-tool";
+export {
+  VISUAL_TOOL_IDS,
+  VISUAL_TOOL_GROUPS,
+  VISUAL_ELEMENT_TYPES,
+} from "./elements/visuals/constants";
+export { EdgelessToolGroup } from "./managers/edgeless-tools/edgeless-tool-group";
+export { EdgelessToolContext } from "./managers/edgeless-tools/edgeless-tool-context";
+export { useEdgelessTools } from "./surfaces/edgeless/edgeless-tools-context";

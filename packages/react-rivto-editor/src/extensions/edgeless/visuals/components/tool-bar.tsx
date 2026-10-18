@@ -1,3 +1,4 @@
+import { EdgelessCreationTool } from "../../../../managers/edgeless-tools/edgeless-creation-tool";
 /**
  * Bottom-centered create toolbar for the edgeless canvas.
  *
@@ -11,7 +12,6 @@
  */
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { ToolBarDivider } from "../../../../components/edgeless/tool-bar-divider";
 import { Popover, PopoverAnchor } from "../../../../components/ui/popover";
 import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
@@ -19,8 +19,12 @@ import type {
   EdgelessToolbarItem,
   EdgelessToolbarRenderContext,
 } from "../../../../managers/edgeless-toolbar/types";
-import type { EdgelessVisualTool } from "../../../../elements/visuals/types";
-import { EdgelessToolButton } from "../../../../components/edgeless/tool-button";
+import type { EdgelessTool } from "../../../../managers/edgeless-tools/edgeless-tool";
+import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
+import {
+  EdgelessToolButton,
+  type EdgelessToolButtonProps,
+} from "../../../../components/edgeless/tool-button";
 import { ToolPopover, ToolSections } from "./tool-popover";
 
 /** Bottom-centered create toolbar; its CSS hook also identifies the in-tree popover owner. */
@@ -34,10 +38,12 @@ const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
 export function ToolBar({
   edgelessOperation,
   tool,
+  tools: toolContext,
   ...pointer
 }: {
   readonly edgelessOperation: EdgelessOperations;
-  readonly tool: EdgelessVisualTool;
+  readonly tool?: EdgelessTool;
+  readonly tools: EdgelessToolContext;
 } & Pick<EdgelessToolbarRenderContext, "startPresetDrag" | "movePresetDrag" | "endPresetDrag">) {
   const { reactPanel } = useReactPanelContext();
   const registry = reactPanel.editor.edgelessToolbar;
@@ -56,12 +62,13 @@ export function ToolBar({
   const context: EdgelessToolbarRenderContext = {
     reactPanel,
     operations: edgelessOperation,
+    tools: toolContext,
     ...pointer,
   };
   const items: EdgelessToolbarItem[] = tools.map((entry) => ({
     tool: entry,
-    active: entry.isActive(tool),
-    activate: () => edgelessOperation.activateToolbarTool(entry.id),
+    active: entry.id === tool?.id,
+    activate: () => toolContext.activate(entry.id),
   }));
   const currentGroup = groups.find((group) => group.id === menu);
 
@@ -75,13 +82,29 @@ export function ToolBar({
   }, [menu, registry, revision]);
 
   useEffect(() => {
-    if (tool.tool === "select" || tool.tool === "pan") {
+    if (!tool?.keepsMenuOpen) {
       setMenu(null);
     }
   }, [tool]);
 
   const renderTool = (item: EdgelessToolbarItem, children: ReactNode = item.tool.title) => {
-    const bindings = item.tool.getButtonProps?.(context);
+    const instance = toolContext.getTool(item.tool.id);
+    const bindings: Partial<EdgelessToolButtonProps> = {
+      ...(instance instanceof EdgelessCreationTool && instance.supportsPlacement
+        ? ({
+            onClick: (event) => {
+              if (event.detail > 0) {
+                event.preventDefault();
+              }
+            },
+            onPointerDown: (event) => pointer.startPresetDrag(event, instance),
+            onPointerMove: pointer.movePresetDrag,
+            onPointerUp: (event) => pointer.endPresetDrag(event),
+            onPointerCancel: (event) => pointer.endPresetDrag(event, false),
+          } satisfies Partial<EdgelessToolButtonProps>)
+        : {}),
+      ...item.tool.getButtonProps?.(context),
+    };
     return (
       <EdgelessToolButton
         key={`tool:${item.tool.id}`}
@@ -110,7 +133,7 @@ export function ToolBar({
     }
     const group = entry.registration;
     const open = menu === group.id;
-    const last = edgelessOperation.getGroupTool(group.id);
+    const last = toolContext.getGroupTool(group.id);
     const active = items.some((item) => item.tool.group === group.id && item.active);
     return (
       <EdgelessToolButton
@@ -126,7 +149,7 @@ export function ToolBar({
             setMenu(null);
             return;
           }
-          edgelessOperation.activateToolbarGroup(group.id);
+          toolContext.activateGroup(group.id);
           setMenu(group.id);
         }}
       >
@@ -134,12 +157,17 @@ export function ToolBar({
       </EdgelessToolButton>
     );
   });
-  const groupProps = {
-    reactPanel,
-    operations: edgelessOperation,
-    items: items.filter((item) => item.tool.group === menu),
-    renderTool,
-  };
+  const group = currentGroup && toolContext.getGroup(currentGroup.id);
+  const groupProps = group
+    ? {
+        reactPanel,
+        operations: edgelessOperation,
+        tools: toolContext,
+        group,
+        items: items.filter((item) => item.tool.group === menu),
+        renderTool,
+      }
+    : undefined;
   const Contents = currentGroup?.render;
   return (
     <Popover
@@ -159,32 +187,13 @@ export function ToolBar({
           role="toolbar"
           aria-label="Visual objects"
         >
-          <EdgelessToolButton
-            label="Select"
-            icon="select"
-            pressed={tool.tool === "select"}
-            onClick={() => {
-              edgelessOperation.setTool("select");
-              setMenu(null);
-            }}
-          />
-          <EdgelessToolButton
-            label="Pan"
-            icon="pan"
-            pressed={tool.tool === "pan"}
-            onClick={() => {
-              edgelessOperation.setTool({ tool: "pan" });
-              setMenu(null);
-            }}
-          />
-          <ToolBarDivider />
           {entries}
-          {currentGroup && (
+          {currentGroup && groupProps && (
             <ToolPopover
               id={popoverId}
               category={currentGroup.id}
               container={barRef.current}
-              operations={edgelessOperation}
+              tools={toolContext}
             >
               {Contents ? (
                 <Contents {...groupProps} />

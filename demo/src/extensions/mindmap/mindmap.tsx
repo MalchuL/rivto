@@ -15,6 +15,11 @@ import {
   type MindmapNode,
 } from "./model";
 
+/** Style keys remembered independently of authored mindmap nodes. */
+const MINDMAP_REMEMBERED_PROPERTIES = ["color", "fontSize"] as const;
+/** Hidden dimensions shared by creation tools in the diagrams group. */
+const DIAGRAM_REMEMBERED_FRAME_FIELDS = ["width", "height"] as const;
+
 const INITIAL_NODES: readonly MindmapNode[] = [{ id: "root", parentId: null, label: "Mindmap" }];
 const INITIAL_LAYOUT = layoutMindmap(INITIAL_NODES);
 
@@ -249,6 +254,7 @@ export function mindmapExtension(): ReactEditorExtension {
     setup(editor) {
       editor.edgelessToolbar.registerGroup({
         id: "diagrams",
+        rememberedProperties: { frame: DIAGRAM_REMEMBERED_FRAME_FIELDS },
         title: "Diagrams",
         icon: mindmapIcon,
       });
@@ -282,7 +288,7 @@ export function mindmapExtension(): ReactEditorExtension {
         },
         render: MindmapElement,
         properties: MindmapProperties,
-        rememberedProperties: ["color", "fontSize"],
+        rememberedProperties: { props: MINDMAP_REMEMBERED_PROPERTIES },
         creation: {
           title: "Mindmap",
           group: "diagrams",

@@ -79,7 +79,7 @@
 
 .edgeless-viewport[data-panning-ready],
 .edgeless-viewport[data-panning],
-.edgeless-viewport[data-edgeless-tool="pan"] {
+.edgeless-viewport[data-edgeless-pan-tool="true"] {
   cursor: grab;
 }
 

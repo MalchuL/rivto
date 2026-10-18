@@ -24,8 +24,17 @@ export class EdgelessToolbarManager implements EdgelessToolbarApi {
   registerGroup(group: EdgelessToolbarGroup): () => void {
     return this.register(this.groups, group);
   }
-  /** @inheritdoc EdgelessToolbarApi.registerTool */
+  /**
+   * Installs a tool factory while preserving one configured fallback interaction.
+   *
+   * @param tool - Shared registration; its factory creates surface-local instances.
+   * @returns Idempotent owner-bound removal without deleting document content.
+   * @throws For an existing default, duplicate ID or inactive registration owner.
+   */
   registerTool(tool: EdgelessToolbarTool): () => void {
+    if (tool.default && this.getTools().some((entry) => entry.default)) {
+      throw new Error("A default edgeless tool is already registered");
+    }
     return this.register(this.tools, tool);
   }
   /** @inheritdoc EdgelessToolbarApi.getGroup */

@@ -40,7 +40,7 @@ the size, a click without drag places a default `160×120` frame at the point, a
 dragging a preset from the toolbar onto the canvas still drops it at the pointer.
 Place previews and committed frames use the same grid and object-alignment
 snapping as move/resize. Hold Alt to bypass snapping. A completed drag becomes
-the active preset's click size until another preset or tool is selected; hold
+the registered type/group click size across preset and tool switches; hold
 Shift while dragging any place tool to constrain its frame to a square.
 Pencil, pen, and marker store their brush preset with each drawing; the eraser
 removes intersected whole canvas objects in one transaction. Escape or right-click
@@ -125,7 +125,7 @@ return editor.elementTypes.register({
   render: BadgeElement,
   properties: BadgeProperties,
   creation: { title: "Badge", create: () => ({ type: "badge" }) },
-  rememberedProperties: ["color"],
+  rememberedProperties: { props: ["color"] },
 });
 ```
 
@@ -140,9 +140,37 @@ Use property patches for properties only; a key named `id` or `frame` is not
 interpreted as element identity or geometry by this API.
 
 `rememberedProperties` explicitly opts fields into canvas-local creation defaults.
-Leave content such as a mindmap tree out of this list. Related registrations can
-share a `behavior.defaultsGroup`; its initial property keys define shared settings.
-The built-in categories retain their palette defaults. `behavior.creationDefaults`
+Declare `props` and `frame: ["width", "height"]` separately. Keep content such as
+text or a mindmap tree out of these lists. Related registrations can share a
+`behavior.defaultsGroup` referring to a toolbar group; otherwise `creation.group`
+provides membership. Each group declares `creationDefaults: { props, frame }` and
+its own `rememberedProperties`. Initial keys do not implicitly become remembered fields.
+The built-in categories retain their palette defaults; Shapes shares dimensions
+between Rectangle and Ellipse, while Text and Stickies keep separate dimensions.
+Rectangle corner radius belongs to the rectangle type.
+
+The surface provider owns one `EdgelessCreationDefaults` session containing
+`CreationDefaultsStore` instances for registrations. Operations and transform
+controls receive that session; neither the panel nor the editor stores these values.
+Unmounting the edgeless surface resets memory, while switching tools preserves it.
+Previews and cancelled or failed actions do not remember values; undo/redo changes
+the document without rewriting creation settings. Property edits remember only
+changed fields; creation remembers declared fields from the complete created record.
+Resize remembers dimensions after the final commit.
+
+Resolution order is definition defaults, remembered type values, group initial and
+remembered values, then explicit creation input. Placement uses factory dimensions
+as its fallback, remembered dimensions for its preview, and final gesture geometry
+for the committed element. Drawing paths and connector endpoints retain their own
+geometry. Text content always starts from initial defaults or explicit input.
+
+Group toolbar controls use `group.getSettings()` and `group.setSettings()`;
+standalone consumers can also use `operations.getDefaults({ group: "shapes" })` and
+`operations.setCreationDefaults({ group: "shapes" }, { props: { fill: "#ff0000" } })`.
+A type scope is `{ type: "rectangle" }`. Setters reject undeclared fields and invalid
+dimensions before changing memory. A policy can provide `validate(props)` to check
+merged settings without requiring complete element geometry. Full document validation
+still runs when an element is created or edited. `behavior.creationDefaults`
 can derive defaults before explicit creation properties are applied. Geometry
 preparation belongs in `behavior.create`; `behavior.resize` handles persisted frame
 changes. `behavior.relatedElements` returns referenced IDs so a same-level element
@@ -277,17 +305,19 @@ groups, or opaque props.
 
 ## Implementation ownership
 
-The React package keeps canvas operations and local tool state in
-`src/managers/elements/`, with their lifecycle hooks in `src/hooks/elements/`.
+The React package keeps canvas operations in `src/managers/elements/` and
+surface-local tool classes in `src/managers/edgeless-tools/`, with lifecycle hooks
+in `src/hooks/elements/` and the edgeless surface provider.
 Visual definitions, renderers, creation geometry and shared styles live in
 `src/elements/`; the viewport, block cards, snapping and surface configuration
 live in `src/surfaces/edgeless/`. Extensions install these contributions and own
 optional interaction handlers, creation gestures, toolbars and property panels.
 
 `EdgelessOperations` remains owned by the mounted canvas representation, even
-though its implementation lives beside the element managers. Separate calls to
-`useEdgelessOperations()` create independent tools and previews; pass the existing
-operations to child UI that must share the canvas state. The toolbar remains a
+though its implementation lives beside the element managers. Calls to
+`useEdgelessOperations()` share the same context-owned operations and settings;
+`useEdgelessTools()` exposes the same surface-owned instances to extension UI.
+Independent surfaces have independent tools and settings. The toolbar remains a
 separate component receiving that instance. Extension UI is mounted beneath the
 receiving panel context, where `usePanel()` exposes the core panel contract and
 `useReactPanel()` exposes the React panel and its `editor`. This refactor does
@@ -361,17 +391,40 @@ Group content describes creation settings; selection editing still belongs to th
 element's `properties` component and its shared preview/commit/cancel lifecycle.
 
 For tools independent of a registered element type, use `registerTool` with `id`,
-`title`, optional `icon`/`group`/`order`, `activate({ operations, reactPanel })` and a
-pure `isActive(currentTool)` predicate. Predicates should identify distinct tools
-or presets so remembered group choices are unambiguous. For example, built-in
-brushes select drawing mode instead of directly inserting an element. Toolbar
-activation must not create document content; placement/drawing gestures do that.
-Optional `getButtonProps` supplies pointer bindings for draggable presets. Its
-click handler may call `preventDefault()` when pointer release already activated
-the tool, avoiding a duplicate activation. Leave keyboard clicks unhandled to
-use the common `activate` behavior.
+`title`, optional `icon`/`group`/`order`, and `createTool(options)`. The factory
+creates an `EdgelessTool` subclass once per surface; active styling compares its
+registered identity. `activate(previous)` applies a preset without inserting
+content. The instance owns `pointerDown`, `pointerMove`, `pointerUp`, `cancel`,
+`deactivate` and `dispose`. The common adapter normalizes canvas input, captures
+accepted pointers and releases capture on completion, cancellation or failure.
 
-Removing the active tool resets affected panels to Select. Removing an open group
+`renderPreview(zoom)` returns extension-owned React content. Call protected
+`changed()` after local preview updates; this rerenders the active preview without
+notifying the whole surface. A registration may instead supply a `preview`
+component receiving `{ tool, zoom }`. Store prospective gesture data on the instance;
+commit through its bound operations only on release. `cancel()` must discard local
+state without document or settings writes. A successful `pointerUp()` clears its
+gesture state but may retain hover feedback.
+
+`EdgelessCreationTool` implements ordinary click, canvas-drag and toolbar placement.
+Existing element `creation.create` registrations automatically use it without an
+API change. Its factory runs once per prospective element; previews keep that raw
+input until commit or cancellation. Creation-tool instances with `supportsPlacement` receive common
+toolbar drag bindings. Optional `getButtonProps` can customize those bindings. Its
+click handler may call `preventDefault()` when pointer release already activated
+the tool, avoiding a duplicate activation. Leave keyboard clicks unhandled to use
+the context's common activation behavior.
+
+Group renderers receive a surface-local `group` instance: `getSettings()` and
+`setSettings()` share the same registered settings with its tools. The panel and
+editor are dependencies, not mutable tool/settings owners. Tool identifiers and
+built-in behavior remain in extension registrations; common dispatch never checks
+built-in names. One registration may declare `default: true`; `tools.reset()` and
+Escape resolve that fallback from the registry. Duplicate defaults are rejected.
+Use exported `VISUAL_TOOL_IDS`, `VISUAL_TOOL_GROUPS` and `VISUAL_ELEMENT_TYPES`
+when referencing built-in registrations; custom extensions own their own constants.
+
+Removing the active tool resets affected surfaces to their registered default tool. Removing an open group
 closes its menu and clears its remembered choice; registered members remain and
 can reappear when the group is installed again. Existing elements, their properties
 and undo history are unaffected. Groups are one level deep.

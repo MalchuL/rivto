@@ -1,10 +1,12 @@
+import { VISUAL_TOOL_GROUPS, VISUAL_ELEMENT_TYPES } from "./constants";
+import { RECTANGLE_REMEMBERED_PROPERTIES } from "./remembered-properties";
 import type { ReactEditorApi } from "../../editor/types";
 import type { ReactElementRegistration } from "../../managers/elements/types";
 import {
   connectorClipboardConverter,
   textElementClipboardConverter,
 } from "../clipboard-converters";
-import { createEdgelessDefaults, drawingDefaults } from "../../managers/elements/tool-state";
+import { createEdgelessDefaults, drawingDefaults } from "./creation-defaults";
 import {
   DrawingContent,
   ConnectorContent,
@@ -24,8 +26,14 @@ import { drawingResizeProps } from "./utils/drawing-frame";
 import { prepareConnector } from "./prepare-connector";
 import { normalizeRotation } from "./utils/geometry";
 
-/** Validates the common persisted visual style fields before any document mutation. */
-function validateStyle(props: Record<string, unknown>): Record<string, unknown> {
+/**
+ * Validates common visual styles in settings and persisted elements.
+ *
+ * @param props - Candidate properties; geometry is not required.
+ * @returns Accepted properties without changing them.
+ * @throws If text is not a string or a supplied numeric style is not finite.
+ */
+export function validateStyle(props: Record<string, unknown>): Record<string, unknown> {
   if (props.text !== undefined && typeof props.text !== "string") {
     throw new Error("Element text must be a string");
   }
@@ -92,21 +100,20 @@ function validateConnector(props: Record<string, unknown>): Record<string, unkno
 }
 
 /**
- * Declares shared session settings and normalizes rotation for interactive creation.
- * Each built-in registration chooses its own category; custom types can instead use
+ * Selects a registered settings group and normalizes rotation for interactive creation.
+ * Each group declares its own remembered fields; custom types can additionally use
  * rememberedProperties. Drawing additionally registers a separate brush-default policy.
- * @param category - Shared built-in session settings selected by this registration.
- * @returns Creation and remembering behavior for that category; custom registrations need neither.
+ *
+ * @param group - Registered toolbar group providing initial and remembered creation settings.
+ * @returns Group membership and geometry preparation; custom registrations need neither.
  */
-function styleDefaults(
-  category: keyof ReturnType<typeof createEdgelessDefaults>,
-): NonNullable<ReactElementRegistration["behavior"]> {
+function styleDefaults(group: string): NonNullable<ReactElementRegistration["behavior"]> {
   return {
     create: (input) => ({
       ...input,
       props: { ...input.props, rotation: normalizeRotation(Number(input.props?.rotation ?? 0)) },
     }),
-    defaultsGroup: category,
+    defaultsGroup: group,
   };
 }
 
@@ -123,26 +130,30 @@ function styleDefaults(
  */
 export function registerVisualElements(editor: ReactEditorApi): () => void {
   const defaults = createEdgelessDefaults();
-  const shapes = styleDefaults("shape");
-  const text = styleDefaults("text");
-  const sticky = styleDefaults("sticker");
-  const drawing = styleDefaults("drawing");
-  const connector = styleDefaults("connector");
+  const shapes = styleDefaults(VISUAL_TOOL_GROUPS.shapes);
+  const text = styleDefaults(VISUAL_TOOL_GROUPS.text);
+  const sticky = styleDefaults(VISUAL_TOOL_GROUPS.stickers);
+  const drawing = styleDefaults(VISUAL_TOOL_GROUPS.drawing);
+  const connector = styleDefaults(VISUAL_TOOL_GROUPS.connectors);
   const registrations: readonly ReactElementRegistration[] = [
     {
       definition: {
-        type: "rectangle",
+        type: VISUAL_ELEMENT_TYPES.rectangle,
         defaults: { ...defaults.shape, cornerRadius: 3 },
         validate: validateRectangle,
       },
       title: "Shape",
       render: RectangleContent,
-      rememberedProperties: ["cornerRadius"],
+      rememberedProperties: { props: RECTANGLE_REMEMBERED_PROPERTIES, validate: validateRectangle },
       properties: ShapeProperties,
       behavior: { ...shapes, editableLabel: true },
     },
     {
-      definition: { type: "ellipse", defaults: defaults.shape, validate: validateStyle },
+      definition: {
+        type: VISUAL_ELEMENT_TYPES.ellipse,
+        defaults: defaults.shape,
+        validate: validateStyle,
+      },
       title: "Shape",
       render: EllipseContent,
       properties: ShapeProperties,
@@ -150,7 +161,7 @@ export function registerVisualElements(editor: ReactEditorApi): () => void {
     },
     {
       definition: {
-        type: "text",
+        type: VISUAL_ELEMENT_TYPES.text,
         defaults: { ...defaults.text, text: "" },
         validate: validateStyle,
       },
@@ -169,7 +180,7 @@ export function registerVisualElements(editor: ReactEditorApi): () => void {
     },
     {
       definition: {
-        type: "sticker",
+        type: VISUAL_ELEMENT_TYPES.sticker,
         defaults: { ...defaults.sticker, text: "" },
         validate: validateStyle,
       },
@@ -187,7 +198,11 @@ export function registerVisualElements(editor: ReactEditorApi): () => void {
       },
     },
     {
-      definition: { type: "drawing", defaults: defaults.drawing, validate: validateDrawing },
+      definition: {
+        type: VISUAL_ELEMENT_TYPES.drawing,
+        defaults: defaults.drawing,
+        validate: validateDrawing,
+      },
       title: "Drawing",
       render: DrawingContent,
       properties: DrawingProperties,
@@ -214,7 +229,11 @@ export function registerVisualElements(editor: ReactEditorApi): () => void {
       },
     },
     {
-      definition: { type: "connector", defaults: defaults.connector, validate: validateConnector },
+      definition: {
+        type: VISUAL_ELEMENT_TYPES.connector,
+        defaults: defaults.connector,
+        validate: validateConnector,
+      },
       title: "Connector",
       render: ConnectorContent,
       properties: ConnectorProperties,

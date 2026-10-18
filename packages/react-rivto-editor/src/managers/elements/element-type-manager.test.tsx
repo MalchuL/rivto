@@ -1,3 +1,4 @@
+import { EdgelessToolContext } from "../edgeless-tools/edgeless-tool-context";
 import { edgelessVisualsExtension } from "../../extensions/edgeless/visuals/extension";
 import { ChildrenPanel } from "@chulane/rivto";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
@@ -60,7 +61,9 @@ it("installs an element atomically and cleans up without deleting persisted data
 it("keeps tool choice and creation defaults local to independent panels", async () => {
   const editor = await createTestCoreEditor();
   const first = createTestReactEditor({ editor, extensions: [edgelessVisualsExtension()] });
-  const firstOperations = observeOperations(first);
+  const firstTools = new EdgelessToolContext(first);
+  const stopFirst = firstTools.observeChanges();
+  const firstOperations = firstTools.operations;
   const unregister = first.editor.elementTypes.register({
     definition: { type: "badge" },
     render: () => null,
@@ -75,13 +78,15 @@ it("keeps tool choice and creation defaults local to independent panels", async 
     first.editor,
     new ChildrenPanel(editor, { rootElementId: root.id }),
   );
-  const secondOperations = observeOperations(second);
+  const secondTools = new EdgelessToolContext(second);
+  const stopSecond = secondTools.observeChanges();
+  const secondOperations = secondTools.operations;
   const closeSecond = second.destroy;
-  firstOperations.setTool({ tool: "element", type: "badge" });
-  expect(secondOperations.getTool()).toEqual({ tool: "select" });
-  firstOperations.setCreationDefaults("shape", { fill: "#ff0000" });
-  expect(secondOperations.getDefaults().shape.fill).not.toBe("#ff0000");
-  secondOperations.setTool({ tool: "pan" });
+  firstTools.activate("element:badge");
+  expect(secondTools.active?.id).toBe("select");
+  firstOperations.setCreationDefaults({ group: "shapes" }, { props: { fill: "#ff0000" } });
+  expect(secondOperations.getDefaults({ group: "shapes" }).props?.fill).not.toBe("#ff0000");
+  secondTools.activate("pan");
   const node = secondOperations.createElement({ type: "badge" });
   expect(node.frame).toEqual({ x: 120, y: 120, width: 160, height: 120 });
   expect(node.zIndex).toBe(1);
@@ -90,22 +95,24 @@ it("keeps tool choice and creation defaults local to independent panels", async 
   const red = firstOperations.createElement({ type: "rectangle" });
   const plain = secondOperations.createElement({ type: "rectangle" });
   expect(red.props.fill).toBe("#ff0000");
-  expect(plain.props.fill).toBe(secondOperations.getDefaults().shape.fill);
+  expect(plain.props.fill).toBe(secondOperations.getDefaults({ group: "shapes" }).props?.fill);
   expect(first.editor.elementTypes.get("rectangle")?.definition.defaults?.fill).not.toBe("#ff0000");
   editor.commands.execute("edgeless.tool.set", {
-    operations: secondOperations,
-    payload: { tool: "pan" },
+    tools: secondTools,
+    payload: "pan",
   });
-  expect(firstOperations.getTool()).toEqual({ tool: "element", type: "badge" });
+  expect(firstTools.active?.id).toBe("element:badge");
   expect(() => editor.commands.execute("edgeless.tool.set", "select")).toThrow(
-    /explicit canvas operations/,
+    /explicit surface context/,
   );
   expect(() =>
     editor.commands.execute("edgeless.tool.set", { reactPanel: second, payload: "select" }),
-  ).toThrow(/explicit canvas operations/);
+  ).toThrow(/explicit surface context/);
   unregister();
-  expect(firstOperations.getTool()).toEqual({ tool: "select" });
-  expect(secondOperations.getTool()).toEqual({ tool: "pan" });
+  expect(firstTools.active?.id).toBe("select");
+  expect(secondTools.active?.id).toBe("pan");
+  stopFirst();
+  stopSecond();
   closeSecond();
   first.editor.destroy();
   await editor.destroy();
@@ -140,7 +147,7 @@ it("keeps custom properties separate from canvas identity and rejects foreign pa
   expect(secondCore.elements.getElementNodes()).toEqual([]);
   let notifications = 0;
   firstOperations.subscribe(() => notifications++);
-  firstOperations.setTool({ tool: "pan" });
+  firstOperations.setCreationDefaults({ group: "shapes" }, { props: { fill: "red" } });
   expect(notifications).toBe(1);
   firstOperations.previewProperties([node.id], { title: "Draft" });
   expect(firstOperations.getVisuals()[0]).toMatchObject({ title: "Draft" });
@@ -149,7 +156,7 @@ it("keeps custom properties separate from canvas identity and rejects foreign pa
   const notificationsAfterCleanup = notifications;
   first.editor.destroy();
   second.editor.destroy();
-  firstOperations.setTool("select");
+  firstOperations.discardPropertyPreview();
   expect(notifications).toBe(notificationsAfterCleanup);
   await firstCore.destroy();
   await secondCore.destroy();
@@ -178,7 +185,7 @@ it("shares validated custom property previews, preserves opaque keys and remembe
       },
     },
     render: () => null,
-    rememberedProperties: ["color"],
+    rememberedProperties: { props: ["color"] },
   });
   const first = operations.createElement({
     type: "custom-tree",
@@ -336,9 +343,7 @@ it("prepares detached creation data with the same defaults and normalization as 
   expect(created.frame).toEqual(input.frame);
   expect(notifications).toBeGreaterThan(0);
   stop();
-  expect(operations.getPlaceSize({ width: 220, height: 80 })).toEqual({ width: 220, height: 80 });
-  operations.rememberPlaceSize({ x: 0, y: 0, width: 300, height: 150 });
-  expect(operations.getPlaceSize({ width: 220, height: 80 })).toEqual({ width: 300, height: 150 });
+  expect(operations.getDefaults({ type: "preview-example" }).frame).toEqual({});
   operations.destroy();
   await panel.editor.destroy();
   await editor.destroy();

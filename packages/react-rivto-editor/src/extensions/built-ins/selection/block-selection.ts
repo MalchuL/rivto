@@ -122,7 +122,7 @@ export function registerBlockSelection(reactEditor: ReactEditorApi): () => void 
         mode === "edgeless" &&
         (!anchor?.isContentEditable ||
           root.dataset.panningReady === "true" ||
-          root.dataset.edgelessTool === "pan")
+          root.dataset.edgelessPanTool === "true")
       ) {
         return false;
       }
