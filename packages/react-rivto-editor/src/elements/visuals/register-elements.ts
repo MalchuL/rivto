@@ -40,6 +40,25 @@ function validateStyle(props: Record<string, unknown>): Record<string, unknown> 
   return props;
 }
 
+/**
+ * Validates rectangle styling and its nonnegative corner radius before persistence.
+ *
+ * @param props - Merged rectangle properties, including registered defaults.
+ * @returns The supplied properties after validation; no dimensions are changed.
+ * @throws If common styles are invalid or the radius is negative or nonfinite.
+ */
+function validateRectangle(props: Record<string, unknown>): Record<string, unknown> {
+  validateStyle(props);
+  if (
+    typeof props.cornerRadius !== "number" ||
+    !Number.isFinite(props.cornerRadius) ||
+    props.cornerRadius < 0
+  ) {
+    throw new Error("Corner radius must be a finite nonnegative number");
+  }
+  return props;
+}
+
 /** Checks freehand geometry at the definition boundary, including imported drawings. */
 function validateDrawing(props: Record<string, unknown>): Record<string, unknown> {
   validateStyle(props);
@@ -111,9 +130,14 @@ export function registerVisualElements(editor: ReactEditorApi): () => void {
   const connector = styleDefaults("connector");
   const registrations: readonly ReactElementRegistration[] = [
     {
-      definition: { type: "rectangle", defaults: defaults.shape, validate: validateStyle },
+      definition: {
+        type: "rectangle",
+        defaults: { ...defaults.shape, cornerRadius: 3 },
+        validate: validateRectangle,
+      },
       title: "Shape",
       render: RectangleContent,
+      rememberedProperties: ["cornerRadius"],
       properties: ShapeProperties,
       behavior: { ...shapes, editableLabel: true },
     },

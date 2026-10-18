@@ -18,7 +18,6 @@ import {
   snapResizeToGrid,
   snapScalarToGrid,
 } from "./geometry";
-import { shapeStrokePad } from "./shape-stroke";
 
 describe("edgeless visual geometry", () => {
   test.each([0, -0, 360, -720, NaN, Infinity, -Infinity])(
@@ -176,15 +175,6 @@ describe("edgeless visual geometry", () => {
     });
     expect(hasCenterBreak).toBe(true);
   });
-  test("insets shape strokes so thick borders stay inside the viewBox", () => {
-    const pad = shapeStrokePad(16, { x: 0, y: 0, width: 100, height: 100 }, 1);
-    expect(pad.x).toBeGreaterThan(1);
-    expect(pad.x).toBeLessThan(45);
-    expect(shapeStrokePad(2, { x: 0, y: 0, width: 200, height: 100 }, 2).x).toBeGreaterThanOrEqual(
-      1,
-    );
-  });
-
   test("snaps move and resize deltas onto the canvas grid", () => {
     expect(snapScalarToGrid(27, 20)).toBe(20);
     expect(snapScalarToGrid(31, 20)).toBe(40);

@@ -290,3 +290,16 @@
   [data-edgeless-connector-endpoint-highlight="target"] {
   opacity: 1;
 }
+
+.edgeless-rectangle-radius {
+  fill: white;
+  stroke: var(--rivto-accent);
+  stroke-width: 1.5px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.edgeless-rectangle-radius:focus-visible {
+  outline: none;
+  stroke-width: 3px;
+}

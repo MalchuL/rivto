@@ -77,6 +77,8 @@ export interface DrawingVisual extends RotatableVisualBase {
 /** Rectangle or ellipse with fill, stroke, and optional centered label. */
 export interface ShapeVisual extends RotatableVisualBase {
   readonly kind: "rectangle" | "ellipse";
+  /** Rectangle corner radius in canvas units; SVG limits it to half the available size. */
+  cornerRadius?: number;
   fill: string;
   stroke: string;
   strokeWidth: number;
@@ -204,6 +206,8 @@ export type CreateVisualPayload =
       fill?: string;
       stroke?: string;
       strokeWidth?: number;
+      /** Rectangle corner radius in canvas units; defaults to 3. */
+      cornerRadius?: number;
       filled?: boolean;
       stroked?: boolean;
       text?: string;

@@ -193,7 +193,11 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
   );
 }
 /**
- * Shape fill, stroke, and text properties for either registered shape.
+ * Renders fill, stroke, and text properties for either registered shape.
+ *
+ * Rectangles also expose a nonnegative corner radius in canvas units. All changes
+ * use the supplied local preview callbacks; the property host owns commit and cancellation.
+ *
  * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
  * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
  */
@@ -219,6 +223,22 @@ export function ShapeProperties(props: ElementPropertiesProps) {
           )}
           {paintToggle("Stroke", "stroked", common("stroked") !== false)}
         </PropertyRow>
+        {props.elements[0]?.type === "rectangle" && (
+          <PropertyRow label="Corners">
+            <SizeControl
+              label="Corner radius"
+              value={common("cornerRadius")}
+              min={0}
+              max={Math.max(
+                64,
+                ...props.elements.map(
+                  (element) => Math.min(element.frame.width, element.frame.height) / 2,
+                ),
+              )}
+              onChange={(cornerRadius) => preview({ cornerRadius })}
+            />
+          </PropertyRow>
+        )}
       </PropertyGroup>
       <TextProperties {...props} />
     </>

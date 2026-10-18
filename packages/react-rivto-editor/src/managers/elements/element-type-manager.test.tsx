@@ -343,3 +343,31 @@ it("prepares detached creation data with the same defaults and normalization as 
   await panel.editor.destroy();
   await editor.destroy();
 });
+
+it("persists rectangle corner radius and rejects invalid updates without changing the element", async () => {
+  const editor = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor, extensions: [edgelessVisualsExtension()] });
+  const operations = observeOperations(panel);
+  const rectangle = operations.createElement({ type: "rectangle" });
+  expect(rectangle.props.cornerRadius).toBe(3);
+  operations.updateProperties(rectangle.id, { cornerRadius: 0 });
+  expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(0);
+  for (const cornerRadius of [-1, NaN, Infinity, "12", null]) {
+    expect(() => operations.updateProperties(rectangle.id, { cornerRadius })).toThrow(
+      /Corner radius/,
+    );
+    expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(0);
+  }
+  expect(operations.createElement({ type: "rectangle" }).props.cornerRadius).toBe(0);
+  operations.previewProperties([rectangle.id], { cornerRadius: 24 });
+  expect(operations.getRenderedElement(rectangle.id)?.props.cornerRadius).toBe(24);
+  expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(0);
+  expect(operations.createElement({ type: "rectangle" }).props.cornerRadius).toBe(0);
+  operations.commitPropertyPreview();
+  expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(24);
+  expect(operations.prepareElementCreation({ type: "rectangle" }).props.cornerRadius).toBe(24);
+  expect(operations.createElement({ type: "rectangle" }).props.cornerRadius).toBe(24);
+  expect(operations.createElement({ type: "ellipse" }).props.cornerRadius).toBeUndefined();
+  panel.editor.destroy();
+  await editor.destroy();
+});
