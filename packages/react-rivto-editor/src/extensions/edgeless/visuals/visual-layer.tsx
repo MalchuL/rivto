@@ -1,4 +1,3 @@
-import { ElementCreationPreview } from "../../../elements/visuals/element-creation-preview";
 import { ElementProperties } from "./components/element-properties";
 import { ConnectorInteractionContext } from "../../../elements/visuals/connector-endpoints";
 import type { EdgelessVisualsOptions } from "./types";
@@ -16,7 +15,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
  * a child that is the only full-list subscriber so marquee growth cannot
  * re-render every shape.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useEditorRoot, useReactPanel } from "../../../hooks";
 import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
@@ -27,7 +26,11 @@ import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "../../../elements/visuals/visual-element";
 import { VisualFontContext } from "../../../elements/visuals/properties";
 import type { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
-import { useDrawingGesture, type ConnectorHover } from "./hooks/use-drawing-gesture";
+import { useToolGesture } from "./hooks/use-tool-gesture";
+import { ConnectorTargets, type ConnectorHover } from "./tools/connector-targets";
+import { ConnectorGesturePreview } from "./tools/connector-preview";
+import { useEdgelessTools } from "../../../surfaces/edgeless/edgeless-tools-context";
+import type { EdgelessTool } from "../../../managers/edgeless-tools/edgeless-tool";
 import { usePresetDrag } from "./hooks/use-preset-drag";
 import { useVisualTool } from "../../../hooks/elements/use-visual-tool";
 import { DEFAULT_FONTS } from "../../../elements/visuals/presets";
@@ -145,8 +148,15 @@ export function EdgelessVisualLayer({ options }: { readonly options: EdgelessVis
   return mode === "edgeless" ? <EdgelessCanvasVisuals options={options} /> : null;
 }
 
-/** Owns canvas tools, previews, and subscriptions only while the edgeless surface is displayed. */
+/**
+ * Connects surface-owned tools, previews and document subscriptions while edgeless is displayed.
+ *
+ * @param props - Installed visual chrome and font options.
+ * @param props.options - Host presentation options; tool state belongs to the surface context.
+ * @returns Canvas content and interaction chrome portaled into the receiving surface.
+ */
 function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsOptions }) {
+  const tools = useEdgelessTools();
   const edgelessOperation = useEdgelessOperations();
   const reactPanel = useReactPanel();
   useEffect(
@@ -157,19 +167,18 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
           keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
           mode: "edgeless",
           priority: 20,
-          when: ({ root }) =>
-            !root.dataset.transforming && edgelessOperation.getTool().tool !== "select",
+          when: ({ root }) => !root.dataset.transforming && tools.canReset,
         },
         () => {
-          edgelessOperation.setTool("select");
+          tools.reset();
           return true;
         },
       ),
-    [edgelessOperation, reactPanel],
+    [tools, reactPanel],
   );
 
   const { element: root } = useEditorRoot();
-  const tool = useVisualTool(edgelessOperation);
+  const tool = useVisualTool(tools);
   useSyncExternalStore(
     (listener) => edgelessOperation.subscribe(listener),
     () => edgelessOperation.getRevision(),
@@ -186,10 +195,12 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     ],
     [options.fonts],
   );
-  const presetDrag = usePresetDrag({ edgelessOperation, root, plane, zoom });
-  const drawing = useDrawingGesture({ edgelessOperation, root, zoom, tool });
-  const drawingRef = useRef(drawing);
-  drawingRef.current = drawing;
+  const presetDrag = usePresetDrag({ tools, root, plane, zoom });
+  const gesture = useToolGesture({ tools, root, zoom, tool });
+  const targets = useMemo(
+    () => new ConnectorTargets(edgelessOperation, zoom),
+    [edgelessOperation, zoom],
+  );
   const [reconnectHover, setReconnectHover] = useState<ConnectorHover | null>(null);
 
   /**
@@ -201,12 +212,12 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
   const resolveEndpoint = useCallback(
     (event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
       const point = canvasPoint(event, root, zoom);
-      const targetId = drawingRef.current.objectAt(point);
+      const targetId = targets.objectAt(point);
       return targetId
-        ? drawingRef.current.endpoint(targetId, point)
+        ? targets.endpoint(targetId, point)
         : { elementId: undefined, anchor: { x: 0.5, y: 0.5 }, position: point };
     },
-    [root, zoom],
+    [root, zoom, targets],
   );
 
   /**
@@ -222,25 +233,26 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
         return;
       }
       const point = canvasPoint(event, root, zoom);
-      setReconnectHover(drawingRef.current.hoverFor(point));
+      setReconnectHover(targets.hoverFor(point));
     },
-    [root, zoom],
+    [root, zoom, targets],
   );
 
   useEffect(() => {
     if (!root) {
       return;
     }
-    root.dataset.edgelessTool = tool.tool;
-  }, [root, tool.tool]);
+    root.dataset.edgelessTool = tool?.id ?? "";
+    root.dataset.edgelessPanTool = String(tool?.pansViewport ?? false);
+    root.dataset.edgelessCaptureTool = String(tool?.capturesPointer ?? false);
+  }, [root, tool]);
 
   useEffect(() => {
     if (!root) {
       return;
     }
-    const creationTools = new Set(["place", "element", "drawing", "eraser", "connector"]);
     const onContextMenu = (event: MouseEvent) => {
-      if (!creationTools.has(edgelessOperation.getTool().tool)) {
+      if (!tools.active?.capturesPointer) {
         return;
       }
       const target = event.target;
@@ -248,13 +260,13 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
         return;
       }
       event.preventDefault();
-      edgelessOperation.setTool("select");
+      tools.reset();
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 2) {
         return;
       }
-      if (!creationTools.has(edgelessOperation.getTool().tool)) {
+      if (!tools.active?.capturesPointer) {
         return;
       }
       const target = event.target;
@@ -262,7 +274,7 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
         return;
       }
       event.preventDefault();
-      edgelessOperation.setTool("select");
+      tools.reset();
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);
@@ -270,14 +282,11 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
       root.removeEventListener("contextmenu", onContextMenu);
       root.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [edgelessOperation, root]);
+  }, [tools, root]);
 
   if (!root || !plane) {
     return null;
   }
-
-  const defaults = edgelessOperation.getDefaults();
-  const connectorHover = drawing.connectorHover ?? reconnectHover;
 
   return (
     <>
@@ -298,44 +307,29 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
         plane,
       )}
       {createPortal(
-        <DrawingCapture
-          tool={tool}
-          zoom={zoom}
-          preview={drawing.preview}
-          connectorPreview={drawing.connectorPreview}
-          connectorHover={connectorHover}
-          drawingStroke={defaults.drawing.stroke}
-          drawingStrokeWidth={defaults.drawing.strokeWidth}
-          drawingOpacity={defaults.drawing.opacity}
-          connectorStroke={defaults.connector.stroke}
-          connectorStrokeWidth={defaults.connector.strokeWidth}
-          connectorLineStyle={defaults.connector.lineStyle}
-          connectorStartStyle={defaults.connector.startStyle}
-          connectorEndStyle={defaults.connector.endStyle}
-          onPointerDown={drawing.pointerDown}
-          onPointerMove={drawing.pointerMove}
-          onPointerUp={drawing.pointerEnd}
-          onPointerLeave={drawing.hidePlacePreview}
-        />,
+        <>
+          <DrawingCapture
+            active={tool?.capturesPointer}
+            onPointerDown={gesture.pointerDown}
+            onPointerMove={gesture.pointerMove}
+            onPointerUp={gesture.pointerUp}
+            onPointerCancel={gesture.pointerCancel}
+            onPointerLeave={gesture.pointerLeave}
+          />
+          {tool && <ToolPreview tool={tool} zoom={zoom} />}
+          {reconnectHover && (
+            <ConnectorGesturePreview zoom={zoom} connectorHover={reconnectHover} />
+          )}
+        </>,
         plane,
       )}
       {presetDrag.preview}
-      {drawing.placePreview &&
-        drawing.placeInput &&
-        createPortal(
-          <ElementCreationPreview
-            input={drawing.placeInput}
-            frame={drawing.placePreview}
-            operations={edgelessOperation}
-            zoom={zoom}
-          />,
-          plane,
-        )}
       {options.toolbar !== false &&
         createPortal(
           <>
             <ToolBar
               edgelessOperation={edgelessOperation}
+              tools={tools}
               tool={tool}
               startPresetDrag={presetDrag.startPresetDrag}
               movePresetDrag={presetDrag.movePresetDrag}
@@ -352,4 +346,21 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
       )}
     </>
   );
+}
+
+/**
+ * Subscribes only the active preview to pointer samples.
+ *
+ * @param props - Active instance and canvas scale.
+ * @returns Registered preview override or the instance's own preview component.
+ */
+function ToolPreview({ tool, zoom }: { readonly tool: EdgelessTool; readonly zoom: number }) {
+  useSyncExternalStore(
+    (listener) => tool.subscribe(listener),
+    () => tool.revision,
+    () => tool.revision,
+  );
+  const panel = useReactPanel();
+  const Preview = panel.editor.edgelessToolbar.getTool(tool.id)?.preview;
+  return Preview ? <Preview tool={tool} zoom={zoom} /> : tool.renderPreview(zoom);
 }

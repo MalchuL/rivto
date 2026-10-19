@@ -28,6 +28,5 @@ export type {
   EdgelessAlignment,
   EdgelessReorder,
   EdgelessPlaceKind,
-  EdgelessVisualTool,
   EdgelessVisualCommandMap,
 } from "../../../elements/visuals/types";

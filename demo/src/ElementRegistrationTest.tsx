@@ -1,3 +1,4 @@
+import { registerCustomGesture } from "./CustomGestureTool";
 import { useMemo, useRef, useState } from "react";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "@chulane/document-model";
@@ -30,6 +31,7 @@ export function ElementRegistrationTest() {
   const [mounted, setMounted] = useState(true);
   const registerGroup = useRef<(() => void) | undefined>(undefined);
   const unregisterGroup = useRef<(() => void) | undefined>(undefined);
+  const unregisterTool = useRef<(() => void) | undefined>(undefined);
   const unregister = useRef<(() => void) | undefined>(undefined);
   const extension = useMemo<ReactEditorExtension>(
     () => ({
@@ -122,7 +124,13 @@ export function ElementRegistrationTest() {
           clipboard: { copy: (element) => ({ props: { ...element.props, copied: true } }) },
         });
         unregister.current = dispose;
-        return dispose;
+        if (new URLSearchParams(window.location.search).has("customTool")) {
+          unregisterTool.current = registerCustomGesture(editor);
+        }
+        return () => {
+          unregisterTool.current?.();
+          dispose();
+        };
       },
     }),
     [],
@@ -144,6 +152,9 @@ export function ElementRegistrationTest() {
     <>
       <button onClick={() => setMounted((value) => !value)}>Toggle canvases</button>
       <button onClick={() => unregister.current?.()}>Unregister badge</button>
+      {new URLSearchParams(window.location.search).has("customTool") && (
+        <button onClick={() => unregisterTool.current?.()}>Unregister host tool</button>
+      )}
       {new URLSearchParams(window.location.search).get("toolbarGroup") === "custom" && (
         <>
           <button onClick={() => registerGroup.current?.()}>Register badge group</button>

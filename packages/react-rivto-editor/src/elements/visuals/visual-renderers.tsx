@@ -8,8 +8,8 @@ import type {
   ConnectorVisual,
 } from "./types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "./utils/geometry";
-import { shapeStrokePad } from "./utils/shape-stroke";
 import { ConnectorEndpoints, useConnectorPreview } from "./connector-endpoints";
+import { RectangleShape } from "./rectangle-shape";
 
 /** Shared label control; editing state belongs to the receiving canvas host. */
 function labelControl({
@@ -228,44 +228,50 @@ export function TextContent(props: ElementRenderProps) {
 export function StickerContent(props: ElementRenderProps) {
   return <TextLabel {...props} sticky />;
 }
-/** Shared shape geometry and label layout, selected explicitly by the registration. */
+/**
+ * Renders shared shape geometry and label layout, selected explicitly by the registration.
+ *
+ * Stroke width is screen pixels; the SVG CSS box follows the live host size and zoom.
+ * Inset the viewport so non-scaling strokes stay inside the frame during previews
+ * and after commit, without deriving geometry from the persisted dimensions.
+ *
+ * @param props - Current element data, shared interaction state and ellipse selection.
+ * @returns Responsive shape content and its optional editable label inside the shared host.
+ */
 function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
   const { zoom, editing, ellipse } = props;
   const visual = { ...props.element.props, frame: props.element.frame } as unknown as ShapeVisual;
   const labelFor = labelControl(props);
   const stroked = visual.stroked !== false;
   const filled = visual.filled !== false;
-  const pad = shapeStrokePad(stroked ? visual.strokeWidth : 0, visual.frame, zoom);
   const fill = filled ? visual.fill : "none";
   const stroke = stroked ? visual.stroke : "none";
   const strokeWidth = stroked ? visual.strokeWidth : 0;
+  const pad = strokeWidth / (2 * Math.max(zoom, 0.01));
   const shape = ellipse ? (
     <ellipse
-      cx="50"
-      cy="50"
-      rx={Math.max(1, 50 - pad.x)}
-      ry={Math.max(1, 50 - pad.y)}
+      cx="50%"
+      cy="50%"
+      rx="50%"
+      ry="50%"
       fill={fill}
       stroke={stroke}
       strokeWidth={strokeWidth}
       vectorEffect="non-scaling-stroke"
     />
   ) : (
-    <rect
-      x={pad.x}
-      y={pad.y}
-      width={Math.max(1, 100 - pad.x * 2)}
-      height={Math.max(1, 100 - pad.y * 2)}
-      rx={3}
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={strokeWidth}
-      vectorEffect="non-scaling-stroke"
-    />
+    <RectangleShape {...props} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
   );
   return (
     <>
-      <svg className="edgeless-shape" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <svg
+        className="edgeless-shape"
+        style={{
+          inset: `min(45%, ${pad}px)`,
+          width: `max(10%, calc(100% - ${pad * 2}px))`,
+          height: `max(10%, calc(100% - ${pad * 2}px))`,
+        }}
+      >
         {shape}
       </svg>
       {(editing || visual.text) && (

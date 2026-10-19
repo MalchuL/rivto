@@ -77,6 +77,8 @@ export interface DrawingVisual extends RotatableVisualBase {
 /** Rectangle or ellipse with fill, stroke, and optional centered label. */
 export interface ShapeVisual extends RotatableVisualBase {
   readonly kind: "rectangle" | "ellipse";
+  /** Rectangle corner radius in canvas units; SVG limits it to half the available size. */
+  cornerRadius?: number;
   fill: string;
   stroke: string;
   strokeWidth: number;
@@ -204,6 +206,8 @@ export type CreateVisualPayload =
       fill?: string;
       stroke?: string;
       strokeWidth?: number;
+      /** Rectangle corner radius in canvas units; defaults to 3. */
+      cornerRadius?: number;
       filled?: boolean;
       stroked?: boolean;
       text?: string;
@@ -240,16 +244,6 @@ export type EdgelessReorder = "front" | "forward" | "backward" | "back";
 /** Placeable kinds activated from the create toolbar (canvas rubber-band / click). */
 export type EdgelessPlaceKind = "rectangle" | "ellipse" | "text" | "sticker";
 
-/** Local tool state; place tools create shapes/text/stickies on the canvas. */
-export type EdgelessVisualTool =
-  | { tool: "element"; type: string }
-  | { tool: "select" }
-  | { tool: "pan" }
-  | { tool: "place"; kind: EdgelessPlaceKind; fill?: string; color?: string; fontFamily?: string }
-  | { tool: "drawing"; brush: EdgelessBrush }
-  | { tool: "eraser" }
-  | { tool: "connector"; route: ConnectorRoute };
-
 export interface EdgelessVisualCommandMap {
   "edgeless.visual.create": { payload: CreateVisualPayload; result: EditorElementNode };
   "edgeless.visual.update": { payload: UpdateVisualPayload; result: EditorElementNode };
@@ -280,7 +274,7 @@ export interface EdgelessVisualCommandMap {
     payload: EdgelessReorder | { direction: EdgelessReorder };
     result: void;
   };
-  "edgeless.tool.set": { payload: EdgelessVisualTool | "select"; result: void };
+  "edgeless.tool.set": { payload: string; result: void };
 }
 
 export type VisualCommandPayload<Name extends keyof EdgelessVisualCommandMap> =

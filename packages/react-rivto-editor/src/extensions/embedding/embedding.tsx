@@ -1,6 +1,6 @@
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
-import { Link2Icon, RefreshCwIcon } from "lucide-react";
+import { Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { Button } from "../../components/ui/button";
@@ -58,6 +58,7 @@ function EmbeddingWrapper({ block, children }: BlockWrapperProps) {
 
 /** Native embedding props; an empty target is an unconfigured reference. */
 export interface EmbeddingProps extends Record<string, unknown> {
+  /** Empty means search the containing document before other documents. */
   readonly targetDocumentId: string;
   readonly targetBlockId: string;
 }
@@ -126,7 +127,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
             <div>
               <div className="text-sm font-medium">Embedding settings</div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Choose the document and block to show here.
+                Choose a block. Leave Document ID empty to search this document first.
               </p>
             </div>
             <Button
@@ -136,20 +137,20 @@ function EmbeddingControls({ block }: BlockSlotProps) {
               size="icon-xs"
               aria-label="Refresh embedding"
               title="Refresh embedding"
-              disabled={!refreshEvents || !props.targetDocumentId || !props.targetBlockId}
+              disabled={!refreshEvents || !props.targetBlockId}
               onClick={() => refreshEvents?.dispatchEvent(new Event(REFRESH_EVENT))}
             >
               <RefreshCwIcon aria-hidden="true" />
             </Button>
           </div>
           <label className="flex flex-col gap-1.5 text-sm">
-            Document ID
+            Document ID (optional)
             <Input
               {...editorControlProps}
               name="targetDocumentId"
               aria-label="Target document ID"
               defaultValue={props.targetDocumentId}
-              placeholder="Document ID"
+              placeholder="Current document"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -177,6 +178,7 @@ function EmbeddingControls({ block }: BlockSlotProps) {
  * Location searches and source acquisitions publish an unavailable or error
  * status after one attempt. The retained source editor belongs to storage;
  * changing the reference or unmounting releases this consumer and its lookup.
+ * An empty document ID prefers the containing document before the shared fallback search.
  * Reference ancestry prevents recursive acquisition without changing persisted IDs.
  * Settings refresh restarts lookup and failed acquisition while retaining a
  * successfully loaded source editor and its document history.
@@ -192,7 +194,8 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   const panel = usePanel();
   const ancestors = useContext(ancestryContext);
   const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
-  const targetAddress = JSON.stringify([targetDocumentId, targetBlockId]);
+  const preferredDocumentId = targetDocumentId || panel.document.getDocument().id;
+  const targetAddress = JSON.stringify([preferredDocumentId, targetBlockId]);
   const ownAddress = JSON.stringify([panel.document.getDocument().id, blockId]);
   const references = useContext(EditorStorageContext);
   const refreshEvents = useContext(refreshEventsContext);
@@ -215,11 +218,11 @@ function EmbeddingBody({ block }: BlockSlotProps) {
       }
       return { targetAddress, settled: false, ambiguous: false };
     });
-    if (!targetDocumentId || !targetBlockId || !references) {
+    if (!targetBlockId || !references) {
       return;
     }
     return references.blockReferences.subscribeBlockLocation(
-      { documentId: targetDocumentId, blockId: targetBlockId },
+      { documentId: preferredDocumentId, blockId: targetBlockId },
       (resolution, error) => {
         setLocation((previous) => {
           if (
@@ -235,7 +238,7 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         });
       },
     );
-  }, [targetAddress, targetDocumentId, targetBlockId, references, refreshVersion]);
+  }, [targetAddress, preferredDocumentId, targetBlockId, references, refreshVersion]);
   const { editor: source, error: sourceError } = useAcquiredEditor(
     references,
     cycle || !locationIsCurrent ? undefined : location.documentId,
@@ -260,22 +263,26 @@ function EmbeddingBody({ block }: BlockSlotProps) {
   }, [refreshEvents, source]);
   const error = location.error ?? sourceError;
   let message = "Loading embedded block…";
-  if (!targetDocumentId || !targetBlockId) {
-    message = "Choose a target document and block.";
+  let showWarning = false;
+  if (!targetBlockId) {
+    message = "Choose a target block.";
   } else if (cycle) {
     message = "Recursive block reference.";
   } else if (!references) {
     message = "Block resolution is unavailable.";
+    showWarning = true;
   } else if (error) {
     message = "Unable to load referenced block.";
+    showWarning = true;
   } else if (locationIsCurrent && location.settled && !location.documentId) {
     message = "Referenced block is unavailable.";
+    showWarning = true;
   }
   return (
     <>
       {locationIsCurrent && location.ambiguous && (
         <div role="status" className={EMBEDDING_STATUS_CLASS}>
-          Multiple documents contain this block; showing the first match.
+          Multiple documents contain this block; showing document {location.documentId}.
         </div>
       )}
       {!cycle &&
@@ -287,6 +294,10 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         <ancestryContext.Provider value={ancestry}>
           {Boolean(error) && (
             <div role="status" className={EMBEDDING_STATUS_CLASS}>
+              <TriangleAlertIcon
+                aria-hidden="true"
+                className="mr-1.5 inline-block size-4 align-text-bottom text-destructive"
+              />
               Unable to load referenced block.
             </div>
           )}
@@ -298,6 +309,12 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         </ancestryContext.Provider>
       ) : (
         <div role="status" className={EMBEDDING_STATUS_CLASS}>
+          {showWarning && (
+            <TriangleAlertIcon
+              aria-hidden="true"
+              className="mr-1.5 inline-block size-4 align-text-bottom text-destructive"
+            />
+          )}
           {message}
         </div>
       )}
@@ -388,7 +405,10 @@ export function embeddingExtension(): ReactEditorExtension {
          * @returns Reference property patch, or an empty patch for external or unmapped targets.
          */
         paste(block, context) {
-          if (block.props.targetDocumentId !== context.sourceDocumentId) {
+          if (
+            block.props.targetDocumentId &&
+            block.props.targetDocumentId !== context.sourceDocumentId
+          ) {
             return {};
           }
           const targetBlockId = context.blockIdMap.get(String(block.props.targetBlockId));

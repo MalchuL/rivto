@@ -10,7 +10,7 @@
  * utilities on the rivto-ui scope. Opening/closing never steals canvas focus.
  */
 import { PopoverContent } from "../../../../components/ui/popover";
-import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
 import type { ReactNode } from "react";
 import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
 
@@ -34,16 +34,16 @@ export function ToolPopover({
   id,
   category,
   container,
-  operations,
-  tools,
+  tools: toolContext,
+  toolButtons,
   defaults,
   children,
 }: {
   readonly id: string;
   readonly category: string;
   readonly container: HTMLElement | null;
-  readonly operations: EdgelessOperations;
-  readonly tools?: ReactNode;
+  readonly tools: EdgelessToolContext;
+  readonly toolButtons?: ReactNode;
   readonly children?: ReactNode;
   readonly defaults?: ReactNode;
 }) {
@@ -59,19 +59,16 @@ export function ToolPopover({
       onOpenAutoFocus={(event) => event.preventDefault()}
       onCloseAutoFocus={(event) => event.preventDefault()}
       // Radix consumes Escape before editor keyboard routing; changing tools also cancels its active gesture.
-      onEscapeKeyDown={() => operations.setTool("select")}
+      onEscapeKeyDown={() => toolContext.reset()}
       onInteractOutside={(event) => {
-        const current = operations.getTool().tool;
+        const current = toolContext.active;
         // Group buttons own toggling; canvas placement must not dismiss its defaults.
-        if (
-          container?.contains(event.target as Node) ||
-          (current !== "select" && current !== "pan")
-        ) {
+        if (container?.contains(event.target as Node) || current?.keepsMenuOpen) {
           event.preventDefault();
         }
       }}
     >
-      {children ?? <ToolSections tools={tools} defaults={defaults} />}
+      {children ?? <ToolSections tools={toolButtons} defaults={defaults} />}
     </PopoverContent>
   );
 }

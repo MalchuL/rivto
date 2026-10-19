@@ -1,3 +1,23 @@
+import { EdgelessTool } from "../../../managers/edgeless-tools/edgeless-tool";
+import { EdgelessCreationTool } from "../../../managers/edgeless-tools/edgeless-creation-tool";
+import { DrawingTool } from "./tools/drawing-tool";
+import { ConnectorTool } from "./tools/connector-tool";
+import { EraserTool, PanTool } from "./tools/eraser-tool";
+import {
+  VISUAL_TOOL_IDS,
+  VISUAL_TOOL_GROUPS,
+  VISUAL_ELEMENT_TYPES,
+} from "../../../elements/visuals/constants";
+import { validateStyle } from "../../../elements/visuals/register-elements";
+import { createEdgelessDefaults } from "../../../elements/visuals/creation-defaults";
+import {
+  SHAPE_REMEMBERED_PROPERTIES,
+  TEXT_REMEMBERED_PROPERTIES,
+  STICKER_REMEMBERED_PROPERTIES,
+  DRAWING_REMEMBERED_PROPERTIES,
+  CONNECTOR_REMEMBERED_PROPERTIES,
+  REMEMBERED_FRAME_FIELDS,
+} from "../../../elements/visuals/remembered-properties";
 import type { ReactEditorApi } from "../../../editor/types";
 import type {
   EdgelessToolbarGroupProps,
@@ -41,6 +61,7 @@ export function registerVisualToolbar(
       .reverse()
       .forEach((dispose) => dispose());
   const registry = editor.edgelessToolbar;
+  const defaults = createEdgelessDefaults();
   const register = (tool: EdgelessToolbarTool) => disposers.push(registry.registerTool(tool));
   const preset = (
     id: string,
@@ -54,27 +75,40 @@ export function registerVisualToolbar(
       title,
       group,
       icon,
-      isActive: (tool) =>
-        tool.tool === "place" &&
-        tool.kind === payload.kind &&
-        (payload.kind !== "sticker" || tool.fill === payload.fill),
-      activate: ({ operations }) => operations.setPlaceTool(payload),
-      getButtonProps: (context) => ({
-        // Pointer release already activates the preset; only keyboard clicks need the common activation.
-        onClick: (event) => {
-          if (event.detail > 0) {
-            event.preventDefault();
-          }
-        },
-        className: payload.kind === "sticker" ? STICKER_PRESET_CLASS : undefined,
-        onPointerDown: (event) => context.startPresetDrag(event, payload),
-        onPointerMove: context.movePresetDrag,
-        onPointerUp: (event) => context.endPresetDrag(event),
-        onPointerCancel: (event) => context.endPresetDrag(event, false),
+      createTool: (options) =>
+        new EdgelessCreationTool({
+          ...options,
+          type: payload.kind,
+          create: () => {
+            const { kind, frame, ...props } = payload;
+            return {
+              type: kind,
+              frame: frame ? { x: 0, y: 0, width: 160, height: 120, ...frame } : undefined,
+              props,
+            };
+          },
+        }),
+      getButtonProps: () => ({
+        className: payload.kind === VISUAL_ELEMENT_TYPES.sticker ? STICKER_PRESET_CLASS : undefined,
       }),
     });
   };
   try {
+    register({
+      id: VISUAL_TOOL_IDS.select,
+      title: "Select",
+      icon: "select",
+      order: -100,
+      default: true,
+      createTool: (options) => new EdgelessTool(options),
+    });
+    register({
+      id: VISUAL_TOOL_IDS.pan,
+      title: "Pan",
+      icon: "pan",
+      order: -90,
+      createTool: (options) => new PanTool(options),
+    });
     const fonts = [
       ...new Map(
         [...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font]),
@@ -88,47 +122,118 @@ export function registerVisualToolbar(
     const TextGroup = (props: EdgelessToolbarGroupProps) => <TextTools {...props} fonts={fonts} />;
     for (const group of [
       {
-        id: "shapes",
+        id: VISUAL_TOOL_GROUPS.shapes,
         title: "Shapes",
         icon: "rectangle",
         render: ShapeTools,
-        defaultToolId: "rectangle",
+        defaultToolId: VISUAL_TOOL_IDS.rectangle,
+        creationDefaults: { props: defaults.shape },
+        rememberedProperties: {
+          props: SHAPE_REMEMBERED_PROPERTIES,
+          frame: REMEMBERED_FRAME_FIELDS,
+          validate: validateStyle,
+        },
       },
-      { id: "drawing", title: "Drawing", icon: "draw", render: DrawingTools, defaultToolId: "pen" },
-      { id: "text", title: "Text", icon: "text", render: TextGroup },
-      { id: "stickers", title: "Stickies", icon: "sticker", render: StickerTools },
-      { id: "connectors", title: "Connectors", icon: "connector", render: ConnectorTools },
+      {
+        id: VISUAL_TOOL_GROUPS.drawing,
+        title: "Drawing",
+        icon: "draw",
+        render: DrawingTools,
+        defaultToolId: VISUAL_TOOL_IDS.pen,
+        creationDefaults: { props: defaults.drawing },
+        rememberedProperties: {
+          props: DRAWING_REMEMBERED_PROPERTIES,
+          frame: REMEMBERED_FRAME_FIELDS,
+          validate: validateStyle,
+        },
+      },
+      {
+        id: VISUAL_TOOL_GROUPS.text,
+        title: "Text",
+        icon: "text",
+        render: TextGroup,
+        creationDefaults: { props: defaults.text },
+        rememberedProperties: {
+          props: TEXT_REMEMBERED_PROPERTIES,
+          frame: REMEMBERED_FRAME_FIELDS,
+          validate: validateStyle,
+        },
+      },
+      {
+        id: VISUAL_TOOL_GROUPS.stickers,
+        title: "Stickies",
+        icon: "sticker",
+        render: StickerTools,
+        creationDefaults: { props: defaults.sticker },
+        rememberedProperties: {
+          props: STICKER_REMEMBERED_PROPERTIES,
+          frame: REMEMBERED_FRAME_FIELDS,
+          validate: validateStyle,
+        },
+      },
+      {
+        id: VISUAL_TOOL_GROUPS.connectors,
+        title: "Connectors",
+        icon: "connector",
+        render: ConnectorTools,
+        creationDefaults: { props: defaults.connector },
+        rememberedProperties: {
+          props: CONNECTOR_REMEMBERED_PROPERTIES,
+          frame: REMEMBERED_FRAME_FIELDS,
+          validate: validateStyle,
+        },
+      },
     ] as const) {
       disposers.push(registry.registerGroup(group));
     }
-    preset("rectangle", "Rectangle", "shapes", { kind: "rectangle" }, "rectangle");
-    preset("ellipse", "Ellipse", "shapes", { kind: "ellipse" }, "ellipse");
-    for (const brush of ["pencil", "pen", "marker"] as const) {
+    preset(
+      VISUAL_TOOL_IDS.rectangle,
+      "Rectangle",
+      VISUAL_TOOL_GROUPS.shapes,
+      { kind: VISUAL_ELEMENT_TYPES.rectangle },
+      "rectangle",
+    );
+    preset(
+      VISUAL_TOOL_IDS.ellipse,
+      "Ellipse",
+      VISUAL_TOOL_GROUPS.shapes,
+      { kind: VISUAL_ELEMENT_TYPES.ellipse },
+      "ellipse",
+    );
+    for (const brush of [
+      VISUAL_TOOL_IDS.pencil,
+      VISUAL_TOOL_IDS.pen,
+      VISUAL_TOOL_IDS.marker,
+    ] as const) {
       register({
         id: brush,
         title: brush[0]!.toUpperCase() + brush.slice(1),
-        group: "drawing",
+        group: VISUAL_TOOL_GROUPS.drawing,
         icon: brush,
-        isActive: (tool) => tool.tool === "drawing" && tool.brush === brush,
-        activate: ({ operations }) => operations.setDrawingBrush(brush),
+        createTool: (options) => new DrawingTool(options, brush),
       });
     }
     register({
-      id: "eraser",
+      id: VISUAL_TOOL_IDS.eraser,
       title: "Eraser",
-      group: "drawing",
+      group: VISUAL_TOOL_GROUPS.drawing,
       icon: "eraser",
-      isActive: (tool) => tool.tool === "eraser",
-      activate: ({ operations }) => operations.setTool({ tool: "eraser" }),
+      createTool: (options) => new EraserTool(options),
     });
-    preset("text", "Text", "text", { kind: "text" }, "text");
+    preset(
+      VISUAL_TOOL_IDS.text,
+      "Text",
+      VISUAL_TOOL_GROUPS.text,
+      { kind: VISUAL_ELEMENT_TYPES.text },
+      "text",
+    );
     for (const sticker of stickers) {
       preset(
         `sticker:${sticker.id}`,
         sticker.label,
-        "stickers",
+        VISUAL_TOOL_GROUPS.stickers,
         {
-          kind: "sticker",
+          kind: VISUAL_ELEMENT_TYPES.sticker,
           fill: sticker.fill,
           color: sticker.color,
           fontFamily: sticker.fontFamily,
@@ -148,13 +253,9 @@ export function registerVisualToolbar(
       register({
         id: `connector:${route}`,
         title: `${route[0]!.toUpperCase() + route.slice(1)} connector`,
-        group: "connectors",
+        group: VISUAL_TOOL_GROUPS.connectors,
         icon,
-        isActive: (tool) => tool.tool === "connector" && tool.route === route,
-        activate: ({ operations }) => {
-          operations.setCreationDefaults("connector", { route });
-          operations.setTool({ tool: "connector", route });
-        },
+        createTool: (options) => new ConnectorTool(options, route),
       });
     }
     return cleanup;

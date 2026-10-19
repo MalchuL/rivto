@@ -190,5 +190,7 @@ viewport virtualization for canvas visuals; page virtualization remains separate
 Canvas tools and creation defaults belong to each mounted edgeless representation.
 Switching to the page surface unmounts that representation and resets them; returning to edgeless creates fresh tools, defaults, and previews.
 Panels share type definitions, not tool choices or remembered creation settings.
-The edgeless.tool.set named command requires explicit { operations, payload }
-from the owning canvas; it cannot select a tool through a panel alone.
+The `edgeless.tool.set` named command requires explicit `{ tools, payload }`, where
+`tools` comes from `useEdgelessTools()` and `payload` is a registered tool ID.
+The command cannot select a tool through a panel alone. Document commands continue
+to accept `{ operations, payload }` to use the owning surface’s creation defaults.

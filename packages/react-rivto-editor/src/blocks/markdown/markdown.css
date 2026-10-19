@@ -36,6 +36,8 @@
    Keep the active Markdown editor out of deferred painting while its text changes. */
 .markdown-content:focus-within {
   content-visibility: visible;
+  /* Keep Chrome's text rasterization aligned at fractional page positions. */
+  contain: paint;
 }
 
 .markdown-preview {
@@ -57,6 +59,11 @@
   border-radius: 4px;
   background: var(--rivto-muted);
   font-family: ui-monospace, monospace;
+}
+
+/* Inline monospace font metrics must not enlarge the surrounding text line. */
+.markdown-preview :not(pre) > code {
+  line-height: 0;
 }
 
 .markdown-preview a {

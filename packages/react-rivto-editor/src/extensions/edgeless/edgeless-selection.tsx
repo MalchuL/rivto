@@ -162,7 +162,7 @@ export function EdgelessInteractionOverlay() {
       if (event.button !== 0 || !(event.target instanceof Element) || !root) {
         return false;
       }
-      if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") {
+      if (root.dataset.panningReady === "true" || root.dataset.edgelessPanTool === "true") {
         return false;
       }
       if (event.target.closest(HANDLE_SELECTOR)) {

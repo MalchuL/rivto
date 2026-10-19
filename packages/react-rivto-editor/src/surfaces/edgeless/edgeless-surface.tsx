@@ -1,3 +1,4 @@
+import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
 import { SurfaceBoundary } from "../surface";
 import { getEdgelessSurfaceOptions } from "./register";
@@ -101,9 +102,11 @@ export function EdgelessSurface(
     [suppliedSnapping],
   );
   return (
-    <SurfaceBoundary type="edgeless">
-      <EdgelessSurfaceContent {...configured} {...props} snapping={snapping} />
-    </SurfaceBoundary>
+    <EdgelessToolsProvider>
+      <SurfaceBoundary type="edgeless">
+        <EdgelessSurfaceContent {...configured} {...props} snapping={snapping} />
+      </SurfaceBoundary>
+    </EdgelessToolsProvider>
   );
 }
 
@@ -152,7 +155,7 @@ function EdgelessSurfaceContent({
     viewport.current?.removeAttribute("data-panning-ready");
   };
 
-  const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessTool === "pan";
+  const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessPanTool === "true";
 
   /**
    * Caches the viewport's client origin so pointermove can avoid layout reads.
@@ -300,7 +303,7 @@ function EdgelessSurfaceContent({
       // Pan tool: ignore chrome controls so zoom/snap toggles still work.
       if (
         event.button === 0 &&
-        root.dataset.edgelessTool === "pan" &&
+        root.dataset.edgelessPanTool === "true" &&
         event.target instanceof Element &&
         event.target.closest("[data-edgeless-ui]")
       ) {
@@ -324,7 +327,7 @@ function EdgelessSurfaceContent({
     if (!root || !(target instanceof Element) || event.button !== 0) {
       return;
     }
-    if (root.dataset.edgelessTool === "pan" || root.dataset.edgelessTool === "place") {
+    if (root.dataset.edgelessPanTool === "true" || root.dataset.edgelessCaptureTool === "true") {
       return;
     }
     if (
@@ -548,20 +551,7 @@ function EdgelessSurfaceContent({
       <div
         className="edgeless-plane"
         data-edgeless-plane="true"
-        style={
-          {
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            // Move and size the capture box against the plane transform so it
-            // continues covering the viewport after any pan or zoom. The offset
-            // variables below restore absolute canvas coordinates inside that box.
-            "--edgeless-capture-left": `${-pan.x / zoom}px`,
-            "--edgeless-capture-top": `${-pan.y / zoom}px`,
-            "--edgeless-capture-width": `${100 / zoom}%`,
-            "--edgeless-capture-height": `${100 / zoom}%`,
-            "--edgeless-capture-offset-x": `${pan.x / zoom}px`,
-            "--edgeless-capture-offset-y": `${pan.y / zoom}px`,
-          } as CSSProperties
-        }
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
       >
         {/* Element boundary IDs resolve against current root order; inserted
             roots between them render without rewriting element props. */}

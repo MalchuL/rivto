@@ -39,6 +39,14 @@ for (const repeat of [0, 200]) {
       const child = editor.blocks.getBlockNode(target)!.childIds[0]!;
       return { target, detailId: editor.blocks.getBlockNode(child)!.childIds[0]! };
     });
+    await page.evaluate(() => {
+      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+      const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!;
+      editor.blocks.setBlockProp(embed.id, "targetDocumentId", "");
+    });
+    await expect(region.locator("[data-block-content]").first()).toHaveText(
+      "Nested branch one owns several Markdown children.",
+    );
     const original = today
       .locator(".page-surface")
       .first()
@@ -1213,6 +1221,13 @@ test("cycles stop before recursive acquisition and target changes release the pr
   await expect(
     page.getByText("Referenced block is unavailable.", { exact: true }).first(),
   ).toBeVisible();
+  const caution = page
+    .getByText("Referenced block is unavailable.", { exact: true })
+    .first()
+    .locator("svg");
+  await expect(caution).toBeVisible();
+  await expect(caution).toHaveAttribute("aria-hidden", "true");
+  await expect(caution).toHaveCSS("color", "rgb(214, 69, 69)");
 });
 
 test("an acyclic reference to another embedding resolves its source", async ({ page }) => {
@@ -1865,6 +1880,26 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
 }) => {
   const room = await openDemo(page);
   const target = `${room}:source-block`;
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const host = editor.getEditor("references")!;
+    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    host.blocks.setBlockProp(reference.id, "targetDocumentId", "");
+  });
+  await expect(
+    page
+      .getByRole("region", { name: "Block editor" })
+      .first()
+      .locator("[data-block-content]")
+      .first(),
+  ).toHaveText("Source text");
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const host = editor.getEditor("references")!;
+    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    host.blocks.setBlockProp(reference.id, "targetDocumentId", "source");
+  });
+
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     editor
@@ -1874,10 +1909,19 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
   const embeds = page.getByRole("region", { name: "Block editor" });
   await expect(embeds.first().locator("[data-block-content]").first()).toHaveText("Source text");
   await expect(
-    page.getByText("Multiple documents contain this block; showing the first match.", {
+    page.getByText("Multiple documents contain this block; showing document references.", {
       exact: true,
     }),
   ).toHaveCount(0);
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const host = editor.getEditor("references")!;
+    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    host.blocks.setBlockProp(reference.id, "targetDocumentId", "");
+  });
+  await expect(embeds.first().locator("[data-block-content]").first()).toHaveText(
+    "Same ID in references",
+  );
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     const reference = editor
@@ -1892,7 +1936,7 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
     }
   }, target);
   await expect(
-    page.getByText("Multiple documents contain this block; showing the first match.", {
+    page.getByText("Multiple documents contain this block; showing document references.", {
       exact: true,
     }),
   ).toHaveCount(1);

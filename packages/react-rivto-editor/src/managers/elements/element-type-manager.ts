@@ -1,3 +1,4 @@
+import { EdgelessCreationTool } from "../edgeless-tools/edgeless-creation-tool";
 import type { ReactEditorApi } from "../../editor/types";
 import type { RegistrationOwner } from "../extensions/types";
 import type { ElementTypesApi, ReactElementRegistration } from "./types";
@@ -62,8 +63,12 @@ export class ElementTypeManager implements ElementTypesApi {
             icon: creation.icon,
             group: creation.group,
             order: creation.order,
-            activate: ({ operations }) => operations.setTool({ tool: "element", type }),
-            isActive: (tool) => tool.tool === "element" && tool.type === type,
+            createTool: (options) =>
+              new EdgelessCreationTool({
+                ...options,
+                type,
+                create: () => creation.create(options.reactPanel),
+              }),
           }),
         );
       }

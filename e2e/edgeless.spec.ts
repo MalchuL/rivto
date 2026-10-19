@@ -630,7 +630,7 @@ test("snaps creation, reuses the active preset size, and constrains Shift drags"
     .poll(() =>
       visualFrame(page.locator('[data-edgeless-visual-kind="rectangle"][data-selected="true"]')),
     )
-    .toMatchObject({ width: 160, height: 120 });
+    .toMatchObject({ width: firstFrame.width, height: firstFrame.height });
 
   const textMenu = await openCreateMenu(page, "Text");
   await textMenu.getByRole("button", { name: "Text" }).click();
@@ -706,7 +706,10 @@ test("toggles snap-to-grid, object alignment, and pans from the toolbar", async 
   );
 
   const tools = page.getByRole("toolbar", { name: "Visual objects" });
-  await tools.getByRole("button", { name: "Pan" }).click();
+  const pan = tools.getByRole("button", { name: "Pan", exact: true });
+  await expect(pan).toHaveText("");
+  await expect(pan.locator("svg.lucide-hand")).toBeVisible();
+  await pan.click();
   await expect(tools.getByRole("button", { name: "Pan" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".edgeless-viewport")).toHaveAttribute("data-edgeless-tool", "pan");
   const before = await page.locator(".edgeless-viewport").getAttribute("data-edgeless-pan-x");
@@ -728,7 +731,7 @@ test("toggles snap-to-grid, object alignment, and pans from the toolbar", async 
 test("edits shape labels and keeps thick ellipse strokes inside the frame", async ({ page }) => {
   await switchMode(page, "edgeless");
   const ellipse = await createVisual(page, "Ellipse");
-  // Non-square resize must stretch the SVG (square viewBox must not keep a circle).
+  // Responsive geometry follows the non-square frame; the SVG is inset by half the fixed stroke.
   const se = page.locator('[data-edgeless-controls-for] [data-edgeless-resize-handle="se"]');
   const handleBox = await se.boundingBox();
   if (!handleBox) {
@@ -747,8 +750,8 @@ test("edits shape labels and keeps thick ellipse strokes inside the frame", asyn
       }
       return (
         box.height < box.width &&
-        Math.abs(svg.width - box.width) < 2 &&
-        Math.abs(svg.height - box.height) < 2
+        Math.abs(svg.width + 2 - box.width) < 2 &&
+        Math.abs(svg.height + 2 - box.height) < 2
       );
     })
     .toBe(true);
@@ -761,8 +764,20 @@ test("edits shape labels and keeps thick ellipse strokes inside the frame", asyn
   }
   await expect(ellipse.locator("ellipse")).toHaveAttribute("stroke-width", "28");
   await expect
-    .poll(async () => Number(await ellipse.locator("ellipse").getAttribute("rx")))
-    .toBeLessThan(50);
+    .poll(async () => {
+      const frame = await ellipse.boundingBox();
+      const shape = await ellipse.locator("svg.edgeless-shape").boundingBox();
+      if (!frame || !shape) {
+        return false;
+      }
+      return (
+        Math.abs(shape.x - frame.x - 14) < 1 &&
+        Math.abs(shape.y - frame.y - 14) < 1 &&
+        Math.abs(shape.width + 28 - frame.width) < 1 &&
+        Math.abs(shape.height + 28 - frame.height) < 1
+      );
+    })
+    .toBe(true);
   await properties.getByRole("button", { name: "Collapse properties" }).click();
   await ellipse.dblclick();
   const label = ellipse.locator(".edgeless-shape-label");
@@ -1215,8 +1230,10 @@ test("edits visual properties immediately and enters text editing on double-clic
   await content.dblclick();
   await expect(content).toHaveAttribute("contenteditable", "true");
   await expect(content).toBeFocused();
+  await expect(content).toHaveText("");
+  await page.keyboard.type("Draft");
   await page.keyboard.press("Control+a");
-  await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe("Text");
+  await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe("Draft");
   await page.keyboard.type("Edited");
   const point = await emptyCanvasPoint(page);
   await page.mouse.click(point.x, point.y);

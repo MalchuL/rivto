@@ -46,6 +46,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
     </TestPanel>,
   );
   expect(standalone).toContain("Block resolution is unavailable.");
+  expect(standalone).toContain("lucide-triangle-alert");
   const markup = renderToStaticMarkup(
     <EditorStorageContext.Provider value={runtime}>
       <TestPanel panel={panel}>
@@ -55,6 +56,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   );
   expect(markup).toContain("Loading embedded block…");
   expect(markup).not.toContain("Block resolution is unavailable.");
+  expect(markup).not.toContain("lucide-triangle-alert");
   expect("editorStorage" in reactEditor).toBe(false);
   expect(markup).toContain('aria-label="Edit embedding"');
   expect(markup).not.toContain('aria-label="Target block ID"');
@@ -84,53 +86,59 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   await storage.destroy();
 });
 
-test("clipboard retargets copied internal references and preserves qualified external references in one undo", async () => {
-  const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
-  const source = await storage.create("A");
-  const target = await storage.create("B");
-  const runtime = await createTestMultiEditor([source, target], storage, {
-    extensions: [standardPreset(), embeddingExtension()],
-  });
-  const a = (await runtime.acquireEditor("A")).editor;
-  const b = (await runtime.acquireEditor("B")).editor;
-  a.blocks.insertBlock({
-    id: "branch",
-    type: "paragraph",
-    children: [
-      { id: "target", type: "paragraph", content: "Copied target" },
-      {
-        id: "internal",
-        type: EMBEDDING_BLOCK_TYPE,
-        props: { targetDocumentId: "A", targetBlockId: "target" },
-      },
-      {
-        id: "external",
-        type: EMBEDDING_BLOCK_TYPE,
-        props: { targetDocumentId: "other", targetBlockId: "target" },
-      },
-    ],
-  });
-  b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
-  b.history.clear();
-  a.selection.set(createStructuralSelection(["branch"]));
-  const bundle = runtime.getEditor("A")!.clipboard.copy()!;
-  expect(bundle.sourceDocumentId).toBe("A");
-  const receivingRuntime = runtime.getEditor("B")!;
-  receivingRuntime.clipboard.paste({ bundle, placement: { mergeText: false } }, receivingRuntime);
-  const branch = b.blocks.getBlock("branch")!;
-  const copied = branch.children[0]!;
-  expect(copied.id).not.toBe("target");
-  expect(branch.children[1]!.props).toEqual({ targetDocumentId: "B", targetBlockId: copied.id });
-  expect(branch.children[2]!.props).toEqual({ targetDocumentId: "other", targetBlockId: "target" });
-  expect(bundle.blocks[0]!.children[1]!.props).toEqual({
-    targetDocumentId: "A",
-    targetBlockId: "target",
-  });
-  expect(b.blocks.getBlockNode("target")?.content).toBe("Existing target");
-  b.history.undo();
-  expect(b.blocks.hasBlock("branch")).toBe(false);
-  b.history.redo();
-  expect(b.blocks.getBlock("branch")!.children[1]!.props.targetBlockId).toBe(copied.id);
-  await runtime.destroy();
-  await storage.destroy();
-});
+test.each(["A", ""])(
+  "clipboard retargets internal references with document ID %p and preserves qualified external references in one undo",
+  async (documentId) => {
+    const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
+    const source = await storage.create("A");
+    const target = await storage.create("B");
+    const runtime = await createTestMultiEditor([source, target], storage, {
+      extensions: [standardPreset(), embeddingExtension()],
+    });
+    const a = (await runtime.acquireEditor("A")).editor;
+    const b = (await runtime.acquireEditor("B")).editor;
+    a.blocks.insertBlock({
+      id: "branch",
+      type: "paragraph",
+      children: [
+        { id: "target", type: "paragraph", content: "Copied target" },
+        {
+          id: "internal",
+          type: EMBEDDING_BLOCK_TYPE,
+          props: { targetDocumentId: documentId, targetBlockId: "target" },
+        },
+        {
+          id: "external",
+          type: EMBEDDING_BLOCK_TYPE,
+          props: { targetDocumentId: "other", targetBlockId: "target" },
+        },
+      ],
+    });
+    b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
+    b.history.clear();
+    a.selection.set(createStructuralSelection(["branch"]));
+    const bundle = runtime.getEditor("A")!.clipboard.copy()!;
+    expect(bundle.sourceDocumentId).toBe("A");
+    const receivingRuntime = runtime.getEditor("B")!;
+    receivingRuntime.clipboard.paste({ bundle, placement: { mergeText: false } }, receivingRuntime);
+    const branch = b.blocks.getBlock("branch")!;
+    const copied = branch.children[0]!;
+    expect(copied.id).not.toBe("target");
+    expect(branch.children[1]!.props).toEqual({ targetDocumentId: "B", targetBlockId: copied.id });
+    expect(branch.children[2]!.props).toEqual({
+      targetDocumentId: "other",
+      targetBlockId: "target",
+    });
+    expect(bundle.blocks[0]!.children[1]!.props).toEqual({
+      targetDocumentId: documentId,
+      targetBlockId: "target",
+    });
+    expect(b.blocks.getBlockNode("target")?.content).toBe("Existing target");
+    b.history.undo();
+    expect(b.blocks.hasBlock("branch")).toBe(false);
+    b.history.redo();
+    expect(b.blocks.getBlock("branch")!.children[1]!.props.targetBlockId).toBe(copied.id);
+    await runtime.destroy();
+    await storage.destroy();
+  },
+);

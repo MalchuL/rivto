@@ -67,3 +67,34 @@ test("touchpad scrolling inside a fixed-height card keeps native scrolling", asy
   await expect(canvas).toHaveAttribute("data-edgeless-pan-x", "0");
   await expect(canvas).toHaveAttribute("data-edgeless-pan-y", "0");
 });
+
+for (const repeat of [0, 200]) {
+  test(`panning preserves card styles and drawing coverage, repeat=${repeat}`, async ({ page }) => {
+    await page.goto(`/?repeat=${repeat}`);
+    await page.locator('[data-editor-mode="edgeless"]').click();
+    const canvas = page.locator(".edgeless-viewport");
+    await canvas.hover({ position: { x: 24, y: 24 } });
+    const card = canvas.locator("[data-edgeless-root]").first();
+    const before = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return Object.fromEntries(Array.from(style, (key) => [key, style.getPropertyValue(key)]));
+    });
+
+    await page.mouse.wheel(48, 72);
+    await expect(canvas).toHaveAttribute("data-edgeless-pan-x", "-48");
+    await expect(canvas).toHaveAttribute("data-edgeless-pan-y", "-72");
+    const after = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return Object.fromEntries(Array.from(style, (key) => [key, style.getPropertyValue(key)]));
+    });
+    expect(after).toEqual(before);
+
+    const capture = canvas.locator(".edgeless-drawing-capture");
+    const viewportBounds = (await canvas.boundingBox())!;
+    const captureBounds = (await capture.boundingBox())!;
+    expect(captureBounds.x).toBeCloseTo(viewportBounds.x + 1, 0);
+    expect(captureBounds.y).toBeCloseTo(viewportBounds.y + 1, 0);
+    expect(captureBounds.width).toBeCloseTo(viewportBounds.width - 2, 0);
+    expect(captureBounds.height).toBeCloseTo(viewportBounds.height - 2, 0);
+  });
+}
