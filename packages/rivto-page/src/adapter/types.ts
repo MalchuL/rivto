@@ -9,6 +9,13 @@ export type BlockListType =
  *
  * Hosts may return their existing snapshots structurally, without copying them.
  * Content, properties, schemas, and plugin data belong to their concrete renderers.
+ *
+ * Repeated reads of unchanged state must return the same snapshot object by
+ * reference. React's useSyncExternalStore compares snapshots with Object.is;
+ * publishing a change requires a new immutable snapshot before notifying listeners.
+ * Mutating the old object can hide updates, while allocating on every read can
+ * cause repeated renders. The ID-bound BlockEditorNode remains the same object
+ * across these snapshot replacements for its controller lifetime.
  */
 export interface BlockEditorNodeSnapshot {
   /** Stable identity within this editing region. */
@@ -71,6 +78,8 @@ export interface BlockEditorBlocks {
    *
    * Snapshots and child ID arrays retain identity until their corresponding data
    * changes. Returned values are detached and must be treated as read-only.
+   * A subscription notification prompts a reread; React detects the change by
+   * comparing the returned snapshot reference, not by inspecting its fields.
    *
    * @param blockId - Stable block identity to resolve.
    * @returns Cached node, or undefined when missing or outside the region.
