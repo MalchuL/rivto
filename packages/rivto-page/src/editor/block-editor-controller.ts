@@ -1,9 +1,17 @@
 import type { BlockEditorAdapter } from "../adapter/types";
+import { BlockEditorNode } from "./blocks/block-editor-node";
+
+/** Identity token for one mounted root, independent of later attachments. */
+interface BlockEditorAttachment {
+  readonly root: HTMLElement;
+}
 
 /** Owns the DOM attachment of one block editor without owning its adapter. */
 export class BlockEditorController {
-  private attachment: { readonly root: HTMLElement } | undefined;
+  private attachment: BlockEditorAttachment | undefined;
   private destroyed = false;
+  // shortcut: Retain visited IDs for this controller lifetime; add idle eviction if long-session churn warrants it.
+  private readonly nodes = new Map<string, BlockEditorNode>();
 
   /**
    * Retains the limited capabilities of one region without subscribing or attaching DOM.
@@ -11,6 +19,28 @@ export class BlockEditorController {
    * @param adapter - Borrowed live data and presentation sources for this occurrence.
    */
   constructor(readonly adapter: BlockEditorAdapter) {}
+
+  /**
+   * Reuses one live object per requested ID without reading or copying host snapshots.
+   *
+   * Missing IDs still receive objects so consumers can observe later restoration.
+   * Updates, selection, root reordering, and detach/attach retain the same objects.
+   *
+   * @param blockId - Stable identity inside this controller's adapter occurrence.
+   * @returns Cached node owned by this controller and borrowed by the caller.
+   * @throws If this controller has been destroyed.
+   */
+  getNode(blockId: string): BlockEditorNode {
+    if (this.destroyed) {
+      throw new Error("BlockEditorController is destroyed");
+    }
+    let node = this.nodes.get(blockId);
+    if (!node) {
+      node = new BlockEditorNode(blockId, this.adapter.blocks);
+      this.nodes.set(blockId, node);
+    }
+    return node;
+  }
 
   /**
    * Connects one committed block editor root to this controller.
@@ -48,12 +78,26 @@ export class BlockEditorController {
   }
 
   /**
-   * Permanently detaches this controller without destroying borrowed capabilities.
+   * Permanently detaches this controller and releases owned nodes without destroying the adapter.
    *
-   * @returns The attachment is cleared and later attach calls are rejected; repeats are safe.
+   * @returns Attachment and node cache are cleared and later attach/getNode calls are
+   * rejected; every node cleanup is attempted and repeated destruction is safe.
+   * @throws AggregateError when one or more node cleanups fail.
    */
   destroy(): void {
     this.destroyed = true;
     this.attachment = undefined;
+    const errors: unknown[] = [];
+    for (const node of this.nodes.values()) {
+      try {
+        node.destroy();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.nodes.clear();
+    if (errors.length) {
+      throw new AggregateError(errors, "Failed to destroy block editor nodes");
+    }
   }
 }

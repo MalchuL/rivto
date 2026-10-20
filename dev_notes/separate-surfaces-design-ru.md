@@ -667,8 +667,64 @@ Unused scaffold dependencies удалены через CLI; взаимодейс
 ### Уточнение: adapter не импортирует canonical model
 
 Из автономного Page удалена зависимость от document-model, включая BlockNode type import.
-Собственный BlockEditorNode описывает только id/type/childIds. Renderer владеет content
+Первоначальный собственный структурный node описывал только id/type/childIds; после
+OOP-шага он называется BlockEditorNodeSnapshot, см. уточнение ниже. Renderer владеет content
 и другими специфичными данными, host адаптирует canonical snapshots без обязательного
 копирования. Общие structural hooks, shell и controller не знают schemas/pluginData.
 Manifest и lockfile обновлены через CLI; старый model symlink удалён перед проверкой
 самостоятельной сборки. Задача конвертации .cjs отменена пользователем, эти файлы сохранены.
+
+### Выполнение: кешируемые OOP-узлы без второго хранилища
+
+В автономном Page добавлен BlockEditorNode с live getters, getSnapshot/subscribe и
+командами checked/collapsed/color. BlockEditorController переиспользует один узел
+на ID в своём кеше, а useBlockNode возвращает этот объект, подписывая React на отдельный
+immutable BlockEditorNodeSnapshot. Изменения делегируются ограниченному
+adapter.blocks.updateBlockNode; validation, область доступа, transactions и undo остаются
+обязанностью host. Полный editor/panel/document в API не появляется.
+
+Объекты сохраняются при изменениях и delete/restore, после destroy инвалидируются;
+посещённые IDs удерживаются до конца жизни контроллера. DOM controls, numbered list,
+production adapter и подключение поверхностей этим шагом не реализуются.
+Поведение, границы кеша, проверки и отдельный Node microbenchmark описаны в
+[разделе 16 контрактов](./block-editor-contracts-ru.md#16-выполнено-стабильный-blockeditornode-и-команды-через-host).
+Результаты синтетических чтений не заменяют будущие browser measurements интеграции.
+
+### Уточнение: listType вместо отдельного numbered-флага
+
+Анализ существующей list extension показал пять режимов и раздельные пути отображения
+(CSS counters + virtual window seed) и сериализации (проекция номеров по siblings).
+В автономный node API добавлены собственный BlockListType, listType getter/snapshot field
+и setListType с null для снятия режима. Renderer type, checked и другие поля независимы;
+составные conversion/Enter-команды остаются следующим шагом вместе с behaviors.
+Порядковый номер не хранится в узле, соседние snapshots при смене режима не переписываются.
+
+Подробный разбор текущих путей и границ адаптации — в
+[разделе 17 контрактов](./block-editor-contracts-ru.md#17-выполнено-тип-списка-в-контракте-узла).
+Прошли 24 tests, package typecheck/lint/build; на 5/2000 nodes команда не читает соседей
+или roots. Production wiring и browser numbering этим шагом не переносились.
+
+### Выполнение: package-local demo без production integration
+
+Добавлен `packages/rivto-page/demo`: один in-memory adapter, textarea renderer, controls
+текущих node fields, live renderer registration, selection, reorder и mount/unmount.
+Запуск: `pnpm --filter @chulane/rivto-page demo`, localhost:5184; большой fixture доступен
+через `?repeat=200`. Vite добавлен через CLI как devDependency, production dependencies
+пакета и существующий demo не менялись.
+
+Прошли 24 Jest tests, typechecks, lint и builds; browser behavior — четыре проверки
+Chromium/Firefox с workers=12, performance — четыре проверки с workers=1. На 5+1 и
+1000+200 nodes клавиатурная смена list type сохраняет objects, не читает roots и вызывает
+17 node reads/два уведомления. Тайминги и ограничения интерпретации сохранены в
+[разделе 18 контрактов](./block-editor-contracts-ru.md#18-выполнено-автономное-browser-demo-внутри-пакета).
+Это проверка автономного контракта в браузерах, без завершённого переноса list UI,
+production blocks, clipboard, selection/navigation и undo.
+
+### Уточнение: color — фон блока
+
+Исправлена ошибочная трактовка цвета как text formatting: самостоятельный node API
+использует color/setColor для фона блока. Production host хранит соответствующий токен
+в listProps.backgroundColor; адаптация и удаление override по null остаются на его стороне.
+Page shell отражает фон в data-block-background. В demo используются все семь фоновых
+токенов оригинала; текст и snapshots соседей при смене фона не изменяются.
+Подробности и проверки — в [разделе 19 контрактов](./block-editor-contracts-ru.md#19-исправлено-color-означает-фон-блока).

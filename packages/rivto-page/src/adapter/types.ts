@@ -1,18 +1,42 @@
 import type { ComponentType } from "react";
 
+/** Built-in list modes interpreted by Page, independent of the host's storage schema. */
+export type BlockListType =
+  "list" | "checkbox" | "numbered_list" | "start_numbered_list" | "continue_numbered_list";
+
 /**
  * Describes the structure Page needs to render a block without knowing its storage model.
  *
  * Hosts may return their existing snapshots structurally, without copying them.
  * Content, properties, schemas, and plugin data belong to their concrete renderers.
  */
-export interface BlockEditorNode {
+export interface BlockEditorNodeSnapshot {
   /** Stable identity within this editing region. */
   readonly id: string;
   /** Lookup key for the host's live renderer registry. */
   readonly type: string;
   /** Stable ordered direct child IDs; descendants are read separately. */
   readonly childIds: readonly string[];
+  /** List mode, separate from the content renderer type; omitted for an undecorated block. */
+  readonly listType?: BlockListType;
+  /** Whole-block checkbox state; omitted when the host supplies no checkbox state. */
+  readonly checked?: boolean;
+  /** Persisted collapse state; omitted when the host supplies no collapse state. */
+  readonly collapsed?: boolean;
+  /** Explicit block background token supplied by the host; omitted for the default background. */
+  readonly color?: string;
+}
+
+/** Presentation changes delegated to the host's validation and transaction policy. */
+export interface BlockEditorNodePatch {
+  /** New list mode, null to remove it; omission preserves the mode and other fields. */
+  readonly listType?: BlockListType | null;
+  /** New checkbox state; omission preserves its current value. */
+  readonly checked?: boolean;
+  /** New collapse state; omission preserves its current value. */
+  readonly collapsed?: boolean;
+  /** Block background token, null to remove the override; omission preserves the value. */
+  readonly color?: string | null;
 }
 
 /** Detached root order and availability of one block editing region. */
@@ -51,7 +75,7 @@ export interface BlockEditorBlocks {
    * @param blockId - Stable block identity to resolve.
    * @returns Cached node, or undefined when missing or outside the region.
    */
-  getBlockNode(blockId: string): BlockEditorNode | undefined;
+  getBlockNode(blockId: string): BlockEditorNodeSnapshot | undefined;
   /**
    * Observes one node's fields or direct child order, excluding descendant edits.
    *
@@ -60,6 +84,20 @@ export interface BlockEditorBlocks {
    * @returns Idempotent disposer removing this subscription.
    */
   subscribeBlockNode(blockId: string, listener: () => void): () => void;
+  /**
+   * Applies presentation changes through the host's existing mutation boundary.
+   *
+   * Source identity, region membership, supported fields and values must be
+   * checked before writing. The host owns transaction and undo capture policy;
+   * subscribers observe the resulting cached snapshot, not an optimistic copy.
+   *
+   * @param blockId - Existing block identity inside the current region.
+   * @param patch - Fields to change; omitted fields remain unchanged.
+   * @returns Changes have been applied and the host's notifications delivered.
+   * @throws If the block is missing/outside, changes are unsupported or invalid,
+   * or delegated validation/transaction execution fails.
+   */
+  updateBlockNode(blockId: string, patch: BlockEditorNodePatch): void;
 }
 
 /** Per-block selection membership backed by the host's existing selection store. */

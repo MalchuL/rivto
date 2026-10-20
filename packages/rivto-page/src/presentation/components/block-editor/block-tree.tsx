@@ -1,5 +1,9 @@
 import { memo, useCallback, useSyncExternalStore } from "react";
-import type { BlockEditorNode, BlockRenderer, BlockRendererProps } from "../../../adapter/types";
+import type {
+  BlockEditorNodeSnapshot,
+  BlockRenderer,
+  BlockRendererProps,
+} from "../../../adapter/types";
 import { useBlockNode } from "../../hooks/use-block-node";
 import { useBlockRenderer } from "../../hooks/use-block-renderer";
 import { useBlockSelected } from "../../hooks/use-block-selected";
@@ -14,7 +18,7 @@ interface BlockContentProps extends BlockRendererProps {
 /** Existing node fields and selection presentation used to build its shell. */
 interface BlockNodeContentProps extends BlockRendererProps {
   /** Detached own fields and ordered direct child IDs. */
-  readonly block: BlockEditorNode;
+  readonly block: BlockEditorNodeSnapshot;
   /** Whether the shell exposes whole-block selection. */
   readonly selected: boolean;
 }
@@ -53,7 +57,8 @@ const BlockContent = memo(function BlockContent({ blockId, renderer: Content }: 
  * @throws Propagates adapter reads and renderer errors to the surrounding React boundary.
  */
 const BlockTreeNode = memo(function BlockTreeNode({ blockId }: BlockRendererProps) {
-  const block = useBlockNode(blockId);
+  const node = useBlockNode(blockId);
+  const block = node.getSnapshot();
   const selected = useBlockSelected(blockId);
   if (!block) {
     return null;
@@ -63,6 +68,8 @@ const BlockTreeNode = memo(function BlockTreeNode({ blockId }: BlockRendererProp
 
 /**
  * Resolves a live renderer only for a node that currently exists.
+ *
+ * The shell exposes the explicit background token for surface/theme styling.
  *
  * @param props - Existing node, its stable identity, and whole-block selection state.
  * @param props.blockId - Renderer identity, also used as the structural DOM marker.
@@ -74,7 +81,11 @@ const BlockTreeNode = memo(function BlockTreeNode({ blockId }: BlockRendererProp
 function BlockNodeContent({ blockId, block, selected }: BlockNodeContentProps) {
   const Content = useBlockRenderer(block.type);
   return (
-    <div data-block-id={blockId} data-block-selected={selected || undefined}>
+    <div
+      data-block-id={blockId}
+      data-block-background={block.color || undefined}
+      data-block-selected={selected || undefined}
+    >
       {Content && <BlockContent blockId={blockId} renderer={Content} />}
       <BlockChildren blockIds={block.childIds} />
     </div>

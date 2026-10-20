@@ -1,0 +1,108 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172033;
+  background: #f5f7fb;
+  --rivto-background: white;
+  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
+  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
+  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
+  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
+  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
+  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
+  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
+}
+
+body {
+  margin: 0;
+}
+main {
+  max-width: 1050px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+h1 {
+  margin-bottom: 8px;
+}
+p {
+  line-height: 1.6;
+}
+nav,
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+nav {
+  padding: 16px;
+  background: white;
+  border-radius: 10px;
+}
+button,
+select,
+textarea {
+  font: inherit;
+}
+button,
+select {
+  padding: 6px;
+}
+button,
+label,
+summary {
+  cursor: pointer;
+}
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+details {
+  margin: 16px 0;
+}
+.demo-editor > [data-block-id] {
+  margin: 16px 0;
+}
+.demo-editor [data-block-id] > [data-block-id] {
+  margin: 12px 0 0 28px;
+}
+.demo-node {
+  padding: 16px;
+  background: white;
+  border: 1px solid #dce2ec;
+  border-radius: 10px;
+}
+.demo-node header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.demo-node textarea {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  margin: 12px 0;
+  color: inherit;
+}
+.demo-node output,
+.demo-node small {
+  display: block;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.demo-node output {
+  font-family: monospace;
+}
+.demo-editor [data-block-selected="true"] > .demo-node {
+  outline: 2px solid #4868d8;
+}
+.demo-custom {
+  padding: 12px;
+  background: #e3eaff;
+  border-radius: 10px;
+}
+:focus-visible {
+  outline: 2px solid #4868d8;
+  outline-offset: 3px;
+}

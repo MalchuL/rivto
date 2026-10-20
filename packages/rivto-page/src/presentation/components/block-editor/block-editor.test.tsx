@@ -3,11 +3,13 @@ import { createRoot, type Root } from "react-dom/client";
 import type {
   BlockEditorAdapter,
   BlockEditorBlocks,
-  BlockEditorNode,
+  BlockEditorNodeSnapshot,
   BlockRenderer,
   BlockRendererProps,
 } from "../../../adapter/types";
 import type { BlockEditorController } from "../../../editor/block-editor-controller";
+import type { BlockEditorNode } from "../../../editor/blocks/block-editor-node";
+import { useBlockNode } from "../../hooks/use-block-node";
 import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
 import { TestBlockEditorAdapter } from "../../../test-utils/test-block-editor-adapter";
 import { BlockEditor } from "./block-editor";
@@ -325,7 +327,7 @@ it("renders structural-only snapshots while content stays in the host's own sour
   source.setNode("a", { content: "Host content" });
   source.setRoots(["a"]);
   source.setRenderer("text", createRenderer(source, metrics));
-  const node: BlockEditorNode = { id: "a", type: "text", childIds: [] };
+  const node: BlockEditorNodeSnapshot = { id: "a", type: "text", childIds: [] };
   const blocks: BlockEditorBlocks = {
     /**
      * Supplies only Page's structural fields without projecting host content.
@@ -335,6 +337,7 @@ it("renders structural-only snapshots while content stays in the host's own sour
      */
     getBlockNode: jest.fn((blockId: string) => (blockId === node.id ? node : undefined)),
     subscribeBlockNode: source.blocks.subscribeBlockNode,
+    updateBlockNode: source.blocks.updateBlockNode,
   };
   const adapter: BlockEditorAdapter = {
     blocks,
@@ -351,4 +354,49 @@ it("renders structural-only snapshots while content stays in the host's own sour
   expect(container.querySelector('[data-block-id="a"]')).toBe(shell);
   expect(blocks.getBlockNode("a")).toBe(node);
   expect([...metrics.renders.entries()]).toEqual([["a", 1]]);
+});
+
+it("keeps the hook's node object while React observes its changing host snapshots", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("a", { checked: false });
+  adapter.setRoots(["a"]);
+  const nodes = new Set<BlockEditorNode>();
+  /**
+   * Uses the OOP node while React is driven by its changing snapshot subscription.
+   *
+   * @param props - Stable ID supplied by the shell.
+   * @param props.blockId - Node observed by this renderer.
+   * @returns Current checkbox state and list mode read through the live getters.
+   */
+  function NodeProbe({ blockId }: BlockRendererProps) {
+    const node = useBlockNode(blockId);
+    nodes.add(node);
+    return <span>{`${String(node.checked)}:${node.listType ?? "none"}`}</span>;
+  }
+  adapter.setRenderer("text", NodeProbe);
+  act(() => root.render(<BlockEditor adapter={adapter} />));
+  expect(container.textContent).toBe("false:none");
+  const node = [...nodes][0]!;
+  act(() => node.setChecked(true));
+  expect(container.textContent).toBe("true:none");
+  act(() => node.setListType("continue_numbered_list"));
+  expect(container.textContent).toBe("true:continue_numbered_list");
+  act(() => node.setListType(null));
+  expect(container.textContent).toBe("true:none");
+  act(() => node.setColor("red"));
+  expect(
+    container.querySelector('[data-block-id="a"]')?.getAttribute("data-block-background"),
+  ).toBe("red");
+  act(() => node.setColor(null));
+  expect(
+    container.querySelector('[data-block-id="a"]')?.hasAttribute("data-block-background"),
+  ).toBe(false);
+  expect(nodes.size).toBe(1);
+  expect(adapter.blocks.updateBlockNode).toHaveBeenCalledWith("a", { checked: true });
+  act(() => adapter.select(["a"]));
+  expect(nodes.size).toBe(1);
+  act(() => root.render(null));
+  expect(adapter.subscriberCount).toBe(0);
+  expect(node.getSnapshot()).toBeUndefined();
+  expect(() => node.setChecked(false)).toThrow("destroyed");
 });

@@ -297,8 +297,10 @@ block context, предоставленный BlockEditor, а не ReactPanelApi
 
 Для shell сохранить существующий BlockShellProps: snapshot блока, selected, подготовленные
 content/controls и уже отрисованные children. Для decorators — BlockWrapperProps с block
-и children. Не вводить BlockController на каждый блок: сейчас ему нечем владеть, что
-не принадлежало бы уже renderer hook, shell или контроллеру всей области.
+и children. Отдельный BlockController для каждого блока не вводится: DOM и жестами
+владеет контроллер области, представлением — renderer hook и shell. Добавленный на
+следующем шаге BlockEditorNode связывает ID с чтением, командами и подписками; это
+не второй контроллер DOM и не отдельное хранилище документа.
 
 Произвольный custom renderer может не иметь editable content: focusBlock тогда возвращает
 false. Custom containers сохраняют свой layout и behaviors. Unknown block fallback
@@ -395,22 +397,25 @@ production-подключением фиксируются baseline и резу�
 В `packages/rivto-page/src` реализованы:
 
 - `adapter/types.ts`: единый BlockEditorAdapter с четырьмя используемыми разделами —
-  region, blocks, selection, renderers. Node shape задаётся собственным BlockEditorNode:
-  только id, type и childIds; model-specific data, editor/panel/document, конкретных
-  блоков и обратных owner-ссылок в контракте нет.
+  region, blocks, selection, renderers. Первоначальный структурный snapshot содержал
+  только id, type и childIds. На OOP-шаге он называется BlockEditorNodeSnapshot и дополнен
+  необязательными checked/collapsed/color; подробности команд и кеша — в разделе 16.
+  Model-specific data, editor/panel/document, конкретных блоков и обратных owner-ссылок
+  в контракте нет.
 - `editor/block-editor-controller.ts`: контроллер без внешних эффектов в конструкторе,
   attach с идемпотентным disposer, getRoot и окончательный destroy. Старый disposer не
   отключает новый root; второе одновременное attach и attach после destroy отвергаются.
 - `presentation/components/block-editor/`: BlockEditor, внутренний context и адресное дерево.
   Controller создаётся после commit, на смене adapter/unmount освобождается;
   StrictMode effect replay создаёт новый экземпляр после cleanup старого.
-- `presentation/hooks/`: useBlockEditorController и read-only useBlockNode. Это автономный
+- `presentation/hooks/`: useBlockEditorController и useBlockNode. Изначально read-only
+  hook возвращал snapshot; после OOP-шага возвращает стабильный объект узла (раздел 16). Это автономный
   контекст принимающего пакета; существующие host hooks и renderer implementations
   пока не мигрированы и не подключены к нему.
 
 Компонент принимает один adapter и необязательный className. Первый client render и
 SSR содержат только корневой div; дерево появляется после attachment. onContentHeightChange,
-input/selection commands, mutation API, slots/wrappers, behaviors/collapse, navigation,
+input/selection commands, полный CRUD, slots/wrappers, behaviors/collapse UI, navigation,
 clipboard, viewport/DnD и тема на этом этапе не реализованы и не имитируются заглушками.
 Это слой отображения с реакцией на внешние изменения, а не готовый интерактивный редактор.
 
@@ -435,7 +440,7 @@ CLI: у текущего среза для них нет потребителе�
 взаимодействий добавляются вместе с реализацией соответствующей возможности и не должны
 возвращать зависимость структурного пакета от конкретной модели документа.
 
-Проверки после последнего изменения runtime:
+Проверки первого rendering slice (актуальные проверки OOP-шага — в разделе 16):
 
 - `pnpm --filter @chulane/rivto-page test`: 2 suites, 10 tests, все прошли; React 19.2.7
   и jsdom, serial Jest. Проверены nested roots, child/root reorder без remount, missing
@@ -462,7 +467,8 @@ latency пока не применимы к действующему demo, по�
 
 React-представление выделено в `presentation/`. `editor/` — слой поведения, а не только
 один controller: при реализации соответствующих возможностей здесь появятся selection,
-navigation и drag-and-drop. Пока здесь остаётся BlockEditorController и его тест.
+navigation и drag-and-drop. Сейчас здесь находятся BlockEditorController, кешируемые
+BlockEditorNode в blocks/ и их тесты.
 По отдельному запросу пользователя каталоги будущих selection, navigation, drag-and-drop
 и presentation/slots созданы с `.gitkeep`, чтобы сохранить структуру в Git. Реализаций
 или методов-заглушек в этих каталогах нет.
@@ -473,6 +479,9 @@ src/
 ├── editor/
 │   ├── block-editor-controller.ts
 │   ├── block-editor-controller.test.ts
+│   ├── blocks/
+│   │   ├── block-editor-node.ts
+│   │   └── block-editor-node.test.ts
 │   ├── selection/
 │   ├── navigation/
 │   └── drag-and-drop/
@@ -501,8 +510,10 @@ React-представления и поведения, а не обещание
 ## 15. Независимость adapter от document-model
 
 Прямой импорт model BlockNode в публичном adapter был лишней связностью и удалён.
-BlockEditorNode принадлежит Page-пакету и задаёт минимальный read-only structural contract:
-стабильный id, renderer lookup type и упорядоченные childIds. Content, native props,
+Изначальный read-only structural contract принадлежит Page-пакету: стабильный id,
+renderer lookup type и упорядоченные childIds. После OOP-шага этот контракт называется
+BlockEditorNodeSnapshot и дополнен ограниченными presentation-полями (раздел 16);
+имя BlockEditorNode теперь обозначает класс доступа к нему. Content, native props,
 listProps, pluginData и persisted schema не являются полями, необходимыми Page.
 
 Host adapter может вернуть уже существующий cached snapshot, если он структурно
@@ -532,3 +543,282 @@ snapshot. В public declarations нет импортов @chulane/*; manifest н
 использован существующий установленный tooling без автоматического reinstall. .cjs не
 переводились и не изменялись. Browser timings не повторялись: менялись границы типов и
 тестовый host, алгоритм rendering автономного компонента не изменён.
+
+## 16. Выполнено: стабильный BlockEditorNode и команды через host
+
+Дата: 2026-10-20. Это продолжение автономного среза без production-интеграции.
+
+Разделены два разных контракта:
+
+- `BlockEditorNode` — долгоживущий объект, связанный с ID и ограниченным источником host.
+  Предоставляет readonly id, getters type/childIds/checked/collapsed/color, getSnapshot,
+  subscribe, setChecked, setCollapsed, setColor. Методы находятся в прототипе;
+  экземпляр не копирует содержимое блока, не хранит второй snapshot и не создаёт
+  подписки при конструировании.
+- `BlockEditorNodeSnapshot` — неизменяемое состояние источника: id/type/childIds и
+  необязательные checked/collapsed/color (фон блока). Host возвращает ту же ссылку, пока
+  наблюдаемое состояние не изменилось, и публикует новый snapshot при изменении.
+  Отсутствующие presentation-поля остаются undefined, Page не придумывает defaults.
+
+`BlockEditorController.getNode(id)` кеширует один объект на запрошенный ID в Map своего
+экземпляра. Повторный вызов не читает host и не подписывается. Редактирование, selection,
+перестановка корней и detach/attach не заменяют объект. Удаление и undo/восстановление
+также сохраняют объект; getSnapshot возвращает undefined, пока ID отсутствует или
+недоступен в области. Можно получить объект для ещё отсутствующего ID и наблюдать его
+появление. Одинаковые IDs разных контроллеров не делят объекты или источники.
+
+Кеш ограничен временем жизни контроллера, а не числом смонтированных строк: все посещённые
+IDs удерживаются до destroy. Это осознанное ограничение первого шага; при большом churn
+долгоживущей области понадобится отдельная политика освобождения, согласованная с
+заимствованными ссылками. WeakRef, pooling и повторное назначение объекта другому ID
+не используются. При destroy контроллер инвалидирует узлы, освобождает их подписки и
+очищает Map; host/документ не уничтожается. Старые ссылки больше не читают источник,
+команды и новые подписки отвергаются. Ошибка одного disposer не мешает попытке очистить
+остальные; ошибки возвращаются как AggregateError.
+
+`useBlockNode(id)` теперь возвращает стабильный BlockEditorNode, а не snapshot.
+Внутри hook useSyncExternalStore наблюдает getSnapshot и адресную subscribe узла;
+стабильность объекта не блокирует обновление React. Hook замыкает вызовы на узел через
+useCallback, поэтому смена ID переключает подписку. Для чтения нескольких полей за один
+проход можно взять один node.getSnapshot(); каждый отдельный getter иначе читает
+актуальный кеш host. Сам getSnapshot не аллоцирует объект и не обходит потомков.
+
+Мутации направляются в новый обязательный `adapter.blocks.updateBlockNode(id, patch)`.
+`BlockEditorNodePatch` допускает только checked/collapsed/color; пропущенные поля не
+меняются, null для color снимает локальный фон блока. Узел проверяет доступность перед записью,
+а host обязан повторно обеспечить границы области, допустимость полей и значений,
+transactions и undo. Page не обновляет snapshot оптимистично и не содержит второй истории.
+Ошибки host не скрываются. Реализация адаптера к canonical model остаётся будущим шагом.
+
+На первоначальном OOP-шаге добавлены данные и команды, но не checkbox, collapse/color UI
+и не правила numbered list. Последующее добавление listType описано в разделе 17.
+Сворачивание пока не скрывает children автоматически; потребитель определяет поведение.
+Content и специфичные payload конкретных блоков продолжают принадлежать host.
+Ни model/core imports, ни новые зависимости, ни изменения .cjs для этого не потребовались.
+
+### Проверка поведения и стоимости
+
+Проверки кеша на 5 и 2000 узлах подтверждают переиспользование всех объектов за пять
+проходов без чтений источника или подписок. Обновление одного узла сохраняет ссылки
+объектов и snapshots соседей. Отдельно проверены делегирование patches, удаление и
+восстановление, отсутствие оптимистичной записи при отказе host, независимость двух
+источников с одинаковыми IDs, повторный disposer, уничтожение и ошибки cleanup.
+React-тест проверяет изменение checked через стабильный объект и обновление DOM hook.
+Существующие cost tests rendering сохраняют границу: один изменённый content renderer,
+нет чтений roots/соседей, не более 12 node reads на 5 и 2000 mounted roots.
+
+Для оценки именно накладных расходов доступа выполнен отдельный прогретый microbenchmark
+ESM-сборки в Node v23.11.1: 200 000 чтений в sample, четыре прогрева, девять samples,
+чередование порядка вариантов, checksum результата, без параллельных builds/tests.
+Создание fixture и первоначальное наполнение кеша не входят во время чтений.
+
+| Узлов | Доступ                           | Медиана, ms / 200 000 чтений | Диапазон, ms |
+| ----- | -------------------------------- | ---------------------------- | ------------ |
+| 5     | Прямой adapter.getBlockNode      | 1.672                        | 1.645–2.125  |
+| 5     | Сохранённый node.getSnapshot     | 1.910                        | 1.746–2.235  |
+| 5     | controller.getNode + getSnapshot | 2.499                        | 2.351–3.023  |
+| 2000  | Прямой adapter.getBlockNode      | 2.703                        | 2.677–2.734  |
+| 2000  | Сохранённый node.getSnapshot     | 3.094                        | 3.042–3.113  |
+| 2000  | controller.getNode + getSnapshot | 4.761                        | 4.741–4.782  |
+
+На этом прогоне сохранённый объект добавляет около 0.39 ms на 200 000 чтений при 2000
+узлах; повторный поиск в Map увеличивает разницу до 2.06 ms. Это сравнение путей доступа
+на одном синтетическом источнике, а не измерение browser input, кадров или производительности
+целого редактора. JIT, реальный host и subscribers могут менять результат. Тайминги не
+превращены в универсальный CI-бюджет; тесты контролируют число операций и результат.
+
+Итоговые проверки OOP-шага: 3 Jest suites, 19 tests прошли; package typecheck, lint,
+ESM/declaration build прошли. Исходники и public declarations не содержат импортов
+@chulane/*; manifest/lockfile, существующий host и demo этим шагом не изменялись.
+Browser input, page/edgeless интеграция и применение undo проверяются после подключения;
+тестовый host сейчас подтверждает делегирование команд, а не canonical persistence.
+
+## 17. Выполнено: тип списка в контракте узла
+
+Дата: 2026-10-20. Анализ текущего host подтвердил, что numbered — режим декорации
+произвольного блока, а не отдельный renderer type или boolean-флаг.
+
+### Как работает существующая реализация
+
+- Canonical model хранит `listProps` как `Record<string, unknown>` и проверяет
+  переносимость значений; семантика конкретных list fields принадлежит расширениям.
+- `extensions/built-ins/page/list/types.ts` определяет `BlockListType`. Регистрация
+  list extension знает пять режимов; собственная регистрация defaults/validation,
+  shortcuts, behaviors, block slot и clipboard formatter собирается в
+  `list/shortcuts/register.ts`. Эти возможности ещё не перенесены в Page.
+- Shortcut `1. ` выбирает start_numbered_list; numbered Enter создаёт продолжение
+  numbered_list, а Enter на пустом блоке снимает type и checked. Slash/menu conversion
+  устанавливает type и checked:false вместе; это составная пользовательская операция.
+- `BlockListSlot` отображает checkbox либо marker по listProps.type. CSS counters
+  принадлежат surface/children layout; start и первый numbered после разрыва сбрасывают
+  счётчик. continue позволяет продолжить предыдущую последовательность после разрыва.
+- Clipboard formatter использует `resolveBlockListNumbers(siblings)` отдельно от DOM:
+  обычный numbered зависит от предыдущего пункта, continue — от последнего numbered
+  в группе, start начинает с 1. Сами порядковые номера в документе не сохраняются.
+- Виртуальная Page уже восстанавливает CSS counter через counterSeed для начала
+  смонтированного окна: текущий обход обрабатывает numbered_list/start_numbered_list.
+  Эквивалентность этого пути с continue_numbered_list после разрывов должна быть
+  проверена при переносе layout; существование seed не доказывает все комбинации.
+
+### Принятый API Page
+
+Page экспортирует собственный `BlockListType`, структурно совместимый с текущим host,
+без type/runtime import из react-rivto-editor или document-model:
+
+| Значение               | Смысл                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| list                   | Обычный режим списка, без числового маркера или checkbox в текущем list slot |
+| checkbox               | Пункт с флагом checked                                                       |
+| numbered_list          | Последовательная нумерация, с началом после разрыва                          |
+| start_numbered_list    | Явное начало нумерации с 1                                                   |
+| continue_numbered_list | Продолжение последней числовой последовательности группы                     |
+
+`BlockEditorNodeSnapshot.listType` и getter `node.listType` возвращают этот режим либо
+undefined при отсутствии декорации/узла. Поле `type` продолжает выбирать renderer
+контента. Для custom list modes потребуется расширить контракт на этапе переноса
+регистраций; неизвестные persisted значения host не должен выдавать за один из
+поддержанных режимов. Registry и типы сторонних расширений пока не переносились.
+
+`node.setListType(mode)` отправляет единственный patch `{ listType: mode }`, а null
+означает снять именно тип списка; отсутствие поля в patch сохраняет значение.
+Host переводит это в изменение/удаление своего listProps.type. Команда не меняет checked,
+collapsed, цвет, содержимое или renderer type и не вычисляет номера соседей. Так же
+setChecked не переключает тип списка автоматически. Для воспроизведения menu/slash
+conversion нужна отдельная составная команда с type + checked:false в одной транзакции;
+последовательность двух независимых setter-вызовов не обещает одну undo-запись.
+Enter removal type + checked также остаётся в behavior и не подменяется одним setter.
+
+Test adapter публикует immutable snapshot и адресное уведомление, включая явное снятие
+type через null. Он демонстрирует принимаемый контракт, а не реализацию canonical
+validation/undo. Кеширование узлов и lifecycle не менялись, поля и patches плоские:
+дополнительные вложенные objects/controllers на каждый list node не создаются.
+
+### Проверка
+
+До изменения прошли 19 package tests; после — 24 tests в трёх suites, typecheck, lint,
+ESM/declaration build и форматирование. Покрыты все пять режимов, null, независимость
+renderer type и checked, preservation других полей, snapshot identity, реактивный hook,
+missing/destroyed nodes и отказ host без оптимистичной записи.
+
+На 5 и 2000 узлах смена listType даёт одно адресное уведомление и два чтения целевого
+узла (проверка доступности и проверка getter), без чтения roots/соседей. Соседние snapshots
+и все кешированные объекты сохраняют identity. Существующие rendering cost checks также
+прошли. Это детерминированная проверка стоимости команды, не browser latency.
+
+Production host, CSS, shortcuts, clipboard и виртуализация этим шагом не изменялись.
+До интеграции browser numbering, Enter, undo и clipboard в page/edgeless остаются
+непроверенными для нового API; реальный demo пока не использует автономный компонент.
+
+## 18. Выполнено: автономное browser demo внутри пакета
+
+Дата: 2026-10-20. `packages/rivto-page/demo` использует публичный entry пакета напрямую
+из исходников, свой in-memory DemoAdapter и concrete renderer с обычным textarea.
+Production ReactEditor/EditorPanel и canonical model не подключаются. В `src` не
+добавлялись demo-функции и глобальные debug-ссылки. Vite установлен через CLI только
+как devDependency; manifest/lockfile и команды запуска обновлены через CLI.
+
+[Инструкции запуска и scope](../packages/rivto-page/demo/README.md):
+`pnpm --filter @chulane/rivto-page demo`, localhost:5184; `?repeat=200` создаёт
+1000 roots и 200 children без виртуализации. Custom renderer для каждого пятого корня
+можно включить/отключить, переставить корни, изменить поля/текст, выделить блок и
+перемонтировать BlockEditor. Данные переживают remount, но не перезагрузку страницы.
+Индикатор сравнивает объект узла с первым объектом текущего renderer lifetime.
+
+Маркер списка и скрытие children пока не реализованы: controls демонстрируют состояние
+и команды API, а не завершённое list/collapse поведение. Checkbox виден для любого режима,
+что позволяет отдельно проверить независимость checked и listType. UI явно обозначает
+этот scope; textarea не объявляется production rich-text editor.
+
+DemoAdapter сохраняет immutable snapshots, child-array identity и адресные подписки.
+Toolbar statistics обновляется по кнопке в отдельном компоненте, чтобы чтение/сброс
+счётчиков не рендерили всё дерево. commandMs охватывает запись и синхронные уведомления,
+без последующего React commit. История, CRDT и transactions здесь не эмулируются.
+
+### Browser verification
+
+Vite 7.3.6 production build, serial performance runs без параллельных builds/tests.
+Новый demo не существовал до шага, поэтому before/after browser baseline отсутствует;
+сравниваются размеры одного и того же fixture, а deterministic package tests сохранены.
+
+- 24 package Jest tests прошли, включая ограничения rendering на 5/2000 nodes.
+- Package/demo typecheck, lint без warnings, package build и demo production build прошли.
+- Chromium/Firefox behavior: четыре сценария суммарно прошли с `--workers=12` (четыре
+  доступных задания). Проверены все list modes, checked/collapsed/color, snapshot/DOM,
+  text, root order, selection, dynamic renderer, node identity, remount и subscriptions=0
+  после unmount. Serial rerun не требовался: behavioral failures отсутствуют.
+- Chromium/Firefox performance: четыре сценария суммарно прошли с `--workers=1`.
+  После прогрева настоящий select менялся клавишами ArrowDown/Home, пять samples на
+  размер/браузер; проверялось ожидаемое состояние, а не только время.
+- Во всех samples: 17 node reads, два адресных уведомления, root reads=0 и неизменные
+  объекты узлов; лимит regression test — 24 чтения, независимо от размера документа.
+
+| Browser  | Roots + children | Command median / range, ms | Change → 2 RAF median / range, ms |
+| -------- | ---------------- | -------------------------- | --------------------------------- |
+| Chromium | 5 + 1            | 0 / 0–0.10                 | 23.2 / 22.8–23.9                  |
+| Chromium | 1000 + 200       | 0 / 0–0.10                 | 9.3 / 9.1–55.6                    |
+| Firefox  | 5 + 1            | 0 / 0–1                    | 21 / 19–27                        |
+| Firefox  | 1000 + 200       | 0 / 0–1                    | 3 / 3–34                          |
+
+Нулевые samples означают предел разрешения browser clock, а не отсутствие работы.
+Два RAF — proxy обновления, чувствительный к фазе кадров; меньшая медиана большого
+fixture не доказывает ускорение большого документа. Это не время открытия native dropdown,
+не startup measurement и не бюджет для production editor. Единственная проверенная
+граница масштабирования здесь — постоянное число addressed reads/notifications.
+
+Первый sandbox-запуск Playwright остановился до тестов: локальный listen запрещён EPERM.
+Повторный запуск с разрешением localhost прошёл; ошибок приложения в этих результатах нет.
+Production page/edgeless, numbered marker layout, rich-text selection, clipboard и undo
+всё ещё требуют отдельного подключения и проверок.
+
+## 19. Исправлено: color означает фон блока
+
+Дата: 2026-10-20. По уточнению пользователя удалена ошибочная семантика цвета текста.
+Текущие контракты, примеры и предыдущие разделы приведены к `color` / `setColor`.
+Поле обозначает явный цвет фона блока, не форматирование его текста.
+
+Анализ оригинала: `block-handle/colors.tsx` регистрирует listProps.backgroundColor и
+палитру gray/red/orange/yellow/green/blue/purple с пустым default. Выбор Default удаляет
+локальное поле; batch изменяет только явно выбранные block IDs, не переписывая потомков.
+BlockView отражает токен в data-block-background, а CSS применяет theme palette.
+
+В независимом Page snapshot/patch используется `color`, объект узла предоставляет
+getter color и setColor(token | null). Null снимает override, пропущенное поле patch
+сохраняет фон. Будущий production adapter преобразует это к listProps.backgroundColor
+и его удалению; canonical shape и imports в Page не добавляются. Токен остаётся строкой,
+его допустимые значения проверяет host, а визуальное значение определяет тема.
+
+Block shell отражает color через существующий DOM-контракт data-block-background.
+Package-local demo показывает тот же фон через собственные theme variables палитры
+оригинала, включая все семь токенов и сброс. Цвет текста не меняется. Demo renderer
+не подменяет значение фона CSS-именем насыщенного цвета: используется theme token
+с исходным 18% смешиванием на светлом фоне. Production CSS по-прежнему не импортируется.
+
+Регрессия воспроизведена в Chromium до исправления: новый тест цвета фона упал и
+с workers=12, и при обязательном workers=1 rerun, поскольку фон оставался белым.
+После исправления проверяется смена каждого токена, неизменность текста и дочернего
+фона, Default, snapshot/patch, shell marker и стабильный объект узла. На 5/2000 cached
+nodes команда не читает roots/соседей, отдаёт одно адресное уведомление тестовому consumer.
+
+26 Jest tests прошли; package/demo typecheck, lint без warnings и обе сборки прошли.
+Итоговая production-сборка прошла шесть behavior scenarios Chromium/Firefox с
+workers=12; исправленных behavioral failures нет. Старые aliases и пути записи цвета
+текста в исходниках/экспортах Page удалены. Производственный host и сохранённые данные
+оригинального редактора этим шагом не менялись.
+
+Последовательный performance-run итоговой Vite production-сборки: восемь scenarios
+Chromium/Firefox (list type + background, repeat=1/200) прошли с workers=1.
+Смена фона реальными ArrowDown после прогрева: пять samples на размер/браузер;
+в каждом 17 node reads, два уведомления, root reads=0 и стабильная identity узлов.
+
+| Browser  | Roots + children | Background command median / range, ms | Change → 2 RAF median / range, ms |
+| -------- | ---------------- | ------------------------------------- | --------------------------------- |
+| Chromium | 5 + 1            | 0.10 / 0–0.20                         | 24.4 / 21.5–25.7                  |
+| Chromium | 1000 + 200       | 0 / 0–0.10                            | 62.0 / 10.0–62.7                  |
+| Firefox  | 5 + 1            | 0 / 0–0                               | 21 / 19–31                        |
+| Firefox  | 1000 + 200       | 0 / 0–1                               | 38 / 4–41                         |
+
+Время включает browser rendering большого невиртуализированного demo; proxy двух RAF
+не является гарантией полного завершения layout и не обещает постоянную latency при
+постоянном числе reads. До исправления измеряемая функция не давала правильного фона,
+поэтому сравнение before/after latency не используется как доказательство ускорения.
+Ограничения реальной production-интеграции из предыдущих разделов остаются в силе.

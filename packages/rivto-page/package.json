@@ -10,9 +10,15 @@
     "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
     "dev": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch",
     "check-types": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src demo",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "test": "../../scripts/run-test.sh --runInBand"
+    "test": "../../scripts/run-test.sh --runInBand",
+    "demo": "vite demo --host 127.0.0.1 --port 5184 --strictPort",
+    "demo:build": "tsc --project demo/tsconfig.json --noEmit && vite build demo",
+    "demo:preview": "vite preview demo --host 127.0.0.1 --port 5184 --strictPort",
+    "demo:check": "tsc --project demo/tsconfig.json --noEmit",
+    "demo:test": "playwright test --config demo/playwright.config.ts --grep-invert @performance --workers=12",
+    "demo:performance": "playwright test --config demo/playwright.config.ts --grep @performance --workers=1"
   },
   "files": [
     "dist/esm"
@@ -34,7 +40,8 @@
     "react-dom": "^19.2.7",
     "ts-jest": "^29.4.11",
     "tsup": "^8.5.1",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "vite": "^7.3.6"
   },
   "peerDependencies": {
     "react": ">=18 <20",

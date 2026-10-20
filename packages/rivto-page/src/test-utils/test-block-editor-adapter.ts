@@ -1,12 +1,13 @@
 import type {
   BlockEditorAdapter,
-  BlockEditorNode,
+  BlockEditorNodePatch,
+  BlockEditorNodeSnapshot,
   BlockEditorRegionSnapshot,
   BlockRenderer,
 } from "../adapter/types";
 
 /** Host-specific text data, deliberately outside the structural Page contract. */
-interface TestBlockNode extends BlockEditorNode {
+interface TestBlockNode extends BlockEditorNodeSnapshot {
   /** Text read by the fixture renderer from its own host data. */
   readonly content: string;
 }
@@ -53,6 +54,26 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
     subscribeBlockNode: jest.fn((id: string, listener: () => void) =>
       this.subscribe(`node:${id}`, listener),
     ),
+    /**
+     * Applies limited presentation fields to the fixture host's current snapshot.
+     *
+     * @param id - Existing fixture identity.
+     * @param patch - New values; omitted fields retain their current values.
+     * @returns A replacement snapshot has been published to addressed consumers.
+     * @throws If the node has disappeared before the write.
+     */
+    updateBlockNode: jest.fn((id: string, patch: BlockEditorNodePatch) => {
+      const node = this.nodes.get(id);
+      if (!node) {
+        throw new Error(`Block ${id} is unavailable`);
+      }
+      this.setNode(id, {
+        listType: patch.listType === null ? undefined : (patch.listType ?? node.listType),
+        checked: patch.checked ?? node.checked,
+        collapsed: patch.collapsed ?? node.collapsed,
+        color: patch.color === null ? undefined : (patch.color ?? node.color),
+      });
+    }),
   };
 
   readonly selection = {
