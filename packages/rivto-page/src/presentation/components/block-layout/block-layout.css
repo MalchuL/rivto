@@ -1,0 +1,29 @@
+.rivto-block-row {
+  @apply page:relative page:flex page:items-start page:gap-[var(--rivto-slot-gap,4px)] page:min-h-[var(--rivto-default-block-height,24px)] page:p-[var(--rivto-block-padding,16px)];
+}
+.rivto-block-content {
+  @apply page:flex-1 page:min-w-0;
+}
+.rivto-block-children {
+  @apply page:flex page:flex-col page:gap-[var(--rivto-block-children-gap,12px)];
+}
+.rivto-block-children[hidden] {
+  @apply page:hidden;
+}
+
+/* Outline geometry is opt-in; container layouts use the same child host freely. */
+.rivto-block-outline:not(:empty) {
+  @apply page:pbs-[var(--rivto-block-children-gap,12px)] page:ms-[var(--rivto-block-indent,28px)];
+}
+.rivto-block-outline:empty {
+  @apply page:hidden;
+}
+
+.rivto-block-item {
+  @apply page:relative page:min-w-0 page:box-border;
+}
+
+/* Gap wrappers preserve canonical sibling adjacency without adding layout boxes. */
+.rivto-block-list-gap {
+  display: contents;
+}

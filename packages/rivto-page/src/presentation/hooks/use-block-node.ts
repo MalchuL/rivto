@@ -1,4 +1,4 @@
-import type { BlockEditorNode } from "../../editor/blocks/block-editor-node";
+import type { BlockEditorNodeApi } from "../../editor/blocks/block-editor-node-api";
 import { useCallback, useSyncExternalStore } from "react";
 import { useBlockEditorController } from "./use-block-editor-controller";
 
@@ -9,12 +9,13 @@ import { useBlockEditorController } from "./use-block-editor-controller";
  * Read its getters or getSnapshot during rendering and invoke its commands for writes.
  * Descendants remain addressed separately rather than materialized into a subtree.
  *
- * @param blockId - Stable identity within the current adapter's region.
- * @returns Cached node, including for missing IDs whose getSnapshot returns undefined.
+ * @param blockId - Stable identity within the current adapter.
+ * @returns Cached borrowed node API without destruction, including for missing IDs
+ * whose getSnapshot returns undefined. The controller retains the same object for teardown.
  * @throws If called outside BlockEditor, its controller is destroyed, or delegated
  * reads/subscriptions fail.
  */
-export function useBlockNode(blockId: string): BlockEditorNode {
+export function useBlockNode(blockId: string): BlockEditorNodeApi {
   const node = useBlockEditorController().getNode(blockId);
   const subscribe = useCallback((listener: () => void) => node.subscribe(listener), [node]);
   const getSnapshot = useCallback(() => node.getSnapshot(), [node]);

@@ -1,13 +1,24 @@
 import { createContext, useContext, useRef } from "react";
-import { useBlockNode, type BlockEditorNode, type BlockRendererProps } from "../src";
-import { BACKGROUND_COLORS, DemoAdapter, LIST_TYPES } from "./demo-adapter";
+import {
+  useBlockNode,
+  type BlockEditorNodeApi,
+  type BlockRendererProps,
+  type BlockSlotProps,
+} from "../src";
+import { Badge } from "../src/presentation/components/ui/badge";
+import { Button } from "../src/presentation/components/ui/button";
+import { Checkbox } from "../src/presentation/components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "../src/presentation/components/ui/native-select";
+import { Textarea } from "../src/presentation/components/ui/textarea";
+import type { DemoAdapter } from "./demo-adapter";
+import { BACKGROUND_COLORS, LIST_TYPES } from "./constants";
 
 /** Concrete demo renderers borrow their host outside Page's bounded context. */
 export const DemoAdapterContext = createContext<DemoAdapter | null>(null);
 
 /** Borrowed node whose parent renderer already subscribes to its snapshot. */
 interface DemoControlsProps {
-  readonly node: BlockEditorNode;
+  readonly node: BlockEditorNodeApi;
 }
 
 /**
@@ -21,67 +32,70 @@ function DemoListType({ node }: DemoControlsProps) {
   return (
     <label>
       List type
-      <select
+      <NativeSelect
         value={node.listType ?? ""}
         aria-label={`List type ${node.id}`}
         onChange={(event) =>
           node.setListType(LIST_TYPES.find((type) => type === event.target.value) ?? null)
         }
       >
-        <option value="">Без списка</option>
+        <NativeSelectOption value="">No list</NativeSelectOption>
         {LIST_TYPES.map((type) => (
-          <option key={type} value={type}>
+          <NativeSelectOption key={type} value={type}>
             {type}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
 
 /**
- * Renders native controls for the node commands currently exported by Page.
+ * Renders shadcn controls for the node commands currently exported by Page.
  *
  * @param props - Node borrowed from the subscribed concrete renderer.
  * @param props.node - Live getters and commands; identity stays stable until editor destruction.
  * @returns List, checked, collapsed, and color controls without adding editor behavior.
  */
 function DemoControls({ node }: DemoControlsProps) {
+  const background = node.color;
   return (
     <div className="demo-controls">
       <DemoListType node={node} />
       <label>
-        <input
-          type="checkbox"
+        Background
+        <NativeSelect
+          value={BACKGROUND_COLORS.find((color) => color.value === background)?.name ?? ""}
+          aria-label={`Background ${node.id}`}
+          onChange={(event) =>
+            node.setColor(
+              BACKGROUND_COLORS.find((color) => color.name === event.target.value)?.value ?? null,
+            )
+          }
+        >
+          <NativeSelectOption value="">Default</NativeSelectOption>
+          {BACKGROUND_COLORS.map((color) => (
+            <NativeSelectOption key={color.name} value={color.name}>
+              {color.name}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </label>
+      <label>
+        <Checkbox
           checked={node.checked ?? false}
           aria-label={`Checked ${node.id}`}
-          onChange={(event) => node.setChecked(event.target.checked)}
+          onCheckedChange={(checked) => node.setChecked(checked === true)}
         />
         Checked
       </label>
       <label>
-        <input
-          type="checkbox"
+        <Checkbox
           checked={node.collapsed ?? false}
           aria-label={`Collapsed ${node.id}`}
-          onChange={(event) => node.setCollapsed(event.target.checked)}
+          onCheckedChange={(checked) => node.setCollapsed(checked === true)}
         />
         Collapsed
-      </label>
-      <label>
-        Фон
-        <select
-          value={node.color ?? ""}
-          aria-label={`Фон ${node.id}`}
-          onChange={(event) => node.setColor(event.target.value || null)}
-        >
-          <option value="">По умолчанию</option>
-          {BACKGROUND_COLORS.map((color) => (
-            <option key={color} value={color}>
-              {color}
-            </option>
-          ))}
-        </select>
       </label>
     </div>
   );
@@ -91,7 +105,7 @@ function DemoControls({ node }: DemoControlsProps) {
  * Renders demo-owned text and exposes live node fields for manual verification.
  *
  * Text is a plain textarea owned by the example host, not the production rich-text
- * editor. Controls exercise commands; list markers and child collapse are not implemented here.
+ * editor. Controls exercise commands; structural slots provide list markers and child collapse.
  *
  * @param props - Standard content renderer inputs from Page.
  * @param props.blockId - Stable ID inside the demo fixture.
@@ -107,30 +121,37 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
     throw new Error("DemoBlock requires DemoAdapterContext");
   }
   return (
-    <article
-      className="demo-node"
-      style={{ backgroundColor: color ? `var(--rivto-block-${color})` : undefined }}
-    >
+    <article className="demo-node">
       <header>
-        <strong>{blockId}</strong>
-        <button onClick={() => adapter.select(blockId)}>Выделить {blockId}</button>
+        <div className="demo-node-heading">
+          <span>Text block</span>
+          <strong>{blockId}</strong>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`Select ${blockId}`}
+          onClick={() => adapter.select(blockId)}
+        >
+          Select
+        </Button>
       </header>
-      <textarea
-        aria-label={`Текст ${blockId}`}
+      <Textarea
+        aria-label={`Text ${blockId}`}
         value={adapter.getText(blockId)}
         onChange={(event) => adapter.setText(blockId, event.target.value)}
       />
       <DemoControls node={node} />
-      <output aria-label={`Состояние ${blockId}`}>
+      <output aria-label={`State ${blockId}`}>
         {JSON.stringify({
           listType: node.listType ?? null,
           checked: node.checked ?? null,
           collapsed: node.collapsed ?? null,
-          color: node.color ?? null,
+          color: color ?? null,
         })}
       </output>
       <small data-node-identity={original.current === node ? "stable" : "changed"}>
-        Объект узла: {original.current === node ? "переиспользуется" : "заменён"}
+        Node object: {original.current === node ? "reused" : "replaced"}
       </small>
     </article>
   );
@@ -146,8 +167,24 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
 export function DemoCustomBlock({ blockId }: BlockRendererProps) {
   return (
     <aside className="demo-custom">
-      <strong>Динамический renderer</strong>
+      <strong>Dynamic renderer</strong>
       <DemoBlock blockId={blockId} />
     </aside>
+  );
+}
+
+/**
+ * Displays current selection through a dynamically installed bounded slot context.
+ *
+ * @param props - Current structural owner, without access to the whole editor.
+ * @param props.block - Owner whose ID labels the badge.
+ * @param props.selected - Current whole-block selection membership.
+ * @returns An end-slot badge reflecting updates without subscribing separately.
+ */
+export function DemoSlot({ block, selected }: BlockSlotProps) {
+  return (
+    <Badge variant="secondary" data-demo-slot={block.id}>
+      {selected ? "Selected" : "Slot"}
+    </Badge>
   );
 }

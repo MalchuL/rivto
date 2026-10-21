@@ -1,0 +1,11 @@
+/* Gaps are real configurable hit areas; they do not consume pointer events elsewhere. */
+.rivto-block-drop-gap {
+  @apply page:relative page:box-border page:shrink-0;
+  flex-basis: var(--rivto-drop-gap-size, 8px);
+  min-height: var(--rivto-drop-gap-size, 8px);
+}
+.rivto-block-drop-gap[data-drop-axis="horizontal"] {
+  min-width: var(--rivto-drop-gap-size, 8px);
+  min-height: var(--rivto-drop-min-height, 32px);
+  align-self: stretch;
+}

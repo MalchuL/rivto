@@ -1,36 +1,84 @@
+import { BlockWrapperRegistry } from "../presentation/components/block-wrapper/block-wrapper-registry";
+import { BlockDropTargets } from "./drag-and-drop/block-drop-targets";
+import type { BlockEditorApi } from "./block-editor-api";
+import type { BlockRenderer } from "../presentation/renderers/types";
+import { BlockEditorExtensions } from "./extensions/block-editor-extensions";
+import { BlockEditorEvents } from "./events/block-editor-events";
+import { BlockSlotRegistry } from "../presentation/slots/block-slot-registry";
+import { BlockRendererRegistry } from "../presentation/renderers/block-renderer-registry";
 import type { BlockEditorAdapter } from "../adapter/types";
+import type { BlockEditorNodeApi } from "./blocks/block-editor-node-api";
 import { BlockEditorNode } from "./blocks/block-editor-node";
 
 /** Identity token for one mounted root, independent of later attachments. */
 interface BlockEditorAttachment {
   readonly root: HTMLElement;
+  /** Releases native event listeners installed for this exact attachment. */
+  readonly detachEvents: () => void;
 }
 
-/** Owns the DOM attachment of one block editor without owning its adapter. */
-export class BlockEditorController {
+/** Data source borrowed by one independently configurable block editor instance. */
+export interface BlockEditorOptions {
+  /** Stable data adapter; its lifetime and document resources remain with the host. */
+  readonly adapter: BlockEditorAdapter;
+  /** Content component for unregistered types; omission leaves their content area empty. */
+  readonly fallbackRenderer?: BlockRenderer;
+}
+
+/** Owns block nodes, feature registrations, and one replaceable DOM attachment. */
+export class BlockEditorController implements BlockEditorApi {
+  /** Borrowed data access and host selection; this editor never destroys the adapter. */
+  readonly adapter: BlockEditorAdapter;
+  /** Feature setup and cleanup ownership, independent of view attachment. */
+  readonly extensions: BlockEditorExtensions;
+  /** Editor-owned presentation contributions with stable registration identities. */
+  readonly slots: BlockSlotRegistry;
+  /** Live host-supplied content components, separate from persisted block definitions. */
+  readonly renderers: BlockRendererRegistry;
+  /** Ordered host decorators retained independently of view attachment and DnD placement. */
+  readonly wrappers: BlockWrapperRegistry;
+  /** Observers of focus crossing the attached editor subtree. */
+  readonly events: BlockEditorEvents;
+  /** Explicit mounted regions and geometry-only destination lookup. */
+  readonly dropTargets: BlockDropTargets;
+  /** Current DOM root and its focus-listener cleanup; undefined while detached. Identity prevents stale disposers from detaching a newer root. */
   private attachment: BlockEditorAttachment | undefined;
+  /** Permanent lifecycle flag set when destruction begins; rejects later attachment and node lookup, independently of view detachment. */
   private destroyed = false;
   // shortcut: Retain visited IDs for this controller lifetime; add idle eviction if long-session churn warrants it.
   private readonly nodes = new Map<string, BlockEditorNode>();
 
   /**
-   * Retains the limited capabilities of one region without subscribing or attaching DOM.
+   * Creates editor-owned managers without reading data, subscribing, or attaching DOM.
    *
-   * @param adapter - Borrowed live data and presentation sources for this occurrence.
+   * The host creates this instance outside React rendering and destroys it when
+   * its editing session ends. Views borrow it; unmounting a view only detaches DOM.
+   *
+   * @param options - Borrowed data adapter for this independently configured instance.
+   * @param options.adapter - Live data source retained without taking ownership.
+   * @param options.fallbackRenderer - Stable content component for unregistered types, if supplied.
    */
-  constructor(readonly adapter: BlockEditorAdapter) {}
+  constructor({ adapter, fallbackRenderer }: BlockEditorOptions) {
+    this.adapter = adapter;
+    this.extensions = new BlockEditorExtensions(this);
+    this.slots = new BlockSlotRegistry(this.extensions);
+    this.renderers = new BlockRendererRegistry(this.extensions, fallbackRenderer);
+    this.wrappers = new BlockWrapperRegistry(this.extensions);
+    this.events = new BlockEditorEvents(this.extensions);
+    this.dropTargets = new BlockDropTargets(this.extensions, adapter.blocks, () => this.getRoot());
+  }
 
   /**
    * Reuses one live object per requested ID without reading or copying host snapshots.
    *
    * Missing IDs still receive objects so consumers can observe later restoration.
-   * Updates, selection, root reordering, and detach/attach retain the same objects.
+   * Updates, selection, display-list reordering, and detach/attach retain the same objects.
    *
    * @param blockId - Stable identity inside this controller's adapter occurrence.
    * @returns Cached node owned by this controller and borrowed by the caller.
    * @throws If this controller has been destroyed.
    */
-  getNode(blockId: string): BlockEditorNode {
+  getNode(blockId: string): BlockEditorNodeApi {
     if (this.destroyed) {
       throw new Error("BlockEditorController is destroyed");
     }
@@ -46,11 +94,14 @@ export class BlockEditorController {
    * Connects one committed block editor root to this controller.
    *
    * Detach permits a later attachment; an old disposer cannot clear a newer one.
-   * This rendering slice installs no input handlers or host registrations.
+   * Focus listeners belong to this attachment. Registrations and nodes survive
+   * detach/attach; input commands and host data are not created by attachment.
+   * After publishing the root, attachment reports focus already inside it (such
+   * as autoFocus during React commit). Observer failure rolls back the attachment.
    *
    * @param root - Mounted root owned by this block editor occurrence.
    * @returns Idempotent disposer detaching only this attachment.
-   * @throws If destroyed or another root is still attached.
+   * @throws If destroyed, another root is still attached, or initial focus observers fail.
    */
   attach(root: HTMLElement): () => void {
     if (this.destroyed) {
@@ -59,10 +110,18 @@ export class BlockEditorController {
     if (this.attachment) {
       throw new Error("BlockEditorController already has an attached root");
     }
-    const attachment = { root };
+    const attachment = { root, detachEvents: this.events.attach(root) };
     this.attachment = attachment;
+    try {
+      this.events.notifyInitialFocus(root);
+    } catch (error) {
+      this.attachment = undefined;
+      attachment.detachEvents();
+      throw error;
+    }
     return () => {
       if (this.attachment === attachment) {
+        attachment.detachEvents();
         this.attachment = undefined;
       }
     };
@@ -78,16 +137,28 @@ export class BlockEditorController {
   }
 
   /**
-   * Permanently detaches this controller and releases owned nodes without destroying the adapter.
+   * Permanently detaches this editor and releases extensions, registrations, and nodes.
    *
    * @returns Attachment and node cache are cleared and later attach/getNode calls are
-   * rejected; every node cleanup is attempted and repeated destruction is safe.
-   * @throws AggregateError when one or more node cleanups fail.
+   * rejected; every cleanup is attempted and repeated destruction is safe. The
+   * host adapter and document are not destroyed. Unmount the view before ending
+   * the editing session; React owns removal of rendered DOM.
+   * @throws If called during extension setup, or AggregateError when cleanups fail.
    */
   destroy(): void {
+    this.extensions.assertCanDestroy();
+    if (this.destroyed) {
+      return;
+    }
     this.destroyed = true;
+    this.attachment?.detachEvents();
     this.attachment = undefined;
     const errors: unknown[] = [];
+    try {
+      this.extensions.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
     for (const node of this.nodes.values()) {
       try {
         node.destroy();
@@ -97,7 +168,7 @@ export class BlockEditorController {
     }
     this.nodes.clear();
     if (errors.length) {
-      throw new AggregateError(errors, "Failed to destroy block editor nodes");
+      throw new AggregateError(errors, "Failed to destroy block editor resources");
     }
   }
 }

@@ -2,8 +2,6 @@ import type {
   BlockEditorAdapter,
   BlockEditorNodePatch,
   BlockEditorNodeSnapshot,
-  BlockEditorRegionSnapshot,
-  BlockRenderer,
 } from "../adapter/types";
 
 /** Host-specific text data, deliberately outside the structural Page contract. */
@@ -15,30 +13,26 @@ interface TestBlockNode extends BlockEditorNodeSnapshot {
 /** In-memory addressed sources for autonomous rendering and notification-cost tests. */
 export class TestBlockEditorAdapter implements BlockEditorAdapter {
   readonly nodes = new Map<string, TestBlockNode>();
-  private snapshot: BlockEditorRegionSnapshot = { status: "available", blockIds: [] };
+  private blockIds: readonly string[] = [];
   private selected = new Set<string>();
-  private readonly components = new Map<string, BlockRenderer>();
   private readonly listeners = new Map<string, Set<() => void>>();
-
-  readonly region = {
-    /**
-     * Reads the cached fixture boundary without allocating another snapshot.
-     *
-     * @returns Current availability and root IDs.
-     */
-    getSnapshot: jest.fn(() => this.snapshot),
-    /**
-     * Observes fixture boundary changes independently of node changes.
-     *
-     * @param listener - Callback notified after the region snapshot changes.
-     * @returns Disposer removing this subscription.
-     */
-    subscribe: jest.fn((listener: () => void) => this.subscribe("region", listener)),
-  };
 
   readonly blocks = {
     /**
-     * Reads one cached node without reading descendants or roots.
+     * Reads the cached fixture boundary without allocating another snapshot.
+     *
+     * @returns Current host-selected display IDs.
+     */
+    getBlockIds: jest.fn(() => this.blockIds),
+    /**
+     * Observes fixture boundary changes independently of node changes.
+     *
+     * @param listener - Callback notified after the display list changes.
+     * @returns Disposer removing this subscription.
+     */
+    subscribeBlockIds: jest.fn((listener: () => void) => this.subscribe("block-ids", listener)),
+    /**
+     * Reads one cached node without reading descendants or the display list.
      *
      * @param id - Fixture node identity.
      * @returns Node or undefined when absent.
@@ -96,42 +90,24 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
     ),
   };
 
-  readonly renderers = {
-    /**
-     * Reads the component identity retained for one type.
-     *
-     * @param type - Fixture block type.
-     * @returns Its component or undefined when unregistered.
-     */
-    get: jest.fn((type: string) => this.components.get(type)),
-    /**
-     * Observes component installation and removal.
-     *
-     * @param listener - Callback that rereads renderer lookup results.
-     * @returns Disposer removing this subscription.
-     */
-    subscribe: jest.fn((listener: () => void) => this.subscribe("renderers", listener)),
-  };
-
   /**
    * Counts all currently retained subscriptions, including repeated source kinds.
    *
-   * @returns Active listeners across region, nodes, selection, and renderer sources.
+   * @returns Active listeners across display-list, nodes, and selection sources.
    */
   get subscriberCount(): number {
     return [...this.listeners.values()].reduce((count, listeners) => count + listeners.size, 0);
   }
 
   /**
-   * Replaces the region boundary and synchronously notifies its consumers.
+   * Replaces the displayed block list and synchronously notifies its consumers.
    *
-   * @param blockIds - Ordered fixture roots.
-   * @param status - Availability of their owning region; defaults to available.
-   * @returns The new region snapshot has been published.
+   * @param blockIds - Ordered fixture display IDs.
+   * @returns The new display list has been published.
    */
-  setRoots(blockIds: readonly string[], status: "available" | "missing" = "available"): void {
-    this.snapshot = { status, blockIds };
-    this.emit("region");
+  setBlockIds(blockIds: readonly string[]): void {
+    this.blockIds = blockIds;
+    this.emit("block-ids");
   }
 
   /**
@@ -154,7 +130,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
   }
 
   /**
-   * Deletes a node and notifies its consumers without changing the root source.
+   * Deletes a node and notifies its consumers without changing the display list.
    *
    * @param id - Fixture node to remove.
    * @returns The missing snapshot has been published to this node's listeners.
@@ -178,22 +154,6 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
         this.emit(`selection:${id}`);
       }
     }
-  }
-
-  /**
-   * Installs or removes a content component and publishes a registry change.
-   *
-   * @param type - Fixture block type to modify.
-   * @param renderer - Component to install; undefined removes it.
-   * @returns Renderer lookup consumers have been notified of the new state.
-   */
-  setRenderer(type: string, renderer: BlockRenderer | undefined): void {
-    if (renderer) {
-      this.components.set(type, renderer);
-    } else {
-      this.components.delete(type);
-    }
-    this.emit("renderers");
   }
 
   /**

@@ -1,0 +1,18 @@
+/* Compile utilities inside the package; consumers import the finished stylesheet.
+ * The page prefix isolates utilities/tokens from the containing application's Tailwind.
+ * Preflight is omitted: only our shadcn primitives receive the scoped reset below. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(page);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(page) source(none);
+@import "./theme.css";
+@import "./components/ui/ui.css" layer(base);
+@import "./components/block-editor/block-editor.css" layer(components);
+@import "./components/block-layout/block-layout.css" layer(components);
+@import "./drag-and-drop/block-drop-wrapper.css" layer(components);
+@import "./components/block-layout/block-view.css" layer(components);
+@import "./slots/block-slots.css" layer(components);
+@import "./slots/block-controls.css" layer(components);
+@import "./drag-and-drop/drag-and-drop.css" layer(components);
+
+@source "../";
+@custom-variant dark (&:is(.dark *));

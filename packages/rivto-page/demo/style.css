@@ -1,108 +1,129 @@
-:root {
-  font-family: system-ui, sans-serif;
-  color: #172033;
-  background: #f5f7fb;
-  --rivto-background: white;
-  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
-  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
-  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
-  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
-  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
-  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
-  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
-}
+/* Demo chrome and example forms only; package geometry is compiled independently. */
+@reference "../src/presentation/styles.css";
 
+:root {
+  @apply page:font-sans page:text-slate-800 page:bg-slate-100;
+}
 body {
-  margin: 0;
+  @apply page:m-0;
 }
-main {
-  max-width: 1050px;
-  margin: 40px auto;
-  padding: 0 20px;
+.demo-page {
+  @apply page:mx-auto page:my-10 page:max-w-[1180px] page:px-5 page:pb-12;
 }
-h1 {
-  margin-bottom: 8px;
+.demo-heading {
+  @apply page:mb-7;
 }
-p {
-  line-height: 1.6;
+.demo-eyebrow {
+  @apply page:text-xs page:font-semibold page:tracking-widest page:uppercase page:text-indigo-600;
 }
-nav,
-.demo-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+.demo-heading h1 {
+  @apply page:mt-4 page:mb-3 page:text-4xl page:font-semibold page:tracking-tight page:sm:text-5xl;
 }
-nav {
-  padding: 16px;
-  background: white;
-  border-radius: 10px;
+.demo-heading h1 span {
+  @apply page:mt-1 page:block page:text-slate-400;
 }
-button,
-select,
-textarea {
-  font: inherit;
+.demo-heading > p {
+  @apply page:m-0 page:text-sm page:leading-relaxed page:text-slate-600;
 }
-button,
-select {
-  padding: 6px;
+.demo-scope {
+  @apply page:mt-3 page:max-w-2xl page:text-xs page:leading-relaxed page:text-slate-600;
 }
-button,
-label,
-summary {
-  cursor: pointer;
+.demo-scope summary {
+  @apply page:w-fit page:cursor-pointer page:font-medium;
 }
-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.demo-scope p {
+  @apply page:mb-0;
 }
-details {
-  margin: 16px 0;
+nav[aria-label="Demo controls"] {
+  @apply page:flex page:flex-wrap page:items-center page:gap-3;
 }
-.demo-editor > [data-block-id] {
-  margin: 16px 0;
+nav[aria-label="Demo controls"] {
+  @apply page:mb-3 page:rounded-xl page:border page:border-solid page:border-slate-200 page:bg-white page:p-4 page:shadow-xs;
 }
-.demo-editor [data-block-id] > [data-block-id] {
-  margin: 12px 0 0 28px;
+:is(nav[aria-label="Demo controls"], .demo-node, .demo-inspector) label,
+.demo-density {
+  @apply page:inline-flex page:cursor-pointer page:items-center page:gap-2 page:text-xs page:font-medium page:text-slate-600;
 }
-.demo-node {
-  padding: 16px;
-  background: white;
-  border: 1px solid #dce2ec;
-  border-radius: 10px;
+.demo-examples {
+  @apply page:flex page:basis-full page:flex-wrap page:items-center page:gap-2 page:border-0 page:border-t page:border-solid page:border-slate-100 page:pt-3;
+}
+.demo-examples > span {
+  @apply page:mr-2 page:text-[10px] page:font-semibold page:tracking-wider page:uppercase page:text-slate-500;
+}
+.demo-examples a {
+  @apply page:rounded-md page:bg-slate-100 page:px-3 page:py-2 page:text-xs page:font-medium page:text-slate-700 page:no-underline page:hover:bg-indigo-50 page:hover:text-indigo-700 page:focus-visible:outline-2 page:focus-visible:outline-indigo-600;
+}
+section[aria-label="Statistics"],
+.demo-inspector {
+  @apply page:my-2 page:flex page:flex-wrap page:items-center page:gap-2 page:rounded-lg page:border page:border-solid page:border-slate-200 page:bg-white page:px-3 page:py-2 page:text-xs page:text-slate-600;
+}
+section[aria-label="Statistics"] details {
+  @apply page:ml-auto;
+}
+section[aria-label="Statistics"] summary {
+  @apply page:cursor-pointer page:font-medium;
+}
+section[aria-label="Statistics"] pre {
+  @apply page:overflow-x-auto page:rounded-md page:bg-slate-50 page:p-3 page:text-xs;
+}
+.demo-inspector output {
+  @apply page:min-w-0 page:font-mono page:text-[10px] page:wrap-anywhere page:text-slate-500;
+}
+.demo-density {
+  @apply page:mt-2 page:mb-4;
 }
 .demo-node header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply page:flex page:items-center page:justify-between page:gap-3;
+}
+.demo-node-heading {
+  @apply page:min-w-0;
+}
+.demo-node-heading span {
+  @apply page:mb-1 page:block page:text-[10px] page:font-semibold page:tracking-widest page:uppercase page:text-slate-500;
+}
+.demo-node-heading strong {
+  @apply page:block page:font-mono page:text-xs page:font-medium page:wrap-anywhere page:text-slate-700;
+}
+.demo-node header button {
+  @apply page:h-7 page:shrink-0 page:border-slate-200 page:px-2 page:text-[11px] page:text-slate-600 page:shadow-none;
 }
 .demo-node textarea {
-  display: block;
-  width: 100%;
-  min-height: 60px;
-  box-sizing: border-box;
-  margin: 12px 0;
-  color: inherit;
+  @apply page:my-3 page:box-border page:min-h-20 page:w-full page:resize-y page:border-slate-200 page:bg-white/70 page:text-sm page:leading-relaxed page:shadow-none;
 }
-.demo-node output,
-.demo-node small {
-  display: block;
-  margin-top: 12px;
-  overflow-wrap: anywhere;
+.demo-controls {
+  @apply page:grid page:grid-cols-2 page:gap-x-3 page:gap-y-2;
+}
+.demo-controls label:has(select) {
+  @apply page:min-w-0 page:flex-col page:items-start page:gap-1 page:text-[10px] page:text-slate-500;
+}
+.demo-controls [data-slot="native-select-wrapper"] {
+  @apply page:w-full page:min-w-0;
+}
+.demo-controls select {
+  @apply page:h-8 page:border-slate-200 page:bg-white/70 page:pl-2 page:text-xs page:text-slate-700 page:shadow-none;
+}
+.demo-controls label:has(button) {
+  @apply page:py-1 page:text-[11px];
 }
 .demo-node output {
-  font-family: monospace;
+  @apply page:mt-3 page:block page:rounded-md page:bg-slate-100/70 page:p-2 page:font-mono page:text-[10px] page:leading-relaxed page:wrap-anywhere page:text-slate-600;
 }
-.demo-editor [data-block-selected="true"] > .demo-node {
-  outline: 2px solid #4868d8;
+.demo-node small {
+  @apply page:mt-2 page:block page:text-[10px] page:text-slate-500;
+}
+.demo-node small::before {
+  @apply page:mr-1.5 page:inline-block page:size-1.5 page:rounded-full page:bg-amber-500;
+  content: "";
+}
+.demo-node small[data-node-identity="stable"]::before {
+  @apply page:bg-emerald-500;
+}
+.demo-container-title {
+  @apply page:flex page:items-center page:gap-2 page:text-sm page:tracking-tight;
 }
 .demo-custom {
-  padding: 12px;
-  background: #e3eaff;
-  border-radius: 10px;
+  @apply page:rounded-lg page:bg-indigo-50 page:p-3;
 }
-:focus-visible {
-  outline: 2px solid #4868d8;
-  outline-offset: 3px;
+.demo-custom > strong {
+  @apply page:mb-3 page:block page:text-xs page:font-semibold page:text-indigo-700;
 }

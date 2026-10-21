@@ -1,0 +1,70 @@
+.rivto-block-slot [data-block-control] {
+  @apply page:box-border page:cursor-pointer page:w-[var(--rivto-block-control-size,20px)] page:h-[var(--rivto-block-control-size,20px)] page:p-0 page:m-0;
+}
+.rivto-block-slot [data-block-control]:focus-visible {
+  @apply page:outline-2 page:outline-solid page:outline-[color:var(--rivto-block-selection,#4868d8)];
+  @apply page:outline-offset-[3px];
+}
+.rivto-block-slot button[data-block-control] {
+  @apply page:inline-flex page:items-center page:justify-center page:font-[inherit] page:leading-none;
+}
+.rivto-block-list-marker {
+  @apply page:w-[var(--rivto-block-marker-width,24px)] page:text-end page:leading-[var(--rivto-default-block-height,24px)];
+}
+/* Each sibling group owns a counter. Ordinary gaps restart numbered_list,
+ * while continue_numbered_list retains the last value across a gap. */
+[data-rivto-block-editor],
+.rivto-block-children {
+  counter-reset: rivto-list-number;
+}
+:is(.rivto-block:not([data-block-in-item]), .rivto-block-item:not([data-block-in-item])):is(
+  [data-block-list-type="numbered_list"],
+  [data-block-list-type="start_numbered_list"],
+  [data-block-list-type="continue_numbered_list"]
+) {
+  counter-increment: rivto-list-number;
+}
+:is(
+  .rivto-block:not([data-block-in-item]),
+  .rivto-block-item:not([data-block-in-item])
+)[data-block-list-type="start_numbered_list"],
+:is(
+    .rivto-block:not([data-block-in-item]),
+    .rivto-block-item:not([data-block-in-item])
+  )[data-block-list-type="numbered_list"]:nth-child(
+    1 of :is(.rivto-block:not([data-block-in-item]), .rivto-block-item:not([data-block-in-item]))
+  ),
+:is(.rivto-block:not([data-block-in-item]), .rivto-block-item:not([data-block-in-item])):not(
+    :is(
+      [data-block-list-type="numbered_list"],
+      [data-block-list-type="start_numbered_list"],
+      [data-block-list-type="continue_numbered_list"]
+    )
+  )
+  + :is(
+    .rivto-block:not([data-block-in-item]),
+    .rivto-block-item:not([data-block-in-item])
+  )[data-block-list-type="numbered_list"],
+:is(.rivto-block:not([data-block-in-item]), .rivto-block-item:not([data-block-in-item])):not(
+    :is(
+      [data-block-list-type="numbered_list"],
+      [data-block-list-type="start_numbered_list"],
+      [data-block-list-type="continue_numbered_list"]
+    )
+  )
+  + .rivto-block-list-gap
+  + :is(
+    .rivto-block:not([data-block-in-item]),
+    .rivto-block-item:not([data-block-in-item])
+  )[data-block-list-type="numbered_list"] {
+  counter-set: rivto-list-number 1;
+  counter-increment: none;
+}
+/* An optional placement item owns its counter; its nested block must not count twice. */
+:is(.rivto-block, .rivto-block-item)[data-block-in-item] {
+  counter-set: none;
+  counter-increment: none;
+}
+.rivto-block-list-marker::before {
+  content: counter(rivto-list-number) ".";
+}

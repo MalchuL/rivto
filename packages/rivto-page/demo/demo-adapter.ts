@@ -1,78 +1,49 @@
-import type {
-  BlockEditorAdapter,
-  BlockEditorNodePatch,
-  BlockEditorNodeSnapshot,
-  BlockEditorRegionSnapshot,
-  BlockListType,
-  BlockRenderer,
-} from "../src";
-
-/** List choices used by the demo host; not a second package registry. */
-export const LIST_TYPES: readonly BlockListType[] = [
-  "list",
-  "checkbox",
-  "numbered_list",
-  "start_numbered_list",
-  "continue_numbered_list",
-];
-
-/** Original editor background tokens, implemented locally by the example host. */
-export const BACKGROUND_COLORS = [
-  "gray",
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-] as const;
+import { BACKGROUND_COLORS, LIST_TYPES } from "./constants";
+import type { BlockEditorAdapter, BlockEditorNodePatch, BlockEditorNodeSnapshot } from "../src";
 
 /** Demo-owned content alongside the structural fields consumed by Page. */
 interface DemoNodeSnapshot extends BlockEditorNodeSnapshot {
   readonly text: string;
+  readonly width?: number;
 }
 
 /** On-demand counters; reading them does not notify the editor. */
 export interface DemoMetrics {
   readonly nodeReads: number;
-  readonly rootReads: number;
+  readonly blockIdsReads: number;
   readonly notifications: number;
   readonly subscriptions: number;
   readonly commandMs: number;
 }
 
-/** In-memory example host; its snapshots and registrations outlive editor remounts. */
+/** In-memory example host; its snapshots outlive view remounts. */
 export class DemoAdapter implements BlockEditorAdapter {
   private readonly nodes = new Map<string, DemoNodeSnapshot>();
   private readonly listeners = new Map<string, Set<() => void>>();
-  private readonly renderersByType = new Map<string, BlockRenderer>();
-  private roots: BlockEditorRegionSnapshot = { status: "available", blockIds: [] };
+  private blockIds: readonly string[] = [];
   private selected: string | undefined;
   private nodeReads = 0;
-  private rootReads = 0;
+  private blockIdsReads = 0;
   private notifications = 0;
   private commandMs = 0;
 
-  readonly region = {
+  readonly blocks = {
     /**
-     * Reads root order without observing node edits.
+     * Reads display order without observing node edits.
      *
-     * @returns Cached available-region snapshot.
+     * @returns Cached host-selected display IDs.
      */
-    getSnapshot: () => {
-      this.rootReads += 1;
-      return this.roots;
+    getBlockIds: () => {
+      this.blockIdsReads += 1;
+      return this.blockIds;
     },
     /**
-     * Observes root-order changes.
+     * Observes display-list changes.
      *
-     * @param listener - Callback invoked after root replacement.
+     * @param listener - Callback invoked after display-list replacement.
      * @returns Disposer releasing this observation.
      */
-    subscribe: (listener: () => void) => this.subscribe("roots", listener),
-  };
-
-  readonly blocks = {
+    subscribeBlockIds: (listener: () => void) => this.subscribe("block-ids", listener),
     /**
      * Reads the host's cached own-node snapshot.
      *
@@ -99,13 +70,13 @@ export class DemoAdapter implements BlockEditorAdapter {
      * @param id - Existing demo node identity.
      * @param patch - Presentation fields; omitted fields retain their values.
      * @returns A new snapshot has been published to addressed subscribers.
-     * @throws If the node is unknown or the list mode/background token is unsupported.
+     * @throws If the node is unknown or the list mode/background value is unsupported.
      */
     updateBlockNode: (id: string, patch: BlockEditorNodePatch) => {
       if (patch.listType != null && !LIST_TYPES.includes(patch.listType)) {
         throw new Error("Unsupported list type");
       }
-      if (patch.color && !BACKGROUND_COLORS.some((color) => color === patch.color)) {
+      if (patch.color && !BACKGROUND_COLORS.some((color) => color.value === patch.color)) {
         throw new Error("Unsupported block background");
       }
       const node = this.requiredNode(id);
@@ -137,32 +108,20 @@ export class DemoAdapter implements BlockEditorAdapter {
       this.subscribe(`selected:${id}`, listener),
   };
 
-  readonly renderers = {
-    /**
-     * Looks up a stable content component from the demo host.
-     *
-     * @param type - Content renderer type, independent of listType.
-     * @returns Registered component, or undefined when disabled.
-     */
-    get: (type: string) => this.renderersByType.get(type),
-    /**
-     * Observes dynamic registrations.
-     *
-     * @param listener - Callback invoked after a renderer is replaced or removed.
-     * @returns Disposer releasing this observation.
-     */
-    subscribe: (listener: () => void) => this.subscribe("renderers", listener),
-  };
-
   /**
-   * Creates five roots and one child per repeat without installing subscriptions.
+   * Creates five displayed blocks and one child per repeat without installing subscriptions.
    *
    * @param repeat - Fixture multiplier, clamped by the caller to 1–200.
-   * @param renderer - Stable content renderer for ordinary demo blocks.
+   * @param example - Host-only fixture choice; omitted values retain the original outline fixture.
    */
-  constructor(repeat: number, renderer: BlockRenderer) {
+  constructor(repeat: number, example: "outline" | "kanban" | "bento" = "outline") {
+    if (example !== "outline") {
+      this.blockIds = Array.from({ length: repeat }, (_, group) =>
+        this.createBoard(example, group),
+      );
+      return;
+    }
     const ids: string[] = [];
-    this.renderersByType.set("text", renderer);
     for (let group = 0; group < repeat; group++) {
       for (let index = 0; index < 5; index++) {
         const id = `block-${group * 5 + index + 1}`;
@@ -170,7 +129,7 @@ export class DemoAdapter implements BlockEditorAdapter {
         this.nodes.set(id, {
           id,
           type: index === 4 ? "custom" : "text",
-          text: `Текст ${id}`,
+          text: `Text ${id}`,
           childIds: index === 0 ? [`child-${group}`] : [],
           listType: LIST_TYPES[index],
           checked: false,
@@ -178,9 +137,9 @@ export class DemoAdapter implements BlockEditorAdapter {
         });
       }
       const id = `child-${group}`;
-      this.nodes.set(id, { id, type: "text", text: "Вложенный блок", childIds: [] });
+      this.nodes.set(id, { id, type: "text", text: "Nested block", childIds: [] });
     }
-    this.roots = { status: "available", blockIds: ids };
+    this.blockIds = ids;
   }
 
   /**
@@ -227,28 +186,13 @@ export class DemoAdapter implements BlockEditorAdapter {
   }
 
   /**
-   * Reverses roots without replacing node snapshots.
+   * Reverses the displayed block order without replacing node snapshots.
    *
-   * @returns Root subscribers observe the new order.
+   * @returns Display-list subscribers observe the new order.
    */
-  reverseRoots(): void {
-    this.roots = { ...this.roots, blockIds: [...this.roots.blockIds].reverse() };
-    this.emit("roots");
-  }
-
-  /**
-   * Enables or disables the custom content renderer without replacing the adapter.
-   *
-   * @param renderer - Stable component, or undefined to remove its registration.
-   * @returns Renderer lookup subscribers have been notified.
-   */
-  setCustomRenderer(renderer: BlockRenderer | undefined): void {
-    if (renderer) {
-      this.renderersByType.set("custom", renderer);
-    } else {
-      this.renderersByType.delete("custom");
-    }
-    this.emit("renderers");
+  reverseBlockIds(): void {
+    this.blockIds = [...this.blockIds].reverse();
+    this.emit("block-ids");
   }
 
   /**
@@ -263,7 +207,7 @@ export class DemoAdapter implements BlockEditorAdapter {
     }
     return {
       nodeReads: this.nodeReads,
-      rootReads: this.rootReads,
+      blockIdsReads: this.blockIdsReads,
       notifications: this.notifications,
       subscriptions,
       commandMs: this.commandMs,
@@ -277,9 +221,90 @@ export class DemoAdapter implements BlockEditorAdapter {
    */
   resetMetrics(): void {
     this.nodeReads = 0;
-    this.rootReads = 0;
+    this.blockIdsReads = 0;
     this.notifications = 0;
     this.commandMs = 0;
+  }
+
+  /**
+   * Reads the host-owned preferred width of one Bento tile.
+   *
+   * @param id - Tile identity; ordinary text blocks use the example default.
+   * @returns Width in CSS pixels, defaulting to 280.
+   * @throws If the node is unknown.
+   */
+  getTileWidth(id: string): number {
+    return this.requiredNode(id).width ?? 280;
+  }
+
+  /**
+   * Updates one example tile width through its existing addressed source.
+   *
+   * @param id - Existing tile identity.
+   * @param width - One of the demo's 240, 280, or 360 CSS pixel choices.
+   * @returns A replacement own-node snapshot is published without changing child IDs.
+   * @throws If the ID or example width is invalid.
+   */
+  setTileWidth(id: string, width: number): void {
+    if (![240, 280, 360].includes(width)) {
+      throw new Error("Unsupported demo width");
+    }
+    this.publish(id, { width });
+  }
+
+  /**
+   * Appends one native example column or card without changing displayed root IDs.
+   *
+   * @param parentId - Existing Kanban board or column owning the new child.
+   * @returns Parent and new node snapshots are available to addressed consumers.
+   * @throws If the parent is unknown or does not support the example operation.
+   */
+  appendChild(parentId: string): void {
+    const parent = this.requiredNode(parentId);
+    if (parent.type !== "demo-kanban" && parent.type !== "demo-column") {
+      throw new Error("Unsupported demo parent");
+    }
+    const id = `${parentId}-added-${parent.childIds.length + 1}`;
+    const type = parent.type === "demo-kanban" ? "demo-column" : "text";
+    this.nodes.set(id, { id, type, text: "New item", childIds: [] });
+    this.publish(parentId, { childIds: [...parent.childIds, id] });
+  }
+
+  /**
+   * Seeds real example hierarchy without adding placeholder content blocks.
+   *
+   * @param example - Host fixture selecting columns or wrapping tiles.
+   * @param group - Zero-based fixture repetition used for stable unique IDs.
+   * @returns The board ID to include in the display list.
+   */
+  private createBoard(example: "kanban" | "bento", group: number): string {
+    const id = `board-${group + 1}`;
+    const count = example === "kanban" ? 3 : 4;
+    const childIds = Array.from({ length: count }, (_, index) => `${id}-item-${index + 1}`);
+    this.nodes.set(id, {
+      id,
+      type: `demo-${example}`,
+      text: example === "kanban" ? "Kanban" : "Bento",
+      childIds,
+    });
+    for (const [index, childId] of childIds.entries()) {
+      const nested = example === "kanban" ? 2 : Number(index < 2);
+      const children = Array.from(
+        { length: nested },
+        (_, child) => `${childId}-child-${child + 1}`,
+      );
+      this.nodes.set(childId, {
+        id: childId,
+        type: example === "kanban" ? "demo-column" : "text",
+        text: `Item ${index + 1}`,
+        childIds: children,
+        width: 280,
+      });
+      for (const nestedId of children) {
+        this.nodes.set(nestedId, { id: nestedId, type: "text", text: "Nested text", childIds: [] });
+      }
+    }
+    return id;
   }
 
   /**
@@ -315,7 +340,7 @@ export class DemoAdapter implements BlockEditorAdapter {
   /**
    * Adds one independently disposable callback to an addressed source.
    *
-   * @param key - Node, selection, root, or renderer source key.
+   * @param key - Node, selection or display-list source key.
    * @param listener - Callback invoked after this source changes.
    * @returns Idempotent disposer releasing the callback and empty source entry.
    */

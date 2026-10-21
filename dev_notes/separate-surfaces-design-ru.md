@@ -728,3 +728,43 @@ production blocks, clipboard, selection/navigation и undo.
 Page shell отражает фон в data-block-background. В demo используются все семь фоновых
 токенов оригинала; текст и snapshots соседей при смене фона не изменяются.
 Подробности и проверки — в [разделе 19 контрактов](./block-editor-contracts-ru.md#19-исправлено-color-означает-фон-блока).
+
+### Выполнение: BlockView и расширяемые slots
+
+В автономном Page выделен BlockView и реализован BlockSlotRegistry с immutable snapshot,
+стабильными entry IDs, priority/when/mode и индивидуальным disposer. Через единый adapter
+передаются read-only slots и фактический mode; регистрации принадлежат host/extensions.
+Сохранены start/end/body и 12 perimeter anchors. Базовые checkbox/list marker/collapse
+подключены в demo через обычные contributions, а не зашиты в concrete renderer.
+
+Структурный stylesheet экспортируется как styles.css; наружу выставлены шесть CSS names
+и переменные geometry/theme. Фон оформляет BlockView. Нумерация использует scoped CSS
+counters, collapse размонтирует descendants и их подписки без замены кешированных узлов.
+Production containers/childrenVisible policy, navigation, virtualization и DnD пока не
+переносились. Контракты, границы и проверки — в
+[разделе 20](./block-editor-contracts-ru.md#20-выполнено-структурный-blockview-slots-и-базовые-controls).
+
+### Обязательное правило: CSS defaults находятся в пакете
+
+Правило записано в package AGENTS.md. Row padding, root/child gaps, indent, start gutter,
+control/marker dimensions, selection и default palette перенесены из demo в stylesheet
+Page. Публичный BlockEditorThemeProvider принимает типизированные CSS parameters;
+standalone consumer не копирует .demo-* selectors. В demo остались chrome и собственные
+примерные forms, а compact mode использует public parameters. Regression отключает
+весь demo stylesheet и проверяет geometry/palette; отдельный сценарий меняет параметры
+без замены node objects. Подробности — в
+[разделе 21](./block-editor-contracts-ru.md#21-правило-пакета-обязательный-css-и-параметры-принадлежат-page).
+
+### Выполнение: Tailwind CSS и shadcn/ui внутри Page
+
+Через CLI установлены Tailwind v4 и shadcn Button/Checkbox/NativeSelect/Textarea/Badge.
+Структурные классы используют utilities через @apply, сохраняя шесть public hooks и
+публичные geometry/theme parameters. Controls используют shadcn primitives; для
+checkbox команды теперь приходят через onCheckedChange, collapse сохраняет text focus.
+CSS counters, palette expressions и border shorthand остаются пакетной CSS логикой.
+
+Utilities используют префикс page:, Tailwind variables — --page-*; reset ограничен Page UI
+primitives. Глобальный Preflight не подключён. Shadcn colors наследуют Page theme
+parameters, и host не обязан копировать отдельную global shadcn theme. Package build
+компилирует готовый styles.css через Tailwind CLI, demo использует Vite plugin.
+Production ReactEditor/EditorPanel не подключались.

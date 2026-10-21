@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-import type { BlockRenderer } from "../../adapter/types";
+import type { BlockRenderer } from "../renderers/types";
 import { useBlockEditorController } from "./use-block-editor-controller";
 
 /**
@@ -10,11 +10,11 @@ import { useBlockEditorController } from "./use-block-editor-controller";
  * @throws If called outside BlockEditor or registry access fails.
  */
 export function useBlockRenderer(type: string): BlockRenderer | undefined {
-  const { renderers } = useBlockEditorController().adapter;
+  const { renderers } = useBlockEditorController();
   const subscribe = useCallback(
     (listener: () => void) => renderers.subscribe(listener),
     [renderers],
   );
-  const getSnapshot = useCallback(() => renderers.get(type), [renderers, type]);
+  const getSnapshot = useCallback(() => renderers.get(type)?.content, [renderers, type]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

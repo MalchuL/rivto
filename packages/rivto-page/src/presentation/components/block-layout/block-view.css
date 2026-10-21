@@ -1,0 +1,12 @@
+/* Background belongs to the structural block, not to a concrete content renderer. */
+/* BlockView sets backgroundColor with the node color and theme fallbacks in one place. */
+.rivto-block {
+  @apply page:relative page:min-w-0 page:box-border;
+  border: var(--rivto-block-border, none);
+  @apply page:rounded-[var(--rivto-block-radius,10px)];
+}
+
+/* Selection belongs to the single block shell, including layouts without a row. */
+.rivto-block[data-block-selected="true"] {
+  @apply page:outline-2 page:outline-solid page:outline-[color:var(--rivto-block-selection,#4868d8)];
+}

@@ -1,0 +1,15 @@
+/** Public structural class names; concrete block renderer classes remain host-owned. */
+export const BLOCK_EDITOR_CLASSES = Object.freeze({
+  /** Outer block container, including its row, body slots, and children. */
+  block: "rivto-block",
+  /** Main row containing content and its inline/perimeter slots. */
+  row: "rivto-block-row",
+  /** Flexible container for the host's concrete content renderer. */
+  content: "rivto-block-content",
+  /** Child host with its own list counter and collapse visibility; indentation belongs to its layout. */
+  children: "rivto-block-children",
+  /** Contribution host positioned by its data-slot-position attribute. */
+  slot: "rivto-block-slot",
+  /** Numeric list marker rendered through the sibling group's CSS counter. */
+  marker: "rivto-block-list-marker",
+});

@@ -822,3 +822,358 @@ Chromium/Firefox (list type + background, repeat=1/200) прошли с workers=
 постоянном числе reads. До исправления измеряемая функция не давала правильного фона,
 поэтому сравнение before/after latency не используется как доказательство ускорения.
 Ограничения реальной production-интеграции из предыдущих разделов остаются в силе.
+
+## 20. Выполнено: структурный BlockView, slots и базовые controls
+
+Дата: 2026-10-20. Этап остаётся автономным: production host, surfaces и concrete blocks
+не мигрированы. До изменения прошли 26 существующих package tests; после первого
+реализованного среза — 46 tests, включая исходные cost bounds на 5/2000 roots.
+
+### API и ownership
+
+- `BlockView` — пассивная DOM-оболочка с forwardRef, snapshot, selected, className и
+  children. Она контролирует block ID/type/listType/background/selection attributes;
+  произвольные div attributes не могут переопределить их. Row/content/body/children
+  собираются структурным деревом, concrete renderer получает только blockId.
+- `BlockSlotRegistry` — класс в presentation/slots. Владелец host/extensions создаёт
+  один общий registry, регистрирует contributions и хранит disposers; controller
+  заимствует его и не уничтожает регистрации при remount/удалении своей области.
+- `BlockEditorAdapter` получил обязательные `mode` и `slots`. Mode — фактически
+  отображающая поверхность, стабильная в течение lifetime адаптера, а не inferred
+  editor mode; canvas occurrence может передать edgeless, отображаемый page embedding —
+  page. Через slots видны только getSnapshot/subscribe, register принадлежит владельцу.
+- `BlockSlotProps` содержит immutable block, стабильный node с ограниченными командами,
+  selected, mode и childrenId текущего DOM occurrence. Editor/panel/document не передаётся.
+- Registry сохраняет все 15 anchors: 12 perimeter из SLOT_POSITIONS и start/end/body.
+  Приоритет сортируется по убыванию, равные приоритеты сохраняют порядок установки.
+  CSS направляет controls так, чтобы высокий priority располагался ближе к владельцу.
+
+register возвращает идемпотентный disposer именно своего entry. В snapshot entry получает
+registry-local числовой ID; повторная установка того же component — независимая
+регистрация. Массив, entry и копия массива mode restrictions immutable. Ссылки старых
+entries сохраняются при соседних изменениях. Position и finite priority проверяются до
+публикации; when/mode filters применяются к текущему owner context во время отображения.
+Фильтры синхронные, без побочных эффектов; уведомления registry не являются подпиской
+на произвольное замкнутое внешнее состояние contribution.
+
+Один block owner подписан на registry один раз, все его 15 hosts используют общий snapshot.
+Registry changes обновляют slots всех mounted owners, но memo boundaries сохраняют
+content renderers. На 5/2000 roots добавление end-slot создаёт нужные hosts без чтения
+node/root sources и без повторного content render. Это ожидаемое O(mounted owners)
+обновление presentation registry, не постоянная по размеру операция установки extension.
+
+### Controls и collapse
+
+`BlockListSlot` и `BlockCollapseSlot` экспортируются как обычные contributions.
+Demo host регистрирует их в start; ядро BlockEditor не включает их автоматически.
+Checkbox вызывает node.setChecked, collapse — node.setCollapsed с чтением live флага.
+Кнопка имеет aria-expanded/aria-controls и сохраняет text focus при pointer activation.
+При закрытии сохраняется child container с occurrence-local ID, но descendant renderers
+размонтируются вместе с их node/registry subscriptions. При раскрытии controller
+возвращает прежние узлы; host content, child order и canonical selection не переписываются.
+Body-slot расположен между row и document children и не скрывается вместе с потомками.
+
+На этом шаге visibility определяется generic collapsed flag. Перед переносом concrete
+containers и keyboard/navigation нужно подключить согласованную host behavior policy:
+их собственные правила childrenVisible ещё не адаптированы и этим срезом не заменяются.
+Selection скрытых children пока не маршрутизируется: production navigation не подключена.
+
+### Нумерация и CSS
+
+Номера не добавлены ни в persisted data, ни в node snapshots. Structural CSS counter
+увеличивается на numbered/start/continue blocks, явный start и numbered после разрыва
+начинаются с 1. Continue сохраняет последний счётчик группы через обычный блок.
+Каждая children-группа и корневой BlockEditor отдельно сбрасывают counter; перестановка
+DOM пересчитывает видимые маркеры без чтения/записи snapshots соседей. Маркер выводит
+counter через ::before и aria-hidden, как исходный renderer.
+
+Это реализация для полностью смонтированной группы siblings. Виртуализация пока не
+перенесена: при её добавлении нужен seed из полного sibling outline; CSS counters по
+видимым DOM alone не обещают корректный номер после виртуального разрыва. Clipboard
+нумерация и Enter behaviors остаются host-owned будущими этапами.
+
+`@chulane/rivto-page/styles.css` экспортирует отдельный stylesheet из dist. Build копирует
+его вместе с JS/declarations, demo импортирует source CSS. `BLOCK_EDITOR_CLASSES`
+экспортирует ровно шесть structural names: block/row/content/children/slot/marker.
+CSS задаёт geometry и фон BlockView через theme variables; concrete renderer больше не
+отвечает за фон блока. Палитру значений предоставляет host. Дополнительные theme variables
+описывают row height, children indent, slot gap, control size, marker width и selection.
+На первом проходе React theme provider не добавлялся и использовалось обычное наследование
+CSS variables. После уточнения ownership CSS provider и полные defaults реализованы
+в разделе 21.
+
+### Проверка этапа
+
+Покрыты immutable registry snapshots, все anchors, порядок/дубликаты, независимый disposer,
+invalid registration без публикации, динамические when/mode filters, сохранение component
+identity при добавлении соседа, body placement, collapse/restore, shared registry в двух
+BlockEditor и StrictMode cleanup. Registration state переживает unmount редактора.
+В demo добавлен переключатель end-slot с текущим selection; concrete renderer остаётся host-owned.
+
+Первый browser запуск не собрал tests: импорт palette из DemoAdapter начал транзитивно
+загружать TSX barrel в Node runner. Палитра вынесена в demo/constants.ts с type-only Page
+import, тест не загружает UI runtime. Повторный run на production preview собрал сценарии.
+Ошибки behavior assertions после этого не возникли. Browser counter tests проверяют
+reset/increment rules после type changes/reorder и isolation child counters; фактические
+маркеры 1/1/2 дополнительно просмотрены на Chromium screenshot. Это не OCR-проверка всех
+возможных значений счётчика и не доказательство корректности будущей виртуализации.
+
+## 21. Правило пакета: обязательный CSS и параметры принадлежат Page
+
+Дата: 2026-10-20. Пользователь выделил это как главное правило разработки пакета.
+Правило сохранено в `packages/rivto-page/AGENTS.md`: required geometry, controls,
+selection, counters и palette не должны зависеть от demo CSS. Demo может оформлять
+страницу и собственные примерные формы, но не structural Page selectors.
+
+Аудит выявил остаточную зависимость: padding карточки, root/child margins и defaults
+палитры задавались демо. Перед исправлением browser regression с отключённым demo
+stylesheet воспроизвёл отсутствие package padding (0 вместо 16px), с workers=12 и
+при обязательном workers=1 rerun. Это собственный дефект текущего автономного этапа,
+не pre-existing ошибка другого редактора.
+
+Теперь stylesheet пакета содержит defaults:
+
+- Общий row padding для content и controls, root/children gaps, children indent.
+- Контроль размеров checkbox/collapse, marker width, first-line height и slot gap.
+- Резерв start gutter даже для пустого slot, с default минимумом control + marker + gap.
+  Базовые controls не сдвигают текст при смене list type; более широкие custom contributions
+  могут расширить gutter по CSS layout, поэтому его минимум доступен как параметр.
+- Background/foreground/selection, все семь palette fallbacks, radius и optional border.
+- Скрытие child container при collapsed, counters и perimeter geometry; demo не поставляет
+  компенсационные offsets для этих механизмов.
+
+`BlockEditorTheme` — публичный тип CSS parameters, `BlockEditorThemeProvider` применяет
+их через обычное DOM inheritance. Значения lengths задаются строками с единицами или
+валидными CSS expressions; невалидные значения обрабатывает браузер, JS validation нет.
+Provider необязателен: standalone import styles.css уже содержит все defaults. Nested
+providers наследуют неуказанные параметры; detached portals этим компонентом не bridged.
+Theme update не заменяет adapter/controller или node objects и не пишет в документ.
+
+Публичный consumer example и таблица defaults сохранены в package README. Demo подключает
+«Компактный вид» через provider parameters, без structural overrides. Demo stylesheet
+вынесен в отдельный URL/link и ограничен chrome/form selectors; обязательных цветов,
+padding/margins редактора и selection outline в нём больше нет. Правило применимо и
+к будущим DnD/slots/navigation components: их required CSS поставляется вместе с пакетом.
+
+Проверка без demo CSS подтверждает row padding 16px, root gap 16px, children indent 28px,
+control size 20px, выравнивание parent/child content и отсутствие сдвига при добавлении
+number marker. Palette работает без demo variables и не становится transparent.
+Public compact theme меняет padding/gap на 4px, indent на 12px и controls на 16px;
+сброс возвращает defaults, объекты узлов остаются прежними.
+
+### Итоговая проверка этапов 20–21
+
+- 46 Jest tests, package/demo typechecks, lint без warnings, JS/declaration/CSS build
+  и production demo build прошли. ESM bundle — 23.18 KB без минификации; CSS публикуется
+  отдельным subpath, без production dependencies на другие Rivto packages.
+- CSS-only изменение проверено в package dev/watch: пересобирается и копируется
+  styles.css. JS/CSS exports дополнительно проверяются непосредственно из dist.
+- 14 browser behavior scenarios прошли Chromium/Firefox с workers=12. Новые сценарии
+  отключают demo stylesheet целиком и меняют typed theme parameters. Все итоговые
+  assertions прошли; исходные воспроизведения CSS-зависимости зафиксированы выше отдельно.
+- 12 production performance scenarios прошли с workers=1, без параллельных builds/tests.
+  Наборы: list/color selects, native checkbox и collapse button; repeat=1 и 200,
+  без виртуализации. Для selects пять warmed samples, для каждого pointer control четыре.
+- На обоих размерах list/color/checkbox дают 16 own-node reads, collapse close/open —
+  17/30 при одном дочернем блоке. Root reads=0, адресных уведомлений два; unchanged node
+  identities сохраняются. Дополнительные чтения при раскрытии — mount child consumers.
+- На 5/2000 roots установка end-slot создаёт нужные hosts, не перечитывая node/root
+  sources и не перерисовывая content. Это не обещание постоянной стоимости registry
+  update: slot presentation каждого mounted owner обрабатывается отдельно.
+
+Все времена ниже — milliseconds от native change/click до двух RAF: median (min–max).
+Синхронная запись + notifications в текущем прогоне: Chromium 0–0.10 ms, Firefox часто
+0 на своём разрешении clock. Это не полное время event handler и не отсутствие работы.
+
+| Browser  | Roots + children | List             | Background       |
+| -------- | ---------------- | ---------------- | ---------------- |
+| Chromium | 5 + 1            | 23.5 (22.5–25.9) | 24.2 (18.4–24.5) |
+| Chromium | 1000 + 200       | 13.9 (5.4–16.2)  | 63.3 (6.4–64.7)  |
+| Firefox  | 5 + 1            | 17 (16–22)       | 20 (17–30)       |
+| Firefox  | 1000 + 200       | 16 (3–17)        | 3 (3–4)          |
+
+| Browser  | Roots + children | Collapse         | Checkbox         |
+| -------- | ---------------- | ---------------- | ---------------- |
+| Chromium | 5 + 1            | 31.6 (31.2–31.7) | 31.4 (31.1–31.5) |
+| Chromium | 1000 + 200       | 30.2 (29.7–32.1) | 64.2 (59.8–67.6) |
+| Firefox  | 5 + 1            | 14.5 (14–15)     | 15 (15–16)       |
+| Firefox  | 1000 + 200       | 16 (14–17)       | 45.5 (44–49)     |
+
+Render latency зависит от размеров DOM и фазы кадров даже при постоянном числе reads.
+Большой debug fixture содержит 1000 корней с множеством native form controls; эти
+измерения не заявляют ускорение готового редактора или одинаковую latency всех размеров.
+Новые controls/layout отсутствовали в корректном виде до этого этапа, поэтому их timings
+не используются как before/after speedup. До production wiring остаются host behavior
+policies, wrappers, navigation/selection, virtualization, DnD, clipboard и undo; portals
+потребуют отдельного переноса theme scope.
+
+## 22. Выполнено: Tailwind CSS v4 и shadcn/ui
+
+### Владение стилями и подключение
+
+Tailwind, его CLI/Vite integration и shadcn primitives установлены через CLI внутри
+`packages/rivto-page`. `components.json` использует тот же new-york/Radix стиль, что
+соседний React-пакет, но генерирует компоненты в `presentation/components/ui`.
+Новая зависимость от `react-rivto-editor` не появилась. Button, Checkbox, NativeSelect,
+Textarea и Badge принадлежат Page; они пока не экспортируются как общий public UI kit.
+
+Структурные классы сохраняют шесть имён из BLOCK_EDITOR_CLASSES. Их геометрия,
+selection и основное оформление используют Tailwind utilities через @apply. CSS
+counters, фоновые palette expressions и border shorthand остаются в stylesheet:
+они задают поведение нумерации и публичные theme parameters. Demo chrome также
+использует @apply, но не задаёт структурные отступы или размеры Page.
+
+Utilities имеют префикс page:, Tailwind theme variables — --page-*. Глобальный
+Preflight отсутствует; необходимый shadcn reset ограничен data-rivto-page-ui.
+Shadcn primary/ring, foreground, background и производные цвета читают существующие
+Page parameters. Отдельный глобальный набор --primary/--background не устанавливается.
+Так сохраняются bounded theme API и возможность вложенных providers.
+
+Package build компилирует styles.css через Tailwind CLI. Потребитель импортирует
+готовый CSS без Tailwind scanner/build у себя. Source demo использует Vite plugin;
+его собственный CSS импортируется как inline style, который regression test может
+отключить целиком. Dev library watcher пересобирает stylesheet при изменении src;
+отдельный dev:styles доступен для CSS watch.
+
+Исходные стили разделены по владельцам: components/block-editor (root/tree layout),
+components/block-view (shell/background), components/ui (scoped reset), slots
+(anchors, controls и list counters). Theme tokens находятся в presentation/theme.css;
+presentation/styles.css содержит Tailwind configuration и упорядоченные imports.
+При переносе финальный CSS совпал побайтно, а TS/TSX и configuration не изменились.
+Повторные interaction timings для этого переноса не нужны: исполняемые JS/CSS
+остались теми же; сборки и behavioral checks проверяют сборку локальных imports.
+
+### Контролы и сохранённое поведение
+
+Базовые list/collapse slots используют shadcn Checkbox и Button. Checkbox делегирует
+onCheckedChange в node.setChecked; snapshot и node cache не меняют свой контракт.
+Collapse сохраняет aria-controls/expanded, предотвращает потерю text focus при pointer
+activation и снимает только descendant subscriptions. Demo selectors используют
+NativeSelect, сохраняя native keyboard/selection API, а concrete renderer — Textarea.
+
+Структурные control sizes переопределяют shadcn defaults общими utility classes с
+публичным --rivto-block-control-size. Изолированная CSS-проверка обнаружила, что
+shadcn transition-all анимировал изменение ширины после theme update. Для этих
+контролов оставлен transition-colors; теперь изменение размеров применяется сразу.
+Регрессия проверяет computed width синхронно после установки CSS parameter.
+
+### Проверки и измерения этого перехода
+
+Финальные проверки: 46 unit tests, package/demo typecheck и lint без ошибок;
+JS/DTS/CSS и demo production builds прошли. В обоих браузерах 16 behavioral tests
+с workers=12 и 12 performance scenarios с workers=1 прошли без failures. Behavioral
+checks включают отсутствие глобального reset у host controls, keyboard checkbox,
+сохранение text focus, отключение всего demo CSS и public geometry overrides.
+Готовый CSS дополнительно проверен в изолированном документе без demo styles и
+Tailwind pipeline; public ESM exports и stylesheet subpath разрешаются из пакета.
+
+Одинаковые production fixtures до/после: repeat=1 (5 roots + child), repeat=200
+(1000 roots + 200 children), без виртуализации. Замеры не пересекались с builds или
+другими browser runs. Время ниже — event → два RAF, median (min–max) ms, не полная
+задержка async layout; 5 warmed samples для selectors, 4 для каждого pointer control.
+
+| Browser / repeat | List до → после                     | Background до → после               |
+| ---------------- | ----------------------------------- | ----------------------------------- |
+| Chromium / 1     | 22.7 (20.0–23.6) → 19.4 (18.0–20.8) | 22.4 (19.0–23.4) → 22.4 (19.5–23.3) |
+| Chromium / 200   | 14.4 (6.7–76.6) → 19.6 (8.4–20.5)   | 6.8 (6.3–69.3) → 9.4 (8.8–80.7)     |
+| Firefox / 1      | 19.0 (18.0–20.0) → 18.0 (17.0–32.0) | 19.0 (17.0–24.0) → 19.0 (17.0–23.0) |
+| Firefox / 200    | 15.0 (3.0–17.0) → 15.0 (3.0–15.0)   | 4.0 (3.0–5.0) → 4.0 (4.0–4.0)       |
+
+| Browser / repeat | Collapse до → после                 | Checkbox до → после                 |
+| ---------------- | ----------------------------------- | ----------------------------------- |
+| Chromium / 1     | 31.5 (31.3–31.6) → 30.6 (30.0–31.2) | 31.5 (31.1–31.6) → 30.9 (30.9–31.2) |
+| Chromium / 200   | 31.2 (28.9–32.0) → 43.0 (41.8–45.9) | 63.3 (59.6–66.7) → 53.9 (7.0–78.5)  |
+| Firefox / 1      | 15.0 (14.0–15.0) → 15.0 (15.0–16.0) | 14.5 (14.0–15.0) → 14.5 (12.0–17.0) |
+| Firefox / 200    | 17.5 (13.0–19.0) → 15.5 (14.0–19.0) | 45.5 (43.0–48.0) → 54.5 (53.0–55.0) |
+
+List/color/checkbox сохраняют 16 addressed node reads, 0 root reads и 2 notifications
+при обоих размерах. Collapse сохраняет 17 reads при закрытии / 30 при открытии одного
+ребёнка. Синхронная запись с notifications — до 0.1 ms в Chromium; Firefox до 1 ms,
+с учётом coarse clock resolution. Эти счётчики не измеряют внутренние Radix renders.
+
+Рост некоторых visual timings зафиксирован, ускорение редактора не заявляется.
+В большом демо теперь около 42 238 DOM elements, включая example forms и UI wrappers.
+Диагностический Chromium trace одного background event показал суммарные spans:
+EventDispatch 15.30 ms, UpdateLayoutTree 0.41 ms, Layout 6.11 ms, Paint 4.51 ms.
+Spans могут быть вложенными, складывать их в полное время нельзя. Профиль указывает
+на browser/DOM work в этом fixture; bounded adapter не добавил обхода документа.
+Production renderers, виртуализация, integration CSS import order и performance
+реального ReactEditor в этом этапе не проверялись и остаются последующими этапами.
+
+## 23. Выполнено: общий фон и расширяемая палитра
+
+BlockView использует один публичный --rivto-block-background override. Общая палитра
+принимает --rivto-color-<token>, включая дополнительные host tokens без изменения
+Page: например, --rivto-color-brand вместе с node.color="brand". Старые публичные
+--rivto-block-{gray,red,orange,yellow,green,blue,purple} удалены без compatibility aliases.
+В BlockEditorTheme используется template-literal index signature вместо фиксированных
+свойств для каждого цвета. Имена токенов ограничены lowercase ASCII letters/digits/
+hyphens, начиная с буквы; неподдерживаемое имя или неизвестный цвет без определения
+использует default background.
+
+BlockEditorPalette формирует CSS references без фиксированного списка токенов и
+без зависимости от DOM. Конкретные цвета задаёт только host; примерная палитра находится в DEMO_THEME.
+В theme.css пакета нет цветовой палитры, а block-view.css не содержит per-color selectors. CSS разрешает palette references
+по текущей теме, поэтому для theme changes не нужны React subscriptions. BlockView
+задаёт собственный backgroundColor на каждом shell, предотвращая наследование
+выбранного node.color детьми; отдельная наследуемая node-color variable не создаётся. Общий --rivto-block-background остаётся отдельным
+наследуемым theme override и приоритетнее own-node color. При его удалении снова
+применяется собственный цвет каждого узла.
+
+Проверки: 51 unit tests и 18 browser scenarios в Chromium/Firefox прошли; browser
+workers=12. Проверены default palette, изоляция цвета детей, вложенные overrides
+общего palette token, общий background override и восстановление node colors без
+замены объектов. Package/demo builds, typecheck и lint прошли. Дополнительные unit tests проверяют произвольный host token и нормализацию
+неподдерживаемых имён к отсутствующему цвету. Built SSR BlockView вместе с готовым
+CSS отдельно проверен в обоих браузерах: custom token, live palette update,
+неподдерживаемое имя и изоляция дочернего фона.
+
+Финальный focused performance run: 4 background scenarios, два браузера, repeat=1/200,
+workers=1, production preview. На обоих размерах остаются 16 node reads, 0 root reads
+и 2 notifications. Command + synchronous notifications: Chromium до 0.1 ms,
+Firefox 0 ms на доступном разрешении часов. Event → два RAF, median (range), ms:
+
+| Browser  | repeat=1         | repeat=200      |
+| -------- | ---------------- | --------------- |
+| Chromium | 22.1 (17.8–28.8) | 80.0 (9.2–87.1) |
+| Firefox  | 21.0 (19.0–28.0) | 3.0 (3.0–4.0)   |
+
+Для сравнения последний baseline до изменения фона: Chromium 22.4 (19.5–23.3) /
+9.4 (8.8–80.7), Firefox 19.0 (17.0–23.0) / 4.0 (4.0–4.0). В большом Chromium fixture
+медиана выросла, диапазоны частично перекрываются; отсутствие роста reads не является
+гарантией одинакового времени browser paint/layout. Debug fixture с десятками тысяч
+DOM elements остаётся дорогим; performance improvement не заявляется. Диагностическое
+принудительное чтение computed style/geometry в Firefox не выявило измеряемой стоимости
+flush, но меняет scheduling и не заменяет основной serial run.
+
+## 24. Уточнено владение палитрой: только host/demo
+
+Встроенная палитра из предыдущего этапа удалена: в src и собранных JS/CSS нет
+--rivto-palette-* declarations или references. Resolver использует только общий
+--rivto-block-background, host token --rivto-color-<token> и base background fallback.
+Page не резервирует gray/red/etc и не выбирает для них значения. Примерные семь
+цветов переехали в DEMO_THEME, передаваемый через публичный provider; COMPACT_THEME
+сохраняет ту же host palette. Это optional theme configuration, а не обязательная
+геометрия из demo CSS.
+
+Обновлены README и package AGENTS.md. Новая browser regression удаляет host palette
+и проверяет, что все семь токенов действительно используют base background; выбор
+токена отражается в snapshot/DOM, поэтому быстрый no-op не проходит проверку.
+Проверки: 51 unit test, 20 browser scenarios в Chromium/Firefox с workers=12,
+package/demo builds, typecheck и lint прошли. Собранные ESM/CSS проверены на отсутствие
+внутренних palette references.
+
+Focused performance: 4 background scenarios, production preview, workers=1,
+repeat=1/200 в обоих браузерах. Сохраняются 16 node reads, 0 root reads и 2 notifications
+на обоих размерах. Event → два RAF, median (range), ms:
+
+| Browser  | repeat | DOM proxy ms     |
+| -------- | ------ | ---------------- |
+| chromium | 1      | 22.1 (18.8–30.7) |
+| chromium | 200    | 9.8 (8.4–88.5)   |
+| firefox  | 1      | 21.0 (18.0–32.0) |
+| firefox  | 200    | 4.0 (3.0–5.0)    |
+
+Предыдущий baseline приведён в разделе 23. Диапазоны browser timings зашумлены;
+этот перенос убирает ответственность за палитру из Page, а не доказывает ускорение
+production editor. Отдельные production renderers и integration здесь не проверялись.

@@ -1,5 +1,3 @@
-import type { ComponentType } from "react";
-
 /** Built-in list modes interpreted by Page, independent of the host's storage schema. */
 export type BlockListType =
   "list" | "checkbox" | "numbered_list" | "start_numbered_list" | "continue_numbered_list";
@@ -18,7 +16,7 @@ export type BlockListType =
  * across these snapshot replacements for its controller lifetime.
  */
 export interface BlockEditorNodeSnapshot {
-  /** Stable identity within this editing region. */
+  /** Stable identity within the adapter. */
   readonly id: string;
   /** Lookup key for the host's live renderer registry. */
   readonly type: string;
@@ -30,7 +28,7 @@ export interface BlockEditorNodeSnapshot {
   readonly checked?: boolean;
   /** Persisted collapse state; omitted when the host supplies no collapse state. */
   readonly collapsed?: boolean;
-  /** Explicit block background token supplied by the host; omitted for the default background. */
+  /** Resolved CSS background color or expression supplied by the host; omitted for the default background. */
   readonly color?: string;
 }
 
@@ -42,39 +40,33 @@ export interface BlockEditorNodePatch {
   readonly checked?: boolean;
   /** New collapse state; omission preserves its current value. */
   readonly collapsed?: boolean;
-  /** Block background token, null to remove the override; omission preserves the value. */
+  /** Resolved CSS background color or expression, null to remove the override; omission preserves the value. */
   readonly color?: string | null;
 }
 
-/** Detached root order and availability of one block editing region. */
-export interface BlockEditorRegionSnapshot {
-  /** Missing owners must not be interpreted as available empty regions. */
-  readonly status: "available" | "missing";
-  /** Unique ordered roots; descendants are supplied by their own node snapshots. */
-  readonly blockIds: readonly string[];
-}
-
-/** Live root boundaries, independent of changes to individual block contents. */
-export interface BlockEditorRegion {
-  /**
-   * Reads the current region availability and root order.
-   *
-   * @returns Cached snapshot whose identity changes only with status or root order.
-   */
-  getSnapshot(): BlockEditorRegionSnapshot;
-  /**
-   * Observes availability and root-order changes without observing block content.
-   *
-   * @param listener - Callback that rereads the snapshot after a change.
-   * @returns Idempotent disposer removing this subscription.
-   */
-  subscribe(listener: () => void): () => void;
-}
-
-/** Addressed, nonrecursive reads constrained to the adapter's region. */
+/** Host-selected display list and addressed, nonrecursive node access. */
 export interface BlockEditorBlocks {
   /**
-   * Reads a block's own fields and direct child IDs within this region.
+   * Reads the ordered blocks to display without requiring a common parent or owner.
+   *
+   * IDs must be unique within this list. Each node supplies its real descendants
+   * through childIds; the list does not create or change document hierarchy.
+   * Repeated reads must return the same array reference until its contents or order
+   * change. Publish a new immutable array before notifying list subscribers;
+   * useSyncExternalStore compares references with Object.is. Empty means no blocks.
+   *
+   * @returns Cached, read-only display IDs selected by the host.
+   */
+  getBlockIds(): readonly string[];
+  /**
+   * Observes display-list changes independently of individual node edits.
+   *
+   * @param listener - Callback that rereads IDs after their contents or order change.
+   * @returns Idempotent disposer removing this subscription.
+   */
+  subscribeBlockIds(listener: () => void): () => void;
+  /**
+   * Reads a block's own fields and direct child IDs through the host adapter.
    *
    * Snapshots and child ID arrays retain identity until their corresponding data
    * changes. Returned values are detached and must be treated as read-only.
@@ -82,7 +74,7 @@ export interface BlockEditorBlocks {
    * comparing the returned snapshot reference, not by inspecting its fields.
    *
    * @param blockId - Stable block identity to resolve.
-   * @returns Cached node, or undefined when missing or outside the region.
+   * @returns Cached node, or undefined when missing or inaccessible through the adapter.
    */
   getBlockNode(blockId: string): BlockEditorNodeSnapshot | undefined;
   /**
@@ -96,11 +88,11 @@ export interface BlockEditorBlocks {
   /**
    * Applies presentation changes through the host's existing mutation boundary.
    *
-   * Source identity, region membership, supported fields and values must be
+   * Source identity, access permissions, supported fields and values must be
    * checked before writing. The host owns transaction and undo capture policy;
    * subscribers observe the resulting cached snapshot, not an optimistic copy.
    *
-   * @param blockId - Existing block identity inside the current region.
+   * @param blockId - Existing block identity accessible through the adapter.
    * @param patch - Fields to change; omitted fields remain unchanged.
    * @returns Changes have been applied and the host's notifications delivered.
    * @throws If the block is missing/outside, changes are unsupported or invalid,
@@ -112,7 +104,7 @@ export interface BlockEditorBlocks {
 /** Per-block selection membership backed by the host's existing selection store. */
 export interface BlockEditorSelection {
   /**
-   * Reads whether a whole block is selected in this region.
+   * Reads whether a whole block is selected through the host adapter.
    *
    * @param blockId - Stable block identity; missing or outside blocks are unselected.
    * @returns Whole-block membership, excluding a caret or partial text selection.
@@ -128,45 +120,17 @@ export interface BlockEditorSelection {
   subscribeBlock(blockId: string, listener: () => void): () => void;
 }
 
-/** Content renderer inputs, compatible with the existing host renderer contract. */
-export interface BlockRendererProps {
-  /** Stable identity resolved through the surrounding limited block context. */
-  readonly blockId: string;
-}
-
-/** Content-only renderer; the Page package supplies the shell and descendants. */
-export type BlockRenderer = ComponentType<BlockRendererProps>;
-
-/** Observable renderer lookup; registration remains with the host. */
-export interface BlockEditorRenderers {
-  /**
-   * Looks up content presentation without creating a component on each read.
-   *
-   * @param type - Persisted block type to resolve.
-   * @returns Stable renderer identity, configured fallback, or undefined for no content.
-   */
-  get(type: string): BlockRenderer | undefined;
-  /**
-   * Observes renderer registration and removal.
-   *
-   * @param listener - Callback that rereads lookup results after a registry change.
-   * @returns Idempotent disposer removing this subscription.
-   */
-  subscribe(listener: () => void): () => void;
-}
-
 /**
- * Supplies the autonomous rendering slice for one block editing region.
+ * Supplies the autonomous rendering slice for a host-selected list of blocks.
  *
- * The host owns data and registries. All reads are synchronous and side-effect
+ * The host owns data; the block editor owns presentation registrations. All reads are synchronous and side-effect
  * free, including server reads; subscriptions notify after snapshots change.
- * Nodes form an acyclic forest with unique IDs, already bounded by the adapter.
+ * The display list need not share a parent or owner. Node IDs are stable and unique;
+ * child relationships remain acyclic. The host controls access through the adapter.
  * Further editing capabilities will be added with their consuming interactions.
  * No editor, panel, document, or owner backlink belongs to this contract.
  */
 export interface BlockEditorAdapter {
-  readonly region: BlockEditorRegion;
   readonly blocks: BlockEditorBlocks;
   readonly selection: BlockEditorSelection;
-  readonly renderers: BlockEditorRenderers;
 }
