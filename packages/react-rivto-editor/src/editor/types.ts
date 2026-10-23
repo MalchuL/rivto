@@ -13,7 +13,7 @@ import type {
   SlashCommandRegistry,
 } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
-import type { BlockReference, BlockResolution } from "../extensions/embedding/types";
+import type { BlockReferenceOptions } from "@chulane/rivto";
 import type { BlockElementProjection } from "../elements/block-element-projection";
 import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
@@ -37,7 +37,7 @@ export interface CreateReactEditorOptions {
 }
 
 /** Loading and construction policies; returned models become storage-owned. */
-export interface EditorStorageOptions {
+export interface EditorStorageOptions extends BlockReferenceOptions {
   /** Loads a model for this identity; defaults to creating an empty Yjs document. */
   readonly openDocument?: (documentId: string) => Promise<DocumentModel>;
   /**
@@ -46,16 +46,6 @@ export interface EditorStorageOptions {
    * Storage creates and disposes the core; this callback must not replace it.
    */
   readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
-  /** Lists containing document IDs from application metadata without acquiring their content; ordinary edits never invoke it. */
-  readonly lookupDocumentIds?: (
-    blockId: string,
-    options: { readonly signal?: AbortSignal },
-  ) => Promise<readonly string[]>;
-  /** Replaces preferred-document-first resolution; receives the persisted address and never changes its props. */
-  readonly resolveBlock?: (
-    reference: BlockReference,
-    options: { readonly signal?: AbortSignal },
-  ) => Promise<BlockResolution>;
   /** Optional registry metadata notifications used to retry unresolved embedding locations. */
   readonly subscribeDocumentIds?: (listener: () => void) => () => void;
   /** Reports asynchronous release failures from view cleanup. */

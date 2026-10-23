@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { BLOCK_ROW_SELECTOR } from "./dom-markers";
 import type { ReactEditor } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -46,8 +47,8 @@ async function seed(page: Page, repeat = 0) {
  */
 async function open(page: Page, id: string) {
   const block = page.locator(`[data-journal-document="today"] [data-block-id="${id}"]`).first();
-  await block.locator(":scope > .page-block-row").hover();
-  await block.locator(":scope > .page-block-row").locator(".block-handle").click();
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).locator(".block-handle").click();
   await expect(page.locator(`[data-panel-root="${id}"]`)).toBeVisible();
 }
 
@@ -159,7 +160,9 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
 test("clicking the universal handle navigates", async ({ page }) => {
   const ids = await seed(page);
   const row = page
-    .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
+    .locator(
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR}`,
+    )
     .first();
   await row.hover();
   await row.locator(".block-handle").click();
@@ -174,9 +177,11 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
   const handle = page
     .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"]`)
     .first()
-    .locator(":scope > .page-block-row .block-handle");
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .block-handle`);
   await page
-    .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
+    .locator(
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR}`,
+    )
     .first()
     .hover();
   await handle.hover();
@@ -184,7 +189,7 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
   await page.mouse.move(rect!.x + rect!.width / 2, rect!.y + rect!.height / 2);
   await page.mouse.down();
   await page.mouse.move(rect!.x + 40, rect!.y + 55, { steps: 10 });
-  await expect(page.locator(".page-drag-overlay")).toBeVisible();
+  await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(page.locator('[data-journal-document="today"] [data-panel-root]')).toHaveAttribute(
@@ -289,7 +294,7 @@ test("opens a Panel from the application button with the keyboard", async ({ pag
   const ids = await seed(page);
   const handle = page
     .locator(
-      `[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row .block-handle`,
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR} .block-handle`,
     )
     .first();
   await handle.focus();
@@ -402,7 +407,7 @@ for (const repeat of [0, 200]) {
         (window as unknown as Inspection).__rivtoDemo.editor.elements.getElementNode(id!)!.frame,
       cardId,
     );
-    const row = block.locator(":scope > .page-block-row");
+    const row = block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     const box = await row.boundingBox();
     const chromeBox = await card.locator(":scope > .edgeless-card-content").boundingBox();
     if (!box || !chromeBox) {
@@ -455,11 +460,19 @@ for (const repeat of [0, 200]) {
     const heading = await today.locator("h1").boundingBox();
     expect(navigation!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
     expect(heading!.y).toBeGreaterThanOrEqual(navigation!.y + navigation!.height);
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    await expect(page.locator(".journal-stack")).toHaveCSS("overflow", "visible");
+    await expect(today.locator("h1")).toBeVisible();
     await breadcrumbs.getByRole("button", { name: "Panel section", exact: true }).press("Enter");
     await expect(today.locator("h1")).toHaveText("Panel section");
     await breadcrumbs.getByRole("button").first().click();
     await expect(today.locator("h1 time")).toBeVisible();
+    await expect(page.locator(".journal-stack")).toHaveCSS("overflow", "hidden");
     await expect(page.locator('[data-journal-document="yesterday"]')).toBeVisible();
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    await expect(today.locator("h1 time")).toBeHidden();
+    await today.getByRole("button", { name: "Page", exact: true }).click();
+    await expect(today.locator("h1 time")).toBeVisible();
   });
 }
 

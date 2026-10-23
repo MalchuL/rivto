@@ -1,15 +1,15 @@
 import type { EditorPosition } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
-import { getPageVirtualizationControllerForElement } from "../../surfaces/page/page-virtualization-controller";
+import { PageNavigationController } from "../../surfaces/page/page-navigation-controller";
 import { PANEL_SELECTOR, findPanelElements, isInPanel } from "./panel-dom";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {
-  /** Stable BlockView container carrying block identity and type markers. */
+  /** Stable block shell container carrying block identity and type markers. */
   readonly block: HTMLElement;
   /** Plain-text contentEditable element inside the block container. */
   readonly content: HTMLElement;
-  /** Persisted ID read from BlockView's `data-block-id` attribute. */
+  /** Persisted ID read from block shell's `data-block-id` attribute. */
   readonly blockId: string;
 }
 
@@ -18,12 +18,12 @@ export interface EventBlock {
  *
  * Delegated events arrive at the PageSurface root after bubbling, while
  * `event.target` still identifies the deepest originating element. `closest`
- * walks upward first to the content marker and then to its BlockView marker.
+ * walks upward first to the content marker and then to its block shell marker.
  * Events outside editable content return null and remain available to buttons,
  * menus, and other controls.
  *
  * @param event - Native event received by `useDOMEvent`.
- * @returns Editable content, its BlockView element, and persisted block ID.
+ * @returns Editable content, its block shell element, and persisted block ID.
  */
 export function findBlockFromEvent(event: Event): EventBlock | null {
   if (!(event.target instanceof Element)) {
@@ -37,7 +37,7 @@ export function findBlockFromEvent(event: Event): EventBlock | null {
   return content && block && blockId ? { block, content, blockId } : null;
 }
 
-/** Finds a rendered BlockView by ID without interpolating that ID into CSS. */
+/** Finds a rendered block shell by ID without interpolating that ID into CSS. */
 export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLElement | null {
   for (const block of findPanelElements(root, BLOCK_ID_SELECTOR)) {
     if (block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId) {
@@ -47,7 +47,7 @@ export function findRenderedBlock(root: HTMLElement, blockId: string): HTMLEleme
   return null;
 }
 
-/** Finds editable content owned directly by one BlockView, excluding descendants. */
+/** Finds editable content owned directly by one block shell, excluding descendants. */
 function findOwnedContent(block: HTMLElement): HTMLElement | null {
   for (const content of block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)) {
     if (content.closest(BLOCK_ID_SELECTOR) === block) {
@@ -60,7 +60,7 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
 /**
  * Finds the immediately previous rendered block when that block is editable.
  *
- * BlockView elements are returned in depth-first DOM order, matching the page's
+ * block shell elements are returned in depth-first DOM order, matching the page's
  * visible traversal. A contentless custom block stops the lookup so Backspace
  * never merges text across structural controls.
  *
@@ -71,8 +71,8 @@ function findOwnedContent(block: HTMLElement): HTMLElement | null {
 export function findPreviousEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
   let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === 0 && getPageVirtualizationControllerForElement(root)) {
-    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, -1);
+  if (index === 0 && PageNavigationController.getForElement(root)) {
+    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(blockId, -1);
     blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
@@ -90,8 +90,8 @@ export function findPreviousEditableBlock(root: HTMLElement, blockId: string): E
 export function findNextEditableBlock(root: HTMLElement, blockId: string): EventBlock | null {
   let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
-  if (index === blocks.length - 1 && getPageVirtualizationControllerForElement(root)) {
-    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(blockId, 1);
+  if (index === blocks.length - 1 && PageNavigationController.getForElement(root)) {
+    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(blockId, 1);
     blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
     index = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
@@ -106,10 +106,10 @@ export function findNextEditableBlock(root: HTMLElement, blockId: string): Event
 }
 
 /**
- * Finds the nearest ancestor BlockView of a rendered block.
+ * Finds the nearest ancestor block shell of a rendered block.
  *
- * @param block - Current BlockView element.
- * @returns Parent BlockView, or null when the block is at the surface root.
+ * @param block - Current block shell element.
+ * @returns Parent block shell, or null when the block is at the surface root.
  */
 export function findParentBlock(block: HTMLElement): HTMLElement | null {
   const parent = block.parentElement?.closest<HTMLElement>(BLOCK_ID_SELECTOR) ?? null;
@@ -132,7 +132,7 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
   if (!findRenderedBlock(root, blockId)) {
-    getPageVirtualizationControllerForElement(root)?.mountBlocks([blockId]);
+    PageNavigationController.getForElement(root)?.mountBlocks([blockId]);
   }
   const block = findRenderedBlock(root, blockId);
   const content = block ? findOwnedContent(block) : null;
@@ -287,9 +287,9 @@ export function verticalCaretPosition(
   if (
     ((direction === "up" && currentIndex === 0) ||
       (direction === "down" && currentIndex === blocks.length - 1)) &&
-    getPageVirtualizationControllerForElement(root)
+    PageNavigationController.getForElement(root)
   ) {
-    getPageVirtualizationControllerForElement(root)?.mountAdjacentBlocks(
+    PageNavigationController.getForElement(root)?.mountAdjacentBlocks(
       position.blockId,
       direction === "up" ? -1 : 1,
     );

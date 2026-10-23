@@ -1,3 +1,6 @@
+import { useCanvasViewportLayers } from "@chulane/rivto-edgeless/react";
+import { useCanvasCamera, useCanvasVisible } from "@chulane/rivto-edgeless/react";
+import { useEdgelessCanvas } from "../../../surfaces/edgeless/edgeless-tools-context";
 import { ElementProperties } from "./components/element-properties";
 import { ConnectorInteractionContext } from "../../../elements/visuals/connector-endpoints";
 import type { EdgelessVisualsOptions } from "./types";
@@ -157,6 +160,9 @@ export function EdgelessVisualLayer({ options }: { readonly options: EdgelessVis
  */
 function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsOptions }) {
   const tools = useEdgelessTools();
+  const canvas = useEdgelessCanvas()!;
+  const camera = useCanvasCamera(canvas);
+  const visible = useCanvasVisible(canvas);
   const edgelessOperation = useEdgelessOperations();
   const reactPanel = useReactPanel();
   useEffect(
@@ -179,14 +185,21 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
 
   const { element: root } = useEditorRoot();
   const tool = useVisualTool(tools);
-  useSyncExternalStore(
+  const revision = useSyncExternalStore(
     (listener) => edgelessOperation.subscribe(listener),
     () => edgelessOperation.getRevision(),
     () => edgelessOperation.getRevision(),
   );
-  const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
-  const zoom = Number(root?.dataset.edgelessZoom) || 1;
-  const elements = edgelessOperation.getRenderedElements();
+  const plane = useCanvasViewportLayers()?.plane ?? null;
+  const zoom = camera.zoom;
+  const elements = useMemo(
+    () =>
+      visible.flatMap((id) => {
+        const element = edgelessOperation.getRenderedElement(id);
+        return element && element.type !== "block" && element.type !== "group" ? [element] : [];
+      }),
+    [visible, revision, edgelessOperation],
+  );
   const fontOptions = useMemo(
     () => [
       ...new Map(
@@ -330,7 +343,6 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
             <ToolBar
               edgelessOperation={edgelessOperation}
               tools={tools}
-              tool={tool}
               startPresetDrag={presetDrag.startPresetDrag}
               movePresetDrag={presetDrag.movePresetDrag}
               endPresetDrag={presetDrag.endPresetDrag}

@@ -8,5 +8,5 @@
  * @module
  */
 export * from "./edgeless-surface";
-export * from "./snapping-store";
+export { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
 export type { EdgelessSnappingSnapshot, EdgelessSurfaceOptions } from "./types";

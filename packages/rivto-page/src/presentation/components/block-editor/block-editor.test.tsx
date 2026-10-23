@@ -1,3 +1,28 @@
+// jsdom has no layout observer; browser suites exercise real root measurements.
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    /**
+     * Accepts targets without simulating browser layout.
+     *
+     * @returns No measurement callbacks are scheduled in jsdom.
+     */
+    observe() {}
+    /**
+     * Leaves the layout-free observer unchanged.
+     *
+     * @returns No tracked target requires release.
+     */
+    unobserve() {}
+    /**
+     * Completes observer cleanup without scheduling callbacks.
+     *
+     * @returns The mock retains no browser resources.
+     */
+    disconnect() {}
+  };
+  window.scrollTo = jest.fn();
+});
+
 import type { BlockWrapperComponent, BlockWrapperProps } from "../block-wrapper/types";
 import type { BlockEditorApi } from "../../../editor/block-editor-api";
 import { BlockRow } from "../block-layout/block-row";
@@ -131,6 +156,28 @@ afterEach(() => {
     editor.destroy();
   }
   container.remove();
+});
+
+it("shares one attached root with the host and renders its ending slot last", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  const hostRoot = createRef<HTMLDivElement>();
+  adapter.setNode("a");
+  adapter.setBlockIds(["a"]);
+  act(() =>
+    root.render(
+      <BlockEditor editor={editor} ref={hostRoot} role="main" aria-label="Document">
+        <button>Append block</button>
+      </BlockEditor>,
+    ),
+  );
+  expect(hostRoot.current).toBe(editor.getRoot());
+  expect(hostRoot.current).toBe(container.firstElementChild);
+  expect(hostRoot.current?.getAttribute("aria-label")).toBe("Document");
+  expect(hostRoot.current?.lastElementChild?.textContent).toBe("Append block");
+  act(() => root.render(null));
+  expect(hostRoot.current).toBeNull();
+  expect(editor.getRoot()).toBeNull();
 });
 
 it("renders nested blocks, reorders them, and observes an empty display list", () => {
@@ -326,7 +373,8 @@ it("preserves the instance through StrictMode replay and releases data subscript
     ),
   );
   expect(container.textContent).toBe("first");
-  expect(firstAdapter.subscriberCount).toBe(4);
+  // Stable root rows also observe list decoration for both rendering modes.
+  expect(firstAdapter.subscriberCount).toBe(5);
   const controller = [...first.controllers].at(-1)!;
   expect(controller.getRoot()).toBe(container.firstElementChild);
   act(() =>
@@ -337,7 +385,8 @@ it("preserves the instance through StrictMode replay and releases data subscript
     ),
   );
   expect([...first.controllers].at(-1)).toBe(controller);
-  expect(firstAdapter.subscriberCount).toBe(4);
+  // Stable root rows also observe list decoration for both rendering modes.
+  expect(firstAdapter.subscriberCount).toBe(5);
   const secondAdapter = new TestBlockEditorAdapter();
   const secondEditor = createEditor(secondAdapter);
   secondAdapter.setNode("second");
@@ -412,6 +461,8 @@ it("renders structural-only snapshots while content stays in the host's own sour
   source.setBlockIds(["a"]);
   const node: BlockEditorNodeSnapshot = { id: "a", type: "text", childIds: [] };
   const blocks: BlockEditorBlocks = {
+    getRootIds: source.blocks.getRootIds,
+    getParentId: source.blocks.getParentId,
     getBlockIds: source.blocks.getBlockIds,
     subscribeBlockIds: source.blocks.subscribeBlockIds,
     /**
@@ -1077,7 +1128,7 @@ it("keeps wrapper elements independent and releases their own refs on removal", 
     expect(second.get(id)).not.toBe(first.get(id));
     expect(first.get(id)?.contains(second.get(id)!)).toBe(true);
     expect(second.get(id)?.contains(shell)).toBe(true);
-    expect(first.get(id)?.hasAttribute("data-block-in-item")).toBe(false);
+    expect(first.get(id)?.hasAttribute("data-block-in-item")).toBe(id === "parent");
     expect(second.get(id)?.getAttribute("data-block-in-item")).toBe("true");
     expect(shell.getAttribute("data-block-in-item")).toBe("true");
   }
@@ -1116,7 +1167,7 @@ it.each([5, 2000])(
     const unchanged = refs.get(ids[1]);
     expect(
       adapter.blocks.subscribeBlockNode.mock.calls.filter(([id]) => id === ids[0]),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     metrics.renders.clear();
     adapter.blocks.getBlockNode.mockClear();
     adapter.blocks.getBlockIds.mockClear();

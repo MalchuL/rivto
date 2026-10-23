@@ -1,0 +1,96 @@
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+
+/** Accessible handle capabilities; commands, artwork, and sensor attachment belong to the caller. */
+export interface DragHandleProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onClick" | "onPointerDown" | "onContextMenu" | "onKeyDown"
+> {
+  readonly children?: ReactNode;
+  /**
+   * Requests navigation after a click that was not consumed by dragging.
+   *
+   * @returns Host navigation has been requested; omission leaves the handle navigation-free.
+   */
+  readonly onOpen?: () => void;
+  /**
+   * Opens host actions at browser context-menu coordinates.
+   *
+   * @param x - Viewport X coordinate in CSS pixels.
+   * @param y - Viewport Y coordinate in CSS pixels.
+   * @returns Host actions have been requested; omission leaves the native menu available.
+   */
+  readonly onMenu?: (x: number, y: number) => void;
+}
+
+/**
+ * Renders a sensor-independent button separating navigation, menus, and drag activation.
+ *
+ * The Page drag controller consumes post-drag clicks during native capture.
+ * This button opens navigation only for clicks that reach it without prevention.
+ * React context-menu events prevent the native menu and open block actions
+ * directly using the viewport coordinates supplied by the browser. Enter and
+ * Space retain native button activation without a second suppression state.
+ *
+ * @param props - Native button attributes and host navigation/menu callbacks.
+ * @param props.onOpen - Host navigation callback invoked by an unsuppressed click.
+ * @param props.onMenu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
+ * @param ref - Optional drag sensor attachment forwarded to the button.
+ * @returns Accessible button with host artwork or the default four-dot grip.
+ */
+export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(function DragHandle(
+  { onOpen, onMenu, children, ...props },
+  ref,
+) {
+  const events: ButtonHTMLAttributes<HTMLButtonElement> = {
+    /**
+     * Stops row click propagation and requests navigation unless the drag consumed this click.
+     *
+     * @param event - Button click whose propagation is stopped.
+     * @returns Native propagation is stopped and the permitted host action is invoked.
+     */
+    onClick: (event) => {
+      event.stopPropagation();
+      if (!event.defaultPrevented) {
+        onOpen?.();
+      }
+    },
+    /**
+     * Suppresses the browser menu and opens block actions at the event coordinates.
+     *
+     * Browser-generated context-menu events use this handler regardless of their
+     * input source; it captures targets before focus moves into the menu.
+     *
+     * @param event - Context-menu event supplying viewport coordinates.
+     * @returns Native propagation is stopped and the permitted host action is invoked.
+     */
+    onContextMenu: (event) => {
+      if (!onMenu) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      onMenu?.(event.clientX, event.clientY);
+    },
+  };
+  return (
+    <button
+      {...props}
+      {...events}
+      ref={ref}
+      type="button"
+      contentEditable={false}
+      data-block-drag-handle="true"
+    >
+      <span className="block-handle-icon" aria-hidden="true">
+        {children ?? (
+          <svg className="block-handle-grip" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="5" cy="5" r="1.5" />
+            <circle cx="11" cy="5" r="1.5" />
+            <circle cx="5" cy="11" r="1.5" />
+            <circle cx="11" cy="11" r="1.5" />
+          </svg>
+        )}
+      </span>
+    </button>
+  );
+});

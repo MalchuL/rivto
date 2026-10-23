@@ -4,6 +4,7 @@ import {
   PREVENT_TEXT_EDITING_ATTRIBUTE,
 } from "../packages/react-rivto-editor/src/constants";
 import {
+  BLOCK_ROW_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
   hostBlockIdSelector as blockIdSelector,
@@ -609,16 +610,18 @@ test("bottom-up nested drag does not select a parent from the gap between childr
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .page-block:has(> .page-block-children)",
+      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]:has(> .rivto-block-children)",
     )
     .first();
-  const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();
+  const child = parent.locator(`.rivto-block-children ${BLOCK_ID_SELECTOR}`).last();
   await parent
-    .locator(":scope > .page-block-row [data-block-content]")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
     .click({ modifiers: ["Control"] });
 
   await expect(parent).toHaveAttribute("data-block-selected", "true");
-  await expect(parent).toHaveCSS("background-color", "rgb(229, 223, 255)");
+  await expect
+    .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(229, 223, 255)");
   const parentBox = await parent.boundingBox();
   const childBox = await child.boundingBox();
   if (!parentBox || !childBox) {
@@ -627,6 +630,59 @@ test("selecting a parent draws one selection rectangle around its subtree", asyn
   expect(parentBox.y).toBeLessThanOrEqual(childBox.y);
   expect(parentBox.y + parentBox.height).toBeGreaterThanOrEqual(childBox.y + childBox.height);
 });
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`nested structural selections share one subtree decoration in ${mode}`, async ({ page }) => {
+    await page.evaluate((mode) => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+      editor.blocks.insertBlock({
+        id: "selected-parent",
+        type: "paragraph",
+        content: "Selected parent",
+        children: [
+          { id: "selected-child", type: "paragraph", content: "Selected child" },
+          { id: "unselected-child", type: "paragraph", content: "Unselected child" },
+        ],
+      });
+      if (mode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 600, height: 240 },
+          props: { startBlockId: "selected-parent", endBlockId: "selected-parent" },
+        });
+      }
+    }, mode);
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const parent = page.locator(blockIdSelector("selected-parent"));
+    const child = page.locator(blockIdSelector("selected-child"));
+    const parentContent = parent.locator(":scope > .rivto-block-row [data-block-content]");
+    await child.locator("[data-block-content]").click({ modifiers: ["Control"] });
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await parentContent.click({ modifiers: ["Control"] });
+    await expect(parent).toHaveAttribute("data-block-selected", "true");
+    await expect(child).toHaveAttribute("data-block-selected", "true");
+    await expect
+      .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
+      .toBe("rgb(229, 223, 255)");
+    await expect(parent).toHaveCSS("outline-style", "solid");
+    await expect(child).toHaveCSS("outline-style", "none");
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(page.locator(blockIdSelector("unselected-child"))).toHaveCSS(
+      "background-color",
+      "rgb(229, 223, 255)",
+    );
+    const parentBox = (await parent.boundingBox())!;
+    const childBox = (await child.boundingBox())!;
+    expect(parentBox.y + parentBox.height).toBeGreaterThanOrEqual(childBox.y + childBox.height);
+    await parentContent.click({ modifiers: ["Control"] });
+    await expect(parent).not.toHaveAttribute("data-block-selected", "true");
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(child).toHaveCSS("outline-style", "solid");
+  });
+}
 
 test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) => {
   const contents = textContents(page);
@@ -644,10 +700,13 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   await page.keyboard.press("Alt+ArrowUp");
   await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("Alt+Shift+ArrowDown");
-  await expect(page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).nth(1)).toHaveAttribute(
-    BLOCK_ID_ATTRIBUTE,
-    firstId!,
-  );
+  await expect(
+    page
+      .locator(
+        `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > ${BLOCK_ID_SELECTOR}`,
+      )
+      .nth(1),
+  ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId!);
   await expect(page.locator(blockIdSelector(firstId!)).locator("[data-block-content]")).toHaveText(
     firstText ?? "",
   );
@@ -865,10 +924,10 @@ for (const mode of ["block", "edgeless"] as const) {
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .page-block:has(> .page-block-children)",
+      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]:has(> .rivto-block-children)",
     )
     .first();
-  const siblings = parent.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`);
+  const siblings = parent.locator(`:scope > .rivto-block-children > ${BLOCK_ID_SELECTOR}`);
   const first = siblings.first();
   const second = siblings.last();
   const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -880,10 +939,10 @@ test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => 
   await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_ID_ATTRIBUTE, parentId!);
 
   await first
-    .locator(":scope > .page-block-row [data-block-content]")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
     .click({ modifiers: ["Control"] });
   await second
-    .locator(":scope > .page-block-row [data-block-content]")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
     .click({ modifiers: ["Control"] });
   await page.keyboard.press("Shift+Tab");
 

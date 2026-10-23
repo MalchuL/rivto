@@ -15,6 +15,9 @@ export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
  * Provides optional item geometry without introducing another block identity.
  *
  * Host layouts supply widths through style; resize controls may share this wrapper.
+ * The item's own border box includes in-flow content and padding, not overflow
+ * from absolute slots. Native slot hits remain reachable outside that box.
+ * Item chrome reveals the owning row's handle; native nested rows retain priority.
  * The nested BlockNode remains the sole owner of its data-block-id and content.
  * A decorator supplies its existing block snapshot without adding a subscription.
  * Placement items without that snapshot observe their own node's list decoration.
@@ -117,6 +120,7 @@ const BlockItemFrame = forwardRef<HTMLDivElement, BlockItemFrameProps>(function 
       <div
         {...attributes}
         ref={ref}
+        data-block-item-id={blockId}
         data-block-in-item={outerItem === blockId || undefined}
         data-block-list-type={listType}
         className={["rivto-block-item", className].filter(Boolean).join(" ")}

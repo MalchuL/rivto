@@ -1,7 +1,16 @@
-import { KanbanLayout, ColumnLayout, BentoLayout, ContainerTitle } from "./container-layouts";
+import { BlockSelectionExtensions, type BlockSelectionFeature } from "../src";
+import {
+  KanbanLayout,
+  ColumnLayout,
+  BentoLayout,
+  ContainerTitle,
+  DemoOutlineLayout,
+} from "./container-layouts";
 import type { ComponentType } from "react";
 import {
   BlockEditorController,
+  BlockDragExtension,
+  BlockDragHandle,
   BlockListSlot,
   BlockCollapseSlot,
   type BlockRenderer,
@@ -15,6 +24,12 @@ import { DemoBlock } from "./demo-block";
 export class DemoSession {
   readonly adapter: DemoAdapter;
   readonly editor: BlockEditorController;
+  readonly selectionFeatures = new BlockSelectionExtensions({
+    toggle: "selection.toggle",
+    range: "selection.range",
+    exact: "selection.exact",
+  });
+  private readonly selectionDisposers = new Map<BlockSelectionFeature, () => void>();
   private removeCustomRenderer: (() => void) | undefined;
   private removeExtraSlot: (() => void) | undefined;
   private removeWrapper: (() => void) | undefined;
@@ -28,6 +43,33 @@ export class DemoSession {
   constructor(repeat: number, example: "outline" | "kanban" | "bento" = "outline") {
     this.adapter = new DemoAdapter(repeat, example);
     this.editor = new BlockEditorController({ adapter: this.adapter });
+    this.editor.keyboard.register(
+      { id: "selection.toggle", keys: ["Control", "Meta"] },
+      () => false,
+    );
+    this.editor.keyboard.register({ id: "selection.range", keys: "Shift" }, () => false);
+    this.editor.keyboard.register({ id: "selection.exact", keys: "Shift+Alt" }, () => false);
+    for (const feature of ["native", "click", "toggle", "range", "pointer", "feedback"] as const) {
+      this.setSelectionFeature(feature, true);
+    }
+    for (const outdent of [false, true]) {
+      this.editor.keyboard.register(
+        { id: outdent ? "block.outdent" : "block.indent", keys: outdent ? "Shift+Tab" : "Tab" },
+        /**
+         * Applies the host outline command to stored structural selection.
+         *
+         * @param input - Keyboard event; toolbar controls and editable text keep native Tab behavior.
+         * @returns Whether a model move occurred and the shortcut should be claimed.
+         */
+        ({ raw, root }) => {
+          if (raw.target !== root) {
+            return false;
+          }
+          return this.adapter.changeSelectionIndent(outdent);
+        },
+      );
+    }
+    this.editor.extensions.register("block-drag", new BlockDragExtension(this.adapter));
     this.editor.extensions.register("demo-block-presentation", {
       /**
        * Installs demo presentation and whole-editor focus observation.
@@ -36,7 +78,8 @@ export class DemoSession {
        * @returns Registrations remain active until the session ends.
        */
       setup(editor) {
-        editor.renderers.register("text", { content: DemoBlock });
+        editor.slots.register({ position: "end", component: BlockDragHandle, priority: 400 });
+        editor.renderers.register("text", { content: DemoBlock, layout: DemoOutlineLayout });
         editor.renderers.register("demo-kanban", { content: ContainerTitle, layout: KanbanLayout });
         editor.renderers.register("demo-column", { content: ContainerTitle, layout: ColumnLayout });
         editor.renderers.register("demo-bento", { content: ContainerTitle, layout: BentoLayout });
@@ -48,6 +91,27 @@ export class DemoSession {
         editor.events.on("blur", () => editor.getRoot()?.removeAttribute("data-demo-focused"));
       },
     });
+  }
+
+  /**
+   * Installs or removes one optional selection capability.
+   *
+   * @param feature - Capability controlled by the demo toolbar.
+   * @param enabled - Whether the capability should be installed.
+   * @returns Previous installation is removed before a replacement is registered.
+   */
+  setSelectionFeature(feature: BlockSelectionFeature, enabled: boolean): void {
+    this.selectionDisposers.get(feature)?.();
+    this.selectionDisposers.delete(feature);
+    if (enabled) {
+      this.selectionDisposers.set(
+        feature,
+        this.editor.extensions.register(
+          `selection.${feature}`,
+          this.selectionFeatures.feature(feature),
+        ),
+      );
+    }
   }
 
   /**

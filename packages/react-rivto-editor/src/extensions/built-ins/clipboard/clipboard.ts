@@ -1,3 +1,4 @@
+import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import { registerBlockClipboardActions } from "../block-handle/actions";
 import {
   browserClipboardFormats,
@@ -21,12 +22,7 @@ import {
 } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
 import { blockIdsOf } from "../../../elements/block-element-projection";
-import {
-  KEYBOARD_BINDING_IDS,
-  matchesShortcut,
-  parseShortcut,
-  resolveSelectionEndpoints,
-} from "../../../managers";
+import { KEYBOARD_BINDING_IDS, matchesShortcut, parseShortcut } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 import { ElementPasteStrategy } from "./element-paste-strategy";
@@ -233,7 +229,7 @@ export function registerClipboard(
     // The completed paste replaces it with the newly selected content.
     const active = canvas ?? reactPanel.selection.get();
     const lengthOf = (id: string) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0;
-    const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
+    const ends = active ? BlockSelectionEndpoints.resolve(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? reactPanel.blocks.getBlockNode(activeId) : undefined;
     const expanded =

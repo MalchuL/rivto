@@ -17,7 +17,7 @@ import { registerEdgelessMovement } from "./edgeless-movement";
 import { installEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
 import { registerEdgelessTransform } from "./edgeless-transform";
-import { registerEdgelessSurface } from "../../surfaces/edgeless/register";
+import { EdgelessSurfaceRegistration } from "../../surfaces/edgeless/register";
 
 /** @returns The built-in positioned-card surface. */
 export function edgelessSurfaceExtension(
@@ -25,7 +25,7 @@ export function edgelessSurfaceExtension(
 ): ReactEditorExtension {
   return {
     id: "surface.edgeless",
-    setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
+    setup: (reactEditor) => new EdgelessSurfaceRegistration(reactEditor, options).dispose,
   };
 }
 

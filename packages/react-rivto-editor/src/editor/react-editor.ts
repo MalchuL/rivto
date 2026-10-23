@@ -210,7 +210,7 @@ export class ReactEditor implements ReactEditorApi {
     const events = new EventManager(this, extensions);
     this.events = events;
     this.disposers.push(() => this.panels.cancelPendingSelections());
-    const keyboard = new KeyboardManager(this, extensions, options.keymap);
+    const keyboard = new KeyboardManager(this.events, extensions, options.keymap);
     this.keyboard = keyboard;
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;

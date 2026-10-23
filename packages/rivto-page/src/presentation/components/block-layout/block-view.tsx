@@ -26,6 +26,9 @@ export interface BlockViewProps extends HTMLAttributes<HTMLDivElement> {
  * Page does not interpret palette names or define a color-token protocol. The public
  * background override remains separate from the node's supplied color value;
  * theme overrides inherit, while a parent's own background does not color children.
+ * Selection supplies an inherited background fill to the shell and child layouts.
+ * The fill replaces their backgrounds without blending text or persisted colors;
+ * removing selection restores each surface's own background through CSS fallbacks.
  * Color selection sets the non-inherited backgroundColor property; it does not
  * mutate an inherited node-color variable or install a theme subscription.
  *
@@ -45,7 +48,7 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function Blo
 ) {
   const itemId = useContext(BlockItemIdentityContext);
   const blockStyle: BlockEditorTheme = {
-    backgroundColor: `var(--rivto-block-background, ${block.color || "var(--rivto-background, #fff)"})`,
+    backgroundColor: `var(--rivto-block-selection-fill, var(--rivto-block-background, ${block.color || "var(--rivto-background, #fff)"}))`,
     ...style,
   };
   return (

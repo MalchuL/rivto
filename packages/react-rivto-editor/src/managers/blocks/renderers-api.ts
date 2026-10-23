@@ -1,4 +1,5 @@
-import type { BlockRenderer } from "./renderer-types";
+import type { BlockLayout } from "@chulane/rivto-page";
+import type { BlockRenderer, BlockRendererRegistration } from "./renderer-types";
 
 /** Registration, lookup, and change notifications for block renderers. */
 export interface RenderersApi {
@@ -7,10 +8,11 @@ export interface RenderersApi {
    *
    * @param type - Block type name whose renderer is registered.
    * @param renderer - React block renderer associated with the type.
+   * @param layout - Optional Page layout installed and removed with the renderer.
    * @returns A function that unregisters the owned renderer.
    * @throws If the type is empty, already registered, or registration ownership is inactive.
    */
-  register(type: string, renderer: BlockRenderer): () => void;
+  register(type: string, renderer: BlockRenderer, layout?: BlockLayout): () => void;
   /**
    * Removes a renderer registered for the block type.
    *
@@ -26,6 +28,14 @@ export interface RenderersApi {
    * undefined when neither is available.
    */
   get(type: string): BlockRenderer | undefined;
+  /** Fixed fallback supplied when the host registry is created. */
+  readonly fallback?: BlockRenderer;
+  /**
+   * Reads concrete renderer and layout contributions with stable entry identities.
+   *
+   * @returns Defensive list of immutable registrations in installation order.
+   */
+  getRegistrations(): readonly BlockRendererRegistration[];
   /**
    * Checks whether a block type has a registered renderer.
    *

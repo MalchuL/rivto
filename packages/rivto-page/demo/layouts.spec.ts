@@ -26,7 +26,7 @@ for (const example of ["kanban", "bento"]) {
         page.getByRole("textbox", { name: "Text board-1-added-4-added-1", exact: true }),
       ).toBeVisible();
     }
-    await expect(text).toHaveValue("Preserved text");
+    await expect(text).toHaveText("Preserved text");
     await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
     await page.locator("style[data-demo-chrome]").evaluate((element) => element.remove());
     const children = board.locator(":scope > .rivto-block-children");
@@ -153,7 +153,7 @@ test("wrapper boundaries use package theme geometry, respect clipping, and disap
   await page.goto("/?example=bento");
   const host = page.locator('[data-block-id="board-1"] > .rivto-block-children');
   await host.evaluate((element) => {
-    element.style.setProperty("--rivto-block-children-gap", "24px");
+    element.style.setProperty("--rivto-block-gap", "24px");
     element.style.setProperty("--rivto-drop-gap-size", "20px");
     element.style.overflow = "hidden";
   });
@@ -266,7 +266,7 @@ for (const example of ["kanban", "bento"]) {
       await page.getByRole("button", { name: "Reset counters", exact: true }).click();
       await text.press("End");
       await text.press("x");
-      await expect(text).toHaveValue("Warmx");
+      await expect(text).toHaveText("Warmx");
       await page.getByRole("button", { name: "Refresh statistics", exact: true }).click();
       const changed: DemoMetrics = JSON.parse(
         (await page.locator("[data-demo-metrics]").textContent())!,

@@ -1,4 +1,11 @@
+import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extension";
+import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
 import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
+import { BlockEditorController, BlockSelectionExtensions } from "@chulane/rivto-page";
+import { PageBlocks } from "../surfaces/page/page-blocks";
+import { PageSelection } from "../surfaces/page/page-selection";
+import { PageSurfaceRegistrations } from "../surfaces/page/page-surface-registrations";
+import { UnknownBlock } from "../blocks/unknown-block/unknown-block";
 import type { DocumentModel } from "@chulane/document-model";
 import { ModeManager, EmbeddingPanel, type PanelAPI, type ModeManagerApi } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
@@ -47,6 +54,13 @@ import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
  * A destroyed instance is never reused by a later mount of the hook.
  */
 export class ReactPanel implements ReactPanelApi {
+  /** Occurrence-owned Page runtime; the mounted surface borrows only its attachment. */
+  readonly page: BlockEditorController;
+  /** Optional feature coordinator shared by this occurrence's independent selection extensions. */
+  readonly pageSelectionFeatures = new BlockSelectionExtensions(PAGE_SELECTION_BINDINGS);
+  private readonly pageSelection: PageSelection;
+  private readonly pageNavigation: PageNavigationController;
+  private readonly pageRegistrations: PageSurfaceRegistrations;
   readonly mode: ModeManagerApi;
   readonly events: PanelEventManager;
   readonly keyboard: PanelKeyboardManager;
@@ -99,6 +113,20 @@ export class ReactPanel implements ReactPanelApi {
     this.blockContextMenu = new PanelBlockContextMenuManager(this);
     this.slashCommands = new PanelSlashCommandManager(editor.slashCommands, this);
     try {
+      const blocks = new PageBlocks(this, editor.blockBehaviors);
+      this.pageSelection = new PageSelection(this, blocks);
+      this.page = new BlockEditorController({
+        adapter: { blocks, selection: this.pageSelection },
+        fallbackRenderer: editor.renderers.fallback ?? UnknownBlock,
+      });
+      this.pageNavigation = new PageNavigationController(this.page.adapter);
+      this.pageRegistrations = new PageSurfaceRegistrations(
+        editor.surfaces,
+        editor.renderers,
+        this.page,
+        this.blocks,
+        this.mode,
+      );
       /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
       this.registrations.add(
         editor.blockElements.maintainBlockCards(
@@ -205,6 +233,7 @@ export class ReactPanel implements ReactPanelApi {
     this.unregisterRoot?.();
     this.unregisterRoot = undefined;
     this.root = nextRoot;
+    this.pageNavigation.setRoot(nextRoot);
     if (this.root) {
       this.root.inert = !this.enabled;
       this.root.setAttribute(PANEL_ATTRIBUTE, "");
@@ -274,6 +303,10 @@ export class ReactPanel implements ReactPanelApi {
     this.destroyed = true;
     const errors: unknown[] = [];
     const cleanups = [
+      () => this.pageRegistrations?.destroy(),
+      () => this.page?.destroy(),
+      () => this.pageSelection?.destroy(),
+      () => this.pageNavigation?.setRoot(null),
       this.unsubscribeMode,
       this.unsubscribeBlock,
       this.unregisterRoot,

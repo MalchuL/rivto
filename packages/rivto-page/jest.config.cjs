@@ -1,7 +1,11 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
+  moduleNameMapper: {
+    "^@chulane/rivto-keyboard$": "<rootDir>/../rivto-keyboard/src/index.ts",
+  },
+  testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   testEnvironment: "jsdom",
-  roots: ["<rootDir>/src"],
+  roots: ["<rootDir>/src", "<rootDir>/demo"],
   transform: {
     "^.+\\.tsx?$": ["<rootDir>/jest-transformer.cjs", { tsconfig: { module: "commonjs" } }],
   },

@@ -1,5 +1,13 @@
 # Контракты самостоятельного блочного редактора
 
+> Current display-list contract: section 27 supersedes the earlier proposed
+> BlockEditorRegion/region snapshot API. Page reads host-selected IDs through
+> adapter.blocks; no shared owner or region availability is required.
+> Section 28 defines current editor ownership, registration, and view lifecycle.
+> Section 29 defines replaceable JSX layouts and geometry-only drop targets.
+> Section 30 adds item-anchored grid/wrapping gaps without changing layout cells.
+> Section 31 corrects idle overlay input, initial focus, borrowed nodes, and sampling.
+
 Дата: 2026-10-19. Статус: целевой дизайн; автономный rendering slice реализован,
 подключение к host и остальные взаимодействия остаются последующими этапами.
 
@@ -1177,3 +1185,491 @@ repeat=1/200 в обоих браузерах. Сохраняются 16 node re
 Предыдущий baseline приведён в разделе 23. Диапазоны browser timings зашумлены;
 этот перенос убирает ответственность за палитру из Page, а не доказывает ускорение
 production editor. Отдельные production renderers и integration здесь не проверялись.
+
+## 25. Color tokens removed from the Page contract
+
+The color-token protocol introduced in sections 23–24 is removed. BlockEditorTheme
+has no per-color index signature, and BlockEditorPalette and its token-validation
+tests are deleted. Page accepts a resolved CSS color or expression in snapshot.color
+and node.setColor. BlockView uses that value as the fallback for the single public
+--rivto-block-background override; an absent color uses --rivto-background or white.
+CSS syntax is the host's responsibility; Page does not parse or reserve color names.
+
+The demo owns its named choices and maps them to resolved CSS expressions before
+calling the node command. Its adapter validates example values, and its controls map
+those values back to labels for display. Any --demo-color-* references in those
+expressions belong exclusively to the demo. There is no palette registry or color
+variable naming convention in the Page API. A production adapter must own persisted
+token conversion and any reverse mapping when applying commands.
+
+README, API comments, and package AGENTS.md now describe this boundary. Package/demo
+builds, typecheck, lint, 46 unit tests, and 20 browser scenarios passed. Built ESM,
+declarations, and CSS were checked for the removed palette class and variable names.
+
+Focused performance verification passed all 4 background scenarios on production
+preview, workers=1, repeat=1/200 in Chromium and Firefox. Both sizes retain 16 node
+reads, zero root reads, and two notifications per change. Event to two animation
+frames, median (range), milliseconds:
+
+| Browser  | repeat | DOM proxy ms     |
+| -------- | ------ | ---------------- |
+| chromium | 1      | 20.4 (18.5–27.7) |
+| chromium | 200    | 9.4 (9.0–9.8)    |
+| firefox  | 1      | 19.0 (17.0–22.0) |
+| firefox  | 200    | 4.0 (3.0–5.0)    |
+
+These are demo rendering measurements, not a production integration guarantee.
+The preceding English-demo baseline is recorded in /tmp/rivto-page-english-performance.log;
+its small/large medians were 21.5/12.4 ms in Chromium and 19.0/54.0 ms in Firefox.
+Rendering ranges remain noisy; no general performance improvement is claimed.
+
+## 26. Surface mode removed from Page
+
+BlockEditorMode is removed from public exports. BlockEditorAdapter, BlockSlotProps,
+and BlockSlotRegistration no longer contain mode. BlockTree does not propagate a
+surface name, BlockSlotHost filters only by position and the current-owner when
+predicate, and the registry no longer captures or copies mode restrictions.
+Demo and test adapters no longer declare a surface mode.
+
+The host chooses which contributions to install and supplies application context
+through its own component wrappers/providers. Page neither names nor branches on
+the containing page/edgeless surface. Registry identity, priorities, owner-state
+filters, selection updates, independent disposers, and controller ownership remain
+unchanged. Tests now check owner/selection predicates and captured registration
+fields without relying on surface names. README and AGENTS.md record this boundary.
+
+Verification: package/demo builds, typecheck, lint, 46 unit tests, and 20 browser
+scenarios passed. Four focused pointer-control performance scenarios passed on a
+production preview in Chromium/Firefox, repeat=1/200, workers=1. Checkbox retains
+16 node reads; collapse retains 17 closing / 30 opening one child. Both sizes retain
+zero root reads and two notifications per command. Event to two animation frames,
+median (range), milliseconds:
+
+| Browser  | repeat | Collapse         | Checkbox         |
+| -------- | ------ | ---------------- | ---------------- |
+| chromium | 1      | 30.8 (30.3–31.3) | 31.2 (30.8–31.3) |
+| chromium | 200    | 42.2 (40.6–43.1) | 47.9 (7.2–80.5)  |
+| firefox  | 1      | 15.0 (13.0–15.0) | 15.0 (13.0–16.0) |
+| firefox  | 200    | 16.0 (15.0–19.0) | 55.0 (54.0–56.0) |
+
+These measurements cover the standalone fixture and bounded work; they do not
+establish production integration performance or a general latency improvement.
+
+## 27. Host-selected display list replaces BlockEditorRegion
+
+BlockEditorRegion, BlockEditorRegionSnapshot, adapter.region, and the
+available/missing status are removed from the implemented public API.
+BlockEditorBlocks now supplies getBlockIds(): readonly string[] and
+subscribeBlockIds(listener): () => void alongside addressed node operations.
+
+The host selects the displayed IDs in their desired order. Blocks may have
+unrelated parents; Page does not create a common parent or require an owner.
+Each node's real childIds still control descendant rendering. An empty list
+renders no nodes; loading or missing-owner presentation belongs to the host.
+These reads do not define future insertion, navigation, or mutation permissions;
+those capabilities must follow actual consumers and the host's access policy.
+
+The array must retain reference identity until IDs or order change. Publish a new
+immutable array before notifying list subscribers. Node snapshots retain their
+own identity contract and subscriptions; content, selection, or node-field edits
+do not invalidate the display list. Reordering preserves keyed node components.
+Demo adapters, read counters, browser assertions, fixtures, exports, and README
+use the same contract. Tests cover selection from different parents without
+reading those parents, actual descendants, reordering, empty-list cleanup, and
+bounded node work with small and large lists. Production wiring remains deferred.
+
+Verification: package and demo builds, typecheck, lint, 47 unit tests, and all
+20 Chromium/Firefox browser scenarios passed (behavior workers=12). All 12
+performance scenarios passed against the production demo preview (workers=1),
+repeat=1/200, rendering 6/1200 nodes without virtualization. List-type, background,
+and checkbox commands each retain 16 node reads; collapse retains 17 closing / 30
+opening one child. Every command retains zero display-list reads and two
+notifications at both sizes. Synchronous command samples range from 0 to 1 ms.
+Event to two animation frames, median (range), milliseconds:
+
+| Browser  | repeat | Interaction | DOM proxy ms     |
+| -------- | ------ | ----------- | ---------------- |
+| chromium | 1      | List type   | 21.2 (18.2–24.9) |
+| chromium | 200    | List type   | 18.9 (8.0–29.3)  |
+| chromium | 1      | Background  | 21.7 (17.5–23.0) |
+| chromium | 200    | Background  | 74.8 (8.9–85.6)  |
+| firefox  | 1      | List type   | 20.0 (17.0–23.0) |
+| firefox  | 200    | List type   | 16.0 (3.0–51.0)  |
+| firefox  | 1      | Background  | 20.0 (18.0–21.0) |
+| firefox  | 200    | Background  | 4.0 (4.0–53.0)   |
+
+Rendering timings remain noisy; these results establish bounded source work in
+the standalone fixture, not a general speedup or production integration behavior.
+
+## 28. Host-owned editor instance and data-only adapter
+
+BlockEditorAdapter now contains only blocks and selection. Presentation renderer
+contracts live under presentation/renderers, not adapter/types. BlockEditorSlots
+and BlockEditorRenderers are removed from adapter contracts and public exports.
+The host creates new BlockEditorController({ adapter, fallbackRenderer? }), configures
+it through slots/renderers/extensions/events, and renders <BlockEditor editor={editor}>.
+Concrete block components and data transactions remain host-owned.
+
+BlockEditorController owns its node cache and managers across DOM detach/attach.
+The React component attaches/detaches only and releases its addressed subscriptions;
+it does not create or destroy the editor. StrictMode replay retains the same
+instance. One instance supports one concurrent view; distinct instances may share
+a data adapter while retaining independent presentation configurations. The host
+creates the object outside React render and owns final destruction. DemoRoot uses
+an effect to create a DemoSession after commit and destroys it on cleanup; toggling
+the view does not end that session. The data-only DemoAdapter owns no registries.
+
+Slot registrations retain stable generated IDs, priority order, synchronous owner
+predicates, and independent disposers. Renderer registrations reject duplicate or
+empty types, retain component identity, and notify live lookup consumers. The
+optional fallbackRenderer preserves fallback rendering for unregistered types.
+The renderer registry does not create persisted block definitions. Publication
+notifies all captured observers even if one fails; a failed direct registration
+removes its new entry and reports publication/rollback failures.
+
+Extensions expose register({ id, setup }) and registerCleanup. Setup is synchronous;
+returned asynchronous/invalid cleanup is rejected. Slot/renderer registrations, their subscriptions, editor event observers, and
+nested extensions installed during setup are captured automatically. Node/data
+subscriptions require returned cleanup or explicit registerCleanup ownership. Nested setup restores
+the parent scope. Failed setup releases captured resources, including nested
+extensions, and allows retrying the same IDs. Removal runs returned cleanup first,
+then captured resources in reverse order. Every release is attempted despite
+failures; setup and cleanup errors are retained in AggregateError. Resource ownership
+is removed before cleanup, so a throwing disposer is still idempotent. Later event
+or asynchronous callbacks have editor ownership rather than implicit feature scope;
+retain their disposers in returned extension cleanup when earlier removal is needed.
+Destruction during setup is rejected before changing editor lifecycle state.
+
+Public extension and event interfaces hide manager teardown and DOM attachment.
+The controller remains the only final lifecycle owner. It removes DOM listeners,
+releases editor resources and cached nodes, and never destroys the borrowed adapter.
+React still owns removal of rendered DOM; unmount the view when ending its session.
+
+Changes have separate subscriptions: node snapshots, host selection, display IDs,
+slot entries, renderer lookups, and editor focus transitions. Focus/blur observations
+receive original native focusin/focusout events only when focus crosses the entire
+attached subtree. Internal focus moves emit neither event. Detachment removes
+native listeners while keeping event subscriptions available for the next mount.
+Keyboard dispatch remains deferred until the first concrete interaction is migrated.
+
+Server rendering now renders the configured block list from synchronous host reads,
+without DOM attachment or subscriptions. Matching data and registrations are the
+host's hydration responsibility; only standalone SSR output is verified here.
+Production ReactEditor/EditorPanel integration remains a separate migration stage.
+
+Verification after implementation and review: 65 unit tests in seven suites,
+package/demo typechecks, lint without warnings, package/demo production builds,
+and 22 Chromium/Firefox browser scenarios passed. Browser behavior used workers=12;
+all 12 production-preview performance scenarios used workers=1 without concurrent
+builds or other browser tests. repeat=1/200 mounts 6/1200 nodes, without virtualization.
+
+List/background/checkbox changes retain 16 own-node reads, collapse retains 17
+closing / 30 opening one child, and every measured command retains zero display-list
+reads and two notifications at both sizes. Command samples remain 0–1 ms. The prior
+section's production fixture is the comparison baseline. Event to two animation
+frames, median (range), milliseconds:
+
+| Browser  | repeat | Interaction | Before           | After            |
+| -------- | ------ | ----------- | ---------------- | ---------------- |
+| chromium | 1      | list        | 21.2 (18.2–24.9) | 21.4 (17.0–25.1) |
+| chromium | 1      | background  | 21.7 (17.5–23.0) | 21.3 (20.9–21.9) |
+| chromium | 200    | list        | 18.9 (8.0–29.3)  | 21.2 (20.0–80.9) |
+| chromium | 200    | background  | 74.8 (8.9–85.6)  | 80.0 (8.7–85.3)  |
+| firefox  | 1      | list        | 20.0 (17.0–23.0) | 21.0 (19.0–33.0) |
+| firefox  | 1      | background  | 20.0 (18.0–21.0) | 19.0 (19.0–23.0) |
+| firefox  | 200    | list        | 16.0 (3.0–51.0)  | 15.0 (4.0–17.0)  |
+| firefox  | 200    | background  | 4.0 (4.0–53.0)   | 4.0 (3.0–8.0)    |
+
+The DOM timing ranges overlap and remain noisy; no general latency improvement is
+claimed. Deterministic work stays bounded at both fixture sizes. Pointer scenarios
+also retain the earlier read/notification bounds. Measurements cover the standalone
+demo, not production editor integration.
+
+The final review checked data/presentation ownership, narrow public manager APIs,
+independent subscriptions, stable snapshot/component/node identity, one-view attachment,
+StrictMode replay, nested setup scopes, failed setup/publication rollback, idempotent
+cleanup, preservation of all cleanup errors, explicit data-subscription ownership,
+SSR without subscriptions, and declaration documentation/formatting. Required styles
+remain package-owned and were not changed by this refactor. No new dependencies or
+CJS files were introduced. Production integration, hydration behavior, and keyboard
+command dispatch remain outside the implemented slice; the full workspace suite was
+not run for this isolated package change.
+
+## 29. Replaceable JSX layouts and explicit drop targets
+
+The implemented first stage separates the common BlockNode/BlockView boundary
+from host JSX composition. Renderer registration now accepts { content?, layout? };
+both components receive blockId and remain host-owned. DefaultBlockLayout preserves
+the ordinary row/body/outline composition and the existing fallback content option.
+A frozen registration retains component identities and extension ownership; its
+lookup consumers compare content/layout results rather than a global revision.
+
+Public primitives are BlockRow, BlockContent, BlockBody, BlockChildren, BlockItem,
+BlockDropTarget, and BlockDropGap. Layout chooses their JSX order; the shell and
+selection remain common even without a row. BlockChildren alone traverses actual
+child IDs and supports stable item/gap components and appended non-block controls.
+Item receives an already-rendered child; gap receives the actual parent and current
+canonical previous/next IDs. Arbitrary root display IDs do not imply a parent.
+Optional BlockItem wrappers own sibling-level counters while nested block shells do
+not count twice; DOM-free gap boundaries preserve counter resets across explicit gaps.
+
+Chrome and structural child contexts are separate. Stable childIds/collapse fields
+avoid child-host/list work for text, color, selection, or slot publications. Layout
+composition and content have independent memo boundaries, while content hooks retain
+addressed data updates. Reordering within one parent retains keyed nodes. Layout
+replacement or reparenting can remount content; ID-bound node objects still retain
+the editor's lifetime. Empty custom child hosts can reserve geometry through public
+style; collapse hides them even when their style explicitly specifies display:grid.
+Only the standard layout adds outline indentation and opts out of empty leaf hosts
+with renderEmpty=false; custom layouts retain empty hosts by default for drop areas. Common styles remain package-owned
+and colocated, with two new public gap parameters (8px gap size, 32px horizontal
+cross-axis minimum). No additional dependencies or CJS files are introduced.
+
+Drop targets support inside(real parent) and between(real parent, nullable canonical
+neighbors), a finite priority, and optional asChild ref composition. Native element
+replacement unregisters the old target. Committed destination props remain live
+without reinstalling retained DOM. Registry registrations participate in editor and
+synchronous extension ownership. The public API exposes register and resolve only.
+
+resolve(clientX,clientY) uses the browser's topmost hit and its registered ancestors,
+scoped to the attached editor. Higher priorities win, then nearest DOM ancestor,
+then earliest duplicate registration. It performs no target-list scan or document
+rectangle measurements. Browser hit testing respects clipping and occlusion; detached
+views and nested editor occurrences do not contribute targets. Live parent existence
+and neighbor adjacency are validated before returning an element/destination candidate.
+The result is not authorization to move: source permissions, cycle checks, commands,
+undo, sensors, cross-document transfer, and edgeless integration remain later stages.
+
+Autonomous Kanban/Bento examples use real in-memory hierarchy and ordinary text
+renderers. Kanban places add controls inside shared child layout without DOM lookup
+or portals; Bento places tiles before its own content and owns widths outside Page's
+data contract. Their host operations append columns/cards and update tile data.
+The default fixture remains available unchanged. An opt-in inspector throttles native
+pointer movement to one frame, resolves a candidate, and changes only debug DOM.
+Large fixtures mount 2000 Kanban or 1400 Bento nodes without virtualization.
+
+This stage does not migrate production containers, Table, real DnD, keyboard behavior,
+hydration, or viewport virtualization. Production ReactEditor integration remains separate.
+
+### Verification of stage 29
+
+The final package check passed: 79 Jest tests in eight suites, TypeScript checks,
+lint with no warnings, the ESM/declaration/stylesheet build, and the production demo
+build. Chromium and Firefox behavioral coverage passed all 30 tests with 12 workers.
+All 20 production-preview performance tests passed serially with tracing disabled.
+The full workspace suite was not run.
+
+At repeat=1 and repeat=200, Kanban text changes read 15 nodes and publish two
+notifications; Bento text changes read 22 nodes and publish four notifications.
+Five pointer samples read five destination parents, read no display lists, and
+publish no data notifications at both sizes. Registry unit tests additionally check
+that unrelated targets and rectangle measurements are never visited. This bounds
+controller work; it does not make browser rendering independent of document size.
+
+Final pointer-to-two-animation-frame samples in milliseconds (median, range):
+
+| Browser  | Example | repeat=1         | repeat=200     |
+| -------- | ------- | ---------------- | -------------- |
+| Chromium | Kanban  | 16.6 (16.5–16.8) | 0.5 (0.4–23.9) |
+| Chromium | Bento   | 16.6 (15.8–16.7) | 0.5 (0.3–44.5) |
+| Firefox  | Kanban  | 16 (16–18)       | 38 (36–38)     |
+| Firefox  | Bento   | 17 (15–17)       | 36 (36–39)     |
+
+These five-sample frame proxies are noisy and include animation-frame alignment;
+they are not complete input latency or proof of a general speedup. Chromium's first
+large-fixture resolve sample took 6.2–6.6 ms; subsequent resolves took 0–0.1 ms.
+Firefox's coarse timer recorded resolve durations as zero. Large-fixture Firefox
+frame cost remains visible. Existing large-outline cases also retain substantial
+browser costs: the final Firefox list-change samples ranged from 100 to 423 ms,
+and checkbox samples from 115 to 125 ms despite unchanged addressed read bounds.
+
+A traced initial run passed, but DOM tracing inflated large Bento pointer medians
+(about 104 ms Chromium and 64 ms Firefox). Isolated browser profiling showed no
+layout work in the sampled inspector path; the same behavioral assertion without
+Playwright tracing reduced that overhead. demo:performance now explicitly passes
+--trace off; behavioral tracing remains unchanged. Traced and untraced timings are
+not compared as an application improvement. No speculative containment CSS or
+virtualization was added to hide these measurement or browser costs.
+
+## 30. Grid and wrapping gap overlays
+
+Historical stage: superseded by the in-flow BlockWrapper boundaries in stage 32.
+
+BlockDropGap now has two named prop contracts. Flow gaps retain explicit canonical
+neighbors and vertical/horizontal sizing. Grid gaps use axis="grid" and a required
+before/after placement directly inside BlockItem; they read the actual parent and
+neighbor IDs from the shared child iterator's placement context. An arbitrary
+display list cannot supply a parent, and unsupported placement throws explicitly.
+
+Each grid placement registers two absolute regions: top/inline-start before the
+tile, bottom/inline-end after it. This preserves CSS Grid cells and flex wrapping;
+regions follow width and row changes without observers or rectangle reads. Their
+inward depth uses the public drop-gap-size, capped at half the tile. Their outward
+reach uses half the shared children-gap, so hosts should use that parameter for
+continuous gutter coverage. Native styles and layout composition remain host-owned;
+all required overlay styles ship in the package. Inline sides support RTL. Normal
+clipping applies. Multiple visual regions may name one canonical gap, including
+across a row break. Dense or visually reordered CSS does not redefine document order.
+
+Bento now uses these item-local overlays rather than flow gaps between tiles.
+Ordinary outline and Kanban flow targets are unchanged. Empty grids use the existing
+inside registration on BlockChildren; no fake children or synthetic block IDs are
+introduced. Gesture execution, source permissions, move transactions, and production
+integration remain separate stages.
+
+### Verification of stage 30
+
+83 Jest tests in eight suites, package type checks, lint without warnings, the
+ESM/declaration/stylesheet build, and the production demo build passed. All 36
+Chromium/Firefox behavior tests passed with 12 workers. Four focused production
+performance tests passed with one worker and tracing disabled, before and after
+this change, on repeat=1 (7 nodes) and repeat=200 (1400 nodes).
+
+At both sizes, text changes retain 22 node reads and four notifications. Five
+actual pointer samples retain five node reads, zero display-list reads, and zero
+data notifications. Structural node identities and data subscriptions remain stable.
+The browser tests cover real two-column CSS Grid with no added cells or shifted
+item rectangles, one-column reflow, tile widths, actual horizontal/row gutters,
+RTL, theme overrides, clipping, collapse/remount, and disabled demo CSS. Unit tests
+cover canonical neighbor updates with retained item/target DOM, missing placement
+errors, and every registration's cleanup through StrictMode replay and destruction.
+
+Pointer-to-two-animation-frame timings in milliseconds, median (range):
+
+| Browser  | repeat | Before (flow gaps) | After (grid overlays) |
+| -------- | ------ | ------------------ | --------------------- |
+| Chromium | 1      | 16.6 (16.2–16.7)   | 16.6 (16.4–16.7)      |
+| Chromium | 200    | 1.0 (0.3–23.8)     | 24.7 (16.9–36.8)      |
+| Firefox  | 1      | 16 (13–16)         | 16 (14–17)            |
+| Firefox  | 200    | 38 (1–41)          | 40 (36–43)            |
+
+These are five-sample frame proxies, affected by frame alignment, and the corrected
+Bento no longer allocates space to old flow gaps. They do not establish a rendering
+speedup or constant browser frame cost. To investigate the larger Chromium proxy,
+a separate serial CDP profile measured five warmed actual hovers: zero layout and
+style recalculation at both sizes, with total ScriptDuration 0.689 ms small and
+0.830 ms large. The resolver continues to inspect hit ancestors rather than all
+registered targets; grid overlays add no pointer-time geometry measurements.
+Full-workspace tests, production ReactEditor integration, and real move execution
+remain outside this package change.
+
+## 31. Review corrections: pointer input, initial focus, node ownership, and sampling
+
+All four review findings were reproduced before their fixes. The grid-overlay
+regression failed in Chromium and Firefox both with 12 workers and serially: the
+bottom three pixels of a tile-width select hit an overlay. The React autoFocus
+regression showed an active input and zero editor focus notifications. Type-level
+assertions confirmed destroy was exposed by controller/editor node lookups, the
+hook, and slot props. All four Kanban content/pointer performance scenarios failed
+serially because toolbar scrolling left the sampled gap center outside the viewport.
+
+Grid edge overlays are now pointer-transparent by default. BlockEditor accepts
+an explicit dropTargetsActive view prop for inspection/dragging; root-scoped CSS
+activation preserves registration identities and resets at nested editor roots.
+The demo coordinates inspector state with that prop. No node facade, global editor
+state, drag sensor, or document mutation was introduced.
+
+Attachment publishes its root before reconciling already-acquired focus. Current
+focus is reported once per attachment with a synthetic focusin delivered directly
+to editor observers; its target is null because the original native event is no
+longer available. Subsequent transitions retain native events. Initial observer
+failure rolls back the attachment and native listeners; retry remains possible.
+
+BlockEditorNodeApi explicitly lists live data access, addressed subscriptions, and
+commands without destroy. Controller lookups, BlockEditorApi, useBlockNode, slots,
+presentation contexts, and demo controls use that borrowed type. The controller's
+private cache retains concrete nodes and exclusive teardown ownership. Existing
+node objects, snapshots, and subscription semantics are unchanged; interface
+narrowing is a TypeScript boundary, not runtime access control.
+
+The performance helper resets counters before restoring gap visibility, intersects
+the region with the viewport, and verifies native hit testing at the selected point
+before starting timing. Equivalent real pointer samples stay in that visible area;
+no-op samples and obstructed/offscreen targets fail explicitly. No correctness or
+work budgets were relaxed. The new pointer regression also restores scroll position
+after toggling the toolbar checkbox; its intermediate offscreen-test failure was
+reproduced serially and corrected before the final browser run.
+
+### Verification of stage 31
+
+Package TypeScript checks, lint without warnings, ESM/declaration/stylesheet build,
+and production demo build passed. All 86 unit tests in eight suites passed. The
+final Chromium/Firefox behavior run passed 38 tests with 12 workers; the full
+serial performance run passed all 20 tests with tracing disabled, including all
+four previously failing Kanban cases. Pre-fix overlay failures were reproduced
+both in parallel (two failures) and serially (two failures); initial-focus and node
+API checks also failed for the reported reasons before their corrections.
+
+Small/large fixtures retain bounded data work: Kanban text changes read 15 nodes
+and publish twice; Bento text changes read 22 nodes and publish four times. Five
+pointer samples read five parents, read no display lists, and publish no data at
+both sizes. Frame timing remains separate from those counts; large Firefox DOM
+costs remain visible. Corrected sampling uses visible points rather than offscreen
+element centers, so the prior failing Kanban run is not a latency comparison.
+No general speedup is claimed. Full-workspace tests and production ReactEditor
+integration were not run for this isolated package correction.
+
+
+## 32. In-flow BlockWrapper insertion boundaries
+
+The agreed replacement is documented in rivto-page-block-wrapper-ru.md. Public
+BlockWrapper composes BlockItem and retains its single sibling counter and existing
+BlockNode. Four targets occupy real CSS Grid tracks around center content instead
+of overlaying the tile. Top/inline-start mean before and bottom/inline-end mean after,
+using the same canonical neighbor context. Native widths include the strips.
+
+BlockDropGap now represents only vertical/horizontal flow gaps. Its grid variant,
+absolute-region implementation, root activation CSS, and BlockEditorProps activation
+flag have been removed. The inspector controls feedback only. Bento sets its child
+host gap to zero because neighboring wrapper strips already provide the spacing.
+All required geometry is package-owned and uses --rivto-drop-gap-size (default 8px).
+No extra decorator registry, alternate node implementation, geometry index, or move
+mutation API is introduced. Earlier overlay measurements remain historical evidence.
+
+
+Stage 32 verification: the old inspected-control-edge failure was reproduced in
+Chromium/Firefox both in parallel and serially. The replacement passes 87 unit tests,
+44 parallel browser cases, and 20 serial production performance cases, plus types,
+lint, package/demo builds, and published-export/CSS checks. Bento retains 22 reads /
+4 notifications per text edit and 5 reads / 0 notifications for five pointer samples
+at both fixture sizes. Ownership and geometry details, limitations, and before/after
+frame-proxy ranges are recorded in rivto-page-block-wrapper-ru.md.
+
+
+## 33. Generic registered block decorators
+
+The concrete insertion frame from stage 32 is renamed BlockDropWrapper and moved
+to drag-and-drop with its own CSS and private boundary component. BlockWrapper now
+composes editor.wrappers around the one existing BlockView. Its ordered registry
+has stable immutable snapshots, subscriptions independent from data/selection,
+and extension-owned registration/disposal/rollback. BlockElementRefProvider gives
+decorators the existing shell without adding layout DOM; child blocks reset the
+ref scope and explicit BlockView refs remain composed. No DnD logic is retained
+inside the generic wrapper folder. Details and verification belong to
+rivto-page-wrapper-registrations-ru.md.
+
+
+## 34. Wrapper-owned DOM and explicit priorities
+
+Stage 33's shared-ref provider/helper has been removed. Decorators own their ordinary
+DOM, React/native events, local refs, and cleanup. BlockView retains only its explicit
+consumer ref. The generic chain returns nested decorators without a ref boundary.
+Registration now requires { component, priority }; higher finite priorities are
+outermost, with installation order for ties. Missing/nonfinite values fail before
+publication. BlockItem accepts a borrowed own-node snapshot for counter-aware decorators;
+nested items for the same block do not increment twice, and BlockView resolves its
+item identity inside the composed chain. The demo exercises owned pointer events,
+list counters, view remounts, and the existing tile placement without shared refs.
+Historical shared-ref measurements above remain evidence for the previous design.
+
+
+## 35. Page events, keyboard и pointer selection
+
+Реализован этап из [плана events/keyboard/selection](rivto-page-events-keyboard-selection-plan-ru.md).
+Page events теперь предоставляют typed DOM registrations и detach cleanup наряду
+с focus/blur observations. Controller владеет keyboard runtime из отдельного
+`@chulane/rivto-keyboard`; React-редактор подключён к нему через host transport.
+Pointer selection подключается независимыми feature registrations; данные и
+конкретный contenteditable остаются у host. Public API и пример подключения —
+в `packages/rivto-page/README.md`. Результаты проверок, измерения и границы этапа
+зафиксированы в плане; production selection-интеграция не считается выполненной.

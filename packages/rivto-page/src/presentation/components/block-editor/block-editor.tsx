@@ -1,14 +1,16 @@
-import { useEffect, useRef } from "react";
-import type { BlockEditorController } from "../../../editor/block-editor-controller";
-import { BlockEditorContext } from "./block-editor-context";
+import type { BlockVirtualizationOptions } from "../../../editor/virtualization/block-virtualization-controller";
+import { forwardRef, useImperativeHandle, useState, type HTMLAttributes } from "react";
+import { BlockEditorScope, type BlockEditorViewApi } from "./block-editor-scope";
 import { BlockTree } from "./block-tree";
 
 /** Inputs of the autonomous block forest, without access to a host editor. */
-export interface BlockEditorProps {
+export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
   /** Host-owned instance; views attach/detach without destroying its registrations or nodes. */
-  readonly editor: BlockEditorController;
+  readonly editor: BlockEditorViewApi;
   /** Additional root classes; import package CSS for geometry defaults and override them through theme parameters. */
   readonly className?: string;
+  /** Opt-in window scrolling of display subtrees; omitted renders the full tree. */
+  readonly virtualization?: BlockVirtualizationOptions;
 }
 
 /**
@@ -20,22 +22,38 @@ export interface BlockEditorProps {
  * One instance supports one mounted view at a time; different views need separate
  * editor objects but may borrow the same data adapter. Server output reads the
  * same synchronous host sources; the host must supply matching hydration data.
- * This autonomous slice provides presentation, not rich-text input, DnD, or host wiring.
+ * Optional controller extensions supply selection and pointer dragging; concrete
+ * rich-text editing and document commands remain with the host adapter.
  *
  * @param props - Host-owned editor and optional root styling.
  * @param props.editor - Stable instance borrowed until this view unmounts or changes it.
+ * @param props.virtualization - Optional variable-height windowing settings (enabled, estimateSize in CSS pixels, overscan in roots); omission disables windowing. Changing settings preserves mounted roots; selected IDs remain in the adapter.
  * @param props.className - Additional class applied to the existing root element.
- * @returns The DOM root and its addressed block nodes, including on the server.
+ * @param props.children - Host page-ending slot rendered after the block forest, inside the Page context.
+ * @param ref - Borrows the same DOM root for host panel routing; no additional root is created.
+ * @returns The DOM root and its addressed block nodes. With virtualization, server
+ * output reserves estimated space until the client measures its viewport.
  * @throws Propagates controller lifecycle, adapter, and renderer failures.
  */
-export function BlockEditor({ editor, className }: BlockEditorProps) {
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => editor.attach(root.current!), [editor]);
+export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function BlockEditor(
+  { editor, className, virtualization, children, ...attributes },
+  ref,
+) {
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  useImperativeHandle(ref, () => root!, [root]);
   return (
-    <div ref={root} className={className} data-rivto-block-editor="true">
-      <BlockEditorContext.Provider value={editor}>
-        <BlockTree />
-      </BlockEditorContext.Provider>
+    <div
+      {...attributes}
+      ref={setRoot}
+      className={className}
+      data-rivto-block-editor="true"
+      data-block-root-list
+      tabIndex={attributes.tabIndex ?? -1}
+    >
+      <BlockEditorScope editor={editor} root={root}>
+        <BlockTree virtualization={virtualization} />
+        {children}
+      </BlockEditorScope>
     </div>
   );
-}
+});

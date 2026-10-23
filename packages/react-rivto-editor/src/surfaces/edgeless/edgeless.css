@@ -29,6 +29,7 @@
   /* Written by EdgelessSurface: 0% at 100% zoom, 70% at 50% zoom. */
   --rivto-edgeless-grid-dot-fade: 0%;
   position: relative;
+  isolation: isolate;
   width: calc(100% - 32px);
   height: calc(100vh - 96px);
   min-height: 520px;
@@ -53,6 +54,7 @@
 
 .edgeless-grid-spotlight {
   position: absolute;
+  z-index: -1;
   inset: 0;
   background-image: radial-gradient(var(--rivto-edgeless-grid-dot-strong) 1px, transparent 1px);
   background-position: inherit;
@@ -111,6 +113,9 @@
 }
 
 .edgeless-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rivto-block-gap, 4px);
   flex: 1 1 auto;
   min-height: 0;
   box-sizing: border-box;
@@ -123,7 +128,7 @@
 }
 
 /* Wide min-content (Kanban lanes) must not inflate the card's scrollport. */
-.edgeless-card-content > .page-block {
+.edgeless-card-content > .rivto-block {
   min-width: 0;
   max-width: 100%;
 }
@@ -137,7 +142,7 @@
 }
 
 /* Match page-mode row hover across the card, including indented blocks. */
-.edgeless-card .page-block-row::before {
+.edgeless-card .rivto-block-row::before {
   width: 100vw;
   inset-inline: auto 0;
 }

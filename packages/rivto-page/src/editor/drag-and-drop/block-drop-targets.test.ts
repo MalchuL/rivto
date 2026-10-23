@@ -157,3 +157,143 @@ it("captures extension ownership and rejects new work after destruction", () => 
     editor.dropTargets.register({ element: inner, getDestination: () => undefined }),
   ).toThrow("destroyed");
 });
+
+it("validates root gaps against explicit canonical roots independently of display IDs", () => {
+  adapter.rootIds = ["first", "last"];
+  adapter.setBlockIds(["unrelated"]);
+  let destination: BlockDropDestination = {
+    kind: "between",
+    parentId: null,
+    previousId: "first",
+    nextId: "last",
+  };
+  editor.dropTargets.register({ element: inner, getDestination: () => destination });
+  expect(editor.dropTargets.resolve(10, 20)?.destination).toEqual(destination);
+  adapter.rootIds = ["first", "inserted", "last"];
+  expect(editor.dropTargets.resolve(10, 20)).toBeUndefined();
+  adapter.rootIds = [];
+  destination = { kind: "between", parentId: null, previousId: null, nextId: null };
+  expect(editor.dropTargets.resolve(10, 20)?.destination).toEqual(destination);
+  destination = { kind: "inside", parentId: null };
+  expect(editor.dropTargets.resolve(10, 20)?.destination).toEqual(destination);
+  adapter.rootIds = undefined;
+  expect(editor.dropTargets.resolve(10, 20)).toBeUndefined();
+  expect(adapter.blocks.getBlockIds).not.toHaveBeenCalled();
+});
+
+it("validates the registered gap before excluding captured roots from both neighbors", () => {
+  adapter.setNode("parent", { childIds: ["before", "a", "b", "after"] });
+  const destination = {
+    kind: "between",
+    parentId: "parent",
+    previousId: "a",
+    nextId: "b",
+  } as const;
+  editor.dropTargets.register({ element: inner, getDestination: () => destination });
+  expect(editor.dropTargets.resolve(10, 20, new Set(["a", "b"]))?.destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "before",
+    nextId: "after",
+  });
+  adapter.setNode("parent", { childIds: ["before", "a", "inserted", "b", "after"] });
+  expect(editor.dropTargets.resolve(10, 20, new Set(["a", "b"]))).toBeUndefined();
+});
+
+it.each(["horizontal", "vertical"] as const)(
+  "measures only the winning between region for a %s insertion line",
+  (indicatorAxis) => {
+    const outerRead = jest.spyOn(outer, "getBoundingClientRect");
+    const innerRead = jest.spyOn(inner, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 100,
+      height: 40,
+    } as DOMRect);
+    const destination = {
+      kind: "between",
+      parentId: "parent",
+      previousId: "a",
+      nextId: "b",
+    } as const;
+    editor.dropTargets.register({
+      element: outer,
+      indicatorAxis,
+      getDestination: () => destination,
+    });
+    editor.dropTargets.register({
+      element: inner,
+      indicatorAxis,
+      getDestination: () => destination,
+    });
+    expect(editor.dropTargets.resolve(15, 25)?.indicator).toEqual(
+      indicatorAxis === "horizontal"
+        ? { left: 10, top: 39, width: 100, height: 2 }
+        : { left: 59, top: 20, width: 2, height: 40 },
+    );
+    expect(innerRead).toHaveBeenCalledTimes(1);
+    expect(outerRead).not.toHaveBeenCalled();
+    editor.dropTargets.register({
+      element: inner,
+      indicatorAxis,
+      priority: 1,
+      getDestination: () => ({ kind: "inside", parentId: "parent" }),
+    });
+    expect(editor.dropTargets.resolve(15, 25)?.indicator).toBeUndefined();
+    expect(innerRead).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("uses the current native hit without another lookup and still validates live hierarchy", () => {
+  const destination = {
+    kind: "between",
+    parentId: "parent",
+    previousId: "a",
+    nextId: "b",
+  } as const;
+  editor.dropTargets.register({ element: inner, getDestination: () => destination });
+  expect(editor.dropTargets.resolve(10, 20, undefined, inner)?.destination).toEqual(destination);
+  expect(hit).not.toHaveBeenCalled();
+  adapter.setNode("parent", { childIds: ["b", "a"] });
+  expect(editor.dropTargets.resolve(10, 20, undefined, inner)).toBeUndefined();
+  expect(hit).not.toHaveBeenCalled();
+  expect(
+    editor.dropTargets.resolve(10, 20, undefined, document.createElement("div")),
+  ).toBeUndefined();
+  expect(hit).toHaveBeenCalledTimes(1);
+  editor.dropTargets.resolve(10, 20);
+  expect(hit).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ["horizontal", true, { left: 10, top: 19, width: 100, height: 2 }],
+  ["horizontal", false, { left: 10, top: 99, width: 100, height: 2 }],
+  ["vertical", true, { left: 9, top: 20, width: 2, height: 80 }],
+  ["vertical", false, { left: 109, top: 20, width: 2, height: 80 }],
+] as const)(
+  "places %s list-end feedback on the item edge, before=%s",
+  (indicatorAxis, before, expected) => {
+    outer.dataset.blockItemId = before ? "a" : "b";
+    jest.spyOn(outer, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      right: 110,
+      bottom: 100,
+      width: 100,
+      height: 80,
+    } as DOMRect);
+    const regionRead = jest.spyOn(inner, "getBoundingClientRect");
+    editor.dropTargets.register({
+      element: inner,
+      indicatorAxis,
+      getDestination: () => ({
+        kind: "between",
+        parentId: "parent",
+        previousId: before ? null : "b",
+        nextId: before ? "a" : null,
+      }),
+    });
+    expect(editor.dropTargets.resolve(15, 25)?.indicator).toEqual(expected);
+    expect(regionRead).not.toHaveBeenCalled();
+  },
+);

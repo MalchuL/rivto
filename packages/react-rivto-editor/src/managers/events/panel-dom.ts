@@ -2,7 +2,7 @@ import {
   BLOCK_CONTENT_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
-  BLOCK_ROW_CLASS,
+  BLOCK_ROW_SELECTOR,
 } from "../../constants";
 /** DOM boundary for a document panel, including full-document and embedded subtree surfaces. */
 export const PANEL_ATTRIBUTE = "data-rivto-panel";
@@ -66,7 +66,7 @@ export class PanelDOM {
 
   /** @param block - Rendered shell. @returns Its own content row, or null for custom shells without one. */
   getRow(block: Element): HTMLElement | null {
-    return block.querySelector<HTMLElement>(`:scope > .${BLOCK_ROW_CLASS}`);
+    return block.querySelector<HTMLElement>(`:scope > ${BLOCK_ROW_SELECTOR}`);
   }
 
   /** @param block - Rendered shell. @returns Its own body slot, excluding descendant slots. */

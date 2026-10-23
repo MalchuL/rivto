@@ -1,3 +1,4 @@
+export { BLOCK_TEXT_METADATA_KEY } from "./managers/selection/block-text-metadata";
 /**
  * Primary public API for `@chulane/rivto-react`.
  *
@@ -275,17 +276,6 @@ export type {
   BlockContextMenuRenderContext,
   BlockContextMenuEntry,
 } from "./managers/block-context-menu/types";
-export {
-  PAGE_DRAG_METADATA_KEY,
-  type BlockDragOptions,
-  type BlockDropPlacementOptions,
-  type DropAxis,
-} from "./extensions/block-drag/block-drag-options";
-
-export {
-  BLOCK_HANDLE_METADATA_KEY,
-  type BlockHandleMetadata,
-} from "./extensions/built-ins/block-handle/metadata";
 
 export type {
   RememberedElementProperties,
@@ -311,3 +301,6 @@ export {
 export { EdgelessToolGroup } from "./managers/edgeless-tools/edgeless-tool-group";
 export { EdgelessToolContext } from "./managers/edgeless-tools/edgeless-tool-context";
 export { useEdgelessTools } from "./surfaces/edgeless/edgeless-tools-context";
+
+export { RegisteredSurface } from "./surfaces/registered-surface";
+export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";

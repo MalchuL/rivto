@@ -127,3 +127,18 @@ section[aria-label="Statistics"] pre {
 .demo-custom > strong {
   @apply page:mb-3 page:block page:text-xs page:font-semibold page:text-indigo-700;
 }
+
+.demo-selection-snapshot {
+  block-size: 12rem;
+  overflow: auto;
+}
+
+/* Concrete editable geometry belongs to this demo renderer, not the Page shell. */
+.demo-node [data-block-content] {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-height: 2rem;
+  padding: 0.5rem;
+  outline-offset: 2px;
+}

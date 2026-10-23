@@ -1,0 +1,376 @@
+import { BlockEditorController } from "../block-editor-controller";
+import { TestBlockEditorAdapter } from "../../test-utils/test-block-editor-adapter";
+import { BlockDragExtension } from "./block-drag-extension";
+
+/**
+ * Delivers pointer-shaped native input in jsdom, which has no PointerEvent constructor.
+ *
+ * @param target - Native dispatch target inside the mounted editor or its window.
+ * @param type - Pointer lifecycle event name.
+ * @param x - Viewport coordinate, away from scroll boundaries.
+ * @param buttons - Native pressed-button mask; defaults to primary held for down/move.
+ * @returns Event delivery and all synchronous handlers have completed.
+ */
+function pointer(
+  target: EventTarget,
+  type: string,
+  x: number,
+  buttons = type === "pointerdown" || type === "pointermove" ? 1 : 0,
+): void {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: x,
+    clientY: 100,
+    buttons,
+  });
+  Object.defineProperties(event, { pointerId: { value: 1 }, isPrimary: { value: true } });
+  target.dispatchEvent(event);
+}
+
+it("withholds forbidden feedback and rechecks permission at pointer release", () => {
+  const data = new TestBlockEditorAdapter();
+  const editor = new BlockEditorController({ adapter: data });
+  const canMove = jest.fn(() => true);
+  const moveBlocks = jest.fn(() => true);
+  editor.extensions.register("drag", new BlockDragExtension({ canMove, moveBlocks }));
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML =
+    '<div data-block-id="source"><button data-block-drag-handle></button></div><div id="target"></div>';
+  document.body.append(root);
+  editor.attach(root);
+  const handle = root.querySelector("button")!;
+  const target = root.querySelector<HTMLElement>("#target")!;
+  const destination = {
+    kind: "between" as const,
+    parentId: "parent",
+    previousId: null,
+    nextId: null,
+  };
+  const indicator = { left: 10, top: 20, width: 100, height: 2 };
+  const previewAtRead: boolean[] = [];
+  jest.spyOn(editor.dropTargets, "resolve").mockImplementation(() => {
+    previewAtRead.push(!!root.querySelector(".rivto-block-drag-preview"));
+    return { element: target, destination, indicator };
+  });
+  try {
+    pointer(handle, "pointerdown", 100);
+    pointer(window, "pointermove", 110);
+    expect(target.hasAttribute("data-block-drop-active")).toBe(true);
+    expect(handle.parentElement!.getAttribute("data-dragging")).toBe("true");
+    expect(previewAtRead[0]).toBe(false);
+    const line = root.querySelector<HTMLElement>(".rivto-block-drop-line")!;
+    expect(line.hidden).toBe(false);
+    expect(line.style.transform).toBe("translate(10px, 20px)");
+    expect(line.style.width).toBe("100px");
+    expect(canMove).toHaveBeenLastCalledWith(["source"], destination, undefined);
+    canMove.mockReturnValue(false);
+    pointer(window, "pointermove", 120);
+    expect(target.hasAttribute("data-block-drop-active")).toBe(false);
+    expect(line.hidden).toBe(true);
+    canMove.mockReturnValue(true);
+    pointer(window, "pointermove", 130);
+    expect(target.hasAttribute("data-block-drop-active")).toBe(true);
+    canMove.mockReturnValue(false);
+    pointer(window, "pointerup", 130);
+    expect(moveBlocks).not.toHaveBeenCalled();
+    expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+    expect(handle.parentElement!.hasAttribute("data-dragging")).toBe(false);
+    expect(root.querySelector(".rivto-block-drop-line")).toBeNull();
+    const release = editor.pointer.acquire();
+    expect(release).toBeDefined();
+    release?.();
+    const failure = new Error("permission read failed");
+    const onError = jest.fn((event: ErrorEvent) => event.preventDefault());
+    window.addEventListener("error", onError);
+    try {
+      canMove.mockImplementation(() => {
+        throw failure;
+      });
+      pointer(handle, "pointerdown", 100);
+      pointer(window, "pointermove", 110);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0]![0].error).toBe(failure);
+      expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+      const releaseAfterFailure = editor.pointer.acquire();
+      expect(releaseAfterFailure).toBeDefined();
+      releaseAfterFailure?.();
+    } finally {
+      window.removeEventListener("error", onError);
+    }
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it.each([false, true])(
+  "borrows uncaptured release targets and retains geometric fallback for capture=%s",
+  (capturedRelease) => {
+    const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+    const resolve = jest.fn<undefined, [number, number, ReadonlySet<string>, Element?]>(
+      () => undefined,
+    );
+    editor.extensions.register(
+      "drag",
+      new BlockDragExtension({ canMove: () => true, moveBlocks: () => true }, { resolve }),
+    );
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.innerHTML =
+      '<div data-block-id="source"><button data-block-drag-handle></button></div><div id="hit"></div>';
+    document.body.append(root);
+    editor.attach(root);
+    const target = root.querySelector<HTMLElement>("#hit")!;
+    const capture = jest.fn(() => false);
+    Object.defineProperty(target, "hasPointerCapture", { value: capture });
+    try {
+      pointer(root.querySelector("button")!, "pointerdown", 100);
+      pointer(target, "pointermove", 110);
+      expect(resolve.mock.calls.at(-1)?.[3]).toBe(target);
+      capture.mockReturnValue(true);
+      pointer(target, "pointermove", 120);
+      expect(resolve.mock.calls.at(-1)?.[3]).toBeUndefined();
+      capture.mockReturnValue(capturedRelease);
+      pointer(target, "pointerup", 120);
+      expect(resolve.mock.calls.at(-1)?.[3]).toBe(capturedRelease ? undefined : target);
+    } finally {
+      editor.destroy();
+      root.remove();
+    }
+  },
+);
+
+it("releases pointer ownership when activation cannot read selection", () => {
+  const data = new TestBlockEditorAdapter();
+  const editor = new BlockEditorController({ adapter: data });
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension({ canMove: () => true, moveBlocks: () => true }),
+  );
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML = '<div data-block-id="source"><button data-block-drag-handle></button></div>';
+  document.body.append(root);
+  editor.attach(root);
+  const failure = new Error("selection read failed");
+  const onError = jest.fn((event: ErrorEvent) => event.preventDefault());
+  window.addEventListener("error", onError);
+  try {
+    jest.spyOn(data.selection, "get").mockImplementation(() => {
+      throw failure;
+    });
+    pointer(root.querySelector("button")!, "pointerdown", 100);
+    pointer(window, "pointermove", 110);
+    expect(onError.mock.calls[0]?.[0].error).toBe(failure);
+    const release = editor.pointer.acquire();
+    expect(release).toBeDefined();
+    release?.();
+  } finally {
+    window.removeEventListener("error", onError);
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it("removes remaining feedback and preserves commit errors when target cleanup fails", () => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML =
+    '<div data-block-id="source"><button data-block-drag-handle></button></div><div id="target"></div>';
+  document.body.append(root);
+  editor.attach(root);
+  const target = root.querySelector<HTMLElement>("#target")!;
+  const commitFailure = new Error("commit failed");
+  const cleanupFailure = new Error("target cleanup failed");
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension(
+      {
+        canMove: () => true,
+        moveBlocks: () => {
+          throw commitFailure;
+        },
+      },
+      { resolve: () => ({ element: target, destination: { kind: "inside", parentId: null } }) },
+    ),
+  );
+  const onError = jest.fn((event: ErrorEvent) => event.preventDefault());
+  window.addEventListener("error", onError);
+  try {
+    pointer(root.querySelector("button")!, "pointerdown", 100);
+    pointer(window, "pointermove", 110);
+    jest.spyOn(target, "removeAttribute").mockImplementation(() => {
+      throw cleanupFailure;
+    });
+    pointer(window, "pointerup", 110);
+    expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+    const failure = onError.mock.calls[0]?.[0].error;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure.errors[0]).toBe(commitFailure);
+    expect(failure.errors[1].errors).toContain(cleanupFailure);
+    const release = editor.pointer.acquire();
+    expect(release).toBeDefined();
+    release?.();
+  } finally {
+    window.removeEventListener("error", onError);
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it("captures bounded inert preview rows once and releases them on Escape", () => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const getPreview = jest.fn(() =>
+    Array.from({ length: 20 }, () => ({
+      text: "<button>unsafe</button>" + "x".repeat(1000),
+      depth: 100,
+    })),
+  );
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension(
+      {
+        canMove: () => true,
+        moveBlocks: () => true,
+        getPreview,
+      },
+      { resolve: () => undefined },
+    ),
+  );
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML = '<div data-block-id="source"><button data-block-drag-handle></button></div>';
+  document.body.append(root);
+  editor.attach(root);
+  try {
+    pointer(root.querySelector("button")!, "pointerdown", 100);
+    pointer(window, "pointermove", 110);
+    pointer(window, "pointermove", 120);
+    expect(getPreview).toHaveBeenCalledTimes(1);
+    expect(getPreview).toHaveBeenCalledWith(["source"], 4);
+    const preview = root.querySelector<HTMLElement>(".rivto-block-drag-preview")!;
+    expect(preview.children).toHaveLength(4);
+    expect(preview.querySelector("button, [contenteditable]")).toBeNull();
+    expect(preview.firstElementChild?.textContent).toHaveLength(240);
+    expect((preview.firstElementChild as HTMLElement).style.marginInlineStart).toBe("36px");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it.each([false, true])(
+  "delegates foreign scope identity and releases its detach subscription, cancel=%s",
+  (cancel) => {
+    const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+    const source = document.createElement("div");
+    source.dataset.rivtoBlockEditor = "true";
+    source.innerHTML = '<div data-block-id="source"><button data-block-drag-handle></button></div>';
+    const receiver = document.createElement("div");
+    receiver.tabIndex = -1;
+    const target = document.createElement("div");
+    receiver.append(target);
+    document.body.append(source, receiver);
+    editor.attach(source);
+    let detach = () => {};
+    const unsubscribe = jest.fn();
+    const scope = {
+      root: receiver,
+      /**
+       * Captures cancellation for this fixture's foreign attachment.
+       *
+       * @param listener - Source cancellation callback.
+       * @returns Fixture disposer observed after every gesture exit.
+       */
+      onDetach(listener: () => void) {
+        detach = listener;
+        return unsubscribe;
+      },
+    };
+    const destination = { kind: "inside" as const, parentId: "source" };
+    const canMove = jest.fn(() => true);
+    const moveBlocks = jest.fn(() => true);
+    editor.extensions.register(
+      "drag",
+      new BlockDragExtension(
+        { canMove, moveBlocks },
+        {
+          resolve: () => ({ element: target, destination, scope }),
+        },
+      ),
+    );
+    try {
+      pointer(source.querySelector("button")!, "pointerdown", 100);
+      pointer(window, "pointermove", 110);
+      expect(canMove).toHaveBeenLastCalledWith(["source"], destination, scope);
+      expect(target.hasAttribute("data-block-drop-active")).toBe(true);
+      if (cancel) {
+        detach();
+      }
+      pointer(window, "pointerup", 110);
+      expect(moveBlocks).toHaveBeenCalledTimes(cancel ? 0 : 1);
+      if (!cancel) {
+        expect(document.activeElement).toBe(receiver);
+      }
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(target.hasAttribute("data-block-drop-active")).toBe(false);
+      expect(source.querySelector(".rivto-block-drag-preview")).toBeNull();
+      const release = editor.pointer.acquire();
+      expect(release).toBeDefined();
+      release?.();
+    } finally {
+      editor.destroy();
+      source.remove();
+      receiver.remove();
+    }
+  },
+);
+
+it.each(["Escape", "blur", "pointercancel", "detach", "released-button"])(
+  "restores source appearance and pointer ownership on %s",
+  (exit) => {
+    const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+    editor.extensions.register(
+      "drag",
+      new BlockDragExtension(
+        { canMove: () => true, moveBlocks: () => true },
+        { resolve: () => undefined },
+      ),
+    );
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.innerHTML = '<div data-block-id="source"><button data-block-drag-handle></button></div>';
+    document.body.append(root);
+    const detach = editor.attach(root);
+    try {
+      const handle = root.querySelector("button")!;
+      pointer(handle, "pointerdown", 100);
+      pointer(window, "pointermove", 110);
+      expect(handle.parentElement!.getAttribute("data-dragging")).toBe("true");
+      if (exit === "detach") {
+        detach();
+      } else if (exit === "Escape") {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      } else if (exit === "pointercancel") {
+        pointer(window, "pointercancel", 110);
+      } else if (exit === "released-button") {
+        pointer(window, "pointermove", 110, 0);
+      } else {
+        window.dispatchEvent(new Event("blur"));
+      }
+      expect(root.querySelector("[data-dragging]")).toBeNull();
+      expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+      const release = editor.pointer.acquire();
+      expect(release).toBeDefined();
+      release?.();
+    } finally {
+      editor.destroy();
+      root.remove();
+    }
+  },
+);

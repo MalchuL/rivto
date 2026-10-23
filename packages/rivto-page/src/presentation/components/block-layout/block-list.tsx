@@ -13,7 +13,7 @@ export interface BlockChildrenItemProps {
 
 /** Live neighbors of one canonical gap in a real parent's child list. */
 export interface BlockChildrenGapProps {
-  readonly parentId: string;
+  readonly parentId: string | null;
   readonly previousId: string | null;
   readonly nextId: string | null;
 }
@@ -21,7 +21,7 @@ export interface BlockChildrenGapProps {
 /** Stable immediate IDs and optional host placement components. */
 export interface BlockListProps {
   readonly blockIds: readonly string[];
-  readonly parentId?: string;
+  readonly parentId?: string | null;
   readonly item?: ComponentType<BlockChildrenItemProps>;
   readonly gap?: ComponentType<BlockChildrenGapProps>;
 }
@@ -36,7 +36,7 @@ export interface BlockListProps {
  *
  * @param props - Stable IDs and optional real-parent placement components.
  * @param props.blockIds - Ordered unique IDs, excluding materialized descendants.
- * @param props.parentId - Actual parent; omitted for an arbitrary display list.
+ * @param props.parentId - Actual parent, null for document roots; omitted for an arbitrary display list.
  * @param props.item - Optional wrapper receiving an already-rendered BlockNode.
  * @param props.gap - Optional gap component, used only with an actual parent.
  * @returns Keyed memoized nodes and optional gaps without a list wrapper.
@@ -53,7 +53,7 @@ export const BlockList = memo(function BlockList({
         const node = <BlockNode blockId={blockId} />;
         return (
           <Fragment key={`node:${blockId}`}>
-            {Gap && parentId && (
+            {Gap && parentId !== undefined && (
               <span className={BLOCK_LIST_GAP_CLASS}>
                 <Gap
                   parentId={parentId}
@@ -79,7 +79,7 @@ export const BlockList = memo(function BlockList({
           </Fragment>
         );
       })}
-      {Gap && parentId && (
+      {Gap && parentId !== undefined && (
         <span className={BLOCK_LIST_GAP_CLASS}>
           <Gap parentId={parentId} previousId={blockIds.at(-1) ?? null} nextId={null} />
         </span>

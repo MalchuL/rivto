@@ -9,14 +9,14 @@ names, classes, or block types to shared selection and drag code.
 
 A block feature has four owners:
 
-| Concern                                                            | Owner                      |
-| ------------------------------------------------------------------ | -------------------------- |
-| Persisted type, content, props, children, and parent restrictions  | Core block definition      |
-| Content markup and local controls                                  | User renderer              |
-| Selection, native range repair, clipboard, and structural commands | Shared editor runtime      |
-| Tree shell, descendants, slots, drag handle, and drop feedback     | `BlockTree` and extensions |
+| Concern                                                            | Owner                 |
+| ------------------------------------------------------------------ | --------------------- |
+| Persisted type, content, props, children, and parent restrictions  | Core block definition |
+| Content markup and local controls                                  | User renderer         |
+| Selection, native range repair, clipboard, and structural commands | Shared editor runtime |
+| Tree shell, descendants, slots, drag handle, and drop feedback     | Page and extensions   |
 
-A renderer returns only its content. It must not recreate `BlockView`, render
+A renderer returns only its content. It must not recreate `BlockNode`, render
 its children, install another block-reordering system, or store document state
 in React state.
 
@@ -24,12 +24,12 @@ The shared shell remains:
 
 ```text
 .page-block[data-block-id][data-block-type]
-├── .page-block-row
+├── .rivto-block-row
 │   ├── extension slots, including the optional page drag handle
 │   └── .rivto-block-content-flow
 │       └── user renderer
-└── .page-block-children
-    └── BlockTree renders persisted children
+└── .rivto-block-children
+    └── Page renders persisted children
 ```
 
 This shell is why the same renderer works inside the page, an edgeless card, a
@@ -227,7 +227,7 @@ buttons, sortable rows, menus, checkboxes, or a third-party widget.
 
 ### Container block
 
-A container still renders only its own content region. `BlockTree` renders its
+A container still renders only its own content region. Page renders its
 persisted children.
 
 ```tsx
@@ -259,17 +259,20 @@ through `blockTypes.subscribe()` for creation and removal of complete definition
 these notifications also update annotation readers. Subscriptions disconnect when
 their React runtime is destroyed; direct metadata mutation does not notify readers.
 
-Import `PAGE_DRAG_METADATA_KEY` and `BLOCK_HANDLE_METADATA_KEY` from
-`@chulane/rivto-react` or `@chulane/rivto-react/extensions`. They identify the
-`drag.page` and `block.handle` metadata namespaces and match their extension IDs.
+Import `BlockChildren` and `BlockDropTarget` from `@chulane/rivto-page` for layout
+geometry. Shared Page row-hover feedback determines handle presentation inside the
+layout, independently of whether dragging is installed. Layout geometry is view-owned
+and does not add persisted metadata.
 
-- `metadata[PAGE_DRAG_METADATA_KEY].dropAxis` describes direct-child layout;
-- `metadata[PAGE_DRAG_METADATA_KEY].acceptsDropContainer` enables drops on the full body;
-- `metadata[PAGE_DRAG_METADATA_KEY].dropPlacement.allowChildPlacement` overrides nesting only;
+- `BlockChildren.dropAxis` describes direct-child layout;
+- `BlockChildren.emptyDropTarget` retains an empty receiving region;
+- `BlockDropTarget` describes explicit inside or between destinations with canonical IDs;
 - `childDropIndent` and `gapDropZone` are extension-wide pixel settings (24 and 8);
-- `metadata[PAGE_DRAG_METADATA_KEY].fixed` describes structural drag geometry, not permissions;
-- `metadata[BLOCK_HANDLE_METADATA_KEY].showOnContainerHover` reveals the universal handle across
-  the container body, including when the drag extension is absent;
+- the host's `canMove` policy controls permissions independently of measured geometry;
+- `BlockChildren.hoverBoundary` bounds row hover to its local layout by default;
+  ordinary outlines use `hoverBoundary={false}` to inherit their enclosing area.
+  Native row/control hits remain authoritative, adjacent items retain their own
+  bounds, and parent handles belong to headers or exposed gutters;
 - `onChildIndent` and `onChildOutdent` intercept outline operations on a parent's
   children before their own `onIndent` or `onOutdent` chain. Each receives the full
   requested group and the parent's shallow `BlockOutlineContext`. `unhandled`
@@ -287,7 +290,7 @@ sibling gaps at every nesting level. Feedback and commit convert the resolved ga
 to the same core destination for canMove. Drag separately retains adjacency and depth
 for indicator geometry; a destination invalidated before release cancels the move.
 
-For example, a Kanban registration declares `metadata[PAGE_DRAG_METADATA_KEY].dropAxis: "horizontal"`. Its
+For example, a Kanban layout renders `<BlockChildren dropAxis="horizontal" />`. Its
 behavior allows only kanban-column sources when receiving children. The column
 behavior permits a moved column only when the receiving parent is kanban. These
 are React interaction policies, not persisted schema constraints; core commands
@@ -335,7 +338,7 @@ the optional page drag gutter. A renderer should:
 - avoid page-width assumptions;
 - keep component overflow on the component that owns it;
 - use named constants for every class referenced from JSX or selectors;
-- leave descendants to `BlockTree`.
+- leave descendants to Page.
 
 These rules make the same component usable inside narrow columns, table cells,
 bento tiles, and edgeless cards.

@@ -17,7 +17,7 @@ export function DefaultBlockLayout() {
         <BlockContent />
       </BlockRow>
       <BlockBody />
-      <BlockChildren className="rivto-block-outline" renderEmpty={false} />
+      <BlockChildren className="rivto-block-outline" renderEmpty={false} hoverBoundary={false} />
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { BLOCK_TEXT_METADATA_KEY } from "../../managers/selection/block-text-metadata";
 /**
  * Provides the opt-in TODO-item model, renderer, properties dialog, and prompt
  * conversion behavior for every renderer exposing Rivto's plain-text content
@@ -6,8 +7,6 @@
  *
  * @module
  */
-import { BLOCK_HANDLE_METADATA_KEY } from "../built-ins/block-handle/metadata";
-import { PAGE_DRAG_METADATA_KEY } from "../block-drag/block-drag-options";
 import type { ReactEditorExtension } from "../../managers";
 import {
   TODO_ITEM_BLOCK_TYPE,
@@ -22,8 +21,7 @@ import { TodoPromptController } from "./todo-prompt-controller";
 import {
   TODO_STORAGE_BLOCK_TYPE,
   TodoStorage,
-  TodoStorageBlockWrapper,
-  TodoStorageVisibility,
+  TodoStorageLayout,
   createTodoStorageProps,
   todoStorageBehavior,
   todoStoragePropsSchema,
@@ -105,12 +103,9 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
             title: "TODO storage",
             defaultProps: createTodoStorageProps,
             propSchema: todoStoragePropsSchema,
-            metadata: {
-              [PAGE_DRAG_METADATA_KEY]: { dropAxis: "vertical", acceptsDropContainer: true },
-              [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
-            },
           },
           render: TodoStorage,
+          layout: TodoStorageLayout,
           behavior: todoStorageBehavior,
 
           slashCommand: {
@@ -126,15 +121,12 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
           definition: {
             type: TODO_ITEM_BLOCK_TYPE,
             title: "TODO item",
+            metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
             defaultProps: createTodoItemProps,
             propSchema: todoItemPropsSchema,
           },
           render: ({ blockId }) => <TodoItem blockId={blockId} propertiesModal={PropertiesModal} />,
         }),
-        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageVisibility),
-        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageVisibility),
-        reactEditor.surfaces.registerBlockWrapper("block", TodoStorageBlockWrapper),
-        reactEditor.surfaces.registerBlockWrapper("edgeless", TodoStorageBlockWrapper),
         new TodoPromptController(reactEditor, prompts).setup(),
       ];
       return () => {

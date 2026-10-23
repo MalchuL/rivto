@@ -1,3 +1,5 @@
+import { BlockPointerOwnership } from "./pointer/block-pointer-ownership";
+import { BlockKeyboard } from "./keyboard/block-keyboard";
 import { BlockWrapperRegistry } from "../presentation/components/block-wrapper/block-wrapper-registry";
 import { BlockDropTargets } from "./drag-and-drop/block-drop-targets";
 import type { BlockEditorApi } from "./block-editor-api";
@@ -37,11 +39,15 @@ export class BlockEditorController implements BlockEditorApi {
   readonly renderers: BlockRendererRegistry;
   /** Ordered host decorators retained independently of view attachment and DnD placement. */
   readonly wrappers: BlockWrapperRegistry;
-  /** Observers of focus crossing the attached editor subtree. */
+  /** Typed native input registrations and observers of focus crossing the attached editor subtree. */
   readonly events: BlockEditorEvents;
+  /** Semantic bindings and physical key state owned by this editor. */
+  readonly keyboard: BlockKeyboard;
+  /** Exclusive pointer reservation shared by selection and drag extensions. */
+  readonly pointer = new BlockPointerOwnership();
   /** Explicit mounted regions and geometry-only destination lookup. */
   readonly dropTargets: BlockDropTargets;
-  /** Current DOM root and its focus-listener cleanup; undefined while detached. Identity prevents stale disposers from detaching a newer root. */
+  /** Current DOM root and its input/focus-listener cleanup; undefined while detached. Identity prevents stale disposers from detaching a newer root. */
   private attachment: BlockEditorAttachment | undefined;
   /** Permanent lifecycle flag set when destruction begins; rejects later attachment and node lookup, independently of view detachment. */
   private destroyed = false;
@@ -49,7 +55,7 @@ export class BlockEditorController implements BlockEditorApi {
   private readonly nodes = new Map<string, BlockEditorNode>();
 
   /**
-   * Creates editor-owned managers without reading data, subscribing, or attaching DOM.
+   * Creates editor-owned managers without reading or subscribing to host data, or attaching DOM.
    *
    * The host creates this instance outside React rendering and destroys it when
    * its editing session ends. Views borrow it; unmounting a view only detaches DOM.
@@ -65,6 +71,7 @@ export class BlockEditorController implements BlockEditorApi {
     this.renderers = new BlockRendererRegistry(this.extensions, fallbackRenderer);
     this.wrappers = new BlockWrapperRegistry(this.extensions);
     this.events = new BlockEditorEvents(this.extensions);
+    this.keyboard = new BlockKeyboard(this.events, this.extensions);
     this.dropTargets = new BlockDropTargets(this.extensions, adapter.blocks, () => this.getRoot());
   }
 
@@ -94,7 +101,7 @@ export class BlockEditorController implements BlockEditorApi {
    * Connects one committed block editor root to this controller.
    *
    * Detach permits a later attachment; an old disposer cannot clear a newer one.
-   * Focus listeners belong to this attachment. Registrations and nodes survive
+   * Input and focus listeners belong to this attachment. Registrations and nodes survive
    * detach/attach; input commands and host data are not created by attachment.
    * After publishing the root, attachment reports focus already inside it (such
    * as autoFocus during React commit). Observer failure rolls back the attachment.
@@ -116,13 +123,20 @@ export class BlockEditorController implements BlockEditorApi {
       this.events.notifyInitialFocus(root);
     } catch (error) {
       this.attachment = undefined;
-      attachment.detachEvents();
+      try {
+        attachment.detachEvents();
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Initial focus and attachment cleanup failed",
+        );
+      }
       throw error;
     }
     return () => {
       if (this.attachment === attachment) {
-        attachment.detachEvents();
         this.attachment = undefined;
+        attachment.detachEvents();
       }
     };
   }
@@ -151,9 +165,18 @@ export class BlockEditorController implements BlockEditorApi {
       return;
     }
     this.destroyed = true;
-    this.attachment?.detachEvents();
-    this.attachment = undefined;
     const errors: unknown[] = [];
+    try {
+      this.attachment?.detachEvents();
+    } catch (error) {
+      errors.push(error);
+    }
+    this.attachment = undefined;
+    try {
+      this.keyboard.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
     try {
       this.extensions.destroy();
     } catch (error) {

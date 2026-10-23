@@ -1,90 +1,44 @@
+import { KeyboardRuntime } from "@chulane/rivto-keyboard";
 import type { RegistrationOwner } from "../extensions/types";
-import type { EditorMode } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
-import { RevisionStore } from "../../internal-store";
-import { modeMatches, scopeMatches } from "../events/event-manager";
+import type { EventManager } from "../events/event-manager";
 import type { PanelRegistration, EditorEventHandler } from "../events/types";
-import { KeyboardEditorEvent } from "./keyboard-editor-event";
+import type { KeyboardEditorEvent } from "./keyboard-editor-event";
 import type {
   KeyboardBindingSnapshot,
   KeyboardEventDefinition,
-  KeyboardEventPhase,
-  KeyboardShortcut,
   KeymapOverrides,
 } from "./keyboard-types";
-import {
-  matchesShortcut,
-  parseShortcut,
-  shortcutFromKeyboardEvent,
-  type ParsedShortcut,
-} from "./shortcut";
-import type { KeyboardDOMEvent, KeyboardRegistration } from "./types";
+import { ReactKeyboardTransport } from "./keyboard-transport";
 
 /** Owns semantic keyboard bindings while EventManager owns native transport. */
-export class KeyboardManager {
-  private readonly registrations: KeyboardRegistration[] = [];
-  private readonly registrationIds = new Set<string>();
-  private readonly registrationDisposers = new Map<string, () => void>();
-  private readonly transportDisposers: Array<() => void>;
-  private keymap: KeymapOverrides;
-  private snapshot: readonly KeyboardBindingSnapshot[] = [];
-  private readonly store = new RevisionStore();
-  private destroyed = false;
-
+export class KeyboardManager extends KeyboardRuntime<
+  KeyboardEditorEvent,
+  KeyboardEventDefinition,
+  KeyboardBindingSnapshot
+> {
   /**
    * Creates keyboard transport before extensions register DOM or keyboard behavior.
    *
-   * @param reactEditor - Owning React runtime providing events and extensions.
-   * @param keymap - Initial semantic binding overrides.
+   * @param events - Borrowed host event registration capability.
    * @param extensions - Internal registration ownership and destruction guard.
+   * @param keymap - Initial semantic binding overrides.
    */
   constructor(
-    reactEditor: ReactEditorApi,
-    private readonly extensions: RegistrationOwner,
+    events: Pick<EventManager, "register">,
+    extensions: RegistrationOwner,
     keymap: KeymapOverrides = {},
   ) {
-    this.keymap = cloneKeymap(keymap);
-    validateKeymap(this.keymap);
-    this.publish();
-    this.transportDisposers = [
-      reactEditor.events.register<"surface", "keydown">(
-        {
-          id: "rivto.keyboard.surface.keydown",
-          type: "keydown",
-        },
-        (event) => this.dispatch(event, "keydown"),
-      ),
-      reactEditor.events.register<"surface", "keyup">(
-        {
-          id: "rivto.keyboard.surface.keyup",
-          type: "keyup",
-        },
-        (event) => this.dispatch(event, "keyup"),
-      ),
-      reactEditor.events.register<"window", "keydown">(
-        {
-          id: "rivto.keyboard.window.keydown",
-          type: "keydown",
-          target: "window",
-        },
-        (event) => this.dispatch(event, "keydown"),
-      ),
-      reactEditor.events.register<"window", "keyup">(
-        {
-          id: "rivto.keyboard.window.keyup",
-          type: "keyup",
-          target: "window",
-        },
-        (event) => this.dispatch(event, "keyup"),
-      ),
-    ];
+    super(new ReactKeyboardTransport(events), extensions, keymap);
   }
 
   /**
    * Registers one semantic keyboard action in declaration order.
    *
+   * Panel-local copies share a semantic override but retain independent cleanup.
+   *
    * @param definition - Stable ID, default keys, filters, and composition policy.
    * @param listener - Handler returning true when it claims the native event.
+   * @param owner - Optional panel restricting dispatch to its currently mounted root.
    * @returns Idempotent disposer which releases the keyboard ID for reuse.
    */
   register(
@@ -92,365 +46,10 @@ export class KeyboardManager {
     listener: EditorEventHandler<KeyboardEditorEvent>,
     owner?: PanelRegistration,
   ): () => void {
-    this.assertActive();
-    const semanticId = definition.id.trim();
-    const id = owner ? `${owner.id}:${semanticId}` : semanticId;
-    if (!semanticId) {
-      throw new Error("Keyboard registration ID is required");
-    }
-    if (this.registrationIds.has(id)) {
-      throw new Error(`Keyboard registration ${id} is already registered`);
-    }
-    const normalized = {
-      ...definition,
-      id: semanticId,
-      keys: typeof definition.keys === "string" ? definition.keys : [...definition.keys],
-    };
-    const registration: KeyboardRegistration = {
-      owner,
-      definition: normalized,
-      shortcuts: this.resolveShortcuts(normalized, this.keymap),
-      listener,
-    };
-    this.registrationIds.add(id);
-    this.registrations.push(registration);
-
-    let active = true;
-    let dispose: () => void = () => undefined;
-    dispose = this.extensions.registerCleanup(() => {
-      if (!active) {
-        return;
-      }
-      active = false;
-      const index = this.registrations.indexOf(registration);
-      if (index >= 0) {
-        this.registrations.splice(index, 1);
-      }
-      this.registrationIds.delete(id);
-      if (this.registrationDisposers.get(id) === dispose) {
-        this.registrationDisposers.delete(id);
-      }
-      if (!this.destroyed) {
-        this.publish();
-      }
+    const id = definition.id.trim();
+    return this.registerBinding(definition, listener, {
+      id: owner ? `${owner.id}:${id}` : id,
+      accepts: owner ? (event) => owner.getRoot() === event.root : undefined,
     });
-    this.registrationDisposers.set(id, dispose);
-    this.publish();
-    return dispose;
   }
-
-  /**
-   * Returns a stable inventory of installed bindings and orphan overrides.
-   *
-   * Panel-local copies of an action share one inventory row and keymap override;
-   * the first installed definition supplies that row's defaults.
-   * @returns Immutable snapshots until the next registry or override revision.
-   */
-  list(): readonly KeyboardBindingSnapshot[] {
-    return this.snapshot;
-  }
-
-  /**
-   * Reads the keyboard registry's observable revision.
-   *
-   * @returns Current revision number.
-   */
-  get revision(): number {
-    return this.store.revision;
-  }
-
-  /**
-   * Subscribes to inventory revisions.
-   *
-   * @param listener - Callback invoked after register, delete, or override changes.
-   * @returns Function that removes the subscription.
-   */
-  subscribe(listener: () => void): () => void {
-    return this.store.subscribe(listener);
-  }
-
-  /**
-   * Deletes one keyboard registration by its stable semantic ID.
-   *
-   * @param id - Identity supplied to register().
-   * @returns True when a registration existed and was disposed.
-   */
-  delete(id: string): boolean {
-    const dispose = this.registrationDisposers.get(id);
-    if (!dispose) {
-      return false;
-    }
-    dispose();
-    return true;
-  }
-
-  /**
-   * Atomically replaces every override and restores defaults for omitted IDs.
-   *
-   * @param keymap - Complete next override map; empty arrays disable bindings.
-   */
-  replaceKeymap(keymap: KeymapOverrides): void {
-    this.assertActive();
-    this.applyKeymap(cloneKeymap(keymap));
-  }
-
-  /**
-   * Atomically replaces one override without reinstalling its handler.
-   *
-   * @param id - Existing or future semantic binding ID.
-   * @param keys - Replacement shortcuts, an empty array to disable, or undefined
-   * to restore the binding's declared defaults.
-   */
-  setKeymapOverride(id: string, keys: readonly KeyboardShortcut[] | undefined): void {
-    this.assertActive();
-    const next = cloneKeymap(this.keymap);
-    if (keys === undefined) {
-      delete next[id];
-    } else {
-      next[id] = [...keys];
-    }
-    this.applyKeymap(next);
-  }
-
-  /** Releases semantic registrations and native keyboard transport. */
-  destroy(): void {
-    if (this.destroyed) {
-      return;
-    }
-    this.destroyed = true;
-    [...this.registrationDisposers.values()].reverse().forEach((dispose) => dispose());
-    this.transportDisposers.reverse().forEach((dispose) => dispose());
-    this.registrationDisposers.clear();
-    this.registrationIds.clear();
-    this.registrations.length = 0;
-  }
-
-  /**
-   * Validates replacement key bindings, reparses registered shortcuts, and publishes the new keymap.
-   *
-   * @param keymap - Complete shortcut override map keyed by command ID.
-   * @throws If keymap entries or shortcut strings are invalid.
-   */
-  private applyKeymap(keymap: KeymapOverrides): void {
-    validateKeymap(keymap);
-    const shortcuts = this.registrations.map(({ definition }) =>
-      this.resolveShortcuts(definition, keymap),
-    );
-    this.keymap = keymap;
-    this.registrations.forEach((registration, index) => {
-      registration.shortcuts = shortcuts[index]!;
-    });
-    this.publish();
-  }
-
-  /**
-   * Rebuilds the cached inventory, including uninstalled override IDs.
-   *
-   * @returns No value.
-   */
-  private publish(): void {
-    const actions = new Map<string, KeyboardRegistration>();
-    this.registrations.forEach((registration) => {
-      if (!actions.has(registration.definition.id)) {
-        actions.set(registration.definition.id, registration);
-      }
-    });
-    const snapshots: Array<KeyboardBindingSnapshot & { conflicts: string[] }> = [
-      ...actions.values(),
-    ].map((registration) => {
-      const definition = registration.definition;
-      const defaultKeys =
-        typeof definition.keys === "string" ? [definition.keys] : [...definition.keys];
-      const overridden = Object.prototype.hasOwnProperty.call(this.keymap, definition.id);
-      const keys = overridden ? [...(this.keymap[definition.id] ?? [])] : defaultKeys;
-      return {
-        id: definition.id,
-        defaultKeys,
-        keys,
-        overridden,
-        disabled: overridden && keys.length === 0,
-        installed: true,
-        phase: definition.phase ?? "keydown",
-        target: definition.target ?? "surface",
-        scope: definition.scope,
-        mode: definition.mode,
-        priority: definition.priority ?? 0,
-        conflicts: [] as string[],
-      } satisfies KeyboardBindingSnapshot;
-    });
-    Object.keys(this.keymap).forEach((id) => {
-      if (actions.has(id)) {
-        return;
-      }
-      snapshots.push({
-        id,
-        defaultKeys: [],
-        keys: [...(this.keymap[id] ?? [])],
-        overridden: true,
-        disabled: (this.keymap[id] ?? []).length === 0,
-        installed: false,
-        phase: "keydown",
-        target: "surface",
-        priority: 0,
-        conflicts: [],
-      });
-    });
-    snapshots.forEach((snapshot) => {
-      snapshot.conflicts.push(
-        ...snapshots
-          .filter((other) => other.id !== snapshot.id && sameConflictBucket(snapshot, other))
-          .map((other) => other.id),
-      );
-    });
-    this.snapshot = snapshots.map((snapshot) => ({
-      ...snapshot,
-      conflicts: [...snapshot.conflicts],
-    }));
-    this.store.changed();
-  }
-
-  /**
-   * Resolves a command's override or default key bindings and parses each shortcut.
-   *
-   * @param definition - Registration definition with its stable ID, filters, and options.
-   * @param keymap - Complete shortcut override map keyed by command ID.
-   * @returns Parsed shortcuts; an explicit nullish override disables the command's bindings.
-   * @throws If a shortcut cannot be parsed.
-   */
-  private resolveShortcuts(
-    definition: KeyboardEventDefinition,
-    keymap: KeymapOverrides,
-  ): ParsedShortcut[] {
-    let configured: readonly string[];
-    if (Object.prototype.hasOwnProperty.call(keymap, definition.id)) {
-      configured = keymap[definition.id] ?? [];
-    } else {
-      configured = typeof definition.keys === "string" ? [definition.keys] : definition.keys;
-    }
-    return configured.map(parseShortcut);
-  }
-
-  /**
-   * Dispatches a keyboard event by priority, panel ownership, scope, phase, and composition policy.
-   *
-   * @param domEvent - Editor DOM event containing the receiving panel and native keyboard input.
-   * @param phase - Keyboard phase to dispatch.
-   * @returns Whether a matching handler or composition policy consumed the event.
-   */
-  private dispatch(domEvent: KeyboardDOMEvent, phase: KeyboardEventPhase): boolean {
-    const raw = domEvent.raw;
-    const event = new KeyboardEditorEvent({
-      raw,
-      reactPanel: domEvent.reactPanel,
-      root: domEvent.root,
-      mode: domEvent.mode,
-      selection: domEvent.selection,
-      eventTarget: domEvent.eventTarget,
-      insideRoot: domEvent.insideRoot,
-      blockElement: domEvent.blockElement,
-      blockId: domEvent.blockId,
-      contentElement: domEvent.contentElement,
-      shortcut: shortcutFromKeyboardEvent(raw),
-      phase,
-    });
-    const registrations = [...this.registrations].sort(
-      (left, right) => (right.definition.priority ?? 0) - (left.definition.priority ?? 0),
-    );
-    let handled = false;
-    for (const registration of registrations) {
-      if (registration.owner && registration.owner.getRoot() !== domEvent.root) {
-        continue;
-      }
-      const definition = registration.definition;
-      if (
-        (definition.phase ?? "keydown") !== phase ||
-        (definition.target ?? "surface") !== event.eventTarget ||
-        !modeMatches(definition.mode, event.mode) ||
-        !scopeMatches(definition.scope, event) ||
-        !registration.shortcuts.some((shortcut) => matchesShortcut(shortcut, raw))
-      ) {
-        continue;
-      }
-      const composition = definition.composing ?? "ignore";
-      if (raw.isComposing && composition === "ignore") {
-        continue;
-      }
-      if (raw.isComposing && composition === "prevent") {
-        handled = true;
-        break;
-      }
-      if (definition.when && !definition.when(event)) {
-        continue;
-      }
-      if (registration.listener(event)) {
-        handled = true;
-        break;
-      }
-    }
-    return handled;
-  }
-
-  /**
-   * Guards keyboard operations after runtime or extension destruction.
-   *
-   * @throws If the keyboard runtime or its registration owner is inactive.
-   */
-  private assertActive(): void {
-    if (this.destroyed) {
-      throw new Error("Keyboard runtime is destroyed");
-    }
-    this.extensions.assertActive();
-  }
-}
-
-const cloneKeymap = (keymap: KeymapOverrides): Record<string, readonly KeyboardShortcut[]> =>
-  Object.fromEntries(Object.entries(keymap).map(([id, keys]) => [id, [...keys]]));
-
-const validateKeymap = (keymap: KeymapOverrides): void => {
-  Object.values(keymap).forEach((keys) => keys.forEach(parseShortcut));
-};
-
-/**
- * Reports whether two inventory rows can claim the same native event.
- *
- * Conservative: overlapping effective keys plus equal phase, target, mode,
- * scope, and priority. `when` predicates are not evaluated.
- *
- * @param left - First inventory row.
- * @param right - Second inventory row.
- * @returns True when dispatch order alone would choose between them.
- */
-function sameConflictBucket(
-  left: KeyboardBindingSnapshot,
-  right: KeyboardBindingSnapshot,
-): boolean {
-  if (left.phase !== right.phase || left.target !== right.target) {
-    return false;
-  }
-  if (left.priority !== right.priority || left.scope !== right.scope) {
-    return false;
-  }
-  if (!modesOverlap(left.mode, right.mode)) {
-    return false;
-  }
-  const rightKeys = new Set(right.keys);
-  return left.keys.some((key) => rightKeys.has(key));
-}
-
-/**
- * Treats an omitted mode as every mode.
- *
- * @param left - Optional mode filter.
- * @param right - Optional mode filter.
- * @returns True when the filters can both match one editor mode.
- */
-function modesOverlap(
-  left?: EditorMode | readonly EditorMode[],
-  right?: EditorMode | readonly EditorMode[],
-): boolean {
-  if (left === undefined || right === undefined) {
-    return true;
-  }
-  const leftModes = new Set(Array.isArray(left) ? left : [left]);
-  return (Array.isArray(right) ? right : [right]).some((mode) => leftModes.has(mode));
 }

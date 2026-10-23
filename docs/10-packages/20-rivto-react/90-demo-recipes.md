@@ -36,7 +36,7 @@ Demo toolbar получает core editor от host для persistence/lifecycle
 
 ## Decorator без duplicate block DOM
 
-Demo block-ID extension регистрирует `BlockWrapper` и использует `BlockElementRefProvider` + portal. Он наблюдает существующий `.page-block-row`, не создаёт второй `BlockView` и не ломает selection contract.
+Demo block-ID extension регистрирует block slot. Page размещает его в существующей строке, без второго structural shell и отдельного ref provider; selection остаётся в панели.
 
 ## Несколько независимых editors
 

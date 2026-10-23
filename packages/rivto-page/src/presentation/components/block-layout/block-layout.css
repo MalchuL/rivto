@@ -5,7 +5,7 @@
   @apply page:flex-1 page:min-w-0;
 }
 .rivto-block-children {
-  @apply page:flex page:flex-col page:gap-[var(--rivto-block-children-gap,12px)];
+  @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)];
 }
 .rivto-block-children[hidden] {
   @apply page:hidden;
@@ -13,7 +13,7 @@
 
 /* Outline geometry is opt-in; container layouts use the same child host freely. */
 .rivto-block-outline:not(:empty) {
-  @apply page:pbs-[var(--rivto-block-children-gap,12px)] page:ms-[var(--rivto-block-indent,28px)];
+  @apply page:pbs-[var(--rivto-block-gap,4px)] page:ms-[var(--rivto-block-indent,28px)];
 }
 .rivto-block-outline:empty {
   @apply page:hidden;
@@ -26,4 +26,16 @@
 /* Gap wrappers preserve canonical sibling adjacency without adding layout boxes. */
 .rivto-block-list-gap {
   display: contents;
+}
+
+/* Contentless structural anchors expose controls over their body instead of
+ * reserving a blank text row above containers or embedded views. */
+.rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty) {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+}
+.rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty)
+  > .rivto-block-slot {
+  pointer-events: auto;
 }

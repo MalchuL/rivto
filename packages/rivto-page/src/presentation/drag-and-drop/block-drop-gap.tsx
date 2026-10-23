@@ -54,6 +54,7 @@ export function BlockDropGap(props: BlockDropGapProps) {
     <BlockDropTarget
       className="rivto-block-drop-gap"
       data-drop-axis={axis}
+      indicatorAxis={axis === "horizontal" ? "vertical" : "horizontal"}
       data-drop-gap={parentId}
       destination={{ kind: "between", parentId, previousId, nextId }}
     />

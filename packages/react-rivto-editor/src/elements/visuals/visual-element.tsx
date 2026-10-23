@@ -4,7 +4,7 @@
  * Selection handles subscribe per visual ID so marquee growth over a neighbor
  * does not re-render this node or recreate its label editor.
  */
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import type { EditorElementNode } from "@chulane/rivto";
 import type { EditableLabelFocusPoint } from "../../components";
 import { ElementSlots } from "../../blocks";
@@ -24,7 +24,7 @@ import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-eleme
  * @param props.zoom - Current canvas zoom factor.
  * @returns Positioned visual host with optional resize/rotate chrome.
  */
-export function VisualElement({
+export const VisualElement = memo(function VisualElement({
   element,
   edgelessOperation,
   zoom,
@@ -50,6 +50,7 @@ export function VisualElement({
       className="edgeless-visual"
       data-edgeless-object-kind="visual"
       data-edgeless-object-id={element.id}
+      data-canvas-element={element.id}
       data-edgeless-visual-kind={element.type}
       data-selected={selected || undefined}
       data-editing={editing || undefined}
@@ -81,4 +82,4 @@ export function VisualElement({
       <ElementSlots element={element} selected={selected} />
     </div>
   );
-}
+});

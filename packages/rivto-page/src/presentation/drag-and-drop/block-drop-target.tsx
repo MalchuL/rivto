@@ -7,6 +7,8 @@ import type { BlockDropDestination } from "../../editor/drag-and-drop/types";
 export interface BlockDropTargetProps extends HTMLAttributes<HTMLDivElement> {
   readonly destination: BlockDropDestination;
   readonly priority?: number;
+  /** Optional insertion-line orientation through a between region; does not change hit geometry. */
+  readonly indicatorAxis?: "horizontal" | "vertical";
   /** Composes attributes and ref onto one child instead of adding a wrapper. */
   readonly asChild?: boolean;
 }
@@ -21,6 +23,7 @@ export interface BlockDropTargetProps extends HTMLAttributes<HTMLDivElement> {
  * @param props - Native attributes, destination, priority, and region contents.
  * @param props.destination - Real parent or canonical child gap checked at resolution.
  * @param props.priority - Finite overlap priority, default zero.
+ * @param props.indicatorAxis - Optional line orientation; omitted regions retain outline feedback.
  * @param props.asChild - Attach to an existing child element when true.
  * @param props.children - Target contents, or exactly one ref-forwarding child with asChild.
  * @returns A registered div or the composed child element.
@@ -29,6 +32,7 @@ export interface BlockDropTargetProps extends HTMLAttributes<HTMLDivElement> {
 export function BlockDropTarget({
   destination,
   priority,
+  indicatorAxis,
   asChild = false,
   children,
   ...attributes
@@ -47,6 +51,7 @@ export function BlockDropTarget({
         release.current = editor.dropTargets.register({
           element,
           priority,
+          indicatorAxis,
           /**
            * Reads only the latest committed JSX destination.
            *
@@ -56,7 +61,7 @@ export function BlockDropTarget({
         });
       }
     },
-    [editor, priority],
+    [editor, priority, indicatorAxis],
   );
   const Component = asChild ? Slot.Root : "div";
   return (

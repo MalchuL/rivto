@@ -1,8 +1,17 @@
 import { chromium, expect, firefox, test, type Locator, type Page } from "@playwright/test";
+import { BLOCK_ROW_SELECTOR } from "./dom-markers";
+
+/** Root shells inside the embedded Page's stable virtualization host. */
+const EMBEDDED_ROOT_SELECTOR =
+  ":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]";
+
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import type { EditorStorage, ReactEditor, EditorAcquisition } from "@chulane/rivto-react";
 import type { DocumentStorage } from "@chulane/document-model";
+
+/** Matches Page-owned control slots in writing pages and canvas cards. */
+const BLOCK_SLOT_SELECTOR = ".rivto-block-slot";
 
 interface DemoInspection {
   storage: DocumentStorage;
@@ -50,12 +59,12 @@ for (const repeat of [0, 200]) {
     const original = today
       .locator(".page-surface")
       .first()
-      .locator(`:scope > [data-block-id="${target}"]`);
+      .locator(`${EMBEDDED_ROOT_SELECTOR}[data-block-id="${target}"]`);
     const detail = region.locator(
-      `[data-block-id="${detailId}"] > .page-block-row [data-block-content]`,
+      `[data-block-id="${detailId}"] > .rivto-block-row [data-block-content]`,
     );
     const originalDetail = original.locator(
-      `[data-block-id="${detailId}"] > .page-block-row [data-block-content]`,
+      `[data-block-id="${detailId}"] > .rivto-block-row [data-block-content]`,
     );
     await detail.fill("Warm embedded child");
     await expect(originalDetail).toHaveText("Warm embedded child");
@@ -154,7 +163,7 @@ for (const repeat of [0, 200]) {
       const content = region.locator("[data-block-content]").first();
       const host = today.locator('[data-block-type="embedding"]').first();
       const edit = host
-        .locator(':scope > .page-block-row > [data-slot-position="right"]')
+        .locator(`:scope > ${BLOCK_ROW_SELECTOR} > [data-slot-position="right"]`)
         .getByRole("button", { name: "Edit embedding", exact: true });
       const readSelection = () =>
         page.evaluate(() =>
@@ -255,7 +264,7 @@ for (const [repeat, canvas] of [
       }, cardId);
     }
     const embedding = today.locator(`[data-block-id="${ids.embed}"]`).first();
-    const body = embedding.locator(':scope > .rivto-slot[data-slot-position="body"]');
+    const body = embedding.locator(':scope > .rivto-block-slot[data-slot-position="body"]');
     const readSelection = () =>
       page.evaluate(() =>
         (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection
@@ -279,7 +288,7 @@ for (const [repeat, canvas] of [
           expected.splice(1, 0, ids.child);
         }
         const anchor = today
-          .locator(`[data-block-id="${anchorId}"] > .page-block-row [data-block-content]`)
+          .locator(`[data-block-id="${anchorId}"] > .rivto-block-row [data-block-content]`)
           .first();
         await body.scrollIntoViewIfNeeded();
         const start = (await anchor.boundingBox())!;
@@ -324,7 +333,7 @@ for (const canvas of [false, true]) {
       return;
     }
 
-    const roots = today.locator(".page-surface").first().locator(":scope > [data-block-id]");
+    const roots = today.locator(".page-surface").first().locator(EMBEDDED_ROOT_SELECTOR);
     const count = await roots.count();
     await page.evaluate(() =>
       (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.history.clear(),
@@ -369,7 +378,9 @@ for (const canvas of [false, true]) {
       "Nested branch one owns several Markdown children.",
     );
     const spacing = await region.evaluate((element) => {
-      const block = element.querySelector<HTMLElement>(":scope > [data-block-id]")!;
+      const block = element.querySelector<HTMLElement>(
+        ":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
+      )!;
       const bottomGap =
         element.getBoundingClientRect().bottom - block.getBoundingClientRect().bottom;
       const padding = parseFloat(getComputedStyle(element).paddingBottom);
@@ -414,15 +425,16 @@ for (const canvas of [false, true]) {
     }
     const host = pane.locator(`[data-block-id="${room}:embed-1"]`);
     const edit = host
-      .locator(':scope > .page-block-row > [data-slot-position="right"]')
+      .locator(`:scope > ${BLOCK_ROW_SELECTOR} > [data-slot-position="right"]`)
       .getByRole("button", { name: "Edit embedding", exact: true });
     const settings = page.getByRole("dialog", { name: "Embedding settings" });
-    await expect(host.locator(":scope > .page-block-row").getByRole("textbox")).toHaveCount(0);
-    await expect(host.locator(":scope > .page-block-row .rivto-embedding")).toHaveText("");
-    await expect(host.locator(':scope > .rivto-slot[data-slot-position="body"]')).not.toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0)",
+    await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).getByRole("textbox")).toHaveCount(
+      0,
     );
+    await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR} .rivto-embedding`)).toHaveText("");
+    await expect(
+      host.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`),
+    ).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(host.getByRole("region", { name: "Block editor" })).toHaveCSS(
       "background-color",
       "rgba(0, 0, 0, 0)",
@@ -502,7 +514,9 @@ for (const canvas of [false, true]) {
 /**
  * Moves the real mouse from a row's handle to another row; the caller checks feedback and releases it.
  *
- * Scrolls the destination away from viewport edges to avoid drag autoscroll.
+ * Centers the source and destination together away from viewport edges to avoid
+ * drag autoscroll along the path; a target-only adjustment can leave the source
+ * in an edge band and invalidate the measured destination before the pointer arrives.
  *
  * @param page - Browser page receiving the pointer gesture.
  * @param source - Source page row containing a direct handle slot.
@@ -517,20 +531,38 @@ async function dragRow(
   destination: Locator,
   before = false,
 ): Promise<void> {
-  await destination.scrollIntoViewIfNeeded();
+  await destination.scrollIntoViewIfNeeded({ timeout: 5_000 });
   await source.hover();
-  const handle = source.locator(":scope > .rivto-slot > .block-handle");
+  const handle = source.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`);
   await handle.hover();
-  // Keep the drop away from viewport edges so autoscroll does not move it during the gesture.
-  await destination.evaluate((element) =>
-    window.scrollBy(0, element.getBoundingClientRect().top - window.innerHeight / 3),
-  );
+  // Keep the entire pointer path away from the page's autoscroll edge bands.
+  const sourceBounds = await source.boundingBox();
+  if (!sourceBounds) {
+    throw new Error("Expected source row geometry before scrolling");
+  }
+  await destination.evaluate((element, source) => {
+    const target = element.getBoundingClientRect();
+    const top = Math.min(source.y, target.top);
+    const bottom = Math.max(source.y + source.height, target.bottom);
+    window.scrollBy(0, (top + bottom - window.innerHeight) / 2);
+  }, sourceBounds);
+  // Scrolling moves the row away from the pointer and hides its hover-only handle.
+  await source.hover();
+  await handle.hover();
   const from = await handle.boundingBox();
   const to = await destination.boundingBox();
   if (!from || !to) {
     throw new Error("Expected source handle and destination row geometry");
   }
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  const sourceHit = await handle.evaluate(
+    (element, point) => {
+      const hit = element.ownerDocument.elementFromPoint(point.x, point.y);
+      return { receivesPointer: !!hit && element.contains(hit), point, hit: hit?.className };
+    },
+    { x: from.x + from.width / 2, y: from.y + from.height / 2 },
+  );
+  expect(sourceHit.receivesPointer, JSON.stringify(sourceHit)).toBe(true);
   await page.mouse.down();
   const point = {
     x: before ? to.x + 4 : to.x + to.width / 2,
@@ -539,10 +571,14 @@ async function dragRow(
   await page.mouse.move(point.x, point.y, { steps: 15 });
   await expect(source.locator("..")).toHaveAttribute("data-dragging", "true");
   expect(
-    await destination.evaluate((element, point) => {
-      const hit = element.ownerDocument.elementFromPoint(point.x, point.y);
-      return Boolean(hit && element.contains(hit));
-    }, point),
+    await destination.evaluate(
+      (element, point) => {
+        const hit = element.ownerDocument.elementFromPoint(point.x, point.y);
+        const owner = element.closest("[data-block-id]");
+        return Boolean(hit && owner?.contains(hit));
+      },
+      { ...point, before },
+    ),
   ).toBe(true);
 }
 
@@ -551,13 +587,12 @@ test("embedded row hover exposes only its own reachable drag handle", async ({ p
   const host = page.locator(`[data-document-pane="references"] [data-block-id="${room}:embed-1"]`);
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const child = region.locator(`[data-block-id="${room}:child-0"]`);
-  await child.locator(":scope > .page-block-row").hover();
+  await child.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
   const handle = child.getByRole("button", { name: "Open block: Source child 0", exact: true });
   await expect(handle).toHaveCSS("opacity", "1");
-  await expect(host.locator(":scope > .page-block-row > .rivto-slot > .block-handle")).toHaveCSS(
-    "opacity",
-    "0",
-  );
+  await expect(
+    host.locator(`:scope > ${BLOCK_ROW_SELECTOR} > ${BLOCK_SLOT_SELECTOR} > .block-handle`),
+  ).toHaveCSS("opacity", "0");
   await expect(
     region.getByRole("button", { name: "Open block: Source child 1", exact: true }),
   ).toHaveCSS("opacity", "0");
@@ -602,9 +637,9 @@ test("a host block drops into the embedded document and moves back out", async (
   const host = page.locator('[data-document-pane="references"]');
   const heading = host.locator(`[data-block-id="${room}:reference-heading"]`);
   const region = page.getByRole("region", { name: "Block editor" }).first();
-  const destination = region.locator(`[data-block-id="${room}:child-0"] > .page-block-row`);
-  await dragRow(page, heading.locator(":scope > .page-block-row"), destination);
-  await expect(destination).toHaveAttribute("data-drop-inside", "true");
+  const destination = region.locator(`[data-block-id="${room}:child-0"] > ${BLOCK_ROW_SELECTOR}`);
+  await dragRow(page, heading.locator(`:scope > ${BLOCK_ROW_SELECTOR}`), destination);
+  await expect(destination).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -621,9 +656,9 @@ test("a host block drops into the embedded document and moves back out", async (
     )
     .toEqual({ sourceParent: `${room}:child-0`, hostHas: false });
   const moved = region.locator(`[data-block-id="${room}:reference-heading"]`);
-  const backRow = host.locator(`[data-block-id="${room}:embed-1"] > .page-block-row`);
-  await dragRow(page, moved.locator(":scope > .page-block-row"), backRow, true);
-  await expect(host.locator('.page-drop-indicator[data-kind="between"]')).toBeVisible();
+  const backRow = host.locator(`[data-block-id="${room}:embed-1"] > ${BLOCK_ROW_SELECTOR}`);
+  await dragRow(page, moved.locator(`:scope > ${BLOCK_ROW_SELECTOR}`), backRow, true);
+  await expect(host.locator(".rivto-block-drop-line:visible")).toBeVisible();
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -693,11 +728,15 @@ for (const [repeat, canvas] of [
       }, cardId);
     }
     const region = today.getByRole("region", { name: "Block editor" });
-    const source = today.locator(`[data-block-id="${movedId}"] > .page-block-row`);
-    await dragRow(page, source, region.locator(":scope > [data-block-id] > .page-block-row"));
+    const source = today.locator(`[data-block-id="${movedId}"] > ${BLOCK_ROW_SELECTOR}`);
+    await dragRow(
+      page,
+      source,
+      region.locator(`${EMBEDDED_ROOT_SELECTOR} > ${BLOCK_ROW_SELECTOR}`),
+    );
     const embedding = today.locator(`[data-block-id="${embedId}"]`).first();
     const next = today.locator(`[data-block-id="${nextId}"]`).first();
-    const embeddedRoot = region.locator(":scope > [data-block-id]");
+    const embeddedRoot = region.locator(EMBEDDED_ROOT_SELECTOR);
     const rect = await embedding.boundingBox();
     const content = await embeddedRoot.boundingBox();
     const after = await next.boundingBox();
@@ -705,7 +744,7 @@ for (const [repeat, canvas] of [
       throw new Error("Expected embedding and container geometry");
     }
     const x = rect.x + (canvas ? 8.4 : 12);
-    const line = today.locator('.page-drop-indicator[data-kind="between"]');
+    const line = today.locator(".rivto-block-drop-line:visible");
     // Check the gap above the reference, then its bottom padding and the next
     // container's edge. All of these belong to the enclosing document.
     await page.mouse.move(x, rect.y - 1, { steps: 10 });
@@ -830,12 +869,14 @@ for (const [repeat, canvas] of [
     ]) {
       const parent = today.locator(`[data-block-id="${parentId}"]`).first();
       const next = today.locator(`[data-block-id="${nextId}"]`).first();
-      const source = today.locator(`[data-block-id="${ids.source}"] > .page-block-row`).first();
-      await dragRow(page, source, parent.locator(":scope > .page-block-row"));
+      const source = today
+        .locator(`[data-block-id="${ids.source}"] > ${BLOCK_ROW_SELECTOR}`)
+        .first();
+      await dragRow(page, source, parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`));
       const box = (await parent.boundingBox())!;
       const after = (await next.boundingBox())!;
       const scale = canvas ? 0.7 : 1;
-      const line = today.locator('.page-drop-indicator[data-kind="between"]');
+      const line = today.locator(".rivto-block-drop-line:visible");
       // Moving right across the same gap must turn its sibling line into an
       // indented child line, even when the following block owns another view.
       for (const y of [box.y + box.height - 1, (box.y + box.height + after.y) / 2, after.y + 1]) {
@@ -845,8 +886,13 @@ for (const [repeat, canvas] of [
         await page.mouse.move(box.x + 36 * scale, y);
         await expect(line).toHaveCount(1);
         expect(Math.abs((await line.boundingBox())!.x - (box.x + 24 * scale))).toBeLessThan(2);
-        await expect(parent.locator(":scope > .page-block-row")).not.toHaveAttribute(
-          "data-drop-inside",
+        await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
+          "data-block-drop-active",
+          "true",
+        );
+        await expect(parent).not.toHaveAttribute("data-block-drop-active", "true");
+        await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
+          "data-block-drop-active",
           "true",
         );
       }
@@ -865,10 +911,10 @@ for (const [repeat, canvas] of [
         )
         .toBe(parentId);
       await expect(
-        parent.locator(`:scope > .page-block-children > [data-block-id="${ids.source}"]`),
+        parent.locator(`:scope > .rivto-block-children > [data-block-id="${ids.source}"]`),
       ).toBeVisible();
       if (parentId === ids.embed) {
-        const body = parent.locator(':scope > .rivto-slot[data-slot-position="body"]');
+        const body = parent.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`);
         // The reference has its own decoration; ordinary outline children
         // below it must see the surrounding document's background instead.
         await expect(parent).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -945,11 +991,11 @@ for (const mode of ["Page", "Edgeless"] as const) {
       await expect(zoom.getByRole("button", { name: "Reset zoom" })).toHaveText("50%");
     }
     const outer = today.locator("[data-rivto-panel]").first();
-    const header = outer.locator(`[data-block-id="${embedId}"] > .page-block-row`);
-    const source = outer.locator(`[data-block-id="${movedId}"] > .page-block-row`);
-    const destination = region.locator(`[data-block-id="${childId}"] > .page-block-row`);
+    const header = outer.locator(`[data-block-id="${embedId}"] > ${BLOCK_ROW_SELECTOR}`);
+    const source = outer.locator(`[data-block-id="${movedId}"] > ${BLOCK_ROW_SELECTOR}`);
+    const destination = region.locator(`[data-block-id="${childId}"] > ${BLOCK_ROW_SELECTOR}`);
     await dragRow(page, source, destination);
-    await expect(destination).toHaveAttribute("data-drop-inside", "true");
+    await expect(destination).toHaveAttribute("data-block-drop-active", "true");
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -970,11 +1016,11 @@ for (const mode of ["Page", "Edgeless"] as const) {
     );
     await dragRow(
       page,
-      region.locator(`[data-block-id="${movedId}"] > .page-block-row`),
+      region.locator(`[data-block-id="${movedId}"] > ${BLOCK_ROW_SELECTOR}`),
       header,
       true,
     );
-    await expect(outer.locator('.page-drop-indicator[data-kind="between"]')).toBeVisible();
+    await expect(outer.locator(".rivto-block-drop-line:visible")).toBeVisible();
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -1014,9 +1060,9 @@ for (const mode of ["Page", "Edgeless"] as const) {
       .toBeNull();
     // The original branch cannot be moved into a descendant displayed through its own reference.
     const original = outer.locator(`[data-block-id="${targetId}"]`).first();
-    await dragRow(page, original.locator(":scope > .page-block-row"), destination);
-    await expect(destination).not.toHaveAttribute("data-drop-inside", "true");
-    await expect(outer.locator(".page-drop-indicator")).toHaveCount(0);
+    await dragRow(page, original.locator(`:scope > ${BLOCK_ROW_SELECTOR}`), destination);
+    await expect(destination).not.toHaveAttribute("data-block-drop-active", "true");
+    await expect(outer.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -1386,8 +1432,9 @@ test("reference shell selection removes only the reference and collapse controls
   const header = page
     .locator('[data-document-pane="references"] .rivto-embedding[data-block-selection-anchor]')
     .first();
-  await header.click({ position: { x: 10, y: 10 } });
-  await header.press("Delete");
+  const reference = header.locator("xpath=ancestor::*[@data-block-id][1]");
+  await reference.click({ position: { x: 1, y: 1 }, modifiers: ["Control"] });
+  await page.keyboard.press("Delete");
   await expect(page.getByRole("region", { name: "Block editor" })).toHaveCount(1);
   await expect(
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
@@ -1610,18 +1657,18 @@ test("source drag handles move children through shared commands without moving t
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const handle = region.getByRole("button", { name: "Open block: Source child 0", exact: true });
   const target = region.locator(`[data-block-id="${room}:child-1"]`);
-  await region.locator(`[data-block-id="${room}:child-0"] > .page-block-row`).hover();
+  await region.locator(`[data-block-id="${room}:child-0"] > ${BLOCK_ROW_SELECTOR}`).hover();
   await handle.hover();
   const from = await handle.boundingBox();
-  const to = await target.locator(":scope > .page-block-row").boundingBox();
+  const to = await target.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).boundingBox();
   if (!from || !to) {
     throw new Error("Expected embedded drag geometry");
   }
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
-  await expect(target.locator(":scope > .page-block-row")).toHaveAttribute(
-    "data-drop-inside",
+  await expect(target.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).toHaveAttribute(
+    "data-block-drop-active",
     "true",
   );
   await page.mouse.up();
@@ -2002,10 +2049,12 @@ for (const repeat of [0, 200]) {
       await expect(occurrences).toHaveCount(2);
       const samples = [];
       for (let index = 0; index < 3; index += 1) {
-        const row = embedded.locator(":scope > .page-block-row");
+        const row = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
         await row.hover();
         const start = Date.now();
-        await row.locator(":scope > .rivto-slot > .block-handle").click({ button: "right" });
+        await row
+          .locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`)
+          .click({ button: "right" });
         await expect(embedded).toHaveAttribute("data-block-selected", "true");
         const timing = await page.evaluate(async () => {
           const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
@@ -2040,16 +2089,16 @@ for (const repeat of [0, 200]) {
         ),
       );
       expect(originalIndex).toBeGreaterThanOrEqual(0);
-      const originalRow = occurrences.nth(originalIndex).locator(":scope > .page-block-row");
+      const originalRow = occurrences.nth(originalIndex).locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
       // Canvas cards can overlap the original; target its menu handler after focusing it.
-      const originalHandle = originalRow.locator(":scope > .rivto-slot > .block-handle");
+      const originalHandle = originalRow.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`);
       await originalHandle.focus();
       await originalHandle.dispatchEvent("contextmenu", { button: 2 });
       for (const occurrence of await occurrences.all()) {
         await expect(occurrence).toHaveAttribute("data-block-selected", "true");
       }
       await page.keyboard.press("Escape");
-      const text = embedded.locator(":scope > .page-block-row [data-block-content]").first();
+      const text = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`).first();
       await text.click();
       await expect(today.locator("[data-block-selected]")).toHaveCount(0);
       expect(
@@ -2123,9 +2172,11 @@ for (const repeat of [0, 200]) {
       });
       await expect(page.locator("[data-block-selected]")).toHaveCount(0);
       for (const view of views) {
-        const row = view.locator(`[data-block-id="${childId}"] > .page-block-row`);
+        const row = view.locator(`[data-block-id="${childId}"] > ${BLOCK_ROW_SELECTOR}`);
         await row.hover({ position: { x: 6, y: 6 } });
-        await row.locator(":scope > .rivto-slot > .block-handle").click({ button: "right" });
+        await row
+          .locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`)
+          .click({ button: "right" });
         for (const occurrence of views) {
           await expect(occurrence.locator(`[data-block-id="${childId}"]`)).toHaveAttribute(
             "data-block-selected",

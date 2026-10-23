@@ -5,6 +5,7 @@ import type {
   BlockSlotPosition,
   BlockSlotProps,
   BlockSlotRegistration,
+  BlockWrapperRegistration,
   ElementSlotProps,
   ElementSlotRegistration,
   ResolvedSlot,
@@ -14,6 +15,12 @@ import type {
 
 /** Surface components, wrappers, and ordered slot contributions. */
 export interface SurfacesApi {
+  /**
+   * Reads installed block contributions before owner-specific filtering.
+   *
+   * @returns A defensive priority-ordered list with stable, immutable entry identities.
+   */
+  getBlockSlotRegistrations(): readonly Readonly<BlockSlotRegistration>[];
   /** @returns Matching block slots with stable registration IDs, ordered by priority. */
   getBlockSlotEntries(
     position: BlockSlotPosition,
@@ -62,6 +69,13 @@ export interface SurfacesApi {
    * @returns Wrappers in registration order, or an empty list when none exist.
    */
   getBlockWrappers(mode: EditorMode): readonly BlockWrapperComponent[];
+  /**
+   * Reads decorator entries with stable identities for an occurrence adapter.
+   *
+   * @param mode - Surface mode whose ordered decorators are requested.
+   * @returns Defensive list of immutable registrations in outermost-first order.
+   */
+  getBlockWrapperRegistrations(mode: EditorMode): readonly Readonly<BlockWrapperRegistration>[];
   /** Registers one ordered block-row slot contribution. */
   registerBlockSlot(registration: BlockSlotRegistration): () => void;
   /** Resolves matching block-slot components from nearest to farthest. */

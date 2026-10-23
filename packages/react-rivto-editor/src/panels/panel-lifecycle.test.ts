@@ -11,7 +11,7 @@ import {
   getEdgelessRuntime,
   installEdgelessRuntime,
 } from "../extensions/built-ins/selection/edgeless-runtime";
-import { getEdgelessSurfaceOptions, registerEdgelessSurface } from "../surfaces/edgeless/register";
+import { EdgelessSurfaceRegistration } from "../surfaces/edgeless/register";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
 
@@ -60,6 +60,16 @@ class ElementTarget extends EventTarget {
   getAttribute(key: string): string | null {
     return this.attributes.get(key) ?? null;
   }
+  /**
+   * Checks whether the fixture stores an attribute, including empty values.
+   *
+   * @param name - Attribute name to inspect.
+   * @returns True when the attribute exists.
+   */
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+
   /**
    * Walks fixture ancestors for a matching attribute selector.
    *
@@ -656,7 +666,7 @@ test("events read each panel's surface type while sharing the core mode, manager
   expect(f.editor.panels.getSurfaceType()).toBe("block");
   expect("surfaceType" in f.editor).toBe(false);
   const options = { blockElementWidth: 321, avoidBlockElementOverlap: false };
-  const restoreOptions = registerEdgelessSurface(f.editor, options);
+  const restoreOptions = new EdgelessSurfaceRegistration(f.editor, options).dispose;
   const realm = new DocumentRealm();
   const full = new ReactPanel(f.editor, new ChildrenPanel(f.editor, {}), {});
   const embedded = new ReactPanel(
@@ -681,7 +691,7 @@ test("events read each panel's surface type while sharing the core mode, manager
     expect("surfaceType" in api).toBe(false);
     expect(api.mode).toBeDefined();
     expect(api.editor.surfaces).toBe(f.editor.surfaces);
-    expect(getEdgelessSurfaceOptions(api)).toBe(options);
+    expect(EdgelessSurfaceRegistration.getOptions(api.editor.surfaces)).toBe(options);
   }
   const calls: string[] = [];
   f.editor.events.register({ id: "page.input", type: "keydown", mode: "block" }, ({ mode }) => {

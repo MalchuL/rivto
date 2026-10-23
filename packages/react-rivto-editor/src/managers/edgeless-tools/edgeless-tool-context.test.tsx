@@ -94,7 +94,7 @@ it("uses arbitrary registered classes, groups and fallback IDs without document 
       default: true,
       createTool: (options) => new EdgelessTool(options),
     }),
-  ).toThrow("A default edgeless tool is already registered");
+  ).toThrow("A default canvas tool is already registered");
   const removeGroup = registry.registerGroup({
     id: "experiments",
     title: "Experiments",

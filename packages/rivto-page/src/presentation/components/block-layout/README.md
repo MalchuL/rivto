@@ -75,3 +75,15 @@ current block snapshot, borrowed node API, selection, slot entries, and child-ho
 DOM ID. Row, body, and content primitives use it internally. Child traversal uses
 the separate `BlockChildrenContext`, whose value stays unchanged during selection
 and slot-only updates. Both hooks require their corresponding provider.
+
+`BlockChildren.hoverBoundary` defines row-hover scope independently of drag
+installation and block type. The default is true: a custom child host bounds
+hover to its local layout, and adjacent horizontal/grid items retain their own
+native rectangles. `DefaultBlockLayout` uses false so an ordinary indented
+outline inherits its available horizontal area. Page's view-owned `BlockRowHover`
+marks only the resolved row with `data-block-row-hover`; it adds no hit-test
+pseudo-elements and does not clip controls. Native row/control targets take
+precedence, nested editor occurrences stay independent, and root replacement
+releases listeners and hover feedback. Header and exposed gutter ownership does
+not imply that the complete parent body highlights its handle. Keyboard focus
+feedback is independent of pointer hover.

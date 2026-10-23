@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef } from "react";
+import { createContext, useContext, useRef, useLayoutEffect } from "react";
 import {
   useBlockNode,
   type BlockEditorNodeApi,
@@ -9,7 +9,6 @@ import { Badge } from "../src/presentation/components/ui/badge";
 import { Button } from "../src/presentation/components/ui/button";
 import { Checkbox } from "../src/presentation/components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../src/presentation/components/ui/native-select";
-import { Textarea } from "../src/presentation/components/ui/textarea";
 import type { DemoAdapter } from "./demo-adapter";
 import { BACKGROUND_COLORS, LIST_TYPES } from "./constants";
 
@@ -104,8 +103,8 @@ function DemoControls({ node }: DemoControlsProps) {
 /**
  * Renders demo-owned text and exposes live node fields for manual verification.
  *
- * Text is a plain textarea owned by the example host, not the production rich-text
- * editor. Controls exercise commands; structural slots provide list markers and child collapse.
+ * Text is a contenteditable owned by the example host, not the production rich-text
+ * editor. Native ranges use package content and anchor attributes. Controls exercise commands; structural slots provide list markers and child collapse.
  *
  * @param props - Standard content renderer inputs from Page.
  * @param props.blockId - Stable ID inside the demo fixture.
@@ -117,11 +116,18 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
   const node = useBlockNode(blockId);
   const original = useRef(node);
   const color = node.color;
+  const content = useRef<HTMLDivElement>(null);
+  const text = adapter?.getText(blockId) ?? "";
+  useLayoutEffect(() => {
+    if (content.current && content.current.textContent !== text) {
+      content.current.textContent = text;
+    }
+  }, [text]);
   if (!adapter) {
     throw new Error("DemoBlock requires DemoAdapterContext");
   }
   return (
-    <article className="demo-node">
+    <article className="demo-node" data-block-selection-anchor>
       <header>
         <div className="demo-node-heading">
           <span>Text block</span>
@@ -136,10 +142,16 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
           Select
         </Button>
       </header>
-      <Textarea
+      <div
+        ref={content}
+        role="textbox"
         aria-label={`Text ${blockId}`}
-        value={adapter.getText(blockId)}
-        onChange={(event) => adapter.setText(blockId, event.target.value)}
+        aria-multiline="true"
+        contentEditable
+        suppressContentEditableWarning
+        data-block-content
+        data-block-selection-anchor
+        onInput={(event) => adapter.setText(blockId, event.currentTarget.textContent ?? "")}
       />
       <DemoControls node={node} />
       <output aria-label={`State ${blockId}`}>

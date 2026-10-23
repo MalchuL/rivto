@@ -1,3 +1,6 @@
+import type { BlockDropDestination } from "../src";
+import { BlockSelectionRanges } from "../src/editor/selection/block-selection-ranges";
+import type { BlockSelectionSnapshot } from "../src/editor/selection/types";
 import { BACKGROUND_COLORS, LIST_TYPES } from "./constants";
 import type { BlockEditorAdapter, BlockEditorNodePatch, BlockEditorNodeSnapshot } from "../src";
 
@@ -14,6 +17,7 @@ export interface DemoMetrics {
   readonly notifications: number;
   readonly subscriptions: number;
   readonly commandMs: number;
+  readonly selectionCommandMs: number;
 }
 
 /** In-memory example host; its snapshots outlive view remounts. */
@@ -21,13 +25,30 @@ export class DemoAdapter implements BlockEditorAdapter {
   private readonly nodes = new Map<string, DemoNodeSnapshot>();
   private readonly listeners = new Map<string, Set<() => void>>();
   private blockIds: readonly string[] = [];
-  private selected: string | undefined;
+  private selectionSnapshot: BlockSelectionSnapshot | undefined;
+  private parentIds: ReadonlyMap<string, string> | undefined;
+  private selectableIds: readonly string[] | undefined;
+  private selected = new Set<string>();
   private nodeReads = 0;
   private blockIdsReads = 0;
   private notifications = 0;
   private commandMs = 0;
+  private selectionCommandMs = 0;
 
   readonly blocks = {
+    /**
+     * Reads the demo's canonical roots, which are also its display list.
+     *
+     * @returns Stable current root IDs, including an empty list for an empty demo.
+     */
+    getRootIds: () => this.blockIds,
+    /**
+     * Resolves the actual parent through a hierarchy-only cached index.
+     *
+     * @param id - Known or missing demo identity.
+     * @returns Parent identity, or undefined for roots and unknown IDs.
+     */
+    getParentId: (id: string) => this.getParentIds().get(id),
     /**
      * Reads display order without observing node edits.
      *
@@ -91,12 +112,48 @@ export class DemoAdapter implements BlockEditorAdapter {
 
   readonly selection = {
     /**
+     * Reads host-owned directed coverage.
+     *
+     * @returns Current snapshot, or undefined without selection.
+     */
+    get: () => this.selectionSnapshot,
+    /**
+     * Publishes coverage and only changed whole-block memberships.
+     *
+     * @param snapshot - New directed coverage.
+     * @returns Host snapshot and addressed observers are updated.
+     */
+    set: (snapshot: BlockSelectionSnapshot) => this.setSelection(snapshot),
+    /**
+     * Removes host-owned coverage.
+     *
+     * @returns Selection is cleared and changed memberships are notified.
+     */
+    clear: () => this.setSelection(undefined),
+    /**
+     * Reads cached visible order, excluding collapsed descendants.
+     *
+     * @returns Canonical selectable IDs for this host occurrence.
+     */
+    getSelectableBlockIds: () => this.getOrderedBlockIds(),
+    /**
+     * Reads the host text's UTF-16 length without a node conversion.
+     *
+     * @param id - Fixture identity.
+     * @returns Text length for editable text, or undefined for non-text and missing nodes.
+     */
+    getTextLength: (id: string) => {
+      const node = this.nodes.get(id);
+      return node?.type === "text" ? node.text.length : undefined;
+    },
+
+    /**
      * Reads whole-block selection from the example host.
      *
      * @param id - Demo node identity.
      * @returns Whether this ID is selected.
      */
-    isBlockSelected: (id: string) => this.selected === id,
+    isBlockSelected: (id: string) => this.selected.has(id),
     /**
      * Observes selection of one ID independently of node fields.
      *
@@ -157,12 +214,22 @@ export class DemoAdapter implements BlockEditorAdapter {
    * Publishes text from a native input through the example host.
    *
    * @param id - Existing demo node identity.
-   * @param text - Current textarea value, stored without rich-text conversion.
+   * @param text - Current editable value, stored without rich-text conversion.
    * @returns The node's addressed subscribers have been notified.
    * @throws If the ID is unknown.
    */
   setText(id: string, text: string): void {
     this.publish(id, { text });
+  }
+
+  /**
+   * Observes optional demo selection diagnostics independently of node rendering.
+   *
+   * @param listener - Callback reading current coverage after changes.
+   * @returns Disposer removing diagnostic observation.
+   */
+  subscribeSelection(listener: () => void): () => void {
+    return this.subscribe("selection-snapshot", listener);
   }
 
   /**
@@ -176,13 +243,16 @@ export class DemoAdapter implements BlockEditorAdapter {
     if (id) {
       this.requiredNode(id);
     }
-    const previous = this.selected;
-    this.selected = id;
-    for (const changed of new Set([previous, id])) {
-      if (changed) {
-        this.emit(`selected:${changed}`);
-      }
-    }
+    this.setSelection(
+      id
+        ? {
+            type: "selection",
+            blocks: [{ id, start: 0, end: -1 }],
+            anchorBlockId: id,
+            focusBlockId: id,
+          }
+        : undefined,
+    );
   }
 
   /**
@@ -192,6 +262,7 @@ export class DemoAdapter implements BlockEditorAdapter {
    */
   reverseBlockIds(): void {
     this.blockIds = [...this.blockIds].reverse();
+    this.selectableIds = undefined;
     this.emit("block-ids");
   }
 
@@ -211,6 +282,7 @@ export class DemoAdapter implements BlockEditorAdapter {
       notifications: this.notifications,
       subscriptions,
       commandMs: this.commandMs,
+      selectionCommandMs: this.selectionCommandMs,
     };
   }
 
@@ -224,6 +296,7 @@ export class DemoAdapter implements BlockEditorAdapter {
     this.blockIdsReads = 0;
     this.notifications = 0;
     this.commandMs = 0;
+    this.selectionCommandMs = 0;
   }
 
   /**
@@ -268,6 +341,231 @@ export class DemoAdapter implements BlockEditorAdapter {
     const type = parent.type === "demo-kanban" ? "demo-column" : "text";
     this.nodes.set(id, { id, type, text: "New item", childIds: [] });
     this.publish(parentId, { childIds: [...parent.childIds, id] });
+  }
+
+  /**
+   * Moves selected sibling groups using model IDs, including unmounted blocks.
+   *
+   * This demo command has no history. Selected descendants travel with selected
+   * ancestors; disjoint sibling groups keep their canonical order. Production
+   * hosts delegate equivalent operations to their transactional outline manager.
+   *
+   * @param outdent - True lifts groups after their parent; false nests under the preceding sibling.
+   * @returns Whether at least one eligible group changed parent; selection IDs are retained.
+   */
+  changeSelectionIndent(outdent: boolean): boolean {
+    const started = performance.now();
+    const selected = new Set(this.selectionSnapshot?.blocks.map((range) => range.id));
+    const parents = this.getParentIds();
+    const groups = new Map<string | undefined, string[]>();
+    for (const id of this.getOrderedBlockIds(true)) {
+      if (!selected.has(id)) {
+        continue;
+      }
+      let ancestor = parents.get(id);
+      while (ancestor && !selected.has(ancestor)) {
+        ancestor = parents.get(ancestor);
+      }
+      if (!ancestor) {
+        const parent = parents.get(id);
+        const group = groups.get(parent) ?? [];
+        group.push(id);
+        groups.set(parent, group);
+      }
+    }
+    const changed = new Set<string>();
+    for (const [parent, ids] of groups) {
+      this.moveSiblingGroup(parent, ids, parents, outdent, changed);
+    }
+    this.selectableIds = undefined;
+    this.parentIds = undefined;
+    for (const id of changed) {
+      this.emit(id);
+    }
+    this.commandMs = performance.now() - started;
+    return changed.size > 0;
+  }
+
+  /**
+   * Checks demo source identities, cycles and live destination neighbors.
+   *
+   * Reads hierarchy without publishing nodes or changing selection.
+   *
+   * @param ids - Unique source roots in canonical order.
+   * @param destination - Actual destination parent and optional adjacent neighbors.
+   * @returns Whether a move can be committed against the current demo state.
+   */
+  canMove(ids: readonly string[], destination: BlockDropDestination): boolean {
+    const selected = new Set(ids);
+    const children =
+      destination.parentId === null
+        ? this.blockIds
+        : this.nodes.get(destination.parentId)?.childIds;
+    if (
+      !children ||
+      !ids.length ||
+      selected.size !== ids.length ||
+      ids.some((id) => !this.nodes.has(id))
+    ) {
+      return false;
+    }
+    const parents = this.getParentIds();
+    for (const id of [...ids, ...(destination.parentId === null ? [] : [destination.parentId])]) {
+      let ancestor = parents.get(id);
+      if (id === destination.parentId && selected.has(id)) {
+        return false;
+      }
+      while (ancestor) {
+        if (selected.has(ancestor)) {
+          return false;
+        }
+        ancestor = parents.get(ancestor);
+      }
+    }
+    const index =
+      destination.kind === "inside" || destination.nextId === null
+        ? children.length
+        : children.indexOf(destination.nextId);
+    if (
+      index < 0 ||
+      (destination.kind === "between" && (children[index - 1] ?? null) !== destination.previousId)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Validates and publishes a grouped move without exposing partial hierarchy.
+   *
+   * This demo has no history. Production hosts use their transactional manager.
+   * Sources may have different parents; retained identities include descendants.
+   *
+   * @param ids - Captured unique roots in canonical source order.
+   * @param destination - Actual parent and live insertion neighbors.
+   * @returns False for stale sources, gaps or cycles; true after publication.
+   */
+  moveBlocks(ids: readonly string[], destination: BlockDropDestination): boolean {
+    const started = performance.now();
+    if (!this.canMove(ids, destination)) {
+      return false;
+    }
+    const selected = new Set(ids);
+    const children =
+      destination.parentId === null
+        ? this.blockIds
+        : this.requiredNode(destination.parentId).childIds;
+    const parents = this.getParentIds();
+    const index =
+      destination.kind === "inside" || destination.nextId === null
+        ? children.length
+        : children.indexOf(destination.nextId);
+    const changed = new Set<string>();
+    const target = [
+      ...children.slice(0, index).filter((id) => !selected.has(id)),
+      ...ids,
+      ...children.slice(index).filter((id) => !selected.has(id)),
+    ];
+    for (const source of new Set(ids.map((id) => parents.get(id)))) {
+      if (source !== (destination.parentId ?? undefined)) {
+        const siblings = source ? this.requiredNode(source).childIds : this.blockIds;
+        this.replaceChildren(
+          source,
+          siblings.filter((id) => !selected.has(id)),
+          changed,
+        );
+      }
+    }
+    this.replaceChildren(destination.parentId ?? undefined, target, changed);
+    this.selectableIds = undefined;
+    this.parentIds = undefined;
+    this.setSelection(BlockSelectionRanges.createStructuralSelection(ids));
+    for (const id of changed) {
+      this.emit(id);
+    }
+    this.commandMs = performance.now() - started;
+    return true;
+  }
+
+  /**
+   * Moves one sibling selection and publishes all snapshots before notifications.
+   *
+   * @param parent - Source parent; undefined denotes demo roots.
+   * @param ids - Selected siblings in canonical order.
+   * @param parents - Parent lookup captured before this command.
+   * @param outdent - Whether to lift instead of nesting under the preceding sibling.
+   * @param changed - Accumulates addressed sources notified after all writes.
+   * @returns Ineligible first-root indentation and root outdent leave data unchanged.
+   */
+  private moveSiblingGroup(
+    parent: string | undefined,
+    ids: string[],
+    parents: ReadonlyMap<string, string>,
+    outdent: boolean,
+    changed: Set<string>,
+  ): void {
+    const siblings = parent ? this.requiredNode(parent).childIds : this.blockIds;
+    const first = siblings.indexOf(ids[0]!);
+    if (outdent && !parent) {
+      return;
+    }
+    const target = outdent ? parents.get(parent!) : siblings[first - 1];
+    if (!outdent && !target) {
+      return;
+    }
+    const destination = target ? this.requiredNode(target).childIds : this.blockIds;
+    const insertion = outdent ? destination.indexOf(parent!) + 1 : destination.length;
+    const selected = new Set(ids);
+    this.replaceChildren(
+      parent,
+      siblings.filter((id) => !selected.has(id)),
+      changed,
+    );
+    this.replaceChildren(
+      target,
+      [...destination.slice(0, insertion), ...ids, ...destination.slice(insertion)],
+      changed,
+    );
+  }
+
+  /**
+   * Replaces a demo child list without exposing partially updated hierarchy to observers.
+   *
+   * @param parent - Parent identity, or undefined for the display roots.
+   * @param childIds - Complete replacement sibling order.
+   * @param changed - Sources to notify after the enclosing command completes.
+   * @returns The host snapshot is replaced; notifications are deferred to the command.
+   */
+  private replaceChildren(
+    parent: string | undefined,
+    childIds: readonly string[],
+    changed: Set<string>,
+  ): void {
+    if (parent) {
+      this.nodes.set(parent, { ...this.requiredNode(parent), childIds });
+      changed.add(parent);
+    } else {
+      this.blockIds = childIds;
+      changed.add("block-ids");
+    }
+  }
+
+  /**
+   * Builds the parent index once per hierarchy replacement, without reading renderer state.
+   *
+   * @returns Cached actual parents; roots are absent from the map.
+   */
+  private getParentIds(): ReadonlyMap<string, string> {
+    if (!this.parentIds) {
+      const parents = new Map<string, string>();
+      for (const node of this.nodes.values()) {
+        for (const id of node.childIds) {
+          parents.set(id, node.id);
+        }
+      }
+      this.parentIds = parents;
+    }
+    return this.parentIds;
   }
 
   /**
@@ -332,7 +630,13 @@ export class DemoAdapter implements BlockEditorAdapter {
    */
   private publish(id: string, patch: Partial<DemoNodeSnapshot>): void {
     const started = performance.now();
-    this.nodes.set(id, { ...this.requiredNode(id), ...patch });
+    const previous = this.requiredNode(id);
+    const next = { ...previous, ...patch };
+    this.nodes.set(id, next);
+    if (next.childIds !== previous.childIds || next.collapsed !== previous.collapsed) {
+      this.selectableIds = undefined;
+      this.parentIds = undefined;
+    }
     this.emit(id);
     this.commandMs = performance.now() - started;
   }
@@ -371,5 +675,86 @@ export class DemoAdapter implements BlockEditorAdapter {
       this.notifications += 1;
       listener();
     }
+  }
+  /**
+   * Stores host selection and notifies only changed membership booleans.
+   *
+   * @param snapshot - Directed coverage, or undefined to clear it.
+   * @returns Snapshot is published before membership observers run.
+   */
+  private setSelection(snapshot: BlockSelectionSnapshot | undefined): void {
+    const started = performance.now();
+    const previous = this.selected;
+    if (this.matchesSelection(snapshot)) {
+      return;
+    }
+    this.selectionSnapshot = snapshot;
+    this.selected = new Set(
+      snapshot?.blocks
+        .filter((block) => block.start === 0 && block.end === -1)
+        .map((block) => block.id),
+    );
+    this.emit("selection-snapshot");
+    for (const id of new Set([...previous, ...this.selected])) {
+      if (previous.has(id) !== this.selected.has(id)) {
+        this.emit(`selected:${id}`);
+      }
+    }
+    this.selectionCommandMs = performance.now() - started;
+  }
+
+  /**
+   * Flattens host hierarchy for selection or structural commands.
+   *
+   * @param includeCollapsed - True includes hidden descendants for model mutations.
+   * @returns Cached selectable IDs, or an uncached complete order for structural commands.
+   */
+  private getOrderedBlockIds(includeCollapsed = false): readonly string[] {
+    if (!includeCollapsed && this.selectableIds) {
+      return this.selectableIds;
+    }
+    const result: string[] = [];
+    const stack = [...this.blockIds].reverse();
+    while (stack.length) {
+      const id = stack.pop()!;
+      const node = this.nodes.get(id);
+      if (!node) {
+        continue;
+      }
+      result.push(id);
+      if (includeCollapsed || !node.collapsed) {
+        stack.push(...[...node.childIds].reverse());
+      }
+    }
+    if (!includeCollapsed) {
+      this.selectableIds = result;
+    }
+    return result;
+  }
+  /**
+   * Compares portable coverage without allocating serialized copies on pointer movement.
+   *
+   * @param next - Candidate coverage, or undefined to clear selection.
+   * @returns Whether the current host snapshot already represents these directed ranges.
+   */
+  private matchesSelection(next: BlockSelectionSnapshot | undefined): boolean {
+    const current = this.selectionSnapshot;
+    if (current === next) {
+      return true;
+    }
+    if (
+      !current ||
+      !next ||
+      current.anchorBlockId !== next.anchorBlockId ||
+      current.focusBlockId !== next.focusBlockId ||
+      current.reversed !== next.reversed ||
+      current.blocks.length !== next.blocks.length
+    ) {
+      return false;
+    }
+    return current.blocks.every((range, index) => {
+      const other = next.blocks[index]!;
+      return range.id === other.id && range.start === other.start && range.end === other.end;
+    });
   }
 }

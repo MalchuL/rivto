@@ -1,3 +1,4 @@
+import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
 export interface CanvasPoint {
   x: number;
   y: number;
@@ -10,6 +11,10 @@ export function canvasPoint(
   fallbackZoom = 1,
 ): CanvasPoint {
   const rect = viewport?.getBoundingClientRect();
+  const canvas = CanvasViewport.forElement(viewport)?.canvas;
+  if (canvas && rect) {
+    return canvas.toWorld({ x: point.clientX - rect.left, y: point.clientY - rect.top });
+  }
   const zoom = Number(viewport?.dataset.edgelessZoom) || fallbackZoom;
   const panX = Number(viewport?.dataset.edgelessPanX) || 0;
   const panY = Number(viewport?.dataset.edgelessPanY) || 0;

@@ -1,3 +1,4 @@
+import { BLOCK_EDITOR_CLASSES } from "../../presentation/block-editor-classes";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
 import type {
@@ -25,7 +26,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    */
   constructor(
     private readonly owner: BlockEditorResourceOwner,
-    private readonly blocks: BlockEditorBlocks,
+    private readonly blocks: Pick<BlockEditorBlocks, "getBlockNode" | "getRootIds">,
     private readonly getRoot: () => HTMLElement | null,
   ) {}
 
@@ -62,18 +63,48 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * @param clientX - Viewport X coordinate in CSS pixels.
    * @param clientY - Viewport Y coordinate in CSS pixels.
+   * @param excluded - Captured moving roots omitted after validating the registered gap.
+   * @param nativeHit - Connected uncaptured hit from the current native event; omitted to hit-test current geometry.
    * @returns Highest-priority valid candidate, preserving nearest/earliest tie order,
    * or undefined for detached, clipped, foreign, or invalid destinations.
    * @throws If destroyed or delegated DOM/data reads fail.
    */
-  resolve(clientX: number, clientY: number): ResolvedBlockDropTarget | undefined {
+  resolve(
+    clientX: number,
+    clientY: number,
+    excluded?: ReadonlySet<string>,
+    nativeHit?: Element,
+  ): ResolvedBlockDropTarget | undefined {
     this.owner.assertActive();
     const root = this.getRoot();
     if (!root?.isConnected || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
       return undefined;
     }
-    let element = root.ownerDocument.elementFromPoint(clientX, clientY);
-    if (!element || !root.contains(element)) {
+    const hit =
+      nativeHit?.isConnected && nativeHit.ownerDocument === root.ownerDocument
+        ? nativeHit
+        : root.ownerDocument.elementFromPoint(clientX, clientY);
+    return this.resolveHit(hit, excluded);
+  }
+
+  /**
+   * Resolves registered ancestors of an existing native hit without repeating hit testing.
+   *
+   * The caller supplies a hit from this synchronous resolution. Current attachment,
+   * nested occurrence isolation and live destination validation are still checked.
+   *
+   * @param element - Current native hit, or null when no element was hit.
+   * @param excluded - Moving roots removed from validated gap neighbors.
+   * @returns Highest-priority eligible region, or undefined outside this occurrence.
+   * @throws If destroyed or a destination read fails.
+   */
+  resolveHit(
+    element: Element | null,
+    excluded?: ReadonlySet<string>,
+  ): ResolvedBlockDropTarget | undefined {
+    this.owner.assertActive();
+    const root = this.getRoot();
+    if (!root?.isConnected || !element || !root.contains(element)) {
       return undefined;
     }
     const boundary = element.closest("[data-rivto-block-editor]");
@@ -82,14 +113,17 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     }
     let selected: ResolvedBlockDropTarget | undefined;
     let priority = -Infinity;
+    let indicatorAxis: BlockDropTargetRegistration["indicatorAxis"];
     while (element) {
       for (const entry of this.targets.get(element as HTMLElement) ?? []) {
         if (entry.priority <= priority) {
           continue;
         }
-        const destination = entry.getDestination();
-        if (destination && this.isCurrent(destination)) {
+        const candidate = entry.getDestination();
+        const destination = candidate && this.currentDestination(candidate, excluded);
+        if (destination) {
           selected = { element: entry.element, destination };
+          indicatorAxis = entry.indicatorAxis;
           priority = entry.priority;
         }
       }
@@ -98,28 +132,178 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
       element = element.parentElement;
     }
-    return selected;
+    return selected && indicatorAxis && selected.destination.kind === "between"
+      ? this.withIndicator(selected, indicatorAxis)
+      : selected;
+  }
+
+  /**
+   * Centers a line on the shared sibling gap or outer item edge, falling back to the winning region.
+   *
+   * @param target - Validated between region selected by native hit testing.
+   * @param axis - Fallback line orientation when both neighboring placements are unavailable.
+   * @returns Target with viewport geometry for this synchronous resolution only.
+   */
+  private withIndicator(
+    target: ResolvedBlockDropTarget,
+    axis: "horizontal" | "vertical",
+  ): ResolvedBlockDropTarget {
+    const shared = this.sharedGapIndicator(target) ?? this.listEndIndicator(target, axis);
+    if (shared) {
+      return shared;
+    }
+    const rect = target.element.getBoundingClientRect();
+    const horizontal = axis === "horizontal";
+    return {
+      ...target,
+      indicator: {
+        left: horizontal ? rect.left : rect.left + rect.width / 2 - 1,
+        top: horizontal ? rect.top + rect.height / 2 - 1 : rect.top,
+        width: horizontal ? rect.width : 2,
+        height: horizontal ? 2 : rect.height,
+      },
+    };
+  }
+
+  /**
+   * Places first/last insertion feedback on the complete item rather than its padded strip.
+   *
+   * The region remains the native hit target. Only a matching placement identity
+   * supplies its edge; arbitrary regions without a placement keep their own geometry.
+   *
+   * @param target - Validated canonical gap with at most one neighboring item.
+   * @param axis - Orientation supplied by the mounted insertion strip.
+   * @returns Outer-edge feedback, or undefined for interior gaps or unrelated placements.
+   */
+  private listEndIndicator(
+    target: ResolvedBlockDropTarget,
+    axis: "horizontal" | "vertical",
+  ): ResolvedBlockDropTarget | undefined {
+    const destination = target.destination;
+    if (destination.kind !== "between" || (destination.previousId && destination.nextId)) {
+      return;
+    }
+    const item = target.element.closest<HTMLElement>("[data-block-item-id]");
+    const neighbor = destination.previousId ?? destination.nextId;
+    if (!neighbor || item?.dataset.blockItemId !== neighbor) {
+      return;
+    }
+    const rect = item.getBoundingClientRect();
+    const before = !destination.previousId;
+    if (axis === "horizontal") {
+      return {
+        ...target,
+        indicator: {
+          left: rect.left,
+          top: (before ? rect.top : rect.bottom) - 1,
+          width: rect.width,
+          height: 2,
+        },
+      };
+    }
+    return {
+      ...target,
+      indicator: {
+        left: (before ? rect.left : rect.right) - 1,
+        top: rect.top,
+        width: 2,
+        height: rect.height,
+      },
+    };
+  }
+
+  /**
+   * Gives both wrapper edges the same feedback for their canonical sibling gap.
+   *
+   * Only direct placement identities and the two neighboring rectangles are read.
+   * Wrapped grid rows use a horizontal line; neighbors in one row use a vertical line.
+   *
+   * @param target - Validated destination of the winning mounted boundary.
+   * @returns Shared gap geometry, or undefined at list ends or without both mounted neighbors.
+   */
+  private sharedGapIndicator(target: ResolvedBlockDropTarget): ResolvedBlockDropTarget | undefined {
+    const destination = target.destination;
+    if (destination.kind !== "between" || !destination.previousId || !destination.nextId) {
+      return;
+    }
+    const list = target.element.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
+    if (!list?.dataset.blockDropAxis) {
+      return;
+    }
+    let previous: HTMLElement | undefined;
+    let next: HTMLElement | undefined;
+    for (const child of Array.from(list.children)) {
+      const item = child as HTMLElement;
+      if (item.dataset.blockItemId === destination.previousId) {
+        previous = item;
+      }
+      if (item.dataset.blockItemId === destination.nextId) {
+        next = item;
+      }
+    }
+    if (!previous || !next) {
+      return;
+    }
+    const a = previous.getBoundingClientRect();
+    const b = next.getBoundingClientRect();
+    const inline =
+      list.dataset.blockDropAxis === "horizontal" ||
+      (list.dataset.blockDropAxis === "grid" &&
+        Math.max(a.top, b.top) < Math.min(a.bottom, b.bottom));
+    const indicator = inline
+      ? {
+          left: (a.left > b.left ? a.left + b.right : a.right + b.left) / 2 - 1,
+          top: Math.min(a.top, b.top),
+          width: 2,
+          height: Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top),
+        }
+      : { left: b.left, top: (a.bottom + b.top) / 2 - 1, width: b.width, height: 2 };
+    return { ...target, indicator };
   }
 
   /**
    * Validates a candidate against live actual children rather than displayed roots or CSS.
    *
    * @param destination - Candidate owned by a mounted region.
-   * @returns Whether the real parent exists and a between destination still names an adjacent gap.
+   * @param excluded - Captured roots omitted from neighbors after checking the original gap.
+   * @returns Current destination with moving roots omitted, or undefined for a stale parent or gap.
    * @throws Propagates delegated node-read failures.
    */
-  private isCurrent(destination: BlockDropDestination): boolean {
-    const parent = this.blocks.getBlockNode(destination.parentId);
-    if (!parent) {
-      return false;
+  private currentDestination(
+    destination: BlockDropDestination,
+    excluded?: ReadonlySet<string>,
+  ): BlockDropDestination | undefined {
+    const childIds =
+      destination.parentId === null
+        ? this.blocks.getRootIds()
+        : this.blocks.getBlockNode(destination.parentId)?.childIds;
+    if (!childIds) {
+      return;
     }
     if (destination.kind === "inside") {
-      return true;
+      return destination;
     }
     const index =
-      destination.nextId === null
-        ? parent.childIds.length
-        : parent.childIds.indexOf(destination.nextId);
-    return index >= 0 && (parent.childIds[index - 1] ?? null) === destination.previousId;
+      destination.nextId === null ? childIds.length : childIds.indexOf(destination.nextId);
+    if (index < 0 || (childIds[index - 1] ?? null) !== destination.previousId) {
+      return;
+    }
+    if (!excluded?.size) {
+      return destination;
+    }
+    let previous = index - 1;
+    let next = index;
+    while (previous >= 0 && excluded.has(childIds[previous]!)) {
+      previous -= 1;
+    }
+    while (next < childIds.length && excluded.has(childIds[next]!)) {
+      next += 1;
+    }
+    return {
+      kind: "between",
+      parentId: destination.parentId,
+      previousId: childIds[previous] ?? null,
+      nextId: childIds[next] ?? null,
+    };
   }
 }

@@ -1,12 +1,12 @@
-/** Regression coverage for stable nesting across a Bento tile's padded row. */
+/** Regression coverage for distinct sibling rims and nesting inside a Bento tile. */
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-const ROW_CLASS = "page-block-row";
+const ROW_CLASS = "rivto-block-row";
 const HANDLE_CLASS = "block-handle";
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`Bento row sweep nests into the hovered tile in ${mode}`, async ({ page }) => {
+  test(`Bento row sweep distinguishes sibling rims from nesting in ${mode}`, async ({ page }) => {
     await page.goto("/");
     const ids = await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
@@ -52,9 +52,14 @@ for (const mode of ["block", "edgeless"] as const) {
     const row = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
     for (let y = Math.ceil(row.y); y < row.y + row.height; y++) {
       await page.mouse.move(row.x + row.width / 2, y);
-      await expect(target, `hovered row at y=${y}`).toHaveAttribute("data-drop-inside", "true");
-      await expect(previous).not.toHaveAttribute("data-drop-inside", "true");
+      const rim = y - row.y < 8 || row.y + row.height - y <= 8;
+      await expect(
+        rim ? target : target.locator(`:scope > .${ROW_CLASS}`),
+        `hovered row at y=${y}`,
+      ).toHaveAttribute("data-block-drop-active", rim ? "between" : "true");
+      await expect(previous).not.toHaveAttribute("data-block-drop-active", "true");
     }
+    await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2);
     await page.mouse.up();
     await expect(target.locator(`[data-block-id="${ids.source}"]`)).toHaveCount(1);
     expect(
@@ -70,7 +75,9 @@ for (const mode of ["block", "edgeless"] as const) {
       editor.history.undo();
     });
     await expect(
-      page.locator(`[data-block-id="${ids.board}"] > .page-block-children > [data-block-id]`),
+      page.locator(
+        `[data-block-id="${ids.board}"] > .rivto-block-children > .rivto-bento-tile > .rivto-block-drop-wrapper-content > [data-block-id]`,
+      ),
     ).toHaveCount(3);
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

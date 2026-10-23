@@ -1,3 +1,5 @@
+import type { BlockPointerOwnership } from "./pointer/block-pointer-ownership";
+import type { BlockKeyboardApi } from "./keyboard/block-keyboard";
 import type { BlockWrapperRegistryApi } from "../presentation/components/block-wrapper/types";
 import type { BlockEditorAdapter } from "../adapter/types";
 import type { BlockRendererRegistry } from "../presentation/renderers/block-renderer-registry";
@@ -9,6 +11,10 @@ import type { BlockEditorExtensionsApi } from "./extensions/types";
 
 /** Borrowed editor contract for components and extensions; the host owns attachment and destruction. */
 export interface BlockEditorApi {
+  /** Borrowed semantic bindings and physical state queries. */
+  readonly keyboard: BlockKeyboardApi;
+  /** Exclusive pointer reservation; each gesture releases its own reservation. */
+  readonly pointer: Pick<BlockPointerOwnership, "acquire">;
   /** Host-owned data access and addressed subscriptions. */
   readonly adapter: BlockEditorAdapter;
   /** Feature registration and explicit resource cleanup without manager teardown. */

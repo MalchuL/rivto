@@ -288,6 +288,21 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
   return { startBlockId: blockIds[0]!, endBlockId: blockIds.at(-1)! };
 }
 
+/** Document operations borrowed when inserting a card boundary. */
+interface BlockElementSeparatorEditor {
+  readonly blockTypes: Pick<ReactEditorApi["blockTypes"], "getDefaultBlockElementSeparatorType">;
+  readonly blocks: Pick<ReactEditorApi["blocks"], "insertBlock" | "getInsertionDestinationAfter">;
+}
+
+/** Occurrence operations borrowed when inserting a card boundary. */
+interface BlockElementSeparatorPanel {
+  readonly editor: Pick<BlockElementSeparatorEditor, "blockTypes">;
+  readonly blocks: Pick<
+    ReactPanelApi["blocks"],
+    "canRemove" | "insertBlock" | "getInsertionDestinationAfter"
+  >;
+}
+
 /**
  * Inserts the default plugin-registered boundary after one root block.
  * Automatic edgeless workflows use this instead of knowing a persisted type.
@@ -298,7 +313,7 @@ export function blockRangeProps(blockIds: readonly string[]): BlockElementProps 
  * @throws When the active preset provides no separator block plugin.
  */
 export function insertBlockElementSeparator(
-  editor: ReactEditorApi | ReactPanelApi,
+  editor: BlockElementSeparatorEditor | BlockElementSeparatorPanel,
   afterId: string,
 ): EditorBlock {
   const shared = "editor" in editor ? editor.editor : editor;

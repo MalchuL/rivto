@@ -1,3 +1,8 @@
+import { BlockEditor } from "@chulane/rivto-page";
+import {
+  PageTextSelectionBoundary,
+  PageBlockSelectionBoundary,
+} from "../surfaces/page/page-selection-boundary";
 import { TestPanel } from "../test-utils";
 import { ReactPanel } from "../panels/react-panel";
 import { useReactPanel } from "../hooks/editor/use-react-panel";
@@ -6,7 +11,7 @@ import { BroadcastChannelProvider, YjsDoc, YjsDocumentRegistry } from "@chulane/
 import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
 import { createElement, useContext, type ComponentType, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BlockWrapper, type BlockShellProps, type BlockWrapperProps } from "../blocks";
+import { type BlockWrapperProps } from "../blocks";
 import { EditorPanel } from "../components/editor-panel/editor-panel";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
@@ -492,20 +497,11 @@ describe("ReactPanelApi", () => {
   test("composes the first registered block wrapper outermost", async () => {
     const editor = await createEditor();
     const blockId = editor.blocks.insertBlock({ type: "paragraph", content: "Order" }).id;
-    const block = editor.blocks.getBlockNode(blockId)!;
-    const Shell: ComponentType<BlockShellProps> = () =>
-      createElement("span", { "data-layer": "shell" });
     const Outer: ComponentType<BlockWrapperProps> = ({ children }) =>
       createElement("div", { "data-layer": "outer" }, children);
     const Inner: ComponentType<BlockWrapperProps> = ({ children }) =>
       createElement("div", { "data-layer": "inner" }, children);
-    const Surface = () =>
-      createElement(BlockWrapper, {
-        fallback: Shell,
-        block,
-        isSelected: false,
-        content: null,
-      });
+    const Surface = () => createElement(BlockEditor, { editor: reactPanel.page });
     const reactPanel = createReactEditor({
       editor,
       extensions: [
@@ -523,8 +519,8 @@ describe("ReactPanelApi", () => {
     const markup = renderToStaticMarkup(
       createElement(TestPanel, { panel: reactPanel }, createElement(Surface)),
     );
-    expect(markup).toContain(
-      '<div data-layer="outer"><div data-layer="inner"><span data-layer="shell"></span></div></div>',
+    expect(markup).toMatch(
+      /<div data-layer="outer"><div data-layer="inner"><div[^>]*data-block-id=/,
     );
     reactPanel.editor.destroy();
     editor.destroy();
@@ -670,7 +666,10 @@ describe("ReactPanelApi", () => {
 
     expect(reactPanel.editor.blockTypes.getDefinition("paragraph")).toBeDefined();
     expect(reactPanel.editor.surfaces.get("edgeless")).toBeUndefined();
-    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toHaveLength(0);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toEqual([
+      PageTextSelectionBoundary,
+      PageBlockSelectionBoundary,
+    ]);
     expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toHaveLength(0);
     expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
     // Slash menu and trailing block controls are the standard preset's UI.
@@ -688,9 +687,12 @@ describe("ReactPanelApi", () => {
     });
 
     expect(reactPanel.editor.extensions.getComponents().length).toBeGreaterThan(0);
-    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toHaveLength(1);
-    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toHaveLength(1);
-    expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(1);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toHaveLength(3);
+    expect(reactPanel.editor.surfaces.getEditorWrappers("block")).toEqual(
+      expect.arrayContaining([PageTextSelectionBoundary, PageBlockSelectionBoundary]),
+    );
+    expect(reactPanel.editor.surfaces.getBlockWrappers("block")).toHaveLength(0);
+    expect(reactPanel.editor.surfaces.getBlockWrappers("edgeless")).toHaveLength(0);
 
     reactPanel.editor.destroy();
     editor.destroy();
@@ -965,6 +967,16 @@ describe("delegated events", () => {
      */
     setAttribute(name: string, value: string): void {
       this.attributes.set(name, value);
+    }
+
+    /**
+     * Checks whether the fixture stores an attribute, including empty values.
+     *
+     * @param name - Attribute name to inspect.
+     * @returns True when the attribute exists.
+     */
+    hasAttribute(name: string): boolean {
+      return this.attributes.has(name);
     }
 
     /**

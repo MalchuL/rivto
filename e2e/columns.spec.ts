@@ -47,15 +47,19 @@ for (const mode of ["block", "edgeless"] as const) {
     await board.scrollIntoViewIfNeeded();
     await expect
       .poll(() =>
-        board.locator(":scope > .page-block-children > .page-block").evaluateAll((columns) => {
-          const maximum = Math.max(
-            ...columns.map((column) => column.getBoundingClientRect().height),
-          );
-          return columns.slice(1).map((column) => {
-            const divider = getComputedStyle(column, "::before");
-            return Math.abs(parseFloat(divider.height) + 24 - maximum);
-          });
-        }),
+        board
+          .locator(
+            ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
+          )
+          .evaluateAll((columns) => {
+            const maximum = Math.max(
+              ...columns.map((column) => column.getBoundingClientRect().height),
+            );
+            return columns.slice(1).map((column) => {
+              const divider = getComputedStyle(column, "::before");
+              return Math.abs(parseFloat(divider.height) + 24 - maximum);
+            });
+          }),
       )
       .toEqual([0, 0]);
 
@@ -70,7 +74,9 @@ for (const mode of ["block", "edgeless"] as const) {
      */
     const separatorContent = () =>
       board
-        .locator(":scope > .page-block-children > .page-block")
+        .locator(
+          ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
+        )
         .evaluateAll((columns) =>
           columns.slice(1).map((column) => getComputedStyle(column, "::before").content),
         );
@@ -93,7 +99,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   });
   const board = page.locator('[data-block-type="columns"]').first();
   await board.scrollIntoViewIfNeeded();
-  const lanes = board.locator(":scope > .page-block-children");
+  const lanes = board.locator(":scope > .rivto-block-children");
   const columns = page.locator('[data-block-type="columns-column"]');
   await expect(columns).toHaveCount(2);
   await expect
@@ -146,11 +152,17 @@ test("creates a writing block on empty-column click without retaining the empty 
   const columns = page.locator('[data-block-type="columns-column"]');
   const first = columns.first();
   const second = columns.nth(1);
-  await expect(first.locator(":scope > .page-block-children")).toHaveCount(0);
+  await expect(
+    first.locator(":scope > .rivto-block-children"),
+  ).toHaveCount(0);
   await first.getByRole("button", { name: "Column", exact: true }).click();
-  await expect(first.locator(":scope > .page-block-children > .page-block")).toHaveCount(1);
-  await expect(first.locator(":scope > .page-block-row")).toBeHidden();
-  const content = first.locator(":scope > .page-block-children");
+  await expect(
+    first.locator(
+      ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
+    ),
+  ).toHaveCount(1);
+  await expect(first.locator(":scope > .rivto-block-row")).toBeHidden();
+  const content = first.locator(":scope > .rivto-block-children");
   expect((await content.boundingBox())!.height).toBeLessThan((await second.boundingBox())!.height);
   expect((await first.boundingBox())!.height).toBe((await second.boundingBox())!.height);
 });
@@ -175,7 +187,7 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
   await board.scrollIntoViewIfNeeded();
   const columns = board.locator('[data-block-type="columns-column"]');
   const source = columns.nth(1).locator('[data-block-type="paragraph"]').first();
-  const sourceRow = source.locator(":scope > .page-block-row");
+  const sourceRow = source.locator(":scope > .rivto-block-row");
   const handle = sourceRow.locator(".block-handle");
   const target = columns.first();
   await sourceRow.hover();
@@ -188,8 +200,8 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
 
-  await expect(target).toHaveAttribute("data-drop-inside");
-  const highlight = target.locator(":scope > .page-drop-indicator");
+  await expect(target).toHaveAttribute("data-block-drop-active");
+  const highlight = target.locator(":scope > .rivto-block-drop-line:visible");
   const highlightBox = (await highlight.boundingBox())!;
   expect(highlightBox.x).toBeCloseTo(to.x, 0);
   expect(highlightBox.y).toBeCloseTo(to.y, 0);
@@ -226,18 +238,43 @@ test("aligns sibling drag handles when only one block has a collapse toggle", as
   });
 
   const column = page.locator('[data-block-type="columns-column"]').first();
-  const children = column.locator(":scope > .page-block-children > .page-block");
-  const collapsibleHandle = children.nth(0).locator(":scope > .page-block-row .block-handle");
-  const siblingHandle = children.nth(1).locator(":scope > .page-block-row .block-handle");
+  const children = column.locator(
+    ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
+  );
+  const collapsibleHandle = children
+    .nth(0)
+    .locator(":scope > .rivto-block-row .block-handle");
+  const siblingHandle = children
+    .nth(1)
+    .locator(":scope > .rivto-block-row .block-handle");
   const collapsibleBox = (await collapsibleHandle.boundingBox())!;
   const siblingBox = (await siblingHandle.boundingBox())!;
-  const siblingRowBox = (await children.nth(1).locator(":scope > .page-block-row").boundingBox())!;
+  const siblingRowBox = (await children
+    .nth(1)
+    .locator(":scope > .rivto-block-row")
+    .boundingBox())!;
   const siblingContentBox = (await children
     .nth(1)
-    .locator(":scope > .page-block-row > .rivto-block-content-flow")
+    .locator(
+      ":scope > .rivto-block-row > :is(.rivto-block-content, .rivto-block-content-flow)",
+    )
     .boundingBox())!;
   expect(siblingBox.x).toBeCloseTo(collapsibleBox.x, 0);
-  expect(siblingContentBox.x - siblingRowBox.x).toBeCloseTo(0, 0);
+  // Page owns padding on the row; the legacy surface put it on the outer shell.
+  const rowInset = await children
+    .nth(1)
+    .locator(":scope > .rivto-block-row")
+    .evaluate((row) => {
+      const style = getComputedStyle(row);
+      const start = row.querySelector<HTMLElement>('[data-slot-position="start"]')!;
+      return {
+        padding: parseFloat(style.paddingLeft),
+        gap: parseFloat(style.columnGap),
+        controlWidth: start.getBoundingClientRect().width,
+      };
+    });
+  expect(rowInset.controlWidth).toBe(0);
+  expect(siblingContentBox.x - siblingRowBox.x).toBeCloseTo(rowInset.padding + rowInset.gap, 0);
 
   const siblingBlockBox = (await children.nth(1).boundingBox())!;
   for (const x of [siblingBlockBox.x + 1, siblingBlockBox.x + siblingBlockBox.width - 1]) {

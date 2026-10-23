@@ -2,13 +2,11 @@
 import { expect, test } from "@playwright/test";
 import type { ReactEditor } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
-import { BLOCK_HANDLE_METADATA_KEY } from "../packages/react-rivto-editor/src/extensions/built-ins/block-handle/metadata";
 
-const ROW_CLASS = "page-block-row";
-const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
+const ROW_CLASS = "rivto-block-row";
+const CONTENT_FLOW_CLASS = "rivto-block-content";
 const PAGE_SURFACE_CLASS = "page-surface";
 const DRAG_HANDLE_CLASS = "block-handle";
-const DRAG_CONTAINER_ATTRIBUTE = "data-block-handle-container";
 
 test("slash converts the current root to each structural container", async ({ page }) => {
   for (const [query, command, type] of [
@@ -19,7 +17,9 @@ test("slash converts the current root to each structural container", async ({ pa
   ] as const) {
     await page.goto("/");
     const content = page
-      .locator(`.${PAGE_SURFACE_CLASS} > [data-block-id] > .${ROW_CLASS} [data-block-content]`)
+      .locator(
+        `.${PAGE_SURFACE_CLASS} > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id] > .${ROW_CLASS} [data-block-content]`,
+      )
       .first();
     const blockId = await content
       .locator("xpath=ancestor::*[@data-block-id][1]")
@@ -79,7 +79,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
   ] as const;
   const referenceToggle = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`,
+      `[data-journal-document="today"] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`,
     )
     .first();
   const referenceToggleBox = (await referenceToggle.boundingBox())!;
@@ -99,7 +99,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
     const { blockBox, childrenBox } = await block.evaluate((element) => ({
       blockBox: element.getBoundingClientRect().toJSON(),
       childrenBox: element
-        .querySelector(":scope > .page-block-children")!
+        .querySelector(":scope > .rivto-block-children")!
         .getBoundingClientRect()
         .toJSON(),
     }));
@@ -107,7 +107,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
     const bottomInset = blockBox.y + blockBox.height - childrenBox.y - childrenBox.height;
     expect(topInset, `${type} top inset`).toBeCloseTo(bottomInset, 0);
     if (type === "table" || type === "kanban" || type === "columns") {
-      expect(topInset, `${type} outer inset`).toBeCloseTo(2, 0);
+      expect(topInset, `${type} outer inset`).toBeCloseTo(0, 0);
     }
 
     const toggleBox = (await toggle.boundingBox())!;
@@ -165,7 +165,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
     ["table", 96],
   ] as const) {
     const block = page.locator(`[data-block-type="${type}"]`).first();
-    await expect(block.locator(":scope > .page-block-children")).toHaveCount(0);
+    await expect(block.locator(":scope > .rivto-block-children > [data-block-id]")).toHaveCount(0);
     expect((await block.boundingBox())!.height, `${type} empty height`).toBeGreaterThanOrEqual(
       minimumHeight,
     );
@@ -178,11 +178,12 @@ test("renders a compact TODO storage summary while collapsed", async ({ page }) 
   await storage.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`).click();
   await expect(storage.getByText("TODO storage", { exact: true })).toBeVisible();
   await expect(storage.getByText("3 items", { exact: true })).toBeVisible();
-  await expect(storage.locator(":scope > .page-block-children")).toHaveCount(0);
+  await expect(storage.locator(":scope > .rivto-block-children")).toBeHidden();
+  await expect(storage.locator(":scope > .rivto-block-children > [data-block-id]")).toHaveCount(0);
   expect((await storage.boundingBox())!.height).toBeLessThan(88);
 });
 
-test("reveals root container handles across their body and lateral whitespace", async ({
+test("reveals root block handles in their headers and exposed lateral gutters", async ({
   page,
 }) => {
   await page.goto("/");
@@ -191,15 +192,9 @@ test("reveals root container handles across their body and lateral whitespace", 
   for (const type of ["bento", "table", "columns", "kanban", "todo-storage"] as const) {
     const block = page.locator(`[data-block-type="${type}"]`).first();
     await block.scrollIntoViewIfNeeded();
-    const body = block.locator(":scope > .page-block-children");
+    const body = block.locator(":scope > .rivto-block-children");
     const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
     await expect(handle, `${type} optional drag extension handle`).toHaveCount(1);
-    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
-    await expect(
-      block.locator(
-        `[${DRAG_CONTAINER_ATTRIBUTE}]:is([data-block-type="table-row"], [data-block-type="table-cell"], [data-block-type="columns-column"], [data-block-type="kanban-column"])`,
-      ),
-    ).toHaveCount(0);
     await page.evaluate(
       () =>
         new Promise<void>((resolve) =>
@@ -210,7 +205,7 @@ test("reveals root container handles across their body and lateral whitespace", 
 
     await page.mouse.move(0, 0);
     await expect(handle, `${type} hidden root handle`).toHaveCSS("opacity", "0");
-    await expect(handle, `${type} recoverable root handle`).toHaveCSS("pointer-events", "auto");
+    await expect(handle, `${type} idle root handle`).toHaveCSS("pointer-events", "none");
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await expect(handle, `${type} directly hovered root handle`).toHaveCSS("opacity", "1");
     await page.mouse.move(0, 0);
@@ -221,7 +216,7 @@ test("reveals root container handles across their body and lateral whitespace", 
       await expect(handle, `${type} root handle beside its body`).toHaveCSS("opacity", "1");
     }
     await page.mouse.move(0, 0);
-    const bodyPoint = { x: bodyBox.x + bodyBox.width / 2, y: bodyBox.y + bodyBox.height / 2 };
+    const bodyPoint = { x: surfaceBox.x + 8, y: bodyBox.y + bodyBox.height / 2 };
     const handlePoint = {
       x: handleBox.x + handleBox.width / 2,
       y: handleBox.y + handleBox.height / 2,
@@ -287,9 +282,7 @@ test("reveals root container handles across their body and lateral whitespace", 
 });
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`uses registered view behavior for a custom container's handle in ${mode}`, async ({
-    page,
-  }) => {
+  test(`uses layout hover for a custom block's handle in ${mode}`, async ({ page }) => {
     await page.goto("/");
     const id = await page.evaluate(() => {
       const { editor, reactEditor } = (
@@ -300,12 +293,11 @@ for (const mode of ["block", "edgeless"] as const) {
           };
         }
       ).__rivtoDemo;
-      // Reuse layout metadata that rejects body drops, with explicit applicability for a type unknown to CSS.
+      // The custom type shares ordinary rendering and receives hover without type-specific metadata.
       reactEditor.blockTypes.register({
         definition: {
           type: "test-container",
           title: "Custom container",
-          metadata: { ...reactEditor.blockTypes.getDefinition("columns")?.metadata },
         },
         render: reactEditor.renderers.get("paragraph")!,
       });
@@ -323,15 +315,13 @@ for (const mode of ["block", "edgeless"] as const) {
     }
     const block = today.locator(`[data-block-id="${id}"]`);
     const handle = block.locator(`:scope > .${ROW_CLASS} .${DRAG_HANDLE_CLASS}`);
-    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
-    await expect(block.locator(`[${DRAG_CONTAINER_ATTRIBUTE}]`)).toHaveCount(0);
     expect(await block.evaluate((element) => getComputedStyle(element, "::before").content)).toBe(
-      mode === "block" ? '""' : "none",
+      "none",
     );
     await page.mouse.move(0, 0);
     await expect(handle).toHaveCSS("opacity", "0");
-    await expect(handle).toHaveCSS("pointer-events", "auto");
-    await block.locator(":scope > .page-block-children").hover();
+    await expect(handle).toHaveCSS("pointer-events", "none");
+    await block.locator(":scope > .rivto-block-row").hover();
     await expect(handle).toHaveCSS("opacity", "1");
     await handle.hover();
     await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
@@ -347,7 +337,7 @@ for (const mode of ["block", "edgeless"] as const) {
       }),
     ).toBe(true);
 
-    // Changing to an ordinary block must remove the old container decoration.
+    // Changing type keeps generic row ownership and does not leave type-specific decoration.
     await page.evaluate((blockId) => {
       (
         window as unknown as {
@@ -355,64 +345,47 @@ for (const mode of ["block", "edgeless"] as const) {
         }
       ).__rivtoDemo.editor.blocks.setBlockType(blockId, "paragraph");
     }, id);
-    await expect(block).not.toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE);
     await page.mouse.move(0, 0);
     await expect(handle).toHaveCSS("pointer-events", "none");
   });
 }
 
-test("container handle metadata updates both views without the drag extension", async ({
-  page,
-}) => {
+test("generic row hover works in both views without the drag extension", async ({ page }) => {
   await page.goto("/?editorLifecycle=1");
   await expect(page.locator('[data-lifecycle-state="ready"]')).toBeVisible();
-  await page.evaluate((metadataKey) => {
+  await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoLifecycleEditor: ReactEditor })
       .__rivtoLifecycleEditor;
     editor.blockTypes.register({
-      definition: {
-        type: "hover-container",
-        metadata: { [metadataKey]: { showOnContainerHover: true } },
-      },
+      definition: { type: "hover-block" },
       render: editor.renderers.get("paragraph")!,
     });
     editor.blocks.insertBlock({
-      id: "hover-container",
-      type: "hover-container",
-      content: "Hover container",
+      id: "hover-block",
+      type: "hover-block",
+      content: "Hover header",
       children: [{ type: "paragraph", content: "Hover body" }],
     });
-  }, BLOCK_HANDLE_METADATA_KEY);
-  const blocks = page.locator('[data-block-id="hover-container"]');
+  });
+  const blocks = page.locator('[data-block-id="hover-block"]');
   await expect(blocks).toHaveCount(2);
   for (const block of await blocks.all()) {
-    const handle = block.locator(":scope > .page-block-row .block-handle");
-    await expect(block).toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE, "");
+    const row = block.locator(":scope > .rivto-block-row");
+    const handle = row.locator(".block-handle");
     await expect(handle).not.toHaveAttribute("data-draggable");
-    await block.locator(":scope > .page-block-children").hover();
+    await row.hover();
     await expect(handle).toHaveCSS("opacity", "1");
     await handle.click({ button: "right" });
     await expect(page.getByRole("menu").first()).toBeVisible();
     await page.keyboard.press("Escape");
   }
-  await page.evaluate((metadataKey) => {
-    const editor = (window as unknown as { __rivtoLifecycleEditor: ReactEditor })
-      .__rivtoLifecycleEditor;
-    const definition = editor.blockTypes.getDefinition("hover-container")!;
-    editor.blockTypes.delete("hover-container");
-    editor.blockTypes.register({
-      definition: {
-        type: "hover-container",
-        metadata: { ...definition.metadata, [metadataKey]: { showOnContainerHover: false } },
-      },
-      render: editor.renderers.get("paragraph")!,
-    });
-  }, BLOCK_HANDLE_METADATA_KEY);
   // Escape restores menu focus to the handle; move focus away before testing idle visibility.
   await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await page.mouse.move(0, 0);
   for (const block of await blocks.all()) {
-    await expect(block).not.toHaveAttribute(DRAG_CONTAINER_ATTRIBUTE);
-    await page.mouse.move(0, 0);
-    await expect(block.locator(":scope > .page-block-row .block-handle")).toHaveCSS("opacity", "0");
+    await expect(block.locator(":scope > .rivto-block-row .block-handle")).toHaveCSS(
+      "opacity",
+      "0",
+    );
   }
 });

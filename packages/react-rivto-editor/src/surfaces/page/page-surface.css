@@ -3,10 +3,19 @@
  *
  * `.page-surface` is the public styling hook for the document column in page
  * mode. Hosts override its width, padding, and chrome after importing the
- * package stylesheet. The empty-document drop state is driven by a data
- * attribute written by the drag extension, so it lives here rather than in a
- * utility class.
+ * package stylesheet. Page owns empty-document drop feedback through its
+ * current canonical destination; the host contributes theme values shared
+ * by writing pages and block cards inside the canvas.
  */
+.page-surface,
+.edgeless-viewport {
+  /* Host controls occupy perimeter slots; ordinary content needs no empty start gutter. */
+  --rivto-block-start-width: 0px;
+  --rivto-block-padding: 2px 8px;
+  --rivto-block-gap: 4px;
+  --rivto-block-indent: 24px;
+}
+
 .page-surface {
   width: min(720px, calc(100% - 32px));
   min-height: 70vh;
@@ -20,9 +29,11 @@
   overflow-x: clip;
 }
 
-.page-surface[data-drop-empty] {
-  border-color: var(--rivto-accent);
-  background: color-mix(in srgb, var(--rivto-accent) 4%, var(--rivto-background));
+/* Page owns the subtree shell; the host supplies its established selection colors. */
+:is(.page-surface, .edgeless-viewport) .rivto-block[data-block-selected="true"] {
+  --rivto-block-selection: var(--rivto-block-selection-outline);
+  border-radius: 4px;
+  outline-width: 1px;
 }
 
 [data-page-end-slot] {
@@ -34,7 +45,7 @@
    unchanged block components. */
 .page-surface,
 .edgeless-card-content,
-.page-block-children {
+.rivto-block-children {
   counter-reset: rivto-list-number;
 }
 

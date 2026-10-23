@@ -135,7 +135,18 @@ export interface BlockManagerApi {
   mergeBlocks(targetId: string, sourceId: string): number;
   /** @param id - Moving block. @param targetId - Destination. @param position - Placement. @returns No value. */
   moveBlock(id: string, targetId: string | null, position?: "before" | "after" | "inside"): void;
-  /** @param ids - Moving roots. @param targetId - Destination. @param position - Placement. @returns No value. */
+  /**
+   * Moves selected subtree roots from any parents in canonical document order.
+   *
+   * Selected descendants of selected ancestors move only with their ancestor.
+   * All source IDs are checked before writing; the group forms one undo item.
+   *
+   * @param ids - Source identities in any order; duplicate identities are ignored.
+   * @param targetId - Destination anchor; null prepends within each source's current sibling list.
+   * @param position - Placement relative to the anchor; defaults to after.
+   * @returns The validated group has moved, or no change for an empty group.
+   * @throws Before writes for missing sources, stale targets or a destination within a selected subtree.
+   */
   moveBlocks(
     ids: string[],
     targetId: string | null,

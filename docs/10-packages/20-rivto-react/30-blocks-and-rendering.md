@@ -71,10 +71,10 @@ function TextBlock({ blockId }: { blockId: string }) {
 ## Rendering pipeline
 
 ```text
-Surface → BlockTree(root IDs) → wrappers → BlockView → renderer + descendants
+Surface → Page BlockNode(root IDs) → wrappers → BlockNode → renderer + descendants
 ```
 
-`BlockView` устанавливает `data-block-id`, `data-block-type`, optional `data-block-selected`. DOM events и selection bridge зависят от этого contract.
+`BlockNode` устанавливает `data-block-id`, `data-block-type`, optional `data-block-selected`. DOM events и selection bridge зависят от этого contract.
 
 ## Unknown types
 
@@ -93,4 +93,4 @@ const extension: ReactEditorExtension = {
 };
 ```
 
-Первый registered wrapper — outermost. Wrapper выводит `children` ровно один раз. `BlockElementRefProvider` получает настоящий `BlockView` без дополнительного layout DOM; этот pattern применён в demo block-ID extension.
+Первый registered wrapper — outermost. Wrapper выводит `children` ровно один раз. Контролы и block-ID chrome используют block slots; Page передаёт им контекст текущего блока без дополнительного layout DOM.

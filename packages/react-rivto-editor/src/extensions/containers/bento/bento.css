@@ -1,78 +1,58 @@
-/*
- * Structural rules for the Bento tile container.
- *
- * Tiles are ordinary blocks rendered by the shared block tree, so their wrap
- * layout, fixed flex basis (`--rivto-bento-width`), and resize states must be
- * addressed through generated structure and attribute selectors. The resize
- * handles are positioned relative to the tile shell they are portaled into.
- * Chrome the extension renders itself (collapsed summary) is styled with
- * Tailwind utilities in `bento.tsx`.
- */
+/* Bento owns only board regions and tile placement. Each tile's visual center
+ * matches the existing block's bounds; Page owns its outline and subtree selection.
+ * The resize controller owns temporary dimensions during a gesture, then restores
+ * them before committing the preferred width through the ordinary block command. */
 :root {
   --rivto-bento-background: #f4f5f7;
 }
-
-/* Bento widths are fixed: tiles keep their preferred size and wrap instead of growing. */
-[data-block-type="bento"] > .page-block-children {
+.rivto-bento-header {
+  padding: 10px 12px;
+}
+.rivto-bento-summary {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+.rivto-bento-count {
+  font-size: 12px;
+  color: var(--rivto-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rivto-bento-tiles {
+  display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 16px;
-  padding: 16px;
-  margin-left: 0;
-  background: var(--rivto-bento-background);
-  border-radius: 14px;
+  gap: 0;
+  padding: 8px;
+  margin: 0;
   min-height: 96px;
+  border-radius: 12px;
+  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
 }
-
-/* An expanded board with no tiles still shows its surface as a drop target. */
-[data-block-type="bento"]:not(:has(> .page-block-children)):has(.rivto-bento-summary:empty) {
-  box-sizing: border-box;
-  min-height: 128px;
-  border-radius: 14px;
-  background: var(--rivto-bento-background);
-}
-
-[data-block-type="bento"] > .page-block-children > .page-block {
+/* The declared width includes Page's insertion strips, so adjacent strips alone
+ * supply tile spacing. Neither an extra flex gap nor padding enlarges the item. */
+.rivto-bento-tile {
   position: relative;
   flex: 0 0 var(--rivto-bento-width, 280px);
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 12px;
-  background: var(--rivto-background);
-  border: 1px solid var(--rivto-border);
-  border-radius: 12px;
-  box-shadow: 0 2px 5px rgb(9 30 66 / 8%);
-  overflow: visible;
 }
-
-/* Keep tile controls inside the tile instead of overlapping the neighbor. */
-[data-block-type="bento"] > .page-block-children .rivto-slot[data-slot-position="left-top"] {
-  position: relative;
-  inset: auto;
-  transform: none;
-  order: -1;
-}
-
-[data-block-type="bento"] > .page-block-children .page-block-row::before {
-  display: none;
-}
-
-.rivto-bento-summary:not(:empty) {
-  box-sizing: border-box;
-  width: fit-content;
-  min-height: var(--rivto-default-block-height);
-  padding: 8px 12px;
+.rivto-bento-tile > .rivto-block-drop-wrapper-content {
+  min-width: 0;
+  background: var(--rivto-block-selection-fill, var(--rivto-background));
   border-radius: 10px;
-  background: var(--rivto-bento-background);
+  box-shadow:
+    0 0 0 1px var(--rivto-border),
+    0 2px 5px rgb(9 30 66 / 8%);
 }
-
 .rivto-bento-resize {
   position: absolute;
   z-index: 4;
-  top: 0;
-  bottom: 0;
+  top: 8px;
+  bottom: 8px;
   width: 8px;
   background: transparent;
   cursor: col-resize;
@@ -80,23 +60,21 @@
   pointer-events: auto;
   outline: none;
 }
-
 .rivto-bento-resize[data-bento-resize-edge="left"] {
-  left: 0;
+  left: 4px;
 }
-
 .rivto-bento-resize[data-bento-resize-edge="right"] {
-  right: 0;
+  right: 4px;
 }
-
-/* The preview paints over neighbors; lift it above siblings and selection. */
-[data-block-type="bento"] > .page-block-children > .page-block[data-bento-resizing],
-[data-block-type="bento"]
-  > .page-block-children
-  > .page-block[data-bento-resizing][data-block-selected] {
+/* The active preview may cover neighboring placements. Its ordinary block and
+ * resize controls remain intact; cancelling restores the saved placement styles. */
+.rivto-bento-tile[data-bento-resizing] {
   z-index: 8;
   overflow: visible;
   transition: none;
-  background: var(--rivto-background);
-  outline: none;
+}
+/* The handle owns its accessible hitbox where it meets the resize strip;
+ * the rest of the strip still resizes without shifting either control. */
+.rivto-bento-tile .rivto-block-slot:has(> .block-handle) {
+  z-index: 5;
 }

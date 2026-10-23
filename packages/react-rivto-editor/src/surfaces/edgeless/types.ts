@@ -1,4 +1,5 @@
-import type { EdgelessSnappingStore } from "./snapping-store";
+import type { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
+export type { EdgelessSnappingSnapshot } from "@chulane/rivto-edgeless";
 /**
  * Host-owned snapping preferences for the optional edgeless surface.
  *
@@ -7,12 +8,6 @@ import type { EdgelessSnappingStore } from "./snapping-store";
  *
  * @module
  */
-/** Host-configurable edgeless snapping preferences. */
-export interface EdgelessSnappingSnapshot {
-  readonly snapToGrid: boolean;
-  readonly alignObjects: boolean;
-}
-
 /** Options accepted by the built-in edgeless surface extension. */
 export interface EdgelessSurfaceOptions {
   /** Shared settings store; a private default store is created when omitted. */

@@ -10,6 +10,14 @@ export const BLOCK_EDITOR_CLASSES = Object.freeze({
   children: "rivto-block-children",
   /** Contribution host positioned by its data-slot-position attribute. */
   slot: "rivto-block-slot",
+  /** Bounded inert content row inside a gesture-owned preview. */
+  dragPreviewRow: "rivto-block-drag-preview-row",
+  /** Pointer-transparent line showing a permitted canonical insertion boundary. */
+  dropLine: "rivto-block-drop-line",
+  /** Stable root-list host shared by full and windowed rendering. */
+  tree: "rivto-virtual-tree",
+  /** Measured placement of one displayed root subtree. */
+  virtualRoot: "rivto-virtual-root",
   /** Numeric list marker rendered through the sibling group's CSS counter. */
   marker: "rivto-block-list-marker",
 });

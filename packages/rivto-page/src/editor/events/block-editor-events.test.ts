@@ -45,7 +45,9 @@ it("removes native listeners and event subscriptions on final destruction", () =
   const detach = editor.attach(root);
   editor.destroy();
   detach();
-  expect(remove).toHaveBeenCalledTimes(2);
+  expect(
+    remove.mock.calls.filter(([type]) => type === "focusin" || type === "focusout"),
+  ).toHaveLength(2);
   root.dispatchEvent(new FocusEvent("focusin"));
   expect(focus).not.toHaveBeenCalled();
 });
@@ -83,7 +85,9 @@ it("rolls back attachment and native listeners when initial focus observation fa
   });
   expect(() => editor.attach(root)).toThrow(AggregateError);
   expect(editor.getRoot()).toBeNull();
-  expect(remove).toHaveBeenCalledTimes(2);
+  expect(
+    remove.mock.calls.filter(([type]) => type === "focusin" || type === "focusout"),
+  ).toHaveLength(2);
   release();
   const healthy = jest.fn();
   editor.events.on("focus", healthy);
@@ -92,5 +96,34 @@ it("rolls back attachment and native listeners when initial focus observation fa
   expect(healthy.mock.calls[0]![0].isTrusted).toBe(false);
   detach();
   editor.destroy();
+  root.remove();
+});
+
+it("isolates nested occurrence focus and reconciles only its own autofocus", () => {
+  const outer = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const inner = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML = "<input><div data-rivto-block-editor><input></div>";
+  document.body.append(root);
+  const nested = root.querySelector<HTMLElement>("div")!;
+  nested.querySelector("input")!.focus();
+  const outerFocus = jest.fn();
+  const innerFocus = jest.fn();
+  const outerBlur = jest.fn();
+  outer.events.on("focus", outerFocus);
+  outer.events.on("blur", outerBlur);
+  inner.events.on("focus", innerFocus);
+  outer.attach(root);
+  inner.attach(nested);
+  expect(outerFocus).not.toHaveBeenCalled();
+  expect(innerFocus).toHaveBeenCalledTimes(1);
+  root.querySelector("input")!.focus();
+  expect(outerFocus).toHaveBeenCalledTimes(1);
+  nested.querySelector("input")!.focus();
+  expect(outerFocus).toHaveBeenCalledTimes(1);
+  expect(outerBlur).toHaveBeenCalledTimes(1);
+  inner.destroy();
+  outer.destroy();
   root.remove();
 });

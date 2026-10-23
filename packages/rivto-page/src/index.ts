@@ -2,7 +2,8 @@
  * Autonomous block presentation contracts, controller, component, and limited hooks.
  *
  * The current rendering slice borrows a bounded adapter and does not install
- * concrete block types, host integration, text input or drag-and-drop. Structural slots are registered separately.
+ * concrete block types, host integration or text input. Selection and handle dragging
+ * are optional extensions; structural slots are registered separately.
  *
  * @module
  */
@@ -75,6 +76,8 @@ export type {
   BetweenBlockDropDestination,
   BlockDropTargetRegistration,
   ResolvedBlockDropTarget,
+  BlockDropIndicator,
+  BlockDragTargetScope,
   BlockDropTargetsApi,
 } from "./editor/drag-and-drop/types";
 
@@ -97,3 +100,74 @@ export type {
   BlockWrapperRegistration,
   BlockWrapperRegistryApi,
 } from "./presentation/components/block-wrapper/types";
+
+export { BlockInputEvent } from "./editor/events/block-input-event";
+export type {
+  BlockInputDefinition,
+  BlockInputEventMap,
+  BlockInputHandler,
+  BlockInputObserver,
+  BlockInputResult,
+  BlockInputTarget,
+  BlockInputScope,
+} from "./editor/events/block-input-event";
+
+export type { BlockKeyboardApi, BlockKeyboardDefinition } from "./editor/keyboard/block-keyboard";
+export type { BlockKeyboardEvent } from "./editor/keyboard/block-keyboard-event";
+
+export {
+  BlockSelectionExtensions,
+  type BlockSelectionBindings,
+  type BlockSelectionFeature,
+} from "./editor/selection/block-selection-extensions";
+export type {
+  BlockSelectionSnapshot,
+  BlockSelectionRange,
+  BlockSelectionPosition,
+} from "./editor/selection/types";
+
+export { BlockVirtualizationController } from "./editor/virtualization/block-virtualization-controller";
+export type { BlockVirtualizationOptions } from "./editor/virtualization/block-virtualization-controller";
+
+export {
+  BlockDragExtension,
+  type BlockDragAdapter,
+  type BlockDragPreviewRow,
+} from "./editor/drag-and-drop/block-drag-extension";
+export { BlockDragHandle } from "./presentation/drag-and-drop/block-drag-handle";
+
+export { BlockOutlineDropTargets } from "./editor/drag-and-drop/block-outline-drop-targets";
+
+export { BlockDropFeedback } from "./editor/drag-and-drop/block-drop-feedback";
+export { EmbeddedEditorAcquisition } from "./editor/embedding/embedded-editor-acquisition";
+export type {
+  SourceEditorProvider,
+  SourceEditorLease,
+  EmbeddedEditorSnapshot,
+} from "./editor/embedding/embedded-editor-acquisition";
+export {
+  DropSurfaceRegistry,
+  DROP_SURFACE_ATTRIBUTE,
+} from "./editor/drag-and-drop/drop-surface-registry";
+export type { DropSurface, DropSurfaceRoute } from "./editor/drag-and-drop/drop-surface-registry";
+export { BlockAutoScroll } from "./editor/pointer/block-auto-scroll";
+export type { BlockScrollPoint } from "./editor/pointer/block-auto-scroll";
+export { BlockPointerOwnership } from "./editor/pointer/block-pointer-ownership";
+export { DragHandle, type DragHandleProps } from "./presentation/drag-and-drop/drag-handle";
+
+export { BlockDropReceiver } from "./editor/drag-and-drop/block-drop-receiver";
+export {
+  BlockDragRouter,
+  type BlockForeignDropResolver,
+} from "./editor/drag-and-drop/block-drag-router";
+
+export {
+  BlockEditorScope,
+  type BlockEditorScopeProps,
+  type BlockEditorViewApi,
+} from "./presentation/components/block-editor/block-editor-scope";
+export { BlockNode } from "./presentation/components/block-layout/block-node";
+
+export { BlockDOMSelection, type DOMSelectionPoint } from "./editor/selection/block-dom-selection";
+export { BlockSelectionEndpoints } from "./editor/selection/block-selection-endpoints";
+export { BlockNavigation } from "./editor/blocks/block-navigation";

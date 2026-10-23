@@ -26,7 +26,7 @@ interface BlockDropWrapperBoundaryProps {
 export function BlockDropWrapperBoundary({ placement }: BlockDropWrapperBoundaryProps) {
   const child = useContext(BlockChildPlacementContext);
   const itemId = useContext(BlockItemIdentityContext);
-  if (!child?.parentId || itemId !== child.blockId) {
+  if (child?.parentId === undefined || itemId !== child.blockId) {
     throw new Error("BlockDropWrapper requires a BlockChildren item with a real parent");
   }
   const destination = {
@@ -44,6 +44,7 @@ export function BlockDropWrapperBoundary({ placement }: BlockDropWrapperBoundary
           data-drop-gap={child.parentId}
           data-drop-placement={placement}
           data-drop-edge={edge}
+          indicatorAxis={edge === "inline" ? "vertical" : "horizontal"}
           destination={destination}
         />
       ))}

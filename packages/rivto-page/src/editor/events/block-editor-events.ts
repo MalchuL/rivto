@@ -1,3 +1,11 @@
+import { BlockFocusObserver } from "./block-focus-observer";
+import { BlockInputDispatcher } from "./block-input-dispatcher";
+import type {
+  BlockInputDefinition,
+  BlockInputEventMap,
+  BlockInputHandler,
+  BlockInputObserver,
+} from "./block-input-event";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
 
 /** Whole-editor focus transitions; movement between descendants emits neither event. */
@@ -6,9 +14,55 @@ export type BlockEditorEventType = "focus" | "blur";
 /** Observable whole-editor focus transitions, independent of document updates. */
 export interface BlockEditorEventsApi {
   /**
-   * Observes focus entering or leaving the attached editor's entire DOM subtree.
+   * Observes attachment loss to cancel active gestures and scheduled work.
    *
-   * Internal focus moves emit neither transition. View detachment stops DOM
+   * @param listener - Callback invoked before native input listeners detach.
+   * @returns Idempotent disposer captured by the extension setup scope.
+   */
+  onDetach(listener: () => void): () => void;
+
+  /**
+   * Registers native input behavior independently of focus observers.
+   *
+   * Priority orders handlers sharing native options; browser propagation orders
+   * different realms and capture phases. Returning "handled" claims input without
+   * calling preventDefault or stopPropagation. Registrations survive remounts.
+   *
+   * @param id - Unique registration identity within this editor.
+   * @param definition - Event type, native options, scope, and finite priority.
+   * @param handler - Typed callback; call raw.preventDefault explicitly when needed.
+   * @returns Idempotent disposer captured by the current extension setup scope.
+   * @throws If the editor is destroyed, ID duplicates, or priority is not finite.
+   */
+  register<K extends keyof BlockInputEventMap>(
+    id: string,
+    definition: BlockInputDefinition<K>,
+    handler: BlockInputHandler<K>,
+  ): () => void;
+
+  /**
+   * Observes native input before handlers in the same phase and target.
+   *
+   * Observers still run after another queue claims the event. Return values never
+   * claim input; native default prevention and propagation remain explicit actions.
+   *
+   * @param id - Unique identity shared with input handler registrations.
+   * @param definition - Event type, target, phase, scope and finite priority.
+   * @param observer - Callback receiving the shared occurrence context.
+   * @returns Idempotent disposer captured by the extension setup scope.
+   * @throws If registration identity or priority is invalid, or the owner is destroyed.
+   */
+  observe<K extends keyof BlockInputEventMap>(
+    id: string,
+    definition: BlockInputDefinition<K>,
+    observer: BlockInputObserver<K>,
+  ): () => void;
+
+  /**
+   * Observes focus entering or leaving the attached editor's owned DOM subtree.
+   *
+   * Internal focus moves emit neither transition; nested editor roots form separate
+   * focus boundaries. View detachment stops DOM
    * delivery; subscriptions remain installed until disposed or the editor ends.
    * Observers do not consume input or replace behavior/keyboard dispatch.
    *
@@ -24,19 +78,81 @@ export interface BlockEditorEventsApi {
 
 /** Observes DOM focus transitions without subscribing to document or registry changes. */
 export class BlockEditorEvents implements BlockEditorEventsApi {
-  private readonly listeners = new Map<BlockEditorEventType, Set<(event: FocusEvent) => void>>();
+  private readonly detachListeners = new Set<() => void>();
+  private readonly input: BlockInputDispatcher;
+  private readonly focus: BlockFocusObserver;
+  private attachment: object | undefined;
 
   /**
    * Binds event subscriptions to the editor and synchronous extension scopes.
    *
    * @param owner - Resource owner releasing subscriptions when their extension ends.
    */
-  constructor(private readonly owner: BlockEditorResourceOwner) {}
+  constructor(private readonly owner: BlockEditorResourceOwner) {
+    this.input = new BlockInputDispatcher(owner);
+    this.focus = new BlockFocusObserver(owner);
+  }
 
   /**
-   * Observes focus entering or leaving the attached editor's entire DOM subtree.
+   * Observes attachment loss to cancel active gestures and scheduled work.
    *
-   * Notifications are synchronous and do not consume input or control propagation.
+   * @param listener - Callback invoked before native input listeners detach.
+   * @returns Idempotent disposer captured by the extension setup scope.
+   */
+  onDetach(listener: () => void): () => void {
+    this.owner.assertActive();
+    this.detachListeners.add(listener);
+    return this.owner.registerCleanup(() => {
+      this.detachListeners.delete(listener);
+    });
+  }
+
+  /**
+   * Registers native input behavior independently of focus observers.
+   *
+   * Priority orders handlers sharing native options; browser propagation orders
+   * different realms and capture phases. Returning "handled" claims input without
+   * calling preventDefault or stopPropagation. Registrations survive remounts.
+   *
+   * @param id - Unique registration identity within this editor.
+   * @param definition - Event type, native options, scope, and finite priority.
+   * @param handler - Typed callback; call raw.preventDefault explicitly when needed.
+   * @returns Idempotent disposer captured by the current extension setup scope.
+   * @throws If the editor is destroyed, ID duplicates, or priority is not finite.
+   */
+  register<K extends keyof BlockInputEventMap>(
+    id: string,
+    definition: BlockInputDefinition<K>,
+    handler: BlockInputHandler<K>,
+  ): () => void {
+    return this.input.register(id, definition, handler);
+  }
+
+  /**
+   * Observes native input before handlers in the same phase and target.
+   *
+   * Observers still run after another queue claims the event. Return values never
+   * claim input; native default prevention and propagation remain explicit actions.
+   *
+   * @param id - Unique identity shared with input handler registrations.
+   * @param definition - Event type, target, phase, scope and finite priority.
+   * @param observer - Callback receiving the shared occurrence context.
+   * @returns Idempotent disposer captured by the extension setup scope.
+   * @throws If registration identity or priority is invalid, or the owner is destroyed.
+   */
+  observe<K extends keyof BlockInputEventMap>(
+    id: string,
+    definition: BlockInputDefinition<K>,
+    observer: BlockInputObserver<K>,
+  ): () => void {
+    return this.input.register(id, definition, observer, true);
+  }
+
+  /**
+   * Observes focus entering or leaving the attached editor's owned DOM subtree.
+   *
+   * Nested editor roots are separate focus boundaries. Notifications are synchronous
+   * and do not consume input or control propagation.
    * Detachment stops DOM delivery while preserving subscriptions for the next mount.
    *
    * @param type - Whole-editor focus transition to observe.
@@ -47,20 +163,7 @@ export class BlockEditorEvents implements BlockEditorEventsApi {
    * @throws If the editor is destroyed.
    */
   on(type: BlockEditorEventType, listener: (event: FocusEvent) => void): () => void {
-    this.owner.assertActive();
-    let listeners = this.listeners.get(type);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(type, listeners);
-    }
-    const callback = (event: FocusEvent) => listener(event);
-    listeners.add(callback);
-    return this.owner.registerCleanup(() => {
-      listeners.delete(callback);
-      if (listeners.size === 0) {
-        this.listeners.delete(type);
-      }
-    });
+    return this.focus.on(type, listener);
   }
 
   /**
@@ -71,13 +174,39 @@ export class BlockEditorEvents implements BlockEditorEventsApi {
    * @internal The controller owns this attachment and prevents concurrent roots.
    */
   attach(root: HTMLElement): () => void {
-    const focus = (event: FocusEvent) => this.notify("focus", root, event);
-    const blur = (event: FocusEvent) => this.notify("blur", root, event);
-    root.addEventListener("focusin", focus);
-    root.addEventListener("focusout", blur);
+    if (this.attachment) {
+      throw new Error("Editor events already attached");
+    }
+    const attachment = {};
+    const detachInput = this.input.attach(root);
+    let detachFocus: () => void;
+    try {
+      detachFocus = this.focus.attach(root);
+    } catch (error) {
+      try {
+        detachInput();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Event attachment rollback failed");
+      }
+      throw error;
+    }
+    this.attachment = attachment;
     return () => {
-      root.removeEventListener("focusin", focus);
-      root.removeEventListener("focusout", blur);
+      if (this.attachment !== attachment) {
+        return;
+      }
+      this.attachment = undefined;
+      const errors: unknown[] = [];
+      for (const release of [...this.detachListeners, detachInput, detachFocus]) {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, "Editor event cleanup failed");
+      }
     };
   }
 
@@ -94,39 +223,6 @@ export class BlockEditorEvents implements BlockEditorEventsApi {
    * @internal The controller invokes this after attachment and rolls back on failure.
    */
   notifyInitialFocus(root: HTMLElement): void {
-    const view = root.ownerDocument.defaultView;
-    const active = root.ownerDocument.activeElement;
-    if (view && active && root.contains(active)) {
-      this.notify("focus", root, new view.FocusEvent("focusin"));
-    }
-  }
-
-  /**
-   * Delivers transitions crossing the root boundary to a captured subscriber list.
-   *
-   * @param type - Editor event associated with this native focus transition or initial reconciliation.
-   * @param root - Current DOM attachment.
-   * @param event - Native event whose related target may still be inside the editor,
-   * or the synthetic initial focusin delivered directly during attachment.
-   * @returns Every captured listener has been attempted unless focus stayed within the subtree.
-   * @throws AggregateError containing callback failures, reported through native event dispatch
-   * for native transitions or propagated to the attachment caller for initial reconciliation.
-   */
-  private notify(type: BlockEditorEventType, root: HTMLElement, event: FocusEvent): void {
-    const NodeType = root.ownerDocument.defaultView?.Node;
-    if (NodeType && event.relatedTarget instanceof NodeType && root.contains(event.relatedTarget)) {
-      return;
-    }
-    const errors: unknown[] = [];
-    for (const listener of [...(this.listeners.get(type) ?? [])]) {
-      try {
-        listener(event);
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "Block editor event notification failed");
-    }
+    this.focus.notifyInitialFocus(root);
   }
 }

@@ -1,101 +1,57 @@
+import { EdgelessGridSpotlight } from "./edgeless-grid-spotlight";
+import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
+import { BlockEditorScope } from "@chulane/rivto-page";
+import { CanvasView, useCanvasCamera, useCanvasVisible } from "@chulane/rivto-edgeless/react";
+import { useEdgelessCanvas } from "./edgeless-tools-context";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
-import { EDITOR_CONTROL_SELECTOR } from "../../constants";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
+import { EdgelessSurfaceController } from "./edgeless-surface-controller";
 import { SurfaceBoundary } from "../surface";
-import { getEdgelessSurfaceOptions } from "./register";
+import { EdgelessSurfaceRegistration } from "./register";
 /**
  * React surface for the zoomable edgeless canvas.
  *
- * Owns viewport-local presentation state, browser gestures, and projection of
- * canonical block elements onto the canvas. Persisted document mutations stay
- * in core managers while transient pan, zoom, and pointer visuals remain here.
+ * Connects independent viewport state and browser gestures with the projection
+ * of canonical block elements. Persisted document mutations stay in core
+ * managers; camera state belongs to Canvas and editor pointer visuals remain here.
  */
-import { createCaretSelection } from "@chulane/rivto";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { UI_SCOPE_CLASS } from "../../components/ui-scope";
 import {
   blockIdsOf,
   blockElementRoot,
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
-  insertBlockElementSeparator,
-  nonOverlappingBlockFrame,
 } from "../../elements/block-element-projection";
-import {
-  useDOMEvent,
-  useEditorRoot,
-  useReactPanel,
-  useElements,
-  useKeyboardEvent,
-  useRootBlockIds,
-} from "../../hooks";
-import { BUILTIN_KEYMAP, focusBlock, KEYBOARD_BINDING_IDS } from "../../managers";
+import { useEditorRoot, useReactPanel, useElements, useRootBlockIds } from "../../hooks";
 import { ToolBarDivider } from "../../components/edgeless/tool-bar-divider";
 import { EdgelessToolButton } from "../../components/edgeless/tool-button";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { EdgelessBlockElement } from "./edgeless-block";
-import { EdgelessSnappingStore } from "./snapping-store";
+import type { EdgelessSurfaceOptions } from "./types";
+import { EdgelessSnappingStore } from "@chulane/rivto-edgeless";
 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 2;
-/** Exponential zoom sensitivity per wheel delta unit. */
-const WHEEL_ZOOM_SENSITIVITY = 0.006;
-/** Strongest background-dot fade at minimum zoom; keeps a faint residual grid. */
-const MAX_GRID_DOT_FADE = 0.7;
 const GRID_SPOTLIGHT_CLASS = "edgeless-grid-spotlight";
 /** Bottom-left zoom and snapping cluster; `edgeless-zoom-controls` is a stable hook. */
 const ZOOM_CONTROLS_CLASS = `${UI_SCOPE_CLASS} edgeless-zoom-controls absolute bottom-3.5 left-3 z-20 flex w-max items-center gap-0.5 rounded-[11px] border border-border bg-background/95 p-1 shadow-(--rivto-edgeless-chrome-shadow)`;
 const ZOOM_VALUE_CLASS = "w-13 min-w-13";
 
-interface PanGesture {
-  readonly x: number;
-  readonly y: number;
-  readonly panX: number;
-  readonly panY: number;
-}
-
-const clampZoom = (value: number): number => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
-
-/**
- * Mix amount toward transparent background grid dots at the current zoom.
- *
- * 100% zoom keeps the designed pale dots. As scale drops toward the minimum,
- * packed cells fade, but a residual mix remains so the field never vanishes.
- *
- * @param zoom - Viewport scale already clamped to `[MIN_ZOOM, MAX_ZOOM]`.
- * @returns A CSS percentage for `--rivto-edgeless-grid-dot-fade`.
- */
-function gridDotFade(zoom: number): string {
-  const amount = Math.max(0, Math.min(1, (1 - zoom) / (1 - MIN_ZOOM))) * MAX_GRID_DOT_FADE;
-  return `${Math.round(amount * 100)}%`;
-}
-
 /**
  * Projects root block layouts onto an unbounded, zoomable canvas.
  *
- * Viewport gestures are registered through the editor event runtime. This is
- * important when a surface is replaced: its root, document, and window
- * listeners move together instead of leaving global listeners behind.
+ * CanvasView owns viewport gestures and their mounted DOM listeners. When a
+ * surface is replaced, its root registration and the independent viewport
+ * release their document and window listeners rather than leaving them behind.
  */
-/** @param props - Optional local canvas settings. @returns Explicit canvas with its extension UI. */
-export function EdgelessSurface(
-  props: {
-    readonly snapping?: EdgelessSnappingStore;
-    readonly avoidBlockElementOverlap?: boolean;
-    readonly blockElementWidth?: number;
-  } = {},
-) {
+/**
+ * Creates a surface-owned editor session using configured or explicitly supplied settings.
+ *
+ * @param props - Optional local canvas settings overriding the registered defaults.
+ * @returns Explicit canvas with its extension UI and independently owned tool session.
+ */
+export function EdgelessSurface(props: EdgelessSurfaceOptions = {}) {
   const editor = useReactPanel();
-  const configured = getEdgelessSurfaceOptions(editor);
+  const configured = EdgelessSurfaceRegistration.getOptions(editor.editor.surfaces);
   const suppliedSnapping = props.snapping ?? configured.snapping;
   const snapping = useMemo(
     () => suppliedSnapping ?? new EdgelessSnappingStore(),
@@ -110,459 +66,205 @@ export function EdgelessSurface(
   );
 }
 
+/** Surface-local snapping and placement configuration. */
+interface SurfaceContentProps {
+  readonly snapping: EdgelessSnappingStore;
+  readonly avoidBlockElementOverlap?: boolean;
+  readonly blockElementWidth?: number;
+}
+
+/**
+ * Composes the generic viewport with document cards and Rivto-specific chrome.
+ *
+ * Registers the mounted occurrence and observes its viewport lifetime. The root
+ * reference connects both the panel and the surface controller; camera changes
+ * invalidate the cached client origin. Mirrors the surface snapping settings into
+ * its independent scene. The current snapshot drives toolbar controls and viewport markers.
+ *
+ * @param props - Snapping owner and new-card placement defaults.
+ * @returns Virtualized edgeless content with local camera and gesture policies.
+ */
 function EdgelessSurfaceContent({
   snapping,
   avoidBlockElementOverlap = true,
   blockElementWidth = EDGELESS_CARD_DEFAULT_FRAME.width,
-}: {
-  readonly snapping: EdgelessSnappingStore;
-  readonly avoidBlockElementOverlap?: boolean;
-  readonly blockElementWidth?: number;
-}) {
-  const reactPanel = useReactPanel();
-  const rootIds = useRootBlockIds();
-  const blockElements = useElements().filter(
-    (element) =>
-      element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
-      blockElementRoot(element, reactPanel.blocks) === null,
-  );
-  const { ref: registerRoot } = useEditorRoot();
-  const viewport = useRef<HTMLElement | null>(null);
-  const spotlightOverlay = useRef<HTMLDivElement | null>(null);
-  const spotlightFrame = useRef<number | null>(null);
-  const spotlightPoint = useRef({ x: 0, y: 0 });
-  const viewportOrigin = useRef({ left: 0, top: 0 });
-  const spaceHeld = useRef(false);
-  const panGesture = useRef<PanGesture | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+}: SurfaceContentProps) {
+  const panel = useReactPanel();
+  const canvas = useEdgelessCanvas()!;
+  const camera = useCanvasCamera(canvas);
   const snap = useSyncExternalStore(
     (listener) => snapping.subscribe(listener),
     () => snapping.getSnapshot(),
     () => snapping.getSnapshot(),
   );
-
+  const controller = useMemo(
+    () => new EdgelessSurfaceController(panel, canvas, avoidBlockElementOverlap, blockElementWidth),
+    [panel, canvas, avoidBlockElementOverlap, blockElementWidth],
+  );
+  const spotlight = useMemo(() => new EdgelessGridSpotlight(), []);
+  const { reactPanel } = useReactPanelContext();
+  const { ref: registerRoot, element: root } = useEditorRoot();
   const rootRef = useCallback(
-    (element: HTMLElement | null) => {
-      viewport.current = element;
-      registerRoot(element);
+    (root: HTMLElement | null) => {
+      controller.viewport = root;
+      spotlight.viewport = root;
+      registerRoot(root);
     },
-    [registerRoot],
+    [controller, spotlight, registerRoot],
   );
-
-  const clearSpace = () => {
-    spaceHeld.current = false;
-    viewport.current?.removeAttribute("data-panning-ready");
-  };
-
-  const panReady = () => spaceHeld.current || viewport.current?.dataset.edgelessPanTool === "true";
-
-  /**
-   * Caches the viewport's client origin so pointermove can avoid layout reads.
-   *
-   * @returns Nothing.
-   */
-  const refreshViewportOrigin = (): void => {
-    const root = viewport.current;
-    if (!root) {
-      return;
-    }
-    const bounds = root.getBoundingClientRect();
-    viewportOrigin.current = { left: bounds.left, top: bounds.top };
-  };
-
-  /**
-   * Moves the CSS-rendered grid spotlight without causing a React render.
-   *
-   * Writes `--rivto-edgeless-pointer-x/y` only on the empty overlay so inherited
-   * custom properties do not restyle the canvas tree. Skipped during transform
-   * and pan so those gestures do not also invalidate spotlight styles.
-   *
-   * @param event - Pointer movement bubbling through the edgeless viewport.
-   * @returns Nothing.
-   */
-  const updatePointerSpotlight = (event: ReactPointerEvent<HTMLElement>): void => {
-    spotlightPoint.current = {
-      x: event.clientX,
-      y: event.clientY,
-    };
-    if (spotlightFrame.current !== null) {
-      return;
-    }
-    spotlightFrame.current = requestAnimationFrame(() => {
-      const root = viewport.current;
-      const overlay = spotlightOverlay.current;
-      spotlightFrame.current = null;
-      if (!root || !overlay) {
-        return;
-      }
-      if (root.dataset.transforming || root.dataset.panning === "true") {
-        return;
-      }
-      overlay.style.setProperty(
-        "--rivto-edgeless-pointer-x",
-        `${spotlightPoint.current.x - viewportOrigin.current.left}px`,
-      );
-      overlay.style.setProperty(
-        "--rivto-edgeless-pointer-y",
-        `${spotlightPoint.current.y - viewportOrigin.current.top}px`,
-      );
-    });
-  };
-
-  /**
-   * Cancels a pending pointer-spotlight animation frame.
-   *
-   * @returns Nothing.
-   */
-  const cancelPointerSpotlight = (): void => {
-    if (spotlightFrame.current === null) {
-      return;
-    }
-    cancelAnimationFrame(spotlightFrame.current);
-    spotlightFrame.current = null;
-  };
-
-  useEffect(() => () => cancelPointerSpotlight(), []);
-
-  useEffect(() => {
-    const root = viewport.current;
-    if (!root || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    refreshViewportOrigin();
-    const observer = new ResizeObserver(() => refreshViewportOrigin());
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    refreshViewportOrigin();
-  }, [pan, zoom]);
-
-  useKeyboardEvent(
-    {
-      id: KEYBOARD_BINDING_IDS.edgelessPanStart,
-      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStart],
-      mode: "edgeless",
-      when: ({ raw: event }) => {
-        const target = event.target;
-        return (
-          target instanceof HTMLElement &&
-          !target.isContentEditable &&
-          !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName)
-        );
-      },
-    },
-    () => {
-      spaceHeld.current = true;
-      viewport.current?.setAttribute("data-panning-ready", "true");
-      return true;
-    },
-  );
-
-  useKeyboardEvent(
-    {
-      id: KEYBOARD_BINDING_IDS.edgelessPanStop,
-      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessPanStop],
-      phase: "keyup",
-      target: "window",
-      mode: "edgeless",
-    },
-    () => {
-      clearSpace();
-      return false;
-    },
-  );
-
-  useDOMEvent(
-    {
-      id: "edgeless.pan.blur",
-      type: "blur",
-      target: "window",
-    },
-    () => {
-      clearSpace();
-      panGesture.current = null;
-      viewport.current?.removeAttribute("data-panning");
-    },
-  );
-
-  useDOMEvent(
-    {
-      id: "edgeless.pan.pointer-start",
-      type: "pointerdown",
-      capture: true,
-    },
-    ({ raw: event }) => {
-      const root = viewport.current;
-      const allowed = event.button === 1 || (event.button === 0 && panReady());
-      if (!root || !allowed) {
-        return false;
-      }
-      // Pan tool: ignore chrome controls so zoom/snap toggles still work.
-      if (
-        event.button === 0 &&
-        root.dataset.edgelessPanTool === "true" &&
-        event.target instanceof Element &&
-        event.target.closest("[data-edgeless-ui]")
-      ) {
-        return false;
-      }
-      panGesture.current = {
-        x: event.clientX,
-        y: event.clientY,
-        panX: pan.x,
-        panY: pan.y,
-      };
-      root.dataset.panning = "true";
-      return true;
-    },
-  );
-
-  /** Appends and focuses one default root card at an empty canvas point. */
-  const createBlockAt = (event: ReactMouseEvent<HTMLElement>): void => {
-    const root = viewport.current;
-    const target = event.target;
-    if (!root || !(target instanceof Element) || event.button !== 0) {
-      return;
-    }
-    if (root.dataset.edgelessPanTool === "true" || root.dataset.edgelessCaptureTool === "true") {
-      return;
-    }
-    if (
-      target.closest(
-        `[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}`,
-      ) ||
-      target.closest(".edgeless-drawing-capture[data-active]")
-    ) {
-      return;
-    }
-    const rect = root.getBoundingClientRect();
-    const x = (event.clientX - rect.left - pan.x) / zoom;
-    const y = (event.clientY - rect.top - pan.y) / zoom;
-    const preferredFrame = {
-      ...EDGELESS_CARD_DEFAULT_FRAME,
-      width:
-        Number.isFinite(blockElementWidth) && blockElementWidth > 0
-          ? blockElementWidth
-          : EDGELESS_CARD_DEFAULT_FRAME.width,
-      x,
-      y,
-    };
-    const frame = avoidBlockElementOverlap
-      ? nonOverlappingBlockFrame(
-          preferredFrame,
-          reactPanel.elements
-            .getElementNodes()
-            .filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE)
-            .map((element) => element.frame),
-        )
-      : preferredFrame;
-    const roots = reactPanel.blocks
-      .getRootIds()
-      .flatMap((id) => reactPanel.blocks.getBlockNode(id) ?? []);
-    const zIndex =
-      Math.max(0, ...reactPanel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
-    let id = "";
-    reactPanel.batchUpdates(() => {
-      let afterId = roots.at(-1)?.id;
-      const last = roots.at(-1);
-      if (last && !reactPanel.editor.blockTypes.separatesBlockElements(last.type)) {
-        afterId = insertBlockElementSeparator(reactPanel, last.id).id;
-      }
-      id = reactPanel.blocks.insertBlock(
-        reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
-        reactPanel.blocks.getInsertionDestinationAfter(afterId),
-      ).id;
-      reactPanel.elements.insertElement({
-        type: EDGELESS_BLOCK_ELEMENT_TYPE,
-        frame,
-        zIndex,
-        props: { startBlockId: id, endBlockId: id },
-      });
-    });
-    reactPanel.selection.set(createCaretSelection(id, 0));
-    requestAnimationFrame(() => focusBlock(root, id, 0));
-  };
-
-  useDOMEvent(
-    {
-      id: "edgeless.pan.pointer-move",
-      type: "pointermove",
-      target: "window",
-      passive: false,
-    },
-    ({ raw: event }) => {
-      const root = viewport.current;
-      const start = panGesture.current;
-      if (!root || !start) {
-        return false;
-      }
-      setPan({
-        x: start.panX + event.clientX - start.x,
-        y: start.panY + event.clientY - start.y,
-      });
-      return true;
-    },
-  );
-
-  const stopPan = () => {
-    if (!panGesture.current) {
-      return false;
-    }
-    panGesture.current = null;
-    viewport.current?.removeAttribute("data-panning");
-    return true;
-  };
-  useDOMEvent(
-    {
-      id: "edgeless.pan.pointer-end",
-      type: "pointerup",
-      target: "window",
-    },
-    stopPan,
-  );
-  useDOMEvent(
-    {
-      id: "edgeless.pan.pointer-cancel",
-      type: "pointercancel",
-      target: "window",
-    },
-    stopPan,
-  );
-
-  useDOMEvent(
-    {
-      id: "edgeless.pan.middle-auxclick",
-      type: "auxclick",
-      mode: "edgeless",
-    },
-    ({ raw: event }) => event.button === 1,
-  );
-
-  const zoomAt = (nextZoom: number, clientX?: number, clientY?: number): void => {
-    const root = viewport.current;
-    const next = clampZoom(nextZoom);
-    if (!root || next === zoom) {
-      return setZoom(next);
-    }
-    const rect = root.getBoundingClientRect();
-    const x = (clientX ?? rect.left + root.clientWidth / 2) - rect.left;
-    const y = (clientY ?? rect.top + root.clientHeight / 2) - rect.top;
-    const canvasX = (x - pan.x) / zoom;
-    const canvasY = (y - pan.y) / zoom;
-    setZoom(next);
-    setPan({ x: x - canvasX * next, y: y - canvasY * next });
-  };
-
-  useDOMEvent(
-    {
-      id: "edgeless.viewport.wheel",
-      type: "wheel",
-      passive: false,
-    },
-    /**
-     * Pans by wheel deltas or zooms around the pointer with Ctrl or Meta held.
-     *
-     * Fixed-height card content and canvas controls retain native scrolling.
-     *
-     * @param input - Resolved editor event containing the native wheel gesture.
-     * @returns Whether the gesture was consumed and its default should be prevented.
-     */
-    ({ raw: event }) => {
-      // Wheel modifier policy is a pointer gesture rather than a key binding.
-      if (!event.ctrlKey && !event.metaKey) {
-        if (
-          event.target instanceof Element &&
-          event.target.closest(
-            '[data-edgeless-ui], [data-auto-height="false"] [data-edgeless-card-content]',
-          )
-        ) {
-          return false;
-        }
-        setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY }));
-      } else {
-        zoomAt(
-          zoom * Math.exp(-event.deltaY * WHEEL_ZOOM_SENSITIVITY),
-          event.clientX,
-          event.clientY,
-        );
-      }
-      return true;
-    },
-  );
-
+  useEffect(() => spotlight.observeViewport(), [spotlight]);
+  useEffect(() => spotlight.refreshViewportOrigin(), [spotlight, camera]);
+  useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (
-    <main
-      ref={rootRef}
-      data-rivto-surface="edgeless"
-      className="edgeless-viewport"
-      data-edgeless-zoom={zoom}
-      data-edgeless-pan-x={pan.x}
-      data-edgeless-pan-y={pan.y}
-      data-edgeless-grid={EDGELESS_GRID_SIZE}
-      data-edgeless-snap={snap.snapToGrid ? "true" : "false"}
-      data-edgeless-align={snap.alignObjects ? "true" : "false"}
-      aria-label="Edgeless document canvas"
-      tabIndex={-1}
-      onDoubleClick={createBlockAt}
-      onPointerMove={updatePointerSpotlight}
-      onPointerEnter={refreshViewportOrigin}
-      style={
-        {
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-          backgroundSize: `${EDGELESS_GRID_SIZE * zoom}px ${EDGELESS_GRID_SIZE * zoom}px`,
-          "--rivto-edgeless-zoom": String(zoom),
-          "--rivto-edgeless-grid-dot-fade": gridDotFade(zoom),
-        } as CSSProperties
-      }
-    >
-      <div ref={spotlightOverlay} className={GRID_SPOTLIGHT_CLASS} aria-hidden="true" />
-      <div
-        className={ZOOM_CONTROLS_CLASS}
-        data-edgeless-ui="true"
-        role="toolbar"
-        aria-label="Canvas zoom"
-      >
-        <EdgelessToolButton label="Zoom out" icon="zoom-out" onClick={() => zoomAt(zoom - 0.1)} />
-        <EdgelessToolButton
-          label="Reset zoom"
-          className={ZOOM_VALUE_CLASS}
-          onClick={() => zoomAt(1)}
-        >
-          {Math.round(zoom * 100)}%
-        </EdgelessToolButton>
-        <EdgelessToolButton label="Zoom in" icon="zoom-in" onClick={() => zoomAt(zoom + 0.1)} />
-        <ToolBarDivider />
-        <EdgelessToolButton
-          label={snap.snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}
-          icon="snap"
-          pressed={snap.snapToGrid}
-          onClick={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
-        />
-        <EdgelessToolButton
-          label={snap.alignObjects ? "Disable object alignment" : "Enable object alignment"}
-          icon="align-objects"
-          pressed={snap.alignObjects}
-          onClick={() => snapping.set({ alignObjects: !snap.alignObjects })}
-        />
-      </div>
-      <div
-        className="edgeless-plane"
-        data-edgeless-plane="true"
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-      >
-        {/* Element boundary IDs resolve against current root order; inserted
-            roots between them render without rewriting element props. */}
-        {blockElements.map((element) => (
-          <EdgelessBlockElement
-            key={element.id}
-            element={element}
-            blockIds={blockIdsOf(element, rootIds)}
+    <BlockEditorScope editor={reactPanel.page} root={root}>
+      <CanvasView
+        data-rivto-block-editor="true"
+        canvas={canvas}
+        viewportRef={rootRef}
+        interactions={false}
+        {...controller.getViewportProps(camera, snap)}
+        onPointerMove={spotlight.updatePointerSpotlight}
+        onPointerEnter={spotlight.refreshViewportOrigin}
+        overlay={
+          <EdgelessSurfaceOverlay
+            controller={spotlight}
+            canvas={canvas}
+            snapping={snapping}
+            snap={snap}
+            zoom={camera.zoom}
           />
-        ))}
-      </div>
-    </main>
+        }
+      >
+        <EdgelessCards canvas={canvas} />
+      </CanvasView>
+    </BlockEditorScope>
   );
+}
+
+/** Screen-space viewport UI and the local spotlight owner. */
+interface SurfaceOverlayProps extends ZoomControlProps {
+  readonly controller: Pick<EdgelessGridSpotlight, "spotlightOverlay">;
+}
+
+/**
+ * Renders the pointer spotlight and viewport controls outside the transformed world layer.
+ *
+ * @param props - Camera values, preferences and the controller owning spotlight paint scheduling.
+ * @param props.controller - Receives the mounted overlay for animation-frame updates.
+ * @returns Screen-coordinate spotlight and zoom/snapping controls.
+ */
+function EdgelessSurfaceOverlay({ controller, ...controls }: SurfaceOverlayProps) {
+  return (
+    <>
+      <div
+        ref={(node) => {
+          controller.spotlightOverlay = node;
+        }}
+        className={GRID_SPOTLIGHT_CLASS}
+        aria-hidden="true"
+      />
+      <EdgelessZoomControls {...controls} />
+    </>
+  );
+}
+
+/** Scene observation used to determine mounted root cards. */
+interface EdgelessCardsProps {
+  readonly canvas: CanvasApi;
+}
+
+/**
+ * Renders visible root cards using their boundary IDs in the current root order.
+ *
+ * Camera-only parent updates do not resolve block ranges again. Visible membership,
+ * root order and element subscriptions still update the mounted cards independently.
+ *
+ * @param props - Scene controlling card visibility.
+ * @param props.canvas - Scene whose visible IDs include focused and pinned cards.
+ * @returns Mounted block cards; inserted roots between boundaries need no property rewrite.
+ */
+const EdgelessCards = memo(function EdgelessCards({ canvas }: EdgelessCardsProps) {
+  const panel = useReactPanel();
+  const visible = useCanvasVisible(canvas);
+  const visibleIds = useMemo(() => new Set(visible), [visible]);
+  const rootIds = useRootBlockIds();
+  const blockElements = useElements().filter(
+    (element) =>
+      visibleIds.has(element.id) &&
+      element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
+      blockElementRoot(element, panel.blocks) === null,
+  );
+  // Element boundary IDs resolve against current root order; inserted
+  // roots between them render without rewriting element props.
+  return (
+    <>
+      {blockElements.map((element) => (
+        <EdgelessBlockElement
+          key={element.id}
+          element={element}
+          blockIds={blockIdsOf(element, rootIds)}
+        />
+      ))}
+    </>
+  );
+});
+
+/**
+ * Renders camera scale and snapping controls using the surface's live settings.
+ *
+ * @param props - Scene, settings owner and current presentation values.
+ * @param props.canvas - Camera receiving zoom requests around the viewport center.
+ * @param props.snapping - Store receiving grid and alignment toggles.
+ * @param props.snap - Current settings snapshot.
+ * @param props.zoom - Current world-to-screen scale.
+ * @returns Accessible zoom and snapping toolbar.
+ */
+function EdgelessZoomControls({ canvas, snapping, snap, zoom }: ZoomControlProps) {
+  return (
+    <div
+      className={ZOOM_CONTROLS_CLASS}
+      data-edgeless-ui="true"
+      role="toolbar"
+      aria-label="Canvas zoom"
+    >
+      <EdgelessToolButton
+        label="Zoom out"
+        icon="zoom-out"
+        onClick={() => canvas.zoomAt(zoom - 0.1)}
+      />
+      <EdgelessToolButton
+        label="Reset zoom"
+        className={ZOOM_VALUE_CLASS}
+        onClick={() => canvas.zoomAt(1)}
+      >
+        {Math.round(zoom * 100)}%
+      </EdgelessToolButton>
+      <EdgelessToolButton
+        label="Zoom in"
+        icon="zoom-in"
+        onClick={() => canvas.zoomAt(zoom + 0.1)}
+      />
+      <ToolBarDivider />
+      <EdgelessToolButton
+        label={snap.snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}
+        icon="snap"
+        pressed={snap.snapToGrid}
+        onClick={() => snapping.set({ snapToGrid: !snap.snapToGrid })}
+      />
+      <EdgelessToolButton
+        label={snap.alignObjects ? "Disable object alignment" : "Enable object alignment"}
+        icon="align-objects"
+        pressed={snap.alignObjects}
+        onClick={() => snapping.set({ alignObjects: !snap.alignObjects })}
+      />
+    </div>
+  );
+}
+
+/** Live camera and snapping values presented by the viewport toolbar. */
+interface ZoomControlProps {
+  readonly canvas: CanvasApi;
+  readonly snapping: EdgelessSnappingStore;
+  readonly snap: ReturnType<EdgelessSnappingStore["getSnapshot"]>;
+  readonly zoom: number;
 }

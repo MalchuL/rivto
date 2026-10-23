@@ -1,15 +1,16 @@
+import { BlockNode } from "@chulane/rivto-page";
 /**
  * Positioned canvas card for one block element.
  *
  * Selection chrome subscribes per card ID so marquee growth does not re-render
- * unselected neighbors. `BlockTree` is memoized on the `blockIds` reference so
+ * unselected neighbors. The card is memoized on the `blockIds` contents so
  * flipping `data-block-selected` does not re-parse Markdown. Auto-height
  * measure is scoped to geometry and content, never to selection, so reading
  * `scrollHeight` cannot hitch pointermove.
  */
 import type { EditorElementNode } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef } from "react";
-import { BlockTree, ElementSlots } from "../../blocks";
+import { ElementSlots } from "../../blocks";
 import { usePanel } from "../../hooks";
 import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
 import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
@@ -21,8 +22,8 @@ const MIN_CARD_HEIGHT = 100;
 /**
  * Renders one block element as a positioned canvas card.
  *
- * The shell owns only canvas geometry and object controls. BlockTree supplies
- * the existing recursive BlockView/content/dnd tree inside it, so both surfaces
+ * The shell owns only canvas geometry and object controls. Page supplies
+ * addressed block nodes with shared content, layout and drag ownership, so both surfaces
  * share the complete block rendering and interaction policy.
  *
  * @param props - Card element snapshot and the block IDs it currently owns.
@@ -95,6 +96,7 @@ function EdgelessBlockElementView({
       ref={hostRef}
       className={CARD_CLASS}
       data-edgeless-root={element.id}
+      data-canvas-element={element.id}
       data-edgeless-object-kind="block"
       data-edgeless-object-id={element.id}
       data-block-selected={selected || undefined}
@@ -102,8 +104,15 @@ function EdgelessBlockElementView({
       style={style}
       tabIndex={0}
     >
-      <div ref={contentRef} className={CARD_CONTENT_CLASS} data-edgeless-card-content="true">
-        <BlockTree blockIds={blockIds} />
+      <div
+        ref={contentRef}
+        className={CARD_CONTENT_CLASS}
+        data-edgeless-card-content="true"
+        data-block-root-list
+      >
+        {blockIds.map((blockId) => (
+          <BlockNode key={blockId} blockId={blockId} />
+        ))}
       </div>
       <ElementSlots element={element} selected={selected} />
     </section>

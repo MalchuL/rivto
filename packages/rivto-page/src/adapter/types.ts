@@ -1,3 +1,4 @@
+import type { BlockSelectionSnapshot } from "../editor/selection/types";
 /** Built-in list modes interpreted by Page, independent of the host's storage schema. */
 export type BlockListType =
   "list" | "checkbox" | "numbered_list" | "start_numbered_list" | "continue_numbered_list";
@@ -46,6 +47,23 @@ export interface BlockEditorNodePatch {
 
 /** Host-selected display list and addressed, nonrecursive node access. */
 export interface BlockEditorBlocks {
+  /**
+   * Reads actual document roots accessible as a drop destination in this occurrence.
+   *
+   * This list is independent of display IDs. Return a stable immutable array until
+   * root order changes; an empty array permits insertion into an empty document.
+   *
+   * @returns Canonical root IDs, or undefined when the root destination is inaccessible.
+   */
+  getRootIds(): readonly string[] | undefined;
+
+  /**
+   * Resolves actual hierarchy independently of viewport and display-list membership.
+   *
+   * @param blockId - Accessible block identity, including an unmounted descendant.
+   * @returns Its actual parent ID, or undefined for a root, missing, or inaccessible block.
+   */
+  getParentId(blockId: string): string | undefined;
   /**
    * Reads the ordered blocks to display without requiring a common parent or owner.
    *
@@ -103,6 +121,61 @@ export interface BlockEditorBlocks {
 
 /** Per-block selection membership backed by the host's existing selection store. */
 export interface BlockEditorSelection {
+  /**
+   * Lets the host reserve pointer input for interactions outside block selection.
+   *
+   * @param event - Native pointer or click event starting a selection operation.
+   * @returns False when a host gesture owns this input; omission permits selection.
+   */
+  canStartSelection?(event: MouseEvent): boolean;
+  /**
+   * Reports whether a host command is restoring native selection asynchronously.
+   *
+   * Native selectionchange must not overwrite the command's authoritative model
+   * selection during that interval. Omission means no host restoration is pending.
+   * New input still captures its live caret before mutation.
+   *
+   * @returns True while host-owned restoration owns the model selection.
+   */
+  isNativeSelectionSuspended?(): boolean;
+  /**
+   * Reads current detached block/text coverage.
+   *
+   * @returns Stable current snapshot, or undefined without selection.
+   */
+  get(): BlockSelectionSnapshot | undefined;
+  /**
+   * Publishes coverage through host-owned selection storage.
+   *
+   * @param selection - Directed ranges in visible canonical order.
+   * @returns Host state and addressed membership subscribers have been updated.
+   */
+  set(selection: BlockSelectionSnapshot): void;
+  /**
+   * Clears host-owned block/text coverage.
+   *
+   * @returns No block/text selection remains.
+   */
+  clear(): void;
+  /**
+   * Reads selectable IDs respecting the current display list and collapsed nodes.
+   *
+   * Viewport windowing never removes IDs from this order; only model hierarchy
+   * and collapse policy affect membership.
+   *
+   * @returns Stable ordered IDs until hierarchy or collapse visibility changes.
+   */
+  getSelectableBlockIds(): readonly string[];
+  /**
+   * Reads text length without exposing persisted content or model nodes.
+   *
+   * @param blockId - Block identity accessible through this occurrence.
+   * @returns UTF-16 text length (including zero for empty text), or undefined for
+   * contentless, missing or inaccessible blocks. This classification must not
+   * depend on whether the block currently has mounted DOM.
+   */
+  getTextLength(blockId: string): number | undefined;
+
   /**
    * Reads whether a whole block is selected through the host adapter.
    *

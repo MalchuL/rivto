@@ -2,16 +2,16 @@ import type { CSSProperties, ReactNode } from "react";
 
 /** Typed CSS parameters inherited by structural blocks, controls, and slots. */
 export interface BlockEditorTheme extends CSSProperties {
+  /** Cursor while the configured block-selection binding is held; defaults to pointer. */
+  readonly "--rivto-selection-cursor"?: CSSProperties["cursor"];
   /** Flow-gap thickness and each BlockDropWrapper boundary thickness; defaults to 8px. Two adjacent wrappers contribute twice this spacing. */
   readonly "--rivto-drop-gap-size"?: string;
   /** Minimum cross-axis size of horizontal gap targets; defaults to 32px. */
   readonly "--rivto-drop-min-height"?: string;
   /** Shared row padding, including its content and in-flow controls; defaults to 16px. */
   readonly "--rivto-block-padding"?: string;
-  /** Vertical gap between displayed blocks; defaults to 16px. */
+  /** Shared vertical gap between displayed roots, above children, and between child blocks; defaults to 4px. */
   readonly "--rivto-block-gap"?: string;
-  /** Gap above and between child blocks; defaults to 12px. */
-  readonly "--rivto-block-children-gap"?: string;
   /** Logical indentation of a child group; defaults to 28px. */
   readonly "--rivto-block-indent"?: string;
   /** Gap between row slots/content and between controls; defaults to 4px. */
@@ -26,6 +26,8 @@ export interface BlockEditorTheme extends CSSProperties {
   readonly "--rivto-block-start-width"?: string;
   /** Selection outline color; defaults to #4868d8. */
   readonly "--rivto-block-selection"?: string;
+  /** Background fill shared by a selected subtree and participating layout surfaces; omitted preserves their own backgrounds. */
+  readonly "--rivto-block-selection-background"?: string;
   /** Block background corner radius; defaults to 10px. */
   readonly "--rivto-block-radius"?: string;
   /** Optional block border shorthand; defaults to none. */

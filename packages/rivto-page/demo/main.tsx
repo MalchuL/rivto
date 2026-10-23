@@ -1,3 +1,4 @@
+import { SelectionControls } from "./selection-controls";
 import { DemoBlockWrapper } from "./demo-wrapper";
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,7 +16,6 @@ import demoStyles from "./style.css?inline";
 const COMPACT_THEME: BlockEditorTheme = {
   "--rivto-block-padding": "4px",
   "--rivto-block-gap": "4px",
-  "--rivto-block-children-gap": "4px",
   "--rivto-block-indent": "12px",
   "--rivto-slot-gap": "2px",
   "--rivto-block-control-size": "16px",
@@ -167,9 +167,9 @@ function DemoHeader() {
         <summary>About this demo</summary>
         <p>
           Standalone BlockEditor demo: one adapter, targeted subscriptions, and reusable nodes. Data
-          is stored in memory. Text uses a plain textarea. Checkboxes, list markers, and collapse
-          controls are registered through slots. Rich text, drag and drop, and undo have not been
-          migrated yet; this demo exercises structural rendering and API commands.
+          is stored in memory. Text uses a host-owned contenteditable. Checkboxes, list markers, and
+          collapse controls are registered through slots. Rich text, drag and drop, and undo have
+          not been migrated yet; this demo exercises structural rendering and API commands.
         </p>
       </details>
     </header>
@@ -179,7 +179,7 @@ function DemoHeader() {
 /**
  * Shows the autonomous package with a stable, in-memory example host.
  *
- * repeat=200 renders 1000 displayed blocks and 200 children without virtualization. Reloading
+ * repeat=200 supplies 1000 displayed blocks and 200 children; virtual enables root windowing. Reloading
  * resets the fixture; editor remounts preserve host data and registrations.
  *
  * @param props - Session created and disposed by the demo root.
@@ -189,6 +189,11 @@ function DemoHeader() {
 function Demo({ session }: DemoSessionProps) {
   const { adapter, editor } = session;
   const [mounted, setMounted] = useState(true);
+  const [virtualized, setVirtualized] = useState(
+    new URLSearchParams(location.search).has("virtual"),
+  );
+  const [estimateSize, setEstimateSize] = useState(240);
+  const [overscan, setOverscan] = useState(3);
   const [inspectDropTargets, setInspectDropTargets] = useState(false);
   return (
     <main className="demo-page">
@@ -199,7 +204,36 @@ function Demo({ session }: DemoSessionProps) {
           <Checkbox checked={mounted} onCheckedChange={(checked) => setMounted(checked === true)} />
           Editor mounted
         </label>
+        <label>
+          <Checkbox
+            checked={virtualized}
+            onCheckedChange={(checked) => setVirtualized(checked === true)}
+          />
+          Virtualize blocks
+        </label>
+        <label>
+          Estimated root height (px)
+          <input
+            type="number"
+            min={1}
+            value={estimateSize}
+            onChange={(event) => setEstimateSize(Math.max(1, Number(event.currentTarget.value)))}
+          />
+        </label>
+        <label>
+          Overscan roots
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={overscan}
+            onChange={(event) =>
+              setOverscan(Math.max(0, Math.floor(Number(event.currentTarget.value))))
+            }
+          />
+        </label>
         <DemoRegistrations session={session} />
+        <SelectionControls session={session} />
         <DemoWrapperControl session={session} />
         <Button variant="outline" size="sm" onClick={() => adapter.reverseBlockIds()}>
           Reverse block order
@@ -211,6 +245,7 @@ function Demo({ session }: DemoSessionProps) {
           <span>Explore layouts</span>
           <a href="?repeat=1">Small document</a>
           <a href="?repeat=200">Large document</a>
+          <a href="?repeat=200&virtual">Virtualized document</a>
           <a href="?example=kanban">Kanban</a>
           <a href="?example=bento">Bento</a>
         </div>
@@ -222,7 +257,14 @@ function Demo({ session }: DemoSessionProps) {
         onEnabledChange={setInspectDropTargets}
       />
       <DemoAdapterContext.Provider value={adapter}>
-        <DemoTheme>{mounted && <BlockEditor editor={editor} />}</DemoTheme>
+        <DemoTheme>
+          {mounted && (
+            <BlockEditor
+              editor={editor}
+              virtualization={{ enabled: virtualized, estimateSize, overscan }}
+            />
+          )}
+        </DemoTheme>
       </DemoAdapterContext.Provider>
     </main>
   );

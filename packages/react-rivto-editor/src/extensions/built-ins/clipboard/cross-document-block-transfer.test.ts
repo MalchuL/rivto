@@ -1,6 +1,6 @@
 import { type DocumentEditorAPI } from "@chulane/rivto";
 import { createTestCoreEditor as createDocumentEditor } from "../../../test-utils";
-import { crossDocumentBlockTransfer } from "./cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "./cross-document-block-transfer";
 
 async function createEditor(): Promise<DocumentEditorAPI> {
   const editor = await createDocumentEditor();
@@ -38,7 +38,7 @@ describe("cross-document block transfer", () => {
     source.history.clear();
     destination.history.clear();
 
-    crossDocumentBlockTransfer(source, destination, [first, second], {
+    new CrossDocumentBlockTransfer(source, destination).move([first, second], {
       targetId: target,
       position: "inside",
     });
@@ -67,7 +67,7 @@ describe("cross-document block transfer", () => {
     const destination = await createEditor();
     source.blocks.insertBlock({ id: "moved", type: "paragraph", content: "Moved" });
 
-    crossDocumentBlockTransfer(source, destination, ["moved"], {
+    new CrossDocumentBlockTransfer(source, destination).move(["moved"], {
       targetId: null,
       position: "after",
     });
@@ -91,7 +91,7 @@ describe("cross-document block transfer", () => {
     const destinationBefore = destination.dump();
 
     expect(() =>
-      crossDocumentBlockTransfer(source, destination, ["moved"], {
+      new CrossDocumentBlockTransfer(source, destination).move(["moved"], {
         targetId: null,
         position: "after",
       }),
@@ -109,7 +109,7 @@ describe("cross-document block transfer", () => {
     const sourceBefore = source.dump();
 
     expect(() =>
-      crossDocumentBlockTransfer(source, destination, ["custom"], {
+      new CrossDocumentBlockTransfer(source, destination).move(["custom"], {
         targetId: null,
         position: "after",
       }),
@@ -134,12 +134,10 @@ test("transfers between two source models using one editor runtime", async () =>
   const { createTestMultiEditor } = await import("../../../test-utils");
   const { createReactEditor } = await import("../../../editor/react-editor");
   const runtime = await createTestMultiEditor([source, destination]);
-  crossDocumentBlockTransfer(
+  new CrossDocumentBlockTransfer(
     runtime.getEditor(source.id)!,
     runtime.getEditor(destination.id)!,
-    ["moved"],
-    { targetId: null, position: "after" },
-  );
+  ).move(["moved"], { targetId: null, position: "after" });
   expect(source.blocks.hasBlock("moved")).toBe(false);
   expect(destination.blocks.getBlockNode("moved")?.content).toBe("Moved");
   expect(editor.blocks.getRootIds()).toEqual(["host"]);
@@ -161,7 +159,7 @@ test("rejects overlapping roots and processor-changed identities before writing 
   });
   const before = source.dump();
   expect(() =>
-    crossDocumentBlockTransfer(source, destination, ["parent", "child"], {
+    new CrossDocumentBlockTransfer(source, destination).move(["parent", "child"], {
       targetId: null,
       position: "after",
     }),
@@ -173,7 +171,7 @@ test("rejects overlapping roots and processor-changed identities before writing 
     processor: (block) => ({ ...block, id: `${block.id}-changed` }),
   });
   expect(() =>
-    crossDocumentBlockTransfer(source, destination, ["parent"], {
+    new CrossDocumentBlockTransfer(source, destination).move(["parent"], {
       targetId: null,
       position: "after",
     }),
@@ -183,4 +181,37 @@ test("rejects overlapping roots and processor-changed identities before writing 
   stop();
   await source.destroy();
   await destination.destroy();
+});
+
+test("uses core panel access without requiring a React runtime and retains hidden roots", async () => {
+  const { ChildrenPanel } = await import("@chulane/rivto");
+  const source = await createEditor();
+  const destination = await createEditor();
+  source.blocks.insertBlock({
+    id: "source-root",
+    type: "paragraph",
+    children: [{ id: "moved", type: "paragraph", content: "Moved" }],
+  });
+  destination.blocks.insertBlock({ id: "destination-root", type: "paragraph" });
+  const sourcePanel = new ChildrenPanel(source, { rootBlockId: "source-root" });
+  const destinationPanel = new ChildrenPanel(destination, { rootBlockId: "destination-root" });
+  const transfer = new CrossDocumentBlockTransfer(sourcePanel, destinationPanel);
+  const sourceBefore = source.dump();
+  const destinationBefore = destination.dump();
+  try {
+    expect(() => transfer.move(["source-root"], { targetId: null, position: "after" })).toThrow(
+      "Source block is outside panel or protected",
+    );
+    expect(() =>
+      transfer.move(["moved"], { targetId: "destination-root", position: "before" }),
+    ).toThrow("Destination is outside panel or protected");
+    expect(source.dump()).toEqual(sourceBefore);
+    expect(destination.dump()).toEqual(destinationBefore);
+    transfer.move(["moved"], { targetId: "destination-root", position: "inside" });
+    expect(source.blocks.getBlockNode("source-root")?.childIds).toEqual([]);
+    expect(destination.blocks.getBlockNode("destination-root")?.childIds).toEqual(["moved"]);
+  } finally {
+    source.destroy();
+    destination.destroy();
+  }
 });

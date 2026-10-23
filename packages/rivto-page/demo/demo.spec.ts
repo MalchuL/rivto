@@ -126,7 +126,7 @@ test("keeps host state through reorder, renderer registration, and editor remoun
     "data-block-id",
     "block-5",
   );
-  await expect(text).toHaveValue("Preserved across remount");
+  await expect(text).toHaveText("Preserved across remount");
   await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await expect(page.locator("[data-rivto-block-editor]")).toHaveCount(0);
@@ -136,7 +136,7 @@ test("keeps host state through reorder, renderer registration, and editor remoun
   );
   expect(metrics.subscriptions).toBe(0);
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).check();
-  await expect(text).toHaveValue("Preserved across remount");
+  await expect(text).toHaveText("Preserved across remount");
   await expect(page.getByRole("textbox", { name: "Text block-5", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Clear selection", exact: true }).click();
   await expect(page.locator('[data-block-selected="true"]')).toHaveCount(0);
@@ -298,7 +298,7 @@ test("keeps demo forms usable within a narrow viewport", async ({ page }) => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
   await text.fill("Edited on a narrow screen");
-  await expect(text).toHaveValue("Edited on a narrow screen");
+  await expect(text).toHaveText("Edited on a narrow screen");
   await page.getByLabel("List type block-1", { exact: true }).selectOption("checkbox");
   await page.getByRole("checkbox", { name: "Check block-1", exact: true }).check();
   await expect(page.getByLabel("State block-1", { exact: true })).toContainText('"checked":true');
@@ -514,11 +514,11 @@ test("observes focus crossing the editor boundary through an installed extension
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await page.getByRole("checkbox", { name: "Demo slot", exact: true }).check();
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).check();
-  await expect(page.locator('[data-slot-position="end"]')).toHaveCount(6);
+  await expect(page.locator('[data-slot-position="end"] [data-demo-slot]')).toHaveCount(6);
   await page.getByRole("textbox", { name: "Text block-1", exact: true }).focus();
   await expect(editor).toHaveAttribute("data-demo-focused", "true");
   await page.getByRole("checkbox", { name: "Demo slot", exact: true }).uncheck();
-  await expect(page.locator('[data-slot-position="end"]')).toHaveCount(0);
+  await expect(page.locator('[data-slot-position="end"] [data-demo-slot]')).toHaveCount(0);
 });
 
 test("registers an element-owning wrapper dynamically and retains it across editor remounts", async ({
@@ -539,14 +539,14 @@ test("registers an element-owning wrapper dynamically and retains it across edit
   await expect(page.locator("[data-rivto-block-editor] > [data-demo-wrapper]")).toHaveCount(5);
   await text.click();
   await expect(wrapper).toHaveAttribute("data-demo-wrapper-pointer", "true");
-  await expect(text).toHaveValue("Retained through wrapper changes");
+  await expect(text).toHaveText("Retained through wrapper changes");
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).check();
   await expect(page.locator("[data-demo-wrapper]")).toHaveCount(6);
-  await expect(text).toHaveValue("Retained through wrapper changes");
+  await expect(text).toHaveText("Retained through wrapper changes");
   await page.getByRole("checkbox", { name: "Demo wrapper", exact: true }).uncheck();
   await expect(page.locator("[data-demo-wrapper]")).toHaveCount(0);
-  await expect(text).toHaveValue("Retained through wrapper changes");
+  await expect(text).toHaveText("Retained through wrapper changes");
   await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await page.getByRole("checkbox", { name: "Demo wrapper", exact: true }).check();
@@ -569,7 +569,7 @@ for (const repeat of [1, 200]) {
       await text.press("End");
       await captureControlTiming(text, "input");
       await text.press("x");
-      await expect(text).toHaveValue(`Warm${"x".repeat(sample + 1)}`);
+      await expect(text).toHaveText(`Warm${"x".repeat(sample + 1)}`);
       await expect(text).toHaveAttribute("data-dom-ms", /\d/);
       await page.getByRole("button", { name: "Refresh statistics", exact: true }).click();
       const metrics: DemoMetrics = JSON.parse(

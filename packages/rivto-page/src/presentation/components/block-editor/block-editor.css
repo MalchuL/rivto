@@ -2,5 +2,5 @@
  * BlockEditorThemeProvider or another theme ancestor; row padding is shared by
  * content and controls so renderers never compensate for slot offsets. */
 [data-rivto-block-editor] {
-  @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,16px)] page:text-[color:var(--rivto-block-foreground,#172033)];
+  @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)] page:text-[color:var(--rivto-block-foreground,#172033)];
 }

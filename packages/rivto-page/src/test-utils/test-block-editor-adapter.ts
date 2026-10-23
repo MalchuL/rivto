@@ -1,3 +1,4 @@
+import type { BlockSelectionSnapshot } from "../editor/selection/types";
 import type {
   BlockEditorAdapter,
   BlockEditorNodePatch,
@@ -14,10 +15,28 @@ interface TestBlockNode extends BlockEditorNodeSnapshot {
 export class TestBlockEditorAdapter implements BlockEditorAdapter {
   readonly nodes = new Map<string, TestBlockNode>();
   private blockIds: readonly string[] = [];
+  private selectionSnapshot: BlockSelectionSnapshot | undefined;
+  private selectableIds: readonly string[] | undefined;
   private selected = new Set<string>();
   private readonly listeners = new Map<string, Set<() => void>>();
 
+  rootIds: readonly string[] | undefined;
+
   readonly blocks = {
+    /**
+     * Reads explicitly supplied canonical roots independently of fixture display IDs.
+     *
+     * @returns Root destination IDs, or undefined when not exposed by the fixture.
+     */
+    getRootIds: jest.fn(() => this.rootIds),
+    /**
+     * Resolves fixture hierarchy without consulting mounted DOM.
+     *
+     * @param id - Fixture identity to locate.
+     * @returns Parent ID, or undefined for a root or missing node.
+     */
+    getParentId: (id: string) =>
+      [...this.nodes.values()].find((node) => node.childIds.includes(id))?.id,
     /**
      * Reads the cached fixture boundary without allocating another snapshot.
      *
@@ -72,6 +91,39 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
 
   readonly selection = {
     /**
+     * Reads host-owned directed coverage.
+     *
+     * @returns Current snapshot, or undefined without selection.
+     */
+    get: () => this.selectionSnapshot,
+    /**
+     * Publishes coverage and only changed whole-block memberships.
+     *
+     * @param snapshot - New directed coverage.
+     * @returns Host snapshot and addressed observers are updated.
+     */
+    set: (snapshot: BlockSelectionSnapshot) => this.setSelection(snapshot),
+    /**
+     * Removes host-owned coverage.
+     *
+     * @returns Selection is cleared and changed memberships are notified.
+     */
+    clear: () => this.setSelection(undefined),
+    /**
+     * Reads cached visible order, excluding collapsed descendants.
+     *
+     * @returns Canonical selectable IDs for this host occurrence.
+     */
+    getSelectableBlockIds: () => this.getSelectableIds(),
+    /**
+     * Reads the host text's UTF-16 length without a node conversion.
+     *
+     * @param id - Fixture identity.
+     * @returns Text length, or undefined for a missing node.
+     */
+    getTextLength: (id: string) => this.nodes.get(id)?.content.length,
+
+    /**
      * Reads whole-block membership without allocating a selection object.
      *
      * @param id - Fixture block identity.
@@ -107,6 +159,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
    */
   setBlockIds(blockIds: readonly string[]): void {
     this.blockIds = blockIds;
+    this.selectableIds = undefined;
     this.emit("block-ids");
   }
 
@@ -126,6 +179,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
       ...this.nodes.get(id),
       ...patch,
     });
+    this.selectableIds = undefined;
     this.emit(`node:${id}`);
   }
 
@@ -137,6 +191,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
    */
   deleteNode(id: string): void {
     this.nodes.delete(id);
+    this.selectableIds = undefined;
     this.emit(`node:${id}`);
   }
 
@@ -151,6 +206,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
     this.selected = new Set(ids);
     for (const id of new Set([...previous, ...this.selected])) {
       if (previous.has(id) !== this.selected.has(id)) {
+        this.selectableIds = undefined;
         this.emit(`selection:${id}`);
       }
     }
@@ -188,5 +244,51 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
     for (const listener of [...(this.listeners.get(key) ?? [])]) {
       listener();
     }
+  }
+  /**
+   * Stores host selection and notifies only changed membership booleans.
+   *
+   * @param snapshot - Directed coverage, or undefined to clear it.
+   * @returns Snapshot is published before membership observers run.
+   */
+  private setSelection(snapshot: BlockSelectionSnapshot | undefined): void {
+    const previous = this.selected;
+    this.selectionSnapshot = snapshot;
+    this.selected = new Set(
+      snapshot?.blocks
+        .filter((block) => block.start === 0 && block.end === -1)
+        .map((block) => block.id),
+    );
+    for (const id of new Set([...previous, ...this.selected])) {
+      if (previous.has(id) !== this.selected.has(id)) {
+        this.emit(`selection:${id}`);
+      }
+    }
+  }
+
+  /**
+   * Flattens visible host hierarchy once per invalidation.
+   *
+   * @returns Cached depth-first IDs, excluding descendants of collapsed blocks.
+   */
+  private getSelectableIds(): readonly string[] {
+    if (this.selectableIds) {
+      return this.selectableIds;
+    }
+    const result: string[] = [];
+    const stack = [...this.blockIds].reverse();
+    while (stack.length) {
+      const id = stack.pop()!;
+      const node = this.nodes.get(id);
+      if (!node) {
+        continue;
+      }
+      result.push(id);
+      if (!node.collapsed) {
+        stack.push(...[...node.childIds].reverse());
+      }
+    }
+    this.selectableIds = result;
+    return result;
   }
 }

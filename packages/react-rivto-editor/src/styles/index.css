@@ -18,6 +18,7 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
+@import "@chulane/rivto-page/styles.css";
 
 /* Scan the package source for Tailwind classes regardless of the compiling project. */
 @source "../";
@@ -27,7 +28,6 @@
 
 /* Page surface and recursive block tree. */
 @import "../surfaces/page/page-surface.css" layer(components);
-@import "../blocks/block-tree/block-tree.css" layer(components);
 @import "../blocks/owner-slots/owner-slots.css" layer(components);
 @import "../blocks/block-slot-controls/block-slot-controls.css" layer(components);
 @import "../blocks/block-modal/block-modal.css" layer(utilities);

@@ -54,6 +54,8 @@
     "react-dom": ">=18 <20"
   },
   "dependencies": {
+    "@chulane/rivto-keyboard": "workspace:*",
+    "@tanstack/react-virtual": "^3.14.13",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",
     "lucide-react": "^1.28.0",

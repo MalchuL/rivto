@@ -165,3 +165,27 @@ export function BentoLayout({ blockId }: BlockLayoutProps) {
     </>
   );
 }
+
+/**
+ * Adds an explicit nesting destination to the demo's ordinary outline rows.
+ *
+ * Drop geometry reuses the row; ordinary controls retain their pointer behavior.
+ * The host chooses this policy rather than making every Page block a container.
+ *
+ * @param props - Stable host block identity.
+ * @param props.blockId - Actual parent receiving a dropped group as its last children.
+ * @returns Standard outline geometry with a registered row destination.
+ */
+export function DemoOutlineLayout({ blockId }: BlockLayoutProps) {
+  return (
+    <>
+      <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
+        <BlockRow>
+          <BlockContent />
+        </BlockRow>
+      </BlockDropTarget>
+      <BlockBody />
+      <BlockChildren className="rivto-block-outline" renderEmpty={false} />
+    </>
+  );
+}

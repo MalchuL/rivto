@@ -4,11 +4,13 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const RESIZE_RIGHT = "Resize Bento tile from the right";
 const RESIZE_LEFT = "Resize Bento tile from the left";
-const ROW_CLASS = "page-block-row";
-const CONTENT_FLOW_CLASS = "rivto-block-content-flow";
+const ROW_CLASS = "rivto-block-row";
 const PAGE_DRAG_HANDLE_CLASS = "block-handle";
 // Child-region IDs have a per-view prefix; select direct tiles by the children container class.
-const BENTO_TILES_SELECTOR = ":scope > .page-block-children > [data-block-id]";
+const BENTO_TILES_SELECTOR =
+  ":scope > .rivto-block-children > .rivto-bento-tile > .rivto-block-drop-wrapper-content > [data-block-id]";
+// Page owns the tile placement in both writing pages and canvas cards.
+const BENTO_ITEMS_SELECTOR = ":scope > .rivto-block-children > .rivto-bento-tile";
 
 /**
  * Drags one Bento edge handle by a horizontal pixel delta.
@@ -50,7 +52,7 @@ for (const mode of ["block", "edgeless"]) {
       await page.locator('[data-editor-mode="edgeless"]').click();
     }
     const board = page.locator('[data-block-type="bento"]');
-    const tiles = board.locator(BENTO_TILES_SELECTOR);
+    const tiles = board.locator(BENTO_ITEMS_SELECTOR);
     await expect(tiles).toHaveCount(3);
     await expect(tiles.first()).toHaveCSS("flex-grow", "0");
     await expect(tiles.first()).toHaveCSS("flex-basis", "220px");
@@ -97,7 +99,7 @@ for (const mode of ["block", "edgeless"]) {
     await expect(tiles).toHaveCount(0);
     await expect(
       board.locator(
-        `:scope > .${ROW_CLASS} > .${CONTENT_FLOW_CLASS} > [data-block-selection-anchor]`,
+        ":scope > .rivto-block-row > :is(.rivto-block-content-flow, .rivto-block-content) > [data-block-selection-anchor]",
       ),
     ).not.toHaveAttribute("contenteditable");
     expect((await board.boundingBox())!.height).toBeGreaterThanOrEqual(128);
@@ -114,7 +116,7 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
   });
   const board = page.locator('[data-block-type="bento"]');
   await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
-  const tiles = board.locator(BENTO_TILES_SELECTOR);
+  const tiles = board.locator(BENTO_ITEMS_SELECTOR);
   const first = tiles.first();
   const sibling = tiles.nth(1);
   await first.hover();
@@ -182,36 +184,53 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     await handle.hover();
     await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
     const from = (await handle.boundingBox())!;
-    const to = (await target.boundingBox())!;
+    const to = (await target.locator("xpath=ancestor::*[@data-block-item-id][1]").boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-    // Sibling drops aim at the 16px wrap gap, not a strip hugging the tile.
-    const destX =
-      edge === "between" || edge === "end-right" ? to.x + to.width + 8 : to.x + to.width / 2;
-    const destY =
-      edge === "under" || edge === "end-under" ? to.y + to.height + 8 : to.y + to.height / 2;
+    // The free wrap gap and the item's registered strips describe the same sibling destination.
+    const stripEdge = edge === "end-right" ? "inline" : "block";
+    const strip = await target
+      .locator("xpath=ancestor::*[@data-block-item-id][1]")
+      .locator(`:scope > [data-drop-placement="after"][data-drop-edge="${stripEdge}"]`)
+      .boundingBox();
+    if (!strip) {
+      throw new Error("Expected the tile's insertion strip");
+    }
+    let destX = strip.x + strip.width / 2;
+    let destY = strip.y + strip.height / 2;
+    if (edge === "between") {
+      destX = to.x + to.width + 8;
+      destY = to.y + to.height / 2;
+    } else if (edge === "inside") {
+      const row = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
+      destX = row.x + row.width / 2;
+      destY = row.y + row.height / 2;
+    }
     await page.mouse.move(destX, destY, { steps: 15 });
     if (edge === "inside") {
-      await expect(target).toHaveAttribute("data-drop-inside", "true");
+      await expect(target.locator(`:scope > .${ROW_CLASS}`)).toHaveAttribute(
+        "data-block-drop-active",
+        "true",
+      );
     } else {
-      const lineClass = "page-drop-indicator";
+      const lineClass = "rivto-block-drop-line";
       const line = page.locator(`.${lineClass}`);
       await expect(line).toBeVisible();
       // Related bounds must be read in the same frame while drag chrome settles.
       const { lineBox, targetBox, nextBox } = await page.evaluate(
         ({ targetId, nextId }) => {
           const lineBox = document
-            .querySelector(".page-drop-indicator")!
+            .querySelector(".rivto-block-drop-line")!
             .getBoundingClientRect()
             .toJSON();
           const targetBox = document
-            .querySelector(`[data-block-id="${targetId}"]`)!
+            .querySelector(`[data-block-item-id="${targetId}"]`)!
             .getBoundingClientRect()
             .toJSON();
           const nextBox = nextId
             ? document
-                .querySelector(`[data-block-id="${nextId}"]`)!
+                .querySelector(`[data-block-item-id="${nextId}"]`)!
                 .getBoundingClientRect()
                 .toJSON()
             : null;
@@ -310,10 +329,10 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await tile.hover();
   await tileHandle.hover();
   const tileFrom = (await tileHandle.boundingBox())!;
-  const title = (await board.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
+  const title = (await board.boundingBox())!;
   await page.mouse.move(tileFrom.x + 3, tileFrom.y + 3);
   await page.mouse.down();
-  await page.mouse.move(title.x + title.width / 2, title.y + 1, { steps: 20 });
+  await page.mouse.move(title.x + 2, title.y + 1, { steps: 20 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(2);
   await expect(
@@ -352,4 +371,33 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
   await page.mouse.up();
   await expect(tiles).toHaveCount(1);
   await expect(tiles.first()).toContainText("Drop me");
+});
+
+test("Escape cancels a Bento resize while retaining its expanded panel", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
+  });
+  const board = page.locator('[data-block-type="bento"]');
+  await board.getByRole("button", { name: "Expand Bento", exact: true }).click();
+  const tile = board.locator(BENTO_ITEMS_SELECTOR).first();
+  const before = (await tile.boundingBox())!;
+  await tile.hover();
+  const handle = tile.getByRole("separator", { name: RESIZE_RIGHT });
+  const origin = (await handle.boundingBox())!;
+  await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(origin.x + origin.width / 2 + 80, origin.y + origin.height / 2, {
+    steps: 8,
+  });
+  await expect(tile).toHaveAttribute("data-bento-resizing", "right");
+  await page.keyboard.press("Escape");
+  await expect(tile).not.toHaveAttribute("data-bento-resizing");
+  await expect(page.getByRole("dialog", { name: /^Expanded / })).toBeVisible();
+  await page.mouse.up();
+  expect((await tile.boundingBox())!.width).toBeCloseTo(before.width, 1);
+  await expect(handle).not.toHaveAttribute("data-resizing");
 });

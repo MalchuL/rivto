@@ -768,3 +768,40 @@ primitives. Глобальный Preflight не подключён. Shadcn color
 parameters, и host не обязан копировать отдельную global shadcn theme. Package build
 компилирует готовый styles.css через Tailwind CLI, demo использует Vite plugin.
 Production ReactEditor/EditorPanel не подключались.
+
+### Host-selected block display list
+
+The current autonomous BlockEditor contract supersedes the earlier region source
+proposal: adapter.blocks exposes getBlockIds and subscribeBlockIds together with
+addressed node operations. The host may display blocks without a common parent
+or owner. There is no BlockEditorRegion, region snapshot, or availability status
+in this slice. Node childIds retain their real hierarchy. Stable immutable list
+references and list-only subscriptions keep node edits independent of list reads.
+See section 27 of block-editor-contracts-ru.md for the implemented boundary.
+Future editing permissions must be designed from concrete interactions rather
+than inferred from a synthetic display-list owner. Production integration remains
+a separate stage.
+
+### Host-owned BlockEditorController
+
+The current autonomous API uses a data-only adapter (blocks and selection) and a
+host-owned BlockEditorController with slots, renderers, extensions, and focus event
+observers. Hosts provide contributions/callbacks to Page-owned managers and render
+<BlockEditor editor={editor}>. Concrete block implementations remain in the host.
+View unmount and StrictMode replay detach only; final editor destruction belongs to
+the session owner. Synchronous extension setup captures manager resource ownership,
+rolls it back on failure, and releases it after custom cleanup on removal.
+Section 28 of block-editor-contracts-ru.md describes the implemented lifecycle and
+subscription boundaries. Keyboard dispatch and production wiring remain later work.
+
+### Replaceable JSX block layouts
+
+The next autonomous slice replaces a fixed BlockTree interior with Page-owned
+BlockNode boundaries and host-owned layouts registered alongside content. Layouts
+compose shared primitives in their chosen JSX order; BlockChildren retains recursive
+identity/subscription ownership. Kanban/Bento demos validate parent-owned child
+placement and controls without CSS structure overrides, DOM lookup, or portals.
+Explicit inside/between zones resolve geometry through the topmost hit's registered
+ancestors, with real-parent/live-neighbor validation and occurrence-scoped cleanup.
+This stage does not install gestures or move commands. See section 29 of
+block-editor-contracts-ru.md for the implemented contracts and verification.

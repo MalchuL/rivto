@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { BLOCK_ID_SELECTOR, blockIdSelector } from "./dom-markers";
+import { BLOCK_ID_SELECTOR, BLOCK_ROW_SELECTOR, blockIdSelector } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+
+/** Structural hosts shared by Page and the retained Edgeless block renderer. */
+const BLOCK_CHILDREN_SELECTOR = ".rivto-block-children";
+const BLOCK_SLOT_SELECTOR = ":is(.rivto-block-slot, .rivto-slot)";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -17,19 +21,19 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
       has: page.getByText(text, { exact: true }),
     });
   await expect(
-    root("Try the interactive checkbox").locator(":scope > .page-block-row [role=checkbox]"),
+    root("Try the interactive checkbox").locator(`:scope > ${BLOCK_ROW_SELECTOR} [role=checkbox]`),
   ).not.toBeChecked();
   await expect(
-    root("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]"),
+    root("Completed checkbox item").locator(`:scope > ${BLOCK_ROW_SELECTOR} [role=checkbox]`),
   ).toBeChecked();
   const oneMarker = root("Start a numbered sequence").locator(
-    ":scope > .page-block-row .page-list-marker",
+    `:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`,
   );
   const twoMarker = root("Continue the adjacent sequence").locator(
-    ":scope > .page-block-row .page-list-marker",
+    `:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`,
   );
   const threeMarker = root("Continue numbering across the ordinary block").locator(
-    ":scope > .page-block-row .page-list-marker",
+    `:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`,
   );
   await expect(oneMarker).toHaveAttribute("data-list-type", "start_numbered_list");
   await expect(twoMarker).toHaveAttribute("data-list-type", "numbered_list");
@@ -44,13 +48,13 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
 
   const checkboxBlock = root("Try the interactive checkbox");
   const startSlot = checkboxBlock.locator(
-    ':scope > .page-block-row > .rivto-slot[data-slot-owner="block"][data-slot-position="start"]',
+    `:scope > ${BLOCK_ROW_SELECTOR} > ${BLOCK_SLOT_SELECTOR}[data-slot-owner="block"][data-slot-position="start"]`,
   );
   const endSlot = checkboxBlock.locator(
-    ':scope > .page-block-row > .rivto-slot[data-slot-owner="block"][data-slot-position="end"]',
+    `:scope > ${BLOCK_ROW_SELECTOR} > ${BLOCK_SLOT_SELECTOR}[data-slot-owner="block"][data-slot-position="end"]`,
   );
   const leftTopSlot = checkboxBlock.locator(
-    ':scope > .page-block-row > .rivto-slot[data-slot-owner="block"][data-slot-position="left-top"]',
+    `:scope > ${BLOCK_ROW_SELECTOR} > ${BLOCK_SLOT_SELECTOR}[data-slot-owner="block"][data-slot-position="left-top"]`,
   );
   await expect(startSlot.locator(":scope > *")).toHaveCount(1);
   await expect(startSlot.locator(":scope > *").nth(0)).toHaveClass(/page-list-checkbox/);
@@ -65,12 +69,16 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
     }),
   ).toHaveCount(1);
 
-  const checkboxContent = checkboxBlock.locator(":scope > .page-block-row [data-block-content]");
+  const checkboxContent = checkboxBlock.locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+  );
   const checkboxControl = startSlot.locator(".page-list-checkbox");
   const numberedBlock = root("Start a numbered sequence");
-  const numberedContent = numberedBlock.locator(":scope > .page-block-row [data-block-content]");
-  const numberedMarker = numberedBlock.locator(":scope > .page-block-row .page-list-marker");
-  const row = checkboxBlock.locator(":scope > .page-block-row");
+  const numberedContent = numberedBlock.locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+  );
+  const numberedMarker = numberedBlock.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`);
+  const row = checkboxBlock.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
   const [checkboxBox, checkboxControlBox, numberedBox, markerBox, rowBox, dragBox] =
     await Promise.all([
       checkboxContent.boundingBox(),
@@ -106,12 +114,12 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
 }) => {
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const block = roots.first();
-  const editor = block.locator(":scope > .page-block-row [data-block-content]");
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await editor.click();
   await replaceContent(page, "[ ] ");
 
   await expect(editor).toHaveText("");
-  const checkbox = block.locator(":scope > .page-block-row .page-list-checkbox");
+  const checkbox = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-checkbox`);
   await expect(checkbox).not.toBeChecked();
   await page.keyboard.type("Task");
   await checkbox.check();
@@ -124,19 +132,27 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
   await page.keyboard.press("Enter");
   await expect(roots).toHaveCount(beforeEnter + 1);
   const inherited = roots.nth(1);
-  await expect(inherited.locator(":scope > .page-block-row .page-list-checkbox")).not.toBeChecked();
-  await expect(inherited.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(
+    inherited.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-checkbox`),
+  ).not.toBeChecked();
+  await expect(
+    inherited.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`),
+  ).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(roots).toHaveCount(beforeEnter + 1);
-  await expect(inherited.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(0);
-  await expect(inherited.locator(":scope > .page-block-row .page-list-marker")).toHaveCount(0);
+  await expect(inherited.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-checkbox`)).toHaveCount(
+    0,
+  );
+  await expect(inherited.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)).toHaveCount(
+    0,
+  );
 });
 
 test("empty nested checkbox clears its marker before Enter outdents it", async ({ page }) => {
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const first = roots.first();
-  const content = first.locator(":scope > .page-block-row [data-block-content]");
+  const content = first.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await content.click();
   await replaceContent(page, "[ ] ");
   await page.keyboard.type("Task");
@@ -148,15 +164,15 @@ test("empty nested checkbox clears its marker before Enter outdents it", async (
   if (!childId) {
     throw new Error("Expected an empty checkbox block");
   }
-  await expect(child.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(child.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)).toBeFocused();
   await page.keyboard.press("Tab");
-  const nested = first.locator(`:scope > .page-block-children > ${blockIdSelector(childId)}`);
+  const nested = first.locator(`:scope > ${BLOCK_CHILDREN_SELECTOR} > ${blockIdSelector(childId)}`);
   await expect(nested).toHaveCount(1);
-  await expect(nested.locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(nested.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(nested).toHaveCount(1);
-  await expect(nested.locator(":scope > .page-block-row .page-list-checkbox")).toHaveCount(0);
+  await expect(nested.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-checkbox`)).toHaveCount(0);
   await page.keyboard.press("Enter");
   await expect(roots.nth(1)).toHaveAttribute("data-block-id", childId);
 });
@@ -166,23 +182,27 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
 }) => {
   const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
   const first = roots.first();
-  const editor = first.locator(":scope > .page-block-row [data-block-content]");
+  const editor = first.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await editor.click();
   await replaceContent(page, "1. ");
   await page.keyboard.type("One");
   await page.keyboard.press("Enter");
-  await expect(roots.nth(1).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(
+    roots.nth(1).locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`),
+  ).toBeFocused();
   await page.keyboard.type("Two");
   await page.keyboard.press("Enter");
-  await expect(roots.nth(2).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(
+    roots.nth(2).locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`),
+  ).toBeFocused();
 
   const oneImage = await roots
     .nth(0)
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   const twoImage = await roots
     .nth(1)
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   expect(twoImage).not.toEqual(oneImage);
 
@@ -190,14 +210,18 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
   await page.locator('[data-slash-command="list.list"]').click();
   await page.keyboard.type("Gap");
   await page.keyboard.press("Enter");
-  await expect(roots.nth(3).locator(":scope > .page-block-row [data-block-content]")).toBeFocused();
+  await expect(
+    roots.nth(3).locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`),
+  ).toBeFocused();
   await page.keyboard.type("/continue");
   await page.locator('[data-slash-command="list.continue_numbered_list"]').click();
 
-  await expect(roots.nth(2).locator(":scope > .page-block-row .page-list-marker")).toHaveCount(0);
+  await expect(
+    roots.nth(2).locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`),
+  ).toHaveCount(0);
   const threeImage = await roots
     .nth(3)
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   expect(threeImage).not.toEqual(twoImage);
 });
@@ -211,10 +235,14 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   const next = root("Continue the adjacent sequence");
   const gap = root("Ordinary content between numbered items");
   const continued = root("Continue numbering across the ordinary block");
-  const oneImage = await start.locator(":scope > .page-block-row .page-list-marker").screenshot();
-  const twoImage = await next.locator(":scope > .page-block-row .page-list-marker").screenshot();
+  const oneImage = await start
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
+    .screenshot();
+  const twoImage = await next
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
+    .screenshot();
   const threeImage = await continued
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   const [startId, nextId, gapId] = await Promise.all([
     start.getAttribute("data-block-id"),
@@ -241,11 +269,11 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
       start.evaluate((element) => element.previousElementSibling?.getAttribute("data-block-id")),
     )
     .toBe(nextId);
-  expect(await next.locator(":scope > .page-block-row .page-list-marker").screenshot()).toEqual(
-    oneImage,
-  );
   expect(
-    await continued.locator(":scope > .page-block-row .page-list-marker").screenshot(),
+    await next.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
+  ).toEqual(oneImage);
+  expect(
+    await continued.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
   ).toEqual(twoImage);
 
   await page.evaluate((blockId) => {
@@ -256,12 +284,12 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
     ).__rivtoDemo.editor;
     editor.blocks.updateBlock(blockId, { listProps: { type: "numbered_list" } });
   }, gapId);
-  await expect(gap.locator(":scope > .page-block-row .page-list-marker")).toHaveAttribute(
+  await expect(gap.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)).toHaveAttribute(
     "data-list-type",
     "numbered_list",
   );
   expect(
-    await continued.locator(":scope > .page-block-row .page-list-marker").screenshot(),
+    await continued.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
   ).toEqual(threeImage);
 
   const nested = await page.evaluate(() => {
@@ -316,7 +344,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   });
   const nestedNext = page.locator(blockIdSelector(nested.leftNext));
   expect(
-    await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot(),
+    await nestedNext.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
   ).toEqual(twoImage);
 
   await page.evaluate(
@@ -338,7 +366,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
     )
     .toBe(nested.leftNext);
   expect(
-    await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot(),
+    await nestedNext.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
   ).toEqual(oneImage);
 
   await page.evaluate(
@@ -360,7 +388,7 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
     )
     .toBe(nested.leftNext);
   expect(
-    await nestedNext.locator(":scope > .page-block-row .page-list-marker").screenshot(),
+    await nestedNext.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`).screenshot(),
   ).toEqual(threeImage);
 });
 
@@ -373,7 +401,7 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
       .locator("xpath=ancestor::*[@data-block-id][1]");
 
   const checkbox = block("Try the interactive checkbox").locator(
-    ":scope > .page-block-row [role=checkbox]",
+    `:scope > ${BLOCK_ROW_SELECTOR} [role=checkbox]`,
   );
   await expect(checkbox).not.toBeChecked();
   await checkbox.evaluate((element: HTMLElement) => element.click());
@@ -381,16 +409,16 @@ test("uses the shared list and checkbox rendering in edgeless cards", async ({ p
   await page.locator('[data-editor-action="undo"]').click();
   await expect(checkbox).not.toBeChecked();
   await expect(
-    block("Completed checkbox item").locator(":scope > .page-block-row [role=checkbox]"),
+    block("Completed checkbox item").locator(`:scope > ${BLOCK_ROW_SELECTOR} [role=checkbox]`),
   ).toBeChecked();
   const oneImage = await block("Start a numbered sequence")
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   const twoImage = await block("Continue the adjacent sequence")
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   const threeImage = await block("Continue numbering across the ordinary block")
-    .locator(":scope > .page-block-row .page-list-marker")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)
     .screenshot();
   expect(twoImage).not.toEqual(oneImage);
   expect(threeImage).not.toEqual(twoImage);
@@ -430,7 +458,7 @@ for (const mode of ["block", "edgeless"] as const) {
         const content = page
           .locator(blockIdSelector(ids.source))
           .first()
-          .locator(":scope > .page-block-row [data-block-content]")
+          .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
           .first();
         await content.click();
         await page.keyboard.press("Home");
@@ -479,7 +507,7 @@ for (const mode of ["block", "edgeless"] as const) {
           page
             .locator(blockIdSelector(state.next.id))
             .first()
-            .locator(":scope > .page-block-row [data-block-content]")
+            .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
             .first(),
         ).toBeFocused();
         await expect.poll(() => page.evaluate(() => document.getSelection()?.focusOffset)).toBe(0);

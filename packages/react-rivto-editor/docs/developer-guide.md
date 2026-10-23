@@ -272,16 +272,16 @@ The shared block render stack is:
 ```text
 PageSurface or EdgelessBlockElement
   → ordered root block IDs
-  → BlockTree(blockIds)
+  → Page BlockNode(blockId) for each displayed root
     → useBlockNode(blockId)
     → renderer for block.type
     → ordered BlockWrapper decorators
-    → one BlockView DOM boundary
+    → one Page block DOM boundary
     → recursive child blocks
 ```
 
-`BlockView` owns stable `data-block-*` DOM markers. A block renderer owns only
-its content. `BlockTree` owns traversal and block layout while each surface owns
+`BlockNode` owns stable `data-block-*` DOM markers. A block renderer owns only
+its content. Page owns traversal and block layout while each surface owns
 only its outer page or canvas geometry. A wrapper decorates the shared shell and
 must render its children exactly once.
 
@@ -444,7 +444,7 @@ Use `runtime.blockBehaviors` to register or resolve `BlockBehavior` implementati
 `DefaultBlockBehavior` supplies ordinary outline actions and
 `ContainerBlockBehavior` supplies the shared container behavior. A complete block
 registration uses `behavior`, alongside `definition` and `render`.
-The `BlockView` React component still renders the block shell.
+The `BlockNode` React component still renders the block shell.
 Several behaviors can be registered with
 `runtime.blockBehaviors.register(behavior, priority = 0)`. Each implements
 `isAvailable({ editor, block })` using current detached block fields. Every method
@@ -460,9 +460,12 @@ generic outline actions. Inherited methods receive no special dispatch treatment
 Use `dispatch()` for actions, `resolveAll(context)` for applicable instances, and
 `canMove({ sources, destination })` for semantic movement permissions. The move
 query is independent of dragging; all applicable hooks must allow it. Geometry
-belongs to `definition.metadata[PAGE_DRAG_METADATA_KEY]` and is read by the optional drag
-extension through `blockTypes.getDefinition(type)?.metadata`. Universal handle
-hover uses `metadata[BLOCK_HANDLE_METADATA_KEY]` independently of dragging. React registration
+belongs to the registered Page layout: `BlockChildren` declares its drop axis and
+`BlockDropTarget` declares explicit canonical destinations consumed by the optional drag extension. Universal handle
+hover uses Page’s layout-bounded row feedback independently of dragging. Custom
+`BlockChildren` hosts bound hover by default; ordinary outlines inherit the enclosing
+area with `hoverBoundary={false}`. Native row/control targets take precedence, and
+parent feedback belongs to headers or exposed gutters rather than the complete body. React registration
 owns the complete definition and passes its metadata directly to the existing core
 registry; core API stays unchanged. Registering an already defined native type is
 a conflict. Cleanup removes the owned definition together with its presentation.

@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import type { EditorStorage } from "../../editor/editor-storage";
+import {
+  EmbeddedEditorAcquisition,
+  type SourceEditorProvider,
+  type EmbeddedEditorSnapshot,
+} from "@chulane/rivto-page";
 import type { ReactEditorApi } from "../../editor/types";
-
-/** Result of retaining a source editor for a mounted React consumer. */
-interface AcquiredEditor {
-  readonly editor?: ReactEditorApi;
-  readonly error?: unknown;
-}
 
 /**
  * Retains one source editor while a React consumer needs it.
@@ -24,36 +22,23 @@ interface AcquiredEditor {
  * @returns Acquired editor or load error; both are absent during loading.
  */
 export function useAcquiredEditor(
-  storage: EditorStorage | undefined,
+  storage: SourceEditorProvider<ReactEditorApi> | undefined,
   documentId: string | undefined,
-): AcquiredEditor {
-  const [result, setResult] = useState<AcquiredEditor>({});
+): EmbeddedEditorSnapshot<ReactEditorApi> {
+  const [result, setResult] = useState<EmbeddedEditorSnapshot<ReactEditorApi>>({});
   useEffect(() => {
     setResult({});
     if (!storage || !documentId) {
       return;
     }
-    const controller = new AbortController();
-    let release: (() => Promise<void>) | undefined;
-    void storage
-      .acquireEditor(documentId, { signal: controller.signal })
-      .then((acquisition) => {
-        release = acquisition.release;
-        if (controller.signal.aborted) {
-          void release().catch(console.error);
-        } else {
-          setResult({ editor: acquisition.editor });
-        }
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) {
-          setResult({ error });
-        }
-      });
-    return () => {
-      controller.abort();
-      void release?.().catch(console.error);
-    };
+    const acquisition = new EmbeddedEditorAcquisition(
+      storage,
+      documentId,
+      setResult,
+      console.error,
+    );
+    acquisition.start();
+    return () => acquisition.destroy();
   }, [storage, documentId]);
   return result;
 }

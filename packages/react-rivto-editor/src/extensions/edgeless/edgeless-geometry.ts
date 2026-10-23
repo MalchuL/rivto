@@ -1,53 +1,14 @@
 /**
- * Viewport-space geometry helpers for edgeless marquee and pan/zoom math.
+ * Persisted group-parent lifting for host edgeless selection.
  *
- * Hit testing stays in client coordinates so marquee can reuse DOM rects
- * captured once per gesture. Group lifting walks a child→parent map built
+ * Group lifting walks a child→parent map built
  * from persisted group records instead of scanning every element per ID.
  */
-/** Rectangle expressed in viewport coordinates. */
-export interface EdgelessRect {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-}
-
 /** Minimal element record needed to build a group parent index. */
 export interface GroupParentRecord {
   readonly id: string;
   readonly type: string;
   readonly childIds: readonly string[];
-}
-
-/** One canvas object and its viewport rectangle for marquee intersection. */
-export interface EdgelessObjectHit {
-  readonly id: string;
-  readonly rect: EdgelessRect;
-}
-
-/**
- * Returns root IDs whose rendered rectangles intersect a selection rectangle.
- *
- * @param roots - Object IDs paired with viewport rectangles.
- * @param selection - Inclusive marquee in the same coordinate space.
- * @returns IDs whose rect overlaps `selection`.
- */
-export function rootsInRect(
-  roots: readonly EdgelessObjectHit[],
-  selection: EdgelessRect,
-): string[] {
-  return roots
-    .filter(
-      ({ rect }) =>
-        !(
-          rect.right < selection.left ||
-          rect.left > selection.right ||
-          rect.bottom < selection.top ||
-          rect.top > selection.bottom
-        ),
-    )
-    .map(({ id }) => id);
 }
 
 /**
@@ -94,15 +55,4 @@ export function outermostGroupId(id: string, parentByChild: ReadonlyMap<string, 
     current = parent;
   }
   return current;
-}
-
-/**
- * Converts a viewport pointer delta to unscaled canvas coordinates.
- *
- * @param delta - Distance in CSS pixels.
- * @param zoom - Current canvas zoom factor.
- * @returns Distance in canvas units.
- */
-export function canvasDelta(delta: number, zoom: number): number {
-  return delta / Math.max(zoom, 0.01);
 }

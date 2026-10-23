@@ -478,7 +478,8 @@ export class PanelBlocks implements PanelBlocksAPI {
    * Checks source and target boundaries before moving selected subtrees.
    *
    * The default placement is after the target. A protected root may receive children
-   * but cannot be moved or used as a before/after target.
+   * but cannot be moved or used as a before/after target. The hidden boundary of a
+   * children-only panel also accepts inside moves through the same insertion validation.
    *
    * @param ids - Local subtrees.
    * @param targetId - Local destination or current sibling-list start.
@@ -492,7 +493,11 @@ export class PanelBlocks implements PanelBlocksAPI {
   ) {
     ids.forEach((id) => this.require(id, true));
     if (targetId !== null) {
-      this.require(targetId, position !== "inside");
+      if (position === "inside") {
+        this.destination({ parentId: targetId });
+      } else {
+        this.require(targetId, true);
+      }
     }
     this.document.blocks.moveBlocks([...ids], targetId, position);
   }

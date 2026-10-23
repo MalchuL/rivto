@@ -698,7 +698,7 @@ describe("DocumentEditor block manager", () => {
     editor.destroy();
   });
 
-  it("rejects grouped moves whose roots have different parents", async () => {
+  it("moves roots from different parents in canonical order with one undo and redo", async () => {
     const editor = await createDocumentEditor();
     const parentId = editor.blocks.insertBlock({ type: "paragraph", content: "Parent" }).id;
     const childId = editor.blocks.insertBlock(
@@ -711,13 +711,18 @@ describe("DocumentEditor block manager", () => {
       editor.blocks.getInsertionDestinationAfter(parentId),
     ).id;
 
-    expect(() => editor.blocks.moveBlocks([childId, siblingId], parentId, "before")).toThrow(
-      "share the same parent",
-    );
-    expect(editor.blocks.getBlocks()).toMatchObject([
-      { id: parentId, children: [{ id: childId }] },
-      { id: siblingId },
-    ]);
+    const before = editor.blocks.getBlocks();
+    const updates = jest.fn();
+    const stop = editor.subscribe(updates);
+    editor.blocks.moveBlocks([siblingId, childId, childId], parentId, "before");
+    expect(editor.blocks.getRootIds()).toEqual([childId, siblingId, parentId]);
+    expect(editor.blocks.getBlockNode(parentId)?.childIds).toEqual([]);
+    expect(updates).toHaveBeenCalledTimes(1);
+    editor.history.undo();
+    expect(editor.blocks.getBlocks()).toEqual(before);
+    editor.history.redo();
+    expect(editor.blocks.getRootIds()).toEqual([childId, siblingId, parentId]);
+    stop();
     editor.destroy();
   });
 
@@ -941,4 +946,66 @@ describe("DocumentEditor block manager", () => {
     ).toThrow("block.listProps must be an object");
     editor.destroy();
   });
+});
+
+it("rejects a missing group member or stale destination before changing any source", async () => {
+  const editor = await createDocumentEditor();
+  const parent = editor.blocks.insertBlock({
+    type: "paragraph",
+    children: [{ type: "paragraph" }],
+  });
+  const other = editor.blocks.insertBlock({ type: "paragraph" });
+  const child = editor.blocks.getBlockNode(parent.id)!.childIds[0]!;
+  const before = editor.blocks.getBlocks();
+  const updates = jest.fn();
+  const stop = editor.subscribe(updates);
+  expect(() => editor.blocks.moveBlocks([other.id, "missing"], parent.id, "before")).toThrow();
+  expect(() =>
+    editor.blocks.moveBlocks([child, "missing", other.id], parent.id, "before"),
+  ).toThrow();
+  expect(() => editor.blocks.moveBlocks([child, other.id], "deleted", "inside")).toThrow();
+  expect(editor.blocks.getBlocks()).toEqual(before);
+  expect(updates).not.toHaveBeenCalled();
+  stop();
+  editor.destroy();
+});
+
+it("filters selected descendants across parents and rejects destinations in any selected subtree", async () => {
+  const editor = await createDocumentEditor();
+  const first = editor.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
+  const second = editor.blocks.insertBlock({
+    type: "paragraph",
+    children: [{ type: "paragraph" }],
+  });
+  const target = editor.blocks.insertBlock({ type: "paragraph" });
+  const firstChild = editor.blocks.getBlockNode(first.id)!.childIds[0]!;
+  const secondChild = editor.blocks.getBlockNode(second.id)!.childIds[0]!;
+  const before = editor.blocks.getBlocks();
+  expect(() => editor.blocks.moveBlocks([first.id, secondChild], firstChild, "before")).toThrow();
+  expect(editor.blocks.getBlocks()).toEqual(before);
+  editor.blocks.moveBlocks([secondChild, firstChild, first.id], target.id, "inside");
+  expect(editor.blocks.getBlockNode(target.id)?.childIds).toEqual([first.id, secondChild]);
+  expect(editor.blocks.getBlockNode(first.id)?.childIds).toEqual([firstChild]);
+  expect(editor.blocks.getBlockNode(second.id)?.childIds).toEqual([]);
+  editor.history.undo();
+  expect(editor.blocks.getBlocks()).toEqual(before);
+  editor.destroy();
+});
+
+it("normalizes mixed-parent roots without loading unrelated descendant snapshots", async () => {
+  const editor = await createDocumentEditor();
+  const first = editor.blocks.insertBlock({
+    type: "paragraph",
+    children: Array.from({ length: 100 }, () => ({ type: "paragraph" })),
+  });
+  const second = editor.blocks.insertBlock({ type: "paragraph" });
+  const target = editor.blocks.insertBlock({ type: "paragraph" });
+  const children = editor.blocks.getBlockNode(first.id)!.childIds;
+  const read = jest.spyOn(editor.blocks, "getBlockNode");
+  editor.blocks.moveBlocks([second.id, children[0]!], target.id, "inside");
+  const visited = new Set(read.mock.calls.map(([id]) => id));
+  expect(children.slice(1).some((id) => visited.has(id))).toBe(false);
+  expect(editor.blocks.getBlockNode(target.id)?.childIds).toEqual([children[0], second.id]);
+  read.mockRestore();
+  editor.destroy();
 });
