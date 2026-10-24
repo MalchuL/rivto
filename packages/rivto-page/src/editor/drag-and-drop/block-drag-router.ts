@@ -1,4 +1,4 @@
-import type { BlockOutlineDropTargets } from "./block-outline-drop-targets";
+import type { BlockDropTargetsApi } from "./types";
 import type { DropSurfaceRegistry } from "./drop-surface-registry";
 import type { BlockDragTargetScope, BlockDropAcceptance, ResolvedBlockDropTarget } from "./types";
 
@@ -12,7 +12,6 @@ export interface BlockForeignDropResolver<T extends BlockDragTargetScope> {
    * @param y - Viewport Y in CSS pixels.
    * @param excluded - Source root IDs; their document meaning remains with the host.
    * @param hit - Current native hit, if any.
-   * @param nestedBoundary - Whether routing crossed a registered nested edge.
    * @returns Accepted canonical geometry, or undefined when the host rejects this drop.
    */
   resolveForeign(
@@ -21,7 +20,6 @@ export interface BlockForeignDropResolver<T extends BlockDragTargetScope> {
     y: number,
     excluded: ReadonlySet<string>,
     hit: Element | undefined,
-    nestedBoundary: boolean,
   ): ResolvedBlockDropTarget | undefined;
 }
 
@@ -36,14 +34,12 @@ export class BlockDragRouter<T extends BlockDragTargetScope> {
    * @param registry - Shared native routing capability without registration or teardown access.
    * @param targets - Local canonical geometry resolution.
    * @param foreign - Host policy and optional legacy receiving-contract conversion.
-   * @param outerEdgeDropZone - Nested edge thickness in CSS pixels; defaults to eight.
    */
   constructor(
     private readonly root: HTMLElement,
     private readonly registry: Pick<DropSurfaceRegistry<T>, "resolve">,
-    private readonly targets: Pick<BlockOutlineDropTargets, "resolve">,
+    private readonly targets: Pick<BlockDropTargetsApi, "resolve">,
     private readonly foreign: BlockForeignDropResolver<T>,
-    private readonly outerEdgeDropZone = 8,
   ) {}
 
   /**
@@ -75,12 +71,11 @@ export class BlockDragRouter<T extends BlockDragTargetScope> {
       nativeHit?.isConnected && nativeHit.ownerDocument === document
         ? nativeHit
         : (document.elementFromPoint(x, y) ?? undefined);
-    const route = this.registry.resolve(this.root, { x, y }, this.outerEdgeDropZone, hit);
-    const receiver = route?.controller;
+    const receiver = this.registry.resolve(this.root, { x, y }, hit);
     if (!receiver || receiver.root === this.root) {
-      return this.targets.resolve(x, y, excluded, hit, route?.nestedBoundary, accepts);
+      return this.targets.resolve(x, y, excluded, hit, accepts);
     }
-    const target = this.foreign.resolveForeign(receiver, x, y, excluded, hit, route.nestedBoundary);
+    const target = this.foreign.resolveForeign(receiver, x, y, excluded, hit);
     return target ? { ...target, scope: receiver } : undefined;
   }
 }

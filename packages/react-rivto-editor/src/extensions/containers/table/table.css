@@ -130,7 +130,7 @@
   min-width: 80px;
 }
 
-.rivto-table-cell-item + .rivto-block-list-gap + .rivto-table-cell-item {
+.rivto-table-cell-item + .rivto-table-cell-item {
   border-left: 1px solid var(--rivto-border);
 }
 

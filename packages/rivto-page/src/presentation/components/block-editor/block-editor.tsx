@@ -1,5 +1,13 @@
+import { BlockDropBoundaryContext } from "../../drag-and-drop/block-drop-layout";
+import type { BlockDropBoundaryMode } from "../../../editor/drag-and-drop/types";
 import type { BlockVirtualizationOptions } from "../../../editor/virtualization/block-virtualization-controller";
-import { forwardRef, useImperativeHandle, useState, type HTMLAttributes } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useLayoutEffect,
+  useState,
+  type HTMLAttributes,
+} from "react";
 import { BlockEditorScope, type BlockEditorViewApi } from "./block-editor-scope";
 import { BlockTree } from "./block-tree";
 
@@ -9,8 +17,12 @@ export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
   readonly editor: BlockEditorViewApi;
   /** Additional root classes; import package CSS for geometry defaults and override them through theme parameters. */
   readonly className?: string;
+  /** Shared sibling feedback, default merged; separate retains nearest-edge feedback. */
+  readonly dropBoundaries?: BlockDropBoundaryMode;
   /** Opt-in window scrolling of display subtrees; omitted renders the full tree. */
   readonly virtualization?: BlockVirtualizationOptions;
+  /** Actual receiving parent for an empty view; null denotes document roots, undefined disables it. */
+  readonly emptyDropParentId?: string | null;
 }
 
 /**
@@ -27,7 +39,9 @@ export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
  *
  * @param props - Host-owned editor and optional root styling.
  * @param props.editor - Stable instance borrowed until this view unmounts or changes it.
+ * @param props.dropBoundaries - Default boundary mode for this view, overridable by each layout.
  * @param props.virtualization - Optional variable-height windowing settings (enabled, estimateSize in CSS pixels, overscan in roots); omission disables windowing. Changing settings preserves mounted roots; selected IDs remain in the adapter.
+ * @param props.emptyDropParentId - Actual empty receiving parent; undefined disables an empty region, null denotes document roots.
  * @param props.className - Additional class applied to the existing root element.
  * @param props.children - Host page-ending slot rendered after the block forest, inside the Page context.
  * @param ref - Borrows the same DOM root for host panel routing; no additional root is created.
@@ -36,11 +50,43 @@ export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
  * @throws Propagates controller lifecycle, adapter, and renderer failures.
  */
 export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function BlockEditor(
-  { editor, className, virtualization, children, ...attributes },
+  {
+    editor,
+    className,
+    virtualization,
+    emptyDropParentId,
+    dropBoundaries = "merged",
+    children,
+    ...attributes
+  },
   ref,
 ) {
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   useImperativeHandle(ref, () => root!, [root]);
+  useLayoutEffect(() => {
+    if (!root || emptyDropParentId === undefined) {
+      return;
+    }
+    return editor.dropTargets.register({
+      element: root,
+      /**
+       * Declares append on the existing empty editor surface without adding a spacer.
+       *
+       * Display emptiness is read live, so insertion immediately disables the area.
+       * @returns Background append for an empty view, otherwise no regions.
+       */
+      getRegions: () =>
+        editor.adapter.blocks.getBlockIds().length
+          ? []
+          : [
+              {
+                kind: "inside",
+                coverage: "background",
+                destination: { kind: "inside", parentId: emptyDropParentId },
+              },
+            ],
+    });
+  }, [editor, root, emptyDropParentId]);
   return (
     <div
       {...attributes}
@@ -51,8 +97,10 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
       tabIndex={attributes.tabIndex ?? -1}
     >
       <BlockEditorScope editor={editor} root={root}>
-        <BlockTree virtualization={virtualization} />
-        {children}
+        <BlockDropBoundaryContext.Provider value={dropBoundaries}>
+          <BlockTree virtualization={virtualization} />
+          {children}
+        </BlockDropBoundaryContext.Provider>
       </BlockEditorScope>
     </div>
   );

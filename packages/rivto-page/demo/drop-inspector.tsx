@@ -20,7 +20,8 @@ export interface DropInspectorProps {
  * Samples explicit regions at most once per frame without rerendering editor nodes.
  *
  * Only the debug overlay/output is updated imperatively. The native hit test and
- * selected target's rectangle are read once per frame; no block-tree scan occurs.
+ * selected target's feedback is read once per frame; inside targets use their
+ * anchor rectangle, while insertion targets use the resolved line. No block-tree scan occurs.
  *
  * @param props - Configured editor whose current attachment may change on remount.
  * @param props.editor - Instance owning the target registry and current DOM boundary.
@@ -127,7 +128,7 @@ class DropInspectorController {
     this.output.dataset.resolveMs = String(resolveMs);
     this.overlay.hidden = !next;
     if (next) {
-      const rect = next.element.getBoundingClientRect();
+      const rect = next.indicator ?? next.element.getBoundingClientRect();
       Object.assign(this.overlay.style, {
         transform: `translate(${rect.left}px, ${rect.top}px)`,
         width: `${rect.width}px`,

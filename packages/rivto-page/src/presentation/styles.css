@@ -12,7 +12,6 @@
 @import "./components/block-layout/block-view.css" layer(components);
 @import "./slots/block-slots.css" layer(components);
 @import "./slots/block-controls.css" layer(components);
-@import "./drag-and-drop/drag-and-drop.css" layer(components);
 
 @source "../";
 @custom-variant dark (&:is(.dark *));

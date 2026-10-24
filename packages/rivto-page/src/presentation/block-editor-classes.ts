@@ -8,8 +8,6 @@ export const BLOCK_EDITOR_CLASSES = Object.freeze({
   content: "rivto-block-content",
   /** Child host with its own list counter and collapse visibility; indentation belongs to its layout. */
   children: "rivto-block-children",
-  /** DOM-free gap boundary used by sibling counter selectors; excluded from placement adjacency. */
-  listGap: "rivto-block-list-gap",
   /** Contribution host positioned by its data-slot-position attribute. */
   slot: "rivto-block-slot",
   /** Bounded inert content row inside a gesture-owned preview. */

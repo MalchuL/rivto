@@ -112,28 +112,38 @@ the same position manually and automatically. `BlockBody` remains the convenient
 body-contribution primitive. Moving contributions does not change their owner,
 predicates or registration lifetime.
 
-`BlockChildren.dropPlacement` defaults to `outline`: horizontal pointer depth
-continues to select nesting in ordinary vertical gaps. Choose `siblings` for a
-layout whose background gaps should always insert at its own child level. This
-setting is independent of `dropAxis`, which describes actual flow. Explicit
-`BlockDropTarget` destinations take precedence over heuristic ancestor rims.
+`BlockChildren.dropPlacement` defaults to `outline`: each physical gap declares
+separate horizontal sibling and child-append bands. Terminal subtrees additionally
+expose their ancestor insertion bands. Choose `siblings` to keep a list's gaps at
+its own parent. This is independent of `dropAxis`, which describes actual flow.
+Linear lists generate item-owned regions; grid items compose BlockDropWrapper.
+`dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
 
-Custom-layout headers use nearby permitted insertion positions instead of splitting
-the header into before/after halves. The resolver compares actual feedback bounds
-around the container and its nearest mounted child branch, descending through
-structural levels when their host policy rejects the source. A container's own
-inside region on its header participates in this geometry; explicit sibling strips
-remain authoritative. The optional `BlockDropAcceptance` callback is borrowed for
-one resolution, does not mutate the document, and does not replace commit-time
-validation. Moving header padding therefore changes candidate distances without
-requiring container-specific hit testing. Ordinary outline depth selection and
-exposed outer rims retain their existing semantics.
+BlockNode declares inside insertion on its existing shell, including headers, text
+and controls. Layouts declare background append independently. Override intentional
+areas with BlockDropTarget, or exclude an existing subtree using BlockDropExclude
+or BlockDropTarget.exclude. Control tags do not implicitly exclude drop targets. Resolution reads the
+native hit, registered ancestors and logarithmically many local mounted gap anchors.
+The nearest layout bounds discovery; anchor priority then edge rank and registration
+order choose its winner. Source permission
+is applied to that winner; rejection does not search another structural level.
+Commit validates the destination again through host commands and transactions.
 
-`BlockDropWrapper.axis` defaults to `grid` (four strips). `vertical` reserves only
-top/bottom strips and `horizontal` reserves only inline strips. All variants keep
-the one existing child subtree in their center, with canonical neighbors supplied
-by BlockChildren. Use zero child-host gap when strips should supply all spacing.
-The existing `BlockEditorTheme` types the package's padding, start-gutter,
-child-gap, indentation, slot-gap and strip-size CSS properties; ordinary native
-styles remain available. Full shell bounds determine sibling feedback, while row
-bounds continue to determine outline body/depth semantics.
+Feedback stays on the selected physical region when moving roots are excluded
+from its canonical neighbors. Filtering removes an item's standard regions with
+its content; hidden neighbors still remain in the destination. Virtual spacers
+are inert. Root projections read their actual parents instead of treating their
+visible roots as a synthetic sibling list. The empty-view receiving parent is
+explicitly supplied with BlockEditor.emptyDropParentId.
+
+`BlockDropWrapper.axis` defaults to `grid` (four inset edges). `vertical` enables
+block edges and `horizontal` enables inline edges. All variants retain the existing
+child subtree and canonical placement. `targetSize` and --rivto-drop-target-size
+change only hit geometry; native padding, gap and indentation continue to own layout.
+No declaration inserts a strip or contributes minimum height. Explicit exclusions
+stop ancestor fallback while preserving matching descendant regions and ordinary
+control events. A deeper exclusion bounds those descendant regions in turn.
+Physical gap search requires monotone flow; grids require aligned row-major ordering.
+Bento disables gaps and appends on unoccupied board background. Empty and filtered
+hosts use existing geometry without creating a spacer. Feedback uses the selected
+region; ordinary row hover and handle presentation remain independent.

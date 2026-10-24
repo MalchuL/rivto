@@ -194,6 +194,7 @@ function Demo({ session }: DemoSessionProps) {
   );
   const [estimateSize, setEstimateSize] = useState(240);
   const [overscan, setOverscan] = useState(3);
+  const [mergeDropBoundaries, setMergeDropBoundaries] = useState(true);
   const [inspectDropTargets, setInspectDropTargets] = useState(false);
   return (
     <main className="demo-page">
@@ -232,6 +233,13 @@ function Demo({ session }: DemoSessionProps) {
             }
           />
         </label>
+        <label>
+          <Checkbox
+            checked={mergeDropBoundaries}
+            onCheckedChange={(checked) => setMergeDropBoundaries(checked === true)}
+          />
+          Merge drop boundaries
+        </label>
         <DemoRegistrations session={session} />
         <SelectionControls session={session} />
         <DemoWrapperControl session={session} />
@@ -261,6 +269,7 @@ function Demo({ session }: DemoSessionProps) {
           {mounted && (
             <BlockEditor
               editor={editor}
+              dropBoundaries={mergeDropBoundaries ? "merged" : "separate"}
               virtualization={{ enabled: virtualized, estimateSize, overscan }}
             />
           )}

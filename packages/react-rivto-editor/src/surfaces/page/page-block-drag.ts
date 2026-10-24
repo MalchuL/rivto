@@ -5,7 +5,7 @@ import {
   type BlockDragPreviewRow,
   type BlockDropDestination,
   type BlockDragTargetScope,
-  type BlockOutlineDropTargets,
+  type BlockDropTargetsApi,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
 import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
@@ -36,12 +36,8 @@ export class PageBlockDrag implements BlockDragAdapter {
    * Borrows the panel's model boundary without storing selection or attaching input.
    *
    * @param panel - Source occurrence and bounded grouped commands.
-   * @param outerEdgeDropZone - Nested receiving edge zone in viewport pixels; defaults to eight.
    */
-  constructor(
-    private readonly panel: CrossDocumentBlockPanel,
-    private readonly outerEdgeDropZone = 8,
-  ) {}
+  constructor(private readonly panel: CrossDocumentBlockPanel) {}
 
   /**
    * Registers one receiving Page attachment shared by both surface implementations.
@@ -51,19 +47,13 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @returns Disposer releasing this exact registry entry and foreign feedback.
    * @throws If already attached or registration cleanup fails.
    */
-  attach(root: HTMLElement, targets: Pick<BlockOutlineDropTargets, "resolve">): () => void {
+  attach(root: HTMLElement, targets: Pick<BlockDropTargetsApi, "resolve">): () => void {
     if (this.occurrence) {
       throw new Error("Page drag is already attached");
     }
     const occurrence = new PageDragOccurrence(this.panel, root, targets);
     this.occurrence = occurrence;
-    this.router = new BlockDragRouter(
-      root,
-      crossDocumentPageRootControllers,
-      targets,
-      this,
-      this.outerEdgeDropZone,
-    );
+    this.router = new BlockDragRouter(root, crossDocumentPageRootControllers, targets, this);
     return () => {
       if (this.occurrence === occurrence) {
         this.occurrence = undefined;
@@ -105,7 +95,6 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @param y - Viewport Y in CSS pixels.
    * @param excluded - Captured source model roots.
    * @param hit - Current uncaptured native hit supplied by Page routing.
-   * @param nestedBoundary - Whether the pointer crossed a nested receiving edge.
    * @returns Accepted geometry, or undefined when the receiving host rejects the drop.
    * @throws Propagates source reads, receiving policy, and DOM lookup failures.
    */
@@ -115,7 +104,6 @@ export class PageBlockDrag implements BlockDragAdapter {
     y: number,
     excluded: ReadonlySet<string>,
     hit: Element | undefined,
-    nestedBoundary: boolean,
   ): ResolvedBlockDropTarget | undefined {
     const sources = [...excluded].flatMap((id) => {
       const block = this.panel.blocks.getBlock(id);
@@ -127,7 +115,6 @@ export class PageBlockDrag implements BlockDragAdapter {
       sources,
       this.panel.document.getDocument().id,
       hit,
-      nestedBoundary,
     );
     return placement ?? undefined;
   }

@@ -36,10 +36,10 @@ aggregate error. Late detach subscriptions are notified immediately.
 `BlockDragRouter<T>` borrows only registry resolution, local target resolution,
 and `BlockForeignDropResolver<T>`. It reuses the current native hit, routes nested
 boundaries, and adds the foreign receiving identity to accepted targets. Its host
-callback handles semantic acceptance and legacy geometry conversion. The router
+callback handles semantic acceptance and returns the canonical region directly. The router
 owns no listeners; its source attachment owns its lifetime. Command-time receiver
 identity and permission checks remain mandatory in the host's move adapter.
 
-The React adapter retains the conversion to/from legacy Edgeless placements,
-document identity, model preview reads, transfer commits and selection updates.
+The React adapter retains document identity, model preview reads, transfer commits
+and selection updates while Page and Edgeless share canonical drop destinations.
 Page does not acquire any dependency on those host contracts.

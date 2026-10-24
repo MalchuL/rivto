@@ -13,7 +13,7 @@ import type { BlockEditorExtensionsApi } from "./extensions/types";
 /** Borrowed editor contract for components and extensions; the host owns attachment and destruction. */
 export interface BlockEditorApi {
   /** Mounted primitive ownership; refs release their own registrations. */
-  readonly regions: Pick<BlockLayoutRegions, "register">;
+  readonly regions: Pick<BlockLayoutRegions, "register" | "get">;
   /** Borrowed semantic bindings and physical state queries. */
   readonly keyboard: BlockKeyboardApi;
   /** Exclusive pointer reservation; each gesture releases its own reservation. */

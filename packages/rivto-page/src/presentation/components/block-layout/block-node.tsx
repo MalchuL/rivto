@@ -1,3 +1,4 @@
+import { BlockDropTarget } from "../../drag-and-drop/block-drop-target";
 import { BlockWrapper } from "../block-wrapper/block-wrapper";
 import { useBlockRegion } from "./use-block-region";
 import { memo, useCallback, useId, useMemo, useSyncExternalStore } from "react";
@@ -47,7 +48,10 @@ const BlockLayoutRenderer = memo(function BlockLayoutRenderer({
  * The shell applies the resolved CSS background value supplied by the host.
  * Primitive consumers receive current block layout state without changing occurrence identity.
  * Collapsing retains the occurrence-local child container but unmounts its
- * descendants and their subscriptions. Body slots remain outside that subtree
+ * descendants and their subscriptions. The existing shell declares inside insertion;
+ * sibling edges on that same anchor retain priority, while nested layouts and
+ * explicit exclusions bound discovery before the enclosing shell. Native controls
+ * participate in the containing region. Body slots remain outside that subtree
  * when composed separately by the layout, as in DefaultBlockLayout.
  *
  * @param props - Existing node, its stable identity, and whole-block selection state.
@@ -86,9 +90,11 @@ function BlockNodeView({ blockId, node, block, selected }: BlockNodeViewProps) {
     <BlockLayoutContext.Provider value={layoutState}>
       <BlockChildrenContext.Provider value={childrenState}>
         <BlockWrapper block={block}>
-          <BlockView ref={shellRef} block={block} selected={selected}>
-            <BlockLayoutRenderer blockId={blockId} layout={layout} />
-          </BlockView>
+          <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
+            <BlockView ref={shellRef} block={block} selected={selected}>
+              <BlockLayoutRenderer blockId={blockId} layout={layout} />
+            </BlockView>
+          </BlockDropTarget>
         </BlockWrapper>
       </BlockChildrenContext.Provider>
     </BlockLayoutContext.Provider>

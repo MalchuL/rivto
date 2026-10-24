@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 /**
  * Covers TODO-storage creation, local search/filter presentation, direct-child
  * boundaries, persisted status ordering, and both built-in surfaces through
@@ -46,7 +47,13 @@ test("keeps the storage surface inside its selection and aligns root controls", 
 
   await expect(storage).toHaveAttribute("data-block-selected", "true");
   const wrapper = storage.locator("xpath=parent::*");
-  expect(await wrapper.boundingBox()).toEqual(await storage.boundingBox());
+  const shellBox = (await storage.boundingBox())!;
+  const wrapperBox = (await wrapper.boundingBox())!;
+  // Drop geometry adds no strips around the final root placement.
+  expect(shellBox.x).toBe(wrapperBox.x);
+  expect(shellBox.width).toBe(wrapperBox.width);
+  expect(shellBox.y).toBe(wrapperBox.y);
+  expect(shellBox.y + shellBox.height).toBe(wrapperBox.y + wrapperBox.height);
   const todoChildren = storage.locator(":scope > .rivto-block-children");
   expect(await todoChildren.evaluate((element) => getComputedStyle(element).paddingLeft)).toBe(
     await storage.evaluate((element) =>
@@ -328,14 +335,16 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   await sourceRow.hover();
   await handle.hover();
   const handleBox = await handle.boundingBox();
-  const targetBox = await target.locator(":scope > .rivto-block-row").boundingBox();
+  const targetBox = await (await blockDropRegion(target, "before")).boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected filtered TODO drag geometry");
   }
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(handleBox.x + 8, handleBox.y + 8, { steps: 3 });
-  await page.mouse.move(targetBox.x + 2, targetBox.y + 1, { steps: 12 });
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+    steps: 12,
+  });
   await expect(source).toHaveAttribute("data-dragging", "true");
   await expect(page.locator(`.${DROP_INDICATOR_CLASS}:visible`)).toBeVisible();
   await page.mouse.up();

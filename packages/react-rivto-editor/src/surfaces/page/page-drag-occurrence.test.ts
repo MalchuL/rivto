@@ -179,7 +179,7 @@ it("notifies all attached sources even when one cancellation throws", async () =
   }
 });
 
-it("grants nested boundary routing only after crossing a registered receiving edge", async () => {
+it("keeps edge hits within their registered occurrence until its attachment is removed", async () => {
   const core = await createTestCoreEditor();
   const panel = createTestReactEditor({ editor: core });
   const source = new DragAttachment(panel);
@@ -191,26 +191,17 @@ it("grants nested boundary routing only after crossing a registered receiving ed
     value: () => ({ top: 100, bottom: 200, height: 100 }),
   });
   try {
-    expect(
-      crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 150 }, 8, hit),
-    ).toEqual({
-      controller: nested.scope,
-      nestedBoundary: false,
-    });
-    expect(
-      crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 101 }, 8, hit),
-    ).toEqual({
-      controller: source.scope,
-      nestedBoundary: true,
-    });
+    expect(crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 150 }, hit)).toBe(
+      nested.scope,
+    );
+    expect(crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 101 }, hit)).toBe(
+      nested.scope,
+    );
     nested.destroy();
     source.root.append(hit);
-    expect(
-      crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 101 }, 8, hit),
-    ).toEqual({
-      controller: source.scope,
-      nestedBoundary: false,
-    });
+    expect(crossDocumentPageRootControllers.resolve(source.root, { x: 10, y: 101 }, hit)).toBe(
+      source.scope,
+    );
   } finally {
     nested.destroy();
     source.destroy();

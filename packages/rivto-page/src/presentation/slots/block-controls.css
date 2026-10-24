@@ -44,18 +44,6 @@
   + :is(
     .rivto-block:not([data-block-in-item]),
     .rivto-block-item:not([data-block-in-item])
-  )[data-block-list-type="numbered_list"],
-:is(.rivto-block:not([data-block-in-item]), .rivto-block-item:not([data-block-in-item])):not(
-    :is(
-      [data-block-list-type="numbered_list"],
-      [data-block-list-type="start_numbered_list"],
-      [data-block-list-type="continue_numbered_list"]
-    )
-  )
-  + .rivto-block-list-gap
-  + :is(
-    .rivto-block:not([data-block-in-item]),
-    .rivto-block-item:not([data-block-in-item])
   )[data-block-list-type="numbered_list"] {
   counter-set: rivto-list-number 1;
   counter-increment: none;

@@ -64,6 +64,7 @@ function PageSurfaceContent() {
   return (
     <BlockEditor
       editor={reactPanel.page}
+      emptyDropParentId={rootBlockId ?? null}
       ref={ref}
       virtualization={virtualization}
       className={PAGE_SURFACE_CLASS}

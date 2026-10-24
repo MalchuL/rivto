@@ -9,7 +9,6 @@ import {
 } from "./table-column-width";
 export { setTableColumnWidth, TABLE_DEFAULT_COLUMN_WIDTH } from "./table-column-width";
 import type { CSSProperties } from "react";
-import { HorizontalDropGap } from "../horizontal-drop-gap";
 /**
  * Optional table presentation built entirely from ordinary document blocks.
  * Tables own rows, rows own draggable cells, and cells retain editable Markdown
@@ -245,7 +244,7 @@ function TableLayout() {
         <BlockContent />
       </BlockRow>
       <BlockBody />
-      <BlockChildren dropAxis="vertical" emptyDropTarget />
+      <BlockChildren dropAxis="vertical" dropPlacement="siblings" emptyDropTarget />
     </>
   );
 }
@@ -266,12 +265,7 @@ function TableRowLayout() {
         <BlockContent />
       </BlockRow>
       <BlockBody />
-      <BlockChildren
-        dropAxis="horizontal"
-        item={TableCellItem}
-        gap={HorizontalDropGap}
-        emptyDropTarget
-      />
+      <BlockChildren dropAxis="horizontal" item={TableCellItem} emptyDropTarget />
     </>
   );
 }

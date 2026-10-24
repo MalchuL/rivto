@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { blockIdSelector } from "./dom-markers";
 
@@ -26,30 +27,30 @@ async function snapshot(editor: Locator): Promise<Snapshot> {
  *
  * @param source - Block containing the source handle.
  * @param target - Block whose direct page row receives the drop.
- * @param edge - Row center by default, or the narrow before/after insertion edge.
+ * @param edge - Explicit child append by default, or the declared before/after edge.
  * @returns Resolves after mouse release; callers assert the resulting document change.
  * @throws If either bounding box is unavailable or browser input fails.
  */
 async function drag(source: Locator, target: Locator, edge: "body" | "before" | "after" = "body") {
   await source.locator(":scope > .rivto-block-row").hover();
   const handleBox = await source.locator(".block-handle").boundingBox();
-  const targetBox = await target
-    .locator(":scope > .rivto-block-row")
-    .boundingBox();
-  if (!handleBox || !targetBox) {
+  let region;
+  const children = target.locator(":scope > .rivto-block-children > [data-block-id]");
+  if (edge === "body" && (await children.count())) {
+    region = await blockDropRegion(children.last(), "after");
+  } else {
+    region = await blockDropRegion(target, edge === "body" ? "inside" : edge);
+  }
+  const targetBox = await region.boundingBox();
+  if (!handleBox) {
     throw new Error("Expected drag geometry");
   }
-  let y = targetBox.y + targetBox.height / 2;
-  if (edge === "before") {
-    y = targetBox.y + 1;
-  } else if (edge === "after") {
-    y = targetBox.y + targetBox.height - 1;
-  }
+  const x = targetBox.x + targetBox.width / 2;
+  const y = targetBox.y + targetBox.height / 2;
   await source
     .page()
     .mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await source.page().mouse.down();
-  const x = edge === "body" ? targetBox.x + targetBox.width / 2 : targetBox.x + 2;
   await source.page().mouse.move(x, y, { steps: 12 });
   await source.page().mouse.up();
 }
@@ -92,10 +93,22 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   await expect(left.locator(blockIdSelector("left-child"))).toBeVisible();
   await expect(right.locator(blockIdSelector("right-nested"))).toBeVisible();
 
-  const rightRoots = await right.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]").count();
+  const rightRoots = await right
+    .locator(
+      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
+    )
+    .count();
   await left.locator(".page-trailing-block").first().click();
-  await expect(left.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")).toHaveCount(4);
-  await expect(right.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")).toHaveCount(rightRoots);
+  await expect(
+    left.locator(
+      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
+    ),
+  ).toHaveCount(4);
+  await expect(
+    right.locator(
+      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
+    ),
+  ).toHaveCount(rightRoots);
 
   await left.getByRole("button", { name: "Edgeless" }).click();
   await expect(left.locator("[data-edgeless-root]").first()).toBeVisible();

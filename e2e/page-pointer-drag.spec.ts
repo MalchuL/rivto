@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -34,12 +35,12 @@ for (const { cancel, capture } of [
       });
     }
     const from = (await handle.boundingBox())!;
-    const target = (await surface
-      .locator('[data-block-id="drag-three"] > .rivto-block-row')
-      .boundingBox())!;
+    const target = (await (
+      await blockDropRegion(surface.locator('[data-block-id="drag-three"]'), "after")
+    ).boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(target.x + 2, target.y + target.height - 1, { steps: 8 });
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
     await expect(surface.locator(".rivto-block-drag-preview")).toBeVisible();
     await expect(source).toHaveCSS("opacity", "0.45");
     await expect(surface.locator(".rivto-block-drag-preview")).toContainText("drag-one");
@@ -99,24 +100,23 @@ for (const depth of [0, 1, 2]) {
     const source = surface.locator('[data-block-id="moving"]');
     await source.locator(":scope > .rivto-block-row").hover();
     const from = (await source.locator(".block-handle").boundingBox())!;
-    const leaf = (await surface
-      .locator('[data-block-id="leaf"] > .rivto-block-row')
-      .boundingBox())!;
+    const anchor = surface.locator(`[data-block-id="${["leaf", "branch", "parent"][depth]}"]`);
+    const region = (await anchor.boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(leaf.x - 24 * depth + 2, leaf.y + leaf.height - 1, { steps: 10 });
+    await page.mouse.move(region.x + 3, region.y + region.height - 3, { steps: 10 });
     await expect(surface.locator(".rivto-block-drag-preview")).toBeVisible();
     const line = surface.locator(".rivto-block-drop-line");
     await expect(line).toBeVisible();
     const indicator = (await line.boundingBox())!;
-    expect(indicator.x).toBeCloseTo(leaf.x - 24 * depth, 0);
-    let expectedY = leaf.y + leaf.height;
+    expect(indicator.x).toBeCloseTo(region.x, 0);
+    let boundaryY = region.y + region.height;
     if (depth === 2) {
-      const ancestor = (await surface.locator('[data-block-id="parent"]').boundingBox())!;
       const following = (await surface.locator('[data-block-id="following"]').boundingBox())!;
-      expectedY = (ancestor.y + ancestor.height + following.y) / 2;
+      // Root siblings share a boundary; terminal nested levels have only one anchor.
+      boundaryY = (boundaryY + following.y) / 2;
     }
-    expect(indicator.y + indicator.height / 2).toBeCloseTo(expectedY, 0);
+    expect(indicator.y + indicator.height / 2).toBeCloseTo(boundaryY, 0);
     expect(indicator.height).toBe(4);
     await page.mouse.up();
     const parent = await page.evaluate(() =>

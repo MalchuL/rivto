@@ -15,7 +15,6 @@ export interface CrossDocumentPageRootController extends BlockDragTargetScope {
    * @param sources - Live detached source roots, including selected subtrees not mounted.
    * @param sourceDocumentId - Actual source model identity used for same-document exclusion.
    * @param nativeHit - Optional current hit; omitted when the receiver must hit-test afresh.
-   * @param nestedBoundary - Whether routing crossed a registered nested occurrence edge; defaults to false.
    * @returns Current canonical destination and feedback, or null outside an eligible destination.
    */
   resolvePlacement: (
@@ -24,7 +23,6 @@ export interface CrossDocumentPageRootController extends BlockDragTargetScope {
     sources: readonly Block[],
     sourceDocumentId: string,
     nativeHit?: Element,
-    nestedBoundary?: boolean,
   ) => ResolvedBlockDropTarget | null;
 }
 
@@ -32,9 +30,4 @@ export interface CrossDocumentPageRootController extends BlockDragTargetScope {
 export interface PageDragExtensionOptions {
   readonly children: ReactNode;
   readonly activationDistance?: number;
-  readonly childDropIndent?: number;
-  readonly gapDropZone?: number;
-  /** Width in viewport pixels of each container's outer sibling-drop zone. Defaults to 8. */
-  readonly outerEdgeDropZone?: number;
-  readonly allowChildPlacement?: boolean;
 }

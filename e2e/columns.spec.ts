@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 /** Browser regression for headerless columns layout and column-count settings. */
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -80,13 +81,13 @@ for (const mode of ["block", "edgeless"] as const) {
     const handle = row.locator(".block-handle");
     await handle.hover();
     const from = (await handle.boundingBox())!;
-    const to = (await target.boundingBox())!;
+    const to = (await (await blockDropRegion(target, "after")).boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-    // The board's outer top rim intentionally inserts before the whole board.
-    // Use the child's lower edge to insert after it within the receiving lane.
-    await page.mouse.move(to.x + 4, to.y + to.height - 2, { steps: 20 });
+    // The board's declared outer region inserts before the complete board.
+    // Use the child's registered after region inside the receiving lane.
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
     await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
     await page.mouse.up();
     await expect
@@ -113,9 +114,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect
       .poll(() =>
         board
-          .locator(
-            ":scope > .rivto-block-children > .rivto-block-list-gap:not(:first-child):not(:last-child)",
-          )
+          .locator(":scope > .rivto-block-children > .rivto-block-item + .rivto-block-item")
           .evaluateAll((columns) => {
             const maximum = Math.max(
               ...Array.from(
@@ -141,9 +140,7 @@ for (const mode of ["block", "edgeless"] as const) {
      */
     const separatorContent = () =>
       board
-        .locator(
-          ":scope > .rivto-block-children > .rivto-block-list-gap:not(:first-child):not(:last-child)",
-        )
+        .locator(":scope > .rivto-block-children > .rivto-block-item + .rivto-block-item")
         .evaluateAll((columns) => columns.map((gap) => getComputedStyle(gap, "::after").content));
     await expect.poll(separatorContent).toEqual(["none", "none"]);
     await checkbox.check();
@@ -170,7 +167,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   await expect
     .poll(() =>
       lanes
-        .locator(":scope > .rivto-block-list-gap")
+        .locator(":scope > .rivto-block-item")
         .nth(1)
         .evaluate((element) => {
           const separator = getComputedStyle(element, "::after");

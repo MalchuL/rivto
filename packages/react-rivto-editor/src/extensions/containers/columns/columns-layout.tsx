@@ -8,7 +8,6 @@ import {
   BlockRow,
   type BlockLayoutProps,
 } from "@chulane/rivto-page";
-import { HorizontalDropGap } from "../horizontal-drop-gap";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 
 /**
@@ -38,7 +37,6 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
         dropAxis="horizontal"
         dropPlacement="siblings"
         emptyDropTarget
-        gap={HorizontalDropGap}
         data-show-dividers={block?.props.showDividers !== false}
       />
     </>

@@ -24,7 +24,7 @@
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 0;
+  gap: 4px;
   margin: 0;
   padding: 0 12px 12px;
   min-width: 0;
@@ -35,17 +35,16 @@
   min-width: 0;
   max-width: 100%;
 }
-.rivto-columns-children > .rivto-block-list-gap {
-  --rivto-drop-gap-size: 24px;
-  /* A real gap box bounds its divider to the stretched lanes, not the board. */
-  display: flex;
+/* Each existing lane bounds its divider to the stretched layout height.
+ * The divider occupies the physical layout gap and never creates a drop element. */
+.rivto-columns-children > .rivto-block-item {
   position: relative;
 }
-.rivto-columns-children[data-show-dividers="true"]
-  > .rivto-block-list-gap:not(:first-child):not(:last-child)::after {
+.rivto-columns-children[data-show-dividers="true"] > .rivto-block-item + .rivto-block-item::after {
   content: "";
   position: absolute;
-  inset: 12px auto 12px 50%;
+  inset-block: 12px;
+  inset-inline-start: -2px;
   width: 1px;
   background: var(--rivto-border);
   pointer-events: none;

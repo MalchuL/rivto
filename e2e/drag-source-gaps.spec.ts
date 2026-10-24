@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -85,14 +86,17 @@ for (const mode of ["block", "edgeless"] as const) {
         "data-dragging",
         "true",
       );
-      for (const x of [handle.x + handle.width / 2, middle.x + 2, middle.x + 40]) {
-        await page.mouse.move(x, middle.y - 2);
+      const source = page.locator('[data-block-id="middle"]');
+      const before = (await (await blockDropRegion(source, "before")).boundingBox())!;
+      const after = (await (await blockDropRegion(source, "after")).boundingBox())!;
+      for (const offset of [1, 4, 8]) {
+        await page.mouse.move(before.x + offset, before.y + before.height / 2);
         await expectGap(page, upper.y + upper.height, middle.y);
-        await page.mouse.move(x, middle.y + middle.height + 2);
+        await page.mouse.move(after.x + offset, after.y + after.height / 2);
         await expectGap(page, middle.y + middle.height, lower.y);
       }
-      // Return to the original sibling depth before releasing in the lower gap.
-      await page.mouse.move(middle.x + 2, middle.y + middle.height + 2);
+      // Release in the declared sibling band, preserving the current canonical order.
+      await page.mouse.move(after.x + 2, after.y + after.height / 2);
       await page.mouse.up();
       const state = await page.evaluate(() => {
         const e = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

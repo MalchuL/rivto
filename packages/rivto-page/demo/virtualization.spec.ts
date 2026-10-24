@@ -177,9 +177,11 @@ test("keeps root counters independent of mounting and nested counters", async ({
     (element as HTMLStyleElement).sheet!.disabled = true;
   });
   await page.locator("[data-rivto-block-editor]").evaluate((element) => {
-    (element as HTMLElement).style.setProperty("--rivto-block-gap", "28px");
+    (element as HTMLElement).style.setProperty("--rivto-drop-target-size", "28px");
   });
-  await expect(fifth).toHaveCSS("padding-bottom", "28px");
+  await expect(fifth).toHaveCSS("padding-bottom", "4px");
+  await expect(fifth.locator(":scope > .rivto-block-drop-gap")).toHaveCount(0);
+  await expect(fifth.locator(":scope > .rivto-block-outline-drop-gap")).toHaveCount(0);
 });
 
 test("preserves selection across virtual view detach and remount", async ({ page }) => {

@@ -14,16 +14,11 @@ export class BlockDropReceiver<T extends DropSurface> {
    *
    * @param scope - Borrowed receiver identity and mounted root.
    * @param registry - Registration capability shared by participating drag engines.
-   * @param getContentElement - Optional live boundary of a protected subtree view.
    * @throws If the registry cannot install the attachment.
    */
-  constructor(
-    scope: T,
-    registry: Pick<DropSurfaceRegistry<T>, "register">,
-    getContentElement?: () => HTMLElement | null,
-  ) {
+  constructor(scope: T, registry: Pick<DropSurfaceRegistry<T>, "register">) {
     this.feedback = new BlockDropFeedback(scope.root);
-    this.unregister = registry.register(scope, getContentElement);
+    this.unregister = registry.register(scope);
   }
 
   /**

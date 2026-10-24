@@ -30,7 +30,7 @@ test("failed marker installation preserves the prior receiving attachment", () =
   dispose();
 });
 
-test("nested content edges route to the enclosing receiver without another hit test", () => {
+test("nested edges stay with their registered occurrence without measuring geometry", () => {
   const registry = new DropSurfaceRegistry();
   const outer = { root: document.createElement("div") };
   const inner = { root: document.createElement("div") };
@@ -39,21 +39,15 @@ test("nested content edges route to the enclosing receiver without another hit t
   outer.root.append(inner.root);
   inner.root.append(content);
   registry.register(outer);
-  registry.register(inner, () => content);
+  registry.register(inner);
   const measure = jest.spyOn(content, "getBoundingClientRect").mockReturnValue({
     top: 100,
     bottom: 200,
     height: 100,
   } as DOMRect);
-  expect(registry.resolve(outer.root, { x: 20, y: 150 }, 8, content)).toEqual({
-    controller: inner,
-    nestedBoundary: false,
-  });
-  expect(registry.resolve(outer.root, { x: 20, y: 101 }, 8, content)).toEqual({
-    controller: outer,
-    nestedBoundary: true,
-  });
-  expect(measure).toHaveBeenCalledTimes(2);
+  expect(registry.resolve(outer.root, { x: 20, y: 150 }, content)).toBe(inner);
+  expect(registry.resolve(outer.root, { x: 20, y: 101 }, content)).toBe(inner);
+  expect(measure).not.toHaveBeenCalled();
 });
 
 test("independent registries cannot resolve each other's receivers", () => {
@@ -62,8 +56,6 @@ test("independent registries cannot resolve each other's receivers", () => {
   const controller = { root: document.createElement("div") };
   document.body.append(controller.root);
   first.register(controller);
-  expect(second.resolve(controller.root, { x: 0, y: 0 }, 8, controller.root)).toBeNull();
-  expect(first.resolve(controller.root, { x: 0, y: 0 }, 8, controller.root)?.controller).toBe(
-    controller,
-  );
+  expect(second.resolve(controller.root, { x: 0, y: 0 }, controller.root)).toBeNull();
+  expect(first.resolve(controller.root, { x: 0, y: 0 }, controller.root)).toBe(controller);
 });

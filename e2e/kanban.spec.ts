@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 /** Browser regression for moving real editor blocks across Kanban boundaries. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -7,22 +8,20 @@ const HANDLE_CLASS = "block-handle";
 const DROP_INDICATOR_SELECTOR = ".rivto-block-drop-line:visible";
 
 /**
- * Moves a block through the pointer sensor to a target's interior.
+ * Moves a block through the pointer sensor into an explicitly declared region.
  * @param page - Browser page owning the editor.
  * @param source - Block subtree to move.
  * @param target - Destination rectangle.
- * @param fraction - Vertical fraction of the target used for before/after placement.
- * @param axis - Direction used to choose the destination half.
- * @param crossOffset - Optional horizontal outline-depth offset for vertical drops.
+ * @param position - Canonical sibling side or append action; defaults to inside.
+ * @param axis - Flow axis used to check the physical indicator orientation.
  * @returns Completion of the drag gesture.
  */
 async function move(
   page: Page,
   source: Locator,
   target: Locator,
-  fraction = 0.5,
+  position: "before" | "after" | "inside" = "inside",
   axis: "vertical" | "horizontal" = "vertical",
-  crossOffset?: number,
 ) {
   await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
   await source.scrollIntoViewIfNeeded();
@@ -32,19 +31,16 @@ async function move(
   const from = (await handle.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+  await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, { steps: 3 });
+  await expect(source).toHaveAttribute("data-dragging", "true");
   // A horizontally clipped lane is not a drop field until it is visible.
   await target.scrollIntoViewIfNeeded();
-  const to = (await target.boundingBox())!;
-  let offsetX = crossOffset ?? to.width / 2;
-  if (axis === "horizontal") {
-    offsetX = fraction < 0.5 ? -2 : to.width + 2;
+  const region = await blockDropRegion(target, position);
+  const to = (await region.boundingBox())!;
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
+  if (position !== "inside") {
+    await expect(page.locator(DROP_INDICATOR_SELECTOR)).toBeVisible();
   }
-  await page.mouse.move(
-    to.x + offsetX,
-    to.y + to.height * (axis === "vertical" ? fraction : 0.5),
-    { steps: 15 },
-  );
   if (axis === "horizontal") {
     const indicator = page.locator(DROP_INDICATOR_SELECTOR);
     await expect(indicator).toBeVisible();
@@ -52,11 +48,10 @@ async function move(
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
     expect(line.width).toBe(4);
-    if (fraction < 0.5) {
-      expect(line.x + line.width / 2).toBeCloseTo(column.x, 0);
-    } else {
-      expect(line.x + line.width / 2).toBeCloseTo(column.x + column.width, 0);
-    }
+    expect(line.x + line.width / 2).toBeCloseTo(
+      position === "after" ? column.x + column.width : column.x,
+      0,
+    );
     await expect(target).not.toHaveCSS("background-color", "rgb(220, 234, 255)");
     await expect(source).toHaveAttribute("data-dragging", "true");
     await expect(source).toHaveCSS("opacity", "0.45");
@@ -85,16 +80,8 @@ test("moves cards between columns, back to the outline, and into an empty column
   const stableCard = page.locator(`[data-block-id="${id}"]`);
   await move(page, stableCard, columns.nth(1));
   await expect(columns.nth(1).locator(`[data-block-id="${id}"]`)).toHaveCount(1);
-  // The board title is at the outline level; its top edge inserts before it.
-  const handle = stableCard.locator(`:scope > ${BLOCK_ROW_SELECTOR} .${HANDLE_CLASS}`);
-  await stableCard.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
-  await handle.hover();
-  const from = (await handle.boundingBox())!;
-  const to = (await board.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).boundingBox())!;
-  await page.mouse.move(from.x + 3, from.y + 3);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + 1, { steps: 20 });
-  await page.mouse.up();
+  // Measure the receiving edge after activation applies drag feedback and layout settles.
+  await move(page, stableCard, board, "before");
   await expect(board.locator(`[data-block-id="${id}"]`)).toHaveCount(0);
   await expect(stableCard).toHaveCount(1);
   await move(page, stableCard, columns.nth(2));
@@ -189,10 +176,10 @@ for (const mode of ["block", "edgeless"] as const) {
     const byId = (id: string | null) => page.locator(`[data-block-id="${id}"]`);
     const rowById = (id: string | null) =>
       byId(id).locator(`:scope > ${BLOCK_ROW_SELECTOR}`).first();
-    await move(page, byId(ids[2]!), rowById(ids[0]!), 0.01);
+    await move(page, byId(ids[2]!), rowById(ids[0]!), "before");
     await expect(cards).toHaveCount(3);
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[2]!);
-    await move(page, byId(ids[2]!), rowById(ids[1]!), 0.99, "vertical", 12);
+    await move(page, byId(ids[2]!), rowById(ids[1]!), "after");
     await expect(cards.last()).toHaveAttribute("data-block-id", ids[2]!);
     await expect(cards).toHaveCount(3);
     // Wait for the visible reorder transition before beginning a new action.
@@ -213,7 +200,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const progress = modal.locator('[data-block-type="kanban-column"]').nth(1);
     await move(page, byId(ids[0]!), progress);
     await expect(progress.locator(`[data-block-id="${ids[0]}"]`)).toHaveCount(1);
-    await move(page, byId(ids[0]!), rowById(ids[1]!), 0.01);
+    await move(page, byId(ids[0]!), rowById(ids[1]!), "before");
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[0]!);
     const lanes = modal.locator(
       '[data-block-type="kanban"] > div > [data-block-type="kanban-column"]',
@@ -221,7 +208,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const laneIds = await lanes.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-block-id")),
     );
-    await move(page, byId(laneIds[0]!), byId(laneIds[2]!), 0.8, "horizontal");
+    await move(page, byId(laneIds[0]!), byId(laneIds[2]!), "after", "horizontal");
     await expect(lanes.last()).toHaveAttribute("data-block-id", laneIds[0]!);
     await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
     await modal.getByRole("button", { name: "Add Kanban column" }).click();

@@ -111,6 +111,8 @@ interface TodoStorageFilters {
 
 interface TodoStorageContextValue {
   readonly storageId: string;
+  /** True when persisted children exist but none match this local filter. */
+  readonly allChildrenFiltered: boolean;
   readonly query: string;
   readonly filters: TodoStorageFilters;
   readonly projects: readonly string[];
@@ -309,13 +311,16 @@ function TodoStorageState({ blockId, children }: TodoStorageStateProps) {
   const value = useMemo<TodoStorageContextValue>(
     () => ({
       storageId: blockId,
+      allChildrenFiltered:
+        childBlocks.length > 0 &&
+        !childBlocks.some((child) => matchesTodoStorage(child, query, filters)),
       query,
       filters,
       projects,
       setQuery,
       setFilters,
     }),
-    [blockId, filters, projectKey, query],
+    [blockId, filters, projectKey, query, childBlocks],
   );
   return <TodoStorageContext.Provider value={value}>{children}</TodoStorageContext.Provider>;
 }
@@ -641,6 +646,7 @@ export function TodoStorageLayout({ blockId }: TodoStorageComponentProps) {
       </BlockDropTarget>
       <BlockBody />
       <BlockChildren
+        dropBackground
         className="rivto-todo-storage-children"
         dropAxis="vertical"
         dropPlacement="outline"

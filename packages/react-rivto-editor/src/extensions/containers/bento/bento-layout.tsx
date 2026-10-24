@@ -2,7 +2,7 @@ import { BlockBody, BlockChildren, BlockContent, BlockRow } from "@chulane/rivto
 import { BentoTileItem } from "./bento-tile";
 
 /**
- * Composes a board header and width-aware tiles with reserved insertion boundaries.
+ * Composes a board header and width-aware tiles with data-only insertion edges.
  *
  * The board header participates in flow rather than covering the first tile.
  * Each item owns width and resize resources; Page alone renders its block subtree.
@@ -23,6 +23,8 @@ export function BentoLayout() {
         dropPlacement="siblings"
         item={BentoTileItem}
         controlsPlacement="inside"
+        dropBackground
+        dropGaps
         emptyDropTarget
       />
     </>

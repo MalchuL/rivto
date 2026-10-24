@@ -71,3 +71,5 @@ export const TODO_STORAGE_CLEAR_CLASS =
 export const TODO_STATUS_ORDER_CLASS = "rivto-todo-storage-status-order grid gap-[3px]";
 export const TODO_STATUS_ORDER_ROW_CLASS =
   "rivto-todo-storage-status-row h-auto justify-start gap-1.5 px-1.5 py-1 text-xs font-normal";
+
+/** Explicit append region when storage filters hide every persisted child. */

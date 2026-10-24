@@ -267,7 +267,9 @@ and does not add persisted metadata.
 - `BlockChildren.dropAxis` describes direct-child layout;
 - `BlockChildren.emptyDropTarget` retains an empty receiving region;
 - `BlockDropTarget` describes explicit inside or between destinations with canonical IDs;
-- `childDropIndent` and `gapDropZone` are extension-wide pixel settings (24 and 8);
+- `--rivto-block-indent` sets outline depth and `--rivto-drop-target-size` sets inset hit thickness independently of layout;
+- linear lists declare insertion bands; grid items compose `BlockDropWrapper`;
+- unregistered headers, padding and text do not choose nearby destinations;
 - the host's `canMove` policy controls permissions independently of measured geometry;
 - `BlockChildren.hoverBoundary` bounds row hover to its local layout by default;
   ordinary outlines use `hoverBoundary={false}` to inherit their enclosing area.

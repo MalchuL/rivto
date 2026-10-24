@@ -1,5 +1,6 @@
 /** @jest-environment ./jest-browser-environment.mjs */
 import { act } from "react";
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 import { createRoot } from "react-dom/client";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BlockEditor } from "@chulane/rivto-page";
@@ -137,7 +138,7 @@ it("owns Table cell widths on Page items and updates a whole column in one undo 
   }
 });
 
-it("owns an empty Bento body target only while that child list remains empty", async () => {
+it("keeps Bento background append available as children mount and unmount", async () => {
   const fixture = new PageContainerFixture(await createTestCoreEditor());
   const bento = fixture.panel.blocks.insertBlock(createBentoBlockInput());
   fixture.mount();
@@ -147,6 +148,17 @@ it("owns an empty Bento body target only while that child list remains empty", a
       fixture.container.querySelector<HTMLElement>(
         `[data-block-id="${bento.id}"] > .rivto-block-children`,
       )!;
+    jestApi.spyOn(body(), "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 200,
+      width: 400,
+      height: 200,
+      toJSON: () => ({}),
+    });
     Object.defineProperty(document, "elementFromPoint", { configurable: true, value: body });
     expect(fixture.panel.page.dropTargets.resolve(0, 0)?.destination).toEqual({
       kind: "inside",
@@ -156,7 +168,10 @@ it("owns an empty Bento body target only while that child list remains empty", a
     act(() => {
       childId = fixture.panel.blocks.insertBlock({ type: "paragraph" }, { parentId: bento.id }).id;
     });
-    expect(fixture.panel.page.dropTargets.resolve(0, 0)).toBeUndefined();
+    expect(fixture.panel.page.dropTargets.resolve(0, 0)?.destination).toEqual({
+      kind: "inside",
+      parentId: bento.id,
+    });
     act(() => fixture.panel.blocks.removeBlock(childId));
     expect(fixture.panel.page.dropTargets.resolve(0, 0)?.destination).toEqual({
       kind: "inside",

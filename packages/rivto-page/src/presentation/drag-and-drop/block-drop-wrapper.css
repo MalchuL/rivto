@@ -1,42 +1,16 @@
-/* One outer cell owns the counter and width. Boundaries reserve space rather than
- * overlaying text or controls; both sides contribute to the spacing between contents. */
+/* Placement padding preserves the existing visual frame. Interaction thickness
+ * comes from --rivto-drop-target-size and never participates in layout. */
 .rivto-block-drop-wrapper {
-  @apply page:grid;
-  grid-template-columns: var(--rivto-drop-gap-size, 8px) minmax(0, 1fr) var(
-      --rivto-drop-gap-size,
-      8px
-    );
-  grid-template-rows: var(--rivto-drop-gap-size, 8px) minmax(0, 1fr) var(--rivto-drop-gap-size, 8px);
+  padding: 8px;
+  box-sizing: border-box;
 }
 .rivto-block-drop-wrapper-content {
-  /* Absolute content controls stay inside the center instead of covering strips. */
+  /* Host controls use the content box rather than the outer placement frame. */
   @apply page:relative page:min-w-0;
-  grid-area: 2 / 2;
 }
 .rivto-block-drop-wrapper[data-drop-wrapper-axis="vertical"] {
-  grid-template-columns: 0 minmax(0, 1fr) 0;
+  padding-inline: 0;
 }
 .rivto-block-drop-wrapper[data-drop-wrapper-axis="horizontal"] {
-  grid-template-rows: 0 minmax(0, 1fr) 0;
-}
-
-/* Top and bottom own the corners. Inline strips fill only the center row, so
- * no two targets overlap. CSS Grid line numbers follow the wrapper's direction. */
-.rivto-block-drop-wrapper-boundary[data-drop-edge="block"] {
-  grid-column: 1 / -1;
-}
-.rivto-block-drop-wrapper-boundary[data-drop-edge="inline"] {
-  grid-row: 2;
-}
-.rivto-block-drop-wrapper-boundary[data-drop-placement="before"][data-drop-edge="block"] {
-  grid-row: 1;
-}
-.rivto-block-drop-wrapper-boundary[data-drop-placement="after"][data-drop-edge="block"] {
-  grid-row: 3;
-}
-.rivto-block-drop-wrapper-boundary[data-drop-placement="before"][data-drop-edge="inline"] {
-  grid-column: 1;
-}
-.rivto-block-drop-wrapper-boundary[data-drop-placement="after"][data-drop-edge="inline"] {
-  grid-column: 3;
+  padding-block: 0;
 }

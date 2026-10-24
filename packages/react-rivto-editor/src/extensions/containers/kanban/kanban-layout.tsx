@@ -7,7 +7,6 @@ import {
   type BlockChildrenItemProps,
   type BlockLayoutProps,
 } from "@chulane/rivto-page";
-import { HorizontalDropGap } from "../horizontal-drop-gap";
 import { KanbanAddCard, KanbanAddColumn } from "./kanban-content";
 
 /**
@@ -79,7 +78,6 @@ export function KanbanLayout({ blockId }: BlockLayoutProps) {
         dropPlacement="siblings"
         controlsPlacement="inside"
         emptyDropTarget
-        gap={HorizontalDropGap}
       >
         <KanbanAddColumn blockId={blockId} />
       </BlockChildren>

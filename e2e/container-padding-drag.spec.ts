@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { blockDropRegion } from "./drop-regions";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`drops between wrapped cards from placement padding in ${mode}`, async ({ page }) => {
+  test(`ignores placement padding and drops in declared wrapped-card regions in ${mode}`, async ({
+    page,
+  }) => {
     await page.goto("/");
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
@@ -62,6 +65,10 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(box.x + 12, box.y + box.height - 4, { steps: 12 });
+    await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+    const gap = await blockDropRegion(page.locator('[data-block-id="first"]').first(), "after");
+    const region = (await gap.boundingBox())!;
+    await page.mouse.move(region.x + region.width / 2, region.y + region.height / 2);
     await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
     await page.mouse.up();
     await expect

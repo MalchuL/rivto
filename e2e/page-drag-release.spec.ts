@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -65,10 +66,12 @@ for (const earlyRelease of [false, true]) {
     await loadReleaseFixture(page, earlyRelease);
     await page.locator('[data-block-id="moving"] > .rivto-block-row').hover();
     const source = (await page.locator('[data-block-id="moving"] .block-handle').boundingBox())!;
-    const target = (await page.locator('[data-block-id="upper"]').boundingBox())!;
+    const target = (await (
+      await blockDropRegion(page.locator('[data-block-id="upper"]'), "before")
+    ).boundingBox())!;
     await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
     await page.mouse.down();
-    await page.mouse.move(target.x + 2, target.y + 1, { steps: 6 });
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
     await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
     await page.mouse.up();
     await expect.poll(() => rootOrder(page)).toEqual(["moving", "upper", "lower"]);

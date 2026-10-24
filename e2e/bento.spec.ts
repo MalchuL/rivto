@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 /** Browser coverage for responsive Bento layout, widths, shared modal and editing. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -175,7 +176,6 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     const source = tiles.first();
     const end = edge.startsWith("end-");
     const target = end ? tiles.last() : tiles.nth(1);
-    const next = tiles.nth(2);
     const sourceId = await source.getAttribute("data-block-id");
     const targetId = await target.getAttribute("data-block-id");
     const handleClass = "block-handle";
@@ -184,87 +184,30 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     await handle.hover();
     await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
     const from = (await handle.boundingBox())!;
-    const to = (await target.locator("xpath=ancestor::*[@data-block-item-id][1]").boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-    // The free wrap gap and the item's registered strips describe the same sibling destination.
-    const stripEdge = edge === "end-right" ? "inline" : "block";
-    const strip = await target
-      .locator("xpath=ancestor::*[@data-block-item-id][1]")
-      .locator(`:scope > [data-drop-placement="after"][data-drop-edge="${stripEdge}"]`)
-      .boundingBox();
-    if (!strip) {
-      throw new Error("Expected the tile's insertion strip");
-    }
-    let destX = strip.x + strip.width / 2;
-    let destY = strip.y + strip.height / 2;
-    if (edge === "between") {
-      // Zero host gap means the shared boundary is the edge between the two strips.
-      destX = to.x + to.width;
-      destY = to.y + to.height / 2;
-    } else if (edge === "inside") {
-      const row = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
-      destX = row.x + row.width / 2;
-      destY = row.y + row.height / 2;
-    }
-    await page.mouse.move(destX, destY, { steps: 15 });
+    const inline = edge === "end-right" || edge === "between";
+    const wrapper = target.locator("xpath=ancestor::*[@data-block-item-id][1]");
+    const bounds = (await wrapper.boundingBox())!;
+    let x = inline ? bounds.x + bounds.width - 3 : bounds.x + bounds.width / 2;
+    let y = inline ? bounds.y + bounds.height / 2 : bounds.y + bounds.height - 3;
     if (edge === "inside") {
-      await expect(target.locator(`:scope > .${ROW_CLASS}`)).toHaveAttribute(
-        "data-block-drop-active",
-        "true",
+      const region = await blockDropRegion(target, "inside");
+      const box = await region.boundingBox();
+      x = box.x + box.width / 2;
+      y = box.y + box.height / 2;
+    }
+    await page.mouse.move(x, y, { steps: 15 });
+    const line = page.locator(".rivto-block-drop-line:visible");
+    await expect(line).toBeVisible();
+    if (edge !== "inside") {
+      const lineBox = (await line.boundingBox())!;
+      await expect(line).toHaveAttribute("data-axis", inline ? "vertical" : "horizontal");
+      expect(inline ? lineBox.x + lineBox.width / 2 : lineBox.y + lineBox.height / 2).toBeCloseTo(
+        inline ? bounds.x + bounds.width : bounds.y + bounds.height,
+        0,
       );
-    } else {
-      const lineClass = "rivto-block-drop-line";
-      const line = page.locator(`.${lineClass}`);
-      await expect(line).toBeVisible();
-      // Related bounds must be read in the same frame while drag chrome settles.
-      const { lineBox, targetBox, nextBox } = await page.evaluate(
-        ({ targetId, nextId }) => {
-          const lineBox = document
-            .querySelector(".rivto-block-drop-line")!
-            .getBoundingClientRect()
-            .toJSON();
-          const targetBox = document
-            .querySelector(`[data-block-item-id="${targetId}"]`)!
-            .getBoundingClientRect()
-            .toJSON();
-          const nextBox = nextId
-            ? document
-                .querySelector(`[data-block-item-id="${nextId}"]`)!
-                .getBoundingClientRect()
-                .toJSON()
-            : null;
-          return { lineBox, targetBox, nextBox };
-        },
-        { targetId, nextId: end ? null : await next.getAttribute("data-block-id") },
-      );
-      const sameRow =
-        nextBox &&
-        Math.max(targetBox.y, nextBox.y) <
-          Math.min(targetBox.y + targetBox.height, nextBox.y + nextBox.height);
-      if (sameRow) {
-        await expect(line).toHaveAttribute("data-axis", "vertical");
-        expect(lineBox.width).toBe(4);
-        expect(
-          Math.abs(lineBox.x + lineBox.width / 2 - (targetBox.x + targetBox.width + nextBox.x) / 2),
-        ).toBeLessThanOrEqual(2);
-      } else {
-        const verticalEnd = edge === "end-right";
-        await expect(line).toHaveAttribute("data-axis", verticalEnd ? "vertical" : "horizontal");
-        if (verticalEnd) {
-          expect(lineBox.width).toBe(4);
-          expect(
-            Math.abs(lineBox.x + lineBox.width / 2 - (targetBox.x + targetBox.width)),
-          ).toBeLessThanOrEqual(2);
-        } else {
-          expect(lineBox.height).toBe(4);
-          const expectedY = nextBox
-            ? (targetBox.y + targetBox.height + nextBox.y) / 2
-            : targetBox.y + targetBox.height;
-          expect(Math.abs(lineBox.y + lineBox.height / 2 - expectedY)).toBeLessThanOrEqual(2);
-        }
-      }
     }
     await page.mouse.up();
     if (edge === "inside") {
@@ -316,12 +259,12 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await source.hover();
   await handle.hover();
   const from = (await handle.boundingBox())!;
-  const to = (await target.boundingBox())!;
+  const to = (await (await blockDropRegion(target, "before")).boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-  // Left rim of the tile: sibling insert into the board, not nest-inside the tile.
-  await page.mouse.move(to.x + 4, to.y + to.height / 2, { steps: 15 });
+  // The declared before strip inserts a sibling into the board without nesting.
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(3);
 
@@ -330,10 +273,10 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   await tile.hover();
   await tileHandle.hover();
   const tileFrom = (await tileHandle.boundingBox())!;
-  const title = (await board.boundingBox())!;
+  const title = (await (await blockDropRegion(board, "before")).boundingBox())!;
   await page.mouse.move(tileFrom.x + 3, tileFrom.y + 3);
   await page.mouse.down();
-  await page.mouse.move(title.x + 2, title.y + 1, { steps: 20 });
+  await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2, { steps: 20 });
   await page.mouse.up();
   await expect(tiles).toHaveCount(2);
   await expect(

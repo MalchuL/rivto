@@ -124,12 +124,20 @@ Page creates one `BlockNode` / `BlockView` per block. A typical layout returns:
 `BlockChildren.item` receives `{ blockId, children }`, with the existing child node
 as `children`. Render it once inside `BlockItem` for placement/counter-aware chrome,
 or `BlockDropWrapper` when a wrapping item needs explicit sibling boundaries.
-Declare item and gap components outside render so their identities remain stable.
+Declare item components outside render so their identities remain stable.
 
-`BlockChildren.gap` receives canonical `parentId`, `previousId` and `nextId`.
-Use `BlockDropGap` or the existing `HorizontalDropGap`; never infer model neighbors
-from DOM siblings. Wrapped grid items already reserve insertion strips: do not
-also add separate grid gap cells or accidentally double their spacing.
+`BlockChildren.dropGaps` enables physical gaps between mounted canonical anchors.
+Use `BlockDropExclude asChild` or `BlockDropTarget.exclude` for intentional subtree
+exclusions. Controls participate in containing drop regions during an active drag;
+HTML tags and `data-editor-control` do not imply exclusion. The primitive and property
+preserve existing DOM and stop ancestor fallback. Matching descendant drop regions
+remain eligible; a deeper exclusion blocks its own area again. Exclusion wins over
+a target on the same element.
+
+Edges, gaps and background append are independent declarations; never infer model
+neighbors from DOM siblings. No declaration adds layout boxes or minimum sizes.
+Grid items use existing placement edges; do not create separate gap cells. Bento
+uses `dropBackground` with gaps disabled so space under short tiles belongs to its parent.
 
 Width and resize previews belong to the item, not a global block wrapper. Keep
 visual card bounds aligned with the actual child block. Extra item padding must
@@ -167,28 +175,29 @@ empty filtered results, nested storage isolation and model-backed selection.
 
 Choose `BlockChildren.dropAxis` for actual child flow: vertical, horizontal or grid.
 Vertical layout retains ordinary outline depth placement. Register explicit regions
-with `BlockDropTarget`, canonical gaps with `BlockDropGap`, and wrapping boundaries
+with `BlockDropTarget asChild`, canonical gaps with `dropGaps`, and wrapping edges
 with `BlockDropWrapper`. Do not reintroduce `PAGE_DRAG_METADATA_KEY`,
 `acceptsDropContainer` or per-type axis switches in shared Page code.
 
 Choose `dropPlacement="siblings"` when background gaps must stay at the list's
 own level; the default `outline` preserves horizontal depth selection. This is
-independent of flow axis. `BlockDropWrapper.axis` selects top/bottom strips for
-vertical flow, inline strips for horizontal flow, or all four for its default grid.
+independent of flow axis. `BlockDropWrapper.axis` selects block-start/end edges for
+vertical flow, inline edges for horizontal flow, or all four for its default grid.
 Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
-child gaps and strip thickness without container-specific pointer calculations.
+child gaps and inset edge thickness without container-specific pointer calculations.
+`--rivto-drop-target-size` uses local CSS pixels and never changes presentation spacing.
 
 A drop region proposes a destination; it does not grant permission. Implement
 `canMove` on the applicable concrete behaviors for source and receiving-parent
 restrictions. Inspect the actual destination parent, not the neighboring block's
 edge. Keep structural policy in the owning behavior/core path rather than CSS.
 
-Custom-layout headers compare nearby insertion lines using the same bounds as
-their feedback. The host supplies live source permission to the shared resolver;
-forbidden structural levels descend into the nearest mounted child branch.
-Explicit sibling strips and exposed outer rims retain their existing behavior.
-Header padding and item bounds determine distance, without block-type checks or
-a scan of every target in the document. Commit still revalidates the chosen move.
+Explicit header declarations use their existing anchor bounds. The native hit and
+nearest layout scope limit lookup; controls, nested editors and virtual holes remain
+isolated. The host supplies live source permission to the shared resolver. Rejection
+returns no target rather than falling through to an outer level. Gap resolution
+binary-searches local mounted anchors and never scans the whole document. Source
+exclusion preserves physical feedback; commit still revalidates the chosen move.
 
 `ContainerBlockBehavior` provides empty-container Enter insertion and returns
 `unhandled` where the ordinary behavior chain should continue. Override methods
@@ -206,7 +215,7 @@ pseudo-elements, transparent hit slabs or type-specific hover lists.
 
 `BlockItem` supplies its own border box; in-flow slots contribute to its size,
 but absolute slots overflowing that box do not. Hover over item padding and
-placement strips reveals its block's handle, with native nested rows taking
+placement edges reveals its block's handle, with native nested rows taking
 priority. This is shared Page behavior, not an item-local pointer listener.
 
 Keep handles hidden at rest and reachable from their own row/exposed gutter.

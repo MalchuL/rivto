@@ -63,14 +63,15 @@ export {
   type BlockChildrenProps,
 } from "./presentation/components/block-layout/block-children";
 export { BlockItem, type BlockItemProps } from "./presentation/components/block-layout/block-item";
-export type {
-  BlockChildrenItemProps,
-  BlockChildrenGapProps,
-} from "./presentation/components/block-layout/block-list";
+export type { BlockChildrenItemProps } from "./presentation/components/block-layout/block-list";
 export {
   BlockDropTarget,
   type BlockDropTargetProps,
 } from "./presentation/drag-and-drop/block-drop-target";
+export {
+  BlockDropExclude,
+  type BlockDropExcludeProps,
+} from "./presentation/drag-and-drop/block-drop-exclude";
 export type {
   BlockDropDestination,
   BlockDropAcceptance,
@@ -82,8 +83,6 @@ export type {
   BlockDragTargetScope,
   BlockDropTargetsApi,
 } from "./editor/drag-and-drop/types";
-
-export { BlockDropGap, type BlockDropGapProps } from "./presentation/drag-and-drop/block-drop-gap";
 
 export type { BlockEditorApi } from "./editor/block-editor-api";
 
@@ -138,8 +137,6 @@ export {
 } from "./editor/drag-and-drop/block-drag-extension";
 export { BlockDragHandle } from "./presentation/drag-and-drop/block-drag-handle";
 
-export { BlockOutlineDropTargets } from "./editor/drag-and-drop/block-outline-drop-targets";
-
 export { BlockDropFeedback } from "./editor/drag-and-drop/block-drop-feedback";
 export { EmbeddedEditorAcquisition } from "./editor/embedding/embedded-editor-acquisition";
 export type {
@@ -151,7 +148,7 @@ export {
   DropSurfaceRegistry,
   DROP_SURFACE_ATTRIBUTE,
 } from "./editor/drag-and-drop/drop-surface-registry";
-export type { DropSurface, DropSurfaceRoute } from "./editor/drag-and-drop/drop-surface-registry";
+export type { DropSurface } from "./editor/drag-and-drop/drop-surface-registry";
 export { BlockAutoScroll } from "./editor/pointer/block-auto-scroll";
 export type { BlockScrollPoint } from "./editor/pointer/block-auto-scroll";
 export { BlockPointerOwnership } from "./editor/pointer/block-pointer-ownership";
@@ -173,3 +170,24 @@ export { BlockNode } from "./presentation/components/block-layout/block-node";
 export { BlockDOMSelection, type DOMSelectionPoint } from "./editor/selection/block-dom-selection";
 export { BlockSelectionEndpoints } from "./editor/selection/block-selection-endpoints";
 export { BlockNavigation } from "./editor/blocks/block-navigation";
+
+export {
+  BlockRootNode,
+  type BlockRootNodeProps,
+} from "./presentation/drag-and-drop/block-root-node";
+
+export {
+  BlockDropLayout,
+  type BlockDropLayoutProps,
+  type BlockDropLayoutOptions,
+} from "./presentation/drag-and-drop/block-drop-layout";
+export type {
+  BlockDropRegion,
+  BlockDropEdgeRegion,
+  BlockDropInsideRegion,
+  BlockDropGapRegion,
+  BlockDropDepth,
+  BlockDropBoundaryMode,
+  BlockDropLayoutRegistration,
+  BlockDropPoint,
+} from "./editor/drag-and-drop/types";

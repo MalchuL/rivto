@@ -23,11 +23,6 @@
   @apply page:relative page:min-w-0 page:box-border;
 }
 
-/* Gap wrappers preserve canonical sibling adjacency without adding layout boxes. */
-.rivto-block-list-gap {
-  display: contents;
-}
-
 /* Contentless structural anchors expose outside controls over their body instead of
  * reserving a blank text row above containers or embedded views. Inside controls
  * need their own in-flow row so they cannot overlap the first child. */

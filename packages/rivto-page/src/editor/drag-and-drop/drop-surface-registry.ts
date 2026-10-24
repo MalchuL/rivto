@@ -7,21 +7,9 @@ export interface DropSurface {
   readonly root: HTMLElement;
 }
 
-/** A registered receiver and permission to resolve its enclosing nested boundary. */
-export interface DropSurfaceRoute<T extends DropSurface> {
-  readonly controller: T;
-  readonly nestedBoundary: boolean;
-}
-
-/** One attachment, including an optional live content boundary for a subtree view. */
+/** One registration identity, retained even when the same controller is registered twice. */
 interface DropSurfaceEntry<T extends DropSurface> {
   readonly controller: T;
-  /**
-   * Reads the content whose outer edges belong to the enclosing surface.
-   *
-   * @returns Current content element, or null to use the registered root.
-   */
-  readonly getContentElement?: () => HTMLElement | null;
 }
 
 /** Routes native hits between independently registered drag engines and document views. */
@@ -36,12 +24,11 @@ export class DropSurfaceRegistry<T extends DropSurface> {
    * unchanged. Receivers retain their own cancellation and feedback lifecycle.
    *
    * @param controller - Borrowed receiver and its existing DOM root.
-   * @param getContentElement - Live displayed subtree boundary; omitted uses the root.
    * @returns Idempotent disposer removing only this attachment and its DOM marker.
    * @throws If the DOM marker cannot be written or removed.
    */
-  register(controller: T, getContentElement?: () => HTMLElement | null): () => void {
-    const entry = { controller, getContentElement };
+  register(controller: T): () => void {
+    const entry = { controller };
     controller.root.setAttribute(DROP_SURFACE_ATTRIBUTE, "true");
     this.entries.set(controller.root, entry);
     return () => {
@@ -65,46 +52,29 @@ export class DropSurfaceRegistry<T extends DropSurface> {
   /**
    * Finds the closest registered document surface beneath the active pointer.
    *
-   * Nested views remain eligible inside the source rectangle. Their top and bottom
-   * edges belong to the enclosing surface, including padding outside a displayed
-   * subtree. Only hit ancestors are visited; no document tree or rectangle cache
-   * is maintained. Current native hits avoid a duplicate browser hit test.
+   * The closest registered occurrence owns its complete hit surface, including
+   * its declared edge regions. No geometry redirects a hit to an enclosing
+   * editor. To target the enclosing editor, the pointer must hit one of its own
+   * mounted regions outside the nested occurrence. Only hit ancestors are read;
+   * the registry does not maintain a document tree or rectangle cache.
    *
    * @param sourceRoot - Source occurrence, providing the browser document; null disables resolution.
    * @param pointer - Viewport X and Y coordinates in CSS pixels.
-   * @param outerEdgeDropZone - Edge thickness in pixels; defaults to eight, capped at a third of content height.
    * @param nativeHit - Optional connected hit from the same browser document.
-   * @returns Receiver and nested-boundary permission, or null outside registered surfaces.
-   * @throws Propagates browser geometry and content-boundary lookup failures.
+   * @returns Closest registered receiver, or null outside registered surfaces.
+   * @throws Propagates native hit-testing or DOM traversal failures.
    */
   resolve(
     sourceRoot: HTMLElement | null,
     pointer: { readonly x: number; readonly y: number },
-    outerEdgeDropZone = 8,
     nativeHit?: Element,
-  ): DropSurfaceRoute<T> | null {
+  ): T | null {
     const document = sourceRoot?.ownerDocument;
     const hit =
       nativeHit?.isConnected && nativeHit.ownerDocument === document
         ? nativeHit
         : document?.elementFromPoint(pointer.x, pointer.y);
-    let root = hit?.closest<HTMLElement>(DROP_SURFACE_SELECTOR);
-    let nestedBoundary = false;
-    while (root) {
-      const parent = root.parentElement?.closest<HTMLElement>(DROP_SURFACE_SELECTOR);
-      if (!parent) {
-        break;
-      }
-      const content = this.entries.get(root)?.getContentElement?.();
-      const rect = (content ?? root).getBoundingClientRect();
-      const edge = Math.min(Math.max(0, outerEdgeDropZone), rect.height / 3);
-      if (pointer.y > rect.top + edge && pointer.y < rect.bottom - edge) {
-        break;
-      }
-      nestedBoundary = true;
-      root = parent;
-    }
-    const controller = root && this.get(root);
-    return controller ? { controller, nestedBoundary } : null;
+    const root = hit?.closest<HTMLElement>(DROP_SURFACE_SELECTOR);
+    return root ? (this.get(root) ?? null) : null;
   }
 }

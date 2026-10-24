@@ -4,13 +4,11 @@ import type { CSSProperties, ReactNode } from "react";
 export interface BlockEditorTheme extends CSSProperties {
   /** Cursor while the configured block-selection binding is held; defaults to pointer. */
   readonly "--rivto-selection-cursor"?: CSSProperties["cursor"];
-  /** Flow-gap thickness and each BlockDropWrapper boundary thickness; defaults to 8px. Two adjacent wrappers contribute twice this spacing. */
-  readonly "--rivto-drop-gap-size"?: string;
-  /** Minimum cross-axis size of horizontal gap targets; defaults to 32px. */
-  readonly "--rivto-drop-min-height"?: string;
+  /** Inset drop edge thickness in local CSS pixels; defaults to 8px, without changing layout. */
+  readonly "--rivto-drop-target-size"?: string;
   /** Shared row padding, including its content and in-flow controls; defaults to 16px. */
   readonly "--rivto-block-padding"?: string;
-  /** Shared vertical gap between displayed roots, above children, and between child blocks; defaults to 4px. */
+  /** Spacing above outline children and between editor sections; defaults to 4px. Inset interaction edges use --rivto-drop-target-size independently of this spacing. */
   readonly "--rivto-block-gap"?: string;
   /** Logical indentation of a child group; defaults to 28px. */
   readonly "--rivto-block-indent"?: string;

@@ -2,9 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const edge of ["before", "after"] as const) {
-  test(`Page routes the ${edge} edge of an embedded editor to its enclosing document`, async ({
-    page,
-  }) => {
+  test(`Page inserts ${edge} an embedded editor through its enclosing region`, async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1200 });
     await page.goto("/");
     const ids = await page.evaluate((edge) => {
@@ -30,18 +28,16 @@ for (const edge of ["before", "after"] as const) {
     );
     await source.locator(":scope > .rivto-block-row").hover();
     const from = (await source.locator(".block-handle").boundingBox())!;
-    const referenceBox = (await reference.boundingBox())!;
-    const content = (await nested
-      .locator(":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")
-      .first()
-      .boundingBox())!;
+
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(
-      referenceBox.x + 2,
-      edge === "before" ? content.y + 1 : content.y + content.height - 1,
-      { steps: 12 },
-    );
+    await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
+    await reference.scrollIntoViewIfNeeded();
+    const box = (await reference.boundingBox())!;
+    // Embedded content owns its bounds; use the existing surrounding layout gap.
+    await page.mouse.move(box.x + 4, edge === "before" ? box.y - 2 : box.y + box.height + 2, {
+      steps: 12,
+    });
     await expect(surface.locator(":scope > .rivto-block-drag-preview")).toBeVisible();
     await expect(surface.locator(":scope > .rivto-block-drop-line")).toBeVisible();
     await page.mouse.up();

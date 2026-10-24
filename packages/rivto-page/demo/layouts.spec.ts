@@ -42,8 +42,9 @@ test("chooses live canonical gaps, respects clipping, and clears targets after v
 }) => {
   await page.goto("/?example=kanban");
   await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
-  const gap = page.locator('[data-drop-gap="board-1"]').first();
-  await gap.hover();
+  const gap = page.locator('[data-block-id="board-1-item-1"]');
+  const firstBox = (await gap.boundingBox())!;
+  await page.mouse.move(firstBox.x + 2, firstBox.y + 12);
   const output = page.locator("[data-demo-drop-output]");
   await expect(output).toHaveText(
     JSON.stringify({
@@ -62,7 +63,8 @@ test("chooses live canonical gaps, respects clipping, and clears targets after v
   await body.evaluate((element) => {
     element.scrollLeft = element.scrollWidth;
   });
-  await page.locator('[data-drop-gap="board-1"]').last().hover();
+  const lastBox = (await page.locator('[data-block-id="board-1-added-4"]').boundingBox())!;
+  await page.mouse.move(lastBox.x + lastBox.width - 2, lastBox.y + 12);
   await expect(output).toContainText('"previousId":"board-1-added-4"');
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await page.mouse.move(10, 10);
@@ -112,18 +114,13 @@ test("wrapper boundaries preserve cells and canonical destinations across row wr
     const rectangles = () =>
       tiles.map((tile) => JSON.stringify(tile.getBoundingClientRect().toJSON()));
     const before = rectangles();
-    const gaps = element.querySelectorAll<HTMLElement>(".rivto-block-drop-wrapper-boundary");
-    gaps.forEach((gap) => {
-      gap.hidden = true;
-    });
+    element.style.setProperty("--rivto-drop-target-size", "24px");
     const after = rectangles();
-    gaps.forEach((gap) => {
-      gap.hidden = false;
-    });
+    element.style.removeProperty("--rivto-drop-target-size");
     return JSON.stringify(before) === JSON.stringify(after);
   });
   expect(unchanged).toBe(true);
-  await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(16);
+  await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(0);
   const first = page.locator('[data-demo-tile="board-1-item-1"]');
   const third = page.locator('[data-demo-tile="board-1-item-3"]');
   expect((await third.boundingBox())!.y).toBeGreaterThan((await first.boundingBox())!.y);
@@ -154,13 +151,10 @@ test("wrapper boundaries use package theme geometry, respect clipping, and disap
   const host = page.locator('[data-block-id="board-1"] > .rivto-block-children');
   await host.evaluate((element) => {
     element.style.setProperty("--rivto-block-gap", "24px");
-    element.style.setProperty("--rivto-drop-gap-size", "20px");
+    element.style.setProperty("--rivto-drop-target-size", "20px");
     element.style.overflow = "hidden";
   });
-  const gap = page.locator(
-    '[data-demo-tile="board-1-item-1"] > [data-drop-placement="before"][data-drop-edge="inline"]',
-  );
-  await expect(gap).toHaveCSS("width", "20px");
+  await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
   const bounds = (await host.boundingBox())!;
   await page.mouse.move(bounds.x - 1, bounds.y + 30);
@@ -168,7 +162,7 @@ test("wrapper boundaries use package theme geometry, respect clipping, and disap
   await page.getByRole("button", { name: "Collapse board-1", exact: true }).click();
   await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(0);
   await page.getByRole("button", { name: "Expand board-1", exact: true }).click();
-  await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(16);
+  await expect(page.locator(".rivto-block-drop-wrapper-boundary")).toHaveCount(0);
   await expectTileGap(page, 1, "before", "inline", null, "board-1-item-1");
   await page.getByRole("checkbox", { name: "Editor mounted", exact: true }).uncheck();
   await page.mouse.move(10, 10);
@@ -214,11 +208,8 @@ test("grid gutters resolve between actual tiles and rows, including RTL", async 
   });
   await expectTileGap(page, 1, "before", "inline", null, "board-1-item-1");
   const tile = (await first.boundingBox())!;
-  const start = (await first
-    .locator(':scope > [data-drop-placement="before"][data-drop-edge="inline"]')
-    .boundingBox())!;
-  expect(start.x + start.width).toBeCloseTo(tile.x + tile.width, 1);
-  expect(start.x).toBeGreaterThan(tile.x);
+  await page.mouse.move(tile.x + tile.width - 2, tile.y + tile.height / 2);
+  await expect(output).toContainText('"nextId":"board-1-item-1"');
 });
 
 /**
@@ -240,11 +231,30 @@ async function expectTileGap(
   previousId: string | null,
   nextId: string | null,
 ): Promise<void> {
-  await page
-    .locator(
-      `[data-demo-tile="board-1-item-${item}"] > [data-drop-placement="${placement}"][data-drop-edge="${edge}"]`,
-    )
-    .hover();
+  const tile = page.locator(`[data-demo-tile="board-1-item-${item}"]`);
+  await tile.scrollIntoViewIfNeeded();
+  let box = (await tile.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  if (edge === "block" && placement === "after" && box.y + box.height > viewport.height - 8) {
+    await page.evaluate(
+      (delta) => window.scrollBy(0, delta),
+      box.y + box.height - viewport.height + 8,
+    );
+    box = (await tile.boundingBox())!;
+  }
+  if (edge === "block" && placement === "before" && box.y < 8) {
+    await page.evaluate((delta) => window.scrollBy(0, delta), box.y - 8);
+    box = (await tile.boundingBox())!;
+  }
+  const rtl = await tile.evaluate((element) => getComputedStyle(element).direction === "rtl");
+  let x = box.x + box.width / 2;
+  let y = box.y + box.height / 2;
+  if (edge === "inline") {
+    x = (placement === "after") !== rtl ? box.x + box.width - 2 : box.x + 2;
+  } else {
+    y = placement === "after" ? box.y + box.height - 2 : box.y + 2;
+  }
+  await page.mouse.move(x, y);
   await expect(page.locator("[data-demo-drop-output]")).toHaveText(
     JSON.stringify({ kind: "between", parentId: "board-1", previousId, nextId }),
   );
@@ -263,11 +273,15 @@ for (const example of ["kanban", "bento"]) {
       const id = example === "kanban" ? "board-1-item-1-child-1" : "board-1-item-1";
       const text = page.getByRole("textbox", { name: `Text ${id}`, exact: true });
       await text.fill("Warm");
-      await page.getByRole("button", { name: "Reset counters", exact: true }).click();
       await text.press("End");
+      await page
+        .getByRole("button", { name: "Reset counters", exact: true })
+        .evaluate((element: HTMLButtonElement) => element.click());
       await text.press("x");
       await expect(text).toHaveText("Warmx");
-      await page.getByRole("button", { name: "Refresh statistics", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Refresh statistics", exact: true })
+        .evaluate((element: HTMLButtonElement) => element.click());
       const changed: DemoMetrics = JSON.parse(
         (await page.locator("[data-demo-metrics]").textContent())!,
       );
@@ -275,12 +289,17 @@ for (const example of ["kanban", "bento"]) {
       expect(changed.nodeReads).toBeLessThanOrEqual(40);
       expect(changed.notifications).toBeLessThanOrEqual(4);
       await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
-      const gap = page.locator('[data-drop-gap="board-1"]').first();
-      await page.getByRole("button", { name: "Reset counters", exact: true }).click();
-      // Toolbar clicks can scroll the target away; restore visibility after resetting counters.
+      const gap = page.locator(
+        example === "bento"
+          ? '[data-demo-tile="board-1-item-1"]'
+          : '[data-block-id="board-1-item-1"]',
+      );
+      // Toolbar clicks can scroll the target away; restore visibility before warming samples.
       await gap.scrollIntoViewIfNeeded();
       const samples = await measureDropTargets(page, gap);
-      await page.getByRole("button", { name: "Refresh statistics", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Refresh statistics", exact: true })
+        .evaluate((element: HTMLButtonElement) => element.click());
       const pointer: DemoMetrics = JSON.parse(
         (await page.locator("[data-demo-metrics]").textContent())!,
       );
@@ -340,14 +359,23 @@ async function measureDropTargets(page: Page, gap: Locator): Promise<DropTimingS
     const right = Math.min(window.innerWidth, rect.right);
     const top = Math.max(0, rect.top);
     const bottom = Math.min(window.innerHeight, rect.bottom);
-    const x = (left + right) / 2;
-    const y = (top + bottom) / 2;
+    const x = left + 2;
+    const y = top + 2;
     const hit = document.elementFromPoint(x, y);
     if (right <= left || bottom <= top || !hit || !element.contains(hit)) {
       throw new Error("Performance gap has no unobstructed visible sample point");
     }
     return { x, y, offset: Math.min(1, (right - left) / 4) };
   });
+  // Warm the selected edge and drain inspector work from toolbar/scroll setup.
+  await capturePointerTiming(page);
+  await page.mouse.move(point.x + point.offset, point.y);
+  await expect(page.locator("[data-demo-drop-output]")).toHaveAttribute("data-pointer-ms", /\d/);
+  // The window virtualizer publishes scroll-end state after its 150ms debounce.
+  await page.waitForTimeout(200);
+  await page
+    .getByRole("button", { name: "Reset counters", exact: true })
+    .evaluate((element: HTMLButtonElement) => element.click());
   const samples: DropTimingSample[] = [];
   for (let sample = 0; sample < 5; sample++) {
     await capturePointerTiming(page);
@@ -379,19 +407,9 @@ test("wrapper boundaries remain hit-testable when inspection is inactive", async
   await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
   await expectTileGap(page, 1, "after", "block", "board-1-item-1", "board-1-item-2");
   await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).uncheck();
-  const boundary = page.locator(
-    '[data-demo-tile="board-1-item-1"] > [data-drop-placement="after"][data-drop-edge="block"]',
-  );
+  const boundary = page.locator('[data-demo-tile="board-1-item-1"]');
   await boundary.scrollIntoViewIfNeeded();
-  expect(
-    await boundary.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return (
-        document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2) ===
-        element
-      );
-    }),
-  ).toBe(true);
+  await expect(boundary.locator(":scope > [data-drop-edge]")).toHaveCount(0);
   await select.scrollIntoViewIfNeeded();
   const restored = await select.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -450,12 +468,57 @@ test("wrapper boundaries reserve package-owned space outside tile content", asyn
   expect(geometry.width).toBe(280);
   expect(geometry.insets).toEqual([8, 8, 8, 8]);
   expect(geometry.overlap).toBe(false);
-  expect(geometry.position).toEqual(["static", "static", "static", "static"]);
+  expect(geometry.position).toEqual([]);
   const host = page.locator('[data-block-id="board-1"] > .rivto-block-children');
   await expect(host).toHaveCSS("gap", "0px");
-  await host.evaluate((element) => element.style.setProperty("--rivto-drop-gap-size", "18px"));
-  const strip = wrapper.locator(':scope > [data-drop-placement="before"][data-drop-edge="inline"]');
-  await expect(strip).toHaveCSS("width", "18px");
+  await host.evaluate((element) => element.style.setProperty("--rivto-drop-target-size", "18px"));
   const content = wrapper.locator(":scope > .rivto-block-drop-wrapper-content");
-  await expect(content).toHaveCSS("width", "244px");
+  await expect(content).toHaveCSS("width", "264px");
+});
+
+test("switches merged and separate boundaries without a fractional gap or layout changes", async ({
+  page,
+}) => {
+  await page.goto("/?example=kanban");
+  await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
+  const first = page.locator('[data-block-id="board-1-item-1"]');
+  const next = page.locator('[data-block-id="board-1-item-2"]');
+  const a = (await first.boundingBox())!;
+  const b = (await next.boundingBox())!;
+  const output = page.locator("[data-demo-drop-output]");
+  await page.evaluate(() => {
+    window.addEventListener("pointermove", (event) => {
+      document.documentElement.dataset.testPointerX = String(event.clientX);
+    });
+  });
+  for (const merged of [true, false, true]) {
+    await page
+      .getByRole("checkbox", { name: "Merge drop boundaries", exact: true })
+      .setChecked(merged);
+    expect(await first.boundingBox()).toEqual(a);
+    expect(await next.boundingBox()).toEqual(b);
+    for (let x = a.x + a.width - 2; x <= b.x + 2; x += 0.25) {
+      await page.mouse.move(x, a.y + 20);
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+      );
+      await expect(output).toHaveText(
+        JSON.stringify({
+          kind: "between",
+          parentId: "board-1",
+          previousId: "board-1-item-1",
+          nextId: "board-1-item-2",
+        }),
+      );
+      const line = (await page.locator("[data-demo-drop-overlay]").boundingBox())!;
+      const midpoint = (a.x + a.width + b.x) / 2;
+      let expected = midpoint;
+      if (!merged) {
+        // Firefox may quantize dispatched mouse coordinates to whole CSS pixels.
+        const pointerX = Number(await page.locator("html").getAttribute("data-test-pointer-x"));
+        expected = pointerX <= midpoint ? a.x + a.width : b.x;
+      }
+      expect(line.x + line.width / 2).toBeCloseTo(expected, 1);
+    }
+  }
 });

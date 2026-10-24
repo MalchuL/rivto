@@ -1,16 +1,19 @@
 import { Slot } from "radix-ui";
+import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "../../editor/drag-and-drop/block-drop-attributes";
 import { useCallback, useLayoutEffect, useRef, type HTMLAttributes } from "react";
 import { useBlockEditorController } from "../hooks/use-block-editor-controller";
-import type { BlockDropDestination } from "../../editor/drag-and-drop/types";
+import type { BlockDropRegion, BlockDropDestination } from "../../editor/drag-and-drop/types";
 
-/** Declarative destination attached to a wrapper or an existing child element. */
+/** Declarative geometry composed onto one existing child element. */
 export interface BlockDropTargetProps extends HTMLAttributes<HTMLDivElement> {
-  readonly destination: BlockDropDestination;
+  readonly destination?: BlockDropDestination;
+  /** Explicit data-only geometry; omission uses the supplied destination over existing bounds. */
+  readonly regions?: readonly BlockDropRegion[];
   readonly priority?: number;
-  /** Optional insertion-line orientation through a between region; does not change hit geometry. */
-  readonly indicatorAxis?: "horizontal" | "vertical";
+  /** False by default; true excludes this anchor and ancestor fallback, while descendant regions remain eligible. */
+  readonly exclude?: boolean;
   /** Composes attributes and ref onto one child instead of adding a wrapper. */
-  readonly asChild?: boolean;
+  readonly asChild: true;
 }
 
 /**
@@ -23,26 +26,28 @@ export interface BlockDropTargetProps extends HTMLAttributes<HTMLDivElement> {
  * @param props - Native attributes, destination, priority, and region contents.
  * @param props.destination - Real parent or canonical child gap checked at resolution.
  * @param props.priority - Finite overlap priority, default zero.
- * @param props.indicatorAxis - Optional line orientation; omitted regions retain outline feedback.
- * @param props.asChild - Attach to an existing child element when true.
+ * @param props.exclude - Excludes this anchor, default false; descendant regions may accept drops without ancestor fallback.
+ * @param props.asChild - Required true: registration always uses the existing child element.
  * @param props.children - Target contents, or exactly one ref-forwarding child with asChild.
- * @returns A registered div or the composed child element.
+ * @returns The same child with composed attributes and registration ref.
  * @throws If outside BlockEditor, priority is invalid, or child ref composition fails.
  */
 export function BlockDropTarget({
   destination,
+  regions,
   priority,
-  indicatorAxis,
-  asChild = false,
+  exclude = false,
+  asChild,
   children,
   ...attributes
 }: BlockDropTargetProps) {
   const editor = useBlockEditorController();
   const release = useRef<(() => void) | undefined>(undefined);
-  const current = useRef(destination);
+  const declarations = regions ?? (destination ? [{ kind: "inside" as const, destination }] : []);
+  const current = useRef(declarations);
   useLayoutEffect(() => {
-    current.current = destination;
-  }, [destination]);
+    current.current = declarations;
+  }, [declarations]);
   const attach = useCallback(
     (element: HTMLDivElement | null) => {
       release.current?.();
@@ -51,21 +56,28 @@ export function BlockDropTarget({
         release.current = editor.dropTargets.register({
           element,
           priority,
-          indicatorAxis,
+
           /**
-           * Reads only the latest committed JSX destination.
+           * Reads only the latest committed JSX region declarations.
            *
-           * @returns Current owner destination without allocating a replacement.
+           * @returns Current owner declarations without allocating a replacement.
            */
-          getDestination: () => current.current,
+          getRegions: () => current.current,
         });
       }
     },
-    [editor, priority, indicatorAxis],
+    [editor, priority],
   );
-  const Component = asChild ? Slot.Root : "div";
+  if (!asChild) {
+    throw new Error("BlockDropTarget requires asChild and an existing layout element");
+  }
+  const Component = Slot.Root;
   return (
-    <Component {...attributes} ref={attach}>
+    <Component
+      {...attributes}
+      {...{ [BLOCK_DROP_EXCLUDE_ATTRIBUTE]: exclude ? "" : undefined }}
+      ref={attach}
+    >
       {children}
     </Component>
   );

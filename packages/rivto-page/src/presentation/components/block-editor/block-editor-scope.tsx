@@ -1,3 +1,6 @@
+import { BlockDropLayoutContext } from "../../drag-and-drop/block-drop-layout";
+import { BlockRootPlacements } from "../../drag-and-drop/block-root-placements";
+import { BlockDropDepthContext } from "../../drag-and-drop/block-drop-item";
 import { useEffect, type ReactNode } from "react";
 import type { BlockEditorApi } from "../../../editor/block-editor-api";
 import type { BlockEditorController } from "../../../editor/block-editor-controller";
@@ -26,6 +29,8 @@ export interface BlockEditorScopeProps {
  * Nested occurrences require their own controller.
  * Each occurrence resets inherited child-control placement to outside, so a
  * nested editor does not borrow the surrounding container's row geometry.
+ * Terminal drop-depth destinations also reset at this boundary: a nested editor
+ * must never register insertion regions belonging to an enclosing occurrence.
  *
  * @param props - Borrowed controller, mounted root and existing view content.
  * @param props.editor - Controller created and destroyed by the host outside render.
@@ -46,7 +51,11 @@ export function BlockEditorScope({ editor, root, children }: BlockEditorScopePro
   return (
     <BlockEditorContext.Provider value={editor}>
       <BlockChildrenControlsContext.Provider value="outside">
-        {children}
+        <BlockDropDepthContext.Provider value={null}>
+          <BlockDropLayoutContext.Provider value={null}>
+            <BlockRootPlacements>{children}</BlockRootPlacements>
+          </BlockDropLayoutContext.Provider>
+        </BlockDropDepthContext.Provider>
       </BlockChildrenControlsContext.Provider>
     </BlockEditorContext.Provider>
   );

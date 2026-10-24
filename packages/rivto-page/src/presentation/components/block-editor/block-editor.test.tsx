@@ -1,3 +1,5 @@
+import { BlockRootPlacementContext } from "../../drag-and-drop/block-root-placements";
+import { BlockDropDepthContext } from "../../drag-and-drop/block-drop-item";
 // jsdom has no layout observer; browser suites exercise real root measurements.
 beforeAll(() => {
   globalThis.ResizeObserver = class {
@@ -33,13 +35,21 @@ import { BlockBody } from "../block-layout/block-body";
 import { BlockChildren } from "../block-layout/block-children";
 import { BlockItem } from "../block-layout/block-item";
 import { BlockDropWrapper } from "../../drag-and-drop/block-drop-wrapper";
+import { BlockDropExclude } from "../../drag-and-drop/block-drop-exclude";
 import { BlockDropTarget } from "../../drag-and-drop/block-drop-target";
-import { BlockDropGap } from "../../drag-and-drop/block-drop-gap";
 import type { BlockChildrenItemProps } from "../block-layout/block-list";
 import type { BlockLayoutProps } from "../../renderers/types";
 import { renderToString } from "react-dom/server.node";
 import type { BlockRenderer, BlockRendererProps } from "../../renderers/types";
-import { act, createRef, StrictMode, useCallback, useEffect, useSyncExternalStore } from "react";
+import {
+  act,
+  createRef,
+  StrictMode,
+  useCallback,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type {
   BlockEditorAdapter,
@@ -262,7 +272,7 @@ it("renders nested blocks, reorders them, and observes an empty display list", (
   expect(container.textContent).toBe("aNested");
 });
 
-it("displays blocks from different parents without rendering or reading those parents", () => {
+it("displays blocks from different parents and reads their canonical insertion neighbors", () => {
   const adapter = new TestBlockEditorAdapter();
   const editor = createEditor(adapter);
   editor.renderers.register("text", { content: createRenderer(adapter, createMetrics()) });
@@ -278,8 +288,10 @@ it("displays blocks from different parents without rendering or reading those pa
   act(() => root.render(<BlockEditor editor={editor} />));
   expect(container.textContent).toBe("bachild");
   expect(container.querySelectorAll("[data-block-id]")).toHaveLength(3);
-  expect(adapter.blocks.getBlockNode.mock.calls.flat()).not.toContain("parent-a");
-  expect(adapter.blocks.getBlockNode.mock.calls.flat()).not.toContain("parent-b");
+  expect(adapter.blocks.getBlockNode.mock.calls.flat()).toContain("parent-a");
+  expect(container.querySelector('[data-block-id="parent-a"]')).toBeNull();
+  expect(adapter.blocks.getBlockNode.mock.calls.flat()).toContain("parent-b");
+  expect(container.querySelector('[data-block-id="parent-b"]')).toBeNull();
   adapter.blocks.getBlockIds.mockClear();
   act(() => adapter.setNode("a", { content: "Changed" }));
   expect(container.textContent).toBe("bChangedchild");
@@ -428,7 +440,7 @@ it("preserves the instance through StrictMode replay and releases data subscript
   );
   expect(container.textContent).toBe("first");
   // Stable root rows also observe list decoration for both rendering modes.
-  expect(firstAdapter.subscriberCount).toBe(5);
+  expect(firstAdapter.subscriberCount).toBe(6);
   const controller = [...first.controllers].at(-1)!;
   expect(controller.getRoot()).toBe(container.firstElementChild);
   act(() =>
@@ -440,7 +452,7 @@ it("preserves the instance through StrictMode replay and releases data subscript
   );
   expect([...first.controllers].at(-1)).toBe(controller);
   // Stable root rows also observe list decoration for both rendering modes.
-  expect(firstAdapter.subscriberCount).toBe(5);
+  expect(firstAdapter.subscriberCount).toBe(6);
   const secondAdapter = new TestBlockEditorAdapter();
   const secondEditor = createEditor(secondAdapter);
   secondAdapter.setNode("second");
@@ -817,7 +829,7 @@ it("supports headerless layouts, canonical gap props, and item wrappers without 
    * @returns A canonical child list with independently targetable gaps.
    */
   function Layout() {
-    return <BlockChildren item={Item} gap={BlockDropGap} />;
+    return <BlockChildren item={Item} />;
   }
   editor.renderers.register("container", { layout: Layout });
   act(() => root.render(<BlockEditor editor={editor} />));
@@ -826,7 +838,7 @@ it("supports headerless layouts, canonical gap props, and item wrappers without 
   const item = container.querySelector(".rivto-block-item");
   expect(item?.getAttribute("data-block-list-type")).toBe("numbered_list");
   expect(item?.firstElementChild?.getAttribute("data-block-in-item")).toBe("true");
-  expect(container.querySelectorAll('[data-drop-gap="parent"]')).toHaveLength(3);
+  expect(container.querySelectorAll(".rivto-block-drop-gap")).toHaveLength(0);
   const child = container.querySelector('[data-block-id="a"]');
   act(() => adapter.setNode("parent", { childIds: ["b", "a"] }));
   expect(container.querySelector('[data-block-id="a"]')).toBe(child);
@@ -901,17 +913,17 @@ it("does not rebuild child gaps for text, color, selection, or slot publications
   adapter.setNode("parent", { type: "container", childIds: ["a"] });
   adapter.setNode("a");
   adapter.setBlockIds(["parent"]);
-  const Gap = jest.fn(() => null);
+  const register = jest.spyOn(editor.dropTargets, "register");
   editor.renderers.register("container", {
     layout: () => (
       <>
         <BlockRow />
-        <BlockChildren gap={Gap} />
+        <BlockChildren />
       </>
     ),
   });
   act(() => root.render(<BlockEditor editor={editor} />));
-  Gap.mockClear();
+  register.mockClear();
   act(() => adapter.setNode("parent", { content: "Parent text" }));
   act(() => adapter.setNode("a", { content: "Child text" }));
   act(() => editor.getNode("parent").setColor("red"));
@@ -919,9 +931,9 @@ it("does not rebuild child gaps for text, color, selection, or slot publications
   act(() => {
     editor.slots.register({ position: "end", component: () => <span>Slot</span> });
   });
-  expect(Gap).not.toHaveBeenCalled();
+  expect(register).not.toHaveBeenCalled();
   act(() => adapter.setNode("parent", { childIds: [] }));
-  expect(Gap).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('[data-block-id="a"]')).toBeNull();
 });
 
 it("keeps custom empty child regions usable and hides collapsed children even with explicit display styles", () => {
@@ -975,25 +987,20 @@ it.each(["vertical", "horizontal", "grid"] as const)(
      */
     function Item({ children }: BlockChildrenItemProps) {
       return (
-        <BlockDropWrapper axis={axis} style={{ "--rivto-drop-gap-size": "12px" }}>
+        <BlockDropWrapper axis={axis} style={{ "--rivto-drop-target-size": "12px" }}>
           {children}
         </BlockDropWrapper>
       );
     }
     editor.renderers.register("container", {
-      layout: () => <BlockChildren dropPlacement="siblings" item={Item} />,
+      layout: () => <BlockChildren dropAxis="grid" dropPlacement="siblings" item={Item} />,
     });
     act(() => root.render(<BlockEditor editor={editor} />));
-    const boundaries = container.querySelectorAll(".rivto-block-drop-wrapper-boundary");
-    expect(boundaries).toHaveLength(axis === "grid" ? 4 : 2);
+    expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(0);
     expect(container.querySelectorAll('[data-block-id="a"]')).toHaveLength(1);
-    if (axis !== "grid") {
-      boundaries.forEach((element) =>
-        expect(element.getAttribute("data-drop-edge")).toBe(
-          axis === "vertical" ? "block" : "inline",
-        ),
-      );
-    }
+    expect(
+      container.querySelector(".rivto-block-drop-wrapper")?.getAttribute("data-drop-wrapper-axis"),
+    ).toBe(axis);
   },
 );
 
@@ -1005,11 +1012,13 @@ it("keeps grid edges item-local, updates canonical neighbors without remounting,
   adapter.setNode("b");
   adapter.setBlockIds(["parent"]);
   const register = jest.spyOn(editor.dropTargets, "register");
-  editor.renderers.register("container", { layout: () => <BlockChildren item={GridItem} /> });
+  editor.renderers.register("container", {
+    layout: () => <BlockChildren dropAxis="grid" item={GridItem} />,
+  });
   act(() => root.render(<BlockEditor editor={editor} />));
   const item = container.querySelector('[data-grid-item="a"]')!;
-  const before = item.querySelector<HTMLElement>('[data-drop-placement="before"]')!;
-  const after = item.querySelector<HTMLElement>('[data-drop-placement="after"]')!;
+  const before = item;
+  const after = item;
   const beforeEntry = [...register.mock.calls]
     .reverse()
     .find(([entry]) => entry.element === before)![0];
@@ -1017,20 +1026,20 @@ it("keeps grid edges item-local, updates canonical neighbors without remounting,
     .reverse()
     .find(([entry]) => entry.element === after)![0];
   expect(container.querySelectorAll("[data-block-id]")).toHaveLength(3);
-  expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(8);
-  expect(beforeEntry.getDestination()).toEqual({
+  expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(0);
+  expect(beforeEntry.getRegions()[0]?.destination).toEqual({
     kind: "between",
     parentId: "parent",
     previousId: null,
     nextId: "a",
   });
-  expect(afterEntry.getDestination()).toMatchObject({ previousId: "a", nextId: "b" });
+  expect(afterEntry.getRegions()[1]?.destination).toMatchObject({ previousId: "a", nextId: "b" });
   register.mockClear();
   act(() => adapter.setNode("parent", { childIds: ["b", "a"] }));
   expect(container.querySelector('[data-grid-item="a"]')).toBe(item);
   expect(register).not.toHaveBeenCalled();
-  expect(beforeEntry.getDestination()).toMatchObject({ previousId: "b", nextId: "a" });
-  expect(afterEntry.getDestination()).toMatchObject({ previousId: "a", nextId: null });
+  expect(beforeEntry.getRegions()[0]?.destination).toMatchObject({ previousId: "b", nextId: "a" });
+  expect(afterEntry.getRegions()[1]?.destination).toMatchObject({ previousId: "a", nextId: null });
   act(() => editor.getNode("parent").setCollapsed(true));
   expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(0);
   act(() => root.render(null));
@@ -1039,7 +1048,7 @@ it("keeps grid edges item-local, updates canonical neighbors without remounting,
 
 it("rejects wrappers without a real parent and item anchor", () => {
   expect(() => renderToString(<BlockDropWrapper />)).toThrow(
-    "BlockItem requires block or a BlockChildren item component",
+    "BlockDropWrapper requires a canonical child placement",
   );
   const adapter = new TestBlockEditorAdapter();
   const editor = createEditor(adapter);
@@ -1051,7 +1060,7 @@ it("rejects wrappers without a real parent and item anchor", () => {
         <BlockList blockIds={["a"]} item={GridItem} />
       </BlockEditorContext.Provider>,
     ),
-  ).toThrow("BlockDropWrapper requires a BlockChildren item with a real parent");
+  ).toThrow("BlockDropWrapper requires a canonical child placement");
 });
 
 it("releases every grid registration once through StrictMode replay and view unmount", () => {
@@ -1067,7 +1076,9 @@ it("releases every grid registration once through StrictMode replay and view unm
     releases.push(release);
     return release;
   });
-  editor.renderers.register("container", { layout: () => <BlockChildren item={GridItem} /> });
+  editor.renderers.register("container", {
+    layout: () => <BlockChildren dropAxis="grid" item={GridItem} />,
+  });
   act(() =>
     root.render(
       <StrictMode>
@@ -1075,7 +1086,7 @@ it("releases every grid registration once through StrictMode replay and view unm
       </StrictMode>,
     ),
   );
-  expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(4);
+  expect(container.querySelectorAll(".rivto-block-drop-wrapper-boundary")).toHaveLength(0);
   act(() => root.render(null));
   expect(releases.length).toBeGreaterThanOrEqual(4);
   for (const release of releases) {
@@ -1402,4 +1413,284 @@ it("resets inherited child controls at nested autonomous editor boundaries", () 
       .querySelector('[data-block-id="nested-root"] > .rivto-block-row')
       ?.getAttribute("data-controls-placement"),
   ).toBe("outside");
+});
+
+it("declares terminal depth on existing shells without creating insertion DOM", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("parent", { childIds: ["a", "b"] });
+  adapter.setNode("a");
+  adapter.setNode("b");
+  adapter.rootIds = ["parent"];
+  adapter.setBlockIds(["parent"]);
+  const editor = createEditor(adapter);
+  const register = jest.spyOn(editor.dropTargets, "register");
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const shell = container.querySelector('[data-block-id="b"]')!;
+  const entry = register.mock.calls.find(
+    ([entry]) =>
+      entry.element === shell && entry.getRegions().some((region) => region.kind === "edge"),
+  )![0];
+  const edge = entry.getRegions()[1]!;
+  expect(edge.kind === "edge" && edge.depth?.destinations).toEqual([
+    { kind: "between", parentId: null, previousId: "parent", nextId: null },
+    { kind: "between", parentId: "parent", previousId: "b", nextId: null },
+    { kind: "inside", parentId: "b" },
+  ]);
+  expect(
+    container.querySelectorAll(".rivto-block-drop-gap, .rivto-block-outline-drop-gap"),
+  ).toHaveLength(0);
+  act(() => adapter.setNode("parent", { collapsed: true }));
+  expect(shell.isConnected).toBe(false);
+});
+
+it("removes filtered anchors while retaining hidden canonical neighbors", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("parent", { type: "filtered", childIds: ["a", "hidden", "b"] });
+  for (const id of ["a", "hidden", "b"]) {
+    adapter.setNode(id);
+  }
+  adapter.setBlockIds(["parent"]);
+  const editor = createEditor(adapter);
+  const register = jest.spyOn(editor.dropTargets, "register");
+  /**
+   * Omits a filtered item together with its Page-owned subtree and registrations.
+   *
+   * @param props - Canonical identity and existing subtree.
+   * @returns Visible subtree, or null for the filtered identity.
+   */
+  function Item({ blockId, children }: BlockChildrenItemProps) {
+    return blockId === "hidden" ? null : children;
+  }
+  editor.renderers.register("filtered", { layout: () => <BlockChildren item={Item} /> });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const shell = container.querySelector('[data-block-id="b"]');
+  const entry = register.mock.calls.find(
+    ([entry]) =>
+      entry.element === shell && entry.getRegions().some((region) => region.kind === "edge"),
+  )![0];
+  expect(entry.getRegions()[0]?.destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "hidden",
+    nextId: "b",
+  });
+  expect(container.querySelector('[data-block-id="hidden"]')).toBeNull();
+});
+
+it("declares empty insertion on the existing editor surface without adding an empty drop element", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("hidden", { childIds: [] });
+  const editor = createEditor(adapter);
+  const register = jest.spyOn(editor.dropTargets, "register");
+  act(() => root.render(<BlockEditor editor={editor} emptyDropParentId="hidden" />));
+  const surface = container.querySelector("[data-rivto-block-editor]");
+  const entry = register.mock.calls.find(([entry]) => entry.element === surface)![0];
+  expect(entry.getRegions()[0]?.destination).toEqual({ kind: "inside", parentId: "hidden" });
+  act(() => {
+    adapter.setNode("a");
+    adapter.setBlockIds(["a"]);
+  });
+  expect(entry.getRegions()).toEqual([]);
+  expect(container.querySelector(".rivto-block-empty-drop")).toBeNull();
+});
+
+it("resets terminal depth at a nested autonomous occurrence", () => {
+  const outer = new TestBlockEditorAdapter();
+  outer.setNode("outer", { type: "embedding" });
+  outer.rootIds = ["outer"];
+  outer.setBlockIds(["outer"]);
+  const inner = new TestBlockEditorAdapter();
+  inner.setNode("inner");
+  inner.rootIds = ["inner"];
+  inner.setBlockIds(["inner"]);
+  const editor = createEditor(outer);
+  const nested = createEditor(inner);
+  const register = jest.spyOn(nested.dropTargets, "register");
+  editor.renderers.register("embedding", { content: () => <BlockEditor editor={nested} /> });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const shell = container.querySelector('[data-block-id="inner"]');
+  const edge = register.mock.calls
+    .find(
+      ([entry]) =>
+        entry.element === shell && entry.getRegions().some((region) => region.kind === "edge"),
+    )![0]
+    .getRegions()[1]!;
+  expect(edge.kind === "edge" && edge.depth?.destinations).toEqual([
+    { kind: "between", parentId: null, previousId: "inner", nextId: null },
+    { kind: "inside", parentId: "inner" },
+  ]);
+});
+
+it("retains depth context identity when unrelated roots reorder", () => {
+  const adapter = new TestBlockEditorAdapter();
+  for (const id of ["a", "b", "c", "parent", "d", "leaf"]) {
+    adapter.setNode(id);
+  }
+  adapter.setNode("parent", { childIds: ["leaf"] });
+  adapter.setNode("leaf", { type: "observed" });
+  adapter.rootIds = ["a", "b", "c", "parent", "d"];
+  adapter.setBlockIds(adapter.rootIds);
+  const editor = createEditor(adapter);
+  let renders = 0;
+  /**
+   * Counts publications to a descendant borrowing the terminal insertion levels.
+   *
+   * @returns No DOM; only context identity is observed.
+   */
+  function Content() {
+    useContext(BlockDropDepthContext);
+    renders += 1;
+    return null;
+  }
+  editor.renderers.register("observed", { content: Content });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const before = renders;
+  act(() => {
+    adapter.rootIds = ["b", "a", "c", "parent", "d"];
+    adapter.setBlockIds(adapter.rootIds);
+  });
+  expect(renders).toBe(before);
+});
+
+it.each([5, 2000])("shares canonical root reads when %i displayed roots reorder", (count) => {
+  const adapter = new TestBlockEditorAdapter();
+  const ids = Array.from({ length: count }, (_, index) => `root-${index}`);
+  for (const id of ids) {
+    adapter.setNode(id);
+  }
+  adapter.rootIds = ids;
+  adapter.setBlockIds(ids);
+  const editor = createEditor(adapter);
+  let placementReads: jest.SpyInstance;
+  /**
+   * Counts addressed snapshot checks independently of component renders.
+   *
+   * @returns No DOM; the effect restores its borrowed method on unmount.
+   */
+  function ObserveRootReads() {
+    const placements = useContext(BlockRootPlacementContext)!;
+    useEffect(() => {
+      placementReads = jest.spyOn(placements, "get");
+      return () => placementReads.mockRestore();
+    }, [placements]);
+    return null;
+  }
+  act(() =>
+    root.render(
+      <BlockEditor editor={editor}>
+        <ObserveRootReads />
+      </BlockEditor>,
+    ),
+  );
+  placementReads!.mockClear();
+  adapter.blocks.getRootIds.mockClear();
+  const parentReads = jest.spyOn(adapter.blocks, "getParentId");
+  parentReads.mockClear();
+  act(() => {
+    adapter.rootIds = [ids[1]!, ids[0]!, ...ids.slice(2)];
+    adapter.setBlockIds(adapter.rootIds);
+  });
+  expect(container.querySelectorAll("[data-block-id]")[0]?.getAttribute("data-block-id")).toBe(
+    ids[1],
+  );
+  expect(adapter.blocks.getRootIds.mock.calls.length).toBeLessThanOrEqual(8);
+  expect(parentReads.mock.calls.length).toBeLessThanOrEqual(8);
+  expect(placementReads!.mock.calls.length).toBeLessThanOrEqual(24);
+});
+
+it.each(["primitive", "property"])(
+  "toggles nested exclusion through %s inside an excluded ancestor without replacing the child",
+  (kind) => {
+    const adapter = new TestBlockEditorAdapter();
+    adapter.setNode("a", { checked: false });
+    adapter.setBlockIds(["a"]);
+    const editor = createEditor(adapter);
+    const inputRef = createRef<HTMLInputElement>();
+    const click = jest.fn();
+    /**
+     * Composes a target and a switchable exclusion onto the fixture's existing elements.
+     *
+     * @param props - Block whose checked field toggles exclusion without replacing the child.
+     * @returns One section and its input, preserving the child's ref and click handler.
+     */
+    function Layout({ blockId }: BlockLayoutProps) {
+      const node = useBlockNode(blockId);
+      return (
+        <BlockDropExclude asChild>
+          <div>
+            <BlockDropTarget
+              asChild
+              destination={{ kind: "inside", parentId: blockId }}
+              exclude={kind === "property" && node.checked}
+            >
+              <section data-target>
+                <BlockDropExclude asChild exclude={kind === "primitive" && node.checked}>
+                  <input ref={inputRef} data-editor-control onClick={click} />
+                </BlockDropExclude>
+              </section>
+            </BlockDropTarget>
+          </div>
+        </BlockDropExclude>
+      );
+    }
+    editor.renderers.register("text", { layout: Layout });
+    act(() =>
+      root.render(
+        <StrictMode>
+          <BlockEditor editor={editor} />
+        </StrictMode>,
+      ),
+    );
+    const input = inputRef.current!;
+    const host = container.querySelector<HTMLElement>("[data-target]")!;
+    jest.spyOn(host, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    });
+    const count = container.querySelectorAll("*").length;
+    expect(editor.dropTargets.resolve(50, 50, undefined, input)?.destination.parentId).toBe("a");
+    act(() => editor.getNode("a").setChecked(true));
+    expect(editor.dropTargets.resolve(50, 50, undefined, input)).toBeUndefined();
+    expect(inputRef.current).toBe(input);
+    expect(container.querySelectorAll("*")).toHaveLength(count);
+    act(() => input.click());
+    expect(click).toHaveBeenCalledTimes(1);
+    act(() => editor.getNode("a").setChecked(false));
+    expect(editor.dropTargets.resolve(50, 50, undefined, input)?.destination.parentId).toBe("a");
+    act(() => root.render(null));
+    expect(inputRef.current).toBeNull();
+    expect(adapter.subscriberCount).toBe(0);
+  },
+);
+
+it("excludes an existing element by default without requiring an editor", () => {
+  const ref = createRef<HTMLButtonElement>();
+  act(() =>
+    root.render(
+      <BlockDropExclude asChild>
+        <button ref={ref}>Control</button>
+      </BlockDropExclude>,
+    ),
+  );
+  const button = ref.current!;
+  expect(container.children).toHaveLength(1);
+  expect(button.hasAttribute("data-drop-inert")).toBe(true);
+  act(() =>
+    root.render(
+      <BlockDropExclude asChild exclude={false}>
+        <button ref={ref}>Control</button>
+      </BlockDropExclude>,
+    ),
+  );
+  expect(ref.current).toBe(button);
+  expect(button.hasAttribute("data-drop-inert")).toBe(false);
+  act(() => root.render(null));
+  expect(ref.current).toBeNull();
 });

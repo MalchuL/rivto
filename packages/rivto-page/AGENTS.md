@@ -72,30 +72,32 @@ layouts do not inherit outline indentation. Keep structural child-order/collapse
 context independent from chrome/selection/slot updates and preserve memo boundaries.
 
 Item components receive already-rendered children; do not mount a second block or
-recurse through their renderer. Gap components receive canonical parent/neighbors.
+recurse through their renderer. The shared iterator supplies canonical parent/neighbors.
 BlockItem owns the optional placement-level counter so wrapped children do not count
-twice; gap boundaries must not change list numbering. Keep their styles package-owned.
+twice; drop declarations must not change list numbering or layout dimensions.
 
-Explicit drop targets register DOM regions with real destinations. Resolve candidates
-through browser hit testing and registered ancestors of the hit within one editor;
-do not scan every target or measure the whole document on pointer movement. Respect
-nested editor boundaries, live parent/gap validation, element replacement, and cleanup.
-Grid/wrapping insertion boundaries belong to BlockDropWrapper, composed through the
-existing BlockChildren.item hook. One wrapper is one outer grid cell or flex item;
-its internal grid reserves strips around its already-rendered center content.
-Never insert separate flow gaps as grid cells or overlay targets over text/controls.
-Read canonical neighbors from the shared iterator, including after reordering.
-Before maps to top/inline-start and after to bottom/inline-end; preserve RTL,
-normal clipping, canonical order, and a single sibling counter owned by BlockItem.
-Keep geometry in the colocated package stylesheet, sized by --rivto-drop-gap-size.
-The wrapper's declared width includes both side strips. Each neighbor contributes
-its own strip, so wrapper-only spacing requires zero gap on the public child host;
-additional layout gap is explicitly additive and is not covered by the boundaries.
-Targets remain hit-testable with or without inspection/dragging; do not add an
-editor-level activation prop or inherited pointer-events switch. The inspector
-controls only feedback. No pointer-time scans or global geometry measurement.
-Geometry candidates are not move permissions. Add source checks and commit commands
-only with actual DnD migration; do not add placeholder gesture APIs.
+Drop targets attach data-only edge/inside declarations to existing mounted elements.
+BlockChildren declares physical gaps independently from background append; wrapping
+items use BlockDropWrapper through the existing item hook. Never create DOM hit strips
+or infer destinations from a block type. Inset edge thickness uses
+--rivto-drop-target-size (local CSS pixels), independently of presentation spacing.
+
+Resolve from the native hit within the nearest layout and editor occurrence. Binary
+search ordered mounted anchors for gaps; do not scan or measure the entire document
+on pointer movement. Respect clipping, controls, inert virtual holes, live canonical
+neighbors, replacement and cleanup. Grid gaps require aligned row-major ordering;
+inter-row background is a separately declared inside region. Bento background belongs
+to the board even beneath shorter tiles. Disabled gaps have no insertion action.
+
+Before maps to block-start/inline-start and after to block-end/inline-end; preserve RTL.
+Block edges win corners. Within an anchor explicit priority precedes edge/inside rank;
+physical gaps precede background. Source rejection must not fall through to an outer
+layout. Source exclusion changes neighbors without moving physical feedback.
+
+Declarations remain available without inspection/dragging; the inspector controls
+feedback only. Do not introduce activation flags, pointer-events switches, global
+rectangle caches, or custom container hit-test callbacks. Host permissions and
+transactional mutation retain their existing owners; geometry is not authorization.
 
 ## Generic block decorators
 

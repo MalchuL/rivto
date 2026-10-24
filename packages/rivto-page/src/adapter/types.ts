@@ -77,7 +77,11 @@ export interface BlockEditorBlocks {
    */
   getBlockIds(): readonly string[];
   /**
-   * Observes display-list changes independently of individual node edits.
+   * Observes display-list and accessible canonical-root changes independently of node edits.
+   *
+   * Notify when either getBlockIds or getRootIds changes, including canonical root
+   * reorderings hidden by a projected display list. Both snapshots must be published
+   * before notifying; unchanged arrays retain identity to avoid unrelated renders.
    *
    * @param listener - Callback that rereads IDs after their contents or order change.
    * @returns Idempotent disposer removing this subscription.

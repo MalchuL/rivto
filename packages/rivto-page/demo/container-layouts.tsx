@@ -7,26 +7,14 @@ import {
   BlockItem,
   BlockDropWrapper,
   BlockDropTarget,
-  BlockDropGap,
   useBlockNode,
   type BlockLayoutProps,
   type BlockChildrenItemProps,
-  type BlockChildrenGapProps,
 } from "../src";
 import { Badge } from "../src/presentation/components/ui/badge";
 import { Button } from "../src/presentation/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "../src/presentation/components/ui/native-select";
 import { DemoAdapterContext } from "./demo-block";
-
-/**
- * Places an actual child-list gap along a column row's horizontal flow.
- *
- * @param props - Canonical neighbors supplied by the shared child iterator.
- * @returns A package-owned gap target with horizontal hit-area geometry.
- */
-function HorizontalGap(props: BlockChildrenGapProps) {
-  return <BlockDropGap {...props} axis="horizontal" />;
-}
 
 /**
  * Gives one column a host-selected width without replacing its content renderer.
@@ -42,7 +30,7 @@ function ColumnItem({ children }: BlockChildrenItemProps) {
 /**
  * Configures a tile's placement independently of the renderer of its nested block.
  *
- * Width includes the four package-owned insertion boundaries; the center contains
+ * Width includes the existing visual placement frame; its center contains
  * the existing node and width control. No overlay or activation flag is required.
  *
  * @param props - Stable child ID and the already-rendered Page node.
@@ -111,7 +99,8 @@ export function KanbanLayout({ blockId }: BlockLayoutProps) {
       <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
         <BlockChildren
           item={ColumnItem}
-          gap={HorizontalGap}
+          dropAxis="horizontal"
+          dropPlacement="siblings"
           style={{ flexDirection: "row", overflowX: "auto" }}
         >
           <Button onClick={() => adapter.appendChild(blockId)}>Add column {blockId}</Button>
@@ -136,7 +125,7 @@ export function ColumnLayout({ blockId }: BlockLayoutProps) {
         <BlockContent />
       </BlockRow>
       <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
-        <BlockChildren gap={BlockDropGap}>
+        <BlockChildren>
           <Button onClick={() => adapter.appendChild(blockId)}>Add card {blockId}</Button>
         </BlockChildren>
       </BlockDropTarget>
@@ -156,7 +145,13 @@ export function BentoLayout({ blockId }: BlockLayoutProps) {
   return (
     <>
       <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
-        <BlockChildren item={TileItem} style={{ flexDirection: "row", flexWrap: "wrap", gap: 0 }} />
+        <BlockChildren
+          dropAxis="grid"
+          dropGaps
+          dropPlacement="siblings"
+          item={TileItem}
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: 0 }}
+        />
       </BlockDropTarget>
       <BlockBody />
       <BlockRow>

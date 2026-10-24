@@ -106,7 +106,8 @@ server/client data and registrations for hydration; production SSR integration h
 not been migrated.
 
 `adapter.blocks.getBlockIds()` returns the ordered display list, and
-`subscribeBlockIds(listener)` observes changes to that list. The host may select
+`subscribeBlockIds(listener)` observes changes to that list and to accessible
+canonical `getRootIds()` snapshots, including changes hidden by a projected list. The host may select
 blocks from different parents; no common owner or synthetic hierarchy is required.
 Each listed node still renders its real `childIds`. An empty array displays no blocks.
 Keep the array reference stable until IDs or order change, then publish a new
@@ -226,7 +227,7 @@ function BoardLayout({ blockId }: BlockLayoutProps) {
   return (
     <>
       <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
-        <BlockChildren item={TileItem} gap={BlockDropGap} style={{ flexDirection: "row", flexWrap: "wrap" }} />
+        <BlockChildren item={TileItem} dropAxis="grid" dropPlacement="siblings" style={{ flexDirection: "row", flexWrap: "wrap", gap: 0 }} />
       </BlockDropTarget>
       <BlockBody />
       <BlockRow><BlockContent /></BlockRow>
@@ -250,8 +251,10 @@ the Page-rendered child element. Use `BlockItem` there for placement styles or
 controls; it preserves the single block identity and owns the child's sibling-level
 CSS counter. Nested node counters do not increment twice. `gap` receives
 `BlockChildrenGapProps` for each canonical gap, including the start/end and an empty
-list. `BlockDropGap` supplies configurable hit geometry; custom gap components can
-use arbitrary JSX and BlockDropTarget. Keep item/gap component identities stable.
+list. Linear lists attach declarative edges to their existing shells. Grid items
+compose `BlockDropWrapper` around their supplied children. Physical gaps are enabled
+through `dropGaps`, independently of item edges and background append. Keep item
+component identities stable. Declarations add no DOM and never change layout spacing.
 
 Child-order/collapse context is separate from chrome, selection, and slot entries.
 Stable ID arrays avoid mapping children for unrelated updates. Layout composition
@@ -266,7 +269,7 @@ Empty custom child hosts are retained by default and can reserve space via publi
 collapse retains the host and hides it even with an explicit display style. Defaults,
 row geometry, item positioning, counters, and gap CSS ship in styles.css. Geometry
 remains configurable through native style and the existing theme parameters, plus
-`--rivto-drop-gap-size` (8px) and `--rivto-drop-min-height` (32px for horizontal gaps).
+`--rivto-drop-target-size` (8 local CSS pixels, independent of layout spacing).
 Demo CSS does not override these structural selectors.
 
 `BlockItem controlsPlacement="inside"` places the matching block's `left-top`
@@ -277,49 +280,74 @@ controls keep their in-flow width, so hovering does not shift text.
 `BlockDropWrapper` accepts the same prop and forwards it to its existing item.
 
 For CSS Grid or wrapping tiles, wrap each existing child with `BlockDropWrapper`
-through `BlockChildren.item`. The wrapper itself is one cell/flex item; its internal
-CSS Grid reserves four insertion strips around center content. Do not pass a flow
-gap through `BlockChildren.gap` for this layout:
+through `BlockChildren.item`. The wrapper remains one cell/flex item and preserves
+its existing 8px visual frame. Data-only edge declarations are measured on that
+item; they create no strips, event listeners, overlays, or extra cells:
 
 ```tsx
 function TileItem({ children }: BlockChildrenItemProps) {
   return <BlockDropWrapper style={{ width: 280 }}>{children}</BlockDropWrapper>;
 }
 
-<BlockChildren
-  item={TileItem}
-  style={{ display: "grid", gridTemplateColumns: "repeat(2, max-content)", gap: 0 }}
-/>;
+<BlockChildren item={TileItem} dropAxis="grid" dropPlacement="siblings"
+  dropGaps={false} dropBackground
+  style={{ display: "grid", gridTemplateColumns: "repeat(2, max-content)" }} />;
 ```
 
-All four strips are always hit-testable. They occupy their own space instead of
-covering content, so text and controls remain clickable during inspection as well
-as ordinary editing. No activation prop or pointer-events switch is required.
-The inspector only displays feedback and does not change target registrations.
-Normal browser hit testing handles clipping, overlapping views, and nested editors.
+`axis` defaults to `grid` (four edges); `vertical` and `horizontal` enable only
+block or inline edges. Before uses block-start/inline-start, after uses block-end/
+inline-end. Inline sides follow RTL. Block edges win corners. `targetSize` overrides
+`--rivto-drop-target-size` in local CSS pixels; scale is measured from the mounted
+anchor. Changing this size never changes content width or any layout dimension.
+A 280px wrapper still leaves 264px of content with its existing 8px visual padding.
 
-The layout remains host-owned. Before uses top and inline-start strips, after uses
-bottom and inline-end; logical inline sides follow RTL. Top/bottom own the corners,
-so strips do not overlap each other or center content. The wrapper composes BlockItem
-for native sizing, ref forwarding, and a single sibling counter. It does not create
-a second BlockNode or data-block-id, choose renderers, or recurse through children.
-Strips borrow the actual parent and adjacent IDs from the shared child iterator;
-multiple strips can name the same canonical destination across a row break.
-A wrapper outside an item with a real parent throws instead of inventing a parent
-for an arbitrary display list. Registration cleanup follows ref detachment and
-editor ownership, including StrictMode replay, collapse, and view unmount.
+Every block shell declares inside insertion over its content, including native controls.
+`data-editor-control` affects ordinary interaction, not an already active drop gesture.
+Declared placement edges retain priority within the nearest layout, and nested layouts
+prevent a child hit from falling through to an enclosing block. `BlockDropTarget asChild` attaches explicit
+`regions` to one existing ref-forwarding element. An edge declares `side`, optional
+`size`, and a canonical `destination`; an inside region declares `coverage` (`bounds`
+or `background`). The `destination` convenience prop declares an inside bounds region.
+Background excludes child items, text, explicit exclusions and nested editors. For custom
+existing ordered hosts, `BlockDropLayout` composes a single child without creating DOM.
+Its options provide `axis`, stable `order`, `gaps`, and optional background `regions`.
 
-`--rivto-drop-gap-size` sets each strip thickness (8px by default). Declared wrapper
-width includes both inline strips: a 280px wrapper leaves 264px for center content.
-Two adjacent wrappers contribute two strips, yielding a default 16px content gap.
-Set the child host's public `style.gap` to zero when wrappers provide all spacing;
-any additional host gap is additive and is not itself covered by the strips.
-Geometry follows wrapping and resizing through CSS without observers, rectangle
-caches, or scans on pointer movement. Required styles ship in the exported styles.css,
-even without demo CSS. Public theme overrides affect both strips and content space.
-Empty grids retain an explicit inside target on the child host. Canonical order
-remains independent from dense placement or visual CSS reordering. Real drag gestures,
-source permissions, and move commits remain outside this geometry API.
+`BlockChildren.dropGaps` defaults to true for linear lists, false for grids. Disabling
+it disables insertion in free gaps, while keeping independently declared item edges.
+`dropBackground` enables append in unoccupied host space, including filtered lists.
+Bento enables shared boundaries and background append: unoccupied space beneath
+a shorter tile belongs to the board, while declared neighboring edges remain
+available for sibling insertion. `emptyDropTarget` limits background append to a canonical
+empty child list. Neither option gives the host an artificial minimum height.
+
+Mounted anchors are published in supplied canonical order after structural commits;
+that order must match visual flow. No DOM-order comparisons occur. Linear
+gaps use binary search and query-local measurements; row-major grids can opt into
+same-row gaps and row transitions whose canonical neighbors overlap horizontally.
+Other inter-row space belongs to background. CSS dense packing, visual
+reordering, and arbitrary rotation are outside this ordered-axis contract. Scrolling,
+resizing and zoom read current geometry without a persistent rectangle cache.
+Virtual roots require consecutive mounted indices; unmounted holes remain inert.
+
+The closest layout bounds discovery. Native hit testing preserves clipping and
+occurrence isolation. Within one anchor, explicit priority wins, then block edge,
+inline edge, and inside; ties retain registration order. Physical gap wins over
+background append. Source rejection or stale neighbors return no target and never
+search an outer structural level. The inspector changes feedback only.
+
+Canonical parent and neighbor IDs come from the shared iterator, including after
+reordering and filtering. Both sides of a hidden canonical sibling retain their own
+destination; the nearer visible anchor owns its half of a physical gap. Source
+exclusion adjusts canonical neighbors without moving the physical indicator.
+Wrappers compose BlockItem for ref forwarding and one sibling counter, retain the
+existing subtree, and do not create another BlockNode or choose renderers.
+A wrapper without canonical child placement throws instead of inventing a parent.
+
+Refs/effects release registrations on replacement, collapse and unmount, including
+StrictMode replay. Controllers own final cleanup. Nested occurrences reset layout
+and depth contexts. Host permission checks, cross-document transfer, transactional
+move commands and undo remain outside this geometry API. Adding a container requires
+composition of these declarations, not a block-type branch in the resolver.
 
 ## Registered block decorators
 
@@ -478,7 +506,7 @@ keyboard navigation and DnD migration remain separate stages.
 Register `new BlockDragExtension(moveAdapter)` through `editor.extensions`, and
 register `BlockDragHandle` in a slot (the demo uses `end`, preserving the start
 gutter). Custom handles can use `data-block-drag-handle`. Existing `BlockDropTarget`,
-`BlockDropGap` and `BlockDropWrapper` declare real destinations; a handle alone
+`BlockChildren`, `BlockDropTarget` and `BlockDropWrapper` declare real destinations; a handle alone
 creates no destinations or implicit hierarchy.
 
 `BlockDragAdapter.canMove(ids, destination)` checks current host permissions without
@@ -493,7 +521,10 @@ adapter is in-memory and has no history.
 A destination with `parentId: null` addresses real document roots. Page validates
 its neighbors against `blocks.getRootIds()`, independently of display IDs.
 An undefined root snapshot disables that destination; an empty array exposes an
-empty document. `BlockList` accepts an explicit null parent for root gaps; omitting
+empty document. Supply `BlockEditor.emptyDropParentId` to mount an empty-view
+region (null for document roots); omission disables that region. `BlockRootNode`
+renders a root with actual-parent regions, including canvas block
+projections. `BlockList` accepts an explicit null parent for root gaps; omitting
 the parent continues to mean an arbitrary display list without canonical gaps.
 
 A structural selection containing the active handle supplies all source IDs,
@@ -506,8 +537,9 @@ snapshots or previews. The count preview mounts no block content.
 
 Escape, pointer cancellation, window blur, view detach and extension removal
 cancel the gesture. The runtime supports window edge autoscroll. Keyboard dragging,
-nested scroll containers, cross-editor transport and root-list insertion are not
-implemented by this extension; display roots do not imply a shared real parent.
+nested scroll containers remain outside this extension. Cross-occurrence transport
+uses registered receiver regions and host transfer policy. Root insertion uses
+canonical parent regions; display roots do not imply a shared real parent.
 Keyboard activation of the handle does not move blocks. Keep keyboard movement in
 host commands until its interaction extension is migrated.
 
@@ -534,3 +566,44 @@ second host implementation. Neither class owns document selection or subscriptio
 hierarchy and selection reads. A host subclass implements synchronous `mountBlocks`;
 Page virtualization and canvas-card projection keep ownership of their own mounts.
 The host owns occurrence lookup, scrolling policy, and registration cleanup.
+
+### Explicit drop exclusions
+
+Use `BlockDropExclude` to exclude an area while allowing registered drop regions
+inside it, or set `exclude` on an existing `BlockDropTarget`. Both retain the existing DOM, dimensions,
+child refs and ordinary event handlers. They prevent fallback to an enclosing target.
+A matching nested drop region remains eligible; another exclusion below it blocks that portion again. On the same element,
+exclusion wins over its target registration.
+
+```tsx
+<BlockDropExclude asChild>
+  <div><SomeInteractiveContent /></div>
+</BlockDropExclude>
+
+<BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }} exclude={blocked}>
+  <section>{children}</section>
+</BlockDropTarget>
+```
+
+`BlockDropExclude.exclude` defaults to true; `BlockDropTarget.exclude` defaults to
+false. Disabling BlockDropExclude removes only that boundary and does not declare
+a target. Disabling BlockDropTarget.exclude restores its registered regions, which
+can accept drops inside an excluded ancestor. The standalone primitive requires no
+editor context and owns no registrations. Virtual trailing spacers use it explicitly. Search inputs,
+buttons and resize controls otherwise participate in their declared containing drop
+regions; starting a gesture and native control interaction remain independently owned.
+
+Shared sibling boundaries use one midpoint indicator by default. Set
+`<BlockEditor dropBoundaries="separate" ... />` to retain nearest-edge feedback
+throughout a view. Override a child layout with
+`<BlockChildren dropBoundaries="merged" ... />` or use
+`BlockDropLayout` with `options.boundaries`. Changing the mode affects neither DOM
+structure nor layout dimensions. Both modes cover the complete physical gap,
+including fractional pointer coordinates whose native hit rounds onto a neighbor.
+
+Only matching canonical sibling boundaries merge. Their preceding trailing edge
+supplies one set of inside/outdent depth choices across the entire shared region;
+vertical movement alone does not change depth. Distinct boundaries around filtered
+children retain their own feedback.
+Virtual roots merge only across consecutive mounted display indices; unmounted
+intervals remain unavailable. `dropGaps={false}` still disables shared gap handling.

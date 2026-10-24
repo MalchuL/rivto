@@ -1,6 +1,6 @@
 import {
   BlockDropReceiver,
-  type BlockOutlineDropTargets,
+  type BlockDropTargetsApi,
   type BlockDropAcceptance,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
@@ -23,15 +23,9 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
   constructor(
     readonly reactPanel: CrossDocumentBlockPanel,
     readonly root: HTMLElement,
-    readonly targets: Pick<BlockOutlineDropTargets, "resolve">,
+    readonly targets: Pick<BlockDropTargetsApi, "resolve">,
   ) {
-    this.receiver = new BlockDropReceiver(this, crossDocumentPageRootControllers, () =>
-      this.reactPanel.rootBlockId
-        ? root.querySelector<HTMLElement>(
-            `[data-block-id="${CSS.escape(this.reactPanel.rootBlockId)}"]`,
-          )
-        : null,
-    );
+    this.receiver = new BlockDropReceiver(this, crossDocumentPageRootControllers);
   }
 
   /**
@@ -56,7 +50,6 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
    * @param sources - Live detached roots from the source occurrence.
    * @param sourceDocumentId - Source model identity, independent of DOM occurrence.
    * @param nativeHit - Optional current native hit from the source's resolution.
-   * @param nestedBoundary - Whether shared routing crossed a registered nested edge; defaults to false.
    * @returns Current receiving placement, or null when detached, unavailable or forbidden.
    */
   resolvePlacement(
@@ -65,7 +58,6 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
     sources: readonly EditorBlock[],
     sourceDocumentId: string,
     nativeHit?: Element,
-    nestedBoundary = false,
   ): ReturnType<CrossDocumentPageRootController["resolvePlacement"]> {
     if (!this.receiver.active || !this.root.isConnected) {
       return null;
@@ -82,8 +74,8 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
           beforeId: destination.kind === "between" ? (destination.nextId ?? undefined) : undefined,
         },
       });
-    const target = this.targets.resolve(x, y, excluded, nativeHit, nestedBoundary, accepts);
-    if (!target || !accepts(target.destination)) {
+    const target = this.targets.resolve(x, y, excluded, nativeHit, accepts);
+    if (!target) {
       return null;
     }
     return target;
