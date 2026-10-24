@@ -52,12 +52,12 @@
   border-radius: 10px;
 }
 .rivto-todo-storage-header {
-  padding: 10px;
+  padding: 8px 7px;
   min-height: 44px;
 }
 .rivto-todo-storage-children {
   margin: 0;
-  padding: 10px;
+  padding: 8px 7px 8px 31px;
   gap: 8px;
   min-height: 64px;
   background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));

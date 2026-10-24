@@ -1,3 +1,4 @@
+import type { EditorElementNode } from "@chulane/rivto";
 import type { CanvasElement } from "@chulane/rivto-edgeless";
 import { type CanvasApi, CanvasSource } from "@chulane/rivto-edgeless";
 import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
@@ -43,10 +44,27 @@ export class EdgelessCanvasAdapter extends CanvasSource {
   /**
    * Reads detached geometry and registered capabilities without subscriptions or DOM access.
    *
+   * Hidden block cards retain geometry but are excluded from geometry selection
+   * queries. Groups participate in those queries only when they contain a rendered
+   * descendant, so a retained subtree panel cannot create an invisible selection
+   * target in the document.
+   *
    * @returns Full source projection, including offscreen objects and group geometry.
    */
   override getElements(): readonly CanvasElement[] {
-    return this.panel.elements.getElementNodes().map((element) => {
+    const elements = this.panel.elements.getElementNodes();
+    const rendered = new Set(
+      elements
+        .filter(
+          (element) =>
+            element.type !== "group" &&
+            (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE ||
+              blockElementRoot(element, this.panel.blocks) === null),
+        )
+        .map(({ id }) => id),
+    );
+    const selectable = this.getSelectableIds(elements, rendered);
+    return elements.map((element) => {
       const behavior = this.panel.editor.elementTypes.get(element.type)?.behavior;
       const absolute = behavior?.absoluteGeometry;
       return {
@@ -55,10 +73,8 @@ export class EdgelessCanvasAdapter extends CanvasSource {
         rotation: absolute ? 0 : this.geometry.rotation(element.id),
         zIndex: element.zIndex,
         bounds: this.geometry.bounds(element.id),
-        render:
-          element.type !== "group" &&
-          (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE ||
-            blockElementRoot(element, this.panel.blocks) === null),
+        render: rendered.has(element.id),
+        selectable: selectable.has(element.id),
         movable: !absolute,
         resizable: !absolute,
         rotatable: !absolute,
@@ -220,5 +236,40 @@ export class EdgelessCanvasAdapter extends CanvasSource {
     this.releaseSelection = this.canvas.pin(cards);
     this.pinnedCardIdsKey = key;
     previous?.();
+  }
+
+  /**
+   * Includes rendered leaves and every group containing at least one rendered leaf.
+   *
+   * The flat source can arrive in storage order rather than hierarchy order. Each
+   * included ancestor is visited once, keeping membership work linear even for
+   * nested groups. Geometry and persisted child membership remain unchanged.
+   *
+   * @param elements - Current occurrence's flat element records, including hidden cards.
+   * @param rendered - Leaf IDs admitted by this occurrence's rendering policy.
+   * @returns Selectable leaf and group identities; empty for entirely hidden trees.
+   */
+  private getSelectableIds(
+    elements: readonly EditorElementNode[],
+    rendered: ReadonlySet<string>,
+  ): Set<string> {
+    const parents = new Map<string, string>();
+    for (const element of elements) {
+      if (element.type === "group") {
+        for (const childId of element.childIds) {
+          parents.set(childId, element.id);
+        }
+      }
+    }
+    const selectable = new Set(rendered);
+    const pending = [...rendered];
+    while (pending.length) {
+      const parent = parents.get(pending.pop()!);
+      if (parent && !selectable.has(parent)) {
+        selectable.add(parent);
+        pending.push(parent);
+      }
+    }
+    return selectable;
   }
 }

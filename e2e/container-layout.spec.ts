@@ -155,15 +155,17 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
   }
 }
 
-for (const type of ["bento", "columns", "kanban"] as const) {
+for (const type of ["bento", "kanban"] as const) {
   for (const mode of ["block", "edgeless"] as const) {
-    test(`${type} keeps card controls inside only their own row in ${mode}`, async ({ page }) => {
+    test(`${type} keeps card and descendant controls inside their rows in ${mode}`, async ({
+      page,
+    }) => {
       await loadContainer(page, type, mode);
       const card = page.locator('[data-block-id="layout-card-one"]');
       const row = card.locator(":scope > .rivto-block-row");
       await expect(row).toHaveAttribute("data-controls-placement", "inside");
       const nested = card.locator(".rivto-block-children .rivto-block-row").first();
-      await expect(nested).toHaveAttribute("data-controls-placement", "outside");
+      await expect(nested).toHaveAttribute("data-controls-placement", "inside");
       const content = row.locator(".rivto-block-content");
       const initial = (await content.boundingBox())!;
       await row.hover();
@@ -197,6 +199,10 @@ for (const mode of ["block", "edgeless"] as const) {
     const lane = page.locator('[data-block-id="layout-lane-0"]');
     const row = lane.locator(":scope > .rivto-block-row");
     const child = page.locator('[data-block-id="layout-card-one"]');
+    await expect(child.locator(":scope > .rivto-block-row")).toHaveAttribute(
+      "data-controls-placement",
+      "outside",
+    );
     const header = (await row.boundingBox())!;
     const body = (await child.boundingBox())!;
     expect(header.y + header.height).toBeLessThanOrEqual(body.y);
@@ -224,4 +230,23 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.up();
     await expect(lane).not.toHaveAttribute("data-dragging", "true");
   });
+}
+
+for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
+  for (const mode of ["block", "edgeless"] as const) {
+    test(`${type} retains compact child spacing in ${mode}`, async ({ page }) => {
+      await loadContainer(page, type, mode);
+      const card = page.locator('[data-block-id="layout-card-one"]');
+      const nested = card.locator(".rivto-block-children .rivto-block-row").first();
+      await expect(nested).toHaveCSS("padding", "2px 8px");
+      if (type === "bento") {
+        await expect(card).toHaveCSS("padding", "12px");
+      } else if (type === "kanban") {
+        await expect(card).toHaveCSS("padding", "12px 10px");
+      } else {
+        await expect(card.locator(":scope > .rivto-block-row")).toHaveCSS("padding", "2px 8px");
+      }
+      await expect(card.locator("[data-block-id]")).toHaveCount(1);
+    });
+  }
 }

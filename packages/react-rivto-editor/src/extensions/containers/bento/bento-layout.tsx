@@ -20,7 +20,9 @@ export function BentoLayout() {
       <BlockChildren
         className="rivto-bento-tiles"
         dropAxis="grid"
+        dropPlacement="siblings"
         item={BentoTileItem}
+        controlsPlacement="inside"
         emptyDropTarget
       />
     </>

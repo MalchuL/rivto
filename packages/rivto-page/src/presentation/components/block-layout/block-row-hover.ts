@@ -1,4 +1,5 @@
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
+import { blockLayoutRegion, blockSlotRow } from "./block-layout-regions";
 
 /** Viewport coordinates retained only while a mouse or pen is over this occurrence. */
 interface BlockHoverPoint {
@@ -81,7 +82,7 @@ export class BlockRowHover {
     if (!hit || hit.closest("[data-rivto-block-editor]") !== this.root) {
       return;
     }
-    const row = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.row}`);
+    const row = blockSlotRow(hit) ?? hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.row}`);
     if (row?.closest("[data-rivto-block-editor]") === this.root) {
       return row;
     }
@@ -108,10 +109,9 @@ export class BlockRowHover {
    * @returns Deepest matching row, the parent's exposed gutter row, or undefined.
    */
   private resolveShell(shell: HTMLElement, point: BlockHoverPoint): HTMLElement | undefined {
-    const row = shell.querySelector<HTMLElement>(`:scope > .${BLOCK_EDITOR_CLASSES.row}`);
-    const list = shell.querySelector<HTMLElement>(
-      `:scope > .${BLOCK_EDITOR_CLASSES.children}:not([hidden])`,
-    );
+    const row = blockLayoutRegion(shell, "row");
+    const children = blockLayoutRegion(shell, "children");
+    const list = children?.hidden ? undefined : children;
     if (list) {
       const rect = list.getBoundingClientRect();
       if (point.y >= rect.top && point.y <= rect.bottom) {
@@ -261,7 +261,7 @@ export class BlockRowHover {
     if (row || !ownsShell) {
       return row;
     }
-    return shell.querySelector<HTMLElement>(`:scope > .${BLOCK_EDITOR_CLASSES.row}`) ?? undefined;
+    return blockLayoutRegion(shell, "row");
   }
 
   /**

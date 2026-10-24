@@ -1,4 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, type HTMLAttributes } from "react";
+import { useBlockRegion } from "../components/block-layout/use-block-region";
+import { useBlockLayoutState } from "../components/block-layout/block-layout-context";
 import { BLOCK_EDITOR_CLASSES } from "../block-editor-classes";
 import {
   SLOT_POSITIONS,
@@ -9,6 +11,7 @@ import {
 
 /** Current bounded owner context plus a requested position and registry snapshot. */
 export interface BlockSlotHostProps extends BlockSlotProps {
+  readonly attributes?: Omit<HTMLAttributes<HTMLDivElement>, "children">;
   readonly position: BlockSlotPosition;
   readonly entries: readonly BlockSlotEntry[];
 }
@@ -32,10 +35,12 @@ export interface BlockSlotsProps extends BlockSlotProps {
  * @param props - Bounded owner context, registry snapshot, and anchor.
  * @param props.position - One supported row, body, or perimeter position.
  * @param props.entries - Cached immutable registrations, already priority ordered.
+ * @param props.attributes - Optional native host styles and attributes; ownership markers remain package-owned.
  * @returns A start host, a populated other host, or null for an empty non-start anchor.
  * @throws Propagates predicate and contribution render failures.
  */
-export function BlockSlotHost({ position, entries, ...props }: BlockSlotHostProps) {
+export function BlockSlotHost({ position, entries, attributes, ...props }: BlockSlotHostProps) {
+  const slotRef = useBlockRegion(props.block.id, position === "body" ? "body" : "slot");
   const matches = entries.filter(
     (entry) => entry.position === position && (!entry.when || entry.when(props)),
   );
@@ -44,7 +49,9 @@ export function BlockSlotHost({ position, entries, ...props }: BlockSlotHostProp
   }
   return (
     <div
-      className={BLOCK_EDITOR_CLASSES.slot}
+      {...attributes}
+      ref={slotRef}
+      className={[BLOCK_EDITOR_CLASSES.slot, attributes?.className].filter(Boolean).join(" ")}
       data-slot-owner="block"
       data-slot-position={position}
     >
@@ -55,6 +62,29 @@ export function BlockSlotHost({ position, entries, ...props }: BlockSlotHostProp
       ))}
     </div>
   );
+}
+
+/** Position and optional native styling for an explicitly composed slot. */
+export interface BlockSlotPlacementProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
+  readonly position: BlockSlotPosition;
+}
+
+/**
+ * Places contributions for the current block at an explicit JSX location.
+ *
+ * Use with BlockRow slots="manual" to avoid mounting the same contributions
+ * twice. Ownership follows the block context, independently of wrapper depth.
+ * Existing slot classes and CSS custom properties still control positioning.
+ *
+ * @param props - Requested owner-bound contribution position.
+ * @param props.position - Inline, body, or perimeter anchor to mount.
+ * @param props.className - Optional class for the explicit anchor's presentation.
+ * @param props.style - Native styles, including position overrides when a perimeter slot is placed in flow.
+ * @returns The matching contributions, or null for an empty non-start slot.
+ * @throws If outside a block layout or a contribution fails to render.
+ */
+export function BlockSlot({ position, ...attributes }: BlockSlotPlacementProps) {
+  return <BlockSlotHost {...useBlockLayoutState()} position={position} attributes={attributes} />;
 }
 
 /**

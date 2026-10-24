@@ -5,6 +5,9 @@ const TRACKPAD_DELTAS = [
   [0.5, 1.25],
   [-0.25, 1.5],
   [0.75, -0.25],
+  [48, 72],
+  [80.25, 100.5],
+  [-12, -16],
   [12, 16],
   [8, 12],
   [4, 6],
@@ -15,7 +18,9 @@ const TRACKPAD_DELTAS = [
 
 for (const repeat of [0, 200]) {
   for (const delta of [100, 120]) {
-    test(`wheel step ${delta} visibly moves the dot grid, repeat=${repeat}`, async ({ page }) => {
+    test(`line-mode wheel step ${delta} visibly moves the dot grid, repeat=${repeat}`, async ({
+      page,
+    }) => {
       await page.clock.install({ time: new Date("2026-10-23T10:00:00Z") });
       await page.goto(`/?repeat=${repeat}`);
       const journal = page.locator('[data-journal-document="today"]');
@@ -26,7 +31,10 @@ for (const repeat of [0, 200]) {
       await page.clock.pauseAt(new Date("2026-10-23T11:00:00Z"));
       const clip = { x: bounds.x + bounds.width - 120, y: bounds.y + 140, width: 80, height: 80 };
       const before = await page.screenshot({ clip });
-      await page.mouse.wheel(0, delta);
+      const lineHeight = await canvas.evaluate(
+        (root) => Number.parseFloat(getComputedStyle(root).lineHeight) || 16,
+      );
+      await canvas.dispatchEvent("wheel", { deltaY: delta / lineHeight, deltaMode: 1 });
       await expect(canvas).not.toHaveAttribute("data-edgeless-pan-y", "0");
       await page.clock.runFor(16);
       const during = await page.screenshot({ clip });

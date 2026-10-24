@@ -9,20 +9,29 @@ export class EdgelessGridSpotlight {
   private viewportOrigin = { left: 0, top: 0 };
 
   /**
-   * Observes viewport layout and cancels outstanding paint work on cleanup.
+   * Observes viewport layout and scrolling and cancels outstanding paint work on cleanup.
    *
-   * @returns Cleanup disconnecting the observer and pending animation frame.
+   * Camera translation moves the world plane rather than this viewport. Its
+   * cached client origin follows resize and ancestor scrolling instead of forcing
+   * a layout read after every camera paint or newly mounted card.
+   *
+   * @returns Cleanup disconnecting the observer and layout listeners and cancelling the pending animation frame.
    */
   observeViewport(): () => void {
     const root = this.viewport;
+    const view = root?.ownerDocument.defaultView;
     let observer: ResizeObserver | undefined;
     if (root && typeof ResizeObserver !== "undefined") {
       this.refreshViewportOrigin();
       observer = new ResizeObserver(this.refreshViewportOrigin);
       observer.observe(root);
     }
+    view?.addEventListener("scroll", this.refreshViewportOrigin, { capture: true, passive: true });
+    view?.addEventListener("resize", this.refreshViewportOrigin);
     return () => {
       observer?.disconnect();
+      view?.removeEventListener("scroll", this.refreshViewportOrigin, true);
+      view?.removeEventListener("resize", this.refreshViewportOrigin);
       this.cancelPointerSpotlight();
     };
   }

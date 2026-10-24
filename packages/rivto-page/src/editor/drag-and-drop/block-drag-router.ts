@@ -1,6 +1,6 @@
 import type { BlockOutlineDropTargets } from "./block-outline-drop-targets";
 import type { DropSurfaceRegistry } from "./drop-surface-registry";
-import type { BlockDragTargetScope, ResolvedBlockDropTarget } from "./types";
+import type { BlockDragTargetScope, BlockDropAcceptance, ResolvedBlockDropTarget } from "./types";
 
 /** Host conversion of a foreign receiver's geometry and semantic acceptance. */
 export interface BlockForeignDropResolver<T extends BlockDragTargetScope> {
@@ -56,6 +56,7 @@ export class BlockDragRouter<T extends BlockDragTargetScope> {
    * @param y - Viewport Y in CSS pixels.
    * @param excluded - Captured source roots, including unmounted selected blocks.
    * @param nativeHit - Optional connected hit in the source's browser document.
+   * @param accepts - Optional local-source permission check; foreign receivers supply their own policy.
    * @returns Scoped target, or undefined outside an eligible destination.
    * @throws Propagates browser geometry and host policy failures.
    */
@@ -64,6 +65,7 @@ export class BlockDragRouter<T extends BlockDragTargetScope> {
     y: number,
     excluded: ReadonlySet<string>,
     nativeHit?: Element,
+    accepts?: BlockDropAcceptance,
   ): ResolvedBlockDropTarget | undefined {
     if (!this.root.isConnected) {
       return;
@@ -76,7 +78,7 @@ export class BlockDragRouter<T extends BlockDragTargetScope> {
     const route = this.registry.resolve(this.root, { x, y }, this.outerEdgeDropZone, hit);
     const receiver = route?.controller;
     if (!receiver || receiver.root === this.root) {
-      return this.targets.resolve(x, y, excluded, hit, route?.nestedBoundary);
+      return this.targets.resolve(x, y, excluded, hit, route?.nestedBoundary, accepts);
     }
     const target = this.foreign.resolveForeign(receiver, x, y, excluded, hit, route.nestedBoundary);
     return target ? { ...target, scope: receiver } : undefined;

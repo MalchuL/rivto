@@ -83,7 +83,7 @@ export interface BlockDragTargets {
    * @param x - Viewport X coordinate in CSS pixels.
    * @param y - Viewport Y coordinate in CSS pixels.
    * @param excluded - Captured moving roots, including unmounted selection.
-   * @param hit - Uncaptured native target from this pointer event, omitted during pointer capture and scroll reconciliation.
+   * @param hit - Uncaptured native target from pointer movement, omitted during pointer capture, scroll reconciliation and release so those paths resolve current geometry.
    * @returns Current target, or undefined when no eligible region is hit.
    */
   resolve(
@@ -425,6 +425,11 @@ class BlockDragController {
   /**
    * Re-resolves the release point and delegates one validating host transaction.
    *
+   * Release always reads current geometry. Earlier pointerup handlers may release
+   * capture, so hasPointerCapture can already be false while this event still
+   * targets the capturing source. That native target cannot authorize a drop.
+   * Movement keeps its native-hit optimization; release requests fresh geometry.
+   *
    * @param event - Release for the active pointer.
    * @returns "handled" for release of a pending or active gesture; otherwise "continue".
    * @throws Host failures propagate after attempting every cleanup and focus restoration;
@@ -441,7 +446,11 @@ class BlockDragController {
       gesture.x = event.clientX;
       gesture.y = event.clientY;
       if (gesture.ids) {
-        this.resolve(gesture, this.uncapturedHit(event, gesture.root));
+        // Do not pass pointerup.target: earlier release handlers can clear capture
+        // while this event still targets the source handle. Treating that handle
+        // as the destination rejects a valid drop as a move into its own subtree.
+        // Omit the native hint so the resolver hit-tests the final coordinates.
+        this.resolve(gesture);
         if (gesture.target) {
           const target = gesture.target;
           if (this.adapter.moveBlocks(gesture.ids, target.destination, target.scope)) {
@@ -476,10 +485,11 @@ class BlockDragController {
   /**
    * Borrows this native event's target unless pointer capture redirected delivery.
    *
-   * The result is consumed synchronously; scroll reconciliation still hit-tests
-   * geometry afresh and no hit survives into another input event.
+   * The result is consumed synchronously during movement; scroll reconciliation
+   * and release still hit-test geometry afresh. No native hit survives into another
+   * input event, including release after pointer capture has already been cleared.
    *
-   * @param event - Current pointer move or release event.
+   * @param event - Current pointer movement event, before release-time capture cleanup.
    * @param root - Gesture attachment supplying the correct DOM realm.
    * @returns Connected uncaptured element, or undefined to request geometric resolution.
    */

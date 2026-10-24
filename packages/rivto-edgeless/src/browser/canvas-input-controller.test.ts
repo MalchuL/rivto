@@ -124,12 +124,36 @@ test("publishes the first pan movement without waiting for a frame or reading la
   }
 });
 
+test("fast trackpad samples follow input immediately through acceleration and reversal", () => {
+  const fixture = setup();
+  try {
+    let x = 0;
+    let y = 0;
+    for (const [deltaX, deltaY] of [
+      [0.5, 1.5],
+      [48, 72],
+      [80.25, 100.5],
+      [-12, -16],
+    ]) {
+      fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX, deltaY }));
+      x -= deltaX;
+      y -= deltaY;
+      expect(fixture.canvas.camera.get()).toEqual({ x, y, zoom: 1 });
+      expect(jest.getTimerCount()).toBe(0);
+    }
+  } finally {
+    fixture.destroy();
+  }
+});
+
 test("shows intermediate camera positions for a mouse-wheel step and reaches its exact target", () => {
   const fixture = setup();
   const changed = jest.fn();
   const stop = fixture.canvas.camera.subscribe(changed);
   try {
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, cancelable: true }));
+    fixture.root.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 6.25, deltaMode: 1, cancelable: true }),
+    );
     expect(fixture.canvas.camera.get().y).toBeLessThan(0);
     expect(fixture.canvas.camera.get().y).toBeGreaterThan(-100);
     jest.advanceTimersByTime(500);
@@ -148,7 +172,7 @@ test("applies fractional trackpad deltas directly without losing a pending wheel
     fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 0.25, deltaY: 1.5 }));
     expect(fixture.canvas.camera.get()).toEqual({ x: -0.25, y: -1.5, zoom: 1 });
     expect(jest.getTimerCount()).toBe(0);
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaY: 120 }));
+    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaY: 7.5, deltaMode: 1 }));
     const before = fixture.canvas.camera.get();
     fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 0.5, deltaY: -0.25 }));
     expect(fixture.canvas.camera.get().x).toBe(before.x - 0.5);
@@ -164,7 +188,7 @@ for (const exit of ["pointerdown", "blur", "Escape", "detach", "zoom"]) {
   test(`stops pending wheel movement on ${exit}`, () => {
     const fixture = setup();
     try {
-      fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaY: 120 }));
+      fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaY: 7.5, deltaMode: 1 }));
       expect(jest.getTimerCount()).toBe(1);
       if (exit === "pointerdown") {
         fixture.pointer("pointerdown", 10);
@@ -190,8 +214,12 @@ for (const exit of ["pointerdown", "blur", "Escape", "detach", "zoom"]) {
 test("accumulates coarse wheel events without losing displacement", () => {
   const fixture = setup();
   try {
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 100, deltaY: 120 }));
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: -40, deltaY: -20 }));
+    fixture.root.dispatchEvent(
+      new WheelEvent("wheel", { deltaX: 6.25, deltaY: 7.5, deltaMode: 1 }),
+    );
+    fixture.root.dispatchEvent(
+      new WheelEvent("wheel", { deltaX: -2.5, deltaY: -1.25, deltaMode: 1 }),
+    );
     jest.advanceTimersByTime(500);
     expect(fixture.canvas.camera.get()).toEqual({ x: -60, y: -100, zoom: 1 });
     expect(jest.getTimerCount()).toBe(0);
@@ -225,8 +253,8 @@ test("settles finite large coordinates without overflow or an endless animation"
   const fixture = setup();
   try {
     fixture.canvas.setCamera({ x: 1.5e308, y: 0, zoom: 1 });
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 1e308 }));
-    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 1.5e308 }));
+    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 6.25e306, deltaMode: 1 }));
+    fixture.root.dispatchEvent(new WheelEvent("wheel", { deltaX: 9.375e306, deltaMode: 1 }));
     jest.advanceTimersByTime(2000);
     expect(fixture.canvas.camera.get().x).toBe(5e307 - 1.5e308);
     expect(jest.getTimerCount()).toBe(0);

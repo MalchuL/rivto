@@ -127,6 +127,7 @@ export class EdgelessSurfaceController {
       onPanState: this.updatePanMarkers,
       planeProps: { className: "edgeless-plane", "data-edgeless-plane": "true" },
       "data-rivto-surface": "edgeless",
+      "data-rivto-block-editor": "true",
       className: "edgeless-viewport",
       "data-edgeless-zoom": camera.zoom,
       "data-edgeless-pan-x": camera.x,

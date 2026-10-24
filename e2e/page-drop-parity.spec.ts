@@ -86,7 +86,7 @@ for (const upper of kinds) {
       await fixture.load(upper, lower);
       const a = (await page.locator('[data-block-id="upper"]').boundingBox())!;
       const b = (await page.locator('[data-block-id="lower"]').boundingBox())!;
-      expect(b.y - (a.y + a.height)).toBeCloseTo(16, 0);
+      expect(b.y - (a.y + a.height)).toBeCloseTo(4, 0);
       const center = (a.y + a.height + b.y) / 2;
       await fixture.start();
       for (const y of [a.y + a.height - 1, center, b.y + 1]) {
@@ -103,7 +103,7 @@ for (const upper of kinds) {
         ).__rivtoDemo.editor.blocks.getRootIds(),
       );
       expect(roots).toEqual(["upper", "moving", "lower"]);
-      await page.keyboard.press("Control+z");
+      await page.keyboard.press("ControlOrMeta+z");
       await expect
         .poll(() =>
           page.evaluate(() =>
@@ -117,7 +117,7 @@ for (const upper of kinds) {
   }
 }
 
-test("container headers do not reserve blank space and ordinary handles cover the full line", async ({
+test("container headers keep normal flow and ordinary handles cover the full line", async ({
   page,
 }) => {
   const fixture = new DropParityFixture(page);
@@ -128,7 +128,13 @@ test("container headers do not reserve blank space and ordinary handles cover th
       .locator(':scope > .rivto-block-children, :scope > [data-slot-position="body"]')
       .first();
     const rect = (await shell.boundingBox())!;
-    expect((await body.boundingBox())!.y - rect.y).toBeLessThanOrEqual(2);
+    const row = shell.locator(":scope > .rivto-block-row");
+    const header = (await row.boundingBox())!;
+    const absolute = await row.evaluate(
+      (element) => getComputedStyle(element).position === "absolute",
+    );
+    const expectedTop = absolute ? rect.y : header.y + header.height;
+    expect(Math.abs((await body.boundingBox())!.y - expectedTop)).toBeLessThanOrEqual(2);
   }
   const row = page.locator('[data-block-id="lower"] > .rivto-block-row');
   const rect = (await row.boundingBox())!;
@@ -221,7 +227,7 @@ for (const [wrapped, rtl] of [
         ),
       )
       .toEqual(["upper-child", "moving", "second"]);
-    await page.keyboard.press("Control+z");
+    await page.keyboard.press("ControlOrMeta+z");
     await expect
       .poll(() =>
         page.evaluate(() =>

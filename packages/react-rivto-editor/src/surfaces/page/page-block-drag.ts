@@ -88,7 +88,10 @@ export class PageBlockDrag implements BlockDragAdapter {
     excluded: ReadonlySet<string>,
     nativeHit?: Element,
   ): ResolvedBlockDropTarget | undefined {
-    return this.router?.resolve(x, y, excluded, nativeHit);
+    const ids = [...excluded];
+    return this.router?.resolve(x, y, excluded, nativeHit, (destination) =>
+      this.canMove(ids, destination),
+    );
   }
 
   /**

@@ -35,12 +35,7 @@ export function BentoTileItem({ blockId, children }: BlockChildrenItemProps) {
     [BENTO_WIDTH_PROPERTY]: `${BentoResizeController.getWidth(block?.props.bentoWidth)}px`,
   };
   return (
-    <BlockDropWrapper
-      controlsPlacement="inside"
-      className={BENTO_TILE_ITEM_CLASS}
-      ref={setElement}
-      style={style}
-    >
+    <BlockDropWrapper className={BENTO_TILE_ITEM_CLASS} ref={setElement} style={style}>
       {children}
       {element && <BentoResizeHandles blockId={blockId} tile={element} />}
     </BlockDropWrapper>

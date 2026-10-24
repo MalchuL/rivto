@@ -25,7 +25,7 @@
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 0;
-  padding: 8px;
+  padding: 16px;
   margin: 0;
   min-height: 96px;
   border-radius: 12px;
@@ -47,6 +47,12 @@
   box-shadow:
     0 0 0 1px var(--rivto-border),
     0 2px 5px rgb(9 30 66 / 8%);
+}
+.rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block {
+  padding: 12px;
+}
+.rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block > .rivto-block-row {
+  padding: 0;
 }
 .rivto-bento-resize {
   position: absolute;

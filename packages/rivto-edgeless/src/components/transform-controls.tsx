@@ -8,6 +8,16 @@ import { CanvasControlGeometry } from "./canvas-control-geometry";
 import type { CanvasControlsAdapter } from "../types/controls";
 import { useCanvasCamera, useCanvasVisible } from "../hooks/use-canvas";
 
+/** Alignment edges and centers supported by the shared transform controls. */
+const SNAP_DIRECTIONS = {
+  left: true,
+  right: true,
+  top: true,
+  bottom: true,
+  center: true,
+  middle: true,
+};
+
 /**
  * Renders shared move, resize, rotation and snapping controls over consumer-owned targets.
  *
@@ -102,6 +112,9 @@ function useTransformControls({ canvas, plane, adapter }: CanvasTransformControl
 /**
  * Maps world snapping and keyboard modifiers to library thresholds at the current zoom.
  *
+ * Empty selections skip layout and candidate scans; registration remains mounted
+ * so the next admitted gesture can prepare its targets synchronously.
+ *
  * @param canvas - Scene owning camera and alignment settings.
  * @param adapter - Participants excluded from alignment candidates.
  * @param plane - World layer containing mounted alignment hosts.
@@ -133,23 +146,17 @@ function useControlSnapping(
     plane,
   );
   useLayoutEffect(() => {
-    moveable.current?.updateRect();
+    if (canvas.selection.get().length) {
+      moveable.current?.updateRect();
+    }
   }, [camera]);
-  const directions = {
-    left: true,
-    right: true,
-    top: true,
-    bottom: true,
-    center: true,
-    middle: true,
-  };
   return {
     zoom: 1 / camera.zoom,
     snappable: shift || (!alt && (settings.snap || settings.align)),
     snapRotationDegrees: shift ? Array.from({ length: 25 }, (_, index) => index * 15 - 180) : [],
     snapRotationThreshold: shift ? 7.5 : 0,
-    snapDirections: directions,
-    elementSnapDirections: directions,
+    snapDirections: SNAP_DIRECTIONS,
+    elementSnapDirections: SNAP_DIRECTIONS,
     snapHorizontalThreshold: 8 / camera.zoom,
     snapVerticalThreshold: 8 / camera.zoom,
     snapGap: false,
@@ -403,9 +410,10 @@ function useControlTargets(
         ? previous
         : next,
     );
-    moveable.current?.updateRect();
+    if (next.length) {
+      moveable.current?.updateRect();
+    }
   }, [adapter, canvas, plane, selection, visible, geometry]);
-
   useLayoutEffect(() => {
     const hosts = measurements.current;
     return () => {
@@ -434,8 +442,9 @@ function resolveControlTargets(
   measurements: Map<string, HTMLElement>,
   measurementIds: WeakMap<Element, string>,
 ): HTMLElement[] {
-  const mounted = new Map(adapter.getTargets().map((host) => [adapter.targetId(host), host]));
   const wanted = new Set(adapter.getTargetIds());
+  const targets = wanted.size ? adapter.getTargets() : [];
+  const mounted = new Map(targets.map((host) => [adapter.targetId(host), host]));
   for (const [id, host] of measurements) {
     if (!wanted.has(id) || mounted.has(id)) {
       host.remove();

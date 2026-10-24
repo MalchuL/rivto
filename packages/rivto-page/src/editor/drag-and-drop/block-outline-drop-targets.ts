@@ -1,4 +1,8 @@
 import { BLOCK_EDITOR_CLASSES } from "../../presentation/block-editor-classes";
+import { blockLayoutRegion } from "../../presentation/components/block-layout/block-layout-regions";
+import { blockGapIndicator } from "./block-gap-indicator";
+import { blockDropDistance, nearestBlockDropTarget } from "./block-nearest-drop-target";
+import type { BlockDropAcceptance } from "./types";
 import type { BlockEditorApi } from "../block-editor-api";
 import type { BlockDropDestination, BlockDropIndicator, ResolvedBlockDropTarget } from "./types";
 
@@ -45,12 +49,19 @@ export class BlockOutlineDropTargets {
    * child gaps and unused body space; undeclared grids retain their outer boundaries.
    * Vertical child lists reuse ordinary outline depth projection inside the
    * container's preserved outer boundary, including leading and trailing gaps.
+   * List-owned controls and placement padding use the same geometry as the child
+   * host background; hits inside actual child shells retain row targeting.
+   * Custom-layout header chrome compares nearby insertion feedback after applying
+   * the optional source policy, descending the nearest structural branch when
+   * necessary. Explicit sibling strips remain authoritative; commit authorization
+   * remains with the host and is never implied by a geometric candidate.
    *
    * @param x - Viewport X coordinate in CSS pixels.
    * @param y - Viewport Y coordinate in CSS pixels.
    * @param excluded - Captured source roots, including unmounted selected roots.
    * @param nativeHit - Connected, uncaptured target of the current pointer event; omitted for fresh geometric reconciliation.
    * @param allowNestedBoundary - Whether the host has routed a nested occurrence edge to this enclosing editor; defaults to false so ordinary hits cannot cross occurrence boundaries.
+   * @param accepts - Optional live source permission check used to compare nearby layout insertions; commit still revalidates the winner.
    * @returns Current destination and feedback element, or undefined outside this occurrence.
    */
   resolve(
@@ -59,6 +70,7 @@ export class BlockOutlineDropTargets {
     excluded: ReadonlySet<string> = new Set(),
     nativeHit?: Element,
     allowNestedBoundary = false,
+    accepts?: BlockDropAcceptance,
   ): ResolvedBlockDropTarget | undefined {
     const root = this.editor.getRoot();
     if (!root?.isConnected || !Number.isFinite(x) || !Number.isFinite(y)) {
@@ -71,30 +83,36 @@ export class BlockOutlineDropTargets {
     if (hit.closest("[data-rivto-block-editor]") !== root) {
       return allowNestedBoundary ? this.nestedBoundary(root, hit, x, y, excluded) : undefined;
     }
+    const header = this.layoutHeader(hit);
+    if (header && !this.isExcluded(header.dataset.blockId, excluded)) {
+      return this.headerTarget(root, hit, header, x, y, excluded, accepts);
+    }
     const region = this.regionTarget(root, hit, x, y, excluded);
     if (region) {
       return region;
     }
     const list = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
     const shell = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.block}[data-block-id]`);
-    if (list?.dataset.blockDropAxis && hit === list) {
+    // Layout controls and item padding belong to the list, not its enclosing row.
+    const listBackground = list && (!shell || !list.contains(shell));
+    if (list?.dataset.blockDropAxis && listBackground) {
       if (list.dataset.blockDropAxis === "vertical") {
-        return this.listGap(list, x, y, excluded);
+        return this.listGap(list, x, y, excluded, accepts);
       }
       return this.containerGap(list, x, y, excluded);
     }
-    if (shell && hit === list && !this.hasOutlineLayout(shell)) {
+    if (shell && listBackground && !this.hasOutlineLayout(shell)) {
       const rect = shell.getBoundingClientRect();
       if (y < rect.bottom - this.gapSize || this.isExcluded(shell.dataset.blockId, excluded)) {
         return;
       }
       return this.boundaryTarget(shell, rect, x, false, excluded);
     }
-    if (!shell || hit === list) {
+    if (!shell || listBackground) {
       const roots = hit.closest<HTMLElement>("[data-block-root-list]");
-      return list || roots ? this.listGap(list ?? roots!, x, y, excluded) : undefined;
+      return list || roots ? this.listGap(list ?? roots!, x, y, excluded, accepts) : undefined;
     }
-    return this.rowTarget(shell, x, y, excluded);
+    return this.rowTarget(shell, x, y, excluded, accepts);
   }
 
   /**
@@ -105,6 +123,298 @@ export class BlockOutlineDropTargets {
   private get viewportIndent(): number {
     const scale = this.getScale();
     return this.indent * (Number.isFinite(scale) && scale > 0 ? scale : 1);
+  }
+
+  /**
+   * Finds layout-owned chrome outside the actual child host without inspecting block types.
+   *
+   * @param hit - Native hit in this occurrence, including wrapped title and body slots.
+   * @returns Owning shell for custom-layout chrome, or undefined for child content and ordinary outlines.
+   */
+  private layoutHeader(hit: Element): HTMLElement | undefined {
+    const shell = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.block}[data-block-id]`);
+    const children = shell && blockLayoutRegion(shell, "children");
+    if (shell && children && !this.hasOutlineLayout(shell) && !children.contains(hit)) {
+      return shell;
+    }
+    return undefined;
+  }
+
+  /**
+   * Preserves explicit insertion strips before ranking a header's permitted nearby gaps.
+   *
+   * @param root - Current occurrence boundary.
+   * @param hit - Native header or body-chrome hit.
+   * @param shell - Canonical layout owning that chrome.
+   * @param x - Pointer viewport X in CSS pixels.
+   * @param y - Pointer viewport Y in CSS pixels.
+   * @param excluded - Moving roots omitted from candidates.
+   * @param accepts - Optional source policy, checked before ranking.
+   * @returns Explicit gap or nearest permitted candidate, or undefined when none is allowed.
+   */
+  private headerTarget(
+    root: HTMLElement,
+    hit: Element,
+    shell: HTMLElement,
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+    accepts?: BlockDropAcceptance,
+  ): ResolvedBlockDropTarget | undefined {
+    const explicit = this.editor.dropTargets.resolveHit(hit, excluded);
+    if (explicit?.destination.kind === "between") {
+      return explicit;
+    }
+    return nearestBlockDropTarget(
+      [
+        this.nearestLayoutTarget(shell, x, y, excluded, accepts),
+        this.outerBoundary(root, hit, x, y, excluded),
+      ],
+      x,
+      y,
+      accepts,
+    );
+  }
+
+  /**
+   * Compares outer sibling boundaries with nearby child insertions around layout chrome.
+   *
+   * Header halves never choose a distant container bottom. Every candidate uses
+   * its actual insertion line; only the pointed layout's nearest child branch is
+   * descended when structural policy rejects insertion at the immediate level.
+   *
+   * @param shell - Layout owning the native title/body hit.
+   * @param x - Viewport pointer X in CSS pixels.
+   * @param y - Viewport pointer Y in CSS pixels.
+   * @param excluded - Moving roots and their subtrees omitted from candidates.
+   * @param accepts - Borrowed synchronous permission check, if supplied.
+   * @returns Nearest permitted insertion, or undefined when the local candidates are forbidden.
+   */
+  private nearestLayoutTarget(
+    shell: HTMLElement,
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+    accepts?: BlockDropAcceptance,
+  ): ResolvedBlockDropTarget | undefined {
+    const children = blockLayoutRegion(shell, "children");
+    const within = blockDropDistance(shell.getBoundingClientRect(), x, y) === 0;
+    const child =
+      within && children ? this.nearestChildTarget(children, x, y, excluded, accepts) : undefined;
+    return nearestBlockDropTarget(
+      [
+        this.placementBoundary(shell, false, x, y, excluded),
+        child,
+        this.placementBoundary(shell, true, x, y, excluded),
+      ],
+      x,
+      y,
+      accepts,
+    );
+  }
+
+  /**
+   * Finds a permitted insertion in the nearest mounted child branch.
+   *
+   * Empty hosts propose inside placement. Populated hosts propose canonical gaps;
+   * only rejected structural levels descend further, retaining ordinary outline
+   * semantics for native child hits and avoiding a whole-document target scan.
+   *
+   * @param list - Current owned child host, possibly hidden by collapse.
+   * @param x - Viewport pointer X in CSS pixels.
+   * @param y - Viewport pointer Y in CSS pixels.
+   * @param excluded - Moving roots excluded from geometry and receiving parents.
+   * @param accepts - Optional permission check for this source group.
+   * @returns Nearest permitted local child insertion, or undefined for hidden/forbidden branches.
+   */
+  private nearestChildTarget(
+    list: HTMLElement,
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+    accepts?: BlockDropAcceptance,
+  ): ResolvedBlockDropTarget | undefined {
+    if (list.hidden) {
+      return;
+    }
+    const items = this.mountedItems(list);
+    const parentId = list.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+    if (!parentId || this.isExcluded(parentId, excluded)) {
+      return;
+    }
+    if (!items.length) {
+      return nearestBlockDropTarget(
+        [{ element: list, destination: { kind: "inside", parentId } }],
+        x,
+        y,
+        accepts,
+      );
+    }
+    const shell = this.nearestChildShell(list, items, x, y, excluded);
+    if (!shell) {
+      return;
+    }
+    const candidate = nearestBlockDropTarget(
+      [
+        this.placementBoundary(shell, false, x, y, excluded),
+        this.placementBoundary(shell, true, x, y, excluded),
+      ],
+      x,
+      y,
+      accepts,
+    );
+    if (candidate) {
+      return candidate;
+    }
+    const children = blockLayoutRegion(shell, "children");
+    return children && this.nearestChildTarget(children, x, y, excluded, accepts);
+  }
+
+  /**
+   * Locates nearby children using vertical binary search or the local multi-axis placements.
+   *
+   * @param list - Host declaring the actual child flow.
+   * @param items - Immediate mounted placement elements, without their descendants.
+   * @param x - Viewport pointer X in CSS pixels.
+   * @param y - Viewport pointer Y in CSS pixels.
+   * @param excluded - Moving roots that cannot supply receiving geometry.
+   * @returns Nearest stationary shell, or undefined when no mounted child remains.
+   */
+  private nearestChildShell(
+    list: HTMLElement,
+    items: readonly HTMLElement[],
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+  ): HTMLElement | undefined {
+    let candidates = items;
+    if (!list.dataset.blockDropAxis || list.dataset.blockDropAxis === "vertical") {
+      const low = this.firstItemAfter(items, y);
+      const index = this.stationaryItemIndex(items, low, y, excluded);
+      candidates = items.slice(Math.max(0, index), index + 2);
+    }
+    let nearest: HTMLElement | undefined;
+    let distance = Infinity;
+    for (const item of candidates) {
+      const shell = this.itemShell(item);
+      if (!shell || this.isExcluded(shell.dataset.blockId, excluded)) {
+        continue;
+      }
+      const rect = item.getBoundingClientRect();
+      const current = blockDropDistance(rect, x, y);
+      if (rect.height > 0 && current < distance) {
+        nearest = shell;
+        distance = current;
+      }
+    }
+    return nearest;
+  }
+
+  /**
+   * Builds canonical sibling feedback along the parent's actual placement axis.
+   *
+   * Grid endpoints compare both physical edges; RTL reverses inline edges only.
+   * Adjacent stationary items share one line, while retained sources keep the
+   * candidate at the stationary item's own edge.
+   *
+   * @param shell - Stationary shell bordering the proposed insertion.
+   * @param after - True selects its following canonical gap.
+   * @param x - Pointer X used to choose a grid endpoint's nearest edge.
+   * @param y - Pointer Y used to choose a grid endpoint's nearest edge.
+   * @param excluded - Moving roots omitted from canonical adjacency.
+   * @returns Between target with viewport feedback, or undefined for stale hierarchy.
+   */
+  private placementBoundary(
+    shell: HTMLElement,
+    after: boolean,
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+  ): ResolvedBlockDropTarget | undefined {
+    const destination = this.siblingGap(shell.dataset.blockId!, after, excluded);
+    if (!destination || destination.kind !== "between") {
+      return;
+    }
+    const item = this.placementItem(shell);
+    const rect = this.placementRect(shell);
+    const list = shell.parentElement?.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
+    const axis = list?.dataset.blockDropAxis ?? "vertical";
+    const neighbor = this.adjacentShell(
+      shell,
+      after ? destination.nextId : destination.previousId,
+      !after,
+    );
+    if (neighbor) {
+      const other = this.placementRect(neighbor);
+      const indicator = blockGapIndicator(
+        after ? rect : other,
+        after ? other : rect,
+        axis === "grid" || axis === "horizontal" ? axis : "vertical",
+      );
+      return { element: shell, destination, indicator };
+    }
+    const rtl = shell.ownerDocument.defaultView?.getComputedStyle(item).direction === "rtl";
+    return nearestBlockDropTarget(
+      this.placementEndpoints(rect, axis, after, rtl).map((indicator) => ({
+        element: shell,
+        destination,
+        indicator,
+      })),
+      x,
+      y,
+    );
+  }
+
+  /**
+   * Supplies endpoint lines along the declared flow without measuring additional elements.
+   *
+   * @param rect - Complete stationary placement bounds in viewport pixels.
+   * @param axis - Child host flow; undeclared flow uses vertical boundaries.
+   * @param after - Whether the insertion follows the stationary block.
+   * @param rtl - Whether inline progression runs from right to left.
+   * @returns Both endpoint orientations for grids, otherwise the single flow boundary.
+   */
+  private placementEndpoints(
+    rect: DOMRect,
+    axis: string,
+    after: boolean,
+    rtl: boolean,
+  ): BlockDropIndicator[] {
+    const block = {
+      left: rect.left,
+      top: (after ? rect.bottom : rect.top) - 1,
+      width: rect.width,
+      height: 2,
+    };
+    const inline = {
+      left: (after !== rtl ? rect.right : rect.left) - 1,
+      top: rect.top,
+      width: 2,
+      height: rect.height,
+    };
+    let indicators = [block];
+    if (axis === "grid") {
+      indicators = [block, inline];
+    } else if (axis === "horizontal") {
+      indicators = [inline];
+    }
+    return indicators;
+  }
+
+  /**
+   * Measures explicit placement chrome or the canonical shell beneath neutral wrappers.
+   *
+   * Virtual root wrappers may include flow spacing; that spacing must not move
+   * the shared gap midpoint when approached from the opposite block.
+   *
+   * @param shell - Canonical stationary shell whose boundary is requested.
+   * @returns Full item bounds for an identified placement, otherwise full shell bounds.
+   */
+  private placementRect(shell: HTMLElement): DOMRect {
+    const item = this.placementItem(shell);
+    return (
+      item.dataset.blockItemId === shell.dataset.blockId ? item : shell
+    ).getBoundingClientRect();
   }
 
   /**
@@ -250,6 +560,7 @@ export class BlockOutlineDropTargets {
    * @param x - Viewport pointer X coordinate.
    * @param y - Viewport pointer Y coordinate.
    * @param excluded - Captured moving roots whose descendants cannot receive a drop.
+   * @param accepts - Live source policy carried through neutral placement wrappers.
    * @returns Current row destination, or undefined inside a moving subtree.
    */
   private rowTarget(
@@ -257,6 +568,7 @@ export class BlockOutlineDropTargets {
     x: number,
     y: number,
     excluded: ReadonlySet<string>,
+    accepts?: BlockDropAcceptance,
   ): ResolvedBlockDropTarget | undefined {
     const id = shell.dataset.blockId;
     if (!id) {
@@ -265,23 +577,22 @@ export class BlockOutlineDropTargets {
     if (this.isExcluded(id, excluded)) {
       return this.movingChildBoundary(shell, x, y, excluded);
     }
-    const row = shell.querySelector<HTMLElement>(`:scope > .${BLOCK_EDITOR_CLASSES.row}`) ?? shell;
+    const row = blockLayoutRegion(shell, "row") ?? shell;
     let rect = row.getBoundingClientRect();
     const rowBottom = rect.bottom;
-    const body = shell.querySelector<HTMLElement>(
-      `:scope > .${BLOCK_EDITOR_CLASSES.slot}[data-slot-position="body"]`,
-    );
+    const body = blockLayoutRegion(shell, "body");
     if (body && y > rect.bottom) {
       const bodyRect = body.getBoundingClientRect();
       rect = bodyRect;
     }
     if (!this.hasOutlineLayout(shell)) {
-      const before = y < rect.top + rect.height / 2;
-      return this.boundaryTarget(shell, shell.getBoundingClientRect(), x, before, excluded);
+      const root = this.editor.getRoot();
+      const rim = root && this.outerBoundary(root, shell, x, y, excluded);
+      return rim ?? this.nearestLayoutTarget(shell, x, y, excluded, accepts);
     }
-    const outline = shell.querySelector<HTMLElement>(":scope > .rivto-block-outline:not([hidden])");
+    const outline = this.outlineChildren(shell);
     if (outline && y > rect.bottom) {
-      return this.listGap(outline, x, y, excluded);
+      return this.listGap(outline, x, y, excluded, accepts);
     }
     const edge = Math.min(Math.max(0, this.gapSize), rect.height / 3);
     let destination: BlockDropDestination | undefined;
@@ -403,6 +714,17 @@ export class BlockOutlineDropTargets {
       const depth = Math.floor((x - rect.left) / Math.max(1, this.viewportIndent));
       destination = this.afterGap(id, depth, excluded, gap, this.hasOutlineLayout(shell)) ?? gap;
     }
+    if (destination === gap && !this.outlineChildren(shell)) {
+      const bounds = this.hasOutlineLayout(shell) ? shell.getBoundingClientRect() : rect;
+      const indicator = adjacentRect
+        ? blockGapIndicator(
+            before ? adjacentRect : bounds,
+            before ? bounds : adjacentRect,
+            "vertical",
+          )
+        : this.gapIndicator(id, gap, bounds, before);
+      return { element: shell, destination, indicator };
+    }
     const shared =
       this.childGapIndicator(shell, destination) ??
       (adjacent && this.childGapIndicator(adjacent, destination)) ??
@@ -417,8 +739,7 @@ export class BlockOutlineDropTargets {
       destination.kind === "between" &&
       destination.parentId === id &&
       destination.nextId !== null;
-    const precedesOutline =
-      !before && !!shell.querySelector(":scope > .rivto-block-outline:not([hidden])");
+    const precedesOutline = !before && !!this.outlineChildren(shell);
     const top =
       adjacentRect && !startsChildren && !precedesOutline
         ? (edge + (before ? adjacentRect.bottom : adjacentRect.top)) / 2 - 1
@@ -451,7 +772,7 @@ export class BlockOutlineDropTargets {
     }
     const before = destination.previousId === null;
     const id = before ? destination.nextId : destination.previousId;
-    const list = shell.querySelector<HTMLElement>(":scope > .rivto-block-outline:not([hidden])");
+    const list = this.outlineChildren(shell);
     let item = (before ? list?.firstElementChild : list?.lastElementChild) as
       HTMLElement | null | undefined;
     while (item) {
@@ -569,7 +890,10 @@ export class BlockOutlineDropTargets {
     before: boolean,
   ): HTMLElement | undefined {
     const item = this.placementItem(shell);
-    const neighbor = before ? item.previousElementSibling : item.nextElementSibling;
+    let neighbor = before ? item.previousElementSibling : item.nextElementSibling;
+    while (neighbor?.classList.contains(BLOCK_EDITOR_CLASSES.listGap)) {
+      neighbor = before ? neighbor.previousElementSibling : neighbor.nextElementSibling;
+    }
     const adjacent = neighbor && this.itemShell(neighbor as HTMLElement);
     return adjacent?.dataset.blockId === id ? adjacent : undefined;
   }
@@ -602,12 +926,60 @@ export class BlockOutlineDropTargets {
    * Distinguishes ordinary outline nesting from a host's explicit container layout.
    *
    * @param shell - Current block shell in this occurrence.
-   * @returns False when a direct child host owns a non-outline layout; true for leaves and ordinary outlines.
+   * @returns False when an owned child host uses a non-outline layout; true for leaves and ordinary outlines regardless of wrapper depth.
    */
   private hasOutlineLayout(shell: HTMLElement): boolean {
-    return !shell.querySelector(
-      `:scope > .${BLOCK_EDITOR_CLASSES.children}:not(.rivto-block-outline)`,
+    const children = blockLayoutRegion(shell, "children");
+    return !children || children.classList.contains("rivto-block-outline");
+  }
+
+  /**
+   * Reads the owner's visible ordinary outline through arbitrary layout wrappers.
+   *
+   * @param shell - Canonical mounted block shell.
+   * @returns Expanded outline host, or undefined for custom and collapsed layouts.
+   */
+  private outlineChildren(shell: HTMLElement): HTMLElement | undefined {
+    const children = blockLayoutRegion(shell, "children");
+    if (children && !children.hidden && children.classList.contains("rivto-block-outline")) {
+      return children;
+    }
+    return undefined;
+  }
+
+  /**
+   * Places sibling feedback outside the complete shell, including padding and descendants.
+   *
+   * Both sides of the same gap use the same adjacent bounds. Retained source
+   * placeholders interrupt adjacency and keep feedback at the stationary edge.
+   *
+   * @param shell - Stationary block at one side of the gap.
+   * @param after - True inserts after this block; false inserts before it.
+   * @param excluded - Moving roots omitted from canonical adjacency.
+   * @returns Canonical sibling destination and line, or undefined for stale data.
+   */
+  private siblingBoundary(
+    shell: HTMLElement,
+    after: boolean,
+    excluded: ReadonlySet<string>,
+  ): ResolvedBlockDropTarget | undefined {
+    const id = shell.dataset.blockId!;
+    const destination = this.siblingGap(id, after, excluded);
+    if (!destination || destination.kind !== "between") {
+      return;
+    }
+    const neighbor = this.adjacentShell(
+      shell,
+      after ? destination.nextId : destination.previousId,
+      !after,
     );
+    const rect = shell.getBoundingClientRect();
+    let indicator = this.gapIndicator(id, destination, rect, !after);
+    if (neighbor) {
+      const other = neighbor.getBoundingClientRect();
+      indicator = blockGapIndicator(after ? rect : other, after ? other : rect, "vertical");
+    }
+    return { element: shell, destination, indicator };
   }
 
   /**
@@ -658,6 +1030,7 @@ export class BlockOutlineDropTargets {
    * @param x - Viewport pointer X coordinate.
    * @param y - Viewport pointer Y coordinate.
    * @param excluded - Captured moving roots omitted from the insertion context.
+   * @param accepts - Live source policy forwarded to nearby custom-layout candidates.
    * @returns Neighboring row destination or an empty-list append destination.
    */
   private listGap(
@@ -665,6 +1038,7 @@ export class BlockOutlineDropTargets {
     x: number,
     y: number,
     excluded: ReadonlySet<string>,
+    accepts?: BlockDropAcceptance,
   ): ResolvedBlockDropTarget | undefined {
     const items = this.mountedItems(list);
     if (!items.length) {
@@ -685,10 +1059,13 @@ export class BlockOutlineDropTargets {
     if (!shell) {
       return;
     }
+    if (list.dataset.blockDropPlacement === "siblings") {
+      return this.siblingBoundary(shell, follows, excluded);
+    }
     if (follows) {
       shell = this.lastVisibleShell(shell, excluded);
     }
-    return this.rowTarget(shell, x, y, excluded);
+    return this.rowTarget(shell, x, y, excluded, accepts);
   }
 
   /**
@@ -791,14 +1168,7 @@ export class BlockOutlineDropTargets {
       if (!destination) {
         return;
       }
-      const indicator = horizontal
-        ? {
-            left: (a.left > b.left ? a.left + b.right : a.right + b.left) / 2 - 1,
-            top: Math.min(a.top, b.top),
-            width: 2,
-            height: Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top),
-          }
-        : { left: b.left, top: (a.bottom + b.top) / 2 - 1, width: b.width, height: 2 };
+      const indicator = blockGapIndicator(a, b, horizontal ? "horizontal" : "vertical");
       return { element: list, destination, indicator };
     }
     return { element: list, destination: { kind: "inside", parentId } };
@@ -871,9 +1241,7 @@ export class BlockOutlineDropTargets {
    * @returns Deepest stationary mounted trailing shell, or the original shell.
    */
   private lastVisibleShell(shell: HTMLElement, excluded: ReadonlySet<string>): HTMLElement {
-    const children = shell.querySelector<HTMLElement>(
-      `:scope > .rivto-block-outline:not([hidden])`,
-    );
+    const children = this.outlineChildren(shell);
     let item = children?.lastElementChild as HTMLElement | null | undefined;
     while (item) {
       const child = this.itemShell(item);

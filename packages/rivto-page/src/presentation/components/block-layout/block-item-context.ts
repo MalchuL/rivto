@@ -25,3 +25,6 @@ export interface BlockItemControls {
 
 /** Borrowed placement for the matching block row; other identities use outside. */
 export const BlockItemControlsContext = createContext<BlockItemControls | null>(null);
+
+/** Inherited row-control placement selected by the nearest explicit child layout. */
+export const BlockChildrenControlsContext = createContext<"inside" | "outside">("outside");

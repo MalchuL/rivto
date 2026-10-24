@@ -25,6 +25,7 @@ export class CanvasControlGeometry {
    *
    * Mounted objects use native element guidelines so Moveable retains distance markers.
    * Offscreen objects still contribute deduplicated horizontal and vertical coordinates.
+   * An empty transform selection returns no guidelines without reading scene or DOM geometry.
    *
    * @param canvas - Scene providing full geometry, including unmounted elements.
    * @param adapter - Current concrete transform participants to exclude.
@@ -37,6 +38,9 @@ export class CanvasControlGeometry {
     plane: HTMLElement,
   ) {
     const participants = new Set(adapter.getTargetIds());
+    if (!participants.size) {
+      return { horizontal: [], vertical: [], elements: [] };
+    }
     const guidelines = canvas
       .getElements()
       .filter(

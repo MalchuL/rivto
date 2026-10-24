@@ -200,7 +200,8 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     let destX = strip.x + strip.width / 2;
     let destY = strip.y + strip.height / 2;
     if (edge === "between") {
-      destX = to.x + to.width + 8;
+      // Zero host gap means the shared boundary is the edge between the two strips.
+      destX = to.x + to.width;
       destY = to.y + to.height / 2;
     } else if (edge === "inside") {
       const row = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;

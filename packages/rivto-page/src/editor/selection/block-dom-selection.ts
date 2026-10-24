@@ -1,4 +1,5 @@
 import { BlockSelectionEndpoints } from "./block-selection-endpoints";
+import { blockLayoutRegion } from "../../presentation/components/block-layout/block-layout-regions";
 import { BlockVirtualizationController } from "../virtualization/block-virtualization-controller";
 import type { BlockEditorSelection } from "../../adapter/types";
 import type {
@@ -6,12 +7,10 @@ import type {
   BlockSelectionSnapshot as Selection,
 } from "./types";
 import { BlockSelectionRanges } from "./block-selection-ranges";
-import { BLOCK_EDITOR_CLASSES } from "../../presentation/block-editor-classes";
 const BLOCK_CONTENT_SELECTOR = "[data-block-content]";
 const BLOCK_ID_SELECTOR = "[data-block-id]";
 const BLOCK_ID_ATTRIBUTE = "data-block-id";
 const PANEL_SELECTOR = "[data-rivto-block-editor]";
-const BLOCK_ROW_CLASS = BLOCK_EDITOR_CLASSES.row;
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
  *
@@ -208,7 +207,7 @@ export class BlockDOMSelection {
     // Keep the closest block when the pointer is in its own row, or when a
     // custom shell has no row to distinguish wrapping descendants from chrome.
     // Body slots belong to that block even when it also has outline children.
-    const ownBody = block.querySelector<HTMLElement>(':scope > [data-slot-position="body"]');
+    const ownBody = blockLayoutRegion(block, "body");
     const nestedHit =
       ownRow && !ownRow.contains(hit) && !ownBody?.contains(hit)
         ? this.nearestNestedBlock(block, x, y)
@@ -518,10 +517,10 @@ export class BlockDOMSelection {
    * Returns the BlockView row that belongs to `block` itself, not descendants.
    *
    * @param block - BlockView container that may own a `.rivto-block-row`.
-   * @returns The direct row element, or `null` when a custom shell omitted it.
+   * @returns The owned row through any layout wrappers, or `null` when a custom shell omitted it.
    */
   private ownedBlockRow(block: HTMLElement): HTMLElement | null {
-    return block.querySelector(`:scope > .${BLOCK_ROW_CLASS}`);
+    return blockLayoutRegion(block, "row") ?? null;
   }
 
   /**

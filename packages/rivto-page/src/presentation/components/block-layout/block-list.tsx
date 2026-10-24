@@ -1,9 +1,7 @@
 import { BlockChildPlacementContext } from "./block-item-context";
 import { Fragment, memo, type ComponentType, type ReactNode } from "react";
 import { BlockNode } from "./block-node";
-
-/** DOM-free gap boundary used by sibling counter selectors. */
-const BLOCK_LIST_GAP_CLASS = "rivto-block-list-gap";
+import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 
 /** Optional host placement of one child; the child node is supplied by Page. */
 export interface BlockChildrenItemProps {
@@ -54,7 +52,7 @@ export const BlockList = memo(function BlockList({
         return (
           <Fragment key={`node:${blockId}`}>
             {Gap && parentId !== undefined && (
-              <span className={BLOCK_LIST_GAP_CLASS}>
+              <span className={BLOCK_EDITOR_CLASSES.listGap}>
                 <Gap
                   parentId={parentId}
                   previousId={blockIds[index - 1] ?? null}
@@ -80,7 +78,7 @@ export const BlockList = memo(function BlockList({
         );
       })}
       {Gap && parentId !== undefined && (
-        <span className={BLOCK_LIST_GAP_CLASS}>
+        <span className={BLOCK_EDITOR_CLASSES.listGap}>
           <Gap parentId={parentId} previousId={blockIds.at(-1) ?? null} nextId={null} />
         </span>
       )}

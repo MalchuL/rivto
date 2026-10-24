@@ -57,6 +57,7 @@ export { DefaultBlockLayout } from "./presentation/components/block-layout/defau
 export { BlockRow, type BlockRowProps } from "./presentation/components/block-layout/block-row";
 export { BlockContent } from "./presentation/components/block-layout/block-content";
 export { BlockBody } from "./presentation/components/block-layout/block-body";
+export { BlockSlot, type BlockSlotPlacementProps } from "./presentation/slots/block-slots";
 export {
   BlockChildren,
   type BlockChildrenProps,
@@ -72,6 +73,7 @@ export {
 } from "./presentation/drag-and-drop/block-drop-target";
 export type {
   BlockDropDestination,
+  BlockDropAcceptance,
   InsideBlockDropDestination,
   BetweenBlockDropDestination,
   BlockDropTargetRegistration,

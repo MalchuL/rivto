@@ -1,6 +1,7 @@
 import {
   BlockDropReceiver,
   type BlockOutlineDropTargets,
+  type BlockDropAcceptance,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
 import type { EditorBlock } from "@chulane/rivto";
@@ -73,20 +74,16 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
       sourceDocumentId === this.reactPanel.document.getDocument().id
         ? new Set(sources.map(({ id }) => id))
         : new Set<string>();
-    const target = this.targets.resolve(x, y, excluded, nativeHit, nestedBoundary);
-    if (
-      !target ||
-      !this.reactPanel.editor.blockBehaviors.canMove({
+    const accepts: BlockDropAcceptance = (destination) =>
+      this.reactPanel.editor.blockBehaviors.canMove({
         sources,
         destination: {
-          parentId: target.destination.parentId,
-          beforeId:
-            target.destination.kind === "between"
-              ? (target.destination.nextId ?? undefined)
-              : undefined,
+          parentId: destination.parentId,
+          beforeId: destination.kind === "between" ? (destination.nextId ?? undefined) : undefined,
         },
-      })
-    ) {
+      });
+    const target = this.targets.resolve(x, y, excluded, nativeHit, nestedBoundary, accepts);
+    if (!target || !accepts(target.destination)) {
       return null;
     }
     return target;

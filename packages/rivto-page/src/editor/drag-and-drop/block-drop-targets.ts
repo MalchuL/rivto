@@ -1,4 +1,6 @@
 import { BLOCK_EDITOR_CLASSES } from "../../presentation/block-editor-classes";
+import { blockGapIndicator } from "./block-gap-indicator";
+import { blockLayoutNeighbor } from "../../presentation/components/block-layout/block-layout-regions";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
 import type {
@@ -183,9 +185,13 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     if (destination.kind !== "between" || (destination.previousId && destination.nextId)) {
       return;
     }
-    const item = target.element.closest<HTMLElement>("[data-block-item-id]");
     const neighbor = destination.previousId ?? destination.nextId;
-    if (!neighbor || item?.dataset.blockItemId !== neighbor) {
+    const list = target.element.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
+    const item =
+      list && neighbor
+        ? blockLayoutNeighbor(list, neighbor)
+        : target.element.closest<HTMLElement>("[data-block-item-id]");
+    if (!neighbor || !item || (!list && item.dataset.blockItemId !== neighbor)) {
       return;
     }
     const rect = item.getBoundingClientRect();
@@ -201,10 +207,11 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         },
       };
     }
+    const rtl = item.ownerDocument.defaultView?.getComputedStyle(item).direction === "rtl";
     return {
       ...target,
       indicator: {
-        left: (before ? rect.left : rect.right) - 1,
+        left: (before !== rtl ? rect.left : rect.right) - 1,
         top: rect.top,
         width: 2,
         height: rect.height,
@@ -215,7 +222,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   /**
    * Gives both wrapper edges the same feedback for their canonical sibling gap.
    *
-   * Only direct placement identities and the two neighboring rectangles are read.
+   * Only addressed mounted placement identities and the two neighboring rectangles are read.
    * Wrapped grid rows use a horizontal line; neighbors in one row use a vertical line.
    *
    * @param target - Validated destination of the winning mounted boundary.
@@ -227,37 +234,32 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       return;
     }
     const list = target.element.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
-    if (!list?.dataset.blockDropAxis) {
+    if (!list) {
       return;
     }
-    let previous: HTMLElement | undefined;
-    let next: HTMLElement | undefined;
-    for (const child of Array.from(list.children)) {
-      const item = child as HTMLElement;
-      if (item.dataset.blockItemId === destination.previousId) {
-        previous = item;
-      }
-      if (item.dataset.blockItemId === destination.nextId) {
-        next = item;
-      }
-    }
+    const previous = blockLayoutNeighbor(list, destination.previousId);
+    const next = blockLayoutNeighbor(list, destination.nextId);
     if (!previous || !next) {
+      return;
+    }
+    let following = previous.nextElementSibling;
+    while (following?.classList.contains(BLOCK_EDITOR_CLASSES.listGap)) {
+      following = following.nextElementSibling;
+    }
+    if (following !== next) {
       return;
     }
     const a = previous.getBoundingClientRect();
     const b = next.getBoundingClientRect();
-    const inline =
-      list.dataset.blockDropAxis === "horizontal" ||
-      (list.dataset.blockDropAxis === "grid" &&
-        Math.max(a.top, b.top) < Math.min(a.bottom, b.bottom));
-    const indicator = inline
-      ? {
-          left: (a.left > b.left ? a.left + b.right : a.right + b.left) / 2 - 1,
-          top: Math.min(a.top, b.top),
-          width: 2,
-          height: Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top),
-        }
-      : { left: b.left, top: (a.bottom + b.top) / 2 - 1, width: b.width, height: 2 };
+    const axis =
+      list.dataset.blockDropAxis ??
+      target.element.closest<HTMLElement>("[data-drop-wrapper-axis]")?.dataset.dropWrapperAxis ??
+      "vertical";
+    const indicator = blockGapIndicator(
+      a,
+      b,
+      axis === "horizontal" || axis === "grid" ? axis : "vertical",
+    );
     return { ...target, indicator };
   }
 

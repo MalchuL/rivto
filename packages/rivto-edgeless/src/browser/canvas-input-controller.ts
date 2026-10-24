@@ -3,7 +3,7 @@ import type { CanvasInputOptions, CanvasInputScene } from "./types";
 import type { Point } from "../types/canvas";
 import { CanvasViewport } from "./canvas-viewport";
 
-/** Wheel deltas up to this many CSS pixels per axis follow precise input directly. */
+/** Normalized line/page wheel deltas up to this many CSS pixels per axis follow input directly. */
 const DIRECT_WHEEL_PAN_LIMIT = 32;
 
 /** Owns native camera, selection, focus and capture behavior without a React dependency. */
@@ -493,8 +493,9 @@ export class CanvasInputController {
   /**
    * Pans by wheel deltas or zooms around the pointer with Ctrl or Meta.
    *
-   * Small pixel deltas apply directly. Larger steps publish intermediate camera
-   * positions so a repeating dot grid visibly moves even for whole-grid jumps.
+   * Pixel deltas apply directly at every speed: trackpad acceleration and momentum
+   * already describe the movement to display. Larger line/page steps publish intermediate
+   * camera positions so a repeating dot grid visibly moves even for whole-grid jumps.
    *
    * @param event - Native wheel event subject to host camera policy.
    * @returns Admitted input moves the camera or schedules its remaining wheel displacement.
@@ -519,7 +520,7 @@ export class CanvasInputController {
       );
     } else {
       const delta = this.wheelDeltaInPixels(event);
-      this.panByWheel(delta.x, delta.y);
+      this.panByWheel(delta.x, delta.y, event.deltaMode === 0);
     }
     event.preventDefault();
   };
@@ -547,24 +548,27 @@ export class CanvasInputController {
   }
 
   /**
-   * Accumulates wheel displacement without delaying small trackpad-like samples.
+   * Accumulates wheel displacement without delaying pixel-mode trackpad samples.
    *
-   * Precise samples move the current camera immediately and also shift any pending
-   * target, preserving every input delta when coarse and fine samples are mixed.
+   * Pixel-mode samples move the current camera immediately regardless of magnitude,
+   * and also shift any pending target, preserving every input delta when coarse and
+   * fine samples are mixed. Delta size cannot distinguish a fast trackpad swipe
+   * from a mouse wheel; applying easing to it adds latency to native momentum.
    *
    * @param x - Horizontal displacement in CSS pixels.
    * @param y - Vertical displacement in CSS pixels.
+   * @param pixelMode - Whether native deltas were already expressed in pixels.
    * @returns The camera advances directly or starts a bounded easing tail.
    * @throws If the accumulated target is not finite or camera subscribers fail.
    */
-  private panByWheel(x: number, y: number): void {
+  private panByWheel(x: number, y: number, pixelMode: boolean): void {
     const camera = this.canvas.camera.get();
     const previous = this.wheelPan?.target ?? camera;
     const target = { x: previous.x - x, y: previous.y - y };
     if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) {
       throw new RangeError("Invalid wheel pan target");
     }
-    if (Math.max(Math.abs(x), Math.abs(y)) <= DIRECT_WHEEL_PAN_LIMIT) {
+    if (pixelMode || Math.max(Math.abs(x), Math.abs(y)) <= DIRECT_WHEEL_PAN_LIMIT) {
       if (this.wheelPan) {
         this.wheelPan.target = target;
       }

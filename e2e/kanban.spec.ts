@@ -36,8 +36,12 @@ async function move(
   // A horizontally clipped lane is not a drop field until it is visible.
   await target.scrollIntoViewIfNeeded();
   const to = (await target.boundingBox())!;
+  let offsetX = crossOffset ?? to.width / 2;
+  if (axis === "horizontal") {
+    offsetX = fraction < 0.5 ? -2 : to.width + 2;
+  }
   await page.mouse.move(
-    to.x + (axis === "horizontal" ? to.width * fraction : (crossOffset ?? to.width / 2)),
+    to.x + offsetX,
     to.y + to.height * (axis === "vertical" ? fraction : 0.5),
     { steps: 15 },
   );
@@ -47,17 +51,15 @@ async function move(
     const line = (await indicator.boundingBox())!;
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
-    const inPage = await source.evaluate(
-      (element) => !!element.closest("[data-rivto-block-editor]"),
-    );
-    expect(line.width).toBe(inPage ? 2 : 4);
+    expect(line.width).toBe(4);
     if (fraction < 0.5) {
       expect(line.x + line.width / 2).toBeCloseTo(column.x, 0);
     } else {
       expect(line.x + line.width / 2).toBeCloseTo(column.x + column.width, 0);
     }
     await expect(target).not.toHaveCSS("background-color", "rgb(220, 234, 255)");
-    await expect(source).toHaveCSS("outline-style", "dashed");
+    await expect(source).toHaveAttribute("data-dragging", "true");
+    await expect(source).toHaveCSS("opacity", "0.45");
   }
   await page.mouse.up();
   if (axis === "horizontal") {
@@ -178,7 +180,9 @@ for (const mode of ["block", "edgeless"] as const) {
     }, mode);
     await page.locator(`[data-editor-mode="${mode}"]`).click();
     const column = page.locator('[data-block-type="kanban-column"]').first();
-    const cards = column.locator(':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]');
+    const cards = column.locator(
+      ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+    );
     const ids = await cards.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-block-id")),
     );
@@ -198,9 +202,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await column.getByRole("button", { name: "Add card to To do" }).click();
     await expect(cards).toHaveCount(4);
     await expect(
-      column.locator(
-        ":scope > .rivto-block-children > .rivto-kanban-add-card:last-child",
-      ),
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
     ).toHaveCount(1);
     await expect(column.getByLabel("4 cards", { exact: true })).toHaveText("4");
     await page.getByRole("button", { name: "Expand Kanban", exact: true }).click();
@@ -228,7 +230,9 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.type("Ideas ");
     await expect(lanes.last().getByLabel("Kanban column title")).toContainText("Ideas");
     await expect(
-      byId(laneIds[0]!).locator(':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]'),
+      byId(laneIds[0]!).locator(
+        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+      ),
     ).toHaveCount(4);
     await expect(
       modal
@@ -240,7 +244,9 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(page.getByRole("dialog", { name: "Expanded Kanban" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Expand Kanban", exact: true })).toBeFocused();
     await expect(
-      byId(laneIds[0]!).locator(':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]'),
+      byId(laneIds[0]!).locator(
+        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+      ),
     ).toHaveCount(4);
   });
 }
@@ -266,15 +272,13 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   const addCard = column.getByRole("button", { name: "Add card to To do" });
   await expect(addCard).toBeVisible();
   await expect(
-    column.locator(
-      ":scope > .rivto-block-children > .rivto-kanban-add-card:last-child",
-    ),
+    column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
   ).toHaveCount(1);
   await expect
     .poll(() =>
       column.evaluate((element) => {
         const card = element.querySelector(
-          ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block):last-of-type",
+          ":scope > .rivto-block-children > .rivto-kanban-card:last-of-type",
         );
         const button = element.querySelector(
           ":scope > .rivto-block-children > .rivto-kanban-add-card",
@@ -299,14 +303,10 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   for (const count of [2, 3]) {
     await addCard.click();
     await expect(
-      column.locator(
-        ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
-      ),
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
     ).toHaveCount(count);
     await expect(
-      column.locator(
-        ":scope > .rivto-block-children > .rivto-kanban-add-card:last-child",
-      ),
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
     ).toHaveCount(1);
   }
 
@@ -317,14 +317,10 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   ).toHaveCount(1);
   await emptyAddCard.click();
   await expect(
-    emptyColumn.locator(
-      ":scope > .rivto-block-children > :is(.rivto-block, .rivto-block)",
-    ),
+    emptyColumn.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
   ).toHaveCount(1);
   await expect(
-    emptyColumn.locator(
-      ":scope > .rivto-block-children > .rivto-kanban-add-card:last-child",
-    ),
+    emptyColumn.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
   ).toHaveCount(1);
 });
 
@@ -344,9 +340,7 @@ test("keeps one add-column control in each synced Kanban board", async ({ page }
     const board = pane.locator('[data-block-type="kanban"]');
     await expect(board).toHaveCount(1);
     await expect(
-      board.locator(
-        ":scope > .rivto-block-children > .rivto-kanban-add-column",
-      ),
+      board.locator(":scope > .rivto-block-children > .rivto-kanban-add-column"),
     ).toHaveCount(1);
   }
 });

@@ -1,4 +1,5 @@
 import { BlockWrapper } from "../block-wrapper/block-wrapper";
+import { useBlockRegion } from "./use-block-region";
 import { memo, useCallback, useId, useMemo, useSyncExternalStore } from "react";
 import type { BlockRendererProps, BlockLayout } from "../../renderers/types";
 import type { BlockEditorNodeSnapshot } from "../../../adapter/types";
@@ -58,6 +59,7 @@ const BlockLayoutRenderer = memo(function BlockLayoutRenderer({
  * @throws Propagates registry and host component failures.
  */
 function BlockNodeView({ blockId, node, block, selected }: BlockNodeViewProps) {
+  const shellRef = useBlockRegion(blockId, "shell");
   const { slots, renderers } = useBlockEditorController();
   const subscribeSlots = useCallback((listener: () => void) => slots.subscribe(listener), [slots]);
   const readSlots = useCallback(() => slots.getSnapshot(), [slots]);
@@ -84,7 +86,7 @@ function BlockNodeView({ blockId, node, block, selected }: BlockNodeViewProps) {
     <BlockLayoutContext.Provider value={layoutState}>
       <BlockChildrenContext.Provider value={childrenState}>
         <BlockWrapper block={block}>
-          <BlockView block={block} selected={selected}>
+          <BlockView ref={shellRef} block={block} selected={selected}>
             <BlockLayoutRenderer blockId={blockId} layout={layout} />
           </BlockView>
         </BlockWrapper>

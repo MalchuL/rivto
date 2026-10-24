@@ -74,6 +74,49 @@ it("reads updated destinations and validates neighbors against live canonical da
   expect(editor.dropTargets.resolve(0, 0)).toBeUndefined();
 });
 
+it("keeps explicit feedback beside a stationary strip across retained source space", () => {
+  adapter.setNode("parent", { childIds: ["a", "source", "b"] });
+  outer.className = "rivto-block-children";
+  outer.dataset.blockDropAxis = "vertical";
+  const items = ["a", "source", "b"].map((id, index) => {
+    const item = document.createElement("div");
+    item.dataset.blockItemId = id;
+    outer.append(item);
+    jest
+      .spyOn(item, "getBoundingClientRect")
+      .mockReturnValue({
+        left: 10,
+        top: index * 100,
+        bottom: index * 100 + 80,
+        width: 100,
+        height: 80,
+      } as DOMRect);
+    return item;
+  });
+  items[0]!.append(inner);
+  jest
+    .spyOn(inner, "getBoundingClientRect")
+    .mockReturnValue({ left: 10, top: 72, width: 100, height: 8 } as DOMRect);
+  editor.dropTargets.register({
+    element: inner,
+    indicatorAxis: "horizontal",
+    getDestination: () => ({
+      kind: "between",
+      parentId: "parent",
+      previousId: "a",
+      nextId: "source",
+    }),
+  });
+  const target = editor.dropTargets.resolveHit(inner, new Set(["source"]));
+  expect(target?.destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "a",
+    nextId: "b",
+  });
+  expect(target?.indicator).toEqual({ left: 10, top: 75, width: 100, height: 2 });
+});
+
 it("accepts the empty canonical gap but rejects invented start, end, and missing neighbors", () => {
   let destination: BlockDropDestination = {
     kind: "between",

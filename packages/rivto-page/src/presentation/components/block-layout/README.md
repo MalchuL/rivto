@@ -35,6 +35,14 @@ block, including its `BlockView`. It provides a place for item dimensions and
 host controls, and keeps sibling list counters from counting the same block twice.
 It does not create slots or render the block again.
 
+`BlockChildren.controlsPlacement` sets the default left-top slot placement for
+its children and their descendants. Omission inherits the nearest explicit child
+layout, or `outside` at the editor root. A nested child layout can reset it to
+`outside`. `BlockItem.controlsPlacement` remains an override for only that item's
+own row; omission inherits the child layout and does not change descendant rows.
+These contexts add no DOM boundaries
+and do not change renderer selection or child traversal.
+
 `BlockList` iterates an ordered list of block IDs and renders one keyed `BlockNode`
 per ID. It is shared by the host-selected display list and child lists. It adds no
 outer list element. Optional `item` components wrap each already-rendered node;
@@ -87,3 +95,45 @@ precedence, nested editor occurrences stay independent, and root replacement
 releases listeners and hover feedback. Header and exposed gutter ownership does
 not imply that the complete parent body highlights its handle. Keyboard focus
 feedback is independent of pointer hover.
+
+Layout primitives register their mounted elements with the editor's region
+registry. Row, body, slot and child-host ownership no longer requires a direct
+DOM relationship to the shell: neutral JSX wrappers may separate them. Keep one
+primary row and one canonical child host per block. The registry is addressed by
+block identity within an editor occurrence; refs release registrations on unmount,
+and the controller releases remaining references on destruction. Standalone
+BlockView still needs no editor dependency.
+
+`BlockRow slots="manual"` renders only supplied JSX. Compose `BlockSlot` with a
+`position` to place an owner-bound contribution explicitly, including in a
+separate wrapper. `BlockSlot` accepts native style/class attributes, so a perimeter
+slot may use `style={{ position: "static" }}` when placed in flow. Avoid mounting
+the same position manually and automatically. `BlockBody` remains the convenient
+body-contribution primitive. Moving contributions does not change their owner,
+predicates or registration lifetime.
+
+`BlockChildren.dropPlacement` defaults to `outline`: horizontal pointer depth
+continues to select nesting in ordinary vertical gaps. Choose `siblings` for a
+layout whose background gaps should always insert at its own child level. This
+setting is independent of `dropAxis`, which describes actual flow. Explicit
+`BlockDropTarget` destinations take precedence over heuristic ancestor rims.
+
+Custom-layout headers use nearby permitted insertion positions instead of splitting
+the header into before/after halves. The resolver compares actual feedback bounds
+around the container and its nearest mounted child branch, descending through
+structural levels when their host policy rejects the source. A container's own
+inside region on its header participates in this geometry; explicit sibling strips
+remain authoritative. The optional `BlockDropAcceptance` callback is borrowed for
+one resolution, does not mutate the document, and does not replace commit-time
+validation. Moving header padding therefore changes candidate distances without
+requiring container-specific hit testing. Ordinary outline depth selection and
+exposed outer rims retain their existing semantics.
+
+`BlockDropWrapper.axis` defaults to `grid` (four strips). `vertical` reserves only
+top/bottom strips and `horizontal` reserves only inline strips. All variants keep
+the one existing child subtree in their center, with canonical neighbors supplied
+by BlockChildren. Use zero child-host gap when strips should supply all spacing.
+The existing `BlockEditorTheme` types the package's padding, start-gutter,
+child-gap, indentation, slot-gap and strip-size CSS properties; ordinary native
+styles remain available. Full shell bounds determine sibling feedback, while row
+bounds continue to determine outline body/depth semantics.

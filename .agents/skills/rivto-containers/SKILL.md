@@ -98,10 +98,12 @@ Page creates one `BlockNode` / `BlockView` per block. A typical layout returns:
 </>
 ```
 
-- Keep the rendered row and child host as direct children of the block shell:
-  current hover and placement code queries that relationship. A fragment or
-  context provider is fine; an extra wrapping DOM element changes the contract.
-  `BlockDropTarget asChild` can register an existing region without another shell.
+- Keep one primary row and one canonical child host per block. Their committed
+  refs register ownership, so neutral DOM wrappers, fragments and context
+  providers may separate them from the shell without changing hover or placement
+  ownership. `BlockDropTarget asChild` can register an existing region without
+  another shell. Use `BlockRow slots="manual"` and owner-bound `BlockSlot` when
+  contributions need explicit JSX placement; do not duplicate automatic slots.
 - Let `BlockChildren` traverse child IDs once. Do not map descendants in a content
   renderer, mount a second `BlockNode`/`BlockView`, or manually reimplement collapse.
 - Headers and management rows participate in normal flow. Do not overlay an empty
@@ -169,10 +171,24 @@ with `BlockDropTarget`, canonical gaps with `BlockDropGap`, and wrapping boundar
 with `BlockDropWrapper`. Do not reintroduce `PAGE_DRAG_METADATA_KEY`,
 `acceptsDropContainer` or per-type axis switches in shared Page code.
 
+Choose `dropPlacement="siblings"` when background gaps must stay at the list's
+own level; the default `outline` preserves horizontal depth selection. This is
+independent of flow axis. `BlockDropWrapper.axis` selects top/bottom strips for
+vertical flow, inline strips for horizontal flow, or all four for its default grid.
+Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
+child gaps and strip thickness without container-specific pointer calculations.
+
 A drop region proposes a destination; it does not grant permission. Implement
 `canMove` on the applicable concrete behaviors for source and receiving-parent
 restrictions. Inspect the actual destination parent, not the neighboring block's
 edge. Keep structural policy in the owning behavior/core path rather than CSS.
+
+Custom-layout headers compare nearby insertion lines using the same bounds as
+their feedback. The host supplies live source permission to the shared resolver;
+forbidden structural levels descend into the nearest mounted child branch.
+Explicit sibling strips and exposed outer rims retain their existing behavior.
+Header padding and item bounds determine distance, without block-type checks or
+a scan of every target in the document. Commit still revalidates the chosen move.
 
 `ContainerBlockBehavior` provides empty-container Enter insertion and returns
 `unhandled` where the ordinary behavior chain should continue. Override methods

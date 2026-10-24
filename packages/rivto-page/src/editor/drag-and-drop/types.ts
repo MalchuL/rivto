@@ -15,6 +15,14 @@ export interface BetweenBlockDropDestination {
 /** Geometry-selected destination, not authorization to mutate the document. */
 export type BlockDropDestination = InsideBlockDropDestination | BetweenBlockDropDestination;
 
+/**
+ * Checks a candidate against the current source group without mutating document state.
+ *
+ * @param destination - Canonical proposed insertion with moving roots excluded.
+ * @returns Whether this destination may participate in nearest-position selection.
+ */
+export type BlockDropAcceptance = (destination: BlockDropDestination) => boolean;
+
 /** Mounted DOM region and a live destination supplied by its JSX owner. */
 export interface BlockDropTargetRegistration {
   readonly element: HTMLElement;

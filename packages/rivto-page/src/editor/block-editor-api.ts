@@ -1,4 +1,5 @@
 import type { BlockPointerOwnership } from "./pointer/block-pointer-ownership";
+import type { BlockLayoutRegions } from "../presentation/components/block-layout/block-layout-regions";
 import type { BlockKeyboardApi } from "./keyboard/block-keyboard";
 import type { BlockWrapperRegistryApi } from "../presentation/components/block-wrapper/types";
 import type { BlockEditorAdapter } from "../adapter/types";
@@ -11,6 +12,8 @@ import type { BlockEditorExtensionsApi } from "./extensions/types";
 
 /** Borrowed editor contract for components and extensions; the host owns attachment and destruction. */
 export interface BlockEditorApi {
+  /** Mounted primitive ownership; refs release their own registrations. */
+  readonly regions: Pick<BlockLayoutRegions, "register">;
   /** Borrowed semantic bindings and physical state queries. */
   readonly keyboard: BlockKeyboardApi;
   /** Exclusive pointer reservation; each gesture releases its own reservation. */

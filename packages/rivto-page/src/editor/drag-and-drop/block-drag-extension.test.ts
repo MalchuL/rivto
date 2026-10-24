@@ -106,7 +106,7 @@ it("withholds forbidden feedback and rechecks permission at pointer release", ()
 });
 
 it.each([false, true])(
-  "borrows uncaptured release targets and retains geometric fallback for capture=%s",
+  "borrows movement targets and refreshes release geometry for capture=%s",
   (capturedRelease) => {
     const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
     const resolve = jest.fn<undefined, [number, number, ReadonlySet<string>, Element?]>(
@@ -134,7 +134,7 @@ it.each([false, true])(
       expect(resolve.mock.calls.at(-1)?.[3]).toBeUndefined();
       capture.mockReturnValue(capturedRelease);
       pointer(target, "pointerup", 120);
-      expect(resolve.mock.calls.at(-1)?.[3]).toBe(capturedRelease ? undefined : target);
+      expect(resolve.mock.calls.at(-1)?.[3]).toBeUndefined();
     } finally {
       editor.destroy();
       root.remove();
@@ -169,6 +169,53 @@ it("releases pointer ownership when activation cannot read selection", () => {
     release?.();
   } finally {
     window.removeEventListener("error", onError);
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it("commits the pointed destination when capture was released before window pointerup", () => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML =
+    '<div data-block-id="source"><button data-block-drag-handle></button></div><div id="receiving"></div>';
+  document.body.append(root);
+  editor.attach(root);
+  const handle = root.querySelector("button")!;
+  const receiving = root.querySelector<HTMLElement>("#receiving")!;
+  const destination = { kind: "inside" as const, parentId: "receiving" };
+  const moveBlocks = jest.fn(() => true);
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension(
+      { canMove: () => true, moveBlocks },
+      {
+        /**
+         * Models fresh geometry pointing at the receiver while a retargeted event names the source.
+         *
+         * @param x - Unused viewport horizontal coordinate.
+         * @param y - Unused viewport vertical coordinate.
+         * @param excluded - Unused captured source group.
+         * @param hit - Native hint, absent when fresh geometry is requested.
+         * @returns Receiver for fresh geometry or a receiver hit; source hints cannot receive themselves.
+         */
+        resolve: (x, y, excluded, hit) =>
+          hit === handle ? undefined : { element: receiving, destination },
+      },
+    ),
+  );
+  const captured = jest.fn(() => true);
+  Object.defineProperty(handle, "hasPointerCapture", { value: captured });
+  handle.addEventListener("pointerup", () => captured.mockReturnValue(false));
+  try {
+    pointer(handle, "pointerdown", 100);
+    pointer(handle, "pointermove", 130);
+    expect(receiving.hasAttribute("data-block-drop-active")).toBe(true);
+    pointer(handle, "pointerup", 130);
+    expect(moveBlocks).toHaveBeenCalledWith(["source"], destination, undefined);
+    expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
+  } finally {
     editor.destroy();
     root.remove();
   }

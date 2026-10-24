@@ -30,7 +30,7 @@
   flex-direction: row;
   align-items: stretch;
   gap: 0;
-  padding: 12px;
+  padding: 16px;
   margin: 0;
   min-width: 0;
   min-height: 192px;
@@ -85,6 +85,13 @@
   box-shadow:
     0 0 0 1px var(--rivto-border),
     0 1px 2px rgb(9 30 66 / 12%);
+}
+.rivto-kanban-card > .rivto-block {
+  padding: 12px 10px;
+  color: var(--rivto-kanban-card-foreground);
+}
+.rivto-kanban-card > .rivto-block > .rivto-block-row {
+  padding: 0;
 }
 .rivto-kanban-add-card[data-slot],
 .rivto-kanban-add-column[data-slot] {

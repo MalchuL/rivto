@@ -1,4 +1,5 @@
 import { BlockPointerOwnership } from "./pointer/block-pointer-ownership";
+import { BlockLayoutRegions } from "../presentation/components/block-layout/block-layout-regions";
 import { BlockKeyboard } from "./keyboard/block-keyboard";
 import { BlockWrapperRegistry } from "../presentation/components/block-wrapper/block-wrapper-registry";
 import { BlockDropTargets } from "./drag-and-drop/block-drop-targets";
@@ -29,6 +30,8 @@ export interface BlockEditorOptions {
 
 /** Owns block nodes, feature registrations, and one replaceable DOM attachment. */
 export class BlockEditorController implements BlockEditorApi {
+  /** Mounted layout ownership, released by refs and finally by this controller. */
+  readonly regions = new BlockLayoutRegions();
   /** Borrowed data access and host selection; this editor never destroys the adapter. */
   readonly adapter: BlockEditorAdapter;
   /** Feature setup and cleanup ownership, independent of view attachment. */
@@ -190,6 +193,7 @@ export class BlockEditorController implements BlockEditorApi {
       }
     }
     this.nodes.clear();
+    this.regions.destroy();
     if (errors.length) {
       throw new AggregateError(errors, "Failed to destroy block editor resources");
     }

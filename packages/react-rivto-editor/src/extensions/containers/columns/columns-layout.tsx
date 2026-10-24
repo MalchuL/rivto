@@ -33,6 +33,7 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
         className="rivto-columns-children"
         item={ColumnBlockItem}
         dropAxis="horizontal"
+        dropPlacement="siblings"
         emptyDropTarget
         gap={HorizontalDropGap}
         data-show-dividers={block?.props.showDividers !== false}
@@ -74,9 +75,9 @@ export function ColumnsColumnLayout({ blockId }: BlockLayoutProps) {
       </BlockDropTarget>
       <BlockBody />
       <BlockChildren
-        item={ColumnBlockItem}
         className="rivto-columns-content"
         dropAxis="vertical"
+        dropPlacement="outline"
         renderEmpty={false}
       />
     </>

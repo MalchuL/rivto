@@ -77,12 +77,17 @@ interface SurfaceContentProps {
  * Composes the generic viewport with document cards and Rivto-specific chrome.
  *
  * Registers the mounted occurrence and observes its viewport lifetime. The root
- * reference connects both the panel and the surface controller; camera changes
- * invalidate the cached client origin. Mirrors the surface snapping settings into
+ * reference connects both the panel and the surface controller; viewport layout
+ * and scrolling invalidate the cached client origin without measuring camera translation.
+ * Mirrors the surface snapping settings into
  * its independent scene. The current snapshot drives toolbar controls and viewport markers.
  *
  * @param props - Snapping owner and new-card placement defaults.
+ * @param props.snapping - Borrowed surface-local snapping preferences and subscriptions.
+ * @param props.avoidBlockElementOverlap - Whether newly created cards avoid existing cards; defaults to true.
+ * @param props.blockElementWidth - Preferred new-card width in canvas units; defaults to the shared card width.
  * @returns Virtualized edgeless content with local camera and gesture policies.
+ * @throws If rendered outside the receiving EditorPanel and its edgeless canvas provider.
  */
 function EdgelessSurfaceContent({
   snapping,
@@ -92,11 +97,7 @@ function EdgelessSurfaceContent({
   const panel = useReactPanel();
   const canvas = useEdgelessCanvas()!;
   const camera = useCanvasCamera(canvas);
-  const snap = useSyncExternalStore(
-    (listener) => snapping.subscribe(listener),
-    () => snapping.getSnapshot(),
-    () => snapping.getSnapshot(),
-  );
+  const snap = useSurfaceSnapping(snapping);
   const controller = useMemo(
     () => new EdgelessSurfaceController(panel, canvas, avoidBlockElementOverlap, blockElementWidth),
     [panel, canvas, avoidBlockElementOverlap, blockElementWidth],
@@ -113,12 +114,10 @@ function EdgelessSurfaceContent({
     [controller, spotlight, registerRoot],
   );
   useEffect(() => spotlight.observeViewport(), [spotlight]);
-  useEffect(() => spotlight.refreshViewportOrigin(), [spotlight, camera]);
   useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (
     <BlockEditorScope editor={reactPanel.page} root={root}>
       <CanvasView
-        data-rivto-block-editor="true"
         canvas={canvas}
         viewportRef={rootRef}
         interactions={false}
@@ -138,6 +137,20 @@ function EdgelessSurfaceContent({
         <EdgelessCards canvas={canvas} />
       </CanvasView>
     </BlockEditorScope>
+  );
+}
+
+/**
+ * Observes a surface's borrowed snapping preferences until unmount or store replacement.
+ *
+ * @param snapping - Read and subscription operations of the surface's settings store.
+ * @returns Current stable snapshot, replaced when a preference changes.
+ */
+function useSurfaceSnapping(snapping: Pick<EdgelessSnappingStore, "subscribe" | "getSnapshot">) {
+  return useSyncExternalStore(
+    (listener) => snapping.subscribe(listener),
+    () => snapping.getSnapshot(),
+    () => snapping.getSnapshot(),
   );
 }
 

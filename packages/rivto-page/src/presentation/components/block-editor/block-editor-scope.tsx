@@ -3,6 +3,7 @@ import type { BlockEditorApi } from "../../../editor/block-editor-api";
 import type { BlockEditorController } from "../../../editor/block-editor-controller";
 import { BlockRowHover } from "../block-layout/block-row-hover";
 import { BlockEditorContext } from "./block-editor-context";
+import { BlockChildrenControlsContext } from "../block-layout/block-item-context";
 
 /** View capabilities include occurrence attachment, but not controller destruction. */
 export type BlockEditorViewApi = BlockEditorApi & Pick<BlockEditorController, "attach">;
@@ -23,6 +24,8 @@ export interface BlockEditorScopeProps {
  * controller or its registrations. The view also owns one DOM-only row-hover
  * observer and releases its listeners and feedback on root replacement or unmount.
  * Nested occurrences require their own controller.
+ * Each occurrence resets inherited child-control placement to outside, so a
+ * nested editor does not borrow the surrounding container's row geometry.
  *
  * @param props - Borrowed controller, mounted root and existing view content.
  * @param props.editor - Controller created and destroyed by the host outside render.
@@ -40,5 +43,11 @@ export function BlockEditorScope({ editor, root, children }: BlockEditorScopePro
     const hover = new BlockRowHover(root);
     return () => hover.destroy();
   }, [root]);
-  return <BlockEditorContext.Provider value={editor}>{children}</BlockEditorContext.Provider>;
+  return (
+    <BlockEditorContext.Provider value={editor}>
+      <BlockChildrenControlsContext.Provider value="outside">
+        {children}
+      </BlockChildrenControlsContext.Provider>
+    </BlockEditorContext.Provider>
+  );
 }

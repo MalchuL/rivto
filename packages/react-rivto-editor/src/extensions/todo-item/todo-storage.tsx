@@ -643,6 +643,7 @@ export function TodoStorageLayout({ blockId }: TodoStorageComponentProps) {
       <BlockChildren
         className="rivto-todo-storage-children"
         dropAxis="vertical"
+        dropPlacement="outline"
         item={TodoStorageItem}
         emptyDropTarget
       >

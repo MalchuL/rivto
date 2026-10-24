@@ -204,7 +204,7 @@ test("retains package geometry and colors with demo chrome CSS disabled", async 
   const editor = page.locator("[data-rivto-block-editor]");
   const row = page.locator('[data-block-id="block-1"] > .rivto-block-row');
   await expect(row).toHaveCSS("padding", "16px");
-  await expect(editor).toHaveCSS("row-gap", "16px");
+  await expect(editor).toHaveCSS("row-gap", "4px");
   await expect(page.locator('[data-block-id="block-1"] > .rivto-block-children')).toHaveCSS(
     "margin-inline-start",
     "28px",

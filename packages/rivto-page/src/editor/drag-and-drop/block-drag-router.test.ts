@@ -17,13 +17,14 @@ test("routes one current hit locally or to a foreign attachment without a second
   const route = jest.fn(() => ({ controller: receiver, nestedBoundary: true }));
   const router = new BlockDragRouter(root, { resolve: route }, local, foreign);
   const ids = new Set(["source"]);
-  expect(router.resolve(4, 5, ids, other)).toEqual({ ...target, scope: receiver });
+  const accepts = jest.fn(() => true);
+  expect(router.resolve(4, 5, ids, other, accepts)).toEqual({ ...target, scope: receiver });
   expect(foreign.resolveForeign).toHaveBeenCalledWith(receiver, 4, 5, ids, other, true);
   expect(route).toHaveBeenCalledWith(root, { x: 4, y: 5 }, 8, other);
   expect(local.resolve).not.toHaveBeenCalled();
   route.mockReturnValue({ controller: { root, onDetach: () => () => {} }, nestedBoundary: true });
-  router.resolve(4, 5, ids, root);
-  expect(local.resolve).toHaveBeenCalledWith(4, 5, ids, root, true);
+  router.resolve(4, 5, ids, root, accepts);
+  expect(local.resolve).toHaveBeenCalledWith(4, 5, ids, root, true, accepts);
   root.remove();
   expect(router.resolve(4, 5, ids, other)).toBeUndefined();
   expect(route).toHaveBeenCalledTimes(2);

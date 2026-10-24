@@ -2,6 +2,112 @@ import { BlockEditorController } from "../block-editor-controller";
 import { TestBlockEditorAdapter } from "../../test-utils/test-block-editor-adapter";
 import { BlockOutlineDropTargets } from "./block-outline-drop-targets";
 
+it.each(["outline", "siblings"])(
+  "separates vertical flow from %s background placement",
+  (placement) => {
+    const data = new TestBlockEditorAdapter();
+    data.setNode("parent", { childIds: ["a", "b"] });
+    data.setNode("a");
+    data.setNode("b");
+    data.rootIds = ["parent"];
+    data.setBlockIds(data.rootIds);
+    const editor = new BlockEditorController({ adapter: data });
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.innerHTML = `<div class="rivto-block" data-block-id="parent"><div class="rivto-block-children" data-block-drop-axis="vertical" data-block-drop-placement="${placement}"><div class="rivto-block" data-block-id="a"><div class="rivto-block-row"></div></div><div class="rivto-block" data-block-id="b"><div class="rivto-block-row"></div></div></div></div>`;
+    document.body.append(root);
+    editor.attach(root);
+    const list = root.querySelector<HTMLElement>(".rivto-block-children")!;
+    jest
+      .spyOn(list.parentElement!, "getBoundingClientRect")
+      .mockReturnValue({
+        left: 80,
+        right: 320,
+        top: 80,
+        bottom: 200,
+        width: 240,
+        height: 120,
+      } as DOMRect);
+    for (const [index, item] of Array.from(list.children).entries()) {
+      const rect = {
+        left: 100,
+        right: 300,
+        top: 100 + index * 56,
+        bottom: 124 + index * 56,
+        width: 200,
+        height: 24,
+      } as DOMRect;
+      jest.spyOn(item, "getBoundingClientRect").mockReturnValue(rect);
+      jest.spyOn(item.firstElementChild!, "getBoundingClientRect").mockReturnValue(rect);
+    }
+    const target = new BlockOutlineDropTargets(editor, null).resolve(136, 140, new Set(), list);
+    expect(target?.destination).toEqual(
+      placement === "siblings"
+        ? { kind: "between", parentId: "parent", previousId: "a", nextId: "b" }
+        : { kind: "between", parentId: "a", previousId: null, nextId: null },
+    );
+    expect(target?.indicator?.left).toBe(placement === "siblings" ? 100 : 124);
+    editor.destroy();
+    root.remove();
+  },
+);
+
+it.each([false, true])(
+  "shares the full padded sibling boundary through layout wrappers=%s",
+  (wrapped) => {
+    const data = new TestBlockEditorAdapter();
+    data.rootIds = ["first", "last"];
+    data.setBlockIds(data.rootIds);
+    data.rootIds.forEach((id) => data.setNode(id));
+    const editor = new BlockEditorController({ adapter: data });
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.dataset.blockRootList = "";
+    root.innerHTML = data.rootIds
+      .map(
+        (id) =>
+          `<div class="rivto-block" data-block-id="${id}">${wrapped ? "<section><header>" : ""}<div class="rivto-block-row"></div>${wrapped ? "</header></section>" : ""}</div>`,
+      )
+      .join("");
+    document.body.append(root);
+    editor.attach(root);
+    const rows = Array.from(root.querySelectorAll<HTMLElement>(".rivto-block-row"));
+    for (const [index, row] of rows.entries()) {
+      const shell = row.closest<HTMLElement>("[data-block-id]")!;
+      jest.spyOn(shell, "getBoundingClientRect").mockReturnValue({
+        left: 100,
+        right: 300,
+        top: 100 + index * 80,
+        bottom: 160 + index * 80,
+        width: 200,
+        height: 60,
+      } as DOMRect);
+      jest.spyOn(row, "getBoundingClientRect").mockReturnValue({
+        left: 100,
+        right: 300,
+        top: 112 + index * 80,
+        bottom: 136 + index * 80,
+        width: 200,
+        height: 24,
+      } as DOMRect);
+    }
+    const targets = new BlockOutlineDropTargets(editor, null);
+    const after = targets.resolve(100, 135, new Set(), rows[0]);
+    const before = targets.resolve(100, 193, new Set(), rows[1]);
+    expect(after?.destination).toEqual({
+      kind: "between",
+      parentId: null,
+      previousId: "first",
+      nextId: "last",
+    });
+    expect(before?.destination).toEqual(after?.destination);
+    expect(after?.indicator).toEqual({ left: 100, top: 169, width: 200, height: 2 });
+    expect(before?.indicator).toEqual(after?.indicator);
+    editor.destroy();
+    root.remove();
+  },
+);
+
 it("uses real parents and excludes moving roots without reading subtrees or foreign occurrences", () => {
   const data = new TestBlockEditorAdapter();
   data.setNode("hidden", { childIds: ["source", "target", "tail"] });
@@ -69,6 +175,9 @@ it("outdents through trailing ancestors only and retains the hidden panel bounda
     .mockReturnValue({ left: 148, top: 100, bottom: 124, height: 24, width: 200 } as DOMRect);
   Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => row });
   const targets = new BlockOutlineDropTargets(editor, null);
+  jest
+    .spyOn(row.parentElement!, "getBoundingClientRect")
+    .mockImplementation(() => row.getBoundingClientRect());
   expect(targets.resolve(148, 123)?.destination).toEqual({
     kind: "between",
     parentId: "branch",
@@ -172,7 +281,8 @@ it.each([4, 200])(
       nextId: ids[middle + 1],
     });
     expect(data.blocks.getRootIds).toHaveBeenCalledTimes(1);
-    expect(rectangles).toBeLessThanOrEqual(Math.ceil(Math.log2(count)) + 2);
+    // Binary search, row semantics, full shell padding, and one adjacent anchor.
+    expect(rectangles).toBeLessThanOrEqual(Math.ceil(Math.log2(count)) + 3);
     expect(descendantQuery).not.toHaveBeenCalled();
     editor.destroy();
     root.remove();
@@ -220,7 +330,7 @@ it("resolves an explicitly routed nested boundary without admitting its interior
     });
     expect(targets.resolve(30, 199, new Set(["embed"]), hit, true)).toBeUndefined();
     expect(nested.getBoundingClientRect).toHaveBeenCalledTimes(2);
-    expect(shell.getBoundingClientRect).toHaveBeenCalledTimes(2);
+    expect(shell.getBoundingClientRect).toHaveBeenCalledTimes(4);
   } finally {
     editor.destroy();
     root.remove();
@@ -333,14 +443,12 @@ it.each([false, true])(
       });
       const title = board.querySelector<HTMLElement>(".rivto-block-row")!;
       const grid = board.querySelector<HTMLElement>(".rivto-block-children")!;
-      for (const [hit, y] of [
-        [title, 12],
-        [grid, 197],
-      ] as const) {
-        const boundary = targets.resolve(100, y, excluded, hit);
-        expect(boundary?.destination).toEqual(result?.destination);
-        expect(boundary?.indicator).toEqual(result?.indicator);
-      }
+      const header = targets.resolve(100, 12, excluded, title);
+      expect(header?.destination).toEqual({ kind: "between", parentId: null, previousId: null, nextId: "board" });
+      expect(header?.indicator?.top).toBe(-1);
+      const boundary = targets.resolve(100, 197, excluded, grid);
+      expect(boundary?.destination).toEqual(result?.destination);
+      expect(boundary?.indicator).toEqual(result?.indicator);
       expect(targets.resolve(100, 100, excluded, grid)).toBeUndefined();
       expect(targets.resolve(100, 197, new Set(["board"]), grid)).toBeUndefined();
     } finally {
@@ -666,3 +774,62 @@ function mockVerticalRectangles(list: HTMLElement): jest.Mock {
   }
   return reads;
 }
+
+it.each(["vertical", "horizontal", "grid"])(
+  "resolves %s container padding and controls through its child list",
+  (axis) => {
+    const data = new TestBlockEditorAdapter();
+    data.rootIds = ["container"];
+    data.setBlockIds(data.rootIds);
+    data.setNode("container", { childIds: ["first", "last"] });
+    data.setNode("first");
+    data.setNode("last");
+    const editor = new BlockEditorController({ adapter: data });
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.innerHTML =
+      '<div class="rivto-block" data-block-id="container"><div class="rivto-block-row"></div><div class="rivto-block-children" data-block-drop-axis="vertical"><div data-block-item-id="first"><span id="padding"></span><div class="rivto-block" data-block-id="first"><div class="rivto-block-row"></div></div></div><div class="rivto-block" data-block-id="last"><div class="rivto-block-row"></div></div><button id="footer"></button></div></div>';
+    document.body.append(root);
+    editor.attach(root);
+    const list = root.querySelector<HTMLElement>(".rivto-block-children")!;
+    list.dataset.blockDropAxis = axis;
+    for (const [index, item] of Array.from(list.children).slice(0, 2).entries()) {
+      const rect = {
+        left: 100,
+        right: 300,
+        width: 200,
+        top: 100 + index * 40,
+        bottom: 124 + index * 40,
+        height: 24,
+      } as DOMRect;
+      for (const element of [
+        item,
+        ...Array.from(item.querySelectorAll("[data-block-id], .rivto-block-row")),
+      ]) {
+        jest.spyOn(element, "getBoundingClientRect").mockReturnValue(rect);
+      }
+    }
+    jest.spyOn(root.firstElementChild!, "getBoundingClientRect").mockReturnValue({
+      left: 80,
+      right: 320,
+      top: 50,
+      bottom: 220,
+      height: 170,
+      width: 240,
+    } as DOMRect);
+    try {
+      const targets = new BlockOutlineDropTargets(editor, null);
+      for (const hitId of ["padding", "footer"]) {
+        const y = hitId === "padding" ? 132 : 180;
+        const expected = targets.resolve(112, y, new Set(), list);
+        expect(expected?.destination.parentId).toBe("container");
+        expect(
+          targets.resolve(112, y, new Set(), root.querySelector(`#${hitId}`)!)?.destination,
+        ).toEqual(expected?.destination);
+      }
+    } finally {
+      editor.destroy();
+      root.remove();
+    }
+  },
+);

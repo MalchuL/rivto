@@ -26,6 +26,8 @@ beforeAll(() => {
 import type { BlockWrapperComponent, BlockWrapperProps } from "../block-wrapper/types";
 import type { BlockEditorApi } from "../../../editor/block-editor-api";
 import { BlockRow } from "../block-layout/block-row";
+import { BlockSlot } from "../../slots/block-slots";
+import { blockLayoutRegion } from "../block-layout/block-layout-regions";
 import { BlockContent } from "../block-layout/block-content";
 import { BlockBody } from "../block-layout/block-body";
 import { BlockChildren } from "../block-layout/block-children";
@@ -178,6 +180,58 @@ it("shares one attached root with the host and renders its ending slot last", ()
   act(() => root.render(null));
   expect(hostRoot.current).toBeNull();
   expect(editor.getRoot()).toBeNull();
+});
+
+it("registers wrapped layout regions and manually placed slots with ref cleanup", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  adapter.setNode("parent", { type: "custom", childIds: ["child"] });
+  adapter.setNode("child");
+  adapter.setBlockIds(["parent"]);
+  const rowRef = createRef<HTMLDivElement>();
+  /**
+   * Composes independent slot and child wrappers under the one canonical shell.
+   *
+   * @returns Manual row contributions and a separately wrapped child host.
+   */
+  function Layout() {
+    return (
+      <section>
+        <header>
+          <BlockRow ref={rowRef} slots="manual">
+            <BlockSlot position="end" />
+            <BlockContent />
+          </BlockRow>
+        </header>
+        <aside>
+          <BlockSlot position="body" />
+        </aside>
+        <main>
+          <BlockChildren />
+        </main>
+      </section>
+    );
+  }
+  editor.renderers.register("custom", { layout: Layout });
+  editor.slots.register({ position: "end", component: () => <span>End contribution</span> });
+  editor.slots.register({ position: "body", component: () => <span>Body contribution</span> });
+  act(() =>
+    root.render(
+      <StrictMode>
+        <BlockEditor editor={editor} />
+      </StrictMode>,
+    ),
+  );
+  const shell = container.querySelector<HTMLElement>('[data-block-id="parent"]')!;
+  expect(blockLayoutRegion(shell, "row")).toBe(rowRef.current);
+  expect(blockLayoutRegion(shell, "children")?.parentElement?.tagName).toBe("MAIN");
+  expect(blockLayoutRegion(shell, "body")?.parentElement?.tagName).toBe("ASIDE");
+  expect(rowRef.current?.querySelectorAll('[data-slot-position="end"]')).toHaveLength(1);
+  act(() => root.render(null));
+  expect(rowRef.current).toBeNull();
+  for (const role of ["shell", "row", "children", "body", "slot"] as const) {
+    expect(editor.regions.get("parent", role)).toBeUndefined();
+  }
 });
 
 it("renders nested blocks, reorders them, and observes an empty display list", () => {
@@ -904,6 +958,45 @@ function GridItem({ blockId, children }: BlockChildrenItemProps) {
   return <BlockDropWrapper data-grid-item={blockId}>{children}</BlockDropWrapper>;
 }
 
+it.each(["vertical", "horizontal", "grid"] as const)(
+  "reserves only the requested %s item boundaries",
+  (axis) => {
+    const adapter = new TestBlockEditorAdapter();
+    const editor = createEditor(adapter);
+    adapter.setNode("parent", { type: "container", childIds: ["a"] });
+    adapter.setNode("a");
+    adapter.setBlockIds(["parent"]);
+    /**
+     * Reserves strips around the supplied existing child subtree.
+     *
+     * @param props - Page-owned child content.
+     * @param props.children - Single rendered child to retain inside the item.
+     * @returns One item with boundaries on the requested flow axis.
+     */
+    function Item({ children }: BlockChildrenItemProps) {
+      return (
+        <BlockDropWrapper axis={axis} style={{ "--rivto-drop-gap-size": "12px" }}>
+          {children}
+        </BlockDropWrapper>
+      );
+    }
+    editor.renderers.register("container", {
+      layout: () => <BlockChildren dropPlacement="siblings" item={Item} />,
+    });
+    act(() => root.render(<BlockEditor editor={editor} />));
+    const boundaries = container.querySelectorAll(".rivto-block-drop-wrapper-boundary");
+    expect(boundaries).toHaveLength(axis === "grid" ? 4 : 2);
+    expect(container.querySelectorAll('[data-block-id="a"]')).toHaveLength(1);
+    if (axis !== "grid") {
+      boundaries.forEach((element) =>
+        expect(element.getAttribute("data-drop-edge")).toBe(
+          axis === "vertical" ? "block" : "inline",
+        ),
+      );
+    }
+  },
+);
+
 it("keeps grid edges item-local, updates canonical neighbors without remounting, and releases them on collapse", () => {
   const adapter = new TestBlockEditorAdapter();
   const editor = createEditor(adapter);
@@ -1239,4 +1332,74 @@ it("scopes wrapping item controls to its own row without leaking into descendant
     nested.querySelector(":scope > .rivto-block-row")?.getAttribute("data-controls-placement"),
   ).toBe("outside");
   expect(container.querySelector("[controlsPlacement]")).toBeNull();
+});
+
+it("inherits child-layout controls, permits nested resets and keeps item overrides local", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  adapter.setNode("parent", { type: "container", childIds: ["a", "reset"] });
+  adapter.setNode("a", { childIds: ["nested"] });
+  adapter.setNode("nested");
+  adapter.setNode("reset", { type: "reset", childIds: ["outside"] });
+  adapter.setNode("outside");
+  adapter.setBlockIds(["parent"]);
+  /**
+   * Overrides one item's row without changing the inherited child-layout policy.
+   *
+   * @param props - Canonical child subtree supplied by the shared iterator.
+   * @param props.children - Existing block rendered exactly once.
+   * @returns An item whose own controls stay outside its row.
+   */
+  function Item({ children }: BlockChildrenItemProps) {
+    return <BlockItem controlsPlacement="outside">{children}</BlockItem>;
+  }
+  editor.renderers.register("container", {
+    layout: () => <BlockChildren controlsPlacement="inside" item={Item} />,
+  });
+  editor.renderers.register("reset", {
+    layout: () => <BlockChildren controlsPlacement="outside" />,
+  });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  for (const [blockId, placement] of [
+    ["a", "outside"],
+    ["nested", "inside"],
+    ["outside", "outside"],
+  ]) {
+    expect(
+      container
+        .querySelector(`[data-block-id="${blockId}"] > .rivto-block-row`)
+        ?.getAttribute("data-controls-placement"),
+    ).toBe(placement);
+  }
+  expect(container.querySelectorAll("[data-block-id]")).toHaveLength(5);
+  expect(container.querySelector("[controlsPlacement]")).toBeNull();
+});
+
+it("resets inherited child controls at nested autonomous editor boundaries", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  const nestedAdapter = new TestBlockEditorAdapter();
+  const nestedEditor = createEditor(nestedAdapter);
+  adapter.setNode("parent", { type: "container", childIds: ["embedded"] });
+  adapter.setNode("embedded", { type: "embedded" });
+  adapter.setBlockIds(["parent"]);
+  nestedAdapter.setNode("nested-root");
+  nestedAdapter.setBlockIds(["nested-root"]);
+  editor.renderers.register("container", {
+    layout: () => <BlockChildren controlsPlacement="inside" />,
+  });
+  editor.renderers.register("embedded", {
+    content: () => <BlockEditor editor={nestedEditor} />,
+  });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  expect(
+    container
+      .querySelector('[data-block-id="embedded"] > .rivto-block-row')
+      ?.getAttribute("data-controls-placement"),
+  ).toBe("inside");
+  expect(
+    container
+      .querySelector('[data-block-id="nested-root"] > .rivto-block-row')
+      ?.getAttribute("data-controls-placement"),
+  ).toBe("outside");
 });

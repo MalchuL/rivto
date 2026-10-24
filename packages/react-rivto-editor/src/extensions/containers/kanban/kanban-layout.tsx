@@ -21,11 +21,7 @@ import { KanbanAddCard, KanbanAddColumn } from "./kanban-content";
  * @returns A placement item whose visual card has the same bounds as the child.
  */
 function KanbanCardItem({ children }: BlockChildrenItemProps) {
-  return (
-    <BlockItem controlsPlacement="inside" className="rivto-kanban-card">
-      {children}
-    </BlockItem>
-  );
+  return <BlockItem className="rivto-kanban-card">{children}</BlockItem>;
 }
 
 /**
@@ -48,7 +44,9 @@ export function KanbanColumnLayout({ blockId }: BlockLayoutProps) {
       <BlockChildren
         className="rivto-kanban-cards"
         dropAxis="vertical"
+        dropPlacement="outline"
         item={KanbanCardItem}
+        controlsPlacement="inside"
         emptyDropTarget
       >
         <KanbanAddCard blockId={blockId} />
@@ -78,6 +76,8 @@ export function KanbanLayout({ blockId }: BlockLayoutProps) {
       <BlockChildren
         className="rivto-kanban-columns"
         dropAxis="horizontal"
+        dropPlacement="siblings"
+        controlsPlacement="inside"
         emptyDropTarget
         gap={HorizontalDropGap}
       >

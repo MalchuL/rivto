@@ -9,8 +9,15 @@
   grid-template-rows: var(--rivto-drop-gap-size, 8px) minmax(0, 1fr) var(--rivto-drop-gap-size, 8px);
 }
 .rivto-block-drop-wrapper-content {
-  @apply page:min-w-0;
+  /* Absolute content controls stay inside the center instead of covering strips. */
+  @apply page:relative page:min-w-0;
   grid-area: 2 / 2;
+}
+.rivto-block-drop-wrapper[data-drop-wrapper-axis="vertical"] {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+.rivto-block-drop-wrapper[data-drop-wrapper-axis="horizontal"] {
+  grid-template-rows: 0 minmax(0, 1fr) 0;
 }
 
 /* Top and bottom own the corners. Inline strips fill only the center row, so

@@ -1,3 +1,4 @@
+import { scheduleCardHeight } from "./card-height-updates";
 import { BlockNode } from "@chulane/rivto-page";
 /**
  * Positioned canvas card for one block element.
@@ -19,6 +20,11 @@ const CARD_CLASS = "edgeless-card";
 const CARD_CONTENT_CLASS = "edgeless-card-content";
 const MIN_CARD_HEIGHT = 100;
 
+interface EdgelessBlockElementProps {
+  readonly element: EditorElementNode;
+  readonly blockIds: readonly string[];
+}
+
 /**
  * Renders one block element as a positioned canvas card.
  *
@@ -31,13 +37,7 @@ const MIN_CARD_HEIGHT = 100;
  * @param props.blockIds - Ordered root block IDs projected into this card.
  * @returns Positioned card host, or null when it owns no blocks.
  */
-function EdgelessBlockElementView({
-  element,
-  blockIds,
-}: {
-  readonly element: EditorElementNode;
-  readonly blockIds: readonly string[];
-}) {
+function EdgelessBlockElementView({ element, blockIds }: EdgelessBlockElementProps) {
   const selected = useEdgelessSelected(element.id);
   const panel = usePanel();
   const { ref: hostRef, style } = useEdgelessElementStyle(element);
@@ -50,41 +50,7 @@ function EdgelessBlockElementView({
     if (!autoHeight || !content || !host) {
       return;
     }
-    /**
-     * Writes content-driven height into the element frame when it drifted.
-     *
-     * Temporarily unlocks CSS height so `scrollHeight` reflects content, then
-     * restores the previous inline height. Geometry-lock skips the read during
-     * live resize.
-     *
-     * @returns Nothing.
-     */
-    const measure = () => {
-      if (host.dataset.edgelessGeometryLock === "true") {
-        return;
-      }
-      const previousHeight = host.style.height;
-      host.style.height = "auto";
-      const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
-      host.style.height = previousHeight;
-      if (Math.abs(element.frame.height - height) < 1) {
-        return;
-      }
-      // Undoing a recorded height change would remeasure and record it again, trapping undo.
-      panel.batchUpdatesWithoutHistory(() => {
-        panel.elements.updateElement(element.id, { frame: { height } });
-      });
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(measure);
-    observer.observe(content);
-    [...content.children].forEach((child) => observer.observe(child));
-    // Selection is intentionally omitted from deps: chrome-only
-    // `data-block-selected` must not remount ResizeObserver or force scrollHeight.
-    return () => observer.disconnect();
+    return observeCardHeight(panel, element, host, content);
   }, [autoHeight, contentKey, element.frame.height, element.frame.width, element.id, panel]);
 
   if (!blockIds.length) {
@@ -139,3 +105,61 @@ function sameEdgelessBlockElement(
 
 /** Memoized positioned card woken by its own selection or changed persisted inputs. */
 export const EdgelessBlockElement = memo(EdgelessBlockElementView, sameEdgelessBlockElement);
+
+/**
+ * Observes content dimensions and releases pending writes when the mounted card changes.
+ *
+ * Selection is intentionally omitted from the caller's effect dependencies:
+ * chrome-only `data-block-selected` must not remount ResizeObserver or force
+ * scrollHeight. The observer also watches direct children for content-driven
+ * size changes and keeps geometry-locked resize previews under gesture ownership.
+ *
+ * @param panel - Borrowed receiving panel's card update and transaction operations.
+ * @param element - Captured card identity and geometry for this observation.
+ * @param host - Mounted card shell whose explicit height is temporarily unlocked.
+ * @param content - Mounted content whose scroll height supplies the card height.
+ * @returns Cleanup disconnecting observation and withdrawing the pending measurement.
+ * @throws Propagates layout measurement or observer registration failures.
+ */
+function observeCardHeight(
+  panel: Parameters<typeof scheduleCardHeight>[0],
+  element: EditorElementNode,
+  host: HTMLElement,
+  content: HTMLElement,
+): () => void {
+  let cancelHeight: (() => void) | undefined;
+  /**
+   * Queues content-driven height for a shared transaction when it drifted.
+   *
+   * Temporarily unlocks CSS height so `scrollHeight` reflects content, then
+   * restores the previous inline height. Geometry-lock skips the read during
+   * live resize. Measurements from sibling cards finish before their queued
+   * document writes, avoiding repeated scene refreshes inside the same commit.
+   *
+   * @returns A changed content height is queued for the shared card update batch.
+   */
+  const measure = () => {
+    if (host.dataset.edgelessGeometryLock === "true") {
+      return;
+    }
+    cancelHeight?.();
+    cancelHeight = undefined;
+    const previousHeight = host.style.height;
+    host.style.height = "auto";
+    const height = Math.max(MIN_CARD_HEIGHT, Math.ceil(content.scrollHeight + 2));
+    host.style.height = previousHeight;
+    if (Math.abs(element.frame.height - height) < 1) {
+      return;
+    }
+    // Undoing a recorded height change would remeasure and record it again, trapping undo.
+    cancelHeight = scheduleCardHeight(panel, element.id, element.frame.width, height);
+  };
+  measure();
+  const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+  observer?.observe(content);
+  [...content.children].forEach((child) => observer?.observe(child));
+  return () => {
+    observer?.disconnect();
+    cancelHeight?.();
+  };
+}
