@@ -1,5 +1,6 @@
-import { forwardRef, type ReactNode, type HTMLAttributes } from "react";
+import { forwardRef, useContext, type ReactNode, type HTMLAttributes } from "react";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
+import { BlockItemControlsContext } from "./block-item-context";
 import { BlockSlots } from "../../slots/block-slots";
 import { useBlockLayoutState } from "./block-layout-context";
 
@@ -14,6 +15,8 @@ export interface BlockRowProps extends HTMLAttributes<HTMLDivElement> {
  *
  * Placement belongs to the layout; a layout may omit the row entirely. Package
  * spacing and the start gutter work without renderer or demo stylesheet overrides.
+ * Only a matching BlockItem identity can move this row's left-top controls inside;
+ * ancestor placement does not alter descendant rows.
  *
  * @param props - Native row attributes and content placed between its inline slots.
  * @param props.children - JSX arranged by the host layout.
@@ -27,10 +30,13 @@ export const BlockRow = forwardRef<HTMLDivElement, BlockRowProps>(function Block
   ref,
 ) {
   const layoutState = useBlockLayoutState();
+  const controls = useContext(BlockItemControlsContext);
+  const placement = controls?.blockId === layoutState.block.id ? controls.placement : "outside";
   return (
     <div
       {...attributes}
       ref={ref}
+      data-controls-placement={placement}
       className={[BLOCK_EDITOR_CLASSES.row, className].filter(Boolean).join(" ")}
     >
       <BlockSlots {...layoutState}>{children}</BlockSlots>

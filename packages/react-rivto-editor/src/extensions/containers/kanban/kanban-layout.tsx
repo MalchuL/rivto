@@ -21,7 +21,11 @@ import { KanbanAddCard, KanbanAddColumn } from "./kanban-content";
  * @returns A placement item whose visual card has the same bounds as the child.
  */
 function KanbanCardItem({ children }: BlockChildrenItemProps) {
-  return <BlockItem className="rivto-kanban-card">{children}</BlockItem>;
+  return (
+    <BlockItem controlsPlacement="inside" className="rivto-kanban-card">
+      {children}
+    </BlockItem>
+  );
 }
 
 /**

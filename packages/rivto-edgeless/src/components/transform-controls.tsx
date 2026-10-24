@@ -13,6 +13,7 @@ import { useCanvasCamera, useCanvasVisible } from "../hooks/use-canvas";
  *
  * Moveable supplies geometry; the adapter owns participant expansion, dependent
  * decorations and source commits. World coordinates remain independent of zoom.
+ * Each target in a multiple selection keeps its own outline inside the shared controls.
  *
  * @param props - Canvas state, DOM layers, transform policies and snapping settings.
  * @returns Controls portaled into the world layer.
@@ -27,7 +28,6 @@ export function CanvasTransformControls(props: CanvasTransformControlsProps) {
       origin={false}
       draggable
       linePadding={6}
-      hideChildMoveableDefaultLines
       passDragArea
       renderDirections={options.resizable ? ["n", "e", "s", "w", "nw", "ne", "sw", "se"] : false}
       useResizeObserver
@@ -94,6 +94,7 @@ function useTransformControls({ canvas, plane, adapter }: CanvasTransformControl
       ...capabilities,
       keepRatio: isGroup || modifiers.shift,
       hideDefaultLines: targets.length === 0 || Boolean(selectedId && !interactive),
+      hideChildMoveableDefaultLines: selection.length < 2,
     },
   };
 }

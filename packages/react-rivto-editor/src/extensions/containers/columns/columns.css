@@ -25,7 +25,7 @@
   min-width: 0;
   max-width: 100%;
 }
-.rivto-columns-children > .rivto-block {
+.rivto-columns-children > .rivto-block-item {
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;

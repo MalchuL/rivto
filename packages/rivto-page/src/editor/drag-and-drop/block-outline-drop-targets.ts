@@ -678,23 +678,8 @@ export class BlockOutlineDropTargets {
         : { element: list, destination: { kind: "inside", parentId } };
     }
     const low = this.firstItemAfter(items, y);
-    let index = low - 1;
-    while (
-      index >= 0 &&
-      this.isExcluded(this.itemShell(items[index]!)?.dataset.blockId, excluded)
-    ) {
-      index -= 1;
-    }
-    const follows = index >= 0;
-    if (!follows) {
-      index = low;
-      while (
-        index < items.length &&
-        this.isExcluded(this.itemShell(items[index]!)?.dataset.blockId, excluded)
-      ) {
-        index += 1;
-      }
-    }
+    const index = this.stationaryItemIndex(items, low, y, excluded);
+    const follows = index < low;
     const item = items[index];
     let shell = item && this.itemShell(item);
     if (!shell) {
@@ -704,6 +689,54 @@ export class BlockOutlineDropTargets {
       shell = this.lastVisibleShell(shell, excluded);
     }
     return this.rowTarget(shell, x, y, excluded);
+  }
+
+  /**
+   * Chooses the nearer stationary boundary when moving items retain intervening space.
+   *
+   * Ordinary gaps keep the preceding item for outline depth projection. If moving
+   * items cover that position, compare the nearest stationary siblings on both
+   * sides instead of always snapping back above the source. Only skipped moving
+   * siblings and at most two boundary rectangles are inspected.
+   *
+   * @param items - Mounted placements in vertical order.
+   * @param low - First placement beginning below the pointer.
+   * @param y - Pointer Y coordinate in viewport pixels.
+   * @param excluded - Moving roots omitted from receiving geometry.
+   * @returns Stationary index, or items.length when no stationary item remains.
+   */
+  private stationaryItemIndex(
+    items: readonly HTMLElement[],
+    low: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+  ): number {
+    let before = low - 1;
+    while (
+      before >= 0 &&
+      this.isExcluded(this.itemShell(items[before]!)?.dataset.blockId, excluded)
+    ) {
+      before -= 1;
+    }
+    if (before >= 0 && before === low - 1) {
+      return before;
+    }
+    let after = low;
+    while (
+      after < items.length &&
+      this.isExcluded(this.itemShell(items[after]!)?.dataset.blockId, excluded)
+    ) {
+      after += 1;
+    }
+    if (before < 0) {
+      return after;
+    }
+    if (after >= items.length) {
+      return before;
+    }
+    const above = items[before]!.getBoundingClientRect();
+    const below = items[after]!.getBoundingClientRect();
+    return y - above.bottom <= below.top - y ? before : after;
   }
 
   /**

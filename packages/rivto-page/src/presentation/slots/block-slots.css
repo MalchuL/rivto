@@ -60,3 +60,14 @@
 .rivto-block-slot:is([data-slot-position="top-right"], [data-slot-position="bottom-right"]) {
   @apply page:right-0;
 }
+
+/* Only the owning row opts in; nested rows retain their own placement. */
+.rivto-block-row[data-controls-placement="inside"]
+  > .rivto-block-slot[data-slot-position="left-top"] {
+  @apply page:relative page:inset-auto page:transform-none page:order-first page:shrink-0;
+}
+.rivto-block-row[data-controls-placement="inside"]
+  > .rivto-block-slot[data-slot-position="left-top"]
+  > * {
+  @apply page:relative page:inset-auto page:translate-none;
+}

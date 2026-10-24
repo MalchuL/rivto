@@ -154,3 +154,74 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
     });
   }
 }
+
+for (const type of ["bento", "columns", "kanban"] as const) {
+  for (const mode of ["block", "edgeless"] as const) {
+    test(`${type} keeps card controls inside only their own row in ${mode}`, async ({ page }) => {
+      await loadContainer(page, type, mode);
+      const card = page.locator('[data-block-id="layout-card-one"]');
+      const row = card.locator(":scope > .rivto-block-row");
+      await expect(row).toHaveAttribute("data-controls-placement", "inside");
+      const nested = card.locator(".rivto-block-children .rivto-block-row").first();
+      await expect(nested).toHaveAttribute("data-controls-placement", "outside");
+      const content = row.locator(".rivto-block-content");
+      const initial = (await content.boundingBox())!;
+      await row.hover();
+      const handle = row.locator(".block-handle");
+      await expect(handle).toHaveCSS("opacity", "1");
+      const bounds = (await card.boundingBox())!;
+      for (const control of [
+        handle,
+        row.getByRole("button", { name: "Collapse block: First card", exact: true }),
+      ]) {
+        const box = (await control.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(initial.x);
+        expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+      }
+      expect((await content.boundingBox())!.x).toBe(initial.x);
+      await row.getByRole("button", { name: "Collapse block: First card", exact: true }).click();
+      await expect(nested).toHaveCount(0);
+      await row.getByRole("button", { name: "Expand block: First card", exact: true }).click();
+      await expect(nested).toBeVisible();
+      await row.hover();
+      await handle.click({ button: "right" });
+      await expect(page.getByRole("menu")).toBeVisible();
+    });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`Columns separates lane controls from its first child in ${mode}`, async ({ page }) => {
+    await loadContainer(page, "columns", mode);
+    const lane = page.locator('[data-block-id="layout-lane-0"]');
+    const row = lane.locator(":scope > .rivto-block-row");
+    const child = page.locator('[data-block-id="layout-card-one"]');
+    const header = (await row.boundingBox())!;
+    const body = (await child.boundingBox())!;
+    expect(header.y + header.height).toBeLessThanOrEqual(body.y);
+    await row.hover();
+    const handle = row.locator(".block-handle");
+    await expect(handle).toHaveCSS("opacity", "1");
+    const control = (await handle.boundingBox())!;
+    const bounds = (await lane.boundingBox())!;
+    expect(control.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(control.x + control.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+    await handle.click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await row.getByRole("button", { name: "Collapse block: columns-column", exact: true }).click();
+    await expect(child).toHaveCount(0);
+    await row.getByRole("button", { name: "Expand block: columns-column", exact: true }).click();
+    await expect(child).toBeVisible();
+    await handle.hover();
+    const start = (await handle.boundingBox())!;
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 10, start.y + start.height / 2);
+    await expect(lane).toHaveAttribute("data-dragging", "true");
+    await expect(child).not.toHaveAttribute("data-dragging", "true");
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await expect(lane).not.toHaveAttribute("data-dragging", "true");
+  });
+}

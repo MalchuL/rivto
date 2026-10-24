@@ -269,6 +269,13 @@ remains configurable through native style and the existing theme parameters, plu
 `--rivto-drop-gap-size` (8px) and `--rivto-drop-min-height` (32px for horizontal gaps).
 Demo CSS does not override these structural selectors.
 
+`BlockItem controlsPlacement="inside"` places the matching block's `left-top`
+slot in row flow before content, reserving space for the handle and collapse controls.
+The default `"outside"` retains perimeter placement. This setting applies only to
+that item's block ID; descendant rows retain their own layout choice. Hidden
+controls keep their in-flow width, so hovering does not shift text.
+`BlockDropWrapper` accepts the same prop and forwards it to its existing item.
+
 For CSS Grid or wrapping tiles, wrap each existing child with `BlockDropWrapper`
 through `BlockChildren.item`. The wrapper itself is one cell/flex item; its internal
 CSS Grid reserves four insertion strips around center content. Do not pass a flow

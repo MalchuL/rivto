@@ -13,7 +13,8 @@
   background: transparent;
   cursor: grab;
   opacity: 0;
-  pointer-events: none;
+  /* Window activation can deliver a press before movement restores row hover. */
+  pointer-events: auto;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -23,6 +24,7 @@
    or owning the caret reveals its handle. */
 .rivto-block-row[data-block-row-hover] > .rivto-block-slot > .block-handle,
 .rivto-block-row:focus-within > .rivto-block-slot > .block-handle,
+.block-handle:hover,
 .block-handle:focus-visible {
   opacity: 1;
   pointer-events: auto;

@@ -1210,3 +1210,33 @@ it("lets wrappers receive bubbling DOM events on their own elements", () => {
   act(() => container.querySelector<HTMLElement>('[data-block-id="a"]')!.click());
   expect(clicked).toEqual(["inner"]);
 });
+
+it("scopes wrapping item controls to its own row without leaking into descendants or DOM props", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  adapter.setNode("parent", { type: "container", childIds: ["a"] });
+  adapter.setNode("a", { childIds: ["nested"] });
+  adapter.setNode("nested");
+  adapter.setBlockIds(["parent"]);
+  /**
+   * Supplies inside placement to one child while preserving its own subtree.
+   *
+   * @param props - Existing child from the shared iterator.
+   * @param props.children - Block shell rendered once inside the placement item.
+   * @returns A wrapping drop item with controls inside its matching row.
+   */
+  function Item({ children }: BlockChildrenItemProps) {
+    return <BlockDropWrapper controlsPlacement="inside">{children}</BlockDropWrapper>;
+  }
+  editor.renderers.register("container", { layout: () => <BlockChildren item={Item} /> });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const child = container.querySelector('[data-block-id="a"]')!;
+  expect(
+    child.querySelector(":scope > .rivto-block-row")?.getAttribute("data-controls-placement"),
+  ).toBe("inside");
+  const nested = container.querySelector('[data-block-id="nested"]')!;
+  expect(
+    nested.querySelector(":scope > .rivto-block-row")?.getAttribute("data-controls-placement"),
+  ).toBe("outside");
+  expect(container.querySelector("[controlsPlacement]")).toBeNull();
+});

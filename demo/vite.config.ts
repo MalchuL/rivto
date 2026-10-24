@@ -7,6 +7,31 @@ export default defineConfig({
   plugins: [
     // Compiles the editor's Tailwind source stylesheet (aliased below) so class
     // edits in packages/react-rivto-editor hot-reload without a package build.
+    {
+      name: "separate-page-styles",
+      enforce: "pre",
+      /**
+       * Compiles Page as its own CSS entry because its Tailwind prefix differs from the host.
+       *
+       * The demo imports Page source CSS directly; published consumers retain the
+       * React stylesheet's compiled Page import. Separate entries also let Vite
+       * observe Page source changes without relying on a cached package build.
+       *
+       * @param code - Stylesheet source before Tailwind expands imports.
+       * @param id - Resolved module path supplied by Vite.
+       * @returns Host CSS without the duplicate compiled Page import, or undefined for other modules.
+       */
+      transform(code, id) {
+        if (
+          id ===
+          fileURLToPath(
+            new URL("../packages/react-rivto-editor/src/styles/index.css", import.meta.url),
+          )
+        ) {
+          return code.replace('@import "@chulane/rivto-page/styles.css";', "");
+        }
+      },
+    },
     tailwindcss(),
     reviewReportFilesPlugin(fileURLToPath(new URL("../reports/", import.meta.url))),
   ],
@@ -16,6 +41,12 @@ export default defineConfig({
     // parallel package build/watch process. Published consumers still use each
     // package's normal dist exports.
     alias: [
+      {
+        find: "@chulane/rivto-page/styles.css",
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-page/src/presentation/styles.css", import.meta.url),
+        ),
+      },
       {
         find: "@chulane/rivto-react/styles.css",
         replacement: fileURLToPath(

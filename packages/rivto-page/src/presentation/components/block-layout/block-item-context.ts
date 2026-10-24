@@ -16,3 +16,12 @@ export interface BlockChildPlacement {
 export const BlockChildPlacementContext = createContext<BlockChildPlacement | null>(null);
 /** Identifies the child whose optional item wrapper owns its sibling-level CSS counter. */
 export const BlockItemIdentityContext = createContext<string | null>(null);
+
+/** Row-control placement scoped to one item identity, never to its descendants. */
+export interface BlockItemControls {
+  readonly blockId: string;
+  readonly placement: "inside" | "outside";
+}
+
+/** Borrowed placement for the matching block row; other identities use outside. */
+export const BlockItemControlsContext = createContext<BlockItemControls | null>(null);

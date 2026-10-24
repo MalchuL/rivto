@@ -28,14 +28,19 @@
   display: contents;
 }
 
-/* Contentless structural anchors expose controls over their body instead of
- * reserving a blank text row above containers or embedded views. */
-.rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty) {
+/* Contentless structural anchors expose outside controls over their body instead of
+ * reserving a blank text row above containers or embedded views. Inside controls
+ * need their own in-flow row so they cannot overlap the first child. */
+.rivto-block-row:not([data-controls-placement="inside"]):has(
+    > .rivto-block-content > [data-block-selection-anchor]:empty
+  ) {
   position: absolute;
   inset: 0 0 auto;
   pointer-events: none;
 }
-.rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty)
+.rivto-block-row:not([data-controls-placement="inside"]):has(
+    > .rivto-block-content > [data-block-selection-anchor]:empty
+  )
   > .rivto-block-slot {
   pointer-events: auto;
 }

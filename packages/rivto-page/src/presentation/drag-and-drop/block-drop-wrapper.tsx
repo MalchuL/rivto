@@ -1,9 +1,9 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
-import { BlockItem } from "../components/block-layout/block-item";
+import { forwardRef, type ReactNode } from "react";
+import { BlockItem, type BlockItemProps } from "../components/block-layout/block-item";
 import { BlockDropWrapperBoundary } from "./block-drop-wrapper-boundary";
 
 /** Native placement attributes around already-rendered content and insertion boundaries. */
-export interface BlockDropWrapperProps extends HTMLAttributes<HTMLDivElement> {
+export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
   /** Existing block node and host controls; rendered once in the center of the wrapper. */
   readonly children?: ReactNode;
 }
@@ -18,6 +18,7 @@ export interface BlockDropWrapperProps extends HTMLAttributes<HTMLDivElement> {
  * Top and inline-start mean before; bottom and inline-end mean after, including RTL.
  *
  * @param props - Native placement attributes and already-rendered block content.
+ * @param props.controlsPlacement - Forwarded to BlockItem for this child's left-top controls; defaults to outside.
  * @param props.className - Additional classes appended to the package wrapper class.
  * @param props.children - Block node and optional controls placed inside the four boundaries.
  * @param ref - Optional measurement ref forwarded to the existing outer BlockItem.

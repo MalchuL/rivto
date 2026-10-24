@@ -1,12 +1,18 @@
 import type { BlockEditorNodeSnapshot, BlockListType } from "../../../adapter/types";
-import { BlockChildPlacementContext, BlockItemIdentityContext } from "./block-item-context";
+import {
+  BlockChildPlacementContext,
+  BlockItemIdentityContext,
+  BlockItemControlsContext,
+} from "./block-item-context";
 import { useBlockNode } from "../../hooks/use-block-node";
-import { forwardRef, useContext, type ReactNode, type HTMLAttributes } from "react";
+import { forwardRef, useContext, useMemo, type ReactNode, type HTMLAttributes } from "react";
 
 /** Native placement styles and controls around one already-rendered child block. */
 export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
   /** Borrowed own-node snapshot for a decorator; omission observes the enclosing child placement. */
   readonly block?: BlockEditorNodeSnapshot;
+  /** Places this block's left-top controls in row flow or outside it; defaults to outside. Descendants keep their own placement. */
+  readonly controlsPlacement?: "inside" | "outside";
   /** JSX contents arranged by the owning layout; no recursive traversal is performed here. */
   readonly children?: ReactNode;
 }
@@ -26,6 +32,7 @@ export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
  *
  * @param props - Native attributes, sizing parameters, and composed child/control JSX.
  * @param props.block - Current borrowed snapshot; omission subscribes to the child placement ID.
+ * @param props.controlsPlacement - Inside reserves row width for the left-top slot; outside keeps perimeter positioning. Applies only to this item's block.
  * @param props.className - Additional classes appended to the package item hook.
  * @param props.children - The already-rendered child and optional host controls.
  * @param ref - Optional reference for item measurement or control positioning.
@@ -105,16 +112,21 @@ interface BlockItemFrameProps extends BlockItemContentProps {
  * @param props - Native attributes and captured identity/list decoration.
  * @param props.blockId - Stable ID used to distinguish nested wrappers for the same block.
  * @param props.listType - Current list decoration, or undefined for an undecorated/missing node.
+ * @param props.controlsPlacement - Row placement for this block only; defaults to outside.
  * @param props.className - Host classes appended to the package placement class.
  * @param props.children - Already-rendered node or next decorator, rendered once.
  * @param ref - Optional reference to this item's own element.
  * @returns One placement div without reading or subscribing to document data.
  */
 const BlockItemFrame = forwardRef<HTMLDivElement, BlockItemFrameProps>(function BlockItemFrame(
-  { blockId, listType, className, children, ...attributes },
+  { blockId, listType, className, children, controlsPlacement = "outside", ...attributes },
   ref,
 ) {
   const outerItem = useContext(BlockItemIdentityContext);
+  const controls = useMemo(
+    () => ({ blockId, placement: controlsPlacement }),
+    [blockId, controlsPlacement],
+  );
   return (
     <BlockItemIdentityContext.Provider value={blockId}>
       <div
@@ -125,7 +137,9 @@ const BlockItemFrame = forwardRef<HTMLDivElement, BlockItemFrameProps>(function 
         data-block-list-type={listType}
         className={["rivto-block-item", className].filter(Boolean).join(" ")}
       >
-        {children}
+        <BlockItemControlsContext.Provider value={controls}>
+          {children}
+        </BlockItemControlsContext.Provider>
       </div>
     </BlockItemIdentityContext.Provider>
   );

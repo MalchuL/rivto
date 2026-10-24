@@ -142,3 +142,49 @@ it.each([false, true])("shares the final child gap from either side, nested=%s",
     fixture.destroy();
   }
 });
+
+it.each([1, 3])("keeps both physical gaps around %i moving siblings", (count) => {
+  const data = new TestBlockEditorAdapter();
+  const moving = Array.from({ length: count }, (_, index) => `moving-${index}`);
+  data.rootIds = ["upper", ...moving, "lower"];
+  data.setBlockIds(data.rootIds);
+  const editor = new BlockEditorController({ adapter: data });
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.dataset.blockRootList = "";
+  data.rootIds.forEach((id, index) => {
+    data.setNode(id);
+    const shell = document.createElement("div");
+    shell.className = "rivto-block";
+    shell.dataset.blockId = id;
+    root.append(shell);
+    jest.spyOn(shell, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      right: 400,
+      width: 300,
+      height: 28,
+      top: index * 32,
+      bottom: index * 32 + 28,
+    } as DOMRect);
+  });
+  document.body.append(root);
+  editor.attach(root);
+  try {
+    const targets = new BlockOutlineDropTargets(editor, null);
+    const excluded = new Set(moving);
+    const above = targets.resolve(100, 30, excluded, root);
+    const below = targets.resolve(100, (count + 1) * 32 - 2, excluded, root);
+    expect(above?.destination).toEqual({
+      kind: "between",
+      parentId: null,
+      previousId: "upper",
+      nextId: "lower",
+    });
+    expect(below?.destination).toEqual(above?.destination);
+    expect(above?.indicator?.top).toBe(27);
+    expect(below?.indicator?.top).toBe((count + 1) * 32 - 1);
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});

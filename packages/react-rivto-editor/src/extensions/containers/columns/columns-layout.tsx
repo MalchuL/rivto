@@ -1,5 +1,7 @@
 import {
   BlockBody,
+  BlockItem,
+  type BlockChildrenItemProps,
   BlockDropTarget,
   BlockChildren,
   BlockContent,
@@ -29,6 +31,7 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
       <BlockBody />
       <BlockChildren
         className="rivto-columns-children"
+        item={ColumnBlockItem}
         dropAxis="horizontal"
         emptyDropTarget
         gap={HorizontalDropGap}
@@ -36,6 +39,17 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
       />
     </>
   );
+}
+
+/**
+ * Places one column child with its controls inside the available lane width.
+ *
+ * @param props - Existing child subtree supplied by Page.
+ * @param props.children - Child shell rendered once without changing its layout.
+ * @returns A placement item reserving row space for the child's controls.
+ */
+function ColumnBlockItem({ children }: BlockChildrenItemProps) {
+  return <BlockItem controlsPlacement="inside">{children}</BlockItem>;
 }
 
 /**
@@ -59,7 +73,12 @@ export function ColumnsColumnLayout({ blockId }: BlockLayoutProps) {
         </BlockRow>
       </BlockDropTarget>
       <BlockBody />
-      <BlockChildren className="rivto-columns-content" dropAxis="vertical" renderEmpty={false} />
+      <BlockChildren
+        item={ColumnBlockItem}
+        className="rivto-columns-content"
+        dropAxis="vertical"
+        renderEmpty={false}
+      />
     </>
   );
 }
