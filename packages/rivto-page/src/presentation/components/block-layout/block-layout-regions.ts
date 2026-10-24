@@ -145,11 +145,11 @@ const selectors: Record<BlockLayoutRegion, string> = {
 /**
  * Resolves an owner's region independently of intervening layout wrappers.
  *
- * Registered shells use addressed lookup. Standalone DOM consumers use bounded
+ * Registered shells and items use addressed lookup. Standalone DOM consumers use bounded
  * traversal that stops at child shells and nested editors, never borrowing a
  * descendant's row or slot. No geometry is measured by this lookup.
  *
- * @param shell - Canonical block shell whose layout is requested.
+ * @param shell - Registered layout owner (shell or item), or a canonical block shell for standalone DOM lookup.
  * @param role - Region to locate inside that shell.
  * @returns Owned region, or undefined when the layout omits it.
  */

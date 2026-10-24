@@ -3,7 +3,7 @@ import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-to
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
-import { PanelRegistry } from "../managers/events/panel-registry";
+import { PanelRegistry } from "../panels/panel-registry";
 import type { ReactEditorApi } from "./types";
 /**
  * React runtime coordinator.
@@ -206,8 +206,8 @@ export class ReactEditor implements ReactEditorApi {
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
     this.disposers.push(() => extensions.destroy());
-    this.panels = new PanelRegistry(this, extensions);
-    const events = new EventManager(this, extensions);
+    this.panels = new PanelRegistry(this.selection, extensions);
+    const events = new EventManager(this.panels, extensions);
     this.events = events;
     this.disposers.push(() => this.panels.cancelPendingSelections());
     const keyboard = new KeyboardManager(this.events, extensions, options.keymap);

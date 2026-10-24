@@ -1,3 +1,4 @@
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 import type { ComponentType } from "react";
 import {
   createTestCoreEditor as createEditor,
@@ -29,7 +30,7 @@ describe("ExtensionManager", () => {
         },
       },
     }) as unknown as HTMLElement;
-    reactPanel.events.getRoot = () => root;
+    jestApi.spyOn(reactPanel, "getRoot").mockImplementation(() => root);
     // A no-op stands in for selection restoration; this test exercises cancellation cleanup.
     reactPanel.selection.scheduleIfSelectionUnchanged(
       () => {},

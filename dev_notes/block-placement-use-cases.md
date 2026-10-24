@@ -258,3 +258,75 @@ Paired timing results, milliseconds, median (minimum–maximum):
 The release lookup adds no gesture state or document traversal. Frame values vary
 with browser scheduling; these small samples do not establish a speedup. The
 large-fixture move medians remain 1.6ms in Chromium and 4–5ms in Firefox.
+
+## Painted Bento rims and nested writing gaps
+
+The shared Page resolver now uses the existing registered `item`/`shell` ownership
+for controls outside a child shell. Direct children of a declared grid use the
+whole painted shell for rim/center intent and the existing `placementBoundary`
+path for canonical neighbors and indicator geometry. This avoids interpreting tile
+padding as a text-row boundary, or a resize control as empty board background.
+Explicit strips still take priority. Nested child shells keep their own outline
+host, including horizontal depth projection. There are no Bento type checks, new
+public options, additional listeners, retained geometry or document-wide scans.
+
+New coverage in `e2e/bento-placement.spec.ts` uses native pointer input and checks
+persisted parent/order plus one-step undo:
+
+| Placement | Combinations | Feedback assertion |
+| --- | --- | --- |
+| Painted tile rims | First/last tile × top/bottom/left/right × 1/4/7px inset × inline/wrapped | One line; internal gaps centered between full item bounds with the correct orientation |
+| Writing gap below an expanded subtree | Sibling/nested depth × inline/wrapped tile | One insertion line, actual receiving parent and complete child order |
+| Generic registered grid (unit) | All rims, center nesting, resize chrome, moving-source exclusion, RTL, nesting disabled | Canonical gaps and full-item indicator bounds, without a native container type |
+
+The unit reproduction failed five of the original six new assertions before the
+fix. The native first-tile left/right rim reproduction failed all four browser
+cases on the saved pre-fix production build, with both 12 workers and one worker.
+
+Main (`442024ae`) was inspected and built separately. Its grid intent and canonical
+neighbor behavior informed this adaptation; its old drag engine was not copied.
+A portable 40-case sample (4px rims and writing gaps, both browsers) passed 28
+cases on main. The 12 failures were rerun serially: one passed, eleven remained.
+Those include first-row top rims resolving outside the board, nested expanded-gap
+placement remaining at the tile level, and a Firefox inline right-rim case. These
+observed legacy failures are not parity requirements. The current branch's new
+104-case suite passes, including the stronger insertion-line geometry assertions.
+
+Ownership review: `BlockItem` continues to register through `useBlockRegion`;
+registration cleanup and editor registry destruction retain their existing owners.
+The resolver borrows region lookup and addressed hierarchy operations; the drag
+router still consumes only `resolve`. No manager or lifecycle interface was widened.
+The region lookup documentation now explicitly includes registered item owners.
+
+Final browser sweep: **266 passed, 16 failed** with 12 workers, covering the new
+Bento suite, current drop parity, headers, container outlines and the ordered
+container matrix in both browsers (including Page and Edgeless where supported).
+The sixteen failures all target Columns. All sixteen also fail serially both on
+the final build and on a comparison build replacing only this resolver with HEAD's
+original source, retaining the same concurrent Columns layout edits. Their first
+move leaves the source at the root instead of `target-list`. They remain unresolved
+outside this Bento change; the broad suite is not reported as fully green.
+
+Production nested-Bento measurements preserve the normal demo, its extensions and
+virtualization defaults. Four checks pass before and after, workers=1, tracing off,
+three warmed native drops per case, with actual order and undo assertions. Build
+comparison substitutes only the resolver. These measure the shared nested-writing
+path; painted-rim cases are behavioral tests, not separate timing benchmarks.
+
+| Browser / document | Move before → after, ms median (range) | Release to two frames before → after, ms median (range) |
+| --- | --- | --- |
+| Chromium / normal | 0.9 (0.8–1.0) → 0.8 (0.7–0.8) | 23.0 (21.6–24.6) → 23.8 (22.3–25.5) |
+| Chromium / repeat=200 | 1.7 (1.3–1.8) → 1.7 (1.1–1.9) | 41.8 (33.3–45.7) → 35.2 (32.9–41.4) |
+| Firefox / normal | 1 (1–1) → 1 (1–2) | 18 (12–21) → 19 (19–19) |
+| Firefox / repeat=200 | 4 (3–5) → 10 (6–11) | 15 (11–49) → 31 (21–39) |
+
+The initial large-Firefox difference prompted one additional paired run, not a
+change to budgets or assertions: move medians were **4 (4–24) → 4 (4–5)ms** and
+frame-proxy medians **16 (15–55) → 14 (14–16)ms**. This shows scheduling variability;
+these small samples do not establish either a speedup or a stable slowdown.
+
+Final Page checks: **243 unit tests passed**, type checking passed, and focused
+lint passed with three function-length warnings. The production demo build used
+for the browser runs passed. Formatting and whitespace checks passed. Later
+unrelated concurrent working-tree changes were not included in those saved
+production builds; this report covers the DnD implementation and comparison above.

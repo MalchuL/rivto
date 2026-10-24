@@ -41,7 +41,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @returns False after any effective core selection change, including explicit clearing.
    */
   get hasPendingSelectionCallback(): boolean {
-    const root = this.reactPanel.events.getRoot();
+    const root = this.reactPanel.getRoot();
     return root !== null && this.pendingSelectionCallbacks.has(root);
   }
 
@@ -126,7 +126,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * @param root - Receiving DOM occurrence; omitted to use this panel’s mounted root.
    * @returns Browser selection, or undefined outside this editor.
    */
-  readDOM(root = this.reactPanel.events.getRoot()): Selection | undefined {
+  readDOM(root = this.reactPanel.getRoot()): Selection | undefined {
     return root ? readEditorDOMSelection(root) : undefined;
   }
 
@@ -140,7 +140,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
   restoreDOM(
     selection: Selection | undefined = this.get(),
     options?: RestoreDOMSelectionOptions,
-    root = this.reactPanel.events.getRoot(),
+    root = this.reactPanel.getRoot(),
   ): boolean {
     return root && selection ? restoreEditorDOMSelection(root, selection, options) : false;
   }
@@ -164,17 +164,15 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * Endpoint mounting and viewport preservation may support selection restoration,
    * but must not turn this into a scheduler for unrelated operations.
    *
+   * Panel-bound root access is retained until invocation or cancellation.
+   *
    * @param callback - Work to run next frame if selection has not changed since scheduling.
    * @param onCancel - Cleanup for caller-owned resources when the callback cannot run.
-   * @param events - Panel-bound root access retained until invocation or cancellation.
    * @returns An idempotent cancellation function, also invoked during runtime teardown.
    */
-  scheduleIfSelectionUnchanged(
-    callback: () => void,
-    onCancel?: () => void,
-    events = this.reactPanel.events,
-  ): () => void {
-    const root = events.getRoot();
+  scheduleIfSelectionUnchanged(callback: () => void, onCancel?: () => void): () => void {
+    const panel = this.reactPanel;
+    const root = panel.getRoot();
     const previous = root ? this.pendingSelectionCallbacks.get(root) : undefined;
     // Schedule and cancel through the root's own window, including editors in an iframe.
     // Without a mounted root/window there is no valid frame to run the caller's work in.
@@ -187,7 +185,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
     // Capture the mounted occurrence, not whichever panel is active next frame.
     const pending: PendingSelectionCallback = {
       root,
-      events,
+      panel,
       view,
       callback,
       onCancel,
@@ -287,7 +285,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
    * in this panel. Returns false for an absent selection or a selection outside its boundaries.
    */
   private isSelectionInActivePanel(): boolean {
-    const root = this.reactPanel.events.getRoot();
+    const root = this.reactPanel.getRoot();
     // Prefer the user's last active occurrence; the default only fills an absent active root.
     if (
       (this.reactPanel.editor.panels.getActiveRoot() ??
@@ -346,7 +344,7 @@ export class PanelSelectionManager implements PanelSelectionApi {
     }
     // The same model selection can outlive its DOM surface. A replacement root
     // invalidates work prepared for the old surface even without a selection update.
-    if (pending.events.getRoot() !== pending.root) {
+    if (pending.panel.getRoot() !== pending.root) {
       this.cancelSelectionCallback(pending);
     } else {
       // Unregister before invoking: the callback may publish selection or

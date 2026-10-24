@@ -194,41 +194,39 @@ for (const type of ["bento", "kanban"] as const) {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`Columns separates lane controls from its first child in ${mode}`, async ({ page }) => {
+  test(`Columns hides expanded headers and restores collapsed controls in ${mode}`, async ({
+    page,
+  }) => {
     await loadContainer(page, "columns", mode);
+    const board = page.locator('[data-block-id="layout-board"]');
+    const boardRow = board.locator(":scope > .rivto-block-row");
     const lane = page.locator('[data-block-id="layout-lane-0"]');
     const row = lane.locator(":scope > .rivto-block-row");
     const child = page.locator('[data-block-id="layout-card-one"]');
-    await expect(child.locator(":scope > .rivto-block-row")).toHaveAttribute(
-      "data-controls-placement",
-      "outside",
-    );
-    const header = (await row.boundingBox())!;
-    const body = (await child.boundingBox())!;
-    expect(header.y + header.height).toBeLessThanOrEqual(body.y);
-    await row.hover();
-    const handle = row.locator(".block-handle");
-    await expect(handle).toHaveCSS("opacity", "1");
-    const control = (await handle.boundingBox())!;
-    const bounds = (await lane.boundingBox())!;
-    expect(control.x).toBeGreaterThanOrEqual(bounds.x);
-    expect(control.x + control.width).toBeLessThanOrEqual(bounds.x + bounds.width);
-    await handle.click({ button: "right" });
+    await expect(boardRow.locator(".rivto-columns")).toHaveText("");
+    await expect(row).toHaveCount(0);
+    const childRow = child.locator(":scope > .rivto-block-row");
+    await childRow.hover();
+    await childRow.locator(".block-handle").click({ button: "right" });
     await expect(page.getByRole("menu")).toBeVisible();
     await page.keyboard.press("Escape");
-    await row.getByRole("button", { name: "Collapse block: columns-column", exact: true }).click();
+    await boardRow.getByRole("button", { name: "Collapse block: columns", exact: true }).click();
+    await expect(boardRow.locator(".rivto-columns")).toHaveText("Columns2 columns");
+    await expect(child).toHaveCount(0);
+    await boardRow.getByRole("button", { name: "Expand block: columns", exact: true }).click();
+    await expect(child).toBeVisible();
+    await expect(boardRow.locator(".rivto-columns")).toHaveText("");
+    // A saved collapsed lane must remain expandable even though expanded lanes have no row.
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.updateBlock("layout-lane-0", { listProps: { collapsed: true } });
+    });
+    await expect(row).toContainText("1 blocks");
     await expect(child).toHaveCount(0);
     await row.getByRole("button", { name: "Expand block: columns-column", exact: true }).click();
     await expect(child).toBeVisible();
-    await handle.hover();
-    const start = (await handle.boundingBox())!;
-    await page.mouse.down();
-    await page.mouse.move(start.x + start.width / 2 + 10, start.y + start.height / 2);
-    await expect(lane).toHaveAttribute("data-dragging", "true");
-    await expect(child).not.toHaveAttribute("data-dragging", "true");
-    await page.keyboard.press("Escape");
-    await page.mouse.up();
-    await expect(lane).not.toHaveAttribute("data-dragging", "true");
+    await expect(row).toHaveCount(0);
   });
 }
 

@@ -83,7 +83,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     }
     const reconcilePanel = () => {
       const apiDocument = "editor" in api ? api.document : api;
-      const root = reactPanel?.events.getRoot();
+      const root = reactPanel?.getRoot();
       const boundary = reactPanel?.rootBlockId;
       const next = reconcileCollapsedSelection(apiDocument.blocks, current, boundary);
       if (next !== current) {

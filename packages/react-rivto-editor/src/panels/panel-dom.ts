@@ -3,7 +3,7 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
   BLOCK_ROW_SELECTOR,
-} from "../../constants";
+} from "../constants";
 /** DOM boundary for a document panel, including full-document and embedded subtree surfaces. */
 export const PANEL_ATTRIBUTE = "data-rivto-panel";
 /** Selector used to distinguish repeated render occurrences and source documents. */

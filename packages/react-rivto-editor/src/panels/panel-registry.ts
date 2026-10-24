@@ -1,8 +1,7 @@
-import type { RegistrationOwner } from "../extensions/types";
+import type { RegistrationOwner } from "../managers/extensions/types";
 import type { DocumentModel } from "@chulane/document-model";
-import type { EditorMode } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
-import type { ReactEditorApi } from "../../editor/types";
+import type { EditorMode, SelectionManagerApi } from "@chulane/rivto";
+import type { ReactPanelApi } from "./types";
 import { PANEL_SELECTOR } from "./panel-dom";
 
 // Window pointer continuations belong to the editor that started the gesture,
@@ -35,13 +34,15 @@ export class PanelRegistry {
   >();
 
   /**
-   * @param reactEditor - Document editor whose selection follows the active panel.
+   * Creates the registry that tracks mounted panels and their active selection.
+   *
+   * @param selection - Shared document selection cleared when the active panel changes.
    * Root subscribers reconnect delegated listeners after roots change.
-   * @param extensions - Internal registration ownership and destruction guard.
+   * @param extensions - Borrowed destruction guard; registration ownership and teardown remain external.
    */
   constructor(
-    private readonly reactEditor: ReactEditorApi,
-    private readonly extensions: RegistrationOwner,
+    private readonly selection: Pick<SelectionManagerApi, "clear">,
+    private readonly extensions: Pick<RegistrationOwner, "assertActive">,
   ) {}
   private readonly rootListeners = new Set<() => void>();
   /** Observes root registration changes without observing document edits. */
@@ -210,7 +211,7 @@ export class PanelRegistry {
       // Replacing a full-document surface (page/canvas) keeps core selection.
       // Removing the active embedded subtree releases its occurrence's selection.
       if (entry.rootBlockId !== undefined) {
-        this.reactEditor.selection.clear();
+        this.selection.clear();
       }
       if (root.contains(root.ownerDocument.activeElement)) {
         const parent = root.parentElement?.closest<HTMLElement>(PANEL_SELECTOR);
@@ -300,7 +301,7 @@ export class PanelRegistry {
     if (changed && activatesPanel) {
       if (this.activeRoot) {
         this.panels.get(this.activeRoot)?.deactivate?.();
-        this.reactEditor.selection.clear();
+        this.selection.clear();
       }
       this.activeRoot = chosen;
     }

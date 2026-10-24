@@ -1,22 +1,10 @@
 import type { DOMEventMap, DOMEventName, DOMEventScope, DOMEventTarget } from "./dom-types";
 import type { EditorMode, Selection } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
+import type { PanelRegistration, ReactPanelApi } from "../../panels/types";
 import type { EditorEvent } from "./editor-event";
 
 /** Callback used by DOM and keyboard event registrations. */
 export type EditorEventHandler<EventValue> = (event: EventValue) => boolean | void;
-
-/** Local registration identity and DOM root belonging to one mounted EditorPanel. */
-export interface PanelRegistration {
-  /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
-  readonly id: string;
-  /** Current root, or null before mounting and after cleanup. */
-  getRoot(): HTMLElement | null;
-  /** Registers the occurrence's root without replacing another panel's root. */
-  setRoot(root: HTMLElement | null): void;
-  /** Owns a local registration until this occurrence is cleaned up. */
-  registerCleanup(dispose: () => void): () => void;
-}
 
 /** Native listener options that must match before registrations can share a listener. */
 export interface NativeListenerGroup {
@@ -67,7 +55,7 @@ export type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
 
 export interface DOMRegistration {
   readonly id: string;
-  readonly owner?: PanelRegistration;
+  readonly owner?: Pick<PanelRegistration, "id" | "getRoot">;
   readonly type: string;
   readonly target: DOMEventTarget;
   readonly scope?: DOMEventScope;

@@ -115,7 +115,7 @@ export function KanbanAddColumn({ blockId }: BlockLayoutProps) {
       ).id;
     });
     requestAnimationFrame(() => {
-      const root = panel.events.getRoot();
+      const root = panel.getRoot();
       if (root) {
         focusBlock(root, id, 0);
       }
@@ -162,7 +162,7 @@ export function KanbanAddCard({ blockId }: BlockLayoutProps) {
       panel.selection.set(createCaretSelection(id, 0));
     });
     requestAnimationFrame(() => {
-      const root = panel.events.getRoot();
+      const root = panel.getRoot();
       if (root) {
         focusBlock(root, id, 0);
       }

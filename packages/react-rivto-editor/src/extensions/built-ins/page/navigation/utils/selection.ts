@@ -1,5 +1,5 @@
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
-import { findPanelElements } from "../../../../../managers/events/panel-dom";
+import { findPanelElements } from "../../../../../panels/panel-dom";
 /**
  * Shared selection and focus operations for page navigation registrations.
  *
@@ -79,7 +79,7 @@ export function textSelectionEdge(
   if (!ends) {
     return { blockId: selection.focusBlockId, offset: 0 };
   }
-  const root = reactPanel.events.getRoot();
+  const root = reactPanel.getRoot();
   const displayed = root ? PageNavigationController.getForElement(root)?.selection : undefined;
   const ids =
     displayed?.getSelectableBlockIds() ??

@@ -344,7 +344,7 @@ test("replacing a root cancels only its restoration and retains another panel's 
     () => calls.push("cancelled"),
   );
   second.getSnapshot().api!.selection.scheduleIfSelectionUnchanged(() => {
-    expect(second.getSnapshot().api!.events.getRoot()).toBe(second.getRoot());
+    expect(second.getSnapshot().api!.getRoot()).toBe(second.getRoot());
     calls.push("second");
   });
   first.setRoot(root(realm));
@@ -708,7 +708,7 @@ test("events read each panel's surface type while sharing the core mode, manager
   fullRoot.dispatchEvent(event("keydown", fullRoot, "x"));
   expect(calls).toEqual(["edgeless"]);
   expect(f.editor.panels.getSurfaceType()).toBe("edgeless");
-  expect(embeddedApi.events.getSurfaceType()).toBe("block");
+  expect(embeddedApi.getSurfaceType()).toBe("block");
   let surfaceReads = 0;
   const getAttribute = embeddedRoot.getAttribute.bind(embeddedRoot);
   embeddedRoot.getAttribute = (name) => {
@@ -722,8 +722,8 @@ test("events read each panel's surface type while sharing the core mode, manager
   expect(surfaceReads).toBe(1);
   expect(full.mode.get()).toBe("edgeless");
   expect(f.editor.panels.getSurfaceType()).toBe("block");
-  expect(fullApi.events.getSurfaceType()).toBe("edgeless");
-  expect(fullApi.events.getSurfaceType()).toBe("edgeless");
+  expect(fullApi.getSurfaceType()).toBe("edgeless");
+  expect(fullApi.getSurfaceType()).toBe("edgeless");
   expect(f.editor.panels.getSurfaceType()).toBe("block");
   closeEmbedded();
   closeFull();
@@ -1160,7 +1160,8 @@ test("panel keymap updates share inventory and dispatch without inheriting manag
   expect(calls).toBe(0);
   surface.dispatchEvent(event("keydown", surface, "b"));
   expect(calls).toBe(1);
-  f.editor.panels.cancelPendingSelections();
+  reactPanel.setRoot(null);
+  reactPanel.setRoot(surface);
   expect(f.editor.blocks.getBlockNode("same-id")?.content).toBe("A");
   close();
   surface.dispatchEvent(event("keydown", surface, "b"));
@@ -1193,7 +1194,7 @@ test("retained slash and clipboard APIs keep their surface without changing the 
     id: "panel.explicit",
     title: "Explicit panel",
     execute: ({ reactPanel }) => {
-      calls.push(reactPanel.events.getSurfaceType());
+      calls.push(reactPanel.getSurfaceType());
       expect(f.editor.panels.getActiveRoot() ?? f.editor.panels.getDefaultRoot()).toBe(canvasRoot);
     },
   });

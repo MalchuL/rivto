@@ -10,7 +10,7 @@ import {
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
 import type { ReactPanelApi } from "../../../../panels/types";
-import { findRenderedBlock } from "../../../../managers/events/block-dom";
+import { findRenderedBlock } from "../../../../blocks/block-dom";
 
 /** Returns true when a block shell directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {

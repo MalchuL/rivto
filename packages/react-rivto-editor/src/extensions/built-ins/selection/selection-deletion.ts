@@ -35,7 +35,7 @@ export function registerSelectionDeletion(reactEditor: ReactEditorApi): void {
       id: KEYBOARD_BINDING_IDS.selectionDelete,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.selectionDelete],
       when: ({ reactPanel, selection, raw: event, blockId }) => {
-        const root = reactPanel.events.getRoot();
+        const root = reactPanel.getRoot();
         if (!root) {
           return false;
         }

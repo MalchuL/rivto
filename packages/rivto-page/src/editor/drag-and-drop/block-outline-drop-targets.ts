@@ -49,8 +49,10 @@ export class BlockOutlineDropTargets {
    * child gaps and unused body space; undeclared grids retain their outer boundaries.
    * Vertical child lists reuse ordinary outline depth projection inside the
    * container's preserved outer boundary, including leading and trailing gaps.
-   * List-owned controls and placement padding use the same geometry as the child
-   * host background; hits inside actual child shells retain row targeting.
+   * List-owned controls and background padding use the same geometry as the child
+   * host background; registered item chrome retains its own child shell targeting.
+   * Declared grid children use their complete painted rims for sibling insertion,
+   * while their nested writing lists retain ordinary outline depth projection.
    * Custom-layout header chrome compares nearby insertion feedback after applying
    * the optional source policy, descending the nearest structural branch when
    * necessary. Explicit sibling strips remain authoritative; commit authorization
@@ -92,8 +94,14 @@ export class BlockOutlineDropTargets {
       return region;
     }
     const list = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
-    const shell = hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.block}[data-block-id]`);
-    // Layout controls and item padding belong to the list, not its enclosing row.
+    const owner = hit.closest<HTMLElement>(
+      `.${BLOCK_EDITOR_CLASSES.block}[data-block-id], [data-block-item-id]`,
+    );
+    const shell =
+      (owner && blockLayoutRegion(owner, "shell")) ??
+      hit.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.block}[data-block-id]`);
+    // Item-owned controls share the child's placement; list-owned controls use its background.
+    // Unowned layout controls and background padding belong to the list, not its enclosing row.
     const listBackground = list && (!shell || !list.contains(shell));
     if (list?.dataset.blockDropAxis && listBackground) {
       if (list.dataset.blockDropAxis === "vertical") {
@@ -577,6 +585,10 @@ export class BlockOutlineDropTargets {
     if (this.isExcluded(id, excluded)) {
       return this.movingChildBoundary(shell, x, y, excluded);
     }
+    const list = shell.parentElement?.closest<HTMLElement>(`.${BLOCK_EDITOR_CLASSES.children}`);
+    if (list?.dataset.blockDropAxis === "grid") {
+      return this.gridItemTarget(shell, x, y, excluded);
+    }
     const row = blockLayoutRegion(shell, "row") ?? shell;
     let rect = row.getBoundingClientRect();
     const rowBottom = rect.bottom;
@@ -610,6 +622,46 @@ export class BlockOutlineDropTargets {
       return this.boundaryTarget(shell, rect, x, false, excluded);
     }
     return { element: row, destination };
+  }
+
+  /**
+   * Resolves painted grid rims using the same canonical gaps as explicit strips.
+   *
+   * Shell padding belongs to the tile, rather than its title row. Nested child
+   * shells still use their own nearest host, preserving ordinary outline depth.
+   * Indicator geometry includes the registered placement item's surrounding space.
+   *
+   * @param shell - Stationary direct child of a declared grid host.
+   * @param x - Viewport pointer X in CSS pixels.
+   * @param y - Viewport pointer Y in CSS pixels.
+   * @param excluded - Moving roots omitted from canonical neighbors.
+   * @returns Sibling boundary at a rim, or an inside destination in the center.
+   */
+  private gridItemTarget(
+    shell: HTMLElement,
+    x: number,
+    y: number,
+    excluded: ReadonlySet<string>,
+  ): ResolvedBlockDropTarget | undefined {
+    const rect = shell.getBoundingClientRect();
+    const vertical = Math.min(Math.max(0, this.gapSize), rect.height / 3);
+    const horizontal = Math.min(Math.max(0, this.gapSize), rect.width / 4);
+    const rtl = shell.ownerDocument.defaultView?.getComputedStyle(shell).direction === "rtl";
+    let after: boolean;
+    if (y < rect.top + vertical) {
+      after = false;
+    } else if (y > rect.bottom - vertical) {
+      after = true;
+    } else if (x < rect.left + horizontal) {
+      after = rtl;
+    } else if (x > rect.right - horizontal) {
+      after = !rtl;
+    } else if (this.allowChildren) {
+      return { element: shell, destination: { kind: "inside", parentId: shell.dataset.blockId! } };
+    } else {
+      after = x >= rect.left + rect.width / 2 !== rtl;
+    }
+    return this.placementBoundary(shell, after, x, y, excluded);
   }
 
   /**

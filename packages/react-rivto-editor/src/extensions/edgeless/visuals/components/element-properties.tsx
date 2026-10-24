@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentType } from "react";
 import type { ElementPropertiesProps } from "../../../../managers/elements/types";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import { isNodeLike } from "../../../../managers/events/dom-nodes";
+import { isNodeLike } from "../../../../dom/dom-nodes";
 import { EdgelessPropertiesPanel } from "../../../../components/edgeless/properties-panel";
 
 /**

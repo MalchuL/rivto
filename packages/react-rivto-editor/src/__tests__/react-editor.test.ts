@@ -1068,11 +1068,11 @@ describe("delegated events", () => {
       },
       () => false,
     );
-    events.setRoot(first.root as unknown as HTMLElement);
+    reactPanel.setRoot(first.root as unknown as HTMLElement);
     expect(first.root.count()).toBeGreaterThan(0);
     expect(first.document.count()).toBe(1);
     expect(first.window.count()).toBeGreaterThan(0);
-    events.setRoot(second.root as unknown as HTMLElement);
+    reactPanel.setRoot(second.root as unknown as HTMLElement);
     expect(first.root.count()).toBe(0);
     expect(first.document.count()).toBe(0);
     expect(first.window.count()).toBe(0);
@@ -1091,7 +1091,7 @@ describe("delegated events", () => {
     const events = reactPanel.events;
     const keyboard = reactPanel.keyboard;
     const { root } = realm();
-    events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     let predicateEvent: KeyboardEditorEvent | undefined;
     let handlerEvent: KeyboardEditorEvent | undefined;
@@ -1135,7 +1135,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     reactPanel.keyboard.register({ id: "test.undo", keys: ["Primary+z"] }, () => {
       calls.push("undo");
@@ -1172,7 +1172,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { document, root, window } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const content = new FakeElement();
     content.ownerDocument = document;
     content.parent = root;
@@ -1222,7 +1222,7 @@ describe("delegated events", () => {
     const reactPanel = createReactEditor({ editor });
     const events = reactPanel.events;
     const { document, root } = realm();
-    events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const inside = new FakeElement();
     inside.ownerDocument = document;
     inside.parent = root;
@@ -1287,7 +1287,7 @@ describe("delegated events", () => {
     const reactPanel = createReactEditor({ editor });
     const events = reactPanel.events;
     const { root } = realm();
-    events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const block = new FakeElement();
     block.ownerDocument = root.ownerDocument;
     block.parent = root;
@@ -1353,7 +1353,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     reactPanel.keyboard.register(
       {
@@ -1386,7 +1386,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     let predicateEvent: EditorEvent | undefined;
     let handlerEvent: EditorEvent | undefined;
@@ -1496,7 +1496,7 @@ describe("delegated events", () => {
     const events = reactPanel.events;
     const keyboard = reactPanel.keyboard;
     const { root } = realm();
-    events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     keyboard.register({ id: "remapped", keys: ["Tab"] }, () => {
       calls.push("remapped");
@@ -1552,7 +1552,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     const defaults = ["a"];
     reactPanel.keyboard.register({ id: "dynamic", keys: defaults }, () => {
@@ -1588,7 +1588,7 @@ describe("delegated events", () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });
     const { root } = realm();
-    reactPanel.events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     reactPanel.keyboard.register({ id: "dynamic", keys: ["a"] }, () => {
       calls.push("dynamic");
@@ -1622,7 +1622,7 @@ describe("delegated events", () => {
     const events = reactPanel.events;
     const keyboard = reactPanel.keyboard;
     const { root } = realm();
-    events.setRoot(root as unknown as HTMLElement);
+    reactPanel.setRoot(root as unknown as HTMLElement);
     const calls: string[] = [];
     keyboard.register({ id: "ignored", keys: ["a"] }, () => {
       calls.push("ignored");

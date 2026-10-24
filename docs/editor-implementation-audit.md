@@ -163,7 +163,7 @@ Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packa
 
 ### 34. Caret geometry performs synchronous layout once per character
 
-Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/managers/events/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
+Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/blocks/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
 
 ### 35. Pointer listeners can survive component unmount
 

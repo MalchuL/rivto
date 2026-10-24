@@ -11,7 +11,7 @@ import {
   listShortcutsExtension,
 } from "../../extensions/built-ins/built-ins";
 import { createTableBlockInput, tableExtension } from "../../extensions/containers/table/table";
-import { firstKeyboardTarget } from "../events/selection";
+import { firstKeyboardTarget } from "../keyboard/selection";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 
 /** @returns An owned headless panel, block, and action/applicability contexts for registry tests. */

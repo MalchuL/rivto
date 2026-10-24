@@ -104,7 +104,7 @@ export function registerClipboard(
   const canvasSelection = (reactPanel: ReactPanelApi): Selection | undefined => {
     // Core mode may be edgeless while the active view is a page embedding.
     // Its clipboard actions must use the page selection, not canvas objects.
-    if (reactPanel.events.getSurfaceType() !== "edgeless") {
+    if (reactPanel.getSurfaceType() !== "edgeless") {
       return undefined;
     }
     const snapshot = findEdgelessRuntime(reactPanel)?.get();
@@ -216,7 +216,7 @@ export function registerClipboard(
           text: event.clipboardData?.getData("text/plain") ?? "",
         },
         {
-          surface: reactPanel.events.getSurfaceType() === "edgeless" ? "edgeless" : "page",
+          surface: reactPanel.getSurfaceType() === "edgeless" ? "edgeless" : "page",
           defaultBlockType: resolveDefaultBlockType(),
         },
       );
@@ -273,7 +273,7 @@ export function registerClipboard(
       },
     });
     if (!canvas && isStructuralSelection(reactPanel.selection.get())) {
-      const root = reactPanel.events.getRoot();
+      const root = reactPanel.getRoot();
       // The paste event started in the old contenteditable, whose native caret
       // would override the newly selected blocks on the next keyboard event.
       // Move keyboard ownership to the surface, as pointer block selection does.

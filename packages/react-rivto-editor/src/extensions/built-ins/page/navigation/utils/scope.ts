@@ -9,7 +9,7 @@
 import type { EditorBlock, EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../../../panels/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
-import { findRenderedBlock } from "../../../../../managers/events/block-dom";
+import { findRenderedBlock } from "../../../../../blocks/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
@@ -55,7 +55,7 @@ export function navigationOutlineBlocks(
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
   // Core-only callers have no view and use the complete block outline.
-  const mode = "events" in editor ? editor.events.getSurfaceType() : "block";
+  const mode = "events" in editor ? editor.getSurfaceType() : "block";
   if (mode === "edgeless") {
     const element = owningBlockElement(editor, blockId);
     if (!element) {

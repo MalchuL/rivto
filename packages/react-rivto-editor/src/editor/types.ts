@@ -20,7 +20,8 @@ import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
-import type { PanelRegistry } from "../managers/events/panel-registry";
+import type { PanelRegistry } from "../panels/panel-registry";
+import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
@@ -138,11 +139,19 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: EventManager;
+  readonly events: Pick<EventManager, "register" | "delete">;
   /** Mounted occurrences and explicit active/default view lookup. */
-  readonly panels: PanelRegistry;
+  readonly panels: Pick<
+    PanelRegistry,
+    | "getActive"
+    | "getDefault"
+    | "registerPanel"
+    | "getSurfaceType"
+    | "getActiveRoot"
+    | "getDefaultRoot"
+  >;
   /** Semantic keyboard bindings and runtime keymap overrides. */
-  readonly keyboard: KeyboardManager;
+  readonly keyboard: Pick<KeyboardManager, keyof KeyboardApi>;
   /** Dedicated extension-owned block menu contributions. */
   readonly blockContextMenu: BlockContextMenuRegistry;
   /** React-owned slash-command registry. */

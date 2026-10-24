@@ -14,7 +14,7 @@ import type {
   BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
 } from "./block-behaviors/types";
-import { firstKeyboardTarget } from "./managers/events/selection";
+import { firstKeyboardTarget } from "./managers/keyboard/selection";
 import { createTestCoreEditor, createTestReactEditor } from "./test-utils";
 
 class ResetRejectingBehavior implements BlockBehavior {

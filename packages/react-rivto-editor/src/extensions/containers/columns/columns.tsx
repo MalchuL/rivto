@@ -147,7 +147,7 @@ export function setColumnsCount(
 }
 
 /**
- * Occupies the board management row and summarizes the current columns.
+ * Occupies the board management row and summarizes hidden columns when collapsed.
  *
  * Divider visibility is reflected on this board's selection region for the
  * shared page and edgeless layout stylesheet. Missing preferences show dividers.
@@ -172,18 +172,29 @@ export function Columns({ blockId }: { readonly blockId: string }) {
       className={COLUMNS_CLASS}
       data-show-dividers={block.props.showDividers !== false}
     >
-      <strong>Columns</strong>
-      <span className={COLUMNS_STATS_CLASS}>
-        {count} {count === 1 ? "column" : "columns"}
-      </span>
+      {block.listProps.collapsed === true && (
+        <>
+          <strong>Columns</strong>
+          <span className={COLUMNS_STATS_CLASS}>
+            {count} {count === 1 ? "column" : "columns"}
+          </span>
+        </>
+      )}
     </div>
   );
 }
 
 /**
  * Marks an empty column as a click-to-start writing target.
+ *
+ * Empty lanes own keyboard activation and are marked as canvas controls so Space
+ * starts writing instead of enabling Edgeless panning. Populated collapsed lanes
+ * remain structural selection anchors without claiming empty-control interaction.
+ *
  * @param props - Identity of the persisted column.
- * @returns Empty-lane control; drop and sort markers live on the column shell.
+ * @param props.blockId - Stable lane ID receiving the first writing block.
+ * @returns Empty-lane control or collapsed summary; drop markers live on its row.
+ * @throws If rendered outside an editor panel or insertion fails.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
@@ -217,6 +228,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
       tabIndex={empty ? 0 : -1}
       role={empty ? "button" : undefined}
       aria-label="Column"
+      data-canvas-control={empty ? "" : undefined}
       onClick={startWriting}
       onKeyDown={startWriting}
     >

@@ -1,4 +1,4 @@
-import type { PanelEventsApi } from "../events/api";
+import type { ReactPanelApi } from "../../panels/types";
 
 /**
  * State owned by one deferred selection request. Cancellation handles retain
@@ -7,7 +7,7 @@ import type { PanelEventsApi } from "../events/api";
  */
 export interface PendingSelectionCallback {
   readonly root: HTMLElement;
-  readonly events: PanelEventsApi;
+  readonly panel: Pick<ReactPanelApi, "getRoot">;
   readonly view: Window;
   readonly callback: () => void;
   readonly onCancel?: () => void;

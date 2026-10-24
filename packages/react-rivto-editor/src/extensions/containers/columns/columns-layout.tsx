@@ -25,7 +25,10 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
   const { block } = useBlockNode(blockId);
   return (
     <>
-      <BlockRow className="rivto-columns-header">
+      <BlockRow
+        className="rivto-columns-header"
+        data-collapsed={block?.listProps.collapsed === true}
+      >
         <BlockContent />
       </BlockRow>
       <BlockBody />
@@ -54,25 +57,31 @@ function ColumnBlockItem({ children }: BlockChildrenItemProps) {
 }
 
 /**
- * Gives each lane its own control row, empty writing target, and ordinary children.
+ * Gives empty and collapsed lanes a control row alongside their ordinary children.
  *
- * Expanded populated lanes have no textual header. Their small control row keeps
- * the lane itself selectable and draggable without overlapping its first child.
- * Empty lanes use the registered writing control; collapse retains that row and
- * hides the canonical child host, rather than moving descendants into a renderer.
+ * Expanded populated lanes omit their own row and its controls, leaving the first
+ * writing block reachable without a separate structural header above its content.
+ * Empty lanes use the registered writing control; collapse restores the summary row
+ * and hides the canonical child host, rather than moving descendants into a renderer.
+ * The addressed snapshot observes both child count and collapse changes, including
+ * deletion of the last child and expansion of a previously saved collapsed lane.
  *
  * @param props - Lane identity supplied by Page.
  * @param props.blockId - Receiving parent for header and empty-region drops.
  * @returns The lane's controls, body contributions and its single child list.
  */
 export function ColumnsColumnLayout({ blockId }: BlockLayoutProps) {
+  const { block } = useBlockNode(blockId);
+  const showRow = block?.listProps.collapsed === true || block?.childIds.length === 0;
   return (
     <>
-      <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
-        <BlockRow className="rivto-columns-lane-header">
-          <BlockContent />
-        </BlockRow>
-      </BlockDropTarget>
+      {showRow && (
+        <BlockDropTarget asChild destination={{ kind: "inside", parentId: blockId }}>
+          <BlockRow className="rivto-columns-lane-header">
+            <BlockContent />
+          </BlockRow>
+        </BlockDropTarget>
+      )}
       <BlockBody />
       <BlockChildren
         className="rivto-columns-content"

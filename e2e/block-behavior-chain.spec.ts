@@ -39,7 +39,7 @@ for (const outcome of ["unhandled", "handled"] as const) {
         focusBlockId: selected[1]!,
       });
       const panel = reactEditor.panels.getActive() ?? reactEditor.panels.getDefault();
-      panel!.events.getRoot()!.focus();
+      panel!.getRoot()!.focus();
       return { selected, left: left!.id, child: child.id, childContent: child.content };
     }, outcome);
     await page.keyboard.press("Delete");
@@ -109,7 +109,7 @@ for (const count of [1, 200]) {
         anchorBlockId: ids[0]!,
         focusBlockId: ids.at(-1)!,
       });
-      panel.events.getRoot()!.focus();
+      panel.getRoot()!.focus();
       snapshots = 0;
       return ids;
     }, count);

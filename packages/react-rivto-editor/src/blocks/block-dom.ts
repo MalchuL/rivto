@@ -1,7 +1,7 @@
 import type { EditorPosition } from "@chulane/rivto";
-import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
-import { PageNavigationController } from "../../surfaces/page/page-navigation-controller";
-import { PANEL_SELECTOR, findPanelElements, isInPanel } from "./panel-dom";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../constants";
+import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
+import { PANEL_SELECTOR, findPanelElements, isInPanel } from "../panels/panel-dom";
 
 /** DOM elements and persisted identity resolved from a delegated event target. */
 export interface EventBlock {

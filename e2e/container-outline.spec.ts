@@ -254,10 +254,16 @@ for (const type of containers) {
 }
 
 for (const repeat of [0, 200]) {
-  for (const header of [false, true]) {
-    test(`@performance container outline repeat=${repeat} header=${header}`, async ({ page }) => {
+  for (const { type, header } of [
+    { type: "kanban", header: false },
+    { type: "kanban", header: true },
+    { type: "bento", header: false },
+  ] as const) {
+    test(`@performance ${type} container outline repeat=${repeat} header=${header}`, async ({
+      page,
+    }) => {
       const fixture = new ContainerOutlineFixture(page);
-      await fixture.load("kanban", "block", repeat);
+      await fixture.load(type, "block", repeat);
       if (header) {
         await fixture.moveFromHeader();
       } else {

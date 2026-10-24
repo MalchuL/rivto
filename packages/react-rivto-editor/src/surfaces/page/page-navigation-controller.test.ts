@@ -2,7 +2,7 @@
 import { BlockVirtualizationController } from "@chulane/rivto-page";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { EdgelessCanvasAdapter } from "../edgeless/canvas-adapter";
-import { PanelDOM } from "../../managers/events/panel-dom";
+import { PanelDOM } from "../../panels/panel-dom";
 import { PageNavigationController } from "./page-navigation-controller";
 
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;

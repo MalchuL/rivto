@@ -4,7 +4,7 @@ import {
   BlockVirtualizationController,
   type BlockEditorAdapter,
 } from "@chulane/rivto-page";
-import { PANEL_SELECTOR, PanelDOM } from "../../managers/events/panel-dom";
+import { PANEL_SELECTOR, PanelDOM } from "../../panels/panel-dom";
 
 /**
  * Page-local bridge from DOM navigation and selection to unmounted root blocks.

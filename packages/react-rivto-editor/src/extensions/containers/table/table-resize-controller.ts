@@ -1,5 +1,5 @@
 import type { ReactPanelApi } from "../../../panels/types";
-import { isInPanel } from "../../../managers/events/panel-dom";
+import { isInPanel } from "../../../panels/panel-dom";
 import { BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../../constants";
 import { TABLE_BLOCK_TYPE, TABLE_ROW_BLOCK_TYPE } from "./table-behavior";
 import {

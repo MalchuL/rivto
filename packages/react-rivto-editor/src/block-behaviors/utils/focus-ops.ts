@@ -9,7 +9,7 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-import { focusBlock } from "../../managers/events/block-dom";
+import { focusBlock } from "../../blocks/block-dom";
 
 /**
  * Publishes a collapsed caret and focuses it after the next paint.
