@@ -607,3 +607,16 @@ vertical movement alone does not change depth. Distinct boundaries around filter
 children retain their own feedback.
 Virtual roots merge only across consecutive mounted display indices; unmounted
 intervals remain unavailable. `dropGaps={false}` still disables shared gap handling.
+
+The tree reserves 48px after its final displayed root for end insertion. Override
+`--rivto-editor-end-space` through `BlockEditorTheme` or an ancestor stylesheet;
+zero removes that area's height. Custom projected forests, including canvas cards,
+can place `<BlockEditorEnd blockId={lastDisplayedId} />` after their roots. Its
+canonical neighbor subscription preserves hidden next siblings and works without
+mounting the last root; virtual reserved space stays before the ending area.
+
+An edge declaration may use `coverage: "bounds"` to accept its whole anchor while
+keeping the insertion line on the declared edge. `indicatorInset` independently
+adjusts the logical-start inset of a block-edge line in local CSS pixels; negative
+values extend feedback without extending hit coverage. Inline-edge lines ignore
+this inset. These declarations do not add DOM or change layout dimensions.

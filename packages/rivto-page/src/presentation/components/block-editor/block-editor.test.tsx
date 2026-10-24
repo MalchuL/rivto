@@ -1694,3 +1694,34 @@ it("excludes an existing element by default without requiring an editor", () => 
   act(() => root.render(null));
   expect(ref.current).toBeNull();
 });
+
+it("keeps the ending region bounded to canonical projected siblings", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("parent", { childIds: ["a", "b", "hidden"] });
+  for (const id of ["a", "b", "hidden"]) {
+    adapter.setNode(id);
+  }
+  adapter.setBlockIds(["a", "b"]);
+  const editor = createEditor(adapter);
+  const register = jest.spyOn(editor.dropTargets, "register");
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const end = container.querySelector(".rivto-block-editor-end");
+  const entry = register.mock.calls.find(([entry]) => entry.element === end)![0];
+  expect(entry.getRegions()).toEqual([
+    {
+      kind: "edge",
+      side: "block-start",
+      coverage: "bounds",
+      destination: { kind: "between", parentId: "parent", previousId: "b", nextId: "hidden" },
+    },
+  ]);
+  act(() => adapter.setNode("parent", { childIds: ["a", "b"] }));
+  expect(entry.getRegions()[0]?.destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "b",
+    nextId: null,
+  });
+  act(() => root.render(null));
+  expect(end?.isConnected).toBe(false);
+});

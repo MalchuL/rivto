@@ -90,3 +90,10 @@
 .rivto-todo-meta [data-slot="native-select-icon"] {
   display: none;
 }
+
+/* The TODO card owns its padding. Empty row slots must not inset the card
+ * relative to the single block selection shell; occupied control slots remain. */
+.rivto-block-row:has(> .rivto-block-content > .rivto-todo-item) {
+  padding: 0;
+  column-gap: 0;
+}

@@ -23,6 +23,43 @@ export interface BlockRootNodeProps {
  * @returns One addressed subtree with live ordinary outline boundaries.
  */
 export const BlockRootNode = memo(function BlockRootNode({ blockId }: BlockRootNodeProps) {
+  const placement = useBlockRootPlacement(blockId);
+  if (!placement) {
+    return <BlockNode blockId={blockId} />;
+  }
+  return <BlockRootNodeView {...placement} />;
+});
+
+/**
+ * Retains a root's mounted regions and node when other roots change their order.
+ *
+ * Primitive neighbor fields are compared by React.memo, independently of the
+ * occurrence's root-map identity. Only changed placements render new regions.
+ *
+ * @param props - Real root placement supplied by the shared occurrence snapshot.
+ * @param props.blockId - The single node rendered inside these insertion regions.
+ * @returns One canonical node surrounded by ordinary outline boundaries.
+ */
+const BlockRootNodeView = memo(function BlockRootNodeView(props: BlockChildPlacement) {
+  return (
+    <BlockDropItem placement={props} axis="vertical" outline>
+      <BlockNode blockId={props.blockId} />
+    </BlockDropItem>
+  );
+});
+
+/**
+ * Observes the actual neighbors of a displayed root without requiring its DOM node.
+ *
+ * Document roots borrow the shared occurrence store. Projected roots subscribe
+ * only to their canonical parent's child order. React releases subscriptions on
+ * identity changes and unmount; unchanged placement snapshots retain identity.
+ *
+ * @param blockId - Existing displayed root, including a currently virtualized root.
+ * @returns Canonical placement, or undefined when the block is absent from its parent's children.
+ * @throws If outside an editor or delegated adapter reads fail.
+ */
+export function useBlockRootPlacement(blockId: string): BlockChildPlacement | undefined {
   const { blocks } = useBlockEditorController().adapter;
   const parentId = blocks.getParentId(blockId) ?? null;
   const roots = useContext(BlockRootPlacementContext);
@@ -66,26 +103,5 @@ export const BlockRootNode = memo(function BlockRootNode({ blockId }: BlockRootN
           }
         : undefined;
   }
-  if (!placement) {
-    return <BlockNode blockId={blockId} />;
-  }
-  return <BlockRootNodeView {...placement} />;
-});
-
-/**
- * Retains a root's mounted regions and node when other roots change their order.
- *
- * Primitive neighbor fields are compared by React.memo, independently of the
- * occurrence's root-map identity. Only changed placements render new regions.
- *
- * @param props - Real root placement supplied by the shared occurrence snapshot.
- * @param props.blockId - The single node rendered inside these insertion regions.
- * @returns One canonical node surrounded by ordinary outline boundaries.
- */
-const BlockRootNodeView = memo(function BlockRootNodeView(props: BlockChildPlacement) {
-  return (
-    <BlockDropItem placement={props} axis="vertical" outline>
-      <BlockNode blockId={props.blockId} />
-    </BlockDropItem>
-  );
-});
+  return placement;
+}

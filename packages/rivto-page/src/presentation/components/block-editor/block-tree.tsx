@@ -1,3 +1,4 @@
+import { BlockEditorEnd } from "./block-editor-end";
 import { BlockDropLayoutContext, useBlockDropLayout } from "../../drag-and-drop/block-drop-layout";
 import { BlockRootNode } from "../../drag-and-drop/block-root-node";
 import { BlockDropExclude } from "../../drag-and-drop/block-drop-exclude";
@@ -36,7 +37,8 @@ export interface BlockTreeProps {
  *
  * @param props - Optional windowing configuration for the displayed block forest.
  * @param props.virtualization - Omitted disables windowing; supplied settings default to enabled, a 240px estimate and three overscan roots.
- * @returns Measured roots and inert space for unmounted subtrees; an empty list renders no block nodes.
+ * @returns Measured roots, inert space for unmounted subtrees, and a themed ending
+ * insertion area after a populated forest; an empty list renders no block nodes.
  * @throws If called outside BlockEditor, settings are invalid, or host reads/renderers fail.
  */
 export function BlockTree({ virtualization }: BlockTreeProps) {
@@ -128,6 +130,7 @@ export function BlockTree({ virtualization }: BlockTreeProps) {
             style={{ height: enabled ? Math.max(0, margin + virtualizer.getTotalSize() - end) : 0 }}
           />
         </BlockDropExclude>
+        {blockIds.length > 0 && <BlockEditorEnd blockId={blockIds[blockIds.length - 1]!} />}
       </BlockDropLayoutContext.Provider>
     </div>
   );

@@ -609,3 +609,23 @@ it("keeps fractional background below a short tile active despite a rounded neig
   next.setAttribute("data-drop-inert", "");
   expect(editor.dropTargets.resolve(199.75, 150, undefined, next)).toBeUndefined();
 });
+
+it("accepts the whole declared ending area while keeping its indicator at the top", () => {
+  register(item, [{ kind: "edge", side: "block-start", coverage: "bounds", destination }]);
+  for (const y of [1, 50, 99]) {
+    const target = editor.dropTargets.resolve(10, y, undefined, item);
+    expect(target?.destination).toEqual(destination);
+    expect(target?.indicator?.top).toBe(-1);
+  }
+});
+
+it.each([false, true])(
+  "offsets block-edge feedback without expanding its hit area, RTL=%s",
+  (rtl) => {
+    item.style.direction = rtl ? "rtl" : "ltr";
+    register(item, [{ kind: "edge", side: "block-end", indicatorInset: -8, destination }]);
+    const target = editor.dropTargets.resolve(10, 99, undefined, item);
+    expect(target?.indicator).toEqual({ left: rtl ? 0 : -8, top: 99, width: 208, height: 2 });
+    expect(editor.dropTargets.resolve(-4, 99, undefined, item)).toBeUndefined();
+  },
+);

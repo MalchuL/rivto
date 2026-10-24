@@ -386,6 +386,12 @@ function containsPairEdge(
     const region = entry
       .getRegions()
       .find((region) => region.kind === "edge" && region.side === side);
-    return region?.kind === "edge" && containsDropPoint(dropEdgeRect(region, read(entry)), point);
+    return (
+      region?.kind === "edge" &&
+      containsDropPoint(
+        region.coverage === "bounds" ? read(entry).rect : dropEdgeRect(region, read(entry)),
+        point,
+      )
+    );
   });
 }

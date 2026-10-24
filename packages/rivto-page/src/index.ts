@@ -191,3 +191,8 @@ export type {
   BlockDropLayoutRegistration,
   BlockDropPoint,
 } from "./editor/drag-and-drop/types";
+
+export {
+  BlockEditorEnd,
+  type BlockEditorEndProps,
+} from "./presentation/components/block-editor/block-editor-end";

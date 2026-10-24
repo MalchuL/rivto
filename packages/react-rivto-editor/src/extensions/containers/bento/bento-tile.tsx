@@ -48,6 +48,7 @@ export function BentoTileItem({ blockId, children }: BlockChildrenItemProps) {
           kind: "edge",
           side: "block-end",
           size: 4,
+          indicatorInset: 8,
           destination: { kind: "inside", parentId: blockId },
         },
       ]}

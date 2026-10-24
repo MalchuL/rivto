@@ -290,3 +290,22 @@ test("changes block-tree windowing settings without replacing retained roots", a
   await expect(page.locator("[data-virtual-block-id]")).toHaveCount(1000);
   expect(await original!.evaluate((element) => element.isConnected)).toBe(true);
 });
+
+test("keeps a themed ending area after the virtual forest", async ({ page }) => {
+  await page.goto("/?repeat=200&virtual");
+  await expect(page.locator("[data-rivto-block-editor]")).toBeVisible();
+  await expect(page.locator('[data-block-id="block-1000"]')).toHaveCount(0);
+  const end = page.locator(".rivto-block-editor-end");
+  await expect(end).toHaveCSS("min-height", "48px");
+  await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.locator('[data-block-id="block-1000"]')).toBeVisible();
+  await end.scrollIntoViewIfNeeded();
+  const rect = (await end.boundingBox())!;
+  await page.mouse.move(rect.x + 12, rect.y + rect.height - 2);
+  await expect(page.locator("[data-demo-drop-output]")).toHaveText(
+    JSON.stringify({ kind: "between", parentId: null, previousId: "block-1000", nextId: null }),
+  );
+  const line = (await page.locator("[data-demo-drop-overlay]").boundingBox())!;
+  expect(line.y + line.height / 2).toBeCloseTo(rect.y, 1);
+});

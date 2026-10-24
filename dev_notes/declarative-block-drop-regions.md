@@ -462,3 +462,76 @@ Final production measurements: 24 passed, three samples for each browser, size a
 The small default Bento setup also exposed pending drag autoscroll after the long programmatic fixture scroll: targets moved 12 viewport pixels after measurement. The benchmark now moves into the receiving region and waits two frames before measuring the seam, outside interaction timing. This fixes stale test coordinates; the subsequent 90 fractional pointer movements and actual committed order remain asserted. Failed setup samples are excluded.
 
 Root-between rendering remains in the same range as the previous production baseline (31 ms default, large medians 75 ms Chromium / 74 ms Firefox); timings do not establish a speedup. Large-document commits still produce a long frame. Full workspace suites were not rerun.
+
+### Geometry follow-up: TODO selection and editor ending space
+
+TODO already owns card padding; the standard BlockRow adds another 2px vertically
+and 12px on each side in the host theme (row padding plus empty-slot gaps). Remove
+those redundant row insets for TODO content, retaining actual occupied control slots.
+
+Give the autonomous Page tree a real ending area with a public CSS height token,
+`--rivto-editor-end-space` (48px default, zero disables its geometry). Declare a
+full-bounds edge region on that existing presentation area: hit coverage and line
+placement remain independent. Reuse canonical root-placement subscriptions for
+its destination after the last displayed root, including hidden canonical next
+siblings in projected views. The ending area remains after virtual reserved space;
+its destination does not depend on a mounted last block. It is view geometry, not
+a persisted block, and does not add a per-pointer forest scan or host-specific rule.
+
+Bento clarification was requested; absent a reply, the implemented interpretation
+is the line for insertion into an individual tile. That line started at the
+content frame, 8px inside the existing outer tile. The explicit content-edge
+registration now uses `indicatorInset: -8`: feedback begins at the outer edge,
+while its hit geometry and child destination remain unchanged. Logical direction
+and transform scale are handled by shared geometry rather than container callbacks.
+
+Both TODO geometry and Bento's 8px feedback offset were reproduced in Page and
+Edgeless in Chromium/Firefox, including the required serial reruns. After changes,
+227 Page unit tests pass, including full-bounds edge coverage, logical feedback
+insets, canonical projected ending placement and the existing bounded subscription
+checks. The first host run passed 244 tests and failed two ending-area checks because
+Edgeless composes its forest directly instead of mounting BlockTree. The same
+BlockEditorEnd primitive is now exported and used there. Final host behavioral run:
+246 passed with 12 workers. Focused standalone layout/virtualization checks: 18 passed,
+including an initially unmounted final root, theme sizing and ending feedback.
+Page/React type checks, Page distribution and both demo builds pass. Scoped lint
+has no errors and seven long-function warnings; diff whitespace is clean.
+
+Ownership review covered view creation, projected/displayed identity, placement
+subscriptions, declaration reads and disposal. The new ending component borrows
+canonical placement through the same hook as root nodes; it owns no editor/model
+lifecycle. Its CSS token owns presentation size, while the full-bounds edge owns
+hit coverage and top-edge feedback. The host only composes the exported primitive;
+no new per-pointer host lookup or model mutation path was introduced. TODO styling
+stays in the TODO extension and Bento supplies only feedback data.
+
+Final geometry-follow-up production measurements: 36 passed, three samples per browser/size/placement, one worker, tracing off.
+
+| Browser / placement / repeat | Command median [range], ms | Two-frame rendered median [range], ms |
+| --- | --- | --- |
+| chromium / control / 0 | 1.3 [1.2–1.3] | 31.7 [31.2–31.7] |
+| chromium / control / 200 | 9.2 [9.2–10.1] | 57.8 [57.5–58.0] |
+| chromium / bento / 0 | 1.3 [1.3–1.4] | 31.6 [31.4–31.7] |
+| chromium / bento / 200 | 7.0 [7.0–7.1] | 100.1 [95.5–110.9] |
+| chromium / end / 0 | 1.2 [1.1–1.2] | 31.2 [31.0–31.6] |
+| chromium / end / 200 | 8.0 [7.7–8.3] | 122.3 [119.3–123.1] |
+| firefox / control / 0 | 2.0 [2.0–3.0] | 31.0 [30.0–32.0] |
+| firefox / control / 200 | 19.0 [18.0–20.0] | 93.0 [90.0–96.0] |
+| firefox / bento / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–32.0] |
+| firefox / bento / 200 | 14.0 [12.0–15.0] | 89.0 [87.0–93.0] |
+| firefox / end / 0 | 2.0 [1.0–2.0] | 31.0 [31.0–32.0] |
+| firefox / end / 200 | 15.0 [14.0–16.0] | 97.0 [97.0–98.0] |
+
+The first ending benchmark used a descendant selector and also matched an embedded editor ending. Its strict-selector setup failures are excluded; the final benchmark scopes the ending to the measured occurrence's direct tree. All final samples assert committed parent/order after real fractional pointer movements. Full workspace suites were not run; large-document commits still include long frames.
+
+Bento direction correction: the user clarified that the child-insertion line
+should move right, not left. The content-edge declaration now uses
+`indicatorInset: 8`, placing its start 8px inside the content frame. Hit coverage
+and destination remain unchanged; the browser assertion checks that exact offset.
+
+Direction-correction verification: four Page/Edgeless browser checks passed in Chromium/Firefox (12 workers), host types/build and scoped lint passed (one existing long-test warning). Twelve serial production measurements passed.
+- chromium, repeat=0: sync median 1.2 ms [1.1–1.2]; rendered median 31.3 ms [31.3–31.4].
+- chromium, repeat=200: sync median 6.9 ms [6.9–7.0]; rendered median 99.3 ms [97.5–105.9].
+- firefox, repeat=0: sync median 2.0 ms [2.0–2.0]; rendered median 32.0 ms [31.0–32.0].
+- firefox, repeat=200: sync median 14.0 ms [14.0–16.0]; rendered median 91.0 ms [88.0–92.0].
+Full workspace tests were not rerun for this feedback-only parameter correction.

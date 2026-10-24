@@ -128,6 +128,7 @@ export function dropEdgeRect(
  * @param geometry - Shared synchronous measurement of the anchor.
  * @param point - Pointer used only for explicit depth partitioning.
  * @returns Declared destination and physical feedback, before permission validation.
+ * @throws If the declared feedback inset is nonfinite.
  */
 export function dropRegionTarget(
   entry: BlockDropTargetRegistration,
@@ -155,6 +156,14 @@ export function dropRegionTarget(
     width = Math.max(0, rect.width - level * indent);
     left = rtl ? rect.left : rect.left + level * indent;
   }
+  const inset = region.indicatorInset ?? 0;
+  if (!Number.isFinite(inset)) {
+    throw new Error("Drop indicator inset must be finite");
+  }
+  if (geometry.style.direction !== "rtl") {
+    left += inset * geometry.scaleX;
+  }
+  width = Math.max(0, width - inset * geometry.scaleX);
   const horizontal = region.side.startsWith("block");
   const end = region.side.endsWith("end");
   const indicator = horizontal

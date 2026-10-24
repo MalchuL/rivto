@@ -206,7 +206,10 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         if (entry.priority < priority || (entry.priority === priority && regionRank <= rank)) {
           continue;
         }
-        const rect = region.kind === "edge" ? dropEdgeRect(region, geometry) : geometry.rect;
+        const rect =
+          region.kind === "edge" && region.coverage !== "bounds"
+            ? dropEdgeRect(region, geometry)
+            : geometry.rect;
         if (
           !containsDropPoint(rect, point) ||
           (region.kind === "inside" &&

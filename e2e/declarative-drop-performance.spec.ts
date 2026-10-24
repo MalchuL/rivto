@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-for (const placement of ["between", "inside", "control", "bento"] as const) {
+for (const placement of ["between", "inside", "control", "bento", "end"] as const) {
   for (const repeat of [0, 200]) {
     test(`declared ${placement} region native pointer cost repeat=${repeat} @performance`, async ({
       page,
@@ -14,6 +14,10 @@ for (const placement of ["between", "inside", "control", "bento"] as const) {
       const ids = await page.evaluate((placement) => {
         const blocks = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
           .__rivtoDemo.editor.blocks;
+        if (placement === "end") {
+          const roots = blocks.getRootIds();
+          return [roots[0]!, roots[roots.length - 1]!];
+        }
         if (placement === "bento") {
           const board = blocks.getBlocks().find((block) => block.type === "bento");
           const children = board && blocks.getBlockNode(board.id)?.childIds;
@@ -46,14 +50,17 @@ for (const placement of ["between", "inside", "control", "bento"] as const) {
       });
       await expect(source).toHaveAttribute("data-dragging", "true");
       const baseline = process.env.DROP_BASELINE === "1";
-      const target = document.locator(`[data-block-id="${intoBlock ? ids[1] : ids[2]}"]`);
+      const targetId = intoBlock || placement === "end" ? ids[1] : ids[2];
+      const target = document.locator(`[data-block-id="${targetId}"]`);
       if (placement === "control") {
         await target.evaluate((element) => {
           element.closest('[data-block-type="todo-storage"]')!.setAttribute("data-drop-inert", "");
         });
       }
       let region = target;
-      if (placement === "bento") {
+      if (placement === "end") {
+        region = document.locator(":scope > .rivto-virtual-tree > .rivto-block-editor-end");
+      } else if (placement === "bento") {
         region = target.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
       } else if (placement === "inside") {
         region = target.locator(":scope > .rivto-block-row");
@@ -61,7 +68,7 @@ for (const placement of ["between", "inside", "control", "bento"] as const) {
         region = target.getByRole("textbox", { name: "Description", exact: true });
       }
       await region.scrollIntoViewIfNeeded();
-      if (placement === "bento") {
+      if (placement === "bento" || placement === "end") {
         const warm = (await region.boundingBox())!;
         await page.mouse.move(warm.x + warm.width / 2, warm.y + warm.height / 2);
         // Stop drag autoscroll before measuring a seam after the long fixture scroll.
@@ -75,6 +82,9 @@ for (const placement of ["between", "inside", "control", "bento"] as const) {
       const box = (await region.boundingBox())!;
       let x = box.x + (intoBlock ? box.width / 2 : Math.min(12, box.width / 2));
       let y = intoBlock ? box.y + box.height / 2 : box.y - 2;
+      if (placement === "end") {
+        y = box.y + box.height - 2;
+      }
       if (placement === "bento") {
         const preceding = (await document
           .locator(`[data-block-id="${ids[1]}"]`)
@@ -153,6 +163,17 @@ for (const placement of ["between", "inside", "control", "bento"] as const) {
             ),
           )
           .toBe(ids[1]);
+      } else if (placement === "end") {
+        await expect
+          .poll(() =>
+            page.evaluate(() => {
+              const roots = (
+                window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+              ).__rivtoDemo.editor.blocks.getRootIds();
+              return roots[roots.length - 1];
+            }),
+          )
+          .toBe(ids[0]);
       } else {
         await expect
           .poll(() =>

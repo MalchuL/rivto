@@ -45,8 +45,12 @@ export interface BlockDropEdgeRegion {
   readonly side: "block-start" | "block-end" | "inline-start" | "inline-end";
   /** Local CSS pixels; omission reads --rivto-drop-target-size, default 8. */
   readonly size?: number;
+  /** Bounds accepts the whole anchor while retaining feedback on the declared edge; defaults to edge. */
+  readonly coverage?: "edge" | "bounds";
   readonly destination: BlockDropDestination;
   readonly depth?: BlockDropDepth;
+  /** Logical-start inset for block-edge feedback in local CSS pixels; negative extends the line without changing hit coverage. Ignored by inline edges. */
+  readonly indicatorInset?: number;
 }
 
 /** Explicit append area, optionally restricted to unoccupied layout background. */

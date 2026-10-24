@@ -621,3 +621,90 @@ for (const mode of ["block", "edgeless"] as const) {
       .toBe("first");
   });
 }
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`TODO card fills its selection shell in ${mode}`, async ({ page }) => {
+    await load(page, "todo-storage", mode);
+    const shell = page.locator('[data-block-id="first"]');
+    const card = shell.locator(".rivto-todo-item").first();
+    expect(await card.boundingBox()).toEqual(await shell.boundingBox());
+    await card.click({ position: { x: 5, y: 5 }, modifiers: ["Control"] });
+    await expect(shell).toHaveAttribute("data-block-selected", "true");
+    expect(await card.boundingBox()).toEqual(await shell.boundingBox());
+  });
+
+  test(`Bento child placement is inset from the tile content in ${mode}`, async ({ page }) => {
+    await load(page, "bento", mode);
+    await startDrag(page);
+    const tile = page
+      .locator('[data-block-id="first"]')
+      .locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
+    const content = (await tile
+      .locator(":scope > .rivto-block-drop-wrapper-content")
+      .boundingBox())!;
+    await page.mouse.move(content.x + content.width / 2, content.y + content.height - 2);
+    const line = page.locator(".rivto-block-drop-line:visible");
+    await expect(line).toHaveCount(1);
+    expect((await line.boundingBox())!.x).toBeCloseTo(content.x + 8, 1);
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getParentId("source"),
+        ),
+      )
+      .toBe("first");
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`editor ending space accepts insertion over its full themed height in ${mode}`, async ({
+    page,
+  }) => {
+    await load(page, "outline", mode);
+    const occurrence = page
+      .locator('[data-block-id="source"]')
+      .locator("xpath=ancestor::*[@data-rivto-block-editor][1]");
+    const end = occurrence.locator(".rivto-block-editor-end");
+    expect((await end.boundingBox())!.height).toBe(48);
+    const board = (await page.locator('[data-block-id="board"]').boundingBox())!;
+    await occurrence.evaluate((element) =>
+      (element as HTMLElement).style.setProperty("--rivto-editor-end-space", "96px"),
+    );
+    expect((await end.boundingBox())!.height).toBe(96);
+    expect(await page.locator('[data-block-id="board"]').boundingBox()).toEqual(board);
+    await startDrag(page);
+    const box = (await end.boundingBox())!;
+    await page.mouse.move(box.x + 12, box.y + box.height - 2);
+    const line = page.locator(".rivto-block-drop-line:visible");
+    await expect(line).toHaveCount(1);
+    const indicator = (await line.boundingBox())!;
+    expect(indicator.y + indicator.height / 2).toBeCloseTo(box.y, 1);
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getRootIds(),
+        ),
+      )
+      .toEqual(["board", "source"]);
+    await page.evaluate(() =>
+      (
+        window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+      ).__rivtoDemo.editor.history.undo(),
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getRootIds(),
+        ),
+      )
+      .toEqual(["source", "board"]);
+  });
+}
