@@ -31,7 +31,7 @@ describe("React block DOM constants", () => {
     expect(selector).toBe(`[${attribute}]`);
   });
 
-  it("keeps the owned-row class aligned with BlockTree shells", () => {
-    expect(BLOCK_ROW_CLASS).toBe("page-block-row");
+  it("keeps the owned-row class aligned with Page shells", () => {
+    expect(BLOCK_ROW_CLASS).toBe("rivto-block-row");
   });
 });

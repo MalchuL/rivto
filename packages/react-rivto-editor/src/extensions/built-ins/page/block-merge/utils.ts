@@ -10,16 +10,16 @@ import {
   BLOCK_ID_SELECTOR,
 } from "../../../../constants";
 import type { ReactPanelApi } from "../../../../panels/types";
-import { findRenderedBlock } from "../../../../managers/events/block-dom";
+import { findRenderedBlock } from "../../../../blocks/block-dom";
 
-/** Returns true when a BlockView directly owns an editable content host. */
+/** Returns true when a block shell directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
   return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)).some(
     (content) => content.closest(BLOCK_ID_SELECTOR) === block,
   );
 }
 
-/** Resolves the current BlockView's immediately preceding sibling BlockView. */
+/** Resolves the current block shell's immediately preceding sibling block shell. */
 function previousSiblingBlock(
   root: HTMLElement,
   blockId: string,

@@ -45,7 +45,7 @@ export function createEdgelessSelection(
  * @param selection - Generic selection that may carry edgeless metadata.
  * @returns Whether edgeless interaction owns selection focus.
  */
-function isActive(selection: Selection | undefined): boolean {
+export function isEdgelessSelectionActive(selection: Selection | undefined): boolean {
   const value = selection?.pluginData?.[EDGELESS_SELECTION_PLUGIN_KEY];
   return Boolean(
     value && typeof value === "object" && (value as { active?: unknown }).active === true,
@@ -75,7 +75,7 @@ export class EdgelessSelectionRuntime {
   /** @returns Detached current canvas selection panel. */
   get(): EdgelessSelectionSnapshot {
     const current = this.selection.get();
-    return { active: isActive(current), items: [...(current?.elements ?? [])] };
+    return { active: isEdgelessSelectionActive(current), items: [...(current?.elements ?? [])] };
   }
 
   /** @returns Stable snapshot until the underlying core selection changes. */
@@ -83,7 +83,10 @@ export class EdgelessSelectionRuntime {
     const current = this.selection.snapshot();
     if (current !== this.snapshotSource) {
       this.snapshotSource = current;
-      this.snapshotValue = { active: isActive(current), items: current?.elements ?? [] };
+      this.snapshotValue = {
+        active: isEdgelessSelectionActive(current),
+        items: current?.elements ?? [],
+      };
     }
     return this.snapshotValue;
   }
@@ -118,7 +121,7 @@ export class EdgelessSelectionRuntime {
    */
   setBlocks(blocks: Selection): void {
     const current = this.selection.get();
-    const active = isActive(current);
+    const active = isEdgelessSelectionActive(current);
     this.selection.set({
       ...blocks,
       elements: active ? (current?.elements ?? []) : [],
@@ -133,7 +136,7 @@ export class EdgelessSelectionRuntime {
   /** Deactivates selected elements while retaining their IDs. */
   deactivate(): void {
     const current = this.selection.get();
-    if (!current || !isActive(current)) {
+    if (!current || !isEdgelessSelectionActive(current)) {
       return;
     }
     this.selection.set(createEdgelessSelection(current, false, current.elements));

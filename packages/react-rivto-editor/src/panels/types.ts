@@ -1,7 +1,7 @@
 import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
 import type { ReactPanel } from "./react-panel";
 import type { DocumentModel } from "@chulane/document-model";
-import type { PanelAPI, ModeManagerApi } from "@chulane/rivto";
+import type { PanelAPI, ModeManagerApi, EditorMode } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
 import type { PanelClipboardApi } from "../managers/clipboard/api";
 import type { PanelEventsApi } from "../managers/events/api";
@@ -40,6 +40,25 @@ export interface ReactPanelApi extends PanelAPI {
   readonly clipboard: PanelClipboardApi;
   /** Delegated native DOM event registration. */
   readonly events: PanelEventsApi;
+  /**
+   * Reads the DOM root available to this panel's interaction handlers.
+   *
+   * @returns Mounted root, or null when unmounted or disabled.
+   */
+  getRoot(): HTMLElement | null;
+  /**
+   * Reads the rendered surface of this panel without changing shared document mode.
+   * Unlike the panel's declared `mode.get()`, this reads markers on the mounted
+   * root to describe the receiving DOM surface: a page embedding returns `block` even
+   * when its document's core mode is `edgeless`. No additional mode is stored.
+   * Event dispatch captures this value in `event.mode`; handlers should use that
+   * snapshot. Use this method for panel-specific commands outside event handlers,
+   * and the core mode manager for document-wide presentation choices.
+   *
+   * @returns Mounted panel's surface type, or the panel's declared mode when unmounted.
+   * Unrecognized mounted roots use the registry's panel-mode fallback.
+   */
+  getSurfaceType(): EditorMode;
   /** Semantic keyboard actions and runtime shortcut overrides. */
   readonly keyboard: KeyboardApi;
   /** Reads the selection owned by this panel and synchronizes its DOM caret and highlights. */
@@ -80,3 +99,23 @@ export type PanelSnapshot =
       readonly api: ReactPanel;
       readonly retained: boolean;
     };
+
+/** Local registration identity and DOM root belonging to one mounted EditorPanel. */
+export interface PanelRegistration {
+  /** Stable occurrence identity; shared shortcut settings continue to use semantic action IDs. */
+  readonly id: string;
+  /**
+   * Reads the root currently available to this occurrence's handlers.
+   *
+   * @returns Mounted root, or null before mounting, when disabled, or after cleanup.
+   */
+  getRoot(): HTMLElement | null;
+  /**
+   * Retains local registration cleanup until this occurrence is destroyed.
+   *
+   * @param dispose - Callback releasing the occurrence's registration.
+   * @returns Idempotent disposer, also invoked during occurrence cleanup.
+   * @throws If cleanup registration is attempted during or after panel destruction.
+   */
+  registerCleanup(dispose: () => void): () => void;
+}

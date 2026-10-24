@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR, HOST_BLOCK_ID_SELECTOR } from "./dom-markers";
+import { BLOCK_ID_SELECTOR, HOST_BLOCK_ID_SELECTOR, BLOCK_ROW_SELECTOR } from "./dom-markers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -15,7 +15,7 @@ test("creates every paragraph through the chosen trailing insertion target", asy
   await expect(affordances).toHaveCount(3);
   const paragraphHeight = await roots
     .first()
-    .locator(":scope > .page-block-row .page-block-content")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-block-content`)
     .first()
     .evaluate((element) => element.getBoundingClientRect().height);
   await expect
@@ -24,15 +24,19 @@ test("creates every paragraph through the chosen trailing insertion target", asy
 
   const count = await roots.count();
   for (let index = 0; index < count; index += 1) {
-    const toggle = roots.nth(index).locator(":scope > .page-block-row [data-collapse-toggle]");
+    const toggle = roots
+      .nth(index)
+      .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-collapse-toggle]`);
     if (await toggle.count()) {
       await toggle.click();
     }
-    const row = roots.nth(index).locator(":scope > .page-block-row");
+    const row = roots.nth(index).locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await row.click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
   }
   await expect(page.locator(`${HOST_BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(count);
 
+  // Deleting the roots can move the trailing controls under the last pointer position.
+  await page.mouse.move(0, 0);
   await page.keyboard.press("Delete");
   await expect(roots).toHaveCount(0);
   await expect(surface).toHaveAttribute("data-empty", "true");

@@ -31,8 +31,11 @@ async function snapshot(editor: Locator): Promise<Snapshot> {
  * @throws If either bounding box is unavailable or browser input fails.
  */
 async function drag(source: Locator, target: Locator, edge: "body" | "before" | "after" = "body") {
+  await source.locator(":scope > .rivto-block-row").hover();
   const handleBox = await source.locator(".block-handle").boundingBox();
-  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
+  const targetBox = await target
+    .locator(":scope > .rivto-block-row")
+    .boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected drag geometry");
   }
@@ -74,8 +77,11 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
 
   await leftParent.locator("[data-block-content]").first().click();
   await page.keyboard.down("Control");
-  await expect(left.locator(".page-surface")).toHaveAttribute("data-block-selecting", "true");
-  await expect(right.locator(".page-surface")).not.toHaveAttribute("data-block-selecting", "true");
+  await expect(leftParent.locator("[data-block-selection-anchor]").first()).toHaveAttribute(
+    "data-block-selecting",
+    "",
+  );
+  await expect(right.locator("[data-block-selecting]")).toHaveCount(0);
   await page.keyboard.up("Control");
 
   await left.locator(blockIdSelector("left-counter")).locator(".custom-counter-block").click();
@@ -86,10 +92,10 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   await expect(left.locator(blockIdSelector("left-child"))).toBeVisible();
   await expect(right.locator(blockIdSelector("right-nested"))).toBeVisible();
 
-  const rightRoots = await right.locator(".page-surface > [data-block-id]").count();
+  const rightRoots = await right.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]").count();
   await left.locator(".page-trailing-block").first().click();
-  await expect(left.locator(".page-surface > [data-block-id]")).toHaveCount(4);
-  await expect(right.locator(".page-surface > [data-block-id]")).toHaveCount(rightRoots);
+  await expect(left.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")).toHaveCount(4);
+  await expect(right.locator(".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")).toHaveCount(rightRoots);
 
   await left.getByRole("button", { name: "Edgeless" }).click();
   await expect(left.locator("[data-edgeless-root]").first()).toBeVisible();
@@ -174,6 +180,7 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   const emptyLeft = multiEditor(page, "left");
   const emptyRight = multiEditor(page, "right");
   const source = emptyLeft.locator(blockIdSelector("left-counter"));
+  await source.locator(":scope > .rivto-block-row").hover();
   const sourceBox = await source.locator(".block-handle").boundingBox();
   const targetBox = await emptyRight.locator(".page-surface").boundingBox();
   if (!sourceBox || !targetBox) {
@@ -182,9 +189,15 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 120, { steps: 12 });
-  await expect(emptyRight.locator(".page-surface")).toHaveAttribute("data-drop-empty", "true");
+  await expect(emptyRight.locator(".page-surface")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
-  await expect(emptyRight.locator(".page-surface")).not.toHaveAttribute("data-drop-empty", "true");
+  await expect(emptyRight.locator(".page-surface")).not.toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   expect((await snapshot(emptyRight)).blocks.map(({ id }) => id)).toEqual(["left-counter"]);
 });
 
@@ -229,5 +242,45 @@ test("rejects destination block ID conflicts without mutating either editor", as
   );
   expect(await snapshot(left)).toEqual(sourceBefore);
   expect(await snapshot(right)).toEqual(destinationBefore);
-  await expect(right.locator("[data-drop-inside]")).toHaveCount(0);
+  await expect(right.locator("[data-block-drop-active]")).toHaveCount(0);
 });
+
+for (const [sourceMode, destinationMode] of [
+  ["Page", "Page"],
+  ["Page", "Edgeless"],
+  ["Edgeless", "Page"],
+  ["Edgeless", "Edgeless"],
+] as const) {
+  test(`transfers a block between ${sourceMode} and ${destinationMode} documents and keeps independent undo`, async ({
+    page,
+  }) => {
+    const left = multiEditor(page, "left");
+    const right = multiEditor(page, "right");
+    await left.getByRole("button", { name: sourceMode, exact: true }).click();
+    await right.getByRole("button", { name: destinationMode, exact: true }).click();
+    const source = left.locator(blockIdSelector("left-counter"));
+    await drag(source, right.locator(blockIdSelector("right-target")));
+    await expect
+      .poll(async () => (await snapshot(left)).blocks.map((block) => block.id))
+      .toEqual(["left-parent", "left-stay"]);
+    await expect
+      .poll(async () => (await snapshot(right)).blocks[0]?.children.map((block) => block.id))
+      .toEqual(["right-nested", "left-counter"]);
+    expect((await snapshot(right)).blocks[0]?.children[1]?.props).toEqual({ count: 7 });
+    if (sourceMode === "Page") {
+      await expect(right.locator("[data-rivto-cross-document-page-root]")).toBeFocused();
+    }
+    await right.locator('[data-editor-action="undo"]').click();
+    await expect
+      .poll(async () => (await snapshot(right)).blocks[0]?.children.map((block) => block.id))
+      .toEqual(["right-nested"]);
+    expect((await snapshot(left)).blocks.map((block) => block.id)).toEqual([
+      "left-parent",
+      "left-stay",
+    ]);
+    await left.locator('[data-editor-action="undo"]').click();
+    await expect
+      .poll(async () => (await snapshot(left)).blocks.map((block) => block.id))
+      .toEqual(["left-parent", "left-counter", "left-stay"]);
+  });
+}

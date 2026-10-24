@@ -1,0 +1,46 @@
+.rivto-block-row {
+  @apply page:relative page:flex page:items-start page:gap-[var(--rivto-slot-gap,4px)] page:min-h-[var(--rivto-default-block-height,24px)] page:p-[var(--rivto-block-padding,16px)];
+}
+.rivto-block-content {
+  @apply page:flex-1 page:min-w-0;
+}
+.rivto-block-children {
+  @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)];
+}
+.rivto-block-children[hidden] {
+  @apply page:hidden;
+}
+
+/* Outline geometry is opt-in; container layouts use the same child host freely. */
+.rivto-block-outline:not(:empty) {
+  @apply page:pbs-[var(--rivto-block-gap,4px)] page:ms-[var(--rivto-block-indent,28px)];
+}
+.rivto-block-outline:empty {
+  @apply page:hidden;
+}
+
+.rivto-block-item {
+  @apply page:relative page:min-w-0 page:box-border;
+}
+
+/* Gap wrappers preserve canonical sibling adjacency without adding layout boxes. */
+.rivto-block-list-gap {
+  display: contents;
+}
+
+/* Contentless structural anchors expose outside controls over their body instead of
+ * reserving a blank text row above containers or embedded views. Inside controls
+ * need their own in-flow row so they cannot overlap the first child. */
+.rivto-block-row:not([data-controls-placement="inside"]):has(
+    > .rivto-block-content > [data-block-selection-anchor]:empty
+  ) {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+}
+.rivto-block-row:not([data-controls-placement="inside"]):has(
+    > .rivto-block-content > [data-block-selection-anchor]:empty
+  )
+  > .rivto-block-slot {
+  pointer-events: auto;
+}

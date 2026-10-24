@@ -9,7 +9,7 @@
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-import type { KeyboardSelectionTarget } from "../../managers/events/selection";
+import type { KeyboardSelectionTarget } from "../../managers/keyboard/selection";
 import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
 import { createBlockOutlineContext } from "./context";
@@ -112,7 +112,7 @@ export function splitBlock(
     reactPanel.blocks.indentBlock(nextBlock.id);
     reactPanel.blocks.moveBlock(nextBlock.id, null);
   } else if (
-    reactPanel.events.getSurfaceType() === "edgeless" &&
+    reactPanel.getSurfaceType() === "edgeless" &&
     reactPanel.blocks.getRootIds().includes(block.id)
   ) {
     const element = reactPanel.elements

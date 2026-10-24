@@ -1,3 +1,4 @@
+import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import { registerBlockClipboardActions } from "../block-handle/actions";
 import {
   browserClipboardFormats,
@@ -21,12 +22,7 @@ import {
 } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../panels/types";
 import { blockIdsOf } from "../../../elements/block-element-projection";
-import {
-  KEYBOARD_BINDING_IDS,
-  matchesShortcut,
-  parseShortcut,
-  resolveSelectionEndpoints,
-} from "../../../managers";
+import { KEYBOARD_BINDING_IDS, matchesShortcut, parseShortcut } from "../../../managers";
 import { findEdgelessRuntime } from "../selection/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 import { ElementPasteStrategy } from "./element-paste-strategy";
@@ -108,7 +104,7 @@ export function registerClipboard(
   const canvasSelection = (reactPanel: ReactPanelApi): Selection | undefined => {
     // Core mode may be edgeless while the active view is a page embedding.
     // Its clipboard actions must use the page selection, not canvas objects.
-    if (reactPanel.events.getSurfaceType() !== "edgeless") {
+    if (reactPanel.getSurfaceType() !== "edgeless") {
       return undefined;
     }
     const snapshot = findEdgelessRuntime(reactPanel)?.get();
@@ -220,7 +216,7 @@ export function registerClipboard(
           text: event.clipboardData?.getData("text/plain") ?? "",
         },
         {
-          surface: reactPanel.events.getSurfaceType() === "edgeless" ? "edgeless" : "page",
+          surface: reactPanel.getSurfaceType() === "edgeless" ? "edgeless" : "page",
           defaultBlockType: resolveDefaultBlockType(),
         },
       );
@@ -233,7 +229,7 @@ export function registerClipboard(
     // The completed paste replaces it with the newly selected content.
     const active = canvas ?? reactPanel.selection.get();
     const lengthOf = (id: string) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0;
-    const ends = active ? resolveSelectionEndpoints(active, lengthOf) : undefined;
+    const ends = active ? BlockSelectionEndpoints.resolve(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? reactPanel.blocks.getBlockNode(activeId) : undefined;
     const expanded =
@@ -277,7 +273,7 @@ export function registerClipboard(
       },
     });
     if (!canvas && isStructuralSelection(reactPanel.selection.get())) {
-      const root = reactPanel.events.getRoot();
+      const root = reactPanel.getRoot();
       // The paste event started in the old contenteditable, whose native caret
       // would override the newly selected blocks on the next keyboard event.
       // Move keyboard ownership to the surface, as pointer block selection does.

@@ -8,7 +8,7 @@
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-const DROP_INDICATOR_CLASS = "page-drop-indicator";
+const DROP_INDICATOR_CLASS = "rivto-block-drop-line";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -47,30 +47,31 @@ test("keeps the storage surface inside its selection and aligns root controls", 
   await expect(storage).toHaveAttribute("data-block-selected", "true");
   const wrapper = storage.locator("xpath=parent::*");
   expect(await wrapper.boundingBox()).toEqual(await storage.boundingBox());
-  const todoChildren = storage.locator(":scope > .page-block-children");
-  const columnChildren = page
-    .locator('[data-block-type="columns-column"] > .page-block-children')
-    .first();
+  const todoChildren = storage.locator(":scope > .rivto-block-children");
   expect(await todoChildren.evaluate((element) => getComputedStyle(element).paddingLeft)).toBe(
-    await columnChildren.evaluate((element) => getComputedStyle(element).paddingLeft),
+    await storage.evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("--rivto-block-indent").trim(),
+    ),
   );
 
   const referenceRow = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row:has([data-collapse-toggle])',
+      '[data-journal-document="today"] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-type="paragraph"] > .rivto-block-row:has([data-collapse-toggle])',
     )
     .first();
   const [referenceHandle, referenceToggle, storageHandle, storageToggle] = await Promise.all([
     referenceRow.locator(".block-handle").boundingBox(),
     referenceRow.locator("[data-collapse-toggle]").boundingBox(),
-    storage.locator(":scope > .page-block-row .block-handle").boundingBox(),
-    storage.locator(":scope > .page-block-row [data-collapse-toggle]").boundingBox(),
+    storage.locator(":scope > .rivto-block-row .block-handle").boundingBox(),
+    storage.locator(":scope > .rivto-block-row [data-collapse-toggle]").boundingBox(),
   ]);
   if (!referenceHandle || !referenceToggle || !storageHandle || !storageToggle) {
     throw new Error("Expected root control geometry");
   }
-  expect(storageHandle.x).toBeCloseTo(referenceHandle.x, 0);
-  expect(storageToggle.x).toBeCloseTo(referenceToggle.x, 0);
+  const referenceBox = (await referenceRow.boundingBox())!;
+  const storageRowBox = (await storage.locator(":scope > .rivto-block-row").boundingBox())!;
+  expect(storageHandle.x - storageRowBox.x).toBeCloseTo(referenceHandle.x - referenceBox.x, 0);
+  expect(storageToggle.x - storageRowBox.x).toBeCloseTo(referenceToggle.x - referenceBox.x, 0);
 });
 
 test("searches and filters only direct TODO children without persisting UI state", async ({
@@ -322,12 +323,12 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   const target = storage
     .locator('[data-block-type="todo-item"]')
     .filter({ hasText: "Build the editor extension" });
-  const sourceRow = source.locator(":scope > .page-block-row");
+  const sourceRow = source.locator(":scope > .rivto-block-row");
   const handle = source.locator(".block-handle");
   await sourceRow.hover();
   await handle.hover();
   const handleBox = await handle.boundingBox();
-  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
+  const targetBox = await target.locator(":scope > .rivto-block-row").boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected filtered TODO drag geometry");
   }
@@ -336,7 +337,7 @@ test("reorders visible tasks while a filter is active in Manual mode", async ({ 
   await page.mouse.move(handleBox.x + 8, handleBox.y + 8, { steps: 3 });
   await page.mouse.move(targetBox.x + 2, targetBox.y + 1, { steps: 12 });
   await expect(source).toHaveAttribute("data-dragging", "true");
-  await expect(storage.locator(`.${DROP_INDICATOR_CLASS}`)).toBeVisible();
+  await expect(page.locator(`.${DROP_INDICATOR_CLASS}:visible`)).toBeVisible();
   await page.mouse.up();
 
   await expect
@@ -388,7 +389,10 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
   await page.mouse.move(dropBox.x + dropBox.width / 2, dropBox.y + dropBox.height / 2, {
     steps: 12,
   });
-  await expect(emptyStorage).toHaveAttribute("data-drop-inside", "true");
+  await expect(emptyStorage.locator(":scope > .rivto-block-row")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
   await expect(emptyStorage.locator(`[data-block-id="${sourceId}"]`)).toBeVisible();
   await expect(dropField).toHaveCount(0);
@@ -412,7 +416,7 @@ test("starts writing in an empty TODO storage from the keyboard", async ({ page 
   expect(dropBox.y + dropBox.height).toBeLessThanOrEqual(storageBox.y + storageBox.height);
   await dropField.press("Enter");
   await expect(
-    storage.locator(':scope > .page-block-children > [data-block-type="paragraph"]'),
+    storage.locator(':scope > .rivto-block-children > [data-block-type="paragraph"]'),
   ).toHaveCount(1);
   await expect(storage.locator("[data-block-content]")).toBeFocused();
 });

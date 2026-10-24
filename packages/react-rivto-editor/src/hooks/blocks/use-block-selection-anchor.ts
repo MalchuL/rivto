@@ -35,7 +35,7 @@ export function useRestoreBlockFocus(
   /** Restores a pending command's caret after commit; cleanup cancels stale work. */
   useLayoutEffect(() => {
     const textEdit = elementRef !== undefined;
-    const element = elementRef ? elementRef.current : reactPanel.events.getRoot();
+    const element = elementRef ? elementRef.current : reactPanel.getRoot();
     if (!element || !reactPanel.selection.hasPendingSelectionCallback) {
       return;
     }

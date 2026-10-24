@@ -22,6 +22,26 @@ const EqualBlockSlot: ComponentType<BlockSlotProps> = () => null;
 const ElementSlot: ComponentType<ElementSlotProps> = () => null;
 
 describe("SurfaceManager", () => {
+  test("rolls back host and occurrence contributions after a publication error", async () => {
+    const editor = await createEditor();
+    const panel = createReactEditor({ editor });
+    const manager = panel.editor.surfaces;
+    const unsubscribe = manager.subscribe(() => {
+      throw new Error("publication failed");
+    });
+    expect(() => manager.registerBlockWrapper("block", Wrapper)).toThrow(AggregateError);
+    expect(() => manager.registerBlockSlot({ position: "body", component: LowBlockSlot })).toThrow(
+      AggregateError,
+    );
+    expect(manager.getBlockWrapperRegistrations("block")).toEqual([]);
+    expect(manager.getBlockSlotRegistrations()).toEqual([]);
+    expect(panel.page.wrappers.getSnapshot()).toEqual([]);
+    expect(panel.page.slots.getSnapshot()).toEqual([]);
+    unsubscribe();
+    panel.editor.destroy();
+    editor.destroy();
+  });
+
   test("keeps surfaces unique and filters defensive wrapper reads by mode", async () => {
     const editor = await createEditor();
     const reactPanel = createReactEditor({ editor });

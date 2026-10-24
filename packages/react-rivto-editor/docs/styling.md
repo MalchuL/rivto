@@ -48,6 +48,25 @@ Because everything the package
 emits is layered, unlayered host CSS loaded after the bundle still wins over
 every rule and can retheme any token.
 
+## Whole-block selection backgrounds
+
+Page owns the selected block marker and the outline around its complete subtree.
+The host supplies `--rivto-block-selection-background` (`#e5dfff` by default).
+While selected, Page exposes that value as the inherited
+`--rivto-block-selection-fill`. Layout surfaces with opaque backgrounds consume
+this value before their ordinary background, for example:
+
+```css
+.rivto-bento-tiles {
+  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
+}
+```
+
+Read this fill in container and card backgrounds; do not set it on individual
+children or blend a layer over their text. Removing selection restores each
+background through its fallback. Controls can retain their semantic foregrounds
+and status colors. Nested selected blocks do not draw additional outlines.
+
 ## Design tokens
 
 `tokens.css` declares every public custom property on `:root`. Hosts retheme

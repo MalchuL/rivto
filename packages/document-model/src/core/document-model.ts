@@ -44,9 +44,9 @@ export class DocumentModelImpl implements DocumentModel {
    * Managers receive the CRDT adapter and private undo-scope accumulator
    * directly; none retain the coordinating document model.
    *
-   * After the initial tree repair, updates not marked local by the CRDT adapter
-   * re-run `blocks.normalize()`. Local APIs already keep parent/child
-   * lists consistent; foreign writes (providers, `applyUpdate`, undo, peers)
+   * After the initial tree repair, updates outside the adapter's local transaction
+   * window and not marked local re-run block and element normalization. Local APIs
+   * already keep parent/child lists consistent; foreign writes (providers, `applyUpdate`, undo, peers)
    * can merge into duplicate ids, missing refs, or orphans.
    *
    * @param crdt - Collaborative document owning identity and local transactions.
@@ -73,11 +73,15 @@ export class DocumentModelImpl implements DocumentModel {
     // a provider instance, undo, or `null`/`undefined` from `applyUpdate`.
     // Skip local origin so we do not open a
     // second normalize transaction after every local write (redundant work and
-    // extra undo stacks). Repair only foreign merges.
+    // extra undo stacks). The adapter's transaction window also identifies local
+    // writes with an explicit origin, such as history-excluded card measurements.
+    // Their different history policy must not cause a full-document repair scan.
+    // Provider updates and native undo remain outside that window and still repair
+    // merged hierarchy references. Repair only foreign merges.
     this.unsubscribeFromUpdates = this.crdt.on(
       "update",
       (update: unknown, updateOrigin?: unknown) => {
-        if (this.crdt.isLocalOrigin(updateOrigin)) {
+        if (this.crdt.isTransacting || this.crdt.isLocalOrigin(updateOrigin)) {
           return;
         }
         blocks.normalize();

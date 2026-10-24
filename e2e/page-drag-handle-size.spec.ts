@@ -22,7 +22,7 @@ for (const repeat of [0, 200]) {
     });
     console.log(JSON.stringify({ repeat, geometry }));
     expect(geometry).toEqual({
-      width: 28,
+      width: 24,
       height: 24,
       padding: "0px",
       margin: "0px",

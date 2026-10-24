@@ -1,9 +1,10 @@
+import { BlockChildrenIdContext } from "./block-children-id-context";
 import { ReactPanel } from "../../panels/react-panel";
 import { ChildrenPanel, EmbeddingPanel } from "@chulane/rivto";
 import { createTestReactEditor as createReactEditor } from "../../test-utils";
 /**
  * Covers the full useBlock and node-level useBlockNode contracts used by
- * BlockTree. Identity stability of those snapshots belongs to document-model
+ * Page. Identity stability of those snapshots belongs to document-model
  * reactivity tests; this file checks the hook-facing shape and updates.
  *
  * @module
@@ -75,7 +76,11 @@ describe("useBlock", () => {
     const Surface = () => {
       const { block } = useBlockNode(parentId);
       return block
-        ? createElement(BlockCollapseSlot, { block, mode: "block", selected: false })
+        ? createElement(
+            BlockChildrenIdContext.Provider,
+            { value: { blockId: block.id, childrenId: "fixture-children" } },
+            createElement(BlockCollapseSlot, { block, mode: "block", selected: false }),
+          )
         : null;
     };
     const reactPanel = createReactEditor({ editor });
@@ -207,7 +212,17 @@ test("a retained collapse handler reads current state and ignores blocks moved o
     return null;
   };
   try {
-    renderToStaticMarkup(createElement(TestPanel, { panel: bounded }, createElement(Surface)));
+    renderToStaticMarkup(
+      createElement(
+        TestPanel,
+        { panel: bounded },
+        createElement(
+          BlockChildrenIdContext.Provider,
+          { value: { blockId: "toggle", childrenId: "fixture-children" } },
+          createElement(Surface),
+        ),
+      ),
+    );
     editor.blocks.updateBlock("toggle", { listProps: { collapsed: true } });
     click!();
     expect(editor.blocks.getBlockNode("toggle")?.listProps.collapsed).toBe(false);

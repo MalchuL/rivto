@@ -1,4 +1,4 @@
-import type { PanelRegistration } from "../events/types";
+import type { PanelRegistration } from "../../panels/types";
 import type { KeyboardApi } from "./keyboard-api";
 import type { KeyboardManager } from "./keyboard-manager";
 
@@ -6,12 +6,15 @@ import type { KeyboardManager } from "./keyboard-manager";
 export class PanelKeyboardManager implements KeyboardApi {
   /**
    * Binds registrations to a panel while keeping keymap settings shared by the document.
+   *
+   * The borrowed shared capability excludes attachment and runtime teardown.
+   * Local registration methods explicitly delegate shared keymap operations.
+   *
    * @param shared - Document keyboard registrations and shared keymap settings.
    * @param owner - Occurrence that owns local registration IDs and cleanup.
-   * @returns Local registration methods and explicitly delegated shared keymap methods.
    */
   constructor(
-    private readonly shared: KeyboardManager,
+    private readonly shared: Pick<KeyboardManager, keyof KeyboardApi>,
     private readonly owner: PanelRegistration,
   ) {}
   /**

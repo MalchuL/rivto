@@ -1,14 +1,15 @@
 /**
  * Resolves the document and DOM boundaries used by page-style navigation.
- * Block mode walks the document root, while edgeless mode remains inside the
- * owning card so keyboard actions cannot cross visual containers.
+ * Block mode walks the document root, while structural and horizontal edgeless
+ * navigation remains inside the owning card. Vertical caret movement and text
+ * extension use the shared surface order so they can reach offscreen cards.
  *
  * @module
  */
 import type { EditorBlock, EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../../../../panels/types";
 import { blockIdsOf } from "../../../../../elements/block-element-projection";
-import { findRenderedBlock } from "../../../../../managers/events/block-dom";
+import { findRenderedBlock } from "../../../../../blocks/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 
@@ -41,7 +42,8 @@ export function owningBlockElement(
  * Outline forest used by caret, block-selection, and structural keyboard moves.
  *
  * Page mode uses the complete document. Edgeless mode keeps navigation inside
- * the card that owns `blockId`, so Up/Down never crosses into another element.
+ * the card that owns `blockId`, so structural movement does not cross into another
+ * element. Vertical caret navigation uses the surface projection instead.
  * React callers use their rendered view's surface; core-only callers use the
  * document mode because they have no DOM occurrence.
  */
@@ -53,7 +55,7 @@ export function navigationOutlineBlocks(
   let outline = roots;
   // Navigation follows the rendered view, which can be a page in an edgeless document.
   // Core-only callers have no view and use the complete block outline.
-  const mode = "events" in editor ? editor.events.getSurfaceType() : "block";
+  const mode = "events" in editor ? editor.getSurfaceType() : "block";
   if (mode === "edgeless") {
     const element = owningBlockElement(editor, blockId);
     if (!element) {

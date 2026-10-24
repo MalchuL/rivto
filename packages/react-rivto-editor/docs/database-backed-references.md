@@ -6,7 +6,7 @@ Implement database-backed content as a React block extension configured with a
 host-owned `EntityRepository`. Keep `useBlock(id)` local and synchronous.
 
 This fits the existing boundary: `EditorPanel` rerenders from the core editor's
-revision, `BlockTree` resolves local IDs, and renderers invoke operations on the
+revision, Page resolves local IDs, and renderers invoke operations on the
 same core editor. A foreign block cannot safely enter that path because its
 operations, subscription, selection, and undo belong to another editor.
 
@@ -70,7 +70,7 @@ references target the same document.
 ## Rendering choices
 
 For the first version, render a read-only preview component from the detached
-target block. Do not reuse the host `BlockTree`: it reads `ReactPanelContext`, so
+target block. Do not reuse the host Page: it reads `ReactPanelContext`, so
 its commands and selection would target the host editor.
 
 Two later options are valid when richer rendering is required:
@@ -98,7 +98,7 @@ in the set, render a cycle state instead of resolving it again.
 
 - Do not change `useBlock` to return a promise or start a fetch when local
   lookup returns `undefined`.
-- Do not add fetched blocks to the host snapshot merely to make `BlockTree`
+- Do not add fetched blocks to the host snapshot merely to make Page
   render them.
 - Do not ask callers for an owning document ID; the repository discovers
   ownership from the global entity ID.

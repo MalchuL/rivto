@@ -1,4 +1,4 @@
-import { EdgelessSurface, PageSurface, useEditorMode } from "@chulane/rivto-react";
+import { RegisteredSurface, PageSurface, useEditorMode } from "@chulane/rivto-react";
 
 /**
  * Renders the presentation selected on this document's core editor.
@@ -7,7 +7,7 @@ import { EdgelessSurface, PageSurface, useEditorMode } from "@chulane/rivto-reac
 export function DemoEditorSurface() {
   const { mode } = useEditorMode();
   if (mode === "edgeless") {
-    return <EdgelessSurface />;
+    return <RegisteredSurface mode="edgeless" />;
   }
   return <PageSurface />;
 }

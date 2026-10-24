@@ -138,9 +138,11 @@ IDs collide with local IDs; applicability never resolves source IDs locally.
 Use `dispatch()` for actions and `resolveAll(context)` for applicable instances.
 Native container behaviors implement their own applicability and specialize only
 demonstrated differences; the container base no longer inherits generic outline
-actions. Geometry is registered through `definition.metadata[PAGE_DRAG_METADATA_KEY]` and
-read by the optional drag extension from `blockTypes.getDefinition(type)?.metadata`.
-Universal handle presentation uses `metadata[BLOCK_HANDLE_METADATA_KEY]`, independently of drag.
+actions. Geometry is declared by Page layout primitives: `BlockChildren` supplies the child axis,
+while `BlockDropTarget` supplies explicit destinations to the optional drag extension.
+Universal handle presentation follows Page’s hovered-row marker, independently of
+drag. `BlockChildren.hoverBoundary` declares whether a child layout bounds hover or
+inherits its enclosing width; no per-type handle annotation is required.
 React registration owns the complete core definition, including metadata, and
 registers the supplied object directly without copying or merging annotation records.
 An already registered native type is a conflict, including a definition created

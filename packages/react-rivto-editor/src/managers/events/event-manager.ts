@@ -7,11 +7,11 @@ import type { AnyEditorEvent, DOMRegistration, NativeListenerGroup } from "./typ
  */
 import type { EditorMode } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../../constants";
-import type { ReactEditorApi } from "../../editor/types";
 import type { DOMEventDefinition, DOMEventName, DOMEventScope, DOMEventTarget } from "./dom-types";
 import { EditorEvent } from "./editor-event";
-import type { PanelRegistry } from "./panel-registry";
-import type { PanelRegistration, EditorEventHandler } from "./types";
+import type { PanelRegistry } from "../../panels/panel-registry";
+import type { EditorEventHandler } from "./types";
+import type { PanelRegistration } from "../../panels/types";
 
 /**
  * Registers and dispatches browser events for all panels of one document.
@@ -31,20 +31,21 @@ export class EventManager {
   );
   private readonly unsubscribeRoots: () => void;
   private readonly claimedEvents = new WeakSet<globalThis.Event>();
-  private readonly panels: PanelRegistry;
   private destroyed = false;
 
   /**
    * Creates the browser-event runtime before extensions are installed.
    *
-   * @param reactEditor - Owning React runtime for payloads and registration lifecycle.
+   * @param panels - Borrowed mounted-root routing and panel context, without lifecycle ownership.
    * @param extensions - Internal registration ownership and destruction guard.
    */
   constructor(
-    reactEditor: ReactEditorApi,
+    private readonly panels: Pick<
+      PanelRegistry,
+      "subscribeRoots" | "getRoots" | "resolveEventRoot" | "getApi" | "getSurfaceType"
+    >,
     private readonly extensions: RegistrationOwner,
   ) {
-    this.panels = reactEditor.panels;
     this.unsubscribeRoots = this.panels.subscribeRoots(() => this.reconnectListeners());
   }
 
@@ -68,7 +69,7 @@ export class EventManager {
   >(
     definition: DOMEventDefinition<Target, Type>,
     listener: EditorEventHandler<EditorEvent<Target, Type>>,
-    owner?: PanelRegistration,
+    owner?: Pick<PanelRegistration, "id" | "getRoot">,
   ): () => void;
 
   /**
@@ -83,7 +84,7 @@ export class EventManager {
   register(
     definition: DOMEventDefinition,
     listener: EditorEventHandler<AnyEditorEvent>,
-    owner?: PanelRegistration,
+    owner?: Pick<PanelRegistration, "id" | "getRoot">,
   ): () => void {
     this.assertActive();
     const id = owner ? `${owner.id}:${definition.id.trim()}` : definition.id.trim();
@@ -148,14 +149,6 @@ export class EventManager {
     this.registrationDisposers.clear();
     this.registrationIds.clear();
     this.registrations.length = 0;
-  }
-
-  /** Throws when a registration is attempted after runtime destruction. */
-  assertActive(): void {
-    if (this.destroyed) {
-      throw new Error("Editor event runtime is destroyed");
-    }
-    this.extensions.assertActive();
   }
 
   /**
@@ -314,6 +307,18 @@ export class EventManager {
       raw.preventDefault();
     }
     this.claimedEvents.add(raw);
+  }
+  /**
+   * Rejects event registration after runtime or extension destruction has started.
+   *
+   * @returns Registration can proceed when both owners are active.
+   * @throws If this runtime or its extension registration owner is inactive.
+   */
+  private assertActive(): void {
+    if (this.destroyed) {
+      throw new Error("Editor event runtime is destroyed");
+    }
+    this.extensions.assertActive();
   }
 }
 

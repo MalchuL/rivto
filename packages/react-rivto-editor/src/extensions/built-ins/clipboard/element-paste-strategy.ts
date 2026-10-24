@@ -68,7 +68,7 @@ export class ElementPasteStrategy implements PasteStrategy {
   matches(context: PasteContext, placement: PastePlacement): boolean {
     // Core mode can be edgeless even when paste targets a page embedding.
     // Use the receiving surface so page paste does not create canvas elements.
-    if ("editor" in this.editor && this.editor.events.getSurfaceType() !== "edgeless") {
+    if ("editor" in this.editor && this.editor.getSurfaceType() !== "edgeless") {
       return false;
     }
     if (!context.bundle) {

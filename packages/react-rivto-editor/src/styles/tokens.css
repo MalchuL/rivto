@@ -14,6 +14,9 @@
 :root {
   /* Brand accent shared by selection, focus rings, and primary actions. */
   --rivto-accent: #6c5ce7;
+  /* Keep whole-block selection darker than the subtle hover tint. */
+  --rivto-block-selection-background: #e5dfff;
+  --rivto-block-selection-outline: #cfc4ff;
 
   /* Semantic surface palette consumed through the Tailwind theme below. */
   --rivto-background: #ffffff;

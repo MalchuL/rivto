@@ -8,4 +8,6 @@ node_modules/
 playwright-report/
 test-results/
 /reports/
+/third-party/
+/.agents/skills/diagram-design
 .pnpm-store/

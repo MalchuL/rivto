@@ -42,8 +42,6 @@ export interface ReactPanelContextValue {
   readonly documentId: string;
   /** Displayed source root limiting selection and keyboard navigation. */
   readonly rootBlockId?: string;
-  /** Per-panel DOM namespace; keeps collapse controls unique across source replicas. */
-  readonly domIdPrefix?: string;
   /** Hidden tabs retain their documents but suspend interaction in all nested panels. */
   readonly enabled?: boolean;
 }

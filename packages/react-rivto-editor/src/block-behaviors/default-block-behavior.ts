@@ -13,13 +13,13 @@ import type { ReactPanelApi } from "../panels/types";
  */
 import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
 import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
-import type { KeyboardSelectionTarget } from "../managers/events/selection";
+import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
 import {
   findNextEditableBlock,
   findParentBlock,
   findPreviousEditableBlock,
   findRenderedBlock,
-} from "../managers/events/block-dom";
+} from "../blocks/block-dom";
 import { scheduleBlockFocus } from "./utils/focus-ops";
 import { createBlockOutlineContext } from "./utils/context";
 import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";

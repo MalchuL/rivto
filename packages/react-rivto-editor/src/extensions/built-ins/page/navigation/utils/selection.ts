@@ -1,4 +1,5 @@
-import { findPanelElements } from "../../../../../managers/events/panel-dom";
+import { BlockSelectionEndpoints } from "@chulane/rivto-page";
+import { findPanelElements } from "../../../../../panels/panel-dom";
 /**
  * Shared selection and focus operations for page navigation registrations.
  *
@@ -18,9 +19,9 @@ import {
   PAGE_EDITOR_ROOT_SELECTOR,
 } from "../../../../../constants";
 import type { ReactPanelApi } from "../../../../../panels/types";
-import { focusBlock, resolveSelectionEndpoints } from "../../../../../managers";
+import { focusBlock } from "../../../../../managers";
 import type { PanelSelectionApi } from "../../../../../managers/selection/api";
-import { getPageVirtualizationControllerForElement } from "../../../../../surfaces/page/page-virtualization-controller";
+import { PageNavigationController } from "../../../../../surfaces/page/page-navigation-controller";
 import { pageEntries } from "./outline";
 import { navigationOutlineBlocks } from "./scope";
 import type { VerticalDirection } from "./types";
@@ -74,17 +75,21 @@ export function textSelectionEdge(
   const documentEditor = "editor" in editor ? editor.document : editor;
   assertBlockRangeEndpoints(selection);
   const lengthOf = (id: string) => documentEditor.blocks.getBlockNode(id)?.content.length ?? 0;
-  const ends = resolveSelectionEndpoints(selection, lengthOf);
+  const ends = BlockSelectionEndpoints.resolve(selection, lengthOf);
   if (!ends) {
     return { blockId: selection.focusBlockId, offset: 0 };
   }
-  const ids = pageEntries(
-    navigationOutlineBlocks(editor, selection.focusBlockId),
-    null,
-    false,
-    // Order text-selection endpoints using the same visible outline as keyboard navigation.
-    (block) => !reactPanel.editor.blockBehaviors.childrenVisible(block),
-  ).map(({ block }) => block.id);
+  const root = reactPanel.getRoot();
+  const displayed = root ? PageNavigationController.getForElement(root)?.selection : undefined;
+  const ids =
+    displayed?.getSelectableBlockIds() ??
+    pageEntries(
+      navigationOutlineBlocks(editor, selection.focusBlockId),
+      null,
+      false,
+      // Order text-selection endpoints using the same visible outline as keyboard navigation.
+      (block) => !reactPanel.editor.blockBehaviors.childrenVisible(block),
+    ).map(({ block }) => block.id);
   const anchorIndex = ids.indexOf(ends.anchor.blockId);
   const headIndex = ids.indexOf(ends.head.blockId);
   const forward =
@@ -115,7 +120,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
   if (!adjacent) {
     return false;
   }
-  getPageVirtualizationControllerForElement(adjacent)?.mountFirstOrLastBlock(
+  PageNavigationController.getForElement(adjacent)?.mountFirstOrLastBlock(
     direction === "up" ? -1 : 1,
   );
   const blocks = findPanelElements(adjacent, BLOCK_ID_SELECTOR);
@@ -148,7 +153,7 @@ export function focusAdjacentEditor(root: HTMLElement, direction: VerticalDirect
  * @returns No value.
  */
 export function focusBlockSelection(root: HTMLElement, blockId: string): void {
-  getPageVirtualizationControllerForElement(root)?.mountBlocks([blockId]);
+  PageNavigationController.getForElement(root)?.mountBlocks([blockId]);
   root.ownerDocument.getSelection()?.removeAllRanges();
   root.focus({ preventScroll: true });
   root

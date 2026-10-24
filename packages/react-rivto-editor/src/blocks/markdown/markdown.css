@@ -21,6 +21,14 @@
   --rivto-link-color: #5b4bd8;
 }
 
+/* Shared text geometry belongs to the Markdown renderer, independently of its Page shell. */
+.page-block-content {
+  min-height: var(--rivto-default-block-height);
+  line-height: 1.5;
+  outline: none;
+  white-space: pre-wrap;
+}
+
 .markdown-content {
   position: relative;
   min-height: var(--rivto-default-block-height);

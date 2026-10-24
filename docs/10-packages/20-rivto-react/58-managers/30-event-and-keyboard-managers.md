@@ -21,11 +21,12 @@ Handler получает `EditorEvent` со properties `raw`, `panel`, `root`, `
 ### Остальные methods
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
-- `editor.events.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. У `runtime.events` этого метода нет.
-- `reactPanel.events.getRoot()` возвращает root этого отображения или `null`.
+- `ReactPanel.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. Этот lifecycle method остаётся у контроллера панели и не входит в `ReactPanelApi`; ref поверхности получает его от владельца панели.
+- `reactPanel.getRoot()` возвращает root этого отображения или `null`.
 - `runtime.panels.getActive()` возвращает последнее активированное отображение либо undefined до первого взаимодействия.
 - `runtime.panels.getDefault()` выбирает full-document view, затем первое subtree. Fallback явно записывается вызывающим кодом: `getActive() ?? getDefault()`.
-- `destroy()` возвращает `void`, повторно безопасен.
+- `reactPanel.getSurfaceType()` возвращает mode отображаемой поверхности, а без root — mode панели.
+- `EventManager.destroy()` возвращает `void`, повторно безопасен; shared runtime вызывает его при cleanup. Consumer API `runtime.events` предоставляет только `register` и `delete`.
 
 ### Modes
 

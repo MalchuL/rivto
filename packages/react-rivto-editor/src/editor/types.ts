@@ -13,14 +13,15 @@ import type {
   SlashCommandRegistry,
 } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
-import type { BlockReference, BlockResolution } from "../extensions/embedding/types";
+import type { BlockReferenceOptions } from "@chulane/rivto";
 import type { BlockElementProjection } from "../elements/block-element-projection";
 import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
-import type { PanelRegistry } from "../managers/events/panel-registry";
+import type { PanelRegistry } from "../panels/panel-registry";
+import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
@@ -37,7 +38,7 @@ export interface CreateReactEditorOptions {
 }
 
 /** Loading and construction policies; returned models become storage-owned. */
-export interface EditorStorageOptions {
+export interface EditorStorageOptions extends BlockReferenceOptions {
   /** Loads a model for this identity; defaults to creating an empty Yjs document. */
   readonly openDocument?: (documentId: string) => Promise<DocumentModel>;
   /**
@@ -46,16 +47,6 @@ export interface EditorStorageOptions {
    * Storage creates and disposes the core; this callback must not replace it.
    */
   readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
-  /** Lists containing document IDs from application metadata without acquiring their content; ordinary edits never invoke it. */
-  readonly lookupDocumentIds?: (
-    blockId: string,
-    options: { readonly signal?: AbortSignal },
-  ) => Promise<readonly string[]>;
-  /** Replaces preferred-document-first resolution; receives the persisted address and never changes its props. */
-  readonly resolveBlock?: (
-    reference: BlockReference,
-    options: { readonly signal?: AbortSignal },
-  ) => Promise<BlockResolution>;
   /** Optional registry metadata notifications used to retry unresolved embedding locations. */
   readonly subscribeDocumentIds?: (listener: () => void) => () => void;
   /** Reports asynchronous release failures from view cleanup. */
@@ -148,11 +139,19 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: EventManager;
+  readonly events: Pick<EventManager, "register" | "delete">;
   /** Mounted occurrences and explicit active/default view lookup. */
-  readonly panels: PanelRegistry;
+  readonly panels: Pick<
+    PanelRegistry,
+    | "getActive"
+    | "getDefault"
+    | "registerPanel"
+    | "getSurfaceType"
+    | "getActiveRoot"
+    | "getDefaultRoot"
+  >;
   /** Semantic keyboard bindings and runtime keymap overrides. */
-  readonly keyboard: KeyboardManager;
+  readonly keyboard: Pick<KeyboardManager, keyof KeyboardApi>;
   /** Dedicated extension-owned block menu contributions. */
   readonly blockContextMenu: BlockContextMenuRegistry;
   /** React-owned slash-command registry. */

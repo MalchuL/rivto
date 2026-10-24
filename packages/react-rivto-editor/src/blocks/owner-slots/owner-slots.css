@@ -26,35 +26,6 @@
   pointer-events: auto;
 }
 
-/* Logical block slots participate in row layout. Their fixed first-line
-   height keeps controls aligned when the block content spans multiple lines. */
-.rivto-slot[data-slot-owner="block"][data-slot-position="start"],
-.rivto-slot[data-slot-owner="block"][data-slot-position="end"] {
-  position: relative;
-  min-height: var(--rivto-default-block-height);
-  transform: none;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="start"] {
-  flex-direction: row-reverse;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="body"] {
-  position: relative;
-  display: block;
-  z-index: auto;
-}
-
-.rivto-slot > .block-handle,
-.rivto-slot > .page-collapse-toggle,
-.rivto-slot > .page-list-marker,
-.rivto-slot > .page-list-checkbox {
-  position: relative;
-  inset: auto;
-  margin: 0;
-  translate: none;
-}
-
 .rivto-slot[data-slot-position="left"] {
   top: 50%;
   left: 0;
@@ -90,14 +61,6 @@
 .rivto-slot[data-slot-position="left-bottom"] {
   right: 100%;
   flex-direction: row-reverse;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
-  gap: 0;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] > .page-collapse-toggle {
-  translate: 4px 0;
 }
 
 .rivto-slot[data-slot-position="top-left"],

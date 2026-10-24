@@ -198,7 +198,7 @@ export function registerBlockCollapseActions(editor: ReactEditorApi): void {
  */
 function deleteMenuBlocks(context: BlockContextMenuContext): void {
   const { reactPanel, rootIds } = context;
-  const root = reactPanel.events.getRoot();
+  const root = reactPanel.getRoot();
   if (!root) {
     throw new Error("The invoking panel is no longer mounted");
   }

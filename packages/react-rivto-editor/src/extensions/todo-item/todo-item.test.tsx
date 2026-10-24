@@ -1,5 +1,3 @@
-import { BLOCK_HANDLE_METADATA_KEY } from "../built-ins/block-handle/metadata";
-import { PAGE_DRAG_METADATA_KEY, getBlockDragOptions } from "../block-drag/block-drag-options";
 import {
   createTestReactEditor as createReactEditor,
   indentBlocks,
@@ -83,16 +81,7 @@ describe("todoItemExtension", () => {
       TODO_STORAGE_BLOCK_TYPE,
       "paragraph",
     ]);
-    expect(
-      getBlockDragOptions(
-        reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(empty)!.type)
-          ?.metadata,
-      )!.dropAxis,
-    ).toBe("vertical");
-    expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)?.metadata).toEqual({
-      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "vertical", acceptsDropContainer: true },
-      [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
-    });
+    expect(editor.blockRegistry.get(TODO_STORAGE_BLOCK_TYPE)).toBeDefined();
 
     const firstTodo = editor.blocks.insertBlock({
       type: TODO_ITEM_BLOCK_TYPE,

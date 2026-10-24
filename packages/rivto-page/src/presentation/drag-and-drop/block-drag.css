@@ -1,0 +1,49 @@
+.rivto-block-drag-handle {
+  @apply page:p-0 page:m-0 page:cursor-grab;
+  width: var(--rivto-block-control-size, 20px);
+  height: var(--rivto-block-control-size, 20px);
+  touch-action: none;
+}
+.rivto-block[data-dragging] {
+  opacity: 0.45;
+}
+.rivto-block-drag-preview {
+  @apply page:fixed page:top-0 page:left-0 page:pointer-events-none page:rounded page:px-3 page:py-2 page:text-sm;
+  z-index: 1000;
+  background: Canvas;
+  color: CanvasText;
+  border: 1px solid currentColor;
+}
+[data-block-drop-active]:not([data-block-drop-active="between"]) {
+  outline: var(--rivto-drop-indicator-thickness, 4px) solid
+    var(--rivto-drop-indicator-color, Highlight);
+  outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness, 4px));
+  border-radius: var(--rivto-drop-indicator-radius, 4px);
+  background: var(--rivto-drop-inside-background, color-mix(in srgb, Highlight 8%, transparent));
+}
+
+.rivto-block-drop-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1000;
+  background: var(--rivto-drop-indicator-color, Highlight);
+  border-radius: var(--rivto-drop-indicator-radius, 4px);
+}
+
+.rivto-block-drag-preview-row {
+  max-width: 280px;
+  max-height: 3lh;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-block-start: 4px;
+}
+
+.rivto-block-drop-line[data-axis="horizontal"] {
+  margin-top: calc((2px - var(--rivto-drop-indicator-thickness, 4px)) / 2);
+}
+.rivto-block-drop-line[data-axis="vertical"] {
+  margin-left: calc((2px - var(--rivto-drop-indicator-thickness, 4px)) / 2);
+}

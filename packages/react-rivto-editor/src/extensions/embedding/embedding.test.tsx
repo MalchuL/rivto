@@ -9,7 +9,7 @@ import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestMultiEditor } from "../../test-utils";
 import { standardPreset } from "../built-ins/built-ins";
-import { crossDocumentBlockTransfer } from "../built-ins/clipboard/cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "../built-ins/clipboard/cross-document-block-transfer";
 import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
 
 test("embedding props validate, snapshots and structured clipboard retain references, and cleanup removes registration", async () => {
@@ -73,7 +73,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
     }),
   ).toBe(true);
   const sourceEditor = (await runtime.acquireEditor(source.id)).editor;
-  crossDocumentBlockTransfer(sourceEditor, editor, ["target"], {
+  new CrossDocumentBlockTransfer(sourceEditor, editor).move(["target"], {
     targetId: null,
     position: "after",
   });

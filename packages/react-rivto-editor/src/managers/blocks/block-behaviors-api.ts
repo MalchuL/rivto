@@ -8,6 +8,16 @@ import type {
 
 /** Outline, split, and movement behavior selected from current detached block data. */
 export interface BlockBehaviorsApi {
+  /** Revision of the installed behavior order, independent of document payload edits. */
+  readonly revision: number;
+  /**
+   * Observes additions and removals that may change structural child visibility.
+   *
+   * @param listener - Callback rereading live behavior-dependent presentation.
+   * @returns Idempotent disposer removing this subscription.
+   */
+  subscribe(listener: () => void): () => void;
+
   /**
    * Runs the context block's prioritized behavior chain until handled or rejected.
    *

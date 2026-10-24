@@ -227,7 +227,7 @@ export const slashCommandExtension = (
           // Use the receiving view: a page embedding can share an edgeless core.
           // Duplicating there should insert a sibling, not create a canvas card.
           const isEdgelessRoot =
-            reactPanel.events.getSurfaceType() === "edgeless" &&
+            reactPanel.getSurfaceType() === "edgeless" &&
             reactPanel.blocks.getRootIds().includes(blockId);
           const sourceElement = isEdgelessRoot
             ? reactPanel.elements

@@ -6,7 +6,7 @@ import { createTestCoreEditor, createTestReactEditor } from "../../../../test-ut
 import { createBlockFactory } from "../../../../block-factories";
 import { createCaretSelection } from "@chulane/rivto";
 import { createBlockBehaviorContext } from "../../../../block-behaviors/utils/context";
-import { firstKeyboardTarget } from "../../../../managers/events/selection";
+import { firstKeyboardTarget } from "../../../../managers/keyboard/selection";
 
 const originalFrame = globalThis.requestAnimationFrame;
 beforeEach(() => {

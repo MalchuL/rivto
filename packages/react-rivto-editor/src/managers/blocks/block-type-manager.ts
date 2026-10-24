@@ -63,7 +63,7 @@ export class BlockTypeManager implements BlockTypesApi {
     const disposers: Array<() => void> = [];
     try {
       disposers.push(this.editor.blockRegistry.defineBlock(definition));
-      disposers.push(renderers.register(definition.type, render));
+      disposers.push(renderers.register(definition.type, render, registration.layout));
       if (registration.clipboard) {
         disposers.push(
           this.reactEditor.clipboard.registerBlockConverter(

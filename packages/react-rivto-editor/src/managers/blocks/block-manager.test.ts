@@ -1,4 +1,3 @@
-import { PAGE_DRAG_METADATA_KEY } from "../../extensions/block-drag/block-drag-options";
 import type { ComponentType } from "react";
 import {
   createTestCoreEditor as createEditor,
@@ -41,7 +40,7 @@ describe("BlockManager", () => {
   test("rejects an existing core definition without changing its model rules or metadata", async () => {
     const editor = await createEditor();
     const metadata = {
-      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "horizontal", fixed: true },
+      ["test.geometry"]: { dropAxis: "horizontal", fixed: true },
       custom: { values: [1, 2] },
     };
     editor.blockRegistry.defineBlock({
@@ -52,7 +51,7 @@ describe("BlockManager", () => {
     const definition = editor.blockRegistry.get("test.existing")!;
     const reactPanel = createReactEditor({ editor });
     const incoming = {
-      [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true },
+      ["test.geometry"]: { acceptsDropContainer: true },
       custom: { values: [3] },
     };
     expect(() =>
@@ -65,11 +64,11 @@ describe("BlockManager", () => {
     expect(definition.title).toBe("Existing");
     expect(definition.metadata).toBe(metadata);
     expect(metadata).toEqual({
-      [PAGE_DRAG_METADATA_KEY]: { dropAxis: "horizontal", fixed: true },
+      ["test.geometry"]: { dropAxis: "horizontal", fixed: true },
       custom: { values: [1, 2] },
     });
     expect(incoming).toEqual({
-      [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true },
+      ["test.geometry"]: { acceptsDropContainer: true },
       custom: { values: [3] },
     });
     expect(reactPanel.editor.renderers.has("test.existing")).toBe(false);

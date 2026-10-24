@@ -11,7 +11,7 @@
 - default writing, separator и error block APIs;
 - `edgelessVisualsExtension` и visual types;
 - hooks;
-- `BlockTree`, `BlockView`, wrappers и Markdown helpers;
+- Page, `BlockNode`, wrappers и Markdown helpers;
 - `EditableLabel`, `placeCaretAtPoint`;
 - selected manager contracts, selection helpers, keymap constants.
 

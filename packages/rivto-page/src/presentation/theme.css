@@ -1,0 +1,37 @@
+/* shadcn tokens inherit the same public parameters as structural blocks. */
+@theme inline {
+  --color-background: var(--rivto-background, #fff);
+  --color-foreground: var(--rivto-block-foreground, #172033);
+  --color-primary: var(--rivto-block-selection, #4868d8);
+  --color-primary-foreground: var(--rivto-background, #fff);
+  --color-secondary: color-mix(
+    in srgb,
+    var(--rivto-block-foreground, #172033) 8%,
+    var(--rivto-background, #fff)
+  );
+  --color-secondary-foreground: var(--rivto-block-foreground, #172033);
+  --color-muted-foreground: color-mix(
+    in srgb,
+    var(--rivto-block-foreground, #172033) 65%,
+    var(--rivto-background, #fff)
+  );
+  --color-accent: color-mix(
+    in srgb,
+    var(--rivto-block-selection, #4868d8) 12%,
+    var(--rivto-background, #fff)
+  );
+  --color-accent-foreground: var(--rivto-block-foreground, #172033);
+  --color-destructive: #ef4444;
+  --color-border: color-mix(
+    in srgb,
+    var(--rivto-block-foreground, #172033) 20%,
+    var(--rivto-background, #fff)
+  );
+  --color-input: color-mix(
+    in srgb,
+    var(--rivto-block-foreground, #172033) 25%,
+    var(--rivto-background, #fff)
+  );
+  --color-ring: var(--rivto-block-selection, #4868d8);
+  --radius-md: 0.375rem;
+}

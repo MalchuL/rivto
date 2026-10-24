@@ -1,3 +1,4 @@
+import type { CanvasToolSnapping as CreationSnapOptions } from "@chulane/rivto-edgeless";
 import type { VisualFrame } from "../types";
 import type { CanvasPoint } from "./canvas-point";
 import {
@@ -14,13 +15,7 @@ import {
 export const DEFAULT_PLACE_SIZE = { width: 160, height: 120 } as const;
 export const MIN_PLACE_SIZE = 16;
 
-export interface CreationSnapOptions {
-  readonly snapToGrid: boolean;
-  readonly alignObjects: boolean;
-  readonly grid?: number;
-  readonly threshold: number;
-  readonly disabled?: boolean;
-}
+export type { CreationSnapOptions };
 
 export interface SnappedCreationFrame {
   readonly frame: VisualFrame;

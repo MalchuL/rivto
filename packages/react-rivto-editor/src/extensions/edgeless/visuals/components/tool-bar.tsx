@@ -1,4 +1,19 @@
+import { CanvasToolbar, type CanvasToolbarLayout } from "@chulane/rivto-edgeless/react";
+import { useRef } from "react";
 import { EdgelessCreationTool } from "../../../../managers/edgeless-tools/edgeless-creation-tool";
+import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
+import { Popover, PopoverAnchor } from "../../../../components/ui/popover";
+import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
+import type { EdgelessTool } from "../../../../managers/edgeless-tools/edgeless-tool";
+import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import type { EdgelessToolbarRenderContext } from "../../../../managers/edgeless-toolbar/types";
+import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
+import {
+  EdgelessToolButton,
+  type EdgelessToolButtonProps,
+} from "../../../../components/edgeless/tool-button";
+import { ToolPopover, ToolSections } from "./tool-popover";
+
 /**
  * Bottom-centered create toolbar for the edgeless canvas.
  *
@@ -10,168 +25,116 @@ import { EdgelessCreationTool } from "../../../../managers/edgeless-tools/edgele
  * raises its stacking level while a menu is open so the popover clears the
  * selection toolbar.
  */
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { UI_SCOPE_CLASS } from "../../../../components/ui-scope";
-import { Popover, PopoverAnchor } from "../../../../components/ui/popover";
-import { useReactPanelContext } from "../../../../hooks/editor/use-react-panel-context";
-import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
-import type {
-  EdgelessToolbarItem,
-  EdgelessToolbarRenderContext,
-} from "../../../../managers/edgeless-toolbar/types";
-import type { EdgelessTool } from "../../../../managers/edgeless-tools/edgeless-tool";
-import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
-import {
-  EdgelessToolButton,
-  type EdgelessToolButtonProps,
-} from "../../../../components/edgeless/tool-button";
-import { ToolPopover, ToolSections } from "./tool-popover";
 
 /** Bottom-centered create toolbar; its CSS hook also identifies the in-tree popover owner. */
 const TOOL_BAR_CLASS = `${UI_SCOPE_CLASS} edgeless-tool-bar`;
 
 /**
- * Bottom-centered create toolbar with always-visible Select and registered group popovers.
- * @param props - Shared receiving operations, current tool and mounted preset-drag handlers.
- * @returns Toolbar with registered standalone tools and nonempty groups; active styling follows each tool predicate.
+ * Adapts the shared canvas toolbar to Rivto placement, registered group contents and popover chrome.
+ *
+ * Menu state, group member selection and activation are owned by CanvasToolbar.
+ * This adapter supplies document placement bindings and existing receiving-panel styling.
+ *
+ * @param props - Shared receiving operations, tool session and mounted preset-drag handlers.
+ * @returns Toolbar with registered standalone tools and nonempty groups; active styling follows the shared session.
  */
 export function ToolBar({
   edgelessOperation,
-  tool,
-  tools: toolContext,
-  ...pointer
+  tools,
+  ...props
 }: {
   readonly edgelessOperation: EdgelessOperations;
-  readonly tool?: EdgelessTool;
   readonly tools: EdgelessToolContext;
 } & Pick<EdgelessToolbarRenderContext, "startPresetDrag" | "movePresetDrag" | "endPresetDrag">) {
   const { reactPanel } = useReactPanelContext();
-  const registry = reactPanel.editor.edgelessToolbar;
-  const revision = useSyncExternalStore(
-    (listener) => registry.subscribe(listener),
-    () => registry.revision,
-    () => registry.revision,
-  );
-  const [menu, setMenu] = useState<string | null>(null);
-  const barRef = useRef<HTMLDivElement | null>(null);
-  const popoverId = useId();
-  const tools = registry.getTools();
-  const groups = registry
-    .getGroups()
-    .filter((group) => tools.some((item) => item.group === group.id));
+  const pointer = props;
   const context: EdgelessToolbarRenderContext = {
     reactPanel,
     operations: edgelessOperation,
-    tools: toolContext,
+    tools,
     ...pointer,
   };
-  const items: EdgelessToolbarItem[] = tools.map((entry) => ({
-    tool: entry,
-    active: entry.id === tool?.id,
-    activate: () => toolContext.activate(entry.id),
-  }));
-  const currentGroup = groups.find((group) => group.id === menu);
+  return (
+    <CanvasToolbar
+      registry={reactPanel.editor.edgelessToolbar}
+      tools={tools}
+      Button={EdgelessToolButton}
+      getButtonProps={(registration, instance) => ({
+        ...getPlacementBindings(instance, pointer),
+        ...registration.getButtonProps?.(context),
+      })}
+      renderGroup={(groupProps) => {
+        const Contents = groupProps.group.registration.render;
+        return Contents ? (
+          <Contents
+            {...groupProps}
+            reactPanel={reactPanel}
+            operations={edgelessOperation}
+            tools={tools}
+          />
+        ) : (
+          <ToolSections tools={groupProps.items.map((item) => groupProps.renderTool(item))} />
+        );
+      }}
+      renderLayout={(layout) => <ToolBarLayout {...layout} tools={tools} />}
+    />
+  );
+}
 
-  useEffect(() => {
-    if (
-      menu &&
-      !registry.getTools().some((item) => item.group === menu && registry.getGroup(menu))
-    ) {
-      setMenu(null);
-    }
-  }, [menu, registry, revision]);
-
-  useEffect(() => {
-    if (!tool?.keepsMenuOpen) {
-      setMenu(null);
-    }
-  }, [tool]);
-
-  const renderTool = (item: EdgelessToolbarItem, children: ReactNode = item.tool.title) => {
-    const instance = toolContext.getTool(item.tool.id);
-    const bindings: Partial<EdgelessToolButtonProps> = {
-      ...(instance instanceof EdgelessCreationTool && instance.supportsPlacement
-        ? ({
-            onClick: (event) => {
-              if (event.detail > 0) {
-                event.preventDefault();
-              }
-            },
-            onPointerDown: (event) => pointer.startPresetDrag(event, instance),
-            onPointerMove: pointer.movePresetDrag,
-            onPointerUp: (event) => pointer.endPresetDrag(event),
-            onPointerCancel: (event) => pointer.endPresetDrag(event, false),
-          } satisfies Partial<EdgelessToolButtonProps>)
-        : {}),
-      ...item.tool.getButtonProps?.(context),
-    };
-    return (
-      <EdgelessToolButton
-        key={`tool:${item.tool.id}`}
-        label={item.tool.title}
-        icon={item.tool.icon}
-        pressed={item.active}
-        {...bindings}
-        onClick={(event) => {
-          bindings?.onClick?.(event);
-          if (!event.defaultPrevented) {
-            item.activate();
-          }
-          if (!item.tool.group) {
-            setMenu(null);
-          }
-        }}
-      >
-        {children}
-      </EdgelessToolButton>
-    );
-  };
-  const entries = registry.getEntries().map((entry) => {
-    if (entry.kind === "tool") {
-      const item = items.find((item) => item.tool.id === entry.registration.id)!;
-      return renderTool(item, item.tool.icon ? null : item.tool.title);
-    }
-    const group = entry.registration;
-    const open = menu === group.id;
-    const last = toolContext.getGroupTool(group.id);
-    const active = items.some((item) => item.tool.group === group.id && item.active);
-    return (
-      <EdgelessToolButton
-        key={`group:${group.id}`}
-        label={group.title}
-        icon={last?.icon ?? group.icon}
-        aria-haspopup="dialog"
-        aria-controls={open ? popoverId : undefined}
-        aria-expanded={open}
-        pressed={active || open}
-        onClick={() => {
-          if (open) {
-            setMenu(null);
-            return;
-          }
-          toolContext.activateGroup(group.id);
-          setMenu(group.id);
-        }}
-      >
-        {(last?.icon ?? group.icon) ? null : group.title}
-      </EdgelessToolButton>
-    );
-  });
-  const group = currentGroup && toolContext.getGroup(currentGroup.id);
-  const groupProps = group
-    ? {
-        reactPanel,
-        operations: edgelessOperation,
-        tools: toolContext,
-        group,
-        items: items.filter((item) => item.tool.group === menu),
-        renderTool,
+/**
+ * Binds ordinary creation tools to toolbar placement while preserving keyboard activation.
+ *
+ * @param tool - Current session instance, absent for an unavailable registration.
+ * @param pointer - Receiving surface's preset-drag callbacks.
+ * @returns Placement callbacks only for creation tools that support ordinary placement.
+ */
+function getPlacementBindings(
+  tool: EdgelessTool | undefined,
+  pointer: Pick<
+    EdgelessToolbarRenderContext,
+    "startPresetDrag" | "movePresetDrag" | "endPresetDrag"
+  >,
+): Partial<EdgelessToolButtonProps> {
+  if (!(tool instanceof EdgelessCreationTool) || !tool.supportsPlacement) {
+    return {};
+  }
+  return {
+    /**
+     * Keeps pointer placement from also activating the toolbar entry through its synthetic click.
+     *
+     * @param event - Button click; detail zero identifies keyboard activation.
+     * @returns Pointer clicks are marked handled while keyboard clicks retain shared activation.
+     */
+    onClick: (event) => {
+      if (event.detail > 0) {
+        event.preventDefault();
       }
-    : undefined;
-  const Contents = currentGroup?.render;
+    },
+    onPointerDown: (event) => pointer.startPresetDrag(event, tool),
+    onPointerMove: pointer.movePresetDrag,
+    onPointerUp: (event) => pointer.endPresetDrag(event),
+    onPointerCancel: (event) => pointer.endPresetDrag(event, false),
+  };
+}
+
+/**
+ * Places registered group contents in the receiving toolbar's in-tree popover.
+ *
+ * @param props - Shared layout snapshot and surface-local tool session.
+ * @returns Existing Rivto toolbar chrome with controlled menu dismissal.
+ */
+function ToolBarLayout({
+  entries,
+  content,
+  menu,
+  popoverId,
+  setMenu,
+  tools,
+}: CanvasToolbarLayout & { readonly tools: EdgelessToolContext }) {
+  const barRef = useRef<HTMLDivElement | null>(null);
   return (
     <Popover
-      open={Boolean(currentGroup)}
+      open={Boolean(menu)}
       onOpenChange={(open) => {
         if (!open) {
           setMenu(null);
@@ -183,23 +146,14 @@ export function ToolBar({
           ref={barRef}
           className={TOOL_BAR_CLASS}
           data-edgeless-ui="true"
-          data-menu-open={currentGroup?.id}
+          data-menu-open={menu ?? undefined}
           role="toolbar"
           aria-label="Visual objects"
         >
           {entries}
-          {currentGroup && groupProps && (
-            <ToolPopover
-              id={popoverId}
-              category={currentGroup.id}
-              container={barRef.current}
-              tools={toolContext}
-            >
-              {Contents ? (
-                <Contents {...groupProps} />
-              ) : (
-                <ToolSections tools={groupProps.items.map((item) => renderTool(item))} />
-              )}
+          {menu && (
+            <ToolPopover id={popoverId} category={menu} container={barRef.current} tools={tools}>
+              {content}
             </ToolPopover>
           )}
         </div>

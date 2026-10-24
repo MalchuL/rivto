@@ -11,8 +11,45 @@ import type { Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const PAGE_SURFACE_CLASS = "page-surface";
-const PAGE_BLOCK_ROW_CLASS = "page-block-row";
-const PAGE_DRAG_OVERLAY_CLASS = "page-drag-overlay";
+const PAGE_BLOCK_ROW_CLASS = "rivto-block-row";
+const PAGE_DRAG_OVERLAY_CLASS = "rivto-block-drag-preview";
+
+/** Owns fixture navigation without assuming a fixed height for every rendered root. */
+class PageOutlineViewport {
+  /**
+   * Borrows the browser page used by a behavioral fixture.
+   *
+   * @param page - Live production preview; navigation is outside interaction timing.
+   */
+  constructor(private readonly page: Page) {}
+
+  /**
+   * Scrolls the window until a later virtual root is mounted, then reveals its own content.
+   *
+   * Windowing settings stay unchanged. Overlapping viewport steps avoid skipping roots
+   * even when measurement replaces estimated heights; selection remains model-owned.
+   *
+   * @param blockId - Canonical root expected below the current fixture position.
+   * @returns The target root is mounted and visible after native wheel scrolling.
+   * @throws If the target is still absent after 100 overlapping viewport steps.
+   */
+  async scrollDownTo(blockId: string): Promise<void> {
+    const target = this.page.locator(`[data-block-id="${blockId}"]`);
+    const step = (this.page.viewportSize()?.height ?? 720) / 2;
+    await this.page.mouse.move(8, 8);
+    for (let attempt = 0; attempt < 100 && !(await target.count()); attempt++) {
+      await this.page.mouse.wheel(0, step);
+      await this.page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+    }
+    await expect(target).toHaveCount(1);
+    await target.scrollIntoViewIfNeeded();
+  }
+}
 
 /**
  * Mounts the large checkbox-decorated Markdown fixture in one undo item.
@@ -158,7 +195,9 @@ test("configures the page threshold and symmetric root buffer", async ({ page })
 
 test("keeps virtualization off by default and treats true as always on", async ({ page }) => {
   await seedLargeDocument(page);
-  const roots = page.locator(`.${PAGE_SURFACE_CLASS} > [data-block-id]`);
+  const roots = page.locator(
+    `.${PAGE_SURFACE_CLASS} > .rivto-virtual-tree > div > [data-virtual-block-id]`,
+  );
   await expect(page.getByRole("checkbox", { name: "Virtualize page" })).not.toBeChecked();
   await expect.poll(() => roots.count()).toBeGreaterThan(500);
   await page.getByRole("checkbox", { name: "Virtualize page" }).check();
@@ -187,7 +226,7 @@ test("skips offscreen content paint while keeping block shells and TODO fields m
       '[data-block-id="perf-root-1999"] .markdown-content',
     );
     const row = document.querySelector<HTMLElement>(
-      '[data-block-id="perf-root-1999"] > .page-block-row',
+      '[data-block-id="perf-root-1999"] > .rivto-block-row',
     );
     const description = document.querySelector<HTMLElement>(
       '[data-journal-document="today"] .rivto-todo-description',
@@ -258,11 +297,21 @@ test("extends a text selection through a page window boundary", async ({ page })
       anchor: current?.anchorBlockId,
       focus: current?.focusBlockId,
       native: Boolean(window.getSelection()?.rangeCount),
+      nativeAnchor: window
+        .getSelection()
+        ?.anchorNode?.parentElement?.closest("[data-block-id]")
+        ?.getAttribute("data-block-id"),
+      nativeFocus: window
+        .getSelection()
+        ?.focusNode?.parentElement?.closest("[data-block-id]")
+        ?.getAttribute("data-block-id"),
     };
   });
   expect(selection.anchor).toBe("perf-root-0");
   expect(Number(selection.focus?.replace("perf-root-", ""))).toBeGreaterThan(20);
   expect(selection.native).toBe(true);
+  expect(selection.nativeAnchor).toBe(selection.anchor);
+  expect(selection.nativeFocus).toBe(selection.focus);
   await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
 });
 
@@ -273,7 +322,7 @@ test("keeps a structural selection complete across virtual gaps for keyboard com
   const first = page.locator('[data-block-id="perf-root-1"] [data-block-content]');
   const last = page.locator('[data-block-id="perf-root-100"] [data-block-content]');
   await first.click();
-  await page.evaluate(() => window.scrollTo(0, 6_500));
+  await new PageOutlineViewport(page).scrollDownTo("perf-root-100");
   await expect(last).toHaveCount(1);
   await last.scrollIntoViewIfNeeded();
   await last.click({ modifiers: ["Shift"] });
@@ -343,7 +392,7 @@ test("keeps scroll position when an offscreen virtualized root is indented and o
   page,
 }) => {
   await seedOutlineDocument(page, 0);
-  await page.evaluate(() => window.scrollTo(0, 6_500));
+  await new PageOutlineViewport(page).scrollDownTo("perf-root-100");
   const parent = page.locator('[data-block-id="perf-root-100"]');
   const child = page.locator('[data-block-id="perf-root-101"]');
   const childContent = page.locator('[data-block-id="perf-root-101"] [data-block-content]');
@@ -615,7 +664,7 @@ test("drops on a root first mounted after scrolling during drag", async ({ page 
   await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 6_500));
   await page.waitForTimeout(200);
-  const target = page.locator('[data-block-id="perf-root-100"] > .page-block-row');
+  const target = page.locator('[data-block-id="perf-root-100"] > .rivto-block-row');
   await expect(target).toHaveCount(1);
   await target.scrollIntoViewIfNeeded();
   await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);

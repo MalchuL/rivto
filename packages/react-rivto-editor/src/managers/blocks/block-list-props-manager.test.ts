@@ -1,7 +1,7 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { splitBlock } from "../../block-behaviors/utils/text-ops";
 import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
-import { firstKeyboardTarget } from "../events/selection";
+import { firstKeyboardTarget } from "../keyboard/selection";
 import { defaultWritingBlockExtension } from "../../extensions/built-ins/built-ins";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 

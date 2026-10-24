@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { PANEL_SELECTOR, PanelDOM } from "../../managers/events/panel-dom";
+import { PANEL_SELECTOR, PanelDOM } from "../../panels/panel-dom";
 
 const ROOT_LEAD_RADIUS = 6;
 

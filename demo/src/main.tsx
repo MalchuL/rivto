@@ -1,4 +1,5 @@
 import "./crypto-polyfill";
+import "@chulane/rivto-page/styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
