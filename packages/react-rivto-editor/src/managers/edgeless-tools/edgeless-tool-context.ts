@@ -57,12 +57,13 @@ export class EdgelessToolContext extends CanvasToolContext<
   }
 
   /**
-   * Observes registrations, document changes and receiving-panel deactivation after mount.
+   * Observes registrations, document changes, creation defaults and receiving-panel deactivation after mount.
    *
-   * @returns Cleanup cancelling tools and releasing document and registry subscriptions.
+   * @returns Cleanup cancelling tools and releasing defaults, document, panel and registry subscriptions.
    */
   override observeChanges(): () => void {
     const stopTools = super.observeChanges();
+    let stopDefaults: (() => void) | undefined;
     let stopOperations: (() => void) | undefined;
     let stopDeactivate: (() => void) | undefined;
     let released = false;
@@ -72,7 +73,11 @@ export class EdgelessToolContext extends CanvasToolContext<
       }
       released = true;
       try {
-        stopDeactivate?.();
+        try {
+          stopDefaults?.();
+        } finally {
+          stopDeactivate?.();
+        }
       } finally {
         try {
           stopOperations?.();
@@ -82,6 +87,7 @@ export class EdgelessToolContext extends CanvasToolContext<
       }
     };
     try {
+      stopDefaults = this.defaults.subscribe(() => this.changed());
       stopOperations = this.operations.observeChanges();
       stopDeactivate = this.reactPanel.subscribeDeactivation(() => this.active?.cancel());
     } catch (error) {

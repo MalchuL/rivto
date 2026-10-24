@@ -14,14 +14,17 @@ export class EdgelessToolGroup extends CanvasToolGroup<
    * @param registration - Immutable group description owned by the editor registry.
    * @param defaults - The same coordinator used by type edits and creation.
    */
-  constructor(registration: EdgelessToolbarGroup, defaults: EdgelessCreationDefaults) {
+  constructor(
+    registration: EdgelessToolbarGroup,
+    defaults: Pick<EdgelessCreationDefaults, "getGroupPreview" | "set">,
+  ) {
     super(registration, {
       /**
-       * Resolves the group's initial and remembered settings.
+       * Resolves the group's initial and remembered settings with pending property previews.
        *
        * @returns Detached settings without type-local overrides.
        */
-      get: () => defaults.get({ group: registration.id }),
+      get: () => defaults.getGroupPreview(registration.id),
       /**
        * Changes declared settings through the group's registered policy.
        *

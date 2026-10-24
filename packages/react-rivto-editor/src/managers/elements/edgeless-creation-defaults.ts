@@ -8,6 +8,7 @@ import type { CreationDefaultsScope, ElementCreationDefaults } from "./creation-
 /** Owns registration-scoped creation settings for one mounted edgeless representation. */
 export class EdgelessCreationDefaults {
   private readonly stores = new WeakMap<object, CreationDefaultsStore>();
+  private readonly previews = new Map<EdgelessToolbarGroup, CreationDefaultsStore>();
   private readonly changes = new RevisionStore();
 
   /**
@@ -18,7 +19,7 @@ export class EdgelessCreationDefaults {
   constructor(private readonly editor: ReactEditorApi) {}
 
   /**
-   * Subscribes to completed settings changes, including commits affecting both scopes.
+   * Subscribes to settings and displayed preview changes, including commits affecting both scopes.
    *
    * @param listener - Called once synchronously after each effective session update.
    * @returns A disposer removing this listener; registration changes have their own observers.
@@ -57,6 +58,61 @@ export class EdgelessCreationDefaults {
       props: { ...registration.definition.defaults, ...current.props, ...group.props },
       frame: { ...current.frame, ...group.frame },
     });
+  }
+
+  /**
+   * Resolves settings for tool controls, including uncommitted property edits.
+   *
+   * Creation continues to read get(), so a preview never changes remembered defaults.
+   * Only fields declared by the matching registration's remembering policy are shown.
+   *
+   * @param groupId - Registered group whose controls are being rendered.
+   * @returns Detached settings with the current preview overlaid, or ordinary defaults when absent.
+   */
+  getGroupPreview(groupId: string): ElementCreationDefaults {
+    const settings = this.get({ group: groupId });
+    const registration = this.editor.edgelessToolbar.getGroup(groupId);
+    const preview = registration && this.previews.get(registration)?.getSnapshot();
+    return { ...settings, props: { ...settings.props, ...preview?.props } };
+  }
+
+  /**
+   * Overlays validated property edits in tool controls without remembering them.
+   *
+   * Successive patches accumulate until the owning property interaction commits or cancels.
+   * Document validation belongs to the caller; undeclared fields are ignored here.
+   *
+   * @param type - Registered element type being previewed.
+   * @param props - Validated changed properties from the current interaction.
+   * @returns Notifies settings observers once when a displayed field changes.
+   */
+  preview(type: string, props: Record<string, unknown>): void {
+    const registration = this.editor.elementTypes.get(type);
+    if (!registration) {
+      return;
+    }
+    const groupId = registration.behavior?.defaultsGroup ?? registration.creation?.group;
+    const group = groupId ? this.editor.edgelessToolbar.getGroup(groupId) : undefined;
+    if (!group) {
+      return;
+    }
+    const store = this.previews.get(group) ?? new CreationDefaultsStore();
+    if (store.apply(store.prepare({ props }, group.rememberedProperties))) {
+      this.previews.set(group, store);
+      this.changes.changed();
+    }
+  }
+
+  /**
+   * Removes the property interaction's display overrides from tool controls.
+   *
+   * @returns Restores remembered settings and notifies observers when overrides existed.
+   */
+  clearPreview(): void {
+    if (this.previews.size) {
+      this.previews.clear();
+      this.changes.changed();
+    }
   }
 
   /**

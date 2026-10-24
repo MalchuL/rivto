@@ -118,9 +118,9 @@ export class CanvasToolContext<
   }
 
   /**
-   * Observes active-tool and registration changes separately from pointer samples.
+   * Observes active-tool, registration and session-settings changes separately from pointer samples.
    *
-   * @param listener - Called after the active tool or available registrations change.
+   * @param listener - Called after the active tool, available registrations or session settings change.
    * @returns Cleanup removing this observer.
    */
   subscribe(listener: () => void): () => void {
@@ -130,7 +130,7 @@ export class CanvasToolContext<
   /**
    * Reads the session revision for React consumers.
    *
-   * @returns Stable revision until activation or registry reconciliation.
+   * @returns Stable revision until activation, registry reconciliation or a published session-settings change.
    */
   get revision(): number {
     return this.changes.revision;
@@ -291,6 +291,18 @@ export class CanvasToolContext<
     if (entry) {
       this.activate(entry.id);
     }
+  }
+
+  /**
+   * Publishes changed session state to toolbar and other context subscribers.
+   *
+   * Subclasses call this after application-owned tool settings change. Pointer
+   * previews remain local to individual tools and must not notify this store.
+   *
+   * @returns Advances the revision and synchronously notifies current subscribers.
+   */
+  protected changed(): void {
+    this.changes.changed();
   }
 
   /**

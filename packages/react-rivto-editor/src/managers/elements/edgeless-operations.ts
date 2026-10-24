@@ -152,6 +152,7 @@ export class EdgelessOperations {
    * Live property preview that does not create an undo step.
    *
    * Values are cloned and merged per ID; preview changes notify local subscribers.
+   * Declared style fields also appear in tool controls without changing remembered defaults.
    *
    * @param ids - Visual IDs whose rendered properties should be previewed.
    * @param patch - Temporary property values; document records remain unchanged.
@@ -174,6 +175,7 @@ export class EdgelessOperations {
     prepared.forEach((id) => {
       this.propertyPreview.set(id, { ...this.propertyPreview.get(id), ...copy(patch) });
     });
+    this.creationDefaults.preview(targets[0]!.type, patch);
     this.emit();
   }
 
@@ -199,6 +201,7 @@ export class EdgelessOperations {
       this.rememberUpdatedProperties(element, updates[index]!.patch.props),
     );
     this.propertyPreview.clear();
+    this.creationDefaults.clearPreview();
     this.emit();
   }
 
@@ -212,6 +215,7 @@ export class EdgelessOperations {
       return;
     }
     this.propertyPreview.clear();
+    this.creationDefaults.clearPreview();
     this.emit();
   }
 
