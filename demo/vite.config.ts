@@ -37,7 +37,7 @@ export default defineConfig({
   ],
   resolve: {
     // The demo is a workspace development consumer. Resolve package entry
-    // points directly to source so editing core or React code never requires a
+    // points directly to source so editing workspace packages never requires a
     // parallel package build/watch process. Published consumers still use each
     // package's normal dist exports.
     alias: [
@@ -69,6 +69,34 @@ export default defineConfig({
         find: /^@chulane\/rivto$/,
         replacement: fileURLToPath(
           new URL("../packages/rivto-editor-core/src/index.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@chulane\/rivto-edgeless\/browser$/,
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-edgeless/src/browser.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@chulane\/rivto-edgeless\/react$/,
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-edgeless/src/react.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@chulane\/rivto-edgeless$/,
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-edgeless/src/index.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@chulane\/rivto-page$/,
+        replacement: fileURLToPath(new URL("../packages/rivto-page/src/index.ts", import.meta.url)),
+      },
+      {
+        find: /^@chulane\/rivto-keyboard$/,
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-keyboard/src/index.ts", import.meta.url),
         ),
       },
       {
