@@ -58,6 +58,11 @@ function upperBound(
  * share a block boundary only where their canonical neighbors overlap horizontally;
  * other inter-row space belongs to the separately declared background.
  *
+ * Explicit trailing/leading areas sharing an endpoint destination use that
+ * endpoint's feedback, even with separate sibling-boundary presentation. Their
+ * own full-bounds hit area is retained; unrelated explicit destinations are not
+ * replaced by the list's free-space insertion.
+ *
  * @param layout - Mounted list and explicit axis/gap policy.
  * @param point - Current viewport pointer.
  * @param hit - Native hit, used to restrict gaps to their background or adjacent anchors.
@@ -71,7 +76,7 @@ export function resolveLayoutGap(
   hit: Element,
   edge?: ResolvedBlockDropTarget,
 ): ResolvedBlockDropTarget | undefined {
-  if (!layout.gaps || (edge && layout.boundaries === "separate")) {
+  if (!layout.gaps) {
     return;
   }
   const items = layout.getItems();
@@ -87,9 +92,12 @@ export function resolveLayoutGap(
     }
     return value;
   };
-  const outer = !edge && resolveListEndGap(layout, items, point, hit, read);
-  if (outer) {
+  const outer = resolveListEndGap(layout, items, point, hit, read);
+  if (outer && (!edge || sameSiblingBoundary(outer.destination, edge.destination))) {
     return outer;
+  }
+  if (edge && layout.boundaries === "separate") {
+    return;
   }
   const rtl =
     layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
@@ -481,7 +489,7 @@ function resolveListEndGap(
     entry = last;
     side = "block-end";
   } else {
-    return;
+    return resolveEndpointInset(layout, items, point, hit, read);
   }
   if (!isDropBackground(layout.element, hit, point) && !entry.element.contains(hit)) {
     return;
@@ -492,6 +500,46 @@ function resolveListEndGap(
   return region?.kind === "edge"
     ? dropRegionTarget(entry, { ...region, depth: undefined }, read(entry), point)
     : undefined;
+}
+
+/**
+ * Recovers endpoint inset edges when native hit rounding selects the layout background.
+ *
+ * The point must remain in an actual declared strip; occupied child content is
+ * never redirected. Unlike free end space, the inset retains outline depth bands.
+ * Only the first and last mounted anchors are measured, including virtual lists;
+ * no unmounted interval or synthetic endpoint is introduced.
+ *
+ * @param layout - Owning vertical list whose native background was hit.
+ * @param items - Nonempty ordered mounted anchors.
+ * @param point - Exact viewport pointer, independent of native rounding.
+ * @param hit - Native hit used to preserve child and exclusion ownership.
+ * @param read - Query-local cached geometry reader.
+ * @returns The declared endpoint edge, or undefined outside its strip or on occupied content.
+ */
+function resolveEndpointInset(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  hit: Element,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+): ResolvedBlockDropTarget | undefined {
+  if (!isDropBackground(layout.element, hit, point)) {
+    return;
+  }
+  for (const [entry, side] of [
+    [items[0]!, "block-start"],
+    [items[items.length - 1]!, "block-end"],
+  ] as const) {
+    const region = entry
+      .getRegions()
+      .find(
+        (region): region is BlockDropEdgeRegion => region.kind === "edge" && region.side === side,
+      );
+    if (region && containsDropPoint(dropEdgeRect(region, read(entry)), point)) {
+      return dropRegionTarget(entry, region, read(entry), point);
+    }
+  }
 }
 
 /**

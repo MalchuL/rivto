@@ -161,7 +161,11 @@ Vertical lists with the default `"row"` continuation also extend their first/las
 insertion boundaries through existing leading/trailing host space. This applies
 to editor roots and container children alike, without adding layout space. Free
 end space inserts at the list's level, with feedback fixed to its endpoint;
-empty lists keep their declared inside action, and virtual holes remain inert.
+empty lists keep their declared inside action, and virtual holes remain inert. Explicit leading/trailing
+areas declaring the same canonical boundary share the mounted endpoint's line,
+including when sibling boundaries use separate feedback. Their hit bounds and
+layout dimensions stay independent from the feedback anchor. Native background
+hits inside an endpoint's declared inset retain ordinary outline depth choices.
 `dropGutterSize` controls how far item boundaries continue around all four item edges.
 A finite nonnegative number is a distance in local CSS pixels, respecting viewport
 scaling; zero disables continuation. `"row"` (the default) fills the host's available

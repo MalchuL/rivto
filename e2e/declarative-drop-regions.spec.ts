@@ -712,6 +712,23 @@ for (const mode of ["block", "edgeless"] as const) {
     const box = (await target.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+    if (mode === "block") {
+      const block = (await last.boundingBox())!;
+      for (const y of [
+        block.y + block.height - 1,
+        block.y + block.height + 1,
+        box.y + 1,
+        box.y + box.height / 2,
+        box.y + box.height - 1,
+      ]) {
+        await page.mouse.move(block.x + 4, y);
+        await expectBoundaryLine(page);
+        const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
+        expect(line.y + line.height / 2).toBeCloseTo(block.y + block.height, 1);
+        expect(line.x).toBeCloseTo(block.x, 1);
+        expect(line.width).toBeCloseTo(block.width, 1);
+      }
+    }
     await page.mouse.up();
     await expect.poll(() => readRootIds(page)).toEqual(["board", "source"]);
     await page.evaluate(() =>

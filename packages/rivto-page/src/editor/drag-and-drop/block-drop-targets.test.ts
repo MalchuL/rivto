@@ -674,6 +674,79 @@ it("accepts the whole declared ending area while keeping its indicator at the to
   }
 });
 
+it.each(["merged", "separate"] as const)(
+  "uses one endpoint line across an explicit trailing area in %s mode",
+  (boundaries) => {
+    rect(item, 20, 40, 360, 100);
+    const entry = register(item);
+    const trailing = document.createElement("footer");
+    host.append(trailing);
+    rect(trailing, 30, 160, 340, 120);
+    register(trailing, [{ kind: "edge", side: "block-start", coverage: "bounds", destination }]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      boundaries,
+      getItems: () => [entry],
+    });
+    for (const y of [139, 141, 159, 161, 220, 279, 300]) {
+      const hit = host;
+      const target = editor.dropTargets.resolve(
+        100,
+        y,
+        undefined,
+        y >= 160 && y < 280 ? trailing : hit,
+      );
+      expect(target?.destination).toEqual(destination);
+      expect(target?.indicator).toEqual({ left: 20, top: 139, width: 360, height: 2 });
+    }
+  },
+);
+
+it("preserves outline depth when native background hits a mounted endpoint inset", () => {
+  adapter.setNode("a");
+  const entry = register(item, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+    },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  expect(editor.dropTargets.resolve(12, 99, undefined, host)?.destination).toEqual(destination);
+  const nested = editor.dropTargets.resolve(40, 99, undefined, host);
+  expect(nested?.destination).toEqual({ kind: "inside", parentId: "a" });
+  expect(nested?.indicator?.left).toBe(28);
+  expect(editor.dropTargets.resolve(40, 50, undefined, host)).toBeUndefined();
+});
+
+it("retains a trailing declaration with a different canonical boundary", () => {
+  const entry = register(item);
+  const trailing = document.createElement("footer");
+  host.append(trailing);
+  rect(trailing, 20, 120, 360, 100);
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  register(trailing, [
+    { kind: "edge", side: "block-start", coverage: "bounds", destination: before },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  const target = editor.dropTargets.resolve(100, 150, undefined, trailing);
+  expect(target?.destination).toEqual(before);
+  expect(target?.indicator?.top).toBe(119);
+});
+
 it("supplies the registered hierarchy outline independently of DOM ancestry", () => {
   const shell = document.createElement("section");
   root.append(shell);
