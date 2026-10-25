@@ -1309,10 +1309,10 @@ for (const mode of ["block", "edgeless"] as const) {
         }) => {
           const parent = await load(page, type, mode);
           const host = page.locator(`[data-block-id="${parent}"] > .rivto-block-children`);
-          if (type === "kanban") {
+          if (type === "kanban" || type === "bento") {
             // Exercise a host-supplied gutter through native layout, without hitbox DOM.
             await host.evaluate((element) => {
-              element.style.paddingInline = "24px";
+              element.style.paddingInline = "48px";
             });
           }
           const id = type === "bento" && side === "right" ? "last" : "first";
@@ -1475,6 +1475,11 @@ for (const mode of ["block", "edgeless"] as const) {
               element.style.paddingInline = "24px";
             }
           }, location);
+        }
+        if (type === "bento" && location === "gutter") {
+          await host.evaluate((element) => {
+            element.style.paddingInline = "48px";
+          });
         }
         const block = page.locator('[data-block-id="first"]');
         const shell = (await block.boundingBox())!;
@@ -1649,6 +1654,9 @@ for (const mode of ["block", "edgeless"] as const) {
       await load(page, "bento", mode);
       const board = page.locator('[data-block-id="board"]');
       const host = board.locator(":scope > .rivto-block-children");
+      await host.evaluate((element) => {
+        element.style.padding = "48px";
+      });
       const bounds = (await host.boundingBox())!;
       const first = (await host.locator(":scope > .rivto-block-item").first().boundingBox())!;
       let x = side === "left" ? bounds.x + 2 : bounds.x + bounds.width - 2;
@@ -1672,5 +1680,106 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.keyboard.press("Control+z");
       await expect.poll(() => readChildIds(page, "board")).toEqual(["first", "last"]);
     });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const rtl of [false, true]) {
+    for (const near of [false, true]) {
+      test(`Bento gutter distance separates tile and board in ${mode}, RTL=${rtl}, near=${near}`, async ({
+        page,
+      }) => {
+        await load(page, "bento", mode);
+        await page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.removeBlocks(["last"]),
+        );
+        const board = page.locator('[data-block-id="board"]');
+        const host = board.locator(":scope > .rivto-block-children");
+        await host.evaluate((element, rtl) => {
+          element.style.direction = rtl ? "rtl" : "ltr";
+        }, rtl);
+        const tile = board
+          .locator('[data-block-id="first"]')
+          .locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
+        const box = (await tile.boundingBox())!;
+        const y = box.y + box.height * 0.75;
+        const edge = rtl ? box.x : box.x + box.width;
+        const direction = rtl ? -1 : 1;
+        await startDrag(page);
+        for (const distance of [31, 32, 33, 32, 31]) {
+          await page.mouse.move(edge + direction * distance, y);
+          if (distance <= 32) {
+            await expectBoundaryLine(page);
+            await expect(page.locator(".rivto-block-drop-line:visible")).toHaveAttribute(
+              "data-axis",
+              "vertical",
+            );
+          } else {
+            await expectInsideOutline(page, "board");
+          }
+        }
+        await page.mouse.move(edge + direction * (near ? 31 : 33), y);
+        await page.mouse.up();
+        await expect.poll(() => readChildIds(page, "board")).toEqual(["first", "source"]);
+        await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, "board")).toEqual(["first"]);
+        await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+      });
+    }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const side of ["top", "bottom"] as const) {
+    for (const near of [false, true]) {
+      test(`Bento gutter extends ${side} in ${mode}, near=${near}`, async ({ page }) => {
+        await load(page, "bento", mode);
+        await page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.removeBlocks(["last"]),
+        );
+        const host = page.locator('[data-block-id="board"] > .rivto-block-children');
+        await host.evaluate((element) => {
+          element.style.paddingBlock = "64px";
+        });
+        const tile = page
+          .locator('[data-block-id="first"]')
+          .locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
+        const box = (await tile.boundingBox())!;
+        const edge = side === "top" ? box.y : box.y + box.height;
+        const direction = side === "top" ? -1 : 1;
+        const x = box.x + box.width / 2;
+        await startDrag(page);
+        for (const distance of [31, 32, 33, 32, 31]) {
+          await page.mouse.move(x, edge + direction * distance);
+          if (distance <= 32) {
+            await expectBoundaryLine(page);
+            await expect(page.locator(".rivto-block-drop-line:visible")).toHaveAttribute(
+              "data-axis",
+              "horizontal",
+            );
+          } else {
+            await expectInsideOutline(page, "board");
+          }
+        }
+        await page.mouse.move(x, edge + direction * (near ? 31 : 33));
+        await page.mouse.up();
+        let children = ["first", "source"];
+        if (near) {
+          children = side === "top" ? ["source", "first"] : ["first"];
+        }
+        await expect.poll(() => readChildIds(page, "board")).toEqual(children);
+        await expect
+          .poll(() => readChildIds(page, "first"))
+          .toEqual(near && side === "bottom" ? ["source"] : []);
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, "board")).toEqual(["first"]);
+        await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+      });
+    }
   }
 }

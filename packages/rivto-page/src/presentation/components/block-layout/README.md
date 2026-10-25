@@ -157,10 +157,14 @@ Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
 seams insert siblings. Terminal descendants inherit their item's trailing levels,
 so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
-`dropGutters` defaults to true while gaps are enabled and continues item boundaries
-across free row gutters. Set it to false when those side areas should retain their
-declared background action. This leaves native item edges and actual physical
-gaps enabled; Bento uses this policy so its board background appends tiles.
+`dropGutterSize` controls how far item boundaries continue around all four item edges.
+A finite nonnegative number is a distance in local CSS pixels, respecting viewport
+scaling; zero disables continuation. `"row"` (the default) fills the host's available
+cross axis. Beyond a numeric extent the declared background action remains eligible.
+In numeric grid regions, left/right select inline edges with vertical feedback,
+while top/bottom select block edges with horizontal feedback; block edges retain
+corner priority. Native item edges and actual physical gaps stay enabled. Bento uses 32px so nearby
+space on any side belongs to a tile boundary and farther board background appends tiles.
 `targetSize` sets the inherited `--rivto-drop-target-size` in local CSS pixels for
 linear and wrapping items. An explicit style token overrides this shorthand.
 Use `dropPlacement="siblings"` only when boundaries intentionally retain their

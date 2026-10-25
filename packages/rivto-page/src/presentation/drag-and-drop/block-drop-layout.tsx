@@ -2,6 +2,7 @@ import { Slot } from "radix-ui";
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import type {
   BlockDropBoundaryMode,
+  BlockDropGutterSize,
   BlockDropLayoutRegistration,
   BlockDropRegion,
   BlockDropTargetRegistration,
@@ -82,8 +83,8 @@ export const BlockDropBoundaryContext = createContext<BlockDropBoundaryMode>("me
 export interface BlockDropLayoutOptions {
   readonly axis: "vertical" | "horizontal" | "grid";
   readonly gaps?: boolean;
-  /** Continue boundary actions across free row gutters; omission enables continuation. */
-  readonly gutters?: boolean;
+  /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row. */
+  readonly gutterSize?: BlockDropGutterSize;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly boundaries?: BlockDropBoundaryMode;
   readonly virtual?: boolean;
@@ -141,12 +142,12 @@ export function useBlockDropLayout(
           return current.current.gaps ?? current.current.axis !== "grid";
         },
         /**
-         * Reads whether free row gutters continue their neighboring item boundaries.
+         * Reads how far neighboring boundaries continue into free row gutters.
          *
-         * @returns Explicit policy, defaulting to enabled independently of background append.
+         * @returns Local CSS-pixel extent, zero to disable, or row (the default) to fill the host.
          */
-        get gutters() {
-          return current.current.gutters ?? true;
+        get gutterSize() {
+          return current.current.gutterSize ?? "row";
         },
         /**
          * Reads whether mounted roots require consecutive display indices.

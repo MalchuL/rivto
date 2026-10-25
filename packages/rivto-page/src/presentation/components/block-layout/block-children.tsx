@@ -1,4 +1,7 @@
-import type { BlockDropBoundaryMode } from "../../../editor/drag-and-drop/types";
+import type {
+  BlockDropBoundaryMode,
+  BlockDropGutterSize,
+} from "../../../editor/drag-and-drop/types";
 import { BlockDropLayoutContext, useBlockDropLayout } from "../../drag-and-drop/block-drop-layout";
 import {
   forwardRef,
@@ -27,8 +30,8 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly emptyDropTarget?: boolean;
   /** Enable declared physical gaps independently of item edges; grid defaults to false. */
   readonly dropGaps?: boolean;
-  /** Continue boundary actions across free row gutters; defaults to true when gaps are enabled. */
-  readonly dropGutters?: boolean;
+  /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row when gaps are enabled. */
+  readonly dropGutterSize?: BlockDropGutterSize;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly dropBoundaries?: BlockDropBoundaryMode;
   /** Append on unoccupied background, including filtered lists; defaults to false. */
@@ -60,7 +63,7 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.emptyDropTarget - True registers the empty, expanded host as a destination for its actual owner.
  * @param props.dropBoundaries - Merged midpoint or separate edge feedback; omission inherits the view default.
  * @param props.dropGaps - Enables insertion in physical free gaps; false leaves those gaps neutral.
- * @param props.dropGutters - False keeps free row gutters for declared background regions; defaults to true. Item edges and physical gaps retain their actions.
+ * @param props.dropGutterSize - Distance beyond all four item edges in local CSS pixels, respecting viewport scaling. Zero leaves gutters for background regions; row (the default) fills the host. Item edges and physical gaps retain their actions.
  * @param props.dropBackground - Enables append on unoccupied host background, including filtered lists.
  * @param props.dropAxis - Flow for declared regions, default vertical. Linear lists register inset edges without forcing indentation; grid items supply wrapping boundaries. Background padding has no implicit action.
  * @param props.targetSize - Optional edge thickness shared by direct items and descendants, including wrapping items; changes hit geometry only. The existing style token takes precedence.
@@ -82,7 +85,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     renderEmpty = true,
     emptyDropTarget = false,
     dropGaps,
-    dropGutters,
+    dropGutterSize,
     dropBoundaries,
     dropBackground = false,
     dropAxis = "vertical",
@@ -100,7 +103,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       axis: dropAxis,
       boundaries: dropBoundaries,
       gaps: !collapsed && (dropGaps ?? dropAxis !== "grid"),
-      gutters: dropGutters,
+      gutterSize: dropGutterSize,
       order: childIds,
       regions:
         !collapsed && (dropBackground || (emptyDropTarget && childIds.length === 0))

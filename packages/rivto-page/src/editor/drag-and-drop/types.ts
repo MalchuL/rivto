@@ -73,13 +73,16 @@ export interface BlockDropTargetRegistration {
 /** Feedback for matching sibling boundaries: one midpoint or the nearest anchor edge. */
 export type BlockDropBoundaryMode = "merged" | "separate";
 
+/** Finite nonnegative local CSS-pixel gutter extent, or the complete available row/column cross axis. */
+export type BlockDropGutterSize = number | "row";
+
 /** Existing ordered layout whose free gaps can connect mounted anchors. */
 export interface BlockDropLayoutRegistration {
   readonly element: HTMLElement;
   readonly axis: "vertical" | "horizontal" | "grid";
   readonly gaps: boolean;
-  /** Continue item boundaries across free row gutters; defaults to true when gaps are enabled. */
-  readonly gutters?: boolean;
+  /** Finite nonnegative local CSS-pixel continuation distance; zero disables it and row fills the host cross axis. Defaults to row when gaps are enabled. */
+  readonly gutterSize?: BlockDropGutterSize;
   /** Matching sibling edges share midpoint feedback by default. */
   readonly boundaries?: BlockDropBoundaryMode;
   /** Virtual lists require consecutive displayed indices, even across missing DOM roots. */

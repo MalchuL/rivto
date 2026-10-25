@@ -315,10 +315,12 @@ Its options provide `axis`, stable `order`, `gaps`, and optional background `reg
 `BlockChildren.dropGaps` defaults to true for linear lists, false for grids. Disabling
 it disables insertion in free gaps, while keeping independently declared item edges.
 `dropBackground` enables append in unoccupied host space, including filtered lists.
-`dropGutters={false}` leaves free row gutters for declared background regions while
-retaining native item edges and physical gaps. Omission preserves full-row boundary
-continuation. The equivalent `BlockDropLayout` option is `gutters`; Bento disables
-this continuation so hovering its exposed board background appends a tile.
+`dropGutterSize={16}` continues item boundaries by 16 local CSS pixels around all four
+item edges, accounting for viewport scaling and clipping to the host. Zero disables
+continuation; `"row"` (the default) preserves full-row continuation. Values must be
+finite and nonnegative. Native item edges and physical gaps remain enabled. The
+equivalent `BlockDropLayout` option is `gutterSize`. Bento uses 32px: beyond that
+extent its exposed board background appends a tile.
 Inside feedback covers the receiving block's complete registered shell, including
 its descendants. The resolved target carries this explicit `outlineElement`
 separately from the hit anchor; rendering does not infer hierarchy from DOM ancestry.

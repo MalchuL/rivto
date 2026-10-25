@@ -1939,9 +1939,9 @@ it("releases a filtered item's mounted anchor when its own visibility changes", 
   expect(layout.getItems()?.map((entry) => entry.element.dataset.blockId)).toEqual(["a", "b"]);
 });
 
-it.each([true, false])(
+it.each(["row", 0, 16, undefined] as const)(
   "passes gutter continuation %s without changing the child DOM",
-  (dropGutters) => {
+  (dropGutterSize) => {
     const adapter = new TestBlockEditorAdapter();
     const editor = createEditor(adapter);
     adapter.setNode("parent", { type: "container", childIds: ["a"] });
@@ -1949,14 +1949,14 @@ it.each([true, false])(
     adapter.setBlockIds(["parent"]);
     const register = jest.spyOn(editor.dropTargets, "registerLayout");
     editor.renderers.register("container", {
-      layout: () => <BlockChildren dropGaps dropGutters={dropGutters} />,
+      layout: () => <BlockChildren dropGaps dropGutterSize={dropGutterSize} />,
     });
     act(() => root.render(<BlockEditor editor={editor} />));
     const host = container.querySelector('[data-block-id="parent"] > .rivto-block-children')!;
     const layout = register.mock.calls.find(([entry]) => entry.element === host)![0];
     expect(layout.gaps).toBe(true);
-    expect(layout.gutters).toBe(dropGutters);
-    expect(host.getAttribute("dropGutters")).toBeNull();
+    expect(layout.gutterSize).toBe(dropGutterSize ?? "row");
+    expect(host.getAttribute("dropGutterSize")).toBeNull();
     expect(host.querySelectorAll('[data-block-id="a"]')).toHaveLength(1);
   },
 );

@@ -188,6 +188,7 @@ export type {
   BlockDropGapRegion,
   BlockDropDepth,
   BlockDropBoundaryMode,
+  BlockDropGutterSize,
   BlockDropLayoutRegistration,
   BlockDropPoint,
 } from "./editor/drag-and-drop/types";

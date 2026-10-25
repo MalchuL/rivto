@@ -136,10 +136,12 @@ a target on the same element.
 
 Edges, gaps and background append are independent declarations; never infer model
 neighbors from DOM siblings. No declaration adds layout boxes or minimum sizes.
-Row-gutter continuation is independent as well: `dropGutters={false}` keeps exposed
-side space for declared background append without disabling physical seams or item
-edges. Bento uses this policy; other layouts retain the default full-row continuation.
-Test the board background separately from nesting into an individual tile.
+Row-gutter continuation is independent as well: `dropGutterSize` accepts a finite
+nonnegative distance in local CSS pixels, zero to disable, or `"row"` (the default)
+to fill the host cross axis. Numeric extents cover all four item edges, respecting viewport scale and host bounds;
+farther space keeps its declared background action without disabling physical
+seams or item edges. Bento uses 32px; other layouts retain full-row continuation.
+Test both sides of the distance boundary separately from nesting into a tile.
 Grid items use existing placement edges; do not create separate gap cells. Bento
 uses declared tile seams and `dropBackground` so space under short tiles remains
 owned by its parent instead of borrowing a taller neighboring tile.

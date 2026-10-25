@@ -958,35 +958,241 @@ it("retains line geometry for edge-derived child insertion", () => {
   expect(target?.outlineElement).toBeUndefined();
 });
 
-it.each([true, false])("keeps physical gaps while gutter continuation is %s", (gutters) => {
-  rect(item, 100, 40, 200, 60);
-  const next = document.createElement("div");
-  next.dataset.blockId = "b";
-  host.append(next);
-  rect(next, 100, 110, 200, 60);
-  const previous = register(item);
-  const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
-  editor.dropTargets.register({
-    element: host,
-    getRegions: () => [
-      {
-        kind: "inside",
-        coverage: "background",
-        destination: { kind: "inside", parentId: "parent" },
-      },
-    ],
-  });
+it.each(["row", 0, 16, undefined] as const)(
+  "keeps physical gaps while gutter continuation is %s",
+  (gutterSize) => {
+    rect(item, 100, 40, 200, 60);
+    const next = document.createElement("div");
+    next.dataset.blockId = "b";
+    host.append(next);
+    rect(next, 100, 110, 200, 60);
+    const previous = register(item);
+    const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+    editor.dropTargets.register({
+      element: host,
+      getRegions: () => [
+        {
+          kind: "inside",
+          coverage: "background",
+          destination: { kind: "inside", parentId: "parent" },
+        },
+      ],
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      gutterSize,
+      getItems: () => [previous, following],
+    });
+    const target = editor.dropTargets.resolve(399, 90, undefined, host);
+    expect(target?.destination).toEqual(
+      gutterSize === "row" || gutterSize === undefined
+        ? destination
+        : { kind: "inside", parentId: "parent" },
+    );
+    expect(Boolean(target?.indicator)).toBe(gutterSize === "row" || gutterSize === undefined);
+    expect(editor.dropTargets.resolve(150, 105, undefined, host)?.destination).toEqual(destination);
+  },
+);
+
+it.each(["vertical", "horizontal", "grid"] as const)(
+  "bounds numeric gutter distance in %s flow under viewport scaling",
+  (axis) => {
+    rect(item, 100, 40, 200, 100);
+    Object.defineProperty(item, "offsetWidth", { configurable: true, value: 100 });
+    Object.defineProperty(item, "offsetHeight", { configurable: true, value: 50 });
+    const entry = register(item, [
+      { kind: "edge", side: "inline-start", destination },
+      { kind: "edge", side: "inline-end", destination },
+      { kind: "edge", side: "block-end", destination },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis,
+      gaps: true,
+      gutterSize: 16,
+      getItems: () => [entry],
+    });
+    for (const distance of [31.5, 32, 32.5]) {
+      for (const leading of [true, false]) {
+        const cross = leading ? 100 - distance : 300 + distance;
+        const x = axis === "horizontal" ? 250 : cross;
+        const crossY = leading ? 40 - distance : 140 + distance;
+        const y = axis === "horizontal" ? crossY : 120;
+        const target = editor.dropTargets.resolve(x, y, undefined, host);
+        expect(target?.destination).toEqual(distance <= 32 ? destination : undefined);
+      }
+    }
+  },
+);
+
+it.each([-1, Infinity, NaN])("rejects invalid gutter distance %s", (gutterSize) => {
+  rect(item, 100, 40, 200, 100);
+  const entry = register(item);
   editor.dropTargets.registerLayout({
     element: host,
     axis: "vertical",
     gaps: true,
-    gutters,
-    getItems: () => [previous, following],
+    gutterSize,
+    getItems: () => [entry],
   });
-  const target = editor.dropTargets.resolve(399, 90, undefined, host);
-  expect(target?.destination).toEqual(
-    gutters ? destination : { kind: "inside", parentId: "parent" },
+  expect(() => editor.dropTargets.resolve(320, 120, undefined, host)).toThrow(
+    "Gutter size must be finite and nonnegative",
   );
-  expect(Boolean(target?.indicator)).toBe(gutters);
-  expect(editor.dropTargets.resolve(150, 105, undefined, host)?.destination).toEqual(destination);
+});
+
+it.each(["vertical", "horizontal", "grid"] as const)(
+  "expands numeric gutters on all four sides and corners in %s flow",
+  (axis) => {
+    rect(item, 100, 80, 200, 100);
+    Object.defineProperty(item, "offsetWidth", { configurable: true, value: 100 });
+    Object.defineProperty(item, "offsetHeight", { configurable: true, value: 50 });
+    const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+    const entry = register(item, [
+      { kind: "edge", side: "block-start", destination: before },
+      { kind: "edge", side: "block-end", destination },
+      { kind: "edge", side: "inline-start", destination: before },
+      { kind: "edge", side: "inline-end", destination },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis,
+      gaps: true,
+      gutterSize: 32,
+      getItems: () => [entry],
+    });
+    for (const distance of [63.5, 64, 64.5]) {
+      const points = [
+        { x: 100 - distance, y: 150, before: axis !== "vertical" },
+        { x: 300 + distance, y: 150, before: false },
+        { x: 250, y: 80 - distance, before: axis !== "horizontal" },
+        { x: 250, y: 180 + distance, before: false },
+        { x: 100 - distance, y: 80 - distance, before: true },
+      ];
+      for (const point of points) {
+        const target = editor.dropTargets.resolve(point.x, point.y, undefined, host);
+        let expected;
+        if (distance <= 64) {
+          expected = point.before ? before : destination;
+        }
+        expect(target?.destination).toEqual(expected);
+      }
+    }
+  },
+);
+
+it("finds a tile's exposed top/bottom using adjacent grid rows", () => {
+  rect(item, 100, 80, 80, 40);
+  const first = register(item, [{ kind: "edge", side: "block-end", destination }]);
+  const second = document.createElement("div");
+  const third = document.createElement("div");
+  const fourth = document.createElement("div");
+  host.append(second, third, fourth);
+  rect(second, 200, 80, 80, 60);
+  rect(third, 100, 170, 80, 40);
+  rect(fourth, 200, 170, 80, 40);
+  const next = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const items = [
+    first,
+    register(second),
+    register(third),
+    register(fourth, [{ kind: "edge", side: "block-start", destination: next }]),
+  ];
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "grid",
+    gaps: true,
+    gutterSize: 32,
+    getItems: () => items,
+  });
+  expect(editor.dropTargets.resolve(140, 125, undefined, host)?.destination).toEqual(destination);
+  expect(editor.dropTargets.resolve(240, 160, undefined, host)?.destination).toEqual(next);
+});
+
+it("bounds numeric gutter measurement to nearby rows in a large grid", () => {
+  rect(host, 0, 0, 400, 10000);
+  const measurements: Array<ReturnType<typeof rect>> = [];
+  const items = Array.from({ length: 1000 }, (_, index) => {
+    const element = document.createElement("div");
+    host.append(element);
+    measurements.push(
+      rect(element, 100 + (index % 10) * 20, 100 + Math.floor(index / 10) * 40, 20, 20),
+    );
+    return register(element);
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "grid",
+    gaps: true,
+    gutterSize: 16,
+    getItems: () => items,
+  });
+  expect(editor.dropTargets.resolve(110, 3725, undefined, host)?.destination).toEqual(destination);
+  const reads = measurements.reduce(
+    (count, measurement) => count + measurement.mock.calls.length,
+    0,
+  );
+  expect(reads).toBeLessThan(100);
+});
+
+it("keeps an inline grid seam ahead of numeric background expansion", () => {
+  rect(item, 100, 80, 80, 100);
+  const next = document.createElement("div");
+  host.append(next);
+  rect(next, 200, 80, 80, 100);
+  const a = register(item, [
+    { kind: "edge", side: "block-end", destination: { kind: "inside", parentId: "parent" } },
+    { kind: "edge", side: "inline-end", destination },
+  ]);
+  const b = register(next, [
+    { kind: "edge", side: "block-end", destination: { kind: "inside", parentId: "parent" } },
+    { kind: "edge", side: "inline-start", destination },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "grid",
+    gaps: true,
+    gutterSize: 32,
+    getItems: () => [a, b],
+  });
+  for (const x of [179.75, 180, 190, 200, 200.25]) {
+    const target = editor.dropTargets.resolve(x, 150, undefined, host);
+    expect(target?.destination).toEqual(destination);
+    expect(target?.indicator?.width).toBe(2);
+    expect(target?.indicator?.left).toBe(189);
+  }
+});
+
+it.each([false, true])("uses exposed grid side orientation in numeric gutters, RTL=%s", (rtl) => {
+  rect(item, 100, 80, 200, 100);
+  host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
+  const entry = register(item, [
+    { kind: "edge", side: "block-start", destination },
+    { kind: "edge", side: "block-end", destination },
+    { kind: "edge", side: "inline-start", destination },
+    { kind: "edge", side: "inline-end", destination },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "grid",
+    gaps: true,
+    gutterSize: 32,
+    getItems: () => [entry],
+  });
+  for (const x of [80, 320]) {
+    const target = editor.dropTargets.resolve(x, 130, undefined, host);
+    expect(target?.indicator?.width).toBe(2);
+    expect(target?.indicator?.height).toBe(100);
+  }
+  for (const point of [
+    { x: 200, y: 60 },
+    { x: 200, y: 200 },
+    { x: 80, y: 60 },
+    { x: 320, y: 200 },
+  ]) {
+    expect(editor.dropTargets.resolve(point.x, point.y, undefined, host)?.indicator?.height).toBe(
+      2,
+    );
+  }
 });

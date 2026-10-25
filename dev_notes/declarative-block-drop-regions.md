@@ -1601,3 +1601,120 @@ Times are median [minimum–maximum], in milliseconds.
 | chromium | 200    | 7.0 [6.8–7.1]    | 7.0 [7.0–7.1]    | 81.8 [81.6–100.9] | 83.2 [80.8–98.6] |
 | firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]  | 30.0 [30.0–31.0] |
 | firefox  | 200    | 15.0 [14.0–17.0] | 15.0 [14.0–15.0] | 89.0 [86.0–90.0]  | 90.0 [89.0–91.0] |
+
+
+## Configure numeric row-gutter distance instead of a boolean — 2026-10-25
+
+The accepted API replaces dropGutters/gutters with dropGutterSize/gutterSize.
+The public BlockDropGutterSize type accepts finite nonnegative local CSS pixels or
+row. Zero disables continuation; row (including omission) retains the complete
+host cross axis. Bento declares 16px: nearby side space continues its tile boundary,
+while farther background appends to the board. Physical seams, native item edges,
+canonical depth choices and host clipping keep their existing owners. No deprecated
+boolean alias, new hitbox DOM or presentation spacing was added.
+
+The shared gutter resolver measures cross-axis distance from the selected item's
+existing bounds and applies its query-local scaleX/scaleY. Vertical/grid gutters
+use X distance, horizontal gutters use Y distance. The finite boundary is inclusive;
+negative and nonfinite numeric extents throw when the gutter is resolved. The helper
+adds no DOM measurement, cache, model traversal, subscription or lifecycle resource.
+The complete API path reviewed was the public type export, BlockChildren prop,
+committed BlockDropLayout options/getter, borrowed registration and geometry read.
+Consumers use the same registration object and existing cleanup. Bento is a current
+numeric consumer; explicit zero/row retain the user-requested disabled/full-row modes.
+Public/layout READMEs and the container skill document defaults, units and scaling.
+
+Six new geometry/validation cases failed on the old implementation before edits;
+all pass after the change. Numeric tests cover both cross-axis sides in vertical,
+horizontal and grid flow under 2x scaling, using viewport distances 31.5/32/32.5 for
+a 16px local limit. Additional checks preserve physical gaps and exercise omitted,
+zero, numeric and row settings through the public component without leaking props
+to HTML or duplicating children. The four focused Page suites pass 140 tests.
+
+All sixteen new native-input cases failed on the previous production build and
+reproduced serially: the old disabled Bento gutter could not provide the requested
+near-tile continuation. The new tests sweep near/on/beyond the 16px boundary in
+Page/Edgeless and LTR/RTL, commit both child and board placement, and undo them.
+Firefox's native pointer delivery floors half-pixel X coordinates: a requested
+16.5px right-side distance arrived as 16px, while 17px arrived as 17px. The initial
+four Firefox-only far-point failures reproduced serially and were diagnosed from
+delivered pointer events. Browser checks therefore use 15/16/17px; fractional
+limits remain covered by DOM-free unit geometry. No runtime tolerance or timing
+budget was widened. All sixteen cases pass with those actual cross-browser inputs.
+
+The final affected main-demo suites pass 692 checks in Chromium/Firefox with
+12 workers, plus six standalone Page geometry/theme checks. Page/React/demo types,
+Page/package and both demo builds, formatting, skill validation and scoped lint
+passed. Scoped lint retains existing long-function warnings. Two existing TODO
+keyboard-order cases remain skipped; the full workspace suite was not run. No
+staging was performed by this run.
+
+The production native Bento sibling-seam benchmark passed twelve after samples,
+compared with the twelve recorded samples on the exact preceding build using the
+same leading-band point and unchanged benchmark. Both browsers and default size /
+`?repeat=200` use three repetitions, one worker, tracing off, and assert committed
+sibling order. This covers common Bento DnD cost; the new correctness matrix covers
+the finite gutter/background transition. No agent-run build or other test overlapped
+the after timings. Rendered completion is the existing two-frame proxy; measured
+cost remains comparable within these samples. Builds: /tmp/bento-inside-after and
+/tmp/gutter-size-after. Logs: /tmp/bento-inside-perf-after-fixed.log and
+/tmp/gutter-size-perf-after.log.
+
+Times are median [minimum–maximum], in milliseconds.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before  | Rendered after   |
+| -------- | ------ | ---------------- | ---------------- | ---------------- | ---------------- |
+| chromium | 0      | 1.4 [1.2–1.5]    | 1.4 [1.2–1.4]    | 29.5 [28.5–29.6] | 29.2 [29.0–31.5] |
+| chromium | 200    | 7.0 [7.0–7.1]    | 7.0 [7.0–7.1]    | 83.2 [80.8–98.6] | 85.2 [83.2–92.8] |
+| firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 30.0 [30.0–31.0] | 31.0 [31.0–32.0] |
+| firefox  | 200    | 15.0 [14.0–15.0] | 14.0 [14.0–14.0] | 90.0 [89.0–91.0] | 87.0 [87.0–89.0] |
+
+
+## Extend numeric item surroundings on all four sides — 2026-10-25
+
+Numeric dropGutterSize now expands the complete item rectangle, including exposed
+top/bottom edges and corners, using local scale on both axes and host clipping.
+The row setting retains its legacy cross-axis continuation. Candidate lookup uses
+binary searches in the containing and adjacent flow rows, with at most two local
+anchors per row, rather than a global nearest-block scan. Virtual-hole restrictions
+remain; registered endpoint and consecutive-neighbor gaps retain their ownership.
+Existing edge declarations supply before/after, depth and canonical destinations.
+No type-specific pointer logic, layout boxes or new API flags were introduced.
+
+Physical gap lookup now precedes inferred expansion; a second local pass can
+normalize an inferred edge against its shared canonical boundary. This priority
+fix resolved two Chromium fractional-seam failures (both reproduced serially)
+caught by the first focused browser run. The corrected focused run passes all 56
+selected Bento cases in Chromium/Firefox: top/bottom and left/right 31/32/33px
+transitions, board background, short-tile background, physical seams, commit and
+undo in Page/Edgeless. The sole geometry unit file passes 77 cases, including all
+four sides/corners under scale, adjacent rows, seam priority and a 1000-item grid
+with fewer than 100 measured anchors. Page types/package build, main-demo build,
+formatting and focused lint pass; lint retains the existing long-load warning.
+
+Only these focused checks were run at the user's request. No whole editor suite,
+full workspace run or separate browser timing benchmark was launched. The large-
+grid measurement-count regression covers the newly added lookup's bounded work.
+Ownership review covered the shared layout resolver, query-local cache, declared
+regions and unchanged commit validation; the new private helpers borrow geometry
+and declarations without adding managers, subscriptions or lifecycle resources.
+
+
+## Match numeric grid-gutter feedback to the exposed side — 2026-10-25
+
+The all-side expansion initially retained the old row-half selector, so its side
+areas still proposed block edges and painted horizontal lines. Numeric grid
+surroundings now select inline edges on the exposed left/right side and block
+edges above/below; corners retain the existing block-edge priority. Logical inline
+sides respect RTL. Linear layouts and the row setting retain their established
+flow-based declarations; missing/disabled edges are not invented. Physical seams
+still resolve first. No public API, renderer or lifecycle dependency was added.
+
+The focused geometry file passes 79 tests, including explicit line orientation,
+four sides/corners, RTL and bounded large-grid work. The same 56 selected Bento
+browser checks pass in Chromium/Firefox with 12 workers, now asserting vertical
+side feedback and horizontal top/bottom feedback, persisted destinations and undo.
+Side continuation sorts tiles rather than nesting them; body and indented bottom
+placement retain nesting. Page types/package build, main-demo build and focused
+lint pass, with only the existing long-load-helper warning. No broad editor suite
+or separate timing benchmark was run, following the requested narrow test scope.

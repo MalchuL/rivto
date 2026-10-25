@@ -63,6 +63,7 @@ function upperBound(
  * @param hit - Native hit, used to restrict gaps to their background or adjacent anchors.
  * @param edge - Nearest declared edge, optionally normalized to its shared boundary.
  * @returns Physical gap target, or undefined for background, virtual holes or absent neighbors.
+ * @throws If a measured edge thickness or numeric gutter extent is negative or nonfinite.
  */
 export function resolveLayoutGap(
   layout: BlockDropLayoutRegistration,
@@ -92,8 +93,40 @@ export function resolveLayoutGap(
   }
   const rtl =
     layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
-  const gutter = edge ? undefined : resolveLayoutGutter(layout, items, point, hit, read, rtl);
-  edge ??= gutter;
+  const pair = resolveGapPairs(layout, items, point, hit, read, rtl, edge);
+  if (pair || edge) {
+    return pair;
+  }
+  const gutter = resolveLayoutGutter(layout, items, point, hit, read, rtl);
+  return gutter
+    ? (resolveGapPairs(layout, items, point, hit, read, rtl, gutter) ?? gutter)
+    : undefined;
+}
+
+/**
+ * Resolves physical neighbor seams before inferred surrounding-item regions.
+ *
+ * The same lookup can normalize an inferred edge to its declared shared boundary.
+ * Query-local measurements are reused across both passes; no global scan is added.
+ *
+ * @param layout - Registered layout and feedback policy.
+ * @param items - Mounted canonical anchors in flow order.
+ * @param point - Native viewport pointer.
+ * @param hit - Native visible element restricting occupied and excluded regions.
+ * @param read - Shared cached geometry reader.
+ * @param rtl - Whether inline order runs right to left.
+ * @param edge - Optional edge to normalize against its own canonical neighbor.
+ * @returns Matching physical/shared gap, or undefined for an unrelated boundary.
+ */
+function resolveGapPairs(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  hit: Element,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+  edge?: ResolvedBlockDropTarget,
+): ResolvedBlockDropTarget | undefined {
   const pairs = layoutPairIndices(items, layout.axis, point, read, rtl, edge?.region);
   for (const pair of pairs) {
     const previous = items[pair - 1]!;
@@ -111,7 +144,6 @@ export function resolveLayoutGap(
       return target;
     }
   }
-  return gutter;
 }
 
 /**
@@ -461,16 +493,18 @@ function resolveRootGap(
 }
 
 /**
- * Selects declared before/after edges across an item's full row in its layout gutters.
+ * Selects declared insertion edges around items or across their legacy row gutters.
  *
- * An explicit gutters=false leaves free row space for declared background regions.
- * Only the owning layout's visible background participates. A binary search
- * selects one mounted anchor; unmounted intervals add no edge target. The leading
+ * A zero gutter size leaves free row space for declared background regions.
+ * Numeric extents expand all four sides in local CSS pixels, respecting viewport scale.
+ * Only the owning layout's visible background participates. Binary searches
+ * select local neighboring anchors; unmounted intervals add no edge target. The leading
  * half chooses before and the trailing half after, including horizontal RTL flow.
  * The original region and actual pointer retain outline depth choices. Feedback
  * stays on the block edge and can still merge with its sibling's matching edge.
- * Grid row gutters use only the exposed first/last tile; inter-tile seams and
- * background beneath short tiles retain their separate declared ownership.
+ * The legacy row mode uses exposed first/last tiles only. Numeric regions also
+ * cover exposed top/bottom edges, including below short tiles, within the extent.
+ * Physical seams keep priority; farther background retains its own declaration.
  *
  * @param layout - Registered list bounding the row gutters in its declared flow.
  * @param items - Committed mounted anchors in display order.
@@ -479,7 +513,7 @@ function resolveRootGap(
  * @param read - Query-local geometry shared with sibling-gap resolution.
  * @param rtl - Whether horizontal item order decreases in viewport X.
  * @returns Existing edge target, or undefined outside a row or for a missing/disabled edge.
- * @throws If a declared edge size is negative or nonfinite.
+ * @throws If a declared edge size or numeric gutter extent is negative or nonfinite.
  */
 function resolveLayoutGutter(
   layout: BlockDropLayoutRegistration,
@@ -489,40 +523,204 @@ function resolveLayoutGutter(
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   rtl: boolean,
 ): ResolvedBlockDropTarget | undefined {
-  if (layout.gutters === false) {
+  const size = layout.gutterSize ?? "row";
+  if (size === 0) {
     return;
   }
-  if (!isDropBackground(layout.element, hit, point)) {
+  if (size !== "row" && (!Number.isFinite(size) || size < 0)) {
+    throw new Error("Gutter size must be finite and nonnegative");
+  }
+  if (
+    !isDropBackground(layout.element, hit, point) ||
+    !containsDropPoint(layout.element.getBoundingClientRect(), point)
+  ) {
     return;
   }
-  if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
+  if (size !== "row") {
+    return sizedGutterTarget(layout, items, point, read, rtl, size);
+  }
+  const entry = layoutGutterItem(layout.axis, items, point, read, rtl);
+  const geometry = entry ? read(entry) : undefined;
+  if (!entry || !geometry) {
     return;
   }
   const horizontal = layout.axis === "horizontal";
-  const entry = layoutGutterItem(layout.axis, items, point, read, rtl);
-  if (!entry) {
-    return;
-  }
-  const geometry = read(entry);
   const coordinate = horizontal ? point.x : point.y;
   const start = horizontal ? geometry.rect.left : geometry.rect.top;
   const end = horizontal ? geometry.rect.right : geometry.rect.bottom;
   if (containsDropPoint(geometry.rect, point) || coordinate < start || coordinate > end) {
     return;
   }
-  const after =
-    horizontal && rtl ? coordinate < (start + end) / 2 : coordinate >= (start + end) / 2;
-  const side = `${horizontal ? "inline" : "block"}-${after ? "end" : "start"}`;
+  const axis = layout.axis === "grid" ? "vertical" : layout.axis;
+  return gutterTarget(entry, axis, geometry, point, rtl);
+}
+
+/**
+ * Selects a declared edge within the numeric extent on any side of local flow neighbors.
+ *
+ * Candidate lookup uses adjacent rows and anchors, not a global nearest-block scan.
+ * Virtual holes retain their old restriction: only cross-axis continuation is inferred;
+ * their real endpoint and consecutive-neighbor gaps remain owned by existing declarations.
+ *
+ * @param layout - Current flow and virtual-hole policy.
+ * @param items - Mounted canonical anchors in flow order.
+ * @param point - Native viewport pointer on unoccupied host background.
+ * @param read - Query-local cached geometry reader.
+ * @param rtl - Whether inline flow runs right to left.
+ * @param size - Finite positive expansion in local CSS pixels.
+ * @returns Closest eligible local edge, or undefined beyond the extent or without an edge.
+ */
+function sizedGutterTarget(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+  size: number,
+): ResolvedBlockDropTarget | undefined {
+  let selected: ResolvedBlockDropTarget | undefined;
+  let distance = Infinity;
+  for (const index of gutterCandidates(items, layout.axis, point, read, rtl)) {
+    const entry = items[index]!;
+    const geometry = read(entry);
+    const { rect } = geometry;
+    if (containsDropPoint(rect, point)) {
+      continue;
+    }
+    const horizontal = layout.axis === "horizontal";
+    const cursor = horizontal ? point.x : point.y;
+    const start = horizontal ? rect.left : rect.top;
+    const end = horizontal ? rect.right : rect.bottom;
+    if (layout.virtual && (cursor < start || cursor > end)) {
+      continue;
+    }
+    const candidateDistance = gutterDistance(geometry, point);
+    if (candidateDistance > size || candidateDistance >= distance) {
+      continue;
+    }
+    const target = gutterTarget(entry, layout.axis, geometry, point, rtl);
+    if (target) {
+      selected = target;
+      distance = candidateDistance;
+    }
+  }
+  return selected;
+}
+
+/**
+ * Finds a bounded set of nearby anchors with binary searches over local flow rows.
+ *
+ * Grid lookup includes the containing row and its immediate neighbors, so exposed
+ * space above/below a tile does not require measuring the whole layout. Ties retain
+ * canonical candidate order; omitted/unmounted anchors are never reconstructed.
+ *
+ * @param items - Mounted anchors in aligned row-major or linear order.
+ * @param axis - Declared flow axis.
+ * @param point - Native viewport pointer.
+ * @param read - Query-local cached geometry reader.
+ * @param rtl - Whether inline order decreases in viewport X.
+ * @returns Up to two anchors per neighboring row, or two for a linear list.
+ */
+function gutterCandidates(
+  items: readonly BlockDropTargetRegistration[],
+  axis: BlockDropLayoutRegistration["axis"],
+  point: BlockDropPoint,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+): number[] {
+  const ranges: Array<readonly [number, number]> = [];
+  if (axis === "grid") {
+    const end = upperBound(items, point.y, read, "y");
+    if (end > 0) {
+      const current = layoutRowRange(items, axis, point, read);
+      if (current[0] > 0) {
+        const y = read(items[current[0] - 1]!).rect.top;
+        ranges.push(layoutRowRange(items, axis, { ...point, y }, read));
+      }
+      ranges.push(current);
+    }
+    if (end < items.length) {
+      const y = read(items[end]!).rect.top;
+      ranges.push(layoutRowRange(items, axis, { ...point, y }, read));
+    }
+  } else {
+    ranges.push([0, items.length]);
+  }
+  const candidates: number[] = [];
+  const horizontal = axis !== "vertical";
+  const inlinePoint = rtl ? -point.x : point.x;
+  const coordinate = horizontal ? inlinePoint : point.y;
+  for (const [start, end] of ranges) {
+    const index = upperBound(items, coordinate, read, horizontal ? "x" : "y", start, end, rtl);
+    for (const candidate of [index - 1, index]) {
+      if (candidate >= start && candidate < end) {
+        candidates.push(candidate);
+      }
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Measures distance to the expanded item rectangle in unscaled local CSS pixels.
+ *
+ * @param geometry - Existing bounds and local-to-viewport scale on both axes.
+ * @param point - Native viewport pointer outside or inside the item.
+ * @returns Zero inside; otherwise the greater outside-axis distance, including corners.
+ */
+function gutterDistance(
+  { rect, scaleX, scaleY }: BlockDropGeometry,
+  point: BlockDropPoint,
+): number {
+  const x = Math.max(rect.left - point.x, point.x - rect.right, 0) / scaleX;
+  const y = Math.max(rect.top - point.y, point.y - rect.bottom, 0) / scaleY;
+  return Math.max(x, y);
+}
+
+/**
+ * Resolves an item's declared before/after edge using its existing outline-depth choices.
+ *
+ * @param entry - Mounted anchor and live canonical declarations.
+ * @param axis - Surrounding flow; grid uses the exposed physical side, with block edges winning corners.
+ * @param geometry - Query-local item bounds and computed tokens.
+ * @param point - Pointer selecting the before/after half and any nesting depth.
+ * @param rtl - Whether horizontal before/after and grid inline edges run right to left.
+ * @returns Existing edge target, or undefined when the requested edge is missing or disabled.
+ * @throws If the declared edge size is negative or nonfinite.
+ */
+function gutterTarget(
+  entry: BlockDropTargetRegistration,
+  axis: BlockDropLayoutRegistration["axis"],
+  geometry: BlockDropGeometry,
+  point: BlockDropPoint,
+  rtl: boolean,
+): ResolvedBlockDropTarget | undefined {
+  const horizontal = axis === "horizontal";
+  const cursor = horizontal ? point.x : point.y;
+  const start = horizontal ? geometry.rect.left : geometry.rect.top;
+  const end = horizontal ? geometry.rect.right : geometry.rect.bottom;
+  const after = horizontal && rtl ? cursor < (start + end) / 2 : cursor >= (start + end) / 2;
+  let side: BlockDropEdgeRegion["side"] = `${horizontal ? "inline" : "block"}-${after ? "end" : "start"}`;
+  if (axis === "grid") {
+    const { rect } = geometry;
+    if (point.y < rect.top || point.y > rect.bottom) {
+      side = point.y < rect.top ? "block-start" : "block-end";
+    } else {
+      side = point.x < rect.left !== rtl ? "inline-start" : "inline-end";
+    }
+  }
   const region = entry
     .getRegions()
-    .find((region) => region.kind === "edge" && region.side === side);
-  if (region?.kind !== "edge") {
+    .find(
+      (region): region is BlockDropEdgeRegion => region.kind === "edge" && region.side === side,
+    );
+  if (!region) {
     return;
   }
   const strip = dropEdgeRect(region, geometry);
-  if (strip.width > 0 && strip.height > 0) {
-    return dropRegionTarget(entry, region, geometry, point);
-  }
+  return strip.width > 0 && strip.height > 0
+    ? dropRegionTarget(entry, region, geometry, point)
+    : undefined;
 }
 
 /**

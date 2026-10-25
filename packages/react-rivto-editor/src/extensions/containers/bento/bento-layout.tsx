@@ -7,8 +7,8 @@ import { BentoTileItem } from "./bento-tile";
  * The board header participates in flow rather than covering the first tile.
  * Each item owns width and resize resources; Page alone renders its block subtree.
  * Empty boards retain the child host as a drop region, and collapse unmounts tiles.
- * Unoccupied board background appends tiles; native tile edges and physical seams
- * retain their insertion actions without extending them over that background.
+ * Unoccupied board background beyond a 32px tile gutter appends tiles; nearby
+ * gutters, native tile edges and physical seams retain their insertion actions.
  *
  * @returns Header, body contributions and the single wrapping tile collection.
  */
@@ -27,7 +27,7 @@ export function BentoLayout() {
         item={BentoTileItem}
         controlsPlacement="inside"
         dropBackground
-        dropGutters={false}
+        dropGutterSize={32}
         dropGaps
         emptyDropTarget
       />
