@@ -67,6 +67,7 @@
 }
 .rivto-columns-content {
   margin: 0;
+  padding-block: 16px;
   padding-inline-start: 24px;
   gap: 4px;
 }

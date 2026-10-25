@@ -1944,7 +1944,7 @@ for (const mode of ["block", "edgeless"] as const) {
         await startDrag(page);
         const ys =
           placement === "before"
-            ? [first.y + 2, type === "kanban" ? first.y - 4 : first.y + 4, first.y + 2]
+            ? [first.y + 2, first.y - 4, first.y + 2]
             : [
                 last.y + last.height + 4,
                 bounds.y + bounds.height - 4,
@@ -1998,4 +1998,33 @@ for (const mode of ["block", "edgeless"] as const) {
       await expect.poll(() => readChildIds(page, parent)).toEqual([]);
     });
   }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`Columns has native space above and below its writing blocks in ${mode}`, async ({
+    page,
+  }) => {
+    const parent = await load(page, "columns", mode);
+    const host = page.locator(`[data-block-id="${parent}"] > .rivto-columns-content`);
+    const box = (await host.boundingBox())!;
+    const first = (await page.locator('[data-block-id="first"]').boundingBox())!;
+    const last = (await page.locator('[data-block-id="last"]').boundingBox())!;
+    expect(first.y - box.y).toBeCloseTo(16, 1);
+    expect(box.y + box.height - last.y - last.height).toBeCloseTo(16, 1);
+    await startDrag(page);
+    for (const offset of [4, 2, 1]) {
+      await page.mouse.move(first.x + first.width / 2, first.y - offset);
+      const line = await expectBoundaryLine(page);
+      expect(line.y + line.height / 2).toBeCloseTo(first.y, 1);
+    }
+    for (const offset of [1, 4, 8]) {
+      await page.mouse.move(last.x + last.width / 2, last.y + last.height + offset);
+      const line = await expectBoundaryLine(page);
+      expect(line.y + line.height / 2).toBeCloseTo(last.y + last.height, 1);
+    }
+    await page.mouse.up();
+    await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last", "source"]);
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+  });
 }
