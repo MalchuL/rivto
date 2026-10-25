@@ -626,3 +626,44 @@ test("keeps list counter ownership on wrapper elements and existing tile placeme
     .hover();
   await expect(page.locator("[data-demo-drop-output]")).toContainText('"nextId":"board-1-item-1"');
 });
+
+test("uses only rendered inside control widths with package CSS and theme overrides", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("style[data-demo-chrome]").evaluate((element) => {
+    (element as HTMLStyleElement).sheet!.disabled = true;
+  });
+  const editor = page.locator("[data-rivto-block-editor]");
+  await editor.locator(".rivto-block-row").evaluateAll((rows) => {
+    for (const row of rows) {
+      row.setAttribute("data-controls-placement", "inside");
+      // Reuse the demo's registered controls at the perimeter position under test.
+      row
+        .querySelector('[data-slot-position="start"]')!
+        .setAttribute("data-slot-position", "left-top");
+    }
+  });
+  const parent = editor.locator('[data-block-id="block-1"] > .rivto-block-row');
+  const child = editor.locator('[data-block-id="child-0"] > .rivto-block-row');
+  for (const size of [20, 14]) {
+    await editor.evaluate((element, value) => {
+      element.style.setProperty("--rivto-block-control-size", `${value}px`);
+    }, size);
+    await expect(parent.locator(':scope > [data-slot-position="left-top"]')).toHaveCSS(
+      "width",
+      `${size}px`,
+    );
+    await expect(child.locator(':scope > [data-slot-position="left-top"]')).toHaveCSS(
+      "width",
+      "0px",
+    );
+    await expect(page.getByRole("button", { name: "Collapse block-1", exact: true })).toHaveCSS(
+      "width",
+      `${size}px`,
+    );
+    const parentText = (await parent.locator(":scope > .rivto-block-content").boundingBox())!;
+    const childText = (await child.locator(":scope > .rivto-block-content").boundingBox())!;
+    expect(childText.x - parentText.x).toBeCloseTo(28, 1);
+  }
+});

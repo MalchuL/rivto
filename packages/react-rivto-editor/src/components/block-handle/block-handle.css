@@ -20,6 +20,11 @@
   -webkit-user-select: none;
 }
 
+/* In-flow handles share the control size used to reserve stable row width. */
+.rivto-block-row[data-controls-placement="inside"] > .rivto-block-slot > .block-handle {
+  width: var(--rivto-block-control-size, 20px);
+}
+
 /* Children live outside their parent's row, so only the line under the cursor
    or owning the caret reveals its handle. */
 .rivto-block-row[data-block-row-hover] > .rivto-block-slot > .block-handle,

@@ -18,8 +18,10 @@ export class BlockDropFeedback {
    *
    * Geometry was already read before these feedback writes. The line never receives
    * input, participates in model selection, or measures mounted blocks independently.
-   * No model or geometry reads occur here. Undefined targets hide the retained
-   * line and release the old outline; inside targets display only their outline.
+   * Boundary geometry keeps its insertion line, including an inside destination
+   * proposed by an indented edge or gap. Body/background inside regions have no
+   * line and outline their receiving hierarchy. No model or geometry reads occur here.
+   * Undefined targets hide the retained line and release the old outline.
    * The resolver supplies the complete receiving hierarchy as outlineElement,
    * so header and child-list backgrounds share their declared hierarchy frame.
    * Without an explicit outline element the region's own anchor is painted.
@@ -30,14 +32,15 @@ export class BlockDropFeedback {
    * @throws DOM write failures; the owner must still attempt clear.
    */
   update(target?: ResolvedBlockDropTarget): void {
-    const element = target?.outlineElement ?? target?.element;
+    const outline = target?.destination.kind === "inside" && !target.indicator;
+    const element = outline ? (target.outlineElement ?? target.element) : target?.element;
     if (this.target !== element) {
       this.target?.removeAttribute("data-block-drop-active");
     }
     this.target = element;
     this.updateLine(target?.indicator);
     if (target && element) {
-      const value = target.indicator ? "between" : "true";
+      const value = outline ? "true" : "between";
       if (element.getAttribute("data-block-drop-active") !== value) {
         element.setAttribute("data-block-drop-active", value);
       }

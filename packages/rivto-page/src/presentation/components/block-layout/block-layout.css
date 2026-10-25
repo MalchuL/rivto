@@ -5,6 +5,7 @@
   @apply page:flex-1 page:min-w-0;
 }
 .rivto-block-children {
+  --rivto-outline-control-offset: 0px;
   @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)];
 }
 .rivto-block-children[hidden] {
@@ -14,6 +15,34 @@
 /* Outline geometry is opt-in; container layouts use the same child host freely. */
 .rivto-block-outline:not(:empty) {
   @apply page:pbs-[var(--rivto-block-gap,4px)] page:ms-[var(--rivto-block-indent,28px)];
+}
+/* The parent's inline toggle must not consume the next level's text indent.
+ * Custom child hosts reset this offset; only ordinary outline children inherit it. */
+.rivto-block:has(
+    > .rivto-block-row[data-controls-placement="inside"]
+      > .rivto-block-slot[data-slot-position="left-top"]
+      > [data-collapse-toggle="true"]
+  )
+  > .rivto-block-outline {
+  --rivto-outline-control-offset: calc(
+    var(--rivto-block-control-size, 20px) + var(--rivto-slot-gap, 4px)
+  );
+}
+/* A standalone toggle has no neighboring control gap to compensate. */
+.rivto-block:has(
+    > .rivto-block-row[data-controls-placement="inside"]
+      > .rivto-block-slot[data-slot-position="left-top"]
+      > [data-collapse-toggle="true"]:only-child
+  )
+  > .rivto-block-outline {
+  --rivto-outline-control-offset: var(--rivto-block-control-size, 20px);
+}
+/* Move the entire leaf row, including its handle, rather than reserving an empty
+ * collapse position. A branch's real toggle already supplies that same offset. */
+.rivto-block-row[data-controls-placement="inside"]:not(
+    :has(> .rivto-block-slot[data-slot-position="left-top"] > [data-collapse-toggle="true"])
+  ) {
+  margin-inline-start: var(--rivto-outline-control-offset, 0px);
 }
 .rivto-block-outline:empty {
   @apply page:hidden;

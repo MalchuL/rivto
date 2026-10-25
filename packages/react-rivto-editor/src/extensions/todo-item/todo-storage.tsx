@@ -631,6 +631,8 @@ function TodoStorageEmpty({ blockId }: TodoStorageComponentProps) {
  * The toolbar and retained empty child host accept inside drops; the outer rim
  * remains the block's sibling boundary. Header, body and children belong to the
  * existing BlockView, giving Page one selection boundary in both surfaces.
+ * Direct-child boundaries share ordinary outline depth: the leading band sorts
+ * siblings and the indented trailing band appends children without entering content.
  *
  * @param props - Storage identity supplied by the registered Page layout.
  * @param props.blockId - Canonical parent for toolbar drops and the empty writing field.
@@ -648,6 +650,7 @@ export function TodoStorageLayout({ blockId }: TodoStorageComponentProps) {
       <BlockChildren
         dropBackground
         className="rivto-todo-storage-children"
+        targetSize={16}
         dropAxis="vertical"
         dropPlacement="outline"
         item={TodoStorageItem}

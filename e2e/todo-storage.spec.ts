@@ -55,11 +55,16 @@ test("keeps the storage surface inside its selection and aligns root controls", 
   expect(shellBox.y).toBe(wrapperBox.y);
   expect(shellBox.y + shellBox.height).toBe(wrapperBox.y + wrapperBox.height);
   const todoChildren = storage.locator(":scope > .rivto-block-children");
-  expect(await todoChildren.evaluate((element) => getComputedStyle(element).paddingLeft)).toBe(
-    await storage.evaluate((element) =>
-      getComputedStyle(element).getPropertyValue("--rivto-block-indent").trim(),
-    ),
+  const indent = await storage.evaluate((element) =>
+    parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
   );
+  const childInset = await todoChildren.evaluate((element) =>
+    parseFloat(getComputedStyle(element).paddingInlineStart),
+  );
+  const headerInset = await storage
+    .locator(":scope > .rivto-block-row")
+    .evaluate((element) => parseFloat(getComputedStyle(element).paddingInlineStart));
+  expect(childInset - headerInset).toBe(indent);
 
   const referenceRow = page
     .locator(
@@ -408,6 +413,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
     .locator("[data-block-content]:focus")
     .locator("xpath=ancestor::*[@data-block-id][1]");
   const sourceId = await source.getAttribute("data-block-id");
+  await dropField.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const handleBox = await source.locator(".block-handle").boundingBox();
   const dropBox = await dropField.boundingBox();
   if (!sourceId || !handleBox || !dropBox) {
@@ -418,10 +424,7 @@ test("creates a TODO storage from the slash menu", async ({ page }) => {
   await page.mouse.move(dropBox.x + dropBox.width / 2, dropBox.y + dropBox.height / 2, {
     steps: 12,
   });
-  await expect(emptyStorage.locator(":scope > .rivto-block-row")).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(emptyStorage).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
   await expect(emptyStorage.locator(`[data-block-id="${sourceId}"]`)).toBeVisible();
   await expect(dropField).toHaveCount(0);

@@ -27,6 +27,8 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly emptyDropTarget?: boolean;
   /** Enable declared physical gaps independently of item edges; grid defaults to false. */
   readonly dropGaps?: boolean;
+  /** Continue boundary actions across free row gutters; defaults to true when gaps are enabled. */
+  readonly dropGutters?: boolean;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly dropBoundaries?: BlockDropBoundaryMode;
   /** Append on unoccupied background, including filtered lists; defaults to false. */
@@ -35,10 +37,10 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly hoverBoundary?: boolean;
   /** Flow for declared insertion regions; defaults to vertical, grid items own their placement edges. */
   readonly dropAxis?: "vertical" | "horizontal" | "grid";
+  /** Inherited inset edge thickness in local CSS pixels; omission preserves the theme token. */
+  readonly targetSize?: number;
   /** Outline declares depth bands; siblings keeps each region at this parent. Defaults to outline. */
   readonly dropPlacement?: "outline" | "siblings";
-  /** False omits child append bands from this outline list; defaults to true. */
-  readonly allowChildPlacement?: boolean;
   /** Optional non-block JSX appended after mapped children, such as an add-column button. */
   readonly children?: ReactNode;
 }
@@ -58,10 +60,11 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.emptyDropTarget - True registers the empty, expanded host as a destination for its actual owner.
  * @param props.dropBoundaries - Merged midpoint or separate edge feedback; omission inherits the view default.
  * @param props.dropGaps - Enables insertion in physical free gaps; false leaves those gaps neutral.
+ * @param props.dropGutters - False keeps free row gutters for declared background regions; defaults to true. Item edges and physical gaps retain their actions.
  * @param props.dropBackground - Enables append on unoccupied host background, including filtered lists.
  * @param props.dropAxis - Flow for declared regions, default vertical. Linear lists register inset edges without forcing indentation; grid items supply wrapping boundaries. Background padding has no implicit action.
+ * @param props.targetSize - Optional edge thickness shared by direct items and descendants, including wrapping items; changes hit geometry only. The existing style token takes precedence.
  * @param props.dropPlacement - Outline declares horizontal depth regions; siblings fixes each gap to this list, independently of axis.
- * @param props.allowChildPlacement - False omits child append bands from standard outline gaps.
  * @param props.hoverBoundary - True bounds descendant row hover to this layout; false inherits the enclosing area without changing indentation or drop permission.
  * @param props.renderEmpty - False omits the entire host when childIds is empty, including extra controls.
  * @param props.className - Additional classes, including optional outline indentation.
@@ -79,10 +82,11 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     renderEmpty = true,
     emptyDropTarget = false,
     dropGaps,
+    dropGutters,
     dropBoundaries,
     dropBackground = false,
     dropAxis = "vertical",
-    allowChildPlacement = true,
+    targetSize,
     dropPlacement = "outline",
     hoverBoundary = true,
     ...attributes
@@ -96,6 +100,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       axis: dropAxis,
       boundaries: dropBoundaries,
       gaps: !collapsed && (dropGaps ?? dropAxis !== "grid"),
+      gutters: dropGutters,
       order: childIds,
       regions:
         !collapsed && (dropBackground || (emptyDropTarget && childIds.length === 0))
@@ -122,7 +127,13 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       data-block-drop-axis={dropAxis}
       data-block-drop-placement={dropPlacement}
       data-block-hover-boundary={hoverBoundary || undefined}
-      style={collapsed ? { ...style, display: "none" } : style}
+      style={{
+        ...(targetSize === undefined
+          ? undefined
+          : { "--rivto-drop-target-size": `${targetSize}px` }),
+        ...style,
+        ...(collapsed ? { display: "none" } : undefined),
+      }}
       className={[BLOCK_EDITOR_CLASSES.children, className].filter(Boolean).join(" ")}
       hidden={collapsed}
     >
@@ -135,7 +146,6 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
               item={item}
               dropAxis={dropAxis}
               dropPlacement={dropPlacement}
-              allowChildPlacement={allowChildPlacement}
             />
             {children}
           </BlockChildrenControlsContext.Provider>

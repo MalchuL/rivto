@@ -4,6 +4,8 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const placement of [
   "between",
+  "gutter",
+  "card",
   "inside",
   "control",
   "bento",
@@ -41,11 +43,14 @@ for (const placement of [
           }
           return [blocks.getRootIds()[0]!, children[0]!, children[1], board.id];
         }
-        if (placement === "column") {
+        if (placement === "column" || placement === "card") {
           const board = blocks.getBlocks().find((block) => block.type === "kanban");
           const lane = board?.children.find((block) => block.children.length > 0);
           if (!lane) {
             throw new Error("The default Kanban fixture needs a populated lane");
+          }
+          if (placement === "card") {
+            return [blocks.getRootIds()[0]!, lane.children[0]!.id, lane.children[1]?.id, lane.id];
           }
           return [blocks.getRootIds()[0]!, lane.id];
         }
@@ -73,7 +78,14 @@ for (const placement of [
       });
       await expect(source).toHaveAttribute("data-dragging", "true");
       const baseline = process.env.DROP_BASELINE === "1";
-      const targetId = intoBlock || placement === "end" || placement === "start" ? ids[1] : ids[2];
+      const targetId =
+        intoBlock ||
+        placement === "end" ||
+        placement === "start" ||
+        placement === "gutter" ||
+        placement === "card"
+          ? ids[1]
+          : ids[2];
       const target = document.locator(`[data-block-id="${targetId}"]`);
       if (placement === "control") {
         await target.evaluate((element) => {
@@ -101,7 +113,12 @@ for (const placement of [
       } else {
         await region.scrollIntoViewIfNeeded();
       }
-      if (placement === "bento" || placement === "end" || placement === "column") {
+      if (
+        placement === "bento" ||
+        placement === "end" ||
+        placement === "column" ||
+        placement === "card"
+      ) {
         const warm = (await region.boundingBox())!;
         await page.mouse.move(warm.x + warm.width / 2, warm.y + warm.height / 2);
         // Stop drag autoscroll before measuring a seam after the long fixture scroll.
@@ -117,6 +134,14 @@ for (const placement of [
       let y = intoBlock ? box.y + box.height / 2 : box.y - 2;
       if (placement === "column") {
         x = box.x + box.width / 2;
+      }
+      if (placement === "gutter") {
+        const host = (await document.boundingBox())!;
+        x = baseline ? box.x + 4 : host.x + 1;
+        y = baseline ? box.y + box.height - 2 : box.y + box.height * 0.55;
+      } else if (placement === "card") {
+        x = box.x + (baseline ? 4 : Math.min(12, box.width / 2));
+        y = box.y + box.height - (baseline ? 2 : 12);
       }
       if (placement === "start") {
         y = box.y + 2;
@@ -139,7 +164,8 @@ for (const placement of [
           const right = Math.min(box.x + box.width, preceding.x + preceding.width);
           expect(right).toBeGreaterThan(left);
           expect(preceding.y + preceding.height).toBeCloseTo(box.y, 1);
-          x = (left + right) / 2;
+          // Keep the wrapped seam in its sibling band, rather than its indented child band.
+          x = left + Math.min(12, (right - left) / 2);
           y = box.y - 0.5;
         }
       }
@@ -228,7 +254,7 @@ for (const placement of [
               return children?.slice(0, 3);
             }, ids[3]),
           )
-          .toEqual([ids[1], ids[0], ids[2]]);
+          .toEqual([ids[1], ids[0], ids[2]].filter((id) => id !== undefined));
       }
       await page.waitForFunction(() => "__dropRendered" in window);
       const command = await page.evaluate(() => {

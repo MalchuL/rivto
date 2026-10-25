@@ -9,7 +9,8 @@ extension contributions. The registered layout determines where they appear.
   traversing children.
 - `BlockContent` renders the host component registered for the block's type,
   passing its `blockId`. If no registration or fallback exists, its content host
-  remains empty. The memoized renderer boundary skips unchanged props while the
+  remains empty. Its ref declares the owner's content bounds without an extra
+  wrapper or recursive lookup. The memoized renderer boundary skips unchanged props while the
   renderer's own state, context, and subscriptions can still trigger updates.
 - `BlockBody` renders matching extension contributions registered at the `body`
   slot position. It returns nothing when no contribution matches. It does not
@@ -30,6 +31,39 @@ BlockView
 supplies the row, body, and child group inside it. Custom layouts can rearrange or
 omit those primitives.
 
+## Shared block interaction
+
+Every block uses the same interaction model, independently of its type or parent
+container. `BlockView` is the complete hierarchy boundary; `BlockRow` and
+`BlockContent` declare the block's own primary content, and `BlockChildren`
+declares its child layout. Their committed refs register occurrence-local bounds;
+content renderers do not provide custom target-search functions.
+
+The geometry resolver uses only those declared regions and canonical neighbors.
+A placement edge cannot consume the middle third of the block's registered content
+(or primary row when content is absent), even when children enlarge the shell or
+a layout inherits a larger target-size token. Shell/item padding remains available
+for sorting without adding any new hitbox DOM or presentation spacing. Missing
+regions retain their declared shell geometry; unregistered anchors are never
+searched for a descendant body. Virtualized, unmounted content is not measured.
+
+`inside` and `between` are canonical destinations, not separate container
+implementations or complete feedback descriptions. Body/background inside regions
+outline their registered complete receiving shell. Boundaries retain their
+shared/separate line at the selected depth, including an inside child-append
+destination proposed by an indented edge or physical gap. Hit anchor, canonical
+parent and feedback geometry are distinct: native discovery owns the hit, model
+validation owns permission and neighbor identity, and feedback paints the resolved
+region without discarding its line based on destination kind alone.
+Exclusions, nested editor occurrences and rejection still bound discovery; a
+rejected target does not redirect to an outer parent.
+
+Layouts configure child order, flow, edge/gap/background declarations and control
+placement. Concrete behaviors can reject semantic moves. Ordinary blocks, Kanban,
+Bento, TODO storage and future layouts otherwise inherit this same model. Fix a
+common geometry or feedback failure in Page instead of introducing another block-
+or container-specific pointer algorithm.
+
 `BlockItem` is an optional outer placement wrapper around an already-rendered
 block, including its `BlockView`. It provides a place for item dimensions and
 host controls, and keeps sibling list counters from counting the same block twice.
@@ -46,10 +80,11 @@ and do not change renderer selection or child traversal.
 `BlockList` iterates an ordered list of block IDs and renders one keyed `BlockNode`
 per ID. It is shared by the host-selected display list and child lists. It adds no
 outer list element. Optional `item` components wrap each already-rendered node;
-they can compose `BlockItem` to supply placement geometry. Optional `gap`
-components receive neighboring IDs and are rendered only when a real `parentId`
-is supplied. A canonical child list must retain document order for those gap
-destinations to be meaningful; an arbitrary display list does not imply a parent.
+they can compose `BlockItem` to supply placement geometry. Item-owned edge
+registrations receive canonical neighbors when a real `parentId` is supplied,
+and the owning layout declares physical gaps independently. A canonical child
+list retains document order for those destinations to be meaningful; an arbitrary
+display list does not imply a parent.
 
 The distinction is scope: `BlockList` renders the collection, while `BlockItem`
 wraps a single member. Neither is the block's main content renderer.
@@ -117,7 +152,37 @@ separate horizontal sibling and child-append bands. Terminal subtrees additional
 expose their ancestor insertion bands. Choose `siblings` to keep a list's gaps at
 its own parent. This is independent of `dropAxis`, which describes actual flow.
 Linear lists generate item-owned regions; grid items compose BlockDropWrapper.
+Both use the same canonical edge builder and inherit the list's placement policy.
+Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
+seams insert siblings. Terminal descendants inherit their item's trailing levels,
+so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
+`dropGutters` defaults to true while gaps are enabled and continues item boundaries
+across free row gutters. Set it to false when those side areas should retain their
+declared background action. This leaves native item edges and actual physical
+gaps enabled; Bento uses this policy so its board background appends tiles.
+`targetSize` sets the inherited `--rivto-drop-target-size` in local CSS pixels for
+linear and wrapping items. An explicit style token overrides this shorthand.
+Use `dropPlacement="siblings"` only when boundaries intentionally retain their
+list parent, such as structural columns. Ordinary container children retain
+`outline`, including direct cards and tiles. Body-inside declarations are an
+additional route to nesting, not a replacement for indented boundary placement.
+Edge thickness never changes layout dimensions.
+
+Rows with `controlsPlacement="inside"` size their control slot from the controls
+actually rendered, using `--rivto-block-control-size` and `--rivto-slot-gap`.
+In-flow host controls must use that control size. A branch adds its collapse
+button and gap; a leaf keeps only its handle width without a reserved second
+position. Collapsing a branch retains its toggle, while deleting the last child
+removes it. Outline child-host indentation remains independent of control width.
+Within an ordinary outline, a leaf row also accounts for its parent's inline
+collapse width so the toggle cannot cancel the next text level. This moves the
+row and handle together instead of adding an empty control position. Branch rows
+already have their own toggle and need no compensation. The internal offset resets
+at custom child hosts and autonomous editor roots, so direct container leaves keep
+their natural control width. Collapse contributions expose `data-collapse-toggle`
+so the shared layout can recognize their actual presence, including a standalone
+toggle without a neighboring handle.
 
 BlockNode declares inside insertion on its existing shell, including headers, text
 and controls. Layouts declare background append independently. Override intentional
@@ -144,6 +209,6 @@ No declaration inserts a strip or contributes minimum height. Explicit exclusion
 stop ancestor fallback while preserving matching descendant regions and ordinary
 control events. A deeper exclusion bounds those descendant regions in turn.
 Physical gap search requires monotone flow; grids require aligned row-major ordering.
-Bento disables gaps and appends on unoccupied board background. Empty and filtered
+Bento declares tile seams and appends on unoccupied board background. Empty and filtered
 hosts use existing geometry without creating a spacer. Feedback uses the selected
 region; ordinary row hover and handle presentation remain independent.

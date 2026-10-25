@@ -315,10 +315,18 @@ Its options provide `axis`, stable `order`, `gaps`, and optional background `reg
 `BlockChildren.dropGaps` defaults to true for linear lists, false for grids. Disabling
 it disables insertion in free gaps, while keeping independently declared item edges.
 `dropBackground` enables append in unoccupied host space, including filtered lists.
+`dropGutters={false}` leaves free row gutters for declared background regions while
+retaining native item edges and physical gaps. Omission preserves full-row boundary
+continuation. The equivalent `BlockDropLayout` option is `gutters`; Bento disables
+this continuation so hovering its exposed board background appends a tile.
 Inside feedback covers the receiving block's complete registered shell, including
 its descendants. The resolved target carries this explicit `outlineElement`
 separately from the hit anchor; rendering does not infer hierarchy from DOM ancestry.
 Custom resolvers may supply `outlineElement` directly; omission paints their hit anchor.
+The selected region supplies feedback independently of its canonical destination:
+body/background inside regions outline the receiving hierarchy, while boundaries
+retain their insertion line, including indented child append represented as inside.
+Layouts share this rule instead of interpreting destination kind as presentation.
 
 Bento enables shared boundaries and background append: unoccupied space beneath
 a shorter tile belongs to the board, while declared neighboring edges remain
@@ -637,6 +645,24 @@ its real trailing element after virtual reserves. Views without trailing control
 including embedded editors, retain ordinary block-edge insertion without acquiring
 extra whitespace or a hidden ending box.
 
+Vertical/horizontal lists also use unoccupied cross-axis gutters across each item's
+full row inside that registered host. The leading half selects its declared before
+edge and the trailing half its after edge, respecting horizontal RTL flow. Bodies
+inside the item keep their separate inside declarations; missing or zero-size edges
+never create a gutter target. Wrapping grids expose the same row halves outside
+the first and last tile of an aligned row, while inter-tile seams and background
+beneath short tiles retain their own declarations.
+Physical sibling gaps span the same host cross axis; shared/separate feedback and
+outline depth stay consistent when crossing an item's side. Lookup stays within
+the native owning layout, uses binary search over mounted anchors, and does not
+fill virtual holes or unoccupied space beneath short tiles. On `BlockChildren`,
+`dropGaps={false}` disables this layout continuation. Insets are capped to one third
+of the anchor axis and stop before the middle third of its registered own content
+(or primary row when content is omitted). Descendants can enlarge the complete
+shell without consuming its own inside body. Existing padding remains available
+to declared edges. These measurements use primitive-owned refs rather than
+searching child blocks or adding type-specific hit tests.
+
 Root-list layouts also use existing free space before their first displayed root
 and after their last root as ordinary insertion gaps. No ending/leading spacer,
 extra model subscription, or padding-specific region mode is required. Feedback
@@ -646,7 +672,14 @@ endpoint is mounted. Existing explicit regions, including trailing controls,
 retain priority over these outer gaps. Empty views still use `emptyDropParentId`.
 
 An edge declaration may use `coverage: "bounds"` to accept its whole anchor while
-keeping the insertion line on the declared edge. `indicatorInset` independently
-adjusts the logical-start inset of a block-edge line in local CSS pixels; negative
-values extend feedback without extending hit coverage. Inline-edge lines ignore
-this inset. These declarations do not add DOM or change layout dimensions.
+keeping the insertion line on the declared edge. `BlockChildren.targetSize` sets
+the inherited inset-edge thickness for both linear children and wrapping items,
+using the existing theme token without changing native layout dimensions.
+Linear shells and wrapping items share canonical edge and terminal-depth generation.
+Their containing list supplies `dropPlacement`: `outline` preserves indented child
+placement on trailing block edges, physical gaps and row gutters, while `siblings`
+intentionally fixes boundaries to the list's parent. Grid inline seams remain
+sibling insertion. Inside body regions provide an additional nesting route;
+ordinary container cards and tiles retain outline boundaries as well.
+Feedback follows the declared placement bounds and outline depth; these
+declarations do not add DOM or change layout dimensions.

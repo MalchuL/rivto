@@ -1,7 +1,7 @@
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 
 /** Mounted layout roles shared by hover, selection and drop geometry. */
-export type BlockLayoutRegion = "shell" | "row" | "children" | "body" | "slot" | "item";
+export type BlockLayoutRegion = "shell" | "row" | "content" | "children" | "body" | "slot" | "item";
 
 /** Registration attached to an element without retaining detached DOM globally. */
 interface MountedRegion {
@@ -136,6 +136,7 @@ export function blockLayoutNeighbor(host: HTMLElement, blockId: string): HTMLEle
 const selectors: Record<BlockLayoutRegion, string> = {
   shell: "[data-block-id]",
   row: `.${BLOCK_EDITOR_CLASSES.row}`,
+  content: `.${BLOCK_EDITOR_CLASSES.content}`,
   children: `.${BLOCK_EDITOR_CLASSES.children}`,
   body: '[data-slot-position="body"]',
   slot: "[data-slot-position]",
@@ -173,4 +174,22 @@ export function blockLayoutRegion(
     pending.unshift(...element.children);
   }
   return undefined;
+}
+
+/**
+ * Reads an explicitly registered owner's region without traversing fallback DOM.
+ *
+ * Pointer geometry uses this bounded lookup so an unregistered anchor cannot
+ * borrow a descendant block's body or scan a large editor subtree.
+ *
+ * @param element - Existing anchor registered by a layout primitive.
+ * @param role - Owned region to read within that anchor and editor occurrence.
+ * @returns Current registered region, or undefined for unregistered/omitted regions.
+ */
+export function registeredBlockRegion(
+  element: HTMLElement,
+  role: BlockLayoutRegion,
+): HTMLElement | undefined {
+  const owner = mounted.get(element);
+  return owner?.registry.get(owner.blockId, role, element);
 }

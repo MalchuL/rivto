@@ -54,7 +54,8 @@ moving the indicator. Host commands validate again and retain transactional writ
 
 Use `BlockChildren` with `dropAxis`, `dropPlacement`, `dropGaps`, `dropBackground`
 and `emptyDropTarget` for canonical children. Use `BlockDropWrapper` through `item`
-for wrapping placement, with optional `axis`, `targetSize`, and `contentRegions`.
+for wrapping placement, with optional `axis` and `targetSize`. Child bodies keep
+inside regions on their existing shells; explicit extra anchors use BlockDropTarget.
 Use `BlockDropTarget asChild` with data-only `regions` for an existing explicit
 anchor. `BlockDropLayout` is available for already-rendered ordered root hosts,
 including Edgeless. A new container needs composition, not a resolver type switch.
@@ -947,3 +948,656 @@ registration; current assets contain none. Timings remain comparable, with noisy
 large-document rendering; no speedup or fix for that existing cost is claimed.
 The pre-existing staged changes were preserved; this simplification is in the
 working tree and has not been restaged.
+
+
+### Continue edge strips into side gutters (2026-10-25)
+
+Compared `main` at dca961c8cbd7893c009832746c27d1619308590e, especially
+`extensions/block-drag/placement/resolver.ts`, `pointer/target.ts` and the fixed
+layout metadata. Main resolved ordered-list background using its own list and
+kept direct fixed-column card gaps from projecting into child placement. Its
+whole-document collection/list scans were not copied. The user explicitly chose
+continuation of existing top/bottom strips, with no new half-row targets in the
+middle of side gutters.
+
+The shared Page layout resolver now projects unoccupied cross-axis gutters onto
+one registered linear item's existing edge strip. Native ownership, clipping to
+the registered host, explicit exclusions and source acceptance stay in the same
+path. Binary search and query-local rectangle caching avoid a full forest scan.
+The original descriptor and actual pointer retain outline depth and merged/
+separate feedback; gutter targets still pass registered pair-identity checks.
+Physical linear gaps span that same host cross axis, preventing a dead patch
+between the continued strips. Grid intersections and their separately declared
+backgrounds remain unchanged; unmounted virtual intervals gain no targets.
+Feedback stays at the same block boundary, independent of the wider hit area.
+
+Kanban card lists use their existing `--rivto-drop-target-size` parameter at 16px
+and `allowChildPlacement={false}` for direct card-edge bands. Their ordinary
+outline context is retained, so nested outline ownership/outdent levels are not
+reset by switching the entire list to sibling-only placement. Full-width direct
+card edges insert in the column; bodies still accept nested content. The shared
+edge cap is one third of its anchor axis, preserving a central body for small
+nested blocks even when they inherit the larger token. No new public mode,
+property, target wrapper, layout spacing or pointer handler was introduced.
+
+Ownership/API review covered registered native-hit resolution, current mounted
+layout snapshots and their cleanup, both pair/gutter geometry consumers, shared
+BlockDropItem depth propagation and source/model validation, BlockChildren's
+existing option and theme contracts, and the Kanban renderer/CSS owner. The new
+pair-identity helper borrows only the selected element/region, preserving original
+descriptor identity checks. No manager dependency, lifecycle ownership, command,
+model shape or declaration union changed; size documentation now states its cap.
+
+Regression evidence: the 24 initial gutter/card-edge cases failed on the isolated
+pre-fix production build with 12 workers and again serially. Failure was missing
+edge feedback at the requested positions, not fixture setup. Final tests verify
+native versus continued feedback equality, neutral side middles, actual root/
+child order and undo, first/last card edges across the width, and nesting into a
+small descendant card body. The previous zero-leading-space test expected no
+feedback where a continued first-item strip now intentionally exists. After its
+two failures reproduced serially, its assertions were updated to prove no added
+space above the root, a neutral side middle, and an active real item strip.
+
+Final checks: 107 Page unit tests, one Kanban model/undo test, and all 218 selected
+Chromium/Firefox DnD, rapid-release and Kanban browser checks passed. Behavioral
+runs used 12 workers. Page/React/demo type checks, Page build and isolated demo
+production build passed. Formatting passed and scoped lint has no errors; only
+the existing long fixture/performance callbacks warn. New runtime helpers and the
+modified pair resolver stay within 50 lines. Full workspace suites were not run.
+
+Serial production measurements, three samples per browser/size/placement;
+median [min–max], ms:
+
+| Build / placement / browser / repeat | Synchronous move | Two-frame rendering proxy |
+| ------------------------------------ | ---------------: | ------------------------: |
+| before / gutter / chromium / 0       |    1.0 [1.0–1.3] |          31.1 [30.6–31.2] |
+| before / gutter / chromium / 200     |    5.3 [4.8–5.3] |          80.0 [72.9–85.6] |
+| before / gutter / firefox / 0        |    2.0 [1.0–3.0] |          32.0 [30.0–34.0] |
+| before / gutter / firefox / 200      | 10.0 [10.0–11.0] |          75.0 [75.0–82.0] |
+| before / card / chromium / 0         |    1.5 [1.4–1.9] |          31.4 [31.3–32.1] |
+| before / card / chromium / 200       |    7.1 [6.4–7.3] |       115.5 [115.4–117.2] |
+| before / card / firefox / 0          |    2.0 [2.0–2.0] |          31.0 [31.0–32.0] |
+| before / card / firefox / 200        | 15.0 [15.0–16.0] |         98.0 [94.0–100.0] |
+| after / gutter / chromium / 0        |    1.1 [1.1–1.2] |          31.3 [30.5–31.7] |
+| after / gutter / chromium / 200      |    5.2 [5.2–5.8] |          71.6 [70.2–79.8] |
+| after / gutter / firefox / 0         |    2.0 [1.0–2.0] |          31.0 [30.0–31.0] |
+| after / gutter / firefox / 200       | 11.0 [10.0–11.0] |          74.0 [73.0–81.0] |
+| after / card / chromium / 0          |    1.5 [1.5–1.7] |          31.1 [31.1–31.4] |
+| after / card / chromium / 200        |    7.0 [6.9–7.1] |       109.0 [107.6–109.4] |
+| after / card / firefox / 0           |    1.0 [1.0–2.0] |          31.0 [30.0–31.0] |
+| after / card / firefox / 200         | 13.0 [13.0–16.0] |         96.0 [95.0–102.0] |
+
+All 48 measurements passed and assert committed canonical order. Stock demo
+registrations and default virtualization settings were retained at normal size
+and repeat=200, with tracing off and no concurrent builds/browser tests. Baseline
+uses an existing legal narrow native edge; the final build uses the continued
+left gutter or the wider card edge at its center. Both perform the same source
+move. Card assertions support the stock lane's one existing card without adding
+a synthetic fixture. Costs are comparable; no rendering speedup is claimed.
+New changes remain unstaged. The user committed the prior top/bottom work as
+c325bc86 during this task; that commit and its unrelated content were preserved.
+
+### Share container edge policy and stabilize nested controls (2026-10-25)
+
+Kanban card lists, Bento tile lists and TODO storage now declare `targetSize={16}`
+on `BlockChildren`. This shorthand sets the existing inherited CSS geometry token;
+linear `BlockDropItem` and wrapping `BlockDropWrapper` read the same value. The
+native spacing and one-third edge cap remain unchanged. Explicit style tokens take
+precedence, and nested lists may override the inherited size. Ordinary editor lists
+retain the existing 8px default.
+
+Kanban and TODO storage omit direct-child append bands through the existing
+`allowChildPlacement={false}` option. This preserves terminal descendant ancestry,
+unlike switching an outline list to sibling-only placement. Direct edge strips sort
+siblings across their full width; the center and nested bodies still accept inside
+drops. Bento already declares sibling edges. Its bespoke content-end append strip
+intersected the enlarged outer edge, so it was removed in favor of the same body
+inside declaration. The former Bento inset-edge browser assertion now verifies a
+real body drop and its persisted parent instead. The unused `contentRegions` wrapper
+option and `indicatorInset` feedback option were removed after checking all callers;
+the historical sections above describe the earlier implementations they supersede.
+
+In-flow left-top controls previously grew when a collapse toggle appeared. A leaf's
+handle and a branch's handle-plus-toggle therefore had different widths, consuming
+most of the visible child indentation. Page now reserves two control positions
+using the public control-size and slot-gap parameters. React's handle follows that
+control size when inside a row, while its existing perimeter hitbox remains intact.
+The collapse button also reads the control-size token through its own width utility,
+so the host's former fixed-width utility cannot override a smaller public theme.
+Default outline indentation still belongs to DefaultBlockLayout; custom container
+hosts do not acquire an implicit indentation.
+
+Ownership review covered BlockChildren -> BlockList -> BlockDropItem and
+BlockDropWrapper -> useBlockDropRegions, plus container layout registrations,
+BlockRow controls contexts, Page slot CSS and the React handle. No model shape,
+controller dependency, object owner or subscription was added. Registration and
+unmount cleanup retain the existing hooks. The new size option only supplies the
+already-public style token; it does not register an extra region or allocate DOM.
+
+Behavioral validation: the initial 36 new container-edge/nesting checks produced
+24 failures and 12 passes on the isolated original production build. All 24
+failures reproduced with one worker. The final main-demo run passed 380 checks
+with 12 workers across Chromium and Firefox; two existing TODO keyboard-order
+checks remain skipped. The standalone Page production demo passed six geometry
+checks, including disabled demo CSS and public control sizes of 20px and 14px.
+The tests assert real pointer moves, committed parent/order, undo, multilevel
+indentation and stable content positions when a leaf becomes a branch or collapses.
+
+The wider run also exposed two stale TODO test expectations already failing on
+the original build in both browsers, confirmed serially. The storage's child inset
+is its header inset plus outline indentation (31px = 7px + 24px), and inside feedback
+belongs to the whole block shell. The assertions now check those contracts while
+retaining the actual move result. The slash-create drag centers its real destination
+before measuring the gesture, avoiding viewport-edge autoscroll in Firefox. Bento's
+old inside-placement test now targets its central row and asserts hierarchy outline
+instead of the removed content-end line. These were test corrections, not additional
+runtime fixes to TODO filtering or slash commands.
+
+Focused unit checks passed: 107 Page declaration/component checks and seven Kanban,
+Bento and TODO-storage operation checks. Page/package and both demo production builds,
+Page/React/main-demo type checks and formatting passed. Scoped ESLint has no errors;
+14 length warnings remain in existing long functions and test callbacks. No full
+workspace suite was run. The index present at task start was preserved; this task's
+changes remain unstaged.
+
+Production performance used the unchanged default demo and `?repeat=200`, with one
+worker, tracing disabled and three samples per browser, size and placement. Both
+runs passed all 36 samples and assert committed canonical hierarchy/order. The
+existing card, Bento-seam and TODO-control scenarios exercise real native handles,
+90 pointer moves, synchronous host commands and two-frame rendered completion.
+The baseline uses the prior legal narrow card edge; the final run uses the wider
+central edge. The transaction, document and browser settings are otherwise equal.
+These measurements show comparable cost, not an application-wide speedup.
+
+Times below are median [minimum–maximum], in milliseconds. Builds were served from
+`/tmp/gutter-drop-validated` (before) and `/tmp/container-drop-complete` (after), on
+isolated loopback previews. Logs: `/tmp/container-drop-perf-before.log` and
+`/tmp/container-drop-perf-after.log`. No builds or other browser runs overlapped
+these measurements.
+
+| Browser  | Target  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | bento   | 0      | 1.6 [1.3–1.6]    | 1.7 [1.2–2.3]    | 31.5 [30.9–31.5]    | 31.3 [31.3–31.4]    |
+| chromium | bento   | 200    | 7.2 [6.9–7.3]    | 7.2 [6.8–7.3]    | 99.7 [96.1–123.9]   | 97.0 [96.5–109.6]   |
+| chromium | card    | 0      | 1.3 [1.2–1.5]    | 1.4 [1.2–1.4]    | 30.8 [29.8–32.0]    | 31.3 [30.6–31.3]    |
+| chromium | card    | 200    | 7.0 [6.9–7.1]    | 7.0 [6.8–7.4]    | 109.4 [108.4–120.8] | 112.3 [110.8–113.5] |
+| chromium | control | 0      | 1.4 [1.4–1.7]    | 1.5 [1.4–1.6]    | 31.8 [31.8–31.9]    | 31.8 [31.2–32.0]    |
+| chromium | control | 200    | 10.3 [10.2–19.1] | 10.6 [10.0–10.8] | 61.2 [58.2–137.6]   | 59.4 [59.0–60.2]    |
+| firefox  | bento   | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]    | 31.0 [31.0–32.0]    |
+| firefox  | bento   | 200    | 14.0 [14.0–15.0] | 13.0 [13.0–14.0] | 88.0 [88.0–93.0]    | 87.0 [87.0–90.0]    |
+| firefox  | card    | 0      | 2.0 [1.0–2.0]    | 1.0 [1.0–2.0]    | 32.0 [30.0–32.0]    | 30.0 [30.0–32.0]    |
+| firefox  | card    | 200    | 15.0 [14.0–16.0] | 14.0 [14.0–14.0] | 96.0 [92.0–96.0]    | 93.0 [93.0–93.0]    |
+| firefox  | control | 0      | 2.0 [2.0–2.0]    | 2.0 [2.0–3.0]    | 32.0 [31.0–33.0]    | 30.0 [28.0–31.0]    |
+| firefox  | control | 200    | 20.0 [19.0–20.0] | 17.0 [17.0–19.0] | 92.0 [92.0–94.0]    | 90.0 [89.0–94.0]    |
+
+### Select insertion across full row gutters (2026-10-25)
+
+The user replaced the earlier strip-only requirement with full-row side coverage.
+The local `main` resolver at `dca961c8cbd7893c009832746c27d1619308590e`
+was inspected again: ordered background belongs to its own list, with canonical
+before/after destinations and independently handled grid seams. The current Page
+implementation keeps that ownership without importing main's global tree scans.
+
+`resolveLayoutGutter` now chooses the existing before edge in the leading half
+of a mounted item and its after edge in the trailing half. Horizontal lists use
+inline halves with RTL reversal. The actual pointer still selects declared
+outline depth, and the existing sibling-pair resolver preserves merged/separate
+feedback. Missing edges, zero-size edges, explicit exclusions, rejected moves and
+unmounted intervals do not invent targets or fall through into another layout.
+Inside-body declarations and top/bottom inset strips remain independent.
+
+Wrapping grids use the same rule only in exposed side gutters outside the first
+or last tile of an aligned row. Inter-tile seams keep their original axis and
+canonical boundary; background underneath a shorter tile keeps the parent's
+background append declaration. `layoutRowRange` shares the existing binary row
+search between gutter and gap lookup. The scope remains the registered list's
+actual bounds; no layout boxes, padding, whole-document search or container-type
+branches were added. `dropGaps={false}` still disables layout gutter resolution.
+
+The helper contract review covered BlockChildren/BlockDropLayout registration,
+BlockList/BlockDropWrapper anchors, BlockDropTargets discovery and permission,
+and feedback/commit consumers. The new private item helper receives only the
+flow axis and cached reads it uses. No public API, controller dependency,
+subscription, lifecycle owner or cleanup path changed.
+
+Browser regressions now enter the side gutter at 45% and 55% of the row height,
+beyond either inset strip. The 16 root cases failed on the original production
+build with 12 workers, and all failures reproduced with one worker. An additional
+48 container cases cover Kanban, Bento and TODO storage on Page and Edgeless,
+including actual parent/order and undo. Kanban's card-list host has no default
+inline padding, so that fixture supplies native list padding to exercise the
+same registered layout extension point; it creates no hit-area DOM. The zero-top-
+space test retains its no-spacer assertions while accepting the new row gutter.
+
+Unit coverage checks vertical/horizontal and RTL halves, declared-edge identity,
+zero/missing edges, source rejection, grid seams, short-tile background and
+bounded rectangle reads with 5 and 2,000 mounted items. Both actual physical gaps
+and middle-of-row gutters stay within ceil(log2(item count)) + 2 rectangle reads.
+
+Final verification passed: 428 main-demo browser checks with 12 workers across
+Chromium and Firefox, 112 focused Page unit checks, Page/package and production
+demo builds, Page/React/demo type checks, formatting and diff whitespace checks.
+The two existing TODO keyboard-order browser cases remain skipped. Scoped lint
+has no errors and two existing long-test-function warnings. The full workspace
+suite was not run, and the pre-existing index was preserved.
+
+Production pointer performance passed 12 before and 12 after samples: three per
+browser at default size and `?repeat=200`, with one worker and tracing disabled.
+Each sample performs 90 pointer movements and asserts the actual committed order.
+The baseline uses its legal inset edge; the final gesture enters the left gutter
+at 55% row height. Both commit the same canonical gap. No build or other browser
+run overlapped these measurements. Cost is comparable; this is not a speedup claim.
+The original and final builds were served from `/tmp/container-drop-complete` and
+`/tmp/row-gutter-final`; raw logs are `/tmp/row-gutter-perf-before.log` and
+`/tmp/row-gutter-perf-after.log`.
+
+Times are median [minimum–maximum] in milliseconds. Rendered completion is the
+existing two-animation-frame proxy after the synchronous host move command.
+
+| Browser  | Repeat | Sync before     | Sync after      | Rendered before  | Rendered after   |
+| -------- | ------ | --------------- | --------------- | ---------------- | ---------------- |
+| chromium | 0      | 1.0 [1.0–1.1]   | 1.0 [1.0–1.3]   | 31.2 [30.4–31.5] | 31.1 [30.9–32.0] |
+| chromium | 200    | 5.3 [5.1–5.3]   | 5.5 [5.1–5.8]   | 72.8 [71.1–79.7] | 73.2 [69.5–76.8] |
+| firefox  | 0      | 2.0 [2.0–3.0]   | 2.0 [1.0–2.0]   | 30.0 [29.0–31.0] | 31.0 [30.0–32.0] |
+| firefox  | 200    | 10.0 [9.0–11.0] | 10.0 [9.0–10.0] | 75.0 [73.0–82.0] | 75.0 [72.0–81.0] |
+
+### Reserve collapse width only when the block has children (2026-10-25)
+
+The user requested removing the empty collapse position from leaves. The shared
+inside slot no longer has a two-control minimum width; it sizes naturally from
+its rendered controls. React already returns no collapse button when the canonical
+child ID list is empty, so no new property, model subscription, DOM attribute or
+container-specific selector is needed. In-flow branches occupy handle + toggle +
+gap, while leaves occupy only their handle. Collapsing a branch retains the toggle;
+removing its final child releases the toggle and its horizontal space.
+
+This intentionally replaces the earlier constant-width invariant: acquiring a first
+child now shifts in-flow text by one control size plus one slot gap. The shared
+outline host retains its own indentation, independently of that conditional control
+width. Tests verify physical subtree indentation and visible nested text offsets,
+rather than requiring leaves and branches to start at the same text coordinate.
+They cover first-child insertion, collapse, final-child deletion and public control
+size changes on Page and Edgeless in Kanban, Bento and TODO storage. The standalone
+Page check uses package CSS with demo chrome disabled and 20px/14px control sizes.
+
+Baseline main-demo checks produced eight failures and four passes; all eight
+failures reproduced with one worker. TODO storage already uses outside controls,
+so its four unchanged cases passed. Runtime ownership is unchanged: the Page slot
+owns geometry and existing React/Page collapse contributions decide visibility
+from canonical child IDs, including when descendants are collapsed or unmounted.
+
+Final verification: 428 main-demo browser checks passed with 12 workers across
+Chromium and Firefox; the two existing TODO keyboard-order cases remain skipped.
+Six standalone Page checks passed, including disabled demo CSS and public theme
+overrides. The published Page CSS and both production demo builds passed. Formatting,
+diff whitespace and scoped ESLint passed; one existing long-fixture warning remains.
+No Jest check was added for this CSS deletion: browser measurements cover the actual
+rendered width and child transitions. No full workspace suite was run. The existing
+index was preserved; these changes remain unstaged.
+
+The existing Kanban card DnD benchmark passed 12 before and 12 after samples on the
+default demo and `?repeat=200`, serially with tracing disabled and three samples per
+browser/size. Every sample asserts the committed card order after real pointer
+input. An additional 12 inside-drop baseline samples passed as an adjacent control;
+only the paired card samples are compared below. Builds and other browser tests
+were not run concurrently with the measurements. The before build was
+`/tmp/row-gutter-final`; the after build was `/tmp/collapse-space-after`.
+
+Times are median [minimum–maximum] in milliseconds. Rendered completion uses the
+existing two-frame proxy after the synchronous host move. Cost remains comparable.
+Raw logs: `/tmp/collapse-space-card-perf-before.log` and
+`/tmp/collapse-space-card-perf-after.log`.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | 0      | 1.4 [1.2–1.6]    | 1.4 [1.3–1.4]    | 31.2 [31.1–31.4]    | 30.9 [30.8–31.2]    |
+| chromium | 200    | 7.1 [6.9–8.4]    | 6.9 [6.9–7.0]    | 113.0 [108.3–115.6] | 119.7 [107.2–120.8] |
+| firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [2.0–2.0]    | 31.0 [30.0–32.0]    | 30.0 [30.0–31.0]    |
+| firefox  | 200    | 14.0 [12.0–14.0] | 14.0 [13.0–15.0] | 94.0 [92.0–94.0]    | 92.0 [90.0–93.0]    |
+
+### Preserve nested text indentation with conditional controls (2026-10-25)
+
+The previous natural-width-only change reintroduced the reported nested text bug.
+With a 20px control and 4px control gap, the parent's extra 24px collapse contribution
+cancelled a 24px outline indent. The earlier test compared subtree boxes at the
+first level and switched to 14px controls before adding a second level, so it did
+not catch the default-theme text alignment regression. The new checks assert the
+actual paragraph content coordinate, not merely a block shell's indentation.
+
+Reproduction on the original production build showed `nested` and `deep` at the
+same X coordinate (0px difference). A screenshot was inspected before and after;
+the corrected default difference is 24px. The before/after captures are preserved
+as `/tmp/nested-indent-before.png` and `/tmp/nested-indent-after.png`. The corrected
+serial baseline produced 16 real failures in Kanban/Bento and eight passes in TODO
+storage, whose controls are outside. An initial fixture iteration also left the
+parent collapsed between theme samples; that setup error was corrected before
+classifying the serial regression results.
+
+Ordinary outline layout now compensates the parent's inline collapse width for
+child rows that do not render their own toggle. The entire leaf row and handle
+move together; its control slot retains natural width. A branch already has its
+own toggle and needs no compensating row offset. Direct leaves in container lists
+keep their natural width with no empty collapse position. The internal
+`--rivto-outline-control-offset` resets at custom child hosts and autonomous editor
+roots, preventing compensation from leaking across layout/surface boundaries.
+A standalone toggle contributes its own width without a nonexistent neighboring
+gap. Control sizes, control gaps and outline indentation use existing public theme
+tokens; no new public geometry option or container-type switch was added.
+
+The existing React collapse marker `data-collapse-toggle` is now also emitted by
+Page's native collapse contribution. This shares the semantic marker without
+opting the host button into Page's separate `data-block-control` styling. Its
+presence follows the existing canonical child-ID condition and ordinary React
+mount/unmount. The owning paths inspected were DefaultBlockLayout, BlockChildren,
+BlockRow, BlockSlots, native/host collapse contributions and editor-root CSS. No
+new subscription, context, DOM wrapper, geometry observer, manager reference or
+lifecycle resource was introduced. The direct row/child relationships belong to
+the ordinary outline composition; concrete container renderers remain unchanged.
+
+Final checks passed: 440 main-demo browser tests with 12 workers in Chromium and
+Firefox, six standalone Page geometry/theme tests with demo CSS disabled, and 56
+Page component unit tests. The two existing TODO keyboard-order cases remain
+skipped. The 24 focused regression cases cover Page/Edgeless, all three containers,
+LTR/RTL, 20px controls with 24px indentation and 14px controls with 12px indentation,
+first-child insertion, collapse and final-child removal. The standalone one-toggle
+case also asserts actual text indentation while its leaf control slot stays 0px.
+Page/package and both demo builds, Page/React/demo types, formatting and whitespace
+checks passed. Scoped ESLint has no errors and four existing long-function warnings.
+The full workspace suite was not run. The pre-existing Git index was preserved.
+
+The existing native Kanban card DnD benchmark passed 12 before and 12 after samples
+on default size and `?repeat=200`, with three samples per browser/size, one worker
+and tracing disabled. Every sample asserts the committed card order. Builds and
+other browser runs did not overlap measurements. Cost is comparable within these
+samples, not a speedup claim. Raw logs: `/tmp/nested-indent-perf-before.log` and
+`/tmp/nested-indent-perf-after.log`; production builds: `/tmp/collapse-space-after`
+and `/tmp/nested-indent-after`.
+
+Times are median [minimum–maximum], in milliseconds. Rendered completion is the
+existing two-frame proxy after the synchronous host move command.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | 0      | 1.6 [1.3–1.9]    | 1.2 [1.1–1.3]    | 30.8 [27.9–31.1]    | 31.4 [30.8–31.5]    |
+| chromium | 200    | 7.2 [6.9–7.8]    | 7.1 [7.0–7.3]    | 117.5 [111.6–124.3] | 108.7 [108.0–109.9] |
+| firefox  | 0      | 2.0 [2.0–3.0]    | 2.0 [2.0–2.0]    | 32.0 [30.0–32.0]    | 30.0 [29.0–30.0]    |
+| firefox  | 200    | 14.0 [13.0–14.0] | 15.0 [14.0–16.0] | 93.0 [93.0–95.0]    | 94.0 [91.0–98.0]    |
+
+
+## Shared own-content geometry and inside feedback — 2026-10-25
+
+The regression was shared by ordinary outlines and container children. Edge inset
+thickness was limited by the complete shell, whose height grows with descendants.
+A 16px inherited edge could therefore consume the center of a populated block's
+28px own row. Independently, an outline edge could select an inside destination
+while retaining a between-line indicator. The previous leaf/edge checks did not
+exercise the center of a populated block's own content.
+
+BlockContent now registers its existing DOM ref as an occurrence-local content
+region, alongside the existing shell and row roles. Shared Page geometry protects
+the middle third of this owned content, falling back to the primary row when
+content is omitted or empty. It still respects the shell's one-third cap, local
+scale, logical direction and existing padding. The lookup reads registered owner
+regions only: no global DOM scan, descendant body inference, virtual-hole fill,
+extra wrapper, geometry observer or container-specific resolver was introduced.
+
+BlockDropTargets now normalizes every validated inside action, including an
+outline-derived action, to the receiving complete shell and removes its line.
+BlockDropFeedback selects outline versus line from the destination kind, without
+reading model state or geometry. Between placement retains its shared/separate
+line. Canonical permission and commit revalidation keep their existing owners.
+The contract is documented in the Page layout README and the blocks, containers
+and performance-testing skills; the block skill's obsolete React BlockTree and
+registration examples were replaced with the current Page/host APIs.
+
+Ownership review covered BlockContent/useBlockRegion, BlockLayoutRegions, the
+controller and borrowed editor API, drop geometry, target validation and feedback.
+The controller retains one concrete registry and destroys it. Primitive refs
+register/release their own DOM lifetime; consumers borrow only register/get or get
+capabilities. The weak registration lookup exposes no lifecycle API and stays
+internal to the package. Geometry consumes declared bounds, validation consumes
+canonical destinations, and feedback consumes the resolved frame. No concrete
+block types, host editor dependencies or presentation-policy callbacks were added
+to the shared resolver. Existing container declarations remain layout policy.
+
+The new browser matrix covers ordinary outlines, Kanban, Bento and TODO storage
+in Page and Edgeless, both first-level and nested populated bodies, target sizes
+8/16/32, edge-derived nesting, complete outline feedback, committed child order
+and undo. On the original production build, 64 cases failed and 48 passed with
+12 workers; all 64 failures reproduced serially with the wrong between feedback.
+After the fix, 552 main-demo checks passed with 12 workers in Chromium/Firefox,
+including the new matrix and existing indentation, selection, controls, container
+and rapid-release scenarios. Six standalone Page theme/geometry cases passed in
+both browsers. Two existing TODO keyboard-order cases remain skipped. Focused
+Page unit suites passed 123 checks, including horizontal RTL content protection,
+registered-only lookup/replacement/cleanup and feedback transitions. Page/host/demo
+type checks, package and both demo builds, scoped lint, formatting and skill
+validation passed; scoped lint retains one existing long-load-function warning.
+The full workspace suite was not run, and the existing Git index was preserved.
+
+The production native Kanban-card benchmark passed 12 before and 12 after samples
+at normal size and `?repeat=200`, three samples per browser/size, one worker and
+tracing disabled. All samples assert the committed order. No builds or other
+browser tests overlapped measurements. Synchronous cost and rendered completion
+remain comparable within these samples; this is not a speedup claim. The latter
+is the existing two-animation-frame proxy. Builds: `/tmp/nested-indent-after` and
+`/tmp/shared-drop-after`; logs: `/tmp/shared-drop-perf-before.log` and
+`/tmp/shared-drop-perf-after.log`.
+
+Times are median [minimum–maximum], in milliseconds.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | 0      | 1.2 [1.1–1.3]    | 1.2 [1.2–1.3]    | 31.7 [31.5–31.8]    | 31.7 [31.5–31.8]    |
+| chromium | 200    | 6.9 [6.7–7.0]    | 6.8 [6.7–6.8]    | 114.0 [113.0–120.7] | 115.2 [108.8–129.7] |
+| firefox  | 0      | 1.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [30.0–32.0]    | 31.0 [30.0–31.0]    |
+| firefox  | 200    | 14.0 [13.0–15.0] | 14.0 [14.0–14.0] | 93.0 [92.0–95.0]    | 94.0 [92.0–95.0]    |
+
+
+## Restore shared outline nesting outside container content — 2026-10-25
+
+The previous own-content fix did not restore the reported boundary gesture.
+During the earlier full-width sibling-zone adjustment, Kanban and TODO storage
+had explicitly disabled direct-child append bands with allowChildPlacement=false.
+Bento retained sibling-only wrapper edges after its custom content-end region was
+removed. Body drops and nesting in deeper ordinary rows therefore passed while
+indented direct-card boundaries could not nest. The relevant layout restrictions
+were in the existing working changes; they are not new restrictions from main.
+
+Linear BlockDropItem shells and wrapping BlockDropWrapper items now call the same
+useBlockDropEdges builder. BlockList passes its existing dropPlacement policy in
+canonical item context. Grid block-end edges expose the same outline nesting
+bands as linear items; inline grid seams still sort siblings. Wrapping items
+provide their trailing ancestry around the existing subtree, so terminal children
+can use those canonical levels. Kanban cards, TODO items and Bento tiles retain
+outline placement. Structural column collections keep their deliberate siblings
+policy. The redundant allowChildPlacement API was removed throughout its callers;
+there is no separate per-container pointer algorithm or replacement option.
+
+The item/context path was reviewed separately from behavior. BlockChildren owns
+canonical traversal, BlockList passes parent/neighbors and placement policy, the
+shared hook builds declarations, and each existing item owns registration cleanup.
+Linear BlockDropItem stays inside its optional filtering item. Grid/projection
+depth reset surrounds the wrapper, allowing that wrapper to supply its own depth
+to descendants. No host manager, permission capability, lifecycle wrapper or extra
+DOM was added. Native discovery and live canonical permission/commit validation
+retain their existing owners. The new context field has the wrapper as its current
+consumer; the removed option has no remaining runtime consumers.
+
+New native-input checks distinguish lower edges, physical gaps and exposed row
+gutters from body drops on direct children, with ordinary outlines as a control,
+in Page and Edgeless. On the unchanged production build, 12 ordinary-outline cases
+passed and all 36 container cases failed; the 36 failures reproduced serially.
+All 48 passed after the fix, asserting complete receiving feedback, committed
+children and undo. Existing sibling tests now exercise the leading depth band;
+they no longer incorrectly require the indented band to sort siblings. Before
+edges and inline grid seams retain their ordinary sorting assertions.
+
+The first broad run caught a filtering lifetime regression in the context change:
+a hidden linear item retained its old anchor when its boundary owner surrounded
+the filter. Both browser failures reproduced serially. Keeping the boundary owner
+inside the filtering item fixed it. A generic unit regression now checks visible,
+hidden and restored mounted anchors while canonical hidden neighbors remain.
+The final broad run passed 600 checks in Chromium/Firefox with 12 workers. After
+factoring the outline boolean without changing policy, the exact final production
+build passed all 50 boundary/filter checks, plus six standalone Page geometry/theme
+checks. Four focused unit suites passed 126 tests, including wrapping outline versus
+siblings policy, terminal ancestry, and reactive filtering. Page/host/demo types,
+package and both demo builds, formatting, skill validation and scoped lint passed.
+Scoped lint retains existing long-function warnings. Two existing TODO keyboard
+order cases remain skipped; the full workspace suite was not run. The pre-existing
+Git index was preserved. Container and performance-testing skills now require
+outside-content boundary checks separately from body-only coverage.
+
+The native Kanban-card benchmark passed 12 before and 12 after samples using the
+same leading sibling-band point on unchanged/final production builds, default
+size and `?repeat=200`, three repetitions per browser/size, one worker, tracing
+disabled. Moving the point from the old full-width band's center to the leading
+band preserves the measured sibling operation under the restored outline policy.
+All samples assert the committed order; no builds or other tests overlapped the
+measurements. Results remain comparable within these samples, not a speedup claim.
+Rendered completion remains the existing two-animation-frame proxy. Builds:
+`/tmp/shared-drop-after` and `/tmp/edge-nesting-final`; logs:
+`/tmp/edge-nesting-perf-before.log` and `/tmp/edge-nesting-perf-after.log`.
+
+Times are median [minimum–maximum], in milliseconds.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | 0      | 1.3 [1.3–1.3]    | 1.4 [1.2–1.5]    | 31.3 [30.8–31.4]    | 31.3 [30.3–31.7]    |
+| chromium | 200    | 7.1 [7.0–8.0]    | 7.3 [7.1–8.2]    | 112.0 [109.7–114.5] | 110.7 [107.7–125.4] |
+| firefox  | 0      | 1.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [30.0–31.0]    | 31.0 [31.0–32.0]    |
+| firefox  | 200    | 14.0 [13.0–14.0] | 14.0 [13.0–17.0] | 93.0 [93.0–93.0]    | 93.0 [92.0–107.0]   |
+
+
+## Correct boundary-line feedback independently of inside destination — 2026-10-25
+
+The earlier feedback normalization was incorrect. It discarded an edge/gap's
+indicator whenever its canonical destination was inside, replacing an indented
+insertion line with a whole-block outline. The subsequent tests encoded that same
+mistake by expecting a body outline at the boundary. A fresh body-hover check was
+therefore green while the requested visible line in the gap had disappeared.
+
+The common resolver now preserves supplied boundary geometry. It attaches the
+receiving shell outline only for inside regions without an insertion line.
+BlockDropFeedback similarly honors a supplied line, including child append, and
+uses the complete receiving shell for body/background inside regions without a
+line. Moving between these regions releases the previous outline or hides the
+retained line. No container renderer, geometry algorithm, permission rule, model
+mutation path or public configuration option was changed for this repair.
+
+The corrected contract is documented in Page's public/layout READMEs, the indicator
+type and the blocks/containers/performance-testing skills. Region feedback and
+canonical destination are independent: inside may mean a body hover or a child
+insertion through a boundary, so destination kind alone cannot select decoration.
+The source gesture and foreign receiving attachment both borrow the same feedback
+class. Their creation/update/clear/destruction paths and the resolver's frame
+lookup were reviewed; no lifecycle or dependency interface change was needed.
+
+New tests move across both edges and their physical gap at sibling and child
+levels, reverse horizontal direction, enter the content body, return to the gap,
+commit either sibling or child insertion, and undo it. They run on ordinary
+outlines, Kanban, Bento and TODO storage in Page/Edgeless and LTR/RTL. The line's
+measured depth and fixed Y are checked at each point; its actual screenshot pixel
+must match the visible opaque indicator color. A body hover must instead show the
+receiving outline with no line. These checks failed all 64 browser cases before
+the repair with 12 workers; all 64 failures reproduced with one worker. The two
+focused unit regressions also failed before the repair: the resolver erased the
+line and feedback retained the body outline for the same receiving parent.
+
+After the repair all 64 new cases pass. The affected main-demo suites pass 664
+checks with 12 workers in Chromium/Firefox, plus six standalone Page geometry/theme
+checks. Four focused Page unit suites pass 126 tests. These include cleanup when
+switching body/line feedback and fixed-depth geometry across both sides of a gap.
+A representative complete screenshot was inspected and saved outside the repo at
+`/tmp/drop-visible-line.png`. Page/host/demo types, package and both demo builds,
+formatting, skill validation and scoped lint passed. Scoped lint retains the
+existing 59-line load-helper warning. Two existing TODO keyboard-order cases remain
+skipped; the full workspace suite was not run. The existing Git index was preserved.
+
+The existing production native Kanban-card sibling benchmark passed 12 after
+samples, compared with the 12 recorded samples on the exact preceding production
+build `/tmp/edge-nesting-final` using the same benchmark and leading-band point.
+This benchmark covers common DnD cost; the new boundary/body correctness matrix
+separately verifies the changed child-insertion paint. Both sizes (default and
+`?repeat=200`) and both browsers use three repetitions, one worker and tracing off,
+with committed order assertions. No agent-run builds or other browser tests
+were active during the after measurements. Results remain comparable within these
+samples. Rendered completion is the existing two-animation-frame proxy. Raw logs:
+`/tmp/edge-nesting-perf-after.log` and `/tmp/drop-visible-perf-after.log`; the new
+production build is `/tmp/drop-visible-after`.
+
+Times are median [minimum–maximum], in milliseconds.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before     | Rendered after      |
+| -------- | ------ | ---------------- | ---------------- | ------------------- | ------------------- |
+| chromium | 0      | 1.4 [1.2–1.5]    | 1.3 [1.2–1.3]    | 31.3 [30.3–31.7]    | 31.7 [31.4–31.8]    |
+| chromium | 200    | 7.3 [7.1–8.2]    | 7.6 [7.1–8.2]    | 110.7 [107.7–125.4] | 110.5 [107.1–111.2] |
+| firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]    | 31.0 [31.0–31.0]    |
+| firefox  | 200    | 14.0 [13.0–17.0] | 14.0 [14.0–14.0] | 93.0 [92.0–107.0]   | 93.0 [91.0–96.0]    |
+
+
+## Keep Bento background append separate from row-gutter continuation — 2026-10-25
+
+The reported point was on Bento's free background; its header still accepted an
+inside drop. Declared background append existed, but inferred row-gutter boundary
+continuation took priority over it. Hovering exposed side space therefore selected
+insertion beside/under a tile instead of appending a tile to the board.
+
+The shared layout now exposes gutters, mapped from BlockChildren.dropGutters.
+Omission preserves existing continuation when gaps are enabled. Explicit false
+skips only the inferred row-gutter action; native item edges, real physical seams,
+outline depth and declared background regions retain their existing behavior.
+Bento declares dropBackground, dropGaps and dropGutters=false: the board background
+appends to Bento while actual tile boundaries retain their insertion lines. Other
+layouts retain the default continuation. No type switch or custom pointer handler
+was added to Page, and presentation dimensions and DOM structure are unchanged.
+
+The API/ownership path reviewed was BlockChildren props, useBlockDropLayout's
+committed options/getter, borrowed BlockDropLayoutRegistration and the bounded
+resolveLayoutGutter read. The existing host ref owns installation and cleanup;
+there is no new subscription, observer, manager reference or lifecycle resource.
+Bento is a present consumer of the new declaration. Shared direct registration
+and component tests cover true/false policy, preserved physical gaps, one child
+occurrence and no dropGutters HTML attribute. Defaults and documentation were
+updated in the public/layout READMEs and container skill.
+
+A new native-input matrix asserts actual background hits on both side gutters and
+bottom padding in Page/Edgeless, full receiving-board outline, canonical append and
+undo without nesting in either tile. Before the fix, all eight side-background
+cases failed and four bottom-background controls passed; the eight failures
+reproduced serially. All twelve pass after the fix. Existing Bento gutter cases
+now assert its explicitly declared background policy; physical edge/seam and depth
+assertions remain. The final affected suites pass 676 checks with 12 workers in
+Chromium/Firefox, plus six standalone Page geometry/theme checks. Focused Page
+unit suites pass 130 tests. A complete background-outline screenshot was inspected
+and saved at /tmp/bento-background-inside.png.
+
+Page/React/demo type checks, Page/package and both demo builds, formatting, skill
+validation and scoped lint passed. Scoped lint retains existing long-function
+warnings. Two existing TODO keyboard-order cases remain skipped, and the full
+workspace suite was not run. This run performed no staging; index updates made
+concurrently were left untouched.
+
+The native Bento seam benchmark passed 12 before and 12 after samples on production
+builds /tmp/drop-visible-after and /tmp/bento-inside-after, default size and
+`?repeat=200`, three samples per browser/size, one worker, tracing disabled. All
+samples assert the same committed sibling order. The initial unchanged/changed
+benchmark attempts both failed their existing order assertion: on a wrapped row
+the old midpoint selected the newly supported child-depth band. The benchmark now
+uses the leading sibling band for that wrapped seam, without weakening the order
+assertion or timing budget; identical corrected input was measured on both builds.
+No builds or other browser runs overlapped the paired measurements. Results remain
+comparable within these samples. Rendered completion is the existing two-frame
+proxy. Raw paired logs are /tmp/bento-inside-perf-before-fixed.log and
+/tmp/bento-inside-perf-after-fixed.log; initial failed logs retain the unsuffixed
+before/after names.
+
+Times are median [minimum–maximum], in milliseconds.
+
+| Browser  | Repeat | Sync before      | Sync after       | Rendered before   | Rendered after   |
+| -------- | ------ | ---------------- | ---------------- | ----------------- | ---------------- |
+| chromium | 0      | 1.3 [1.2–1.3]    | 1.4 [1.2–1.5]    | 29.6 [29.3–31.5]  | 29.5 [28.5–29.6] |
+| chromium | 200    | 7.0 [6.8–7.1]    | 7.0 [7.0–7.1]    | 81.8 [81.6–100.9] | 83.2 [80.8–98.6] |
+| firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]  | 30.0 [30.0–31.0] |
+| firefox  | 200    | 15.0 [14.0–17.0] | 15.0 [14.0–15.0] | 89.0 [86.0–90.0]  | 90.0 [89.0–91.0] |

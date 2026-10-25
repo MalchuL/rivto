@@ -78,7 +78,9 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * Inside feedback uses the receiving parent's registered complete shell. The
    * hit anchor remains separate, so outline ownership cannot affect gap discovery
-   * or canonical validation. Missing shells retain anchor feedback.
+   * or canonical validation. Body/background destinations outline this hierarchy;
+   * boundaries retain their measured line, including indented child append choices.
+   * Missing shells retain anchor feedback.
    *
    * @param clientX - Viewport X coordinate in CSS pixels.
    * @param clientY - Viewport Y coordinate in CSS pixels.
@@ -111,12 +113,12 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     if (!target || (accepts && !accepts(target.destination))) {
       return undefined;
     }
-    if (
-      !target.indicator &&
-      target.destination.kind === "inside" &&
-      target.destination.parentId !== null
-    ) {
-      return { ...target, outlineElement: this.regions.get(target.destination.parentId, "shell") };
+    if (target.destination.kind === "inside" && !target.indicator) {
+      const parentId = target.destination.parentId;
+      return {
+        ...target,
+        outlineElement: parentId === null ? undefined : this.regions.get(parentId, "shell"),
+      };
     }
     return target;
   }

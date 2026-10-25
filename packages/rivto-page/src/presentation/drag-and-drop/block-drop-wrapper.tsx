@@ -1,10 +1,9 @@
 import { Slot } from "radix-ui";
 import { forwardRef, useCallback, useContext, useRef, type ReactNode } from "react";
-import { BlockDropTarget } from "./block-drop-target";
 import { BlockItem, type BlockItemProps } from "../components/block-layout/block-item";
 import { BlockChildPlacementContext } from "../components/block-layout/block-item-context";
 import { useBlockDropRegions } from "./block-drop-layout";
-import type { BlockDropRegion } from "../../editor/drag-and-drop/types";
+import { BlockDropDepthContext, useBlockDropEdges } from "./block-drop-item";
 
 /** Existing placement attributes with independently declared edge geometry. */
 export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
@@ -12,8 +11,6 @@ export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
   readonly axis?: "vertical" | "horizontal" | "grid";
   /** Local CSS-pixel edge thickness; omission inherits the shared target-size token. */
   readonly targetSize?: number;
-  /** Optional declarations on the existing content frame, independent of outer insertion edges. */
-  readonly contentRegions?: readonly BlockDropRegion[];
   readonly children?: ReactNode;
 }
 
@@ -23,7 +20,9 @@ export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
  * The item retains its counter, identity, content and measurement ref. Its content
  * wrapper remains a positioning container for controls. Presentation padding is
  * independent from targetSize: changing drop geometry never changes layout width.
- * Top/inline-start mean before, bottom/inline-end mean after, including RTL.
+ * Top/inline-start declare before and bottom/inline-end declare after, including RTL.
+ * Block-end boundaries inherit the list's outline depth policy through the same
+ * declaration builder as linear items; inline grid seams remain sibling placement.
  *
  * @param props - Existing native placement attributes and its already-rendered node.
  * @param props.axis - Edges to enable; defaults to all four for wrapping layouts.
@@ -35,7 +34,7 @@ export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
  */
 export const BlockDropWrapper = forwardRef<HTMLDivElement, BlockDropWrapperProps>(
   function BlockDropWrapper(
-    { className, children, axis = "grid", targetSize, contentRegions = [], ...attributes },
+    { className, children, axis = "grid", targetSize, ...attributes },
     ref,
   ) {
     const placement = useContext(BlockChildPlacementContext);
@@ -44,31 +43,12 @@ export const BlockDropWrapper = forwardRef<HTMLDivElement, BlockDropWrapperProps
     if (placement?.parentId === undefined) {
       throw new Error("BlockDropWrapper requires a canonical child placement");
     }
-    const before = {
-      kind: "between" as const,
-      parentId: placement.parentId,
-      previousId: placement.previousId,
-      nextId: placement.blockId,
-    };
-    const after = {
-      kind: "between" as const,
-      parentId: placement.parentId,
-      previousId: placement.blockId,
-      nextId: placement.nextId,
-    };
-    const regions: BlockDropRegion[] = [];
-    if (axis !== "horizontal") {
-      regions.push(
-        { kind: "edge", side: "block-start", size: targetSize, destination: before },
-        { kind: "edge", side: "block-end", size: targetSize, destination: after },
-      );
-    }
-    if (axis !== "vertical") {
-      regions.push(
-        { kind: "edge", side: "inline-start", size: targetSize, destination: before },
-        { kind: "edge", side: "inline-end", size: targetSize, destination: after },
-      );
-    }
+    const { regions, depth } = useBlockDropEdges({
+      placement,
+      axis,
+      outline: placement.dropPlacement !== "siblings",
+      size: targetSize,
+    });
     useBlockDropRegions(anchor, regions, placement.blockId);
     return (
       <Slot.Root ref={ref}>
@@ -78,9 +58,9 @@ export const BlockDropWrapper = forwardRef<HTMLDivElement, BlockDropWrapperProps
           data-drop-wrapper-axis={axis}
           className={["rivto-block-drop-wrapper", className].filter(Boolean).join(" ")}
         >
-          <BlockDropTarget asChild regions={contentRegions}>
+          <BlockDropDepthContext.Provider value={depth}>
             <div className="rivto-block-drop-wrapper-content">{children}</div>
-          </BlockDropTarget>
+          </BlockDropDepthContext.Provider>
         </BlockItem>
       </Slot.Root>
     );

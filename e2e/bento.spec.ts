@@ -190,18 +190,20 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     const inline = edge === "end-right" || edge === "between";
     const wrapper = target.locator("xpath=ancestor::*[@data-block-item-id][1]");
     const bounds = (await wrapper.boundingBox())!;
-    let x = inline ? bounds.x + bounds.width - 3 : bounds.x + bounds.width / 2;
+    let x = inline ? bounds.x + bounds.width - 3 : bounds.x + 12;
     let y = inline ? bounds.y + bounds.height / 2 : bounds.y + bounds.height - 3;
     if (edge === "inside") {
-      const region = await blockDropRegion(target, "inside");
-      const box = await region.boundingBox();
+      const box = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
       x = box.x + box.width / 2;
       y = box.y + box.height / 2;
     }
     await page.mouse.move(x, y, { steps: 15 });
     const line = page.locator(".rivto-block-drop-line:visible");
-    await expect(line).toBeVisible();
-    if (edge !== "inside") {
+    if (edge === "inside") {
+      await expect(target).toHaveAttribute("data-block-drop-active", "true");
+      await expect(line).toHaveCount(0);
+    } else {
+      await expect(line).toBeVisible();
       const lineBox = (await line.boundingBox())!;
       await expect(line).toHaveAttribute("data-axis", inline ? "vertical" : "horizontal");
       expect(inline ? lineBox.x + lineBox.width / 2 : lineBox.y + lineBox.height / 2).toBeCloseTo(

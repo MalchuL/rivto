@@ -4,6 +4,8 @@ import { createContext } from "react";
 export interface BlockChildPlacement {
   /** Stable identity of the child placed by this item. */
   readonly blockId: string;
+  /** Containing list's boundary policy; omission retains ordinary outline placement. */
+  readonly dropPlacement?: "outline" | "siblings";
   /** Actual parent, null for document roots; absent for arbitrary display lists. */
   readonly parentId?: string | null;
   /** Canonical preceding sibling, or null at the start. */

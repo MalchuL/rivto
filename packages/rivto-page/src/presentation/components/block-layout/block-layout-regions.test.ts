@@ -1,4 +1,8 @@
-import { BlockLayoutRegions, blockLayoutRegion } from "./block-layout-regions";
+import {
+  BlockLayoutRegions,
+  blockLayoutRegion,
+  registeredBlockRegion,
+} from "./block-layout-regions";
 
 it("resolves wrapped owner regions without borrowing descendant rows", () => {
   const regions = new BlockLayoutRegions();
@@ -39,4 +43,29 @@ it("isolates occurrences and ignores obsolete disposers after replacement", () =
   expect(first.get("same", "row")).toBeUndefined();
   second.destroy();
   expect(second.get("same", "row")).toBeUndefined();
+});
+
+it("reads only the current registered body and never searches an unregistered subtree", () => {
+  const regions = new BlockLayoutRegions();
+  const root = document.createElement("div");
+  const shell = document.createElement("div");
+  const content = document.createElement("div");
+  content.className = "rivto-block-content";
+  shell.append(content);
+  root.append(shell);
+  const stopShell = regions.register("parent", "shell", shell);
+  const stopContent = regions.register("parent", "content", content);
+  const children = jest.spyOn(root, "children", "get");
+  expect(registeredBlockRegion(root, "content")).toBeUndefined();
+  expect(children).not.toHaveBeenCalled();
+  expect(registeredBlockRegion(shell, "content")).toBe(content);
+  const replacement = document.createElement("div");
+  content.replaceWith(replacement);
+  const stopReplacement = regions.register("parent", "content", replacement);
+  stopContent();
+  expect(registeredBlockRegion(shell, "content")).toBe(replacement);
+  stopReplacement();
+  expect(registeredBlockRegion(shell, "content")).toBeUndefined();
+  stopShell();
+  regions.destroy();
 });

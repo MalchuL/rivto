@@ -1,3 +1,4 @@
+import { registeredBlockRegion } from "../../presentation/components/block-layout/block-layout-regions";
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
 import type {
   BlockDropEdgeRegion,
@@ -38,6 +39,8 @@ export function dropBounds(
 /** A local geometry read, shared by declarations on one anchor for one resolution. */
 export interface BlockDropGeometry {
   readonly rect: BlockDropBounds;
+  /** Owned content or primary row, when mounted and nonempty; never a descendant block. */
+  readonly contentRect?: BlockDropBounds;
   readonly style: CSSStyleDeclaration;
   readonly scaleX: number;
   readonly scaleY: number;
@@ -48,11 +51,13 @@ export interface BlockDropGeometry {
  *
  * @param element - Existing mounted layout element.
  * @returns Geometry for this synchronous query only; no cache survives scrolling.
+ * Registered body bounds are read without searching unregistered DOM or child blocks.
  */
 export function readDropGeometry(element: HTMLElement): BlockDropGeometry {
   const rect = element.getBoundingClientRect();
   return {
     rect,
+    contentRect: readContentBounds(element),
     style: element.ownerDocument.defaultView!.getComputedStyle(element),
     scaleX: element.offsetWidth ? rect.width / element.offsetWidth : 1,
     scaleY: element.offsetHeight ? rect.height / element.offsetHeight : 1,
@@ -82,7 +87,9 @@ export function containsDropPoint(rect: BlockDropBounds, point: BlockDropPoint):
  *
  * @param region - Declared side, size and optional terminal outline bands.
  * @param geometry - Current anchor geometry and computed layout tokens.
- * @returns Inset strip, extended toward declared terminal ancestors when needed.
+ * @returns Inset strip capped to one third of the anchor axis and before the owned body
+ * middle third, retaining inside placement even when descendants enlarge the shell.
+ * Declared terminal ancestors can extend the strip toward outer indentation levels.
  * @throws If an explicit size is negative or nonfinite.
  */
 export function dropEdgeRect(
@@ -96,10 +103,7 @@ export function dropEdgeRect(
     throw new Error("Drop target size must be finite and nonnegative");
   }
   const block = region.side.startsWith("block");
-  const thickness = Math.min(
-    size * (block ? scaleY : scaleX),
-    block ? rect.height / 2 : rect.width / 2,
-  );
+  const thickness = Math.min(size * (block ? scaleY : scaleX), contentEdgeLimit(region, geometry));
   const end = region.side.endsWith("end");
   const rtl = style.direction === "rtl";
   if (block) {
@@ -128,7 +132,7 @@ export function dropEdgeRect(
  * @param geometry - Shared synchronous measurement of the anchor.
  * @param point - Pointer used only for explicit depth partitioning.
  * @returns Declared destination and physical feedback, before permission validation.
- * @throws If the declared feedback inset is nonfinite.
+ * @throws If the declared edge thickness is negative or nonfinite.
  */
 export function dropRegionTarget(
   entry: BlockDropTargetRegistration,
@@ -156,14 +160,6 @@ export function dropRegionTarget(
     width = Math.max(0, rect.width - level * indent);
     left = rtl ? rect.left : rect.left + level * indent;
   }
-  const inset = region.indicatorInset ?? 0;
-  if (!Number.isFinite(inset)) {
-    throw new Error("Drop indicator inset must be finite");
-  }
-  if (geometry.style.direction !== "rtl") {
-    left += inset * geometry.scaleX;
-  }
-  width = Math.max(0, width - inset * geometry.scaleX);
   const horizontal = region.side.startsWith("block");
   const end = region.side.endsWith("end");
   const indicator = horizontal
@@ -201,4 +197,52 @@ export function isDropBackground(host: HTMLElement, hit: Element, point: BlockDr
     }
   }
   return host.contains(hit);
+}
+
+/**
+ * Reads a mounted owner's body, falling back to its primary row for contentless layouts.
+ *
+ * Empty or omitted regions do not contribute a protected rectangle. The lookup
+ * uses primitive registrations only and never searches descendants or the document.
+ *
+ * @param element - Current registered drop anchor.
+ * @returns Nonempty content/row viewport bounds, or undefined when neither exists.
+ */
+function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
+  for (const role of ["content", "row"] as const) {
+    const region = registeredBlockRegion(element, role);
+    const rect = region?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      return rect;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Limits an edge so its owner's middle body remains available for inside drops.
+ *
+ * Shell padding retains its sorting area. Child subtree height cannot enlarge an
+ * inset edge over the primary content, and inline limits respect RTL direction.
+ *
+ * @param region - Declared logical edge.
+ * @param geometry - Shell and optional registered body in viewport coordinates.
+ * @returns Maximum inset thickness in viewport pixels, never negative.
+ */
+function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeometry): number {
+  const { rect, contentRect: content } = geometry;
+  const block = region.side.startsWith("block");
+  const limit = (block ? rect.height : rect.width) / 3;
+  if (!content) {
+    return limit;
+  }
+  const end = region.side.endsWith("end");
+  const trailing = block ? end : end !== (geometry.style.direction === "rtl");
+  const start = block ? rect.top : rect.left;
+  const finish = block ? rect.bottom : rect.right;
+  const bodyStart = block ? content.top : content.left;
+  const bodyEnd = block ? content.bottom : content.right;
+  const third = (bodyEnd - bodyStart) / 3;
+  const distance = trailing ? finish - (bodyEnd - third) : bodyStart + third - start;
+  return Math.max(0, Math.min(limit, distance));
 }

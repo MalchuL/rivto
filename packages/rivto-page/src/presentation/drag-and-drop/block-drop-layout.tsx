@@ -82,6 +82,8 @@ export const BlockDropBoundaryContext = createContext<BlockDropBoundaryMode>("me
 export interface BlockDropLayoutOptions {
   readonly axis: "vertical" | "horizontal" | "grid";
   readonly gaps?: boolean;
+  /** Continue boundary actions across free row gutters; omission enables continuation. */
+  readonly gutters?: boolean;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly boundaries?: BlockDropBoundaryMode;
   readonly virtual?: boolean;
@@ -137,6 +139,14 @@ export function useBlockDropLayout(
          */
         get gaps() {
           return current.current.gaps ?? current.current.axis !== "grid";
+        },
+        /**
+         * Reads whether free row gutters continue their neighboring item boundaries.
+         *
+         * @returns Explicit policy, defaulting to enabled independently of background append.
+         */
+        get gutters() {
+          return current.current.gutters ?? true;
         },
         /**
          * Reads whether mounted roots require consecutive display indices.

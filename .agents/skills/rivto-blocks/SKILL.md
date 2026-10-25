@@ -1,302 +1,197 @@
 ---
 name: rivto-blocks
-description: Implement or review ordinary Rivto block types and renderers. Use for leaf blocks in packages/react-rivto-editor or host extensions; use rivto-containers when the block owns child layout.
+description: Implement or review ordinary Rivto block types and renderers using shared Page primitives and editor behavior. Use for leaf renderers in packages/react-rivto-editor or host extensions; use rivto-containers when the block owns child layout.
 ---
 
 # Rivto Blocks
 
-Build every block on Rivto's shared model, `BlockTree` shell, editing hooks, and
-optional drag extension. A renderer owns only the block's content. It must not
-recreate the outer block, row, selection chrome, drag handle, child tree, or
-drop target.
+A renderer owns content, while Page owns the block occurrence, row, child traversal,
+selection frame and shared pointer/drop behavior. An ordinary block must work in
+an outline, column, tile, cell or Edgeless card without learning its parent type.
+Fix missing shared behavior in the primitive or interaction owner, rather than
+adding a renderer-specific handler or a list of container exceptions.
 
-## Start from the current contract
+## Read the current owning path
 
-Patterns can evolve. Trace the requested behavior and inspect the owners relevant
-to the change:
+Paths below are relative to the repository root. Inspect the current implementation
+and consumers; old `.page-block` examples and the former React BlockTree/DnD path
+are not the current Page contract.
 
-- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — stable shell,
-  renderer lookup, slots, collapse visibility, and recursive children.
-- `packages/react-rivto-editor/src/blocks/block-view/block-view.tsx` — `data-block-id`,
-  `data-block-type`, selection state, and measured outer boundary.
-- `packages/react-rivto-editor/src/hooks/blocks/use-block-editing.ts` — text
-  synchronization, structural selection anchors, property access, and nested
-  interactive-control opt-out.
-- `packages/react-rivto-editor/src/managers/blocks/types.ts` and
-  `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
-  registration, defaults, schemas, parent restrictions, and parent outline handlers.
-- `packages/react-rivto-editor/src/extensions/block-drag/` — shared handles,
-  hit testing, drop geometry, and placement. Do not build another drag path.
-- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
-  block geometry. Read `packages/react-rivto-editor/docs/styling.md` before
-  styling a renderer or adding a feature stylesheet.
+- `packages/rivto-page/AGENTS.md` and
+  `packages/rivto-page/src/presentation/components/block-layout/README.md` — layout
+  ownership and the shared block interaction contract.
+- `packages/rivto-page/src/presentation/components/block-layout/` — BlockNode,
+  BlockView, BlockRow, BlockContent, BlockChildren and occurrence-local region refs.
+- `packages/rivto-page/src/editor/drag-and-drop/` and
+  `packages/rivto-page/src/presentation/drag-and-drop/` — declared regions,
+  geometry, native hit testing, destination validation and feedback.
+- `packages/react-rivto-editor/src/managers/blocks/block-types-api.ts` and
+  `types.ts` — definition, content renderer, optional layout/behavior and cleanup.
+- `packages/react-rivto-editor/src/hooks/blocks/use-block.ts`,
+  `use-block-editing.ts` and `use-block-selection-anchor.ts` — addressed snapshots,
+  mutation commands, text ownership and structural selection anchors.
+- `packages/react-rivto-editor/docs/styling.md` — host appearance and package CSS.
 
-Use the closest complete example:
+Use nearby complete examples: Markdown under `src/blocks/markdown/`, the native
+separator under `src/extensions/built-ins/separator/`, default-writing registration
+under `src/extensions/built-ins/page/default-writing-block/`, or Counter/Slider in
+`demo/src/blocks/custom-blocks.tsx`. Read `rivto-containers` when the block arranges
+children; a leaf renderer must not take over their layout.
 
-| Block shape                  | Example                                                             |
-| ---------------------------- | ------------------------------------------------------------------- |
-| Normal editable text         | `src/blocks/markdown/markdown.tsx` and default-writing registration |
-| Contentless visual leaf      | `src/extensions/built-ins/separator/separator-block.tsx`            |
-| Contentless interactive leaf | `demo/src/blocks/custom-blocks.tsx` Counter                         |
-| Text plus native control     | `demo/src/blocks/custom-blocks.tsx` Slider                          |
-| Block that owns child layout | Load the `rivto-containers` skill                                   |
+## Preserve one canonical block occurrence
 
-## Preserve the shared DOM shell
-
-`BlockTree` renders this structure for every type:
+Page creates the existing structure through its registered layout:
 
 ```text
-.page-block[data-block-id][data-block-type]
-├── .page-block-row
-│   ├── shared slots and controls
-│   └── .rivto-block-content-flow
-│       └── renderer output
-└── .page-block-children
-    └── recursively rendered child .page-block nodes
+BlockView (.rivto-block[data-block-id][data-block-type])
+├─ BlockRow (.rivto-block-row)
+│  ├─ registered controls and slots
+│  └─ BlockContent (.rivto-block-content)
+│     └─ host renderer output
+├─ BlockBody (optional body-slot contributions)
+└─ BlockChildren (.rivto-block-children)
+   └─ Page-owned child occurrences
 ```
 
-Return only renderer output. Never render `BlockView`, `.page-block`,
-`.page-block-row`, `.page-block-children`, a drag handle, or `block.children`.
-Never put child IDs in React state. The shared shell is what gives every block
-the same selection, collapse, drag, slot, nesting, and surface behavior.
+Return renderer content only. Do not recreate BlockView, a row, recursive children,
+handles, selection chrome or drop regions inside a content renderer. Do not keep a
+parallel child-ID list in React state or props. A registered layout may compose
+Page primitives differently, but the renderer remains the content owner and each
+canonical child is rendered once.
 
-## Use the canonical geometry
+The shared contract distinguishes the whole hierarchy shell from its own row and
+content. Adding descendants must not enlarge an insertion edge over the middle of
+the block's content. Content/row refs declare those bounds to Page; generic geometry
+uses their registered ownership rather than searching for a convenient descendant.
+Body/background inside regions outline their complete receiving shell, including
+descendants. Boundary regions display their insertion line at the selected depth,
+including an inside destination proposed by an indented edge or physical gap.
+Destination kind alone cannot distinguish these gestures. A container or renderer
+must not reinterpret that action to repair its own feedback.
 
-The shared stylesheet currently defines the editor-wide measurements:
+Controls do not implicitly exclude drops. Use BlockDropExclude or an explicit
+BlockDropTarget exclusion for intentional areas; registered descendants can remain
+eligible inside an excluded ancestor. Permission remains in the source/receiving
+behavior and commit path. Geometry does not grant a move, and rejection must not
+fall through to a different parent.
 
-- `.page-block`: `margin: 4px 0; padding: 2px 8px`.
-- `.page-block-row`: flex row, `align-items: flex-start`, `width: 100%`.
-- `.rivto-block-content-flow`: `min-width: 0; flex: 1 1 auto`.
-- `--rivto-default-block-height`: `1.5em`; ordinary text also uses
-  `line-height: 1.5`.
-- `.page-block-children`: `margin-left: 24px` for ordinary outline nesting.
-- The page drag handle owns a `28px × 24px` gutter beside the first row.
+## Use shared geometry and flexible content
 
-Treat those as shell facts, not values to repeat in a renderer. For an ordinary
-block:
+Read the package theme and owning surface defaults instead of copying numeric
+padding or handle widths from a screenshot. Shared geometry lives in Page CSS;
+the host supplies theme parameters and concrete renderer appearance.
 
-- Add no outer margin. Sibling rhythm belongs to `.page-block`.
-- Add no outer padding merely to align with other blocks. The shell already owns
-  `2px 8px`; renderer padding is internal decoration only.
-- Use `min-height: var(--rivto-default-block-height)` for an ordinary empty
-  editable or structural region. Use a larger minimum only when the block's
-  actual UI needs a larger hit target.
-- Make a structural selection region `width: 100%` so blank space in the row can
-  select the block.
-- Add `min-width: 0; max-width: 100%` to renderer layout roots that contain
-  flex/grid children or long content. Add `box-sizing: border-box` whenever the
-  same element has a width plus border or padding.
-- Prefer `gap` for internal layout. Avoid vertical margins on the renderer root,
-  because row rectangles drive selection and drop placement.
-- Do not use viewport widths, page-relative offsets, or a fixed width in an
-  ordinary renderer. It must shrink inside columns, cells, tiles, and edgeless
-  cards.
-- Keep overflow on the component that owns it. Do not clip the shared row or
-  outer `.page-block`; handles, indicators, and selection outlines extend there.
+- Use the existing block-height, padding, indentation, control-size and slot-gap
+  tokens. Renderer padding is internal decoration, not compensation for controls.
+- Add no outer renderer margin or page-width assumption. Keep layout roots
+  shrinkable with `min-width: 0` and, when appropriate, `max-width: 100%`.
+- Use `box-sizing: border-box` where width combines with padding or borders.
+  Prefer internal `gap` to vertical root margins that change measured row bounds.
+- Keep structural selection anchors full-width so blank body space remains usable.
+  Use a larger minimum height only for the actual control or empty-state UI.
+- Do not clip the shared row/shell to conceal overflowing controls or indicators.
+  Put scrolling/overflow on the component owning that content.
+- Control width and child indentation are separate responsibilities. A leaf has
+  no empty collapse control; outline layout must still preserve its text depth.
+  Check both first-child insertion and final-child removal, not only collapse.
 
-For a full-row non-text selection region, use utilities on its owning element:
-`w-full min-w-0 max-w-full min-h-(--rivto-default-block-height) box-border`.
-Omit properties a more specific shared class already supplies. Do not add
-outer margin or padding. Specialize shell geometry only for a demonstrated
-layout container.
-
-There is intentionally no universal decorative padding for custom controls.
-Use the native control size or the minimum internal padding its design requires;
-changing the shell's margin or padding would make custom blocks behave
-differently from built-ins.
-
-## Keep paint containment inside renderer content
-
-When using `content-visibility: auto` to reduce offscreen rendering work, put
-it on the renderer's content root, never on `.page-block`, `.page-block-row`,
-`.rivto-block-content-flow`, child slots, or drag controls. The shared shell must
-remain available for selection and drag hit testing. Apply the rule separately
-to text fields outside that root, such as the TODO name and description.
-
-Keep interacting layers in one contained root: Markdown's transparent editor,
-preview, links, and code controls belong under `.markdown-content`. Containing
-the editor and preview separately changes their stacking order and blocks link
-clicks. Pair `content-visibility: auto` with `contain-intrinsic-size: auto <height>`
-using a fallback near the normal field height; check long content for scroll
-jumps. Keep page virtualization independently switchable: this CSS can skip
-paint for mounted content, but it cannot make unmounted blocks available to
-native find-in-page.
-
-For a containment change, verify in a browser that distant content is actually
-skipped, block rows and drag handles still respond, and links, code controls,
-and editable fields still work when scrolled into view.
+An ordinary block needs no container-specific drag code. Keep the visible body,
+selection anchor and registered Page content aligned, and let shared geometry
+handle its current placement. Do not seed blank paragraphs to create height.
 
 ## Choose one editing owner
 
-### Editable text
+For ordinary rich text, prefer the existing Markdown renderer. For custom plain
+text, use `useBlockEditing(blockId)` and spread its attributes onto exactly one
+contenteditable element. The `page-block-content` renderer hook remains available
+for text styling; it is not the shared `.rivto-block-content` layout host.
+Do not render persisted `block.content` as React children inside an editable owned
+by the hook. Preserve its ref, input/composition handlers and selection lifecycle.
+The hook reconciles commands, undo/redo and remote updates; IME composition owns
+the DOM until it completes.
 
-Prefer `MarkdownContent` when ordinary Rivto text behavior is sufficient. For a
-custom plain-text renderer, call `useBlockEditing(blockId)` and spread
-`editing.attributes` on exactly one contenteditable `<div>`. Add the
-`page-block-content` class to inherit the canonical minimum height, line height,
-outline, and whitespace rules. Do not render `block.content` as React children;
-the hook owns that DOM text node.
+For contentless or control-only UI, compose `useBlockNode<Props>(blockId)` with
+`useBlockSelectionAnchor(blockId)` and spread the anchor on the actual whole-body
+region. Keep persisted content empty when the block has no text. Do not add hidden
+editable text or a fake paragraph merely to obtain selection or dragging.
 
-Do not replace the returned `ref`, `onInput`, `onCompositionStart`, or
-`onCompositionEnd`. Use `editing.preventTextEditingAttributes` on a nested rich
-control only when that control must own its pointer/text gesture.
+Give text and independent controls separate owners. Keep a nested rich editor on
+its own editing path using the existing prevention attributes, rather than spreading
+a second plain-text editing attribute set or wrapping that editor in a structural
+selection anchor. Native buttons retain their pointer/keyboard behavior. Respect
+`event.defaultPrevented` when an existing selection gesture claims an event; do not
+introduce click IDs or blanket post-DnD click suppression.
 
-### Contentless or control-only blocks
+Use semantic controls, accessible names, disabled states and visible focus styles.
+Buttons need `type="button"`. A non-button keyboard control needs its appropriate
+role, focusability and Enter/Space behavior. Icons should be hidden from accessibility
+when decorative and should not steal the owning button's pointer target.
 
-Call `useBlockNode<Props>(blockId)` and `useBlockSelectionAnchor(blockId)`; spread
-the returned anchor attributes on the one region representing the whole block:
+## Register and mutate through the current APIs
 
-```tsx
-const CONTROL_REGION_CLASS = "my-control-region";
+Register a complete definition and presentation through
+`reactEditor.blockTypes.register({ definition, render, layout, behavior, slashCommand })`
+in extension setup. A leaf ordinarily omits `layout` and inherits DefaultBlockLayout.
+Use one stable native type constant, a human-readable title, validated props and
+creation defaults. A factory is appropriate when creation needs fresh values.
+The registration owns its definition and presentation; an already registered type
+is a conflict, not a second place to supplement metadata.
 
-function ControlBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode<ControlProps>(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
-  const reactEditor = useReactEditor();
-  if (!editing.block) return null;
-  return (
-    <div {...attributes} className={CONTROL_REGION_CLASS}>
-      <button
-        type="button"
-        onClick={(event) => {
-          if (event.defaultPrevented) return;
-          editing.operations.setProp("value", nextValue(reactEditor.blocks.getBlockNode(blockId)?.props.value));
-        }}
-      >
-        Action
-      </button>
-    </div>
-  );
-}
-```
+Inspect the current behavior contract before adding constraints. Do not resurrect
+removed fields such as `allowedParents` or old drag metadata. Real movement policy
+belongs to the applicable behavior/core path; a custom renderer is not authorization.
+Behavior instances must select their own types in `isAvailable` when provided.
 
-Keep persisted `content` as `""`. The structural anchor lets pointer gestures,
-range selection, clipboard, deletion, and drag identify a block that has no text.
-Do not add `contentEditable` or fake hidden text. Interactive descendants must
-ignore a click whose `event.defaultPrevented` is true because a completed
-selection drag claims the browser's follow-up click.
+Use ID-bound hook operations or the panel's block manager for document mutations.
+Snapshots are detached/read-only. In callbacks, read current values through
+`panel.blocks.getBlockNode(blockId)` instead of relying on an older render capture.
+Keep compound changes in the existing history/batch boundary so one undo restores
+the operation. Use the registered default writing-block factory when creating an
+ordinary writing child instead of embedding a paragraph policy in a generic helper.
 
-Use semantic native elements first. Buttons need `type="button"`, accessible
-names, disabled state when applicable, and a visible `:focus-visible` style.
-Give custom keyboard-operable non-button regions `role`, `tabIndex`, and
-Enter/Space handling.
+Keep resize/slider previews transient and commit validated props through managers.
+Clean up listeners, previews and explicit registrations on unmount/destruction.
+Return owned setup disposers and release them in reverse order. Borrowed nodes and
+managers are not destroyed by content renderers. Export only public types/factories
+with present consumers.
 
-### Text plus controls
+A simple slash conversion retains the source ID. Seeded conversions and preservation
+of authored descendants belong to the container workflow. Add clipboard conversion
+when a custom/contentless block needs meaningful portable text or structured formats;
+do not replace the editor's canonical structured-copy behavior.
 
-Give text and controls separate owners. Let `MarkdownContent` or one element
-spread the text-editing attributes, while sibling native controls keep their
-normal handlers. Do not wrap a nested text editor in a structural selection
-anchor and do not spread a second editing attribute set.
+## Keep containment inside content
 
-## Define and register the block
+Put `content-visibility: auto` on renderer-owned content, never the shared shell,
+row, content host, child host or controls. Those regions must remain measurable
+for native input and placement. Apply containment separately to fields outside a
+contained root, such as a TODO description.
 
-- Export one stable type constant and reuse it in definitions, formatters,
-  commands, tests, and selectors.
-- Register a human-readable `title` for UI and accessibility.
-- Put creation defaults in `defaultProps`; use a factory only when each creation
-  needs fresh values.
-- Add a Zod `propSchema` for meaningful native props. Update props through
-  `editing.operations.setProp`, `editing.operations.setProps`, or `reactEditor.blocks`; never mutate
-  the detached reactive snapshot.
-- Read current values again inside event handlers with `reactEditor.blocks.getBlockNode(blockId)` rather than
-  using a stale render capture.
-- Use `allowedParents` only for a real persisted placement invariant. Include
-  `null` only when root placement is valid.
-- Register definition, renderer, optional view, and simple slash conversion
-  together with `reactEditor.blocks.register`. Use `blockExtension(...)` for a
-  single ordinary block; use a dedicated `ReactEditorExtension` when the feature
-  also registers formatters, slots, wrappers, commands, or mounted styles.
-- Collect explicit disposers and run them in reverse order. Runtime managers own
-  cleanup for registrations that do not return or require a retained disposer.
-- Export public block types and factories from the package entry points only when
-  consumers need them.
+Markdown editor, preview, links and code controls belong in one contained root;
+containing overlapping layers separately can change stacking and block input.
+Use an intrinsic-size fallback near normal field height and verify long-content
+scroll restoration. CSS paint skipping does not mount virtualized blocks or make
+unmounted text available to native find-in-page.
 
-Use a stable `rivto-*`, `page-*`, or `edgeless-*` hook on the owning element,
-with Tailwind utilities after it. Keep
-utilities in the component; add a colocated feature `.css` file only for rules
-utilities cannot express, such as recursive geometry, structural `:has()`,
-pseudo-elements, counters, or imperatively created elements. Import package
-feature CSS from `src/styles/index.css` into `layer(components)` and start it
-with a comment explaining why CSS is needed. Keep block content outside the
-`rivto-ui` scoped reset so document typography retains host defaults. Add a
-`--rivto-*` token in `src/styles/tokens.css` only for a color or dimension hosts
-should be able to override. For package chrome, reuse installed shadcn/ui
-primitives where they fit; add a missing one with
-`pnpm --filter @chulane/rivto-react ui:add <name>` rather than editing generated
-files in `src/components/ui/`. Use `lucide-react` icons with
-`aria-hidden="true"` inside labelled controls; add `pointer-events-none` to an
-icon inside a plain button so the button remains the pointer target.
+Use existing shadcn and lucide primitives according to the styling guide. Feature
+CSS stays beside its owner and is imported through the package stylesheet. Define
+repeated HTML classes once in their owning scope. Renderer-specific colors and
+appearance stay in the host; structural Page geometry must work without demo CSS.
 
-Keep repeated or cross-file HTML class names in named constants.
+## Verify the shared contract
 
-## Keep behavior in the owning layer
+Read and execute `rivto-performance-testing` for runtime changes. Choose model tests
+for defaults, validation, factories and transactions; use browser input for layout,
+selection, controls, actual DnD and Page/Edgeless integration.
 
-- Use `reactEditor.blocks` or `reactEditor.editor.blocks` for mutations. React
-  views must not call document-model internals or import Yjs.
-- Wrap multi-step user actions in `reactEditor.batchUpdates` so undo observes
-  one action.
-- Use `reactEditor.defaultWritingBlockFactory.createEmptyBlock()` instead of hardcoding `paragraph`.
-- Persist only durable state. Pointer resize or slider motion may use local DOM
-  or React preview state, then commit one validated property update at the end.
-- Use registered block slots for perimeter controls and block wrappers for
-  subtree decoration. Do not add absolute controls to the renderer merely to
-  reach outside its content region.
-- Add a clipboard formatter when a contentless or custom block needs meaningful
-  plain-text, Markdown, or HTML export. Structured Rivto copy already preserves
-  the native block record.
-- A simple slash “Turn into” registration changes the existing block type and
-  keeps its ID. Seeded subtree conversion belongs to the container workflow.
+A shared interaction change needs an ordinary-block case as well as its affected
+containers. Cover both a leaf and a populated block, own-row body versus placement
+edges, committed parent/order and undo. Verify the visible frame matches the actual
+destination. For indentation, compare content coordinates at multiple levels under
+default geometry and a meaningful override; shell bounds alone can hide cancelled
+text indentation. Include RTL when logical geometry changes.
 
-## Make ordinary blocks container-ready
-
-An ordinary leaf requires no container-specific drag code. It becomes safe in
-containers by preserving the shared shell and by remaining width-flexible:
-
-- render no descendants;
-- keep the renderer root shrinkable with `min-width: 0` where needed;
-- avoid page-width assumptions and global ancestor-dependent positioning;
-- keep the structural selection region aligned with the visible body;
-- let the parent container style its direct child `.page-block` shell;
-- let shared drag code measure the row and outer block; do not register another
-  draggable or droppable region.
-
-If the new block itself owns children, load `rivto-containers` and follow its
-additional rules. In particular: children remain native `EditorBlock.children`,
-`BlockTree` alone renders them, extension metadata declares drag geometry,
-`dropAxis` matches direct-child layout, `allowedParents` protects stored shape,
-and parent behavior handlers (`onChildIndent`, `onChildOutdent`) protect outline
-interactions. Reset the shared `24px` child margin only on layout roots or
-structural shells whose children intentionally align to the container edge.
-
-Do not seed blank paragraph children for height. An empty container or lane gets
-an empty-state `min-height`, scoped so populated containers wrap their real
-content. Preserve authored descendants before deleting a structural shell.
-
-## Verify the contract
-
-Choose a regression check for the behavior changed:
-
-- definition defaults, prop validation, parent restrictions, or factories: a
-  colocated core/React Jest test;
-- text synchronization or structural selection anchoring: a focused React test;
-- compound operations: assert result and one-step undo;
-- pointer selection, real drag/drop, layout geometry, or page/edgeless parity:
-  focused Playwright coverage with `pageDragExtension()` installed explicitly.
-
-For contentless blocks, verify the selection anchor and any native control
-interaction. For blocks used in containers, check the affected layout and
-interaction. Run relevant focused checks and `git diff --check`.
-
-## Reject these shortcuts
-
-- Recreating the shared block shell or recursive tree in a renderer.
-- Adding renderer-root margins or duplicating `.page-block` padding.
-- Using local selection state, custom drag handles, or a second DnD system.
-- Using hidden editable text to make a contentless block selectable.
-- Spreading editing attributes on multiple elements.
-- Mutating snapshots or storing presentation size outside validated block props.
-- Hardcoding full-page width, `paragraph`, or container-specific ancestor types
-  into an ordinary leaf.
-- Making global CSS changes for one block type.
-- Adding abstractions for a single renderer when `blockExtension` and the
-  existing hooks already cover it.
+Do not weaken a failing body assertion into a block-edge assertion or repair one
+container's renderer when the same primitive fails elsewhere. New renderers should
+inherit the verified behavior without another drag handler, pointer callback,
+container-type check or duplicate selection tree.

@@ -1,5 +1,5 @@
 import { returnToDocumentAfterNativeHandleClick } from "./drag-handle-navigation";
-import { blockDropRegion } from "./drop-regions";
+import { blockDropRegion, type DropRegionBox } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -294,7 +294,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const inside = await blockDropRegion(page.locator('[data-block-id="first"]'), "inside");
     const box = await inside.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
-    await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+    await expectBoundaryLine(page);
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -571,7 +571,7 @@ for (const mode of ["block", "edgeless"] as const) {
       for (const direction of [1, -1]) {
         for (let offset = 0; offset <= end - start; offset += 0.25) {
           const coordinate = direction === 1 ? start + offset : end - offset;
-          const x = wrapped ? first.x + first.width / 2 : coordinate;
+          const x = wrapped ? first.x + 12 : coordinate;
           const y = wrapped ? coordinate : first.y + first.height / 2;
           await page.mouse.move(x, y);
           const line = page.locator(".rivto-block-drop-line:visible");
@@ -597,20 +597,19 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`outline shared gap keeps its depth across both edges in ${mode}`, async ({ page }) => {
     await load(page, "outline", mode);
     await startDrag(page);
-    const first = (await page.locator('[data-block-id="first"]').boundingBox())!;
+    const target = page.locator('[data-block-id="first"]');
+    const first = (await target.boundingBox())!;
     const last = (await page.locator('[data-block-id="last"]').boundingBox())!;
+    const indent = await target.evaluate(
+      (element) =>
+        parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")) || 28,
+    );
     const x = first.x + 40;
-    const lines: Array<{ x: number; y: number; height: number }> = [];
     for (let y = first.y + first.height - 2; y <= last.y + 2; y += 0.25) {
       await page.mouse.move(x, y);
-      const line = page.locator(".rivto-block-drop-line:visible");
-      await expect(line).toHaveCount(1);
-      const box = (await line.boundingBox())!;
-      lines.push(box);
-    }
-    expect(new Set(lines.map((line) => line.x)).size, "depth must not jump across the gap").toBe(1);
-    for (const line of lines) {
-      expect(line.y + line.height / 2).toBeCloseTo((first.y + first.height + last.y) / 2, 1);
+      const line = await expectBoundaryLine(page);
+      expect(line.x).toBeCloseTo(first.x + indent, 1);
+      expect(line.width).toBeCloseTo(first.width - indent, 1);
     }
     const middle = (first.y + first.height + last.y) / 2;
     for (const direction of [1, -1]) {
@@ -618,10 +617,10 @@ for (const mode of ["block", "edgeless"] as const) {
       for (let offset = 4; offset <= 60; offset += 2) {
         const dx = direction === 1 ? offset : 64 - offset;
         await page.mouse.move(first.x + dx, middle);
-        const box = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
-        expect(box).not.toBeNull();
-        expect(box.y + box.height / 2).toBeCloseTo(middle, 1);
-        depths.push(box.x);
+        const line = await expectBoundaryLine(page);
+        expect(line.y + line.height / 2).toBeCloseTo(middle, 1);
+        expect(line.x).toBeCloseTo(first.x + (dx < indent ? 0 : indent), 1);
+        depths.push(Math.round((line.x - first.x) / indent));
       }
       expect(new Set(depths).size).toBe(2);
       expect(depths).toEqual([...depths].sort((a, b) => direction * (a - b)));
@@ -651,7 +650,7 @@ for (const mode of ["block", "edgeless"] as const) {
     expect(await card.boundingBox()).toEqual(await shell.boundingBox());
   });
 
-  test(`Bento child placement is inset from the tile content in ${mode}`, async ({ page }) => {
+  test(`Bento body accepts nesting between sibling strips in ${mode}`, async ({ page }) => {
     await load(page, "bento", mode);
     await startDrag(page);
     const tile = page
@@ -660,10 +659,11 @@ for (const mode of ["block", "edgeless"] as const) {
     const content = (await tile
       .locator(":scope > .rivto-block-drop-wrapper-content")
       .boundingBox())!;
-    await page.mouse.move(content.x + content.width / 2, content.y + content.height - 2);
-    const line = page.locator(".rivto-block-drop-line:visible");
-    await expect(line).toHaveCount(1);
-    expect((await line.boundingBox())!.x).toBeCloseTo(content.x + 16, 1);
+    await page.mouse.move(content.x + content.width / 2, content.y + content.height / 2);
+    await expect(page.locator('[data-block-id="first"]')).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -943,16 +943,25 @@ for (const padding of [12, 56]) {
   });
 }
 
-test("zero leading space adds no top drop area", async ({ page }) => {
+test("zero leading space retains row gutters without adding space above the editor", async ({
+  page,
+}) => {
   await load(page, "outline", "block");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await surface.evaluate((element) => {
     (element as HTMLElement).style.paddingTop = "0px";
   });
   const box = (await surface.boundingBox())!;
+  const first = (await page.locator('[data-block-id="source"]').boundingBox())!;
+  expect(first.y).toBeCloseTo(box.y, 1);
   await startDrag(page);
-  await page.mouse.move(box.x + 1, box.y + 0.25);
-  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  const line = page.locator(".rivto-block-drop-line:visible");
+  await page.mouse.move(box.x + 1, box.y - 0.25);
+  await expect(line).toHaveCount(0);
+  await page.mouse.move(box.x + 1, first.y + first.height / 2);
+  await expect(line).toHaveCount(1);
+  await page.mouse.move(box.x + 1, first.y + 0.25);
+  await expect(line).toHaveCount(1);
   await page.mouse.up();
   await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
 });
@@ -970,3 +979,698 @@ test("existing space below the root list inserts after the last root", async ({ 
   await page.keyboard.press("Control+z");
   await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
 });
+
+/**
+ * Reads addressed child order for a model-backed insertion assertion.
+ *
+ * @param page - Demo page owning the model.
+ * @param id - Canonical block to inspect.
+ * @returns Resolves with its child IDs, or undefined if it is absent.
+ */
+async function readChildIds(page: Page, id: string) {
+  return page.evaluate(
+    (id) =>
+      (
+        window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+      ).__rivtoDemo.editor.blocks.getBlockNode(id)?.childIds,
+    id,
+  );
+}
+
+/**
+ * Loads three leaf roots so either side of the target changes canonical order.
+ *
+ * @param page - Demo page receiving the fixture.
+ * @param mode - Existing Page or canvas surface.
+ * @returns Resolves after the target leaf and its intervening sibling mount.
+ */
+async function loadGutter(page: Page, mode: "block" | "edgeless") {
+  await load(page, "outline", mode);
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.removeBlocks(["first", "last"]);
+    editor.blocks.insertBlock({ id: "spare", type: "paragraph", content: "Spare" });
+    editor.blocks.moveBlocks(["spare"], "board", "before");
+    editor.history.clear();
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const { side, placement, roots, parentId } of [
+    { side: "left", placement: "before", roots: ["spare", "source", "board"], parentId: null },
+    { side: "left", placement: "after", roots: ["spare", "board", "source"], parentId: null },
+    { side: "right", placement: "before", roots: ["spare", "board"], parentId: "spare" },
+    { side: "right", placement: "after", roots: ["spare", "board"], parentId: "board" },
+  ] as const) {
+    test(`row gutter ${side} selects ${placement} across the row in ${mode}`, async ({ page }) => {
+      await loadGutter(page, mode);
+      const block = page.locator('[data-block-id="board"]');
+      const host =
+        mode === "block"
+          ? block.locator("xpath=ancestor::*[@data-rivto-block-editor][1]")
+          : block.locator("xpath=ancestor::*[@data-edgeless-card-content][1]");
+      const bounds = (await host.boundingBox())!;
+      const row = (await block.boundingBox())!;
+      await startDrag(page);
+      const x = side === "left" ? bounds.x + 1 : bounds.x + bounds.width - 1;
+      const nativeY = placement === "before" ? row.y + 2 : row.y + row.height - 2;
+      const y = row.y + row.height * (placement === "before" ? 0.45 : 0.55);
+      await page.mouse.move(side === "left" ? row.x + 1 : row.x + row.width - 1, nativeY);
+      const nativeIndicator = await expectBoundaryLine(page);
+      await page.mouse.move(x, y);
+      expect(await expectBoundaryLine(page)).toEqual(nativeIndicator);
+      await page.mouse.up();
+      await expect.poll(() => readRootIds(page)).toEqual(roots);
+      if (parentId) {
+        await expect.poll(() => readChildIds(page, parentId)).toEqual(["source"]);
+      }
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readRootIds(page)).toEqual(["source", "spare", "board"]);
+    });
+  }
+  for (const placement of ["before", "after"] as const) {
+    test(`Kanban card ${placement} edge retains its sibling band in ${mode}`, async ({ page }) => {
+      await load(page, "kanban", mode);
+      const card = page.locator(`[data-block-id="${placement === "before" ? "first" : "last"}"]`);
+      const bounds = (await card.boundingBox())!;
+      await startDrag(page);
+      const y = placement === "before" ? bounds.y + 12 : bounds.y + bounds.height - 12;
+      const offsets =
+        placement === "before"
+          ? [0.25, 0.5, 0.75].map((ratio) => bounds.width * ratio)
+          : [3, 8, 12];
+      for (const offset of offsets) {
+        await page.mouse.move(bounds.x + offset, y);
+        const line = page.locator(".rivto-block-drop-line:visible");
+        await expect(line).toHaveCount(1);
+        const indicator = (await line.boundingBox())!;
+        expect(indicator.x).toBeCloseTo(bounds.x, 1);
+        expect(indicator.width).toBeCloseTo(bounds.width, 1);
+      }
+      await page.mouse.up();
+      await expect
+        .poll(() => readChildIds(page, "lane"))
+        .toEqual(
+          placement === "before" ? ["source", "first", "last"] : ["first", "last", "source"],
+        );
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readChildIds(page, "lane")).toEqual(["first", "last"]);
+    });
+  }
+  for (const type of ["kanban", "bento", "todo-storage"] as const) {
+    test(`nested ${type} body remains droppable in ${mode}`, async ({ page }) => {
+      await load(page, type, mode);
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.insertBlock({ id: "nested", type: "paragraph", content: "Nested" });
+        editor.blocks.moveBlocks(["nested"], "first", "inside");
+        editor.history.clear();
+      });
+      const nested = page.locator('[data-block-id="nested"]');
+      const bounds = (await nested.boundingBox())!;
+      await startDrag(page);
+      await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      await expect(nested).toHaveAttribute("data-block-drop-active", "true");
+      await page.mouse.up();
+      await expect.poll(() => readChildIds(page, "nested")).toEqual(["source"]);
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readChildIds(page, "nested")).toEqual([]);
+    });
+  }
+}
+
+/**
+ * Reads content alignment and the theme contribution of one optional collapse control.
+ *
+ * @param page - Demo page containing the fixture.
+ * @param id - Mounted block whose own row is measured.
+ * @returns Content/shell X positions, outline indent and the expected in-flow toggle width plus gap.
+ */
+async function readControlOffsets(page: Page, id: string) {
+  return page.locator(`[data-block-id="${id}"] > .rivto-block-row`).evaluate((row) => {
+    const style = getComputedStyle(row);
+    const content = row.querySelector(":scope > .rivto-block-content")!;
+    const shell = row.closest("[data-block-id]")!;
+    let toggleOffset = 0;
+    if (row.getAttribute("data-controls-placement") === "inside") {
+      toggleOffset =
+        (parseFloat(style.getPropertyValue("--rivto-block-control-size")) || 20) +
+        (parseFloat(style.getPropertyValue("--rivto-slot-gap")) || 4);
+    }
+    return {
+      contentX:
+        style.direction === "rtl"
+          ? -content.getBoundingClientRect().right
+          : content.getBoundingClientRect().left,
+      shellX:
+        style.direction === "rtl"
+          ? -shell.getBoundingClientRect().right
+          : shell.getBoundingClientRect().left,
+      indent: parseFloat(style.getPropertyValue("--rivto-block-indent")) || 28,
+      toggleOffset,
+    };
+  });
+}
+
+/**
+ * Adds a paragraph child through the demo's model commands for layout transitions.
+ *
+ * @param page - Test-owned demo page.
+ * @param id - New stable paragraph ID, also used as visible text.
+ * @param parentId - Existing receiving block.
+ * @returns Resolves after insertion and reparenting have been requested.
+ */
+async function insertNestedParagraph(page: Page, id: string, parentId: string) {
+  await page.evaluate(
+    ({ id, parentId }) => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.insertBlock({ id, type: "paragraph", content: id });
+      editor.blocks.moveBlocks([id], parentId, "inside");
+    },
+    { id, parentId },
+  );
+}
+
+/**
+ * Loads a container with paragraph siblings and a selected logical text direction.
+ *
+ * @param page - Test-owned demo page.
+ * @param type - Native container using the shared outline subtree.
+ * @param mode - Page or Edgeless occurrence to exercise.
+ * @param rtl - Whether logical indentation proceeds toward the left.
+ * @returns Resolves after native model and direction setup completes.
+ */
+async function loadNestedOutline(
+  page: Page,
+  type: Container,
+  mode: "block" | "edgeless",
+  rtl: boolean,
+) {
+  await load(page, type, mode);
+  await page.evaluate((rtl) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.updateBlock("first", { type: "paragraph", content: "Parent" });
+    editor.blocks.updateBlock("last", { type: "paragraph", content: "Sibling" });
+    const shell = document.querySelector('[data-block-id="first"]')!;
+    (shell.closest("[data-rivto-block-editor]") as HTMLElement).style.direction = rtl
+      ? "rtl"
+      : "ltr";
+  }, rtl);
+}
+
+/**
+ * Sets public geometry parameters on the fixture's own editor occurrence.
+ *
+ * @param page - Demo page containing the nested fixture.
+ * @param size - Control width in local CSS pixels.
+ * @param indent - Outline indentation in local CSS pixels.
+ * @returns Resolves after the native theme override is applied.
+ */
+async function setOutlineTheme(page: Page, size: number, indent: number) {
+  await page.locator('[data-block-id="nested"]').evaluate(
+    (element, values) => {
+      const root = element.closest<HTMLElement>("[data-rivto-block-editor]")!;
+      root.style.setProperty("--rivto-block-control-size", `${values.size}px`);
+      root.style.setProperty("--rivto-block-indent", `${values.indent}px`);
+    },
+    { size, indent },
+  );
+}
+
+/**
+ * Removes the final child, resets fixture expansion, and waits for the collapse control to disappear.
+ *
+ * @param page - Demo page containing the deep fixture child.
+ * @returns Resolves after the model deletion is reflected in the parent's row.
+ */
+async function removeNestedParagraph(page: Page) {
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.removeBlocks(["deep"]);
+    editor.blocks.updateBlock("nested", { listProps: { collapsed: false } });
+  });
+  await expect(
+    page.locator('[data-block-id="nested"] > .rivto-block-row [data-collapse-toggle]'),
+  ).toHaveCount(0);
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["kanban", "bento", "todo-storage"] as const) {
+    for (const placement of ["before", "after"] as const) {
+      test(`container ${type} continues generous ${placement} strips in ${mode}`, async ({
+        page,
+      }) => {
+        const parent = await load(page, type, mode);
+        const id = placement === "before" ? "first" : "last";
+        const block = page.locator(`[data-block-id="${id}"]`);
+        const item =
+          type === "bento" ? block.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]") : block;
+        const bounds = (await item.boundingBox())!;
+        const inset = Math.min(12, bounds.height / 3 - 1);
+        const y = placement === "before" ? bounds.y + inset : bounds.y + bounds.height - inset;
+        await startDrag(page);
+        const offsets =
+          placement === "before"
+            ? [0.25, 0.5, 0.75].map((ratio) => bounds.width * ratio)
+            : [3, 8, 12];
+        for (const offset of offsets) {
+          await page.mouse.move(bounds.x + offset, y);
+          const line = page.locator(".rivto-block-drop-line:visible");
+          await expect(line).toHaveCount(1);
+          const indicator = (await line.boundingBox())!;
+          expect(indicator.x).toBeCloseTo(bounds.x, 1);
+          expect(indicator.width).toBeCloseTo(bounds.width, 1);
+        }
+        await page.mouse.up();
+        await expect
+          .poll(() => readChildIds(page, parent))
+          .toEqual(
+            placement === "before" ? ["source", "first", "last"] : ["first", "last", "source"],
+          );
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+      });
+    }
+    for (const rtl of [false, true]) {
+      test(`container ${type} preserves nested text indent with conditional collapse, RTL=${rtl}, ${mode}`, async ({
+        page,
+      }) => {
+        await loadNestedOutline(page, type, mode, rtl);
+        await insertNestedParagraph(page, "nested", "first");
+        await expect(page.locator('[data-block-id="nested"]')).toBeVisible();
+        const parent = await readControlOffsets(page, "first");
+        const sibling = await readControlOffsets(page, "last");
+        expect(parent.contentX - parent.shellX - (sibling.contentX - sibling.shellX)).toBeCloseTo(
+          parent.toggleOffset,
+          1,
+        );
+        for (const [size, indent] of [
+          [20, 24],
+          [14, 12],
+        ] as const) {
+          await setOutlineTheme(page, size, indent);
+          const leaf = await readControlOffsets(page, "nested");
+          await insertNestedParagraph(page, "deep", "nested");
+          await expect(page.locator('[data-block-id="deep"]')).toBeVisible();
+          const branch = await readControlOffsets(page, "nested");
+          const deep = await readControlOffsets(page, "deep");
+          if (size === 20) {
+            await page
+              .locator('[data-block-id="board"]')
+              .screenshot({ path: test.info().outputPath("nested-outline.png") });
+          }
+          expect(deep.contentX - branch.contentX).toBeCloseTo(indent, 1);
+          expect(branch.contentX).toBeCloseTo(leaf.contentX, 1);
+          await page.getByRole("button", { name: "Collapse block: nested", exact: true }).click();
+          await expect(page.locator('[data-block-id="deep"]')).toHaveCount(0);
+          expect((await readControlOffsets(page, "nested")).contentX).toBeCloseTo(
+            branch.contentX,
+            1,
+          );
+          await removeNestedParagraph(page);
+          expect((await readControlOffsets(page, "nested")).contentX).toBeCloseTo(leaf.contentX, 1);
+        }
+      });
+    }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["kanban", "bento", "todo-storage"] as const) {
+    for (const side of ["left", "right"] as const) {
+      for (const placement of ["before", "after"] as const) {
+        test(`${type} declared row gutter ${side} honors ${placement} layout policy in ${mode}`, async ({
+          page,
+        }) => {
+          const parent = await load(page, type, mode);
+          const host = page.locator(`[data-block-id="${parent}"] > .rivto-block-children`);
+          if (type === "kanban") {
+            // Exercise a host-supplied gutter through native layout, without hitbox DOM.
+            await host.evaluate((element) => {
+              element.style.paddingInline = "24px";
+            });
+          }
+          const id = type === "bento" && side === "right" ? "last" : "first";
+          const block = page.locator(`[data-block-id="${id}"]`);
+          const item =
+            type === "bento"
+              ? block.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]")
+              : block;
+          const bounds = (await item.boundingBox())!;
+          const list = (await host.boundingBox())!;
+          const x = side === "left" ? list.x + 1 : list.x + list.width - 1;
+          const y = bounds.y + bounds.height * (placement === "before" ? 0.45 : 0.55);
+          const initial = ["first", "last"];
+          const expected = initial.slice();
+          expected.splice(initial.indexOf(id) + (placement === "after" ? 1 : 0), 0, "source");
+          await startDrag(page);
+          await page.mouse.move(x, y);
+          const inside = placement === "after" && side === "right";
+          let destination = expected;
+          if (type === "bento") {
+            await expectInsideOutline(page, parent);
+            destination = [...initial, "source"];
+          } else {
+            await expectBoundaryLine(page);
+            if (inside) {
+              destination = initial;
+            }
+          }
+          await page.mouse.up();
+          await expect.poll(() => readChildIds(page, parent)).toEqual(destination);
+          if (type !== "bento" && inside) {
+            await expect.poll(() => readChildIds(page, id)).toEqual(["source"]);
+          }
+          await page.keyboard.press("Control+z");
+          await expect.poll(() => readChildIds(page, parent)).toEqual(initial);
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Verifies inside feedback on the receiving hierarchy without an insertion line.
+ *
+ * @param page - Test-owned demo occurrence with an active drag.
+ * @param id - Canonical receiving block whose complete shell must be highlighted.
+ * @returns Complete shell viewport bounds after its feedback becomes visible.
+ */
+async function expectInsideOutline(page: Page, id: string) {
+  const target = page.locator(`[data-block-id="${id}"]`);
+  await expect(target).toHaveAttribute("data-block-drop-active", "true", { timeout: 1000 });
+  await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  await expect(target).toHaveCSS("outline-style", "solid");
+  return (await target.boundingBox())!;
+}
+
+/**
+ * Commits child insertion using native input and verifies its declared feedback and undo.
+ *
+ * @param page - Test-owned demo occurrence.
+ * @param id - Receiving block whose canonical children must receive the source.
+ * @param children - Canonical child IDs before the move.
+ * @param point - Viewport point exercising a declared body or nesting edge.
+ * @param feedback - Body outline or indented boundary line expected before release.
+ * @returns Resolves after feedback, committed child order and undo have been asserted.
+ */
+async function commitDropIntoBlock(
+  page: Page,
+  id: string,
+  children: readonly string[],
+  point: Pick<DropRegionBox, "x" | "y">,
+  feedback: "outline" | "line",
+) {
+  await startDrag(page);
+  await page.mouse.move(point.x, point.y, { steps: 5 });
+  if (feedback === "line") {
+    await expectBoundaryLine(page);
+  } else {
+    await expectInsideOutline(page, id);
+  }
+  await page.screenshot({ path: test.info().outputPath(`${feedback}-feedback.png`), scale: "css" });
+  await page.mouse.up();
+  await expect.poll(() => readChildIds(page, id)).toEqual([...children, "source"]);
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readChildIds(page, id)).toEqual(children);
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+    for (const targetId of ["first", "nested"] as const) {
+      for (const size of [8, 16, 32]) {
+        test(`shared body protects populated ${targetId} in ${type}, size=${size}, ${mode}`, async ({
+          page,
+        }) => {
+          const parent = await load(page, type, mode);
+          await page.evaluate(() => {
+            const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+              .__rivtoDemo.editor;
+            editor.blocks.updateBlock("first", { type: "paragraph", content: "Parent" });
+          });
+          await insertNestedParagraph(page, "nested", "first");
+          await insertNestedParagraph(page, "deep", "nested");
+          await page
+            .locator(`[data-block-id="${parent}"] > .rivto-block-children`)
+            .evaluate((element, size) => {
+              element.style.setProperty("--rivto-drop-target-size", `${size}px`);
+            }, size);
+          const content = page.locator(
+            `[data-block-id="${targetId}"] > .rivto-block-row > .rivto-block-content`,
+          );
+          const box = (await content.boundingBox())!;
+          await commitDropIntoBlock(
+            page,
+            targetId,
+            targetId === "first" ? ["nested"] : ["deep"],
+            {
+              x: box.x + box.width / 2,
+              y: box.y + box.height / 2,
+            },
+            "outline",
+          );
+        });
+      }
+    }
+    test(`shared nesting edge displays an indented insertion line in ${type}, ${mode}`, async ({
+      page,
+    }) => {
+      await load(page, type, mode);
+      await insertNestedParagraph(page, "nested", "first");
+      const target = page.locator('[data-block-id="nested"]');
+      const bounds = (await target.boundingBox())!;
+      await commitDropIntoBlock(
+        page,
+        "nested",
+        [],
+        {
+          x: bounds.x + bounds.width - 2,
+          y: bounds.y + bounds.height - 2,
+        },
+        "line",
+      );
+    });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+    for (const location of ["edge", "gap", "gutter"] as const) {
+      test(`outline nesting outside content via ${location} in ${type}, ${mode}`, async ({
+        page,
+      }) => {
+        const parent = await load(page, type, mode);
+        const host = page.locator(`[data-block-id="${parent}"] > .rivto-block-children`);
+        if (location !== "edge") {
+          await host.evaluate((element, location) => {
+            element.style.rowGap = "12px";
+            element.style.maxWidth = "350px";
+            if (location === "gutter") {
+              element.style.paddingInline = "24px";
+            }
+          }, location);
+        }
+        const block = page.locator('[data-block-id="first"]');
+        const shell = (await block.boundingBox())!;
+        const item =
+          type === "bento" ? block.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]") : block;
+        const box = (await item.boundingBox())!;
+        const indent = await block.evaluate((element) =>
+          parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+        );
+        const point = { x: box.x + indent + 2, y: box.y + box.height - 1 };
+        if (location === "gap") {
+          point.y += 6;
+        } else if (location === "gutter") {
+          const bounds = (await host.boundingBox())!;
+          point.x = bounds.x + bounds.width - 1;
+        }
+        if (location !== "edge") {
+          expect(point.y > shell.y + shell.height || point.x > shell.x + shell.width).toBe(true);
+        }
+        if (type === "bento" && location === "gutter") {
+          await commitDropIntoBlock(page, parent, ["first", "last"], point, "outline");
+        } else {
+          await commitDropIntoBlock(page, "first", [], point, "line");
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Checks insertion-line feedback independently of the canonical destination kind.
+ *
+ * @param page - Test-owned active gesture on an insertion boundary.
+ * @returns Visible line bounds after excluding any full-body outline.
+ */
+async function expectBoundaryLine(page: Page) {
+  const line = page.locator(".rivto-block-drop-line:visible");
+  await expect(line).toHaveCount(1, { timeout: 1000 });
+  await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
+  await expect(line).toHaveCSS("pointer-events", "none");
+  return (await line.boundingBox())!;
+}
+
+/**
+ * Checks a visible boundary line while moving between sibling and child depth.
+ *
+ * @param page - Demo with an active native drag.
+ * @param box - Existing first item's placement bounds.
+ * @param ys - Trailing edge, physical gap and next leading edge coordinates.
+ * @param rtl - Whether logical indentation starts from the right.
+ * @param indent - Local indentation in viewport CSS pixels.
+ * @returns Resolves after the same line geometry is checked across both boundaries.
+ */
+async function sweepBoundaryDepth(
+  page: Page,
+  box: DropRegionBox,
+  ys: readonly number[],
+  rtl: boolean,
+  indent: number,
+) {
+  for (const offset of [2, indent + 2, indent * 2 + 2, 2]) {
+    const depth = offset < indent ? 0 : 1;
+    for (const y of ys) {
+      await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, y);
+      const line = page.locator(".rivto-block-drop-line:visible");
+      await expect(line).toHaveCount(1, { timeout: 1000 });
+      await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
+      const actual = (await line.boundingBox())!;
+      expect(actual.x).toBeCloseTo(box.x + (rtl ? 0 : depth * indent), 1);
+      expect(actual.width).toBeCloseTo(box.width - depth * indent, 1);
+      expect(actual.y + actual.height / 2).toBeCloseTo(ys[1], 1);
+    }
+  }
+}
+
+/**
+ * Verifies actual composited paint at the center of the visible insertion line.
+ *
+ * @param page - Active gesture whose line is within the viewport.
+ * @returns Resolves after its screenshot pixel matches the opaque indicator color.
+ */
+async function expectPaintedBoundary(page: Page) {
+  const line = page.locator(".rivto-block-drop-line:visible");
+  const box = (await line.boundingBox())!;
+  const expected = await line.evaluate((element) =>
+    getComputedStyle(element).backgroundColor.match(/\d+/g)!.map(Number),
+  );
+  const png = await page.screenshot({ scale: "css", animations: "disabled" });
+  const pixel = await page.evaluate(
+    async ({ source, x, y }) => {
+      const image = new Image();
+      image.src = source;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      return Array.from(context.getImageData(x, y, 1, 1).data);
+    },
+    {
+      source: `data:image/png;base64,${png.toString("base64")}`,
+      x: Math.floor(box.x + box.width / 2),
+      y: Math.floor(box.y + box.height / 2),
+    },
+  );
+  expect(pixel).toEqual([...expected.slice(0, 3), 255]);
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+    for (const rtl of [false, true]) {
+      for (const child of [false, true]) {
+        test(`boundary feedback switches depth and body in ${type}, ${mode}, RTL=${rtl}, child=${child}`, async ({
+          page,
+        }) => {
+          const parent = await load(page, type, mode);
+          await page
+            .locator(`[data-block-id="${parent}"] > .rivto-block-children`)
+            .evaluate((element, rtl) => {
+              element.style.rowGap = "12px";
+              element.style.maxWidth = "350px";
+              element.style.direction = rtl ? "rtl" : "ltr";
+            }, rtl);
+          const first = page.locator('[data-block-id="first"]');
+          const placement =
+            type === "bento" ? "xpath=ancestor::*[@data-drop-wrapper-axis][1]" : "xpath=self::*";
+          const box = (await first.locator(placement).boundingBox())!;
+          const last = (await page
+            .locator('[data-block-id="last"]')
+            .locator(placement)
+            .boundingBox())!;
+          const middle = (box.y + box.height + last.y) / 2;
+          const indent = await first.evaluate((element) =>
+            parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+          );
+          await startDrag(page);
+          await sweepBoundaryDepth(
+            page,
+            box,
+            [box.y + box.height - 1, middle, last.y + 1],
+            rtl,
+            indent,
+          );
+          const body = (await first
+            .locator(":scope > .rivto-block-row > .rivto-block-content")
+            .boundingBox())!;
+          await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2);
+          await expectInsideOutline(page, "first");
+          const offset = child ? indent + 2 : 2;
+          await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, middle);
+          await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+          await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
+          await expectPaintedBoundary(page);
+          await page.mouse.up();
+          await expect
+            .poll(() => readChildIds(page, parent))
+            .toEqual(child ? ["first", "last"] : ["first", "source", "last"]);
+          await expect.poll(() => readChildIds(page, "first")).toEqual(child ? ["source"] : []);
+          await page.keyboard.press("Control+z");
+          await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+          await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+        });
+      }
+    }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const side of ["left", "right", "bottom"] as const) {
+    test(`Bento declared background ${side} appends to the board in ${mode}`, async ({ page }) => {
+      await load(page, "bento", mode);
+      const board = page.locator('[data-block-id="board"]');
+      const host = board.locator(":scope > .rivto-block-children");
+      const bounds = (await host.boundingBox())!;
+      const first = (await host.locator(":scope > .rivto-block-item").first().boundingBox())!;
+      let x = side === "left" ? bounds.x + 2 : bounds.x + bounds.width - 2;
+      if (side === "bottom") {
+        x = bounds.x + bounds.width / 2;
+      }
+      const y = side === "bottom" ? bounds.y + bounds.height - 2 : first.y + first.height * 0.75;
+      expect(
+        await host.evaluate(
+          (element, point) => document.elementFromPoint(point.x, point.y) === element,
+          { x, y },
+        ),
+      ).toBe(true);
+      await startDrag(page);
+      await page.mouse.move(x, y, { steps: 8 });
+      await expectInsideOutline(page, "board");
+      await page.mouse.up();
+      await expect.poll(() => readChildIds(page, "board")).toEqual(["first", "last", "source"]);
+      await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+      await expect.poll(() => readChildIds(page, "last")).toEqual([]);
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readChildIds(page, "board")).toEqual(["first", "last"]);
+    });
+  }
+}

@@ -19,8 +19,6 @@ export interface BlockListProps {
   readonly dropAxis?: "vertical" | "horizontal" | "grid";
   /** Outline declares depth bands; siblings declares one destination per gap. */
   readonly dropPlacement?: "outline" | "siblings";
-  /** False omits child append bands in ordinary outline gaps. */
-  readonly allowChildPlacement?: boolean;
 }
 
 /**
@@ -33,6 +31,9 @@ export interface BlockListProps {
  * Grid items supply their own wrapping edges, and projected lists
  * without a real parent add no implicit sibling targets. Filtering an item removes
  * its standard boundaries together with its already-rendered child.
+ * Linear boundary owners remain inside the optional item so its visibility controls
+ * their registration lifetime. Grid/projection depth resets surround the item;
+ * a wrapping item can then provide its own terminal levels to its child subtree.
  *
  * @param props - Stable IDs and optional real-parent placement components.
  * @param props.blockIds - Ordered unique IDs, excluding materialized descendants.
@@ -40,50 +41,49 @@ export interface BlockListProps {
  * @param props.item - Optional wrapper receiving an already-rendered BlockNode.
  * @param props.dropAxis - Linear flow for standard boundaries; grid delegates placement edges to items.
  * @param props.dropPlacement - Outline exposes depth bands; siblings keeps the receiving parent fixed.
- * @param props.allowChildPlacement - Whether outline boundaries include child append regions.
  * @returns Keyed memoized nodes and canonical regions without a list wrapper.
  */
 export const BlockList = memo(function BlockList({
   blockIds,
   parentId,
   item: Item,
-
   dropAxis = "vertical",
   dropPlacement = "outline",
-  allowChildPlacement = true,
 }: BlockListProps) {
+  const outline = dropPlacement === "outline";
   return (
     <>
       {blockIds.map((blockId, index) => {
         const placement = {
           blockId,
           parentId,
+          dropPlacement,
           previousId: blockIds[index - 1] ?? null,
           nextId: blockIds[index + 1] ?? null,
         };
         const automatic = parentId !== undefined && dropAxis !== "grid";
         const node = automatic ? (
-          <BlockDropItem
-            placement={placement}
-            axis={dropAxis}
-            outline={dropPlacement === "outline"}
-            allowChildPlacement={allowChildPlacement}
-          >
+          <BlockDropItem placement={placement} axis={dropAxis} outline={outline}>
             <BlockNode blockId={blockId} />
           </BlockDropItem>
         ) : (
-          <BlockDropDepthContext.Provider value={null}>
-            <BlockNode blockId={blockId} />
-          </BlockDropDepthContext.Provider>
+          <BlockNode blockId={blockId} />
+        );
+        const content = Item ? (
+          <BlockChildPlacementContext.Provider value={placement}>
+            <Item blockId={blockId}>{node}</Item>
+          </BlockChildPlacementContext.Provider>
+        ) : (
+          node
         );
         return (
           <Fragment key={`node:${blockId}`}>
-            {Item ? (
-              <BlockChildPlacementContext.Provider value={placement}>
-                <Item blockId={blockId}>{node}</Item>
-              </BlockChildPlacementContext.Provider>
+            {automatic ? (
+              content
             ) : (
-              node
+              <BlockDropDepthContext.Provider value={null}>
+                {content}
+              </BlockDropDepthContext.Provider>
             )}
           </Fragment>
         );

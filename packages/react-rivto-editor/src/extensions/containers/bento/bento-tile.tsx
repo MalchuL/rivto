@@ -22,10 +22,11 @@ const RESIZE_HANDLE_CLASS = "rivto-bento-resize";
  *
  * Page supplies the block exactly once. The existing resize gesture uses this
  * explicit item as its frozen placement and preview surface, including cleanup.
- * A declared trailing content edge explicitly appends children alongside the
- * shell's content-inside region. Placement edges retain priority, while resize
- * and other controls keep their native interaction. An active block drag may use
- * their containing region unless the layout explicitly excludes that subtree.
+ * The shell's content-inside region and indented block-end boundaries both
+ * accept nesting through Page's shared outline placement. Inline seams retain
+ * sibling insertion, while resize and other controls keep their native interaction.
+ * An active block drag may use their containing region unless the layout
+ * explicitly excludes that subtree.
  *
  * @param props - Persisted tile identity and the already-rendered Page shell.
  * @param props.blockId - Block whose preferred width is observed.
@@ -39,20 +40,7 @@ export function BentoTileItem({ blockId, children }: BlockChildrenItemProps) {
     [BENTO_WIDTH_PROPERTY]: `${BentoResizeController.getWidth(block?.props.bentoWidth)}px`,
   };
   return (
-    <BlockDropWrapper
-      className={BENTO_TILE_ITEM_CLASS}
-      ref={setElement}
-      style={style}
-      contentRegions={[
-        {
-          kind: "edge",
-          side: "block-end",
-          size: 4,
-          indicatorInset: 16,
-          destination: { kind: "inside", parentId: blockId },
-        },
-      ]}
-    >
+    <BlockDropWrapper className={BENTO_TILE_ITEM_CLASS} ref={setElement} style={style}>
       {children}
       {element && <BentoResizeHandles blockId={blockId} tile={element} />}
     </BlockDropWrapper>

@@ -136,8 +136,13 @@ a target on the same element.
 
 Edges, gaps and background append are independent declarations; never infer model
 neighbors from DOM siblings. No declaration adds layout boxes or minimum sizes.
+Row-gutter continuation is independent as well: `dropGutters={false}` keeps exposed
+side space for declared background append without disabling physical seams or item
+edges. Bento uses this policy; other layouts retain the default full-row continuation.
+Test the board background separately from nesting into an individual tile.
 Grid items use existing placement edges; do not create separate gap cells. Bento
-uses `dropBackground` with gaps disabled so space under short tiles belongs to its parent.
+uses declared tile seams and `dropBackground` so space under short tiles remains
+owned by its parent instead of borrowing a taller neighboring tile.
 
 Width and resize previews belong to the item, not a global block wrapper. Keep
 visual card bounds aligned with the actual child block. Extra item padding must
@@ -173,6 +178,21 @@ empty filtered results, nested storage isolation and model-backed selection.
 
 ## Keep geometry separate from permission
 
+All blocks use the same [shared interaction contract](../../../packages/rivto-page/src/presentation/components/block-layout/README.md#shared-block-interaction).
+A container supplies canonical children, flow and declarative region policy. It
+does not supply a second body/edge algorithm, type-specific pointer resolver or
+its own feedback interpretation. Shared geometry changes belong in Page and must
+also be verified on ordinary blocks outside containers.
+
+A block's own content remains available when children enlarge its shell. Edge
+thickness must respect registered content/row bounds, including inherited target
+sizes and padding; reducing one container's size token is not a general repair.
+Body, header and child-list background inside regions paint the complete receiving
+hierarchy with no insertion line. Boundaries retain their line at the chosen depth,
+including child append proposed by an outline edge or physical gap. Keep hit
+ownership, canonical destination and feedback geometry separate: destination kind
+alone does not identify whether the user is over a body or an insertion boundary.
+
 Choose `BlockChildren.dropAxis` for actual child flow: vertical, horizontal or grid.
 Vertical layout retains ordinary outline depth placement. Register explicit regions
 with `BlockDropTarget asChild`, canonical gaps with `dropGaps`, and wrapping edges
@@ -183,6 +203,11 @@ Choose `dropPlacement="siblings"` when background gaps must stay at the list's
 own level; the default `outline` preserves horizontal depth selection. This is
 independent of flow axis. `BlockDropWrapper.axis` selects block-start/end edges for
 vertical flow, inline edges for horizontal flow, or all four for its default grid.
+Linear items and wrapping block-end edges share the same canonical declaration
+builder and inherit this list policy. Direct cards/tiles retain outline nesting;
+do not disable it merely to make sibling insertion span a larger area. Inline
+grid seams keep sibling order, while terminal descendants inherit their item's
+trailing outline levels. Structural columns may intentionally use `siblings`.
 Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
 child gaps and inset edge thickness without container-specific pointer calculations.
 `--rivto-drop-target-size` uses local CSS pixels and never changes presentation spacing.
@@ -297,6 +322,15 @@ conversion. Use browser tests for the behavior that depends on actual layout:
 - DnD between ordinary blocks, lanes and neighboring containers, including one-pixel
   sweeps across shared boundaries, overflow clipping and scrolling. Assert both
   feedback placement and persisted parent/order; test rejected destinations too.
+  Exercise the own row of a populated block, not only a leaf or the center of its
+  entire subtree. A large shell can hide an edge that consumes its short header.
+  Check body inside actions against the hierarchy outline and edge/gap-derived
+  child insertion against an indented line. Sweep horizontally in both directions
+  and across both neighboring edges without losing the line or changing its Y.
+  Independently exercise indented lower edges, physical gaps and exposed row
+  gutters outside content on direct children, comparing ordinary outlines with
+  containers. A passing body drop or a deeper nested-row drop does not verify
+  this boundary gesture. Assert the receiving child IDs and one-step undo.
 - Width/resize persistence and cancellation, filters, menus, ordering and modal
   expansion when those features are in scope. A redesign preserves existing
   features unless the user explicitly chooses a smaller scope.

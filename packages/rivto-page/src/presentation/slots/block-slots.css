@@ -65,6 +65,9 @@
 .rivto-block-row[data-controls-placement="inside"]
   > .rivto-block-slot[data-slot-position="left-top"] {
   @apply page:relative page:inset-auto page:transform-none page:order-first page:shrink-0;
+  /* Each rendered control contributes its own width in row flow.
+   * Collapse buttons exist only for blocks with children, so leaf rows keep
+   * their handle width without reserving an empty second control position. */
 }
 .rivto-block-row[data-controls-placement="inside"]
   > .rivto-block-slot[data-slot-position="left-top"]

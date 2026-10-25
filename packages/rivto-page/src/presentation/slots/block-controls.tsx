@@ -53,6 +53,8 @@ export function BlockListSlot({ block, node }: BlockSlotProps) {
  *
  * Activation reads the live flag instead of toggling a captured snapshot. Pointer
  * activation preserves existing text focus; keyboard activation remains native.
+ * The collapse marker lets outline layout account for its in-flow width without
+ * adding an empty control to leaf rows.
  *
  * @param props - Current owner, commands, and occurrence-local child container ID.
  * @param props.block - Own snapshot determining whether the control is present.
@@ -73,6 +75,7 @@ export function BlockCollapseSlot({ block, node, childrenId }: BlockSlotProps) {
       className={BLOCK_CONTROL_CLASS_NAME}
       type="button"
       data-block-control="collapse"
+      data-collapse-toggle="true"
       aria-label={`${collapsed ? "Expand" : "Collapse"} ${block.id}`}
       aria-expanded={!collapsed}
       aria-controls={childrenId}

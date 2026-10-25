@@ -92,6 +92,8 @@ export function resolveLayoutGap(
   }
   const rtl =
     layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
+  const gutter = edge ? undefined : resolveLayoutGutter(layout, items, point, hit, read, rtl);
+  edge ??= gutter;
   const pairs = layoutPairIndices(items, layout.axis, point, read, rtl, edge?.region);
   for (const pair of pairs) {
     const previous = items[pair - 1]!;
@@ -109,6 +111,7 @@ export function resolveLayoutGap(
       return target;
     }
   }
+  return gutter;
 }
 
 /**
@@ -131,16 +134,7 @@ function layoutPairIndices(
   edge?: ResolvedBlockDropTarget["region"],
 ): number[] {
   const horizontal = axis !== "vertical";
-  let start = 0;
-  let end = items.length;
-  if (axis === "grid") {
-    end = upperBound(items, point.y, read, "y");
-    if (!end) {
-      return [];
-    }
-    const top = read(items[end - 1]!).rect.top;
-    start = upperBound(items, top - 0.01, read, "y");
-  }
+  const [start, end] = layoutRowRange(items, axis, point, read);
   const inlinePoint = rtl ? -point.x : point.x;
   let index = upperBound(
     items,
@@ -195,23 +189,15 @@ function resolvePair(
   const a = read(previous).rect;
   const b = read(next).rect;
   const horizontal = layout.axis === "horizontal" || (layout.axis === "grid" && a.top === b.top);
-  const rect = pairBounds(a, b, horizontal, rtl);
+  const host = layout.axis === "grid" ? undefined : layout.element.getBoundingClientRect();
+  const rect = pairBounds(a, b, horizontal, rtl, host);
   const low = horizontal ? rect.left : rect.top;
   const high = horizontal ? rect.right : rect.bottom;
   if (high < low) {
     return;
   }
   if (edge) {
-    const region = edge.region;
-    const sideAxis = horizontal ? "inline" : "block";
-    if (region?.kind !== "edge" || !region.side.startsWith(sideAxis)) {
-      return;
-    }
-    const owner = region.side.endsWith("end") ? previous : next;
-    if (owner.element !== edge.element || !owner.getRegions().includes(region)) {
-      return;
-    }
-    if ((horizontal ? rect.height : rect.width) <= 0) {
+    if (!isPairEdge(edge, previous, next, horizontal, rect)) {
       return;
     }
   } else if (
@@ -301,17 +287,26 @@ function mergedTarget(
  * @param b - Following anchor bounds.
  * @param horizontal - Whether insertion progresses along the inline axis.
  * @param rtl - Whether horizontal order runs right to left.
- * @returns Gap bounds using the intersection on the cross axis; overlaps have negative size.
+ * @param host - Registered linear layout bounds; omitted for grid intersections.
+ * @returns Gap bounds using the host cross axis for linear lists or the item intersection for grids; overlaps have negative size.
  */
-function pairBounds(a: BlockDropBounds, b: BlockDropBounds, horizontal: boolean, rtl: boolean) {
+function pairBounds(
+  a: BlockDropBounds,
+  b: BlockDropBounds,
+  horizontal: boolean,
+  rtl: boolean,
+  host?: BlockDropBounds,
+) {
   if (horizontal) {
     const left = rtl ? b.right : a.right;
     const right = rtl ? a.left : b.left;
-    const top = Math.max(a.top, b.top);
-    return dropBounds(left, top, right - left, Math.min(a.bottom, b.bottom) - top);
+    const top = host?.top ?? Math.max(a.top, b.top);
+    const bottom = host?.bottom ?? Math.min(a.bottom, b.bottom);
+    return dropBounds(left, top, right - left, bottom - top);
   }
-  const left = Math.max(a.left, b.left);
-  return dropBounds(left, a.bottom, Math.min(a.right, b.right) - left, b.top - a.bottom);
+  const left = host?.left ?? Math.max(a.left, b.left);
+  const right = host?.right ?? Math.min(a.right, b.right);
+  return dropBounds(left, a.bottom, right - left, b.top - a.bottom);
 }
 
 /**
@@ -463,4 +458,174 @@ function resolveRootGap(
   return region?.kind === "edge"
     ? dropRegionTarget(entry, { ...region, depth: undefined }, read(entry), point)
     : undefined;
+}
+
+/**
+ * Selects declared before/after edges across an item's full row in its layout gutters.
+ *
+ * An explicit gutters=false leaves free row space for declared background regions.
+ * Only the owning layout's visible background participates. A binary search
+ * selects one mounted anchor; unmounted intervals add no edge target. The leading
+ * half chooses before and the trailing half after, including horizontal RTL flow.
+ * The original region and actual pointer retain outline depth choices. Feedback
+ * stays on the block edge and can still merge with its sibling's matching edge.
+ * Grid row gutters use only the exposed first/last tile; inter-tile seams and
+ * background beneath short tiles retain their separate declared ownership.
+ *
+ * @param layout - Registered list bounding the row gutters in its declared flow.
+ * @param items - Committed mounted anchors in display order.
+ * @param point - Actual viewport pointer, also used for outline depth selection.
+ * @param hit - Native visible hit; occupied/excluded background is not redirected.
+ * @param read - Query-local geometry shared with sibling-gap resolution.
+ * @param rtl - Whether horizontal item order decreases in viewport X.
+ * @returns Existing edge target, or undefined outside a row or for a missing/disabled edge.
+ * @throws If a declared edge size is negative or nonfinite.
+ */
+function resolveLayoutGutter(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  hit: Element,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+): ResolvedBlockDropTarget | undefined {
+  if (layout.gutters === false) {
+    return;
+  }
+  if (!isDropBackground(layout.element, hit, point)) {
+    return;
+  }
+  if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
+    return;
+  }
+  const horizontal = layout.axis === "horizontal";
+  const entry = layoutGutterItem(layout.axis, items, point, read, rtl);
+  if (!entry) {
+    return;
+  }
+  const geometry = read(entry);
+  const coordinate = horizontal ? point.x : point.y;
+  const start = horizontal ? geometry.rect.left : geometry.rect.top;
+  const end = horizontal ? geometry.rect.right : geometry.rect.bottom;
+  if (containsDropPoint(geometry.rect, point) || coordinate < start || coordinate > end) {
+    return;
+  }
+  const after =
+    horizontal && rtl ? coordinate < (start + end) / 2 : coordinate >= (start + end) / 2;
+  const side = `${horizontal ? "inline" : "block"}-${after ? "end" : "start"}`;
+  const region = entry
+    .getRegions()
+    .find((region) => region.kind === "edge" && region.side === side);
+  if (region?.kind !== "edge") {
+    return;
+  }
+  const strip = dropEdgeRect(region, geometry);
+  if (strip.width > 0 && strip.height > 0) {
+    return dropRegionTarget(entry, region, geometry, point);
+  }
+}
+
+/**
+ * Checks that an edge is still declared by the matching member of a sibling pair.
+ *
+ * Registration identity is retained: a foreign or stale descriptor cannot borrow
+ * another pair's midpoint or switch its logical axis during normalization.
+ *
+ * @param edge - Selected anchor and original declaration.
+ * @param previous - Mounted preceding sibling registration.
+ * @param next - Mounted following sibling registration.
+ * @param horizontal - Whether the pair uses inline rather than block edges.
+ * @param bounds - Physical pair interval; a nonpositive cross axis cannot normalize feedback.
+ * @returns True for that pair's current declaration on the corresponding side.
+ */
+function isPairEdge(
+  edge: Pick<ResolvedBlockDropTarget, "element" | "region">,
+  previous: BlockDropTargetRegistration,
+  next: BlockDropTargetRegistration,
+  horizontal: boolean,
+  bounds: BlockDropBounds,
+): boolean {
+  if ((horizontal ? bounds.height : bounds.width) <= 0) {
+    return false;
+  }
+  const region = edge.region;
+  if (region?.kind !== "edge" || !region.side.startsWith(horizontal ? "inline" : "block")) {
+    return false;
+  }
+  const owner = region.side.endsWith("end") ? previous : next;
+  return owner.element === edge.element && owner.getRegions().includes(region);
+}
+
+/**
+ * Finds the mounted item whose exposed gutter contains the pointer's flow coordinate.
+ *
+ * Wrapping rows expose gutters only outside their first and last tiles. Space
+ * between tiles remains a canonical seam, and space under a short tile stays background.
+ *
+ * @param axis - Declared flow axis of the owning layout.
+ * @param items - Committed anchors in visual order.
+ * @param point - Current viewport pointer.
+ * @param read - Query-local cached geometry reader.
+ * @param rtl - Whether inline order runs right to left.
+ * @returns One candidate, or undefined before all items or inside a grid row's span.
+ */
+function layoutGutterItem(
+  axis: BlockDropLayoutRegistration["axis"],
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+): BlockDropTargetRegistration | undefined {
+  if (axis === "grid") {
+    const [start, end] = layoutRowRange(items, axis, point, read);
+    if (start === end) {
+      return;
+    }
+    const first = items[rtl ? end - 1 : start]!;
+    const last = items[rtl ? start : end - 1]!;
+    if (point.x < read(first).rect.left) {
+      return first;
+    }
+    if (point.x > read(last).rect.right) {
+      return last;
+    }
+    return;
+  }
+  const horizontal = axis === "horizontal";
+  let coordinate = horizontal ? point.x : point.y;
+  if (horizontal && rtl) {
+    coordinate = -coordinate;
+  }
+  return items[
+    upperBound(items, coordinate, read, horizontal ? "x" : "y", 0, items.length, rtl) - 1
+  ];
+}
+
+/**
+ * Bounds binary searches to the aligned wrapping row containing the pointer.
+ *
+ * Linear lists retain their complete committed range. Grid items must be in
+ * row-major order with aligned row starts, as required by physical gap lookup.
+ *
+ * @param items - Committed mounted anchors in visual order.
+ * @param axis - Declared linear or grid flow.
+ * @param point - Pointer selecting the wrapping row by viewport Y.
+ * @param read - Query-local cached geometry reader.
+ * @returns Half-open row indices, or an empty range before the first grid row.
+ */
+function layoutRowRange(
+  items: readonly BlockDropTargetRegistration[],
+  axis: BlockDropLayoutRegistration["axis"],
+  point: BlockDropPoint,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+): readonly [number, number] {
+  if (axis !== "grid") {
+    return [0, items.length];
+  }
+  const end = upperBound(items, point.y, read, "y");
+  if (!end) {
+    return [0, 0];
+  }
+  const top = read(items[end - 1]!).rect.top;
+  return [upperBound(items, top - 0.01, read, "y"), end];
 }

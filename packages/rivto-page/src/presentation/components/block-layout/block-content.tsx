@@ -3,6 +3,7 @@ import type { BlockRenderer, BlockRendererProps } from "../../renderers/types";
 import { useBlockRenderer } from "../../hooks/use-block-renderer";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 import { useBlockLayoutState } from "./block-layout-context";
+import { useBlockRegion } from "./use-block-region";
 
 /** Stable content component and ID, isolated from block layout state changes. */
 interface BlockContentRendererProps extends BlockRendererProps {
@@ -37,6 +38,8 @@ const BlockContentRenderer = memo(function BlockContentRenderer({
  *
  * Block layout state updates can rerun this primitive, but the memoized content boundary keeps
  * an unchanged host component asleep. Its own hooks still observe live content.
+ * Its committed ref declares this owner's body bounds for shared interaction
+ * geometry; replacement and unmount release that registration.
  *
  * @returns The content host, empty when neither registration nor fallback supplies content.
  * @throws If outside a block layout, or renderer lookup/content rendering fails.
@@ -44,8 +47,9 @@ const BlockContentRenderer = memo(function BlockContentRenderer({
 export function BlockContent() {
   const { block } = useBlockLayoutState();
   const Content = useBlockRenderer(block.type);
+  const ref = useBlockRegion(block.id, "content");
   return (
-    <div className={BLOCK_EDITOR_CLASSES.content}>
+    <div ref={ref} className={BLOCK_EDITOR_CLASSES.content}>
       {Content && <BlockContentRenderer blockId={block.id} renderer={Content} />}
     </div>
   );

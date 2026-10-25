@@ -674,6 +674,7 @@ it("uses borrowed node commands in controls and restores collapsed descendants w
   act(() => checkbox.click());
   expect(adapter.nodes.get("parent")?.checked).toBe(true);
   const collapse = container.querySelector('[data-block-control="collapse"]') as HTMLButtonElement;
+  expect(collapse.getAttribute("data-collapse-toggle")).toBe("true");
   const controls = collapse.getAttribute("aria-controls")!;
   expect(
     container.querySelector(`[id="${controls}"]`)?.querySelector('[data-block-id="child"]'),
@@ -1824,3 +1825,138 @@ it("shares projected root anchors with the outer layout and observes parent upda
   act(() => root.render(null));
   expect(adapter.subscriberCount).toBe(0);
 });
+
+it.each([undefined, "18px"])(
+  "applies child-list target size with style override %s and preserves it on collapse",
+  (override) => {
+    const adapter = new TestBlockEditorAdapter();
+    const editor = createEditor(adapter);
+    adapter.setNode("parent", { type: "container", childIds: ["child"] });
+    adapter.setNode("child");
+    adapter.setBlockIds(["parent"]);
+    editor.renderers.register("container", {
+      layout: () => (
+        <BlockChildren
+          targetSize={16}
+          style={override ? { "--rivto-drop-target-size": override } : undefined}
+        />
+      ),
+    });
+    act(() => root.render(<BlockEditor editor={editor} />));
+    const host = container.querySelector<HTMLElement>(
+      '[data-block-id="parent"] > .rivto-block-children',
+    )!;
+    expect(host.style.getPropertyValue("--rivto-drop-target-size")).toBe(override ?? "16px");
+    expect(container.querySelector("[targetSize]")).toBeNull();
+    act(() => editor.getNode("parent").setCollapsed(true));
+    expect(host.style.display).toBe("none");
+    expect(host.style.getPropertyValue("--rivto-drop-target-size")).toBe(override ?? "16px");
+    act(() => editor.getNode("parent").setCollapsed(false));
+    expect(host.style.display).toBe("");
+    expect(host.style.getPropertyValue("--rivto-drop-target-size")).toBe(override ?? "16px");
+  },
+);
+
+it.each(["outline", "siblings"] as const)(
+  "shares %s boundary policy between wrapping items and their terminal children",
+  (dropPlacement) => {
+    const adapter = new TestBlockEditorAdapter();
+    const editor = createEditor(adapter);
+    adapter.setNode("parent", { type: "container", childIds: ["a", "b"] });
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("b");
+    adapter.setNode("child");
+    adapter.setBlockIds(["parent"]);
+    const register = jest.spyOn(editor.dropTargets, "register");
+    editor.renderers.register("container", {
+      layout: () => <BlockChildren dropAxis="grid" dropPlacement={dropPlacement} item={GridItem} />,
+    });
+    act(() => root.render(<BlockEditor editor={editor} />));
+    const item = container.querySelector('[data-grid-item="a"]')!;
+    const child = container.querySelector('[data-block-id="child"]')!;
+    const itemRegions = register.mock.calls
+      .find(([entry]) => entry.element === item)![0]
+      .getRegions();
+    const trailing = itemRegions.find(
+      (region) => region.kind === "edge" && region.side === "block-end",
+    );
+    expect(trailing?.kind).toBe("edge");
+    const after = { kind: "between", parentId: "parent", previousId: "a", nextId: "b" };
+    const expected =
+      dropPlacement === "outline" ? [after, { kind: "inside", parentId: "a" }] : undefined;
+    expect(trailing?.kind === "edge" && trailing.depth?.destinations).toEqual(expected);
+    const childRegions = register.mock.calls
+      .find(
+        ([entry]) =>
+          entry.element === child && entry.getRegions().some((region) => region.kind === "edge"),
+      )![0]
+      .getRegions();
+    const edge = childRegions.find(
+      (region) => region.kind === "edge" && region.side === "block-end",
+    );
+    expect(edge?.kind === "edge" && edge.depth?.destinations).toEqual([
+      ...(dropPlacement === "outline" ? [after] : []),
+      { kind: "between", parentId: "a", previousId: "child", nextId: null },
+      { kind: "inside", parentId: "child" },
+    ]);
+  },
+);
+
+it("releases a filtered item's mounted anchor when its own visibility changes", async () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  adapter.setNode("parent", { type: "filtered", childIds: ["a", "b"] });
+  adapter.setNode("a");
+  adapter.setNode("b");
+  adapter.setBlockIds(["parent"]);
+  const register = jest.spyOn(editor.dropTargets, "registerLayout");
+  /**
+   * Filters one item's existing subtree using its addressed live type.
+   *
+   * @param props - Canonical identity and supplied child subtree.
+   * @param props.blockId - Own node whose type controls visibility.
+   * @param props.children - Page-owned subtree, unmounted while filtered.
+   * @returns Existing subtree unless its own type is hidden.
+   */
+  function Item({ blockId, children }: BlockChildrenItemProps) {
+    const node = useBlockNode(blockId);
+    return node.getSnapshot()?.type === "hidden" ? null : children;
+  }
+  editor.renderers.register("filtered", { layout: () => <BlockChildren item={Item} /> });
+  await act(async () => root.render(<BlockEditor editor={editor} />));
+  const host = container.querySelector('[data-block-id="parent"] > .rivto-block-children');
+  const layout = register.mock.calls.find(([entry]) => entry.element === host)![0];
+  expect(layout.getItems()?.map((entry) => entry.element.dataset.blockId)).toEqual(["a", "b"]);
+  await act(async () => adapter.setNode("a", { type: "hidden" }));
+  expect(layout.getItems()?.map((entry) => entry.element.dataset.blockId)).toEqual(["b"]);
+  expect(layout.getItems()![0].getRegions()[0].destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "a",
+    nextId: "b",
+  });
+  await act(async () => adapter.setNode("a", { type: "text" }));
+  expect(layout.getItems()?.map((entry) => entry.element.dataset.blockId)).toEqual(["a", "b"]);
+});
+
+it.each([true, false])(
+  "passes gutter continuation %s without changing the child DOM",
+  (dropGutters) => {
+    const adapter = new TestBlockEditorAdapter();
+    const editor = createEditor(adapter);
+    adapter.setNode("parent", { type: "container", childIds: ["a"] });
+    adapter.setNode("a");
+    adapter.setBlockIds(["parent"]);
+    const register = jest.spyOn(editor.dropTargets, "registerLayout");
+    editor.renderers.register("container", {
+      layout: () => <BlockChildren dropGaps dropGutters={dropGutters} />,
+    });
+    act(() => root.render(<BlockEditor editor={editor} />));
+    const host = container.querySelector('[data-block-id="parent"] > .rivto-block-children')!;
+    const layout = register.mock.calls.find(([entry]) => entry.element === host)![0];
+    expect(layout.gaps).toBe(true);
+    expect(layout.gutters).toBe(dropGutters);
+    expect(host.getAttribute("dropGutters")).toBeNull();
+    expect(host.querySelectorAll('[data-block-id="a"]')).toHaveLength(1);
+  },
+);

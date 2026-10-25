@@ -30,6 +30,8 @@ function KanbanCardItem({ children }: BlockChildrenItemProps) {
  * add-card footer unmount together. Empty lanes retain their native drop area.
  * Populated lanes also accept append drops on free background and footer controls;
  * nested card regions and sibling insertion edges keep their own destinations.
+ * Card edges share ordinary outline depth placement: the leading band sorts
+ * siblings and the indented trailing band appends children without entering content.
  *
  * @param props - Column identity passed by Page's renderer registration.
  * @param props.blockId - Receiving parent for the footer's insert command.
@@ -44,6 +46,7 @@ export function KanbanColumnLayout({ blockId }: BlockLayoutProps) {
       <BlockBody />
       <BlockChildren
         className="rivto-kanban-cards"
+        targetSize={16}
         dropAxis="vertical"
         dropPlacement="outline"
         dropBackground

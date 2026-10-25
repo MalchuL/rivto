@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useCallback, type ReactNode } from 
 import type {
   BetweenBlockDropDestination,
   BlockDropDestination,
+  BlockDropEdgeRegion,
 } from "../../editor/drag-and-drop/types";
 import type { BlockChildPlacement } from "../components/block-layout/block-item-context";
 import { useBlockDropRegions } from "./block-drop-layout";
@@ -21,7 +22,6 @@ export interface BlockDropItemProps {
   readonly placement: BlockChildPlacement;
   readonly axis: "vertical" | "horizontal";
   readonly outline: boolean;
-  readonly allowChildPlacement?: boolean;
   readonly children: ReactNode;
 }
 
@@ -39,16 +39,42 @@ export interface BlockDropItemProps {
  * @param props.axis - Direction in which the surrounding list arranges siblings.
  * @param props.children - Existing subtree, rendered once inside its terminal depth context.
  * @param props.outline - Whether trailing gaps expose child and terminal ancestor bands.
- * @param props.allowChildPlacement - False suppresses the child append band.
  * @returns Before/content/after regions without another block shell.
  */
-export function BlockDropItem({
-  placement,
-  axis,
-  outline,
-  allowChildPlacement,
-  children,
-}: BlockDropItemProps) {
+export function BlockDropItem({ placement, axis, outline, children }: BlockDropItemProps) {
+  const { regions, depth } = useBlockDropEdges({ placement, axis, outline });
+  const editor = useBlockEditorController();
+  const anchor = useCallback(
+    () => editor.regions.get(placement.blockId, "shell") ?? null,
+    [editor, placement.blockId],
+  );
+  useBlockDropRegions(anchor, regions, placement.blockId);
+  return <BlockDropDepthContext.Provider value={depth}>{children}</BlockDropDepthContext.Provider>;
+}
+
+/** Shared placement policy consumed by linear shells and wrapping items. */
+interface BlockDropEdgesOptions {
+  readonly placement: BlockChildPlacement;
+  readonly axis: "vertical" | "horizontal" | "grid";
+  readonly outline: boolean;
+  readonly size?: number;
+}
+
+/**
+ * Builds canonical edge declarations and terminal ancestry for any item layout.
+ *
+ * Linear shells and wrapping items use identical nesting depth choices. Grid
+ * block-end edges expose outline depth; their inline seams retain sibling order.
+ * These declarations own no DOM, registrations, permission or pointer listeners.
+ *
+ * @param options - Canonical placement, flow and the containing list's placement policy.
+ * @param options.placement - Real parent and adjacent model IDs, independent of mounted siblings.
+ * @param options.axis - Edges to declare; grid enables block and inline boundaries.
+ * @param options.outline - Enables child append and terminal ancestor bands.
+ * @param options.size - Optional local-pixel edge size; omission inherits the theme.
+ * @returns Edge declarations and ancestry to provide around the existing subtree.
+ */
+export function useBlockDropEdges({ placement, axis, outline, size }: BlockDropEdgesOptions) {
   const inherited = useContext(BlockDropDepthContext);
   const { parentId, blockId, previousId, nextId } = placement;
   const after = useMemo<BetweenBlockDropDestination>(
@@ -65,36 +91,56 @@ export function BlockDropItem({
     () => (outline ? [...ancestors, after] : null),
     [outline, ancestors, after],
   );
-  const editor = useBlockEditorController();
-  const anchor = useCallback(() => editor.regions.get(blockId, "shell") ?? null, [editor, blockId]);
-  const before = {
-    kind: "between" as const,
-    parentId: parentId ?? null,
-    previousId,
-    nextId: blockId,
-  };
-  const declarations = useMemo<readonly BlockDropRegion[]>(() => {
-    if (parentId === undefined) {
-      return [];
-    }
+  const regions = useMemo<readonly BlockDropRegion[]>(() => {
     const destinations: BlockDropDestination[] = [...ancestors, after];
-    if (outline && allowChildPlacement !== false) {
+    if (outline) {
       destinations.push({ kind: "inside", parentId: blockId });
     }
-    return [
+    const trailing = outline ? { destinations, ancestors: ancestors.length } : undefined;
+    return blockDropEdges(placement, axis, trailing, size);
+  }, [parentId, previousId, blockId, nextId, axis, after, ancestors, outline, size]);
+  return { regions, depth };
+}
+
+/**
+ * Maps canonical placement to declared logical boundaries without reading DOM.
+ *
+ * @param placement - Real parent and adjacent canonical IDs.
+ * @param axis - Linear flow or wrapping grid boundaries.
+ * @param depth - Optional nesting choices on the trailing flow edge.
+ * @param size - Optional local CSS-pixel thickness, inherited when omitted.
+ * @returns Before/after declarations, empty for projected lists with no real parent.
+ */
+function blockDropEdges(
+  placement: BlockChildPlacement,
+  axis: BlockDropEdgesOptions["axis"],
+  depth?: BlockDropEdgeRegion["depth"],
+  size?: number,
+): readonly BlockDropRegion[] {
+  const { parentId, previousId, blockId, nextId } = placement;
+  if (parentId === undefined) {
+    return [];
+  }
+  const before = { kind: "between" as const, parentId, previousId, nextId: blockId };
+  const after = { kind: "between" as const, parentId, previousId: blockId, nextId };
+  const regions: BlockDropRegion[] = [];
+  if (axis !== "horizontal") {
+    regions.push(
+      { kind: "edge", side: "block-start", size, destination: before },
+      { kind: "edge", side: "block-end", size, destination: after, depth },
+    );
+  }
+  if (axis !== "vertical") {
+    regions.push(
+      { kind: "edge", side: "inline-start", size, destination: before },
       {
         kind: "edge",
-        side: axis === "vertical" ? "block-start" : "inline-start",
-        destination: before,
-      },
-      {
-        kind: "edge",
-        side: axis === "vertical" ? "block-end" : "inline-end",
+        side: "inline-end",
+        size,
         destination: after,
-        depth: outline ? { destinations, ancestors: ancestors.length } : undefined,
+        depth: axis === "horizontal" ? depth : undefined,
       },
-    ];
-  }, [parentId, previousId, blockId, axis, after, ancestors, outline, allowChildPlacement]);
-  useBlockDropRegions(anchor, declarations, blockId);
-  return <BlockDropDepthContext.Provider value={depth}>{children}</BlockDropDepthContext.Provider>;
+    );
+  }
+  return regions;
 }

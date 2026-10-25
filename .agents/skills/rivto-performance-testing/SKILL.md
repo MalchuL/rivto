@@ -30,6 +30,26 @@ examining their results, not merely proposing commands.
   and a large input. Set bounds from the intended work, not today's accidental
   call count; allow fixed work performed by other installed extensions.
 
+For shared block geometry, test the common contract on ordinary blocks and the
+affected containers. Distinguish content/row bounds from the complete hierarchy:
+include leaves and populated blocks, body-center and boundary points, default
+geometry and a meaningful inherited override. Assert body-outline versus
+boundary-line feedback as well as the committed destination and undo. Indentation
+checks compare text/content coordinates on multiple levels; shell offsets or a
+nondefault theme alone can miss the visible regression. Fix the shared owner
+instead of adding a container exception or weakening the assertion to a different
+region.
+
+For outline nesting, test indented lower boundaries, physical gaps and row gutters
+outside the receiving content separately from body-center drops. Include direct
+container children and ordinary outlines: a body-only test or a deeper descendant
+can pass while direct-card boundary nesting is disabled. Verify intentional
+`siblings` lists still sort, and wrapping items pass terminal depth to descendants.
+An indented boundary keeps a line even if its destination is represented as inside;
+do not change the expected gesture to a body outline merely to match current code.
+Sweep sibling/child depth in both directions, enter the body and return to the gap,
+and verify visible composited paint as well as attributes and canonical hierarchy.
+
 ## Check the real performance path
 
 For changes that affect editor runtime, run the affected interaction in the actual

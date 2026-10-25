@@ -43,14 +43,12 @@ export type BlockDropRegion = BlockDropEdgeRegion | BlockDropInsideRegion;
 export interface BlockDropEdgeRegion {
   readonly kind: "edge";
   readonly side: "block-start" | "block-end" | "inline-start" | "inline-end";
-  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 8. */
+  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 8. Capped to one third of the anchor axis and constrained by the registered own-content middle third, retaining body drops when descendants enlarge the shell. */
   readonly size?: number;
   /** Bounds accepts the whole anchor while retaining feedback on the declared edge; defaults to edge. */
   readonly coverage?: "edge" | "bounds";
   readonly destination: BlockDropDestination;
   readonly depth?: BlockDropDepth;
-  /** Logical-start inset for block-edge feedback in local CSS pixels; negative extends the line without changing hit coverage. Ignored by inline edges. */
-  readonly indicatorInset?: number;
 }
 
 /** Explicit append area, optionally restricted to unoccupied layout background. */
@@ -80,6 +78,8 @@ export interface BlockDropLayoutRegistration {
   readonly element: HTMLElement;
   readonly axis: "vertical" | "horizontal" | "grid";
   readonly gaps: boolean;
+  /** Continue item boundaries across free row gutters; defaults to true when gaps are enabled. */
+  readonly gutters?: boolean;
   /** Matching sibling edges share midpoint feedback by default. */
   readonly boundaries?: BlockDropBoundaryMode;
   /** Virtual lists require consecutive displayed indices, even across missing DOM roots. */
@@ -127,7 +127,7 @@ export interface ResolvedBlockDropTarget {
   readonly element: HTMLElement;
   /** Explicit complete receiving hierarchy to outline; omission paints the hit anchor. Supplied by the owning resolver, without DOM inference in feedback. */
   readonly outlineElement?: HTMLElement;
-  /** Absent for inside targets and custom regions without line geometry. */
+  /** Boundary insertion line, including indented child append; absent for body/background inside regions and custom regions without line geometry. */
   readonly indicator?: BlockDropIndicator;
   readonly destination: BlockDropDestination;
   /** Physical region chosen before source exclusion. */
