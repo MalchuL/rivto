@@ -44,6 +44,8 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly targetSize?: number;
   /** Outline declares depth bands; siblings keeps each region at this parent. Defaults to outline. */
   readonly dropPlacement?: "outline" | "siblings";
+  /** Local (default) keeps the owner's outer boundaries at its sibling level. Outline continues ordinary nesting depth through the owner. Body drops and depth choices within this list remain independent. */
+  readonly dropScope?: "local" | "outline";
   /** Optional non-block JSX appended after mapped children, such as an add-column button. */
   readonly children?: ReactNode;
 }
@@ -68,6 +70,7 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.dropAxis - Flow for declared regions, default vertical. Linear lists register inset edges without forcing indentation; grid items supply wrapping boundaries. Background padding has no implicit action.
  * @param props.targetSize - Optional edge thickness shared by direct items and descendants, including wrapping items; changes hit geometry only. The existing style token takes precedence.
  * @param props.dropPlacement - Outline declares horizontal depth regions; siblings fixes each gap to this list, independently of axis.
+ * @param props.dropScope - Local (default) declares a self-contained child layout whose owner's outer edges sort siblings. Outline continues ordinary outline nesting through that owner; neither mode disables body drops or nesting between children.
  * @param props.hoverBoundary - True bounds descendant row hover to this layout; false inherits the enclosing area without changing indentation or drop permission.
  * @param props.renderEmpty - False omits the entire host when childIds is empty, including extra controls.
  * @param props.className - Additional classes, including optional outline indentation.
@@ -91,6 +94,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     dropAxis = "vertical",
     targetSize,
     dropPlacement = "outline",
+    dropScope = "local",
     hoverBoundary = true,
     ...attributes
   },
@@ -129,6 +133,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       id={childrenId}
       data-block-drop-axis={dropAxis}
       data-block-drop-placement={dropPlacement}
+      data-block-drop-scope={dropScope}
       data-block-hover-boundary={hoverBoundary || undefined}
       style={{
         ...(targetSize === undefined

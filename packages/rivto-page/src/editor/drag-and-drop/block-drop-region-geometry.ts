@@ -2,6 +2,8 @@ import { registeredBlockRegion } from "../../presentation/components/block-layou
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
 import type {
   BlockDropEdgeRegion,
+  BlockDropDestination,
+  BlockDropIndicator,
   BlockDropPoint,
   BlockDropRegion,
   BlockDropTargetRegistration,
@@ -41,6 +43,8 @@ export interface BlockDropGeometry {
   readonly rect: BlockDropBounds;
   /** Owned content or primary row, when mounted and nonempty; never a descendant block. */
   readonly contentRect?: BlockDropBounds;
+  /** False for an owned local child layout; omission preserves ordinary outline depth. */
+  readonly continuesOutline?: boolean;
   readonly style: CSSStyleDeclaration;
   readonly scaleX: number;
   readonly scaleY: number;
@@ -58,10 +62,26 @@ export function readDropGeometry(element: HTMLElement): BlockDropGeometry {
   return {
     rect,
     contentRect: readContentBounds(element),
+    continuesOutline: continuesDropOutline(element),
     style: element.ownerDocument.defaultView!.getComputedStyle(element),
     scaleX: element.offsetWidth ? rect.width / element.offsetWidth : 1,
     scaleY: element.offsetHeight ? rect.height / element.offsetHeight : 1,
   };
+}
+
+/**
+ * Reads whether this anchor's owned child layout continues ordinary outline depth.
+ *
+ * Only the existing registered child host participates. Its local declaration
+ * separates outer sibling placement from body/child drops; no block type, CSS
+ * class, descendant traversal or unregistered DOM marker determines this policy.
+ * Missing declarations keep ordinary outline behavior for leaves and custom anchors.
+ *
+ * @param element - Existing registered shell or wrapping item in this occurrence.
+ * @returns False for an explicitly local child scope; true for outline or absent scopes.
+ */
+export function continuesDropOutline(element: HTMLElement): boolean {
+  return registeredBlockRegion(element, "children")?.dataset.blockDropScope !== "local";
 }
 
 /**
@@ -80,6 +100,32 @@ export function containsDropPoint(rect: BlockDropBounds, point: BlockDropPoint):
     point.y >= rect.top &&
     point.y <= rect.bottom
   );
+}
+
+/**
+ * Tests a point against the cross-axis span of a linear insertion boundary.
+ *
+ * Vertical lists use the boundary width; horizontal lists use its height. The
+ * flow coordinate is intentionally ignored because endpoint padding may extend
+ * beyond the feedback line. Grid boundaries retain their separate geometry.
+ *
+ * @param bounds - Viewport feedback rectangle supplied by the region resolver.
+ * @param point - Current viewport pointer.
+ * @param axis - List flow selecting the perpendicular coordinate.
+ * @returns True within the inclusive cross-axis span, or false for grid flow.
+ */
+export function containsDropCrossAxisPoint(
+  bounds: BlockDropIndicator,
+  point: BlockDropPoint,
+  axis: "vertical" | "horizontal" | "grid",
+): boolean {
+  if (axis === "vertical") {
+    return point.x >= bounds.left && point.x <= bounds.left + bounds.width;
+  }
+  if (axis === "horizontal") {
+    return point.y >= bounds.top && point.y <= bounds.top + bounds.height;
+  }
+  return false;
 }
 
 /**
@@ -152,9 +198,10 @@ export function dropRegionTarget(
       (parseFloat(geometry.style.getPropertyValue("--rivto-block-indent")) || 28) * geometry.scaleX;
     const rtl = geometry.style.direction === "rtl";
     const offset = rtl ? rect.right - point.x : point.x - rect.left;
-    const level = Math.min(
-      region.depth.destinations.length - 1,
-      Math.max(0, Math.floor(offset / indent)),
+    const level = dropOutlineLevel(
+      region.depth.destinations,
+      offset / indent,
+      geometry.continuesOutline,
     );
     destination = region.depth.destinations[level]!;
     width = Math.max(0, rect.width - level * indent);
@@ -177,7 +224,35 @@ export function dropRegionTarget(
 }
 
 /**
- * Restricts background append to space outside child placements and explicit exclusions.
+ * Clamps pointer indentation to the depth choices allowed by the owning layout.
+ *
+ * A local child scope omits the terminal inside band while retaining sibling and
+ * ancestor bands. A sole explicit destination remains available. Body declarations
+ * bypass this calculation and continue accepting inside drops independently.
+ *
+ * @param destinations - Nonempty ordered outline bands from the edge declaration.
+ * @param offset - Pointer displacement in indentation units, already accounting for scale and RTL.
+ * @param continuesOutline - False for a local child layout; omission defaults to outline continuation.
+ * @returns The selected nonnegative index within the eligible destination bands.
+ */
+function dropOutlineLevel(
+  destinations: readonly BlockDropDestination[],
+  offset: number,
+  continuesOutline = true,
+): number {
+  let last = destinations.length - 1;
+  if (!continuesOutline && last > 0 && destinations[last]?.kind === "inside") {
+    last -= 1;
+  }
+  return Math.min(last, Math.max(0, Math.floor(offset)));
+}
+
+/**
+ * Restricts background append to space outside owned content, child placements and explicit exclusions.
+ *
+ * The registered own content/row stays occupied even when its controls have no
+ * content marker. This does not exclude those controls from their owner's inside
+ * region; it only prevents child-list background from replacing that body action.
  *
  * @param host - Declared background owner.
  * @param hit - Browser's visible native hit.
@@ -185,6 +260,10 @@ export function dropRegionTarget(
  * @returns Whether the hit belongs to unoccupied host chrome rather than item content.
  */
 export function isDropBackground(host: HTMLElement, hit: Element, point: BlockDropPoint): boolean {
+  const content = readContentBounds(host);
+  if (content && containsDropPoint(content, point)) {
+    return false;
+  }
   for (let node: Element | null = hit; node && node !== host; node = node.parentElement) {
     if (node.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
       return false;

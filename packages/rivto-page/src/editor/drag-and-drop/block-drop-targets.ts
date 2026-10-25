@@ -7,7 +7,13 @@ import {
   readDropGeometry,
 } from "./block-drop-region-geometry";
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
-import { resolveLayoutGap } from "./block-drop-layout-geometry";
+import {
+  areDropAxesPerpendicular,
+  isLocalOutlineEdge,
+  prefersOuterSiblingEdge,
+  resolveInnerLayoutGap,
+  resolveLayoutGap,
+} from "./block-drop-layout-geometry";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
 import type {
@@ -36,7 +42,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @param owner - Resource lifecycle capturing synchronous extension registrations.
    * @param blocks - Data source used only to validate candidate parents and neighbors.
    * @param getRoot - Live attachment lookup; returns null while the view is detached.
-   * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines and owned child hosts for vertical background scope; no registration or teardown capability is retained.
+   * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines and owned child hosts for linear-list background scope; no registration or teardown capability is retained.
    */
   constructor(
     private readonly owner: BlockEditorResourceOwner,
@@ -107,7 +113,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       nativeHit?.isConnected && nativeHit.ownerDocument === root.ownerDocument
         ? nativeHit
         : root.ownerDocument.elementFromPoint(clientX, clientY);
-    const candidate = this.resolvePoint(hit, { x: clientX, y: clientY });
+    const candidate = this.resolvePoint(hit, { x: clientX, y: clientY }, excluded);
     const destination = candidate && this.currentDestination(candidate.destination, excluded);
     const target = candidate && destination ? { ...candidate, destination } : undefined;
     if (!target || (accepts && !accepts(target.destination))) {
@@ -163,19 +169,21 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * @param hit - Connected native hit from the current occurrence.
    * @param point - Current viewport position.
+   * @param excluded - Captured moving roots; their adjacent boundary does not reserve a stationary shared seam.
    * @returns First local winner, or undefined for neutral/occluded/foreign geometry.
    */
   private resolvePoint(
     hit: Element | null,
     point: BlockDropPoint,
+    excluded?: ReadonlySet<string>,
   ): ResolvedBlockDropTarget | undefined {
     const root = this.getRoot();
     if (!root || !hit || !root.contains(hit) || hit.closest("[data-rivto-block-editor]") !== root) {
       return;
     }
-    const outer = this.resolveOuterEdge(hit, point, root);
-    if (outer) {
-      return outer;
+    const boundary = this.resolveNestedBoundary(hit, point, root, excluded);
+    if (boundary) {
+      return boundary;
     }
     let inside: ResolvedBlockDropTarget | undefined;
     let edge: ResolvedBlockDropTarget | undefined;
@@ -215,11 +223,18 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   }
 
   /**
-   * Keeps declared outer sibling rims reachable through nested child layouts.
+   * Resolves local row gaps and exposed ancestor sibling rims across nested layouts.
    *
-   * Only an actual ancestor edge beyond a nested layout participates; body and
-   * background declarations never gain priority. A nearer explicit item edge is
-   * resolved locally, so coincident container rims cannot swallow a child edge.
+   * Ancestor fallback considers only an actual edge beyond a nested layout;
+   * ancestor body and background append declarations never gain priority.
+   * A nearer explicit item edge retains its ordinary nesting unless a declared
+   * local owner has a stationary sibling strip covering that same edge. This
+   * reserves external shared boundaries without promoting ordinary outline
+   * ancestors over their child edges.
+   * An actual list-background gap wins within its cross-axis feedback span, including
+   * endpoint padding. A containing perpendicular layout keeps the inner list's full
+   * background cross axis available. Otherwise exposed gutters outside that span
+   * retain ancestor sorting.
    * An outdent band may still normalize to its ancestor's shared sibling gap.
    * Indented inside choices retain
    * the nearer layout's ordinary resolution. The winning edge is normalized by
@@ -229,37 +244,49 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @param hit - Connected native hit in this editor occurrence.
    * @param point - Viewport pointer tested against existing inset declarations.
    * @param root - Attached editor bounding the ancestor walk.
-   * @returns Outer sibling edge or its merged gap, or undefined without a matching rim.
+   * @param excluded - Captured moving roots omitted when classifying shared sibling neighbors.
+   * @returns A local row gap, an ancestor sibling edge or its merged gap, or
+   * undefined without a matching boundary that needs priority over local resolution.
    */
-  private resolveOuterEdge(
+  private resolveNestedBoundary(
     hit: Element,
     point: BlockDropPoint,
     root: HTMLElement,
+    excluded?: ReadonlySet<string>,
   ): ResolvedBlockDropTarget | undefined {
-    let nested = false;
+    let inner: BlockDropLayoutRegistration | undefined;
     let edge: ResolvedBlockDropTarget | undefined;
+    let localEdge: ResolvedBlockDropTarget | undefined;
+    let hasOuterPerpendicularLayout = false;
     for (let element: Element | null = hit; element; element = element.parentElement) {
       if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
         return;
       }
       const layout = this.layouts.get(element as HTMLElement);
-      if (edge && layout) {
-        return resolveLayoutGap(layout, point, hit, edge) ?? edge;
+      if (edge && layout && inner) {
+        const gap = resolveInnerLayoutGap(
+          inner,
+          edge,
+          point,
+          hit,
+          hasOuterPerpendicularLayout,
+          excluded,
+        );
+        return gap ?? resolveLayoutGap(layout, point, hit, edge) ?? edge;
       }
+      hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(inner?.axis, layout?.axis);
       const entries = !edge && this.targets.get(element as HTMLElement);
       const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
-      if (
-        !nested &&
-        target?.region?.kind === "edge" &&
-        (target.destination.kind !== "between" ||
-          target.destination.parentId === target.region.destination.parentId)
-      ) {
-        return;
+      if (!inner && isLocalOutlineEdge(target)) {
+        localEdge ??= target;
       }
-      if (nested && target?.region?.kind === "edge" && target.destination.kind === "between") {
+      if (inner && target?.region?.kind === "edge" && target.destination.kind === "between") {
+        if (localEdge && !prefersOuterSiblingEdge(target, localEdge, excluded)) {
+          return;
+        }
         edge = target;
       }
-      nested ||= Boolean(layout);
+      inner ??= layout;
       if (element === root) {
         return edge;
       }
@@ -268,18 +295,18 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   }
 
   /**
-   * Reads a mounted list or its owner's available vertical background scope.
+   * Reads a mounted list or its owner's available linear-list background scope.
    *
    * Registered child lists also own their block's unoccupied padding and remaining
    * height. Their existing declarations and mounted anchors are reused for this
    * synchronous query; no extra registration, DOM node or cached geometry is added.
    * Actual content and nested blocks remain protected by native background checks.
-   * Grid/horizontal layouts and numeric/disabled continuation keep their own
+   * Grid layouts and numeric/disabled continuation keep their own
    * clipping and distance bounds. This child scope never captures an already
    * selected shell edge: that edge belongs to the shell's containing list.
    *
    * @param element - Native ancestor inside the attached editor occurrence.
-   * @returns Its registered layout, an owner-bounded vertical view, or undefined
+   * @returns Its registered layout, an owner-bounded linear-list view, or undefined
    * when no enabled owned child layout is registered in this shell.
    */
   private readLayout(element: Element): BlockDropLayoutRegistration | undefined {
@@ -292,7 +319,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       ? this.regions.get(blockId, "children", element as HTMLElement)
       : undefined;
     const layout = children && this.layouts.get(children);
-    if (layout?.axis === "vertical" && layout.gaps && (layout.gutterSize ?? "row") === "row") {
+    if (layout && layout.axis !== "grid" && layout.gaps && (layout.gutterSize ?? "row") === "row") {
       return { ...layout, element: element as HTMLElement };
     }
   }

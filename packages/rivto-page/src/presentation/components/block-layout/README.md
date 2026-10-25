@@ -157,7 +157,23 @@ Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
 seams insert siblings. Terminal descendants inherit their item's trailing levels,
 so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
-Vertical lists with the default `"row"` continuation also extend their first/last
+
+`BlockChildren.dropScope` separates the owner's outer boundary from its child-list
+placement policy. The default `"local"` keeps sibling insertion across the whole
+outer rim of a self-contained layout. `"outline"` retains the terminal child-append
+band there; `DefaultBlockLayout` declares this mode for ordinary outlines. This is
+independent of `dropPlacement`, which still controls nesting between children.
+Body/inside declarations remain available under their own permission checks in
+both modes. Scope is read from the existing registered child host, without type
+checks, extra DOM, layout spacing, or a descendant search.
+
+A shared sibling boundary keeps its declared strip while crossing into either
+neighbor, ahead of inferred descendant endpoint padding. Neighbors captured as
+moving roots do not reserve a stationary seam. Canonical neighbor IDs determine
+this priority; the selected destination still undergoes live permission and move
+validation once. Block-axis corner priority remains independent of this rule.
+
+Linear lists with the default `"row"` continuation also extend their first/last
 insertion boundaries through existing leading/trailing host space. This applies
 to editor roots and container children alike, without adding layout space. Free
 end space inserts at the list's level, with feedback fixed to its endpoint;
@@ -166,14 +182,18 @@ areas declaring the same canonical boundary share the mounted endpoint's line,
 including when sibling boundaries use separate feedback. Their hit bounds and
 layout dimensions stay independent from the feedback anchor. Native background
 hits inside an endpoint's declared inset retain ordinary outline depth choices.
-An owned vertical list using `"row"` continuation also resolves insertion on its
-block's unoccupied padding and remaining height, even when the child host itself
-is shorter. Registered content keeps its inside action; nested blocks, exclusions
+An owned linear list using `"row"` continuation also resolves insertion on its
+block's unoccupied padding and remaining extent along its flow, even when the
+child host itself is shorter or narrower. Registered content keeps its inside action; nested blocks, exclusions
 and numeric/disabled continuation retain their existing boundaries. A selected
 shell edge still belongs to the shell's containing list, so child background
 coverage cannot consume insertion between containers. A nearer explicit child
 edge wins over a coincident ancestor rim; terminal outdent bands can still share
-the ancestor's gap feedback.
+the ancestor's gap feedback. A real list-background gap also wins within its row's
+inline span, so endpoint padding stays usable beneath an ancestor rim. A containing
+perpendicular linear layout preserves the inner list's full background cross axis;
+other exposed gutters retain ancestor sorting. The same rule applies to vertical
+and horizontal inner lists, including logical start/end in RTL. Body/background append regions gain no priority.
 
 Horizontal child hosts stretch an optional `BlockItem` and its existing block
 together. The visual lane, selection shell and owner background therefore cover

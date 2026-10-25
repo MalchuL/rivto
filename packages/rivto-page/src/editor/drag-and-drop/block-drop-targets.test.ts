@@ -179,57 +179,64 @@ it("resolves real gaps, preserves hidden canonical neighbors, and can disable ga
   expect(editor.dropTargets.resolve(10, 110, undefined, host)).toBeUndefined();
 });
 
-it.each(
-  [5, 2000].flatMap((count) => [
-    [count, 10, 35],
-    [count, 300, 25],
-  ]),
-)("reads logarithmically many live rectangles among %i anchors at %i,%i", (count, x, y) => {
-  adapter.setNode("parent", { childIds: Array.from({ length: count }, (_, i) => `id-${i}`) });
-  const reads: jest.SpyInstance[] = [];
-  const items = Array.from({ length: count }, (_, i) => {
-    const element = document.createElement("div");
-    host.append(element);
-    reads.push(rect(element, 0, i * 20, 200, 10));
-    return register(element, [
-      {
-        kind: "edge",
-        side: "block-start",
-        destination: {
-          kind: "between",
-          parentId: "parent",
-          previousId: i ? `id-${i - 1}` : null,
-          nextId: `id-${i}`,
+for (const axis of ["vertical", "horizontal"] as const) {
+  const horizontal = axis === "horizontal";
+  it.each(
+    [5, 2000].flatMap((count) => [
+      [count, 10, 35],
+      [count, 300, 25],
+    ]),
+  )(`reads logarithmically many ${axis} rectangles among %i anchors at %i,%i`, (count, x, y) => {
+    adapter.setNode("parent", { childIds: Array.from({ length: count }, (_, i) => `id-${i}`) });
+    const reads: jest.SpyInstance[] = [];
+    const items = Array.from({ length: count }, (_, i) => {
+      const element = document.createElement("div");
+      host.append(element);
+      reads.push(
+        horizontal ? rect(element, i * 20, 0, 10, 200) : rect(element, 0, i * 20, 200, 10),
+      );
+      return register(element, [
+        {
+          kind: "edge",
+          side: horizontal ? "inline-start" : "block-start",
+          destination: {
+            kind: "between",
+            parentId: "parent",
+            previousId: i ? `id-${i - 1}` : null,
+            nextId: `id-${i}`,
+          },
         },
-      },
-      {
-        kind: "edge",
-        side: "block-end",
-        destination: {
-          kind: "between",
-          parentId: "parent",
-          previousId: `id-${i}`,
-          nextId: i + 1 < count ? `id-${i + 1}` : null,
+        {
+          kind: "edge",
+          side: horizontal ? "inline-end" : "block-end",
+          destination: {
+            kind: "between",
+            parentId: "parent",
+            previousId: `id-${i}`,
+            nextId: i + 1 < count ? `id-${i + 1}` : null,
+          },
         },
-      },
-    ]);
+      ]);
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis,
+      gaps: true,
+      getItems: () => items,
+    });
+    const pointX = horizontal ? y : x;
+    const pointY = horizontal ? x : y;
+    expect(editor.dropTargets.resolve(pointX, pointY, undefined, host)?.destination).toEqual({
+      kind: "between",
+      parentId: "parent",
+      previousId: "id-1",
+      nextId: "id-2",
+    });
+    expect(reads.reduce((total, spy) => total + spy.mock.calls.length, 0)).toBeLessThanOrEqual(
+      Math.ceil(Math.log2(count)) + 2,
+    );
   });
-  editor.dropTargets.registerLayout({
-    element: host,
-    axis: "vertical",
-    gaps: true,
-    getItems: () => items,
-  });
-  expect(editor.dropTargets.resolve(x, y, undefined, host)?.destination).toEqual({
-    kind: "between",
-    parentId: "parent",
-    previousId: "id-1",
-    nextId: "id-2",
-  });
-  expect(reads.reduce((total, spy) => total + spy.mock.calls.length, 0)).toBeLessThanOrEqual(
-    Math.ceil(Math.log2(count)) + 2,
-  );
-});
+}
 
 it("stale disposers do not remove replacement layouts and detached anchors cannot resolve", () => {
   const old = editor.dropTargets.registerLayout({
@@ -1511,4 +1518,490 @@ it("normalizes a terminal child outdent band to its ancestor sibling gap", () =>
   const target = editor.dropTargets.resolve(12, 99, undefined, child);
   expect(target?.destination).toEqual(destination);
   expect(target?.indicator?.top).toBe(101);
+});
+
+it.each(["block-start", "block-end"] as const)(
+  "keeps %s list padding ahead of a coincident ancestor rim",
+  (side) => {
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "child";
+    item.append(children);
+    children.append(child);
+    rect(children, 0, 0, 200, 100);
+    rect(child, 28, 16, 172, 68);
+    const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+    const first = side === "block-start";
+    adapter.setNode("parent", { childIds: ["a"] });
+    const after = { kind: "between", parentId: "parent", previousId: "a", nextId: null } as const;
+    const outer = first ? before : after;
+    const inner = {
+      kind: "between",
+      parentId: "a",
+      previousId: first ? null : "child",
+      nextId: first ? "child" : null,
+    } as const;
+    const parent = register(item, [{ kind: "edge", side, destination: outer }]);
+    const entry = register(child, [{ kind: "edge", side, destination: inner }]);
+    editor.dropTargets.registerLayout({
+      element: children,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [entry],
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [parent],
+    });
+    const y = first ? 2 : 98;
+    const target = editor.dropTargets.resolve(100, y, undefined, children);
+    expect(target?.destination).toEqual(inner);
+    expect(target?.indicator?.top).toBe(first ? 15 : 83);
+    expect(editor.dropTargets.resolve(4, y, undefined, children)?.destination).toEqual(outer);
+  },
+);
+
+it.each(["vertical", "horizontal"] as const)(
+  "keeps %s list padding across a perpendicular containing layout",
+  (axis) => {
+    const horizontal = axis === "horizontal";
+    adapter.rootIds = ["parent"];
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    host.dataset.blockId = "parent";
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "child";
+    item.append(children);
+    children.append(child);
+    if (horizontal) {
+      rect(item, 0, 0, 100, 200);
+      rect(children, 0, 0, 100, 200);
+      rect(child, 16, 28, 68, 172);
+    } else {
+      rect(children, 0, 0, 200, 100);
+      rect(child, 28, 16, 172, 68);
+    }
+    const outer = { kind: "between", parentId: null, previousId: null, nextId: "parent" } as const;
+    const inner = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+    const parent = register(host, [
+      { kind: "edge", side: horizontal ? "inline-start" : "block-start", destination: outer },
+    ]);
+    const lane = register(item, [
+      { kind: "inside", destination: { kind: "inside", parentId: "a" } },
+    ]);
+    const entry = register(child, [
+      { kind: "edge", side: horizontal ? "inline-start" : "block-start", destination: inner },
+    ]);
+    for (const [element, flow, anchor] of [
+      [children, axis, entry],
+      [host, horizontal ? "vertical" : "horizontal", lane],
+      [root, axis, parent],
+    ] as const) {
+      editor.dropTargets.registerLayout({
+        element,
+        axis: flow,
+        gaps: true,
+        getItems: () => [anchor],
+      });
+    }
+    for (const cross of [12, 100, 198]) {
+      const x = horizontal ? 2 : cross;
+      const y = horizontal ? cross : 2;
+      expect(editor.dropTargets.resolve(x, y, undefined, children)?.destination).toEqual(inner);
+    }
+  },
+);
+
+it.each([false, true])("extends horizontal endpoints through existing padding, RTL=%s", (rtl) => {
+  host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
+  rect(item, 40, 20, 120, 160);
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const entry = register(item, [
+    { kind: "edge", side: "inline-start", destination: before },
+    { kind: "edge", side: "inline-end", destination },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "horizontal",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  for (const x of [1, 39, 161, 399]) {
+    const leading = rtl ? x > 160 : x < 40;
+    const target = editor.dropTargets.resolve(x, 100, undefined, host);
+    expect(target?.destination).toEqual(leading ? before : destination);
+    expect(target?.indicator).toEqual({ left: x < 40 ? 39 : 159, top: 20, width: 2, height: 160 });
+  }
+});
+
+it.each([false, true])(
+  "keeps a horizontal inner list ahead of vertical ancestor rims, RTL=%s",
+  (rtl) => {
+    host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
+    rect(item, 0, 0, 200, 200);
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "child";
+    children.style.direction = child.style.direction = rtl ? "rtl" : "ltr";
+    item.append(children);
+    children.append(child);
+    rect(children, 0, 0, 200, 200);
+    rect(child, 16, 0, 168, 200);
+    const outer = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+    const inner = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+    const parent = register(item, [{ kind: "edge", side: "block-start", destination: outer }]);
+    const entry = register(child, [{ kind: "edge", side: "inline-start", destination: inner }]);
+    editor.dropTargets.registerLayout({
+      element: children,
+      axis: "horizontal",
+      gaps: true,
+      getItems: () => [entry],
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [parent],
+    });
+    const target = editor.dropTargets.resolve(rtl ? 198 : 2, 2, undefined, children);
+    expect(target?.destination).toEqual(inner);
+    expect(target?.indicator).toEqual({ left: rtl ? 183 : 15, top: 0, width: 2, height: 200 });
+  },
+);
+
+it.each([undefined, "row", 0, 16] as const)(
+  "uses owned horizontal background only with row continuation, size=%s",
+  (gutterSize) => {
+    rect(item, 0, 0, 100, 200);
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "child";
+    item.append(children);
+    children.append(child);
+    rect(children, 20, 20, 40, 160);
+    rect(child, 30, 20, 20, 160);
+    register(item, [{ kind: "inside", destination: { kind: "inside", parentId: "a" } }]);
+    editor.regions.register("a", "children", children);
+    const after = { kind: "between", parentId: "a", previousId: "child", nextId: null } as const;
+    const before = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+    const entry = register(child, [
+      { kind: "edge", side: "inline-start", destination: before },
+      { kind: "edge", side: "inline-end", destination: after },
+    ]);
+    const release = editor.dropTargets.registerLayout({
+      element: children,
+      axis: "horizontal",
+      gaps: true,
+      gutterSize,
+      getItems: () => [entry],
+    });
+    expect(editor.dropTargets.resolve(15, 100, undefined, item)?.destination).toEqual(
+      gutterSize === 0 || gutterSize === 16 ? { kind: "inside", parentId: "a" } : before,
+    );
+    const content = document.createElement("div");
+    content.dataset.blockContent = "";
+    item.append(content);
+    rect(content, 0, 0, 10, 200);
+    expect(editor.dropTargets.resolve(5, 100, undefined, content)?.destination).toEqual({
+      kind: "inside",
+      parentId: "a",
+    });
+    const target = editor.dropTargets.resolve(90, 100, undefined, item);
+    expect(target?.destination).toEqual(
+      gutterSize === 0 || gutterSize === 16 ? { kind: "inside", parentId: "a" } : after,
+    );
+    if (gutterSize === undefined || gutterSize === "row") {
+      expect(target?.indicator?.left).toBe(49);
+    }
+    release();
+    expect(editor.dropTargets.resolve(90, 100, undefined, item)?.destination).toEqual({
+      kind: "inside",
+      parentId: "a",
+    });
+  },
+);
+
+it.each([false, true])("keeps horizontal virtual endpoint holes inert, RTL=%s", (rtl) => {
+  host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
+  rect(item, 100, 20, 100, 160);
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const entry = register(item, [
+    { kind: "edge", side: "inline-start", destination: before },
+    { kind: "edge", side: "inline-end", destination },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "horizontal",
+    gaps: true,
+    virtual: true,
+    getItems: () => [entry],
+  });
+  const leadingX = rtl ? 350 : 10;
+  const trailingX = rtl ? 10 : 350;
+  item.dataset.index = "4";
+  expect(editor.dropTargets.resolve(leadingX, 100, undefined, host)).toBeUndefined();
+  expect(editor.dropTargets.resolve(trailingX, 100, undefined, host)).toBeUndefined();
+  item.dataset.index = "0";
+  expect(editor.dropTargets.resolve(leadingX, 100, undefined, host)?.destination).toEqual(before);
+  expect(editor.dropTargets.resolve(trailingX, 100, undefined, host)).toBeUndefined();
+  item.dataset.virtualLast = "true";
+  expect(editor.dropTargets.resolve(trailingX, 100, undefined, host)?.destination).toEqual(
+    destination,
+  );
+});
+
+it.each(["local", "outline"] as const)(
+  "uses declared %s child scope for outer boundary depth",
+  (scope) => {
+    adapter.setNode("a");
+    const children = document.createElement("div");
+    children.dataset.blockDropScope = scope;
+    item.append(children);
+    editor.regions.register("a", "shell", item);
+    editor.regions.register("a", "children", children);
+    const inside = { kind: "inside", parentId: "a" } as const;
+    const entry = register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        destination,
+        depth: { ancestors: 0, destinations: [destination, inside] },
+      },
+      { kind: "inside", destination: inside },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [entry],
+    });
+    const target = editor.dropTargets.resolve(180, 99, undefined, item);
+    expect(target?.destination).toEqual(scope === "local" ? destination : inside);
+    expect(target?.indicator?.left).toBe(scope === "local" ? 0 : 28);
+    expect(editor.dropTargets.resolve(100, 50, undefined, item)?.destination).toEqual(inside);
+    expect(editor.dropTargets.resolve(100, 50, undefined, item)?.indicator).toBeUndefined();
+  },
+);
+
+it("does not infer a child scope from unregistered descendants", () => {
+  adapter.setNode("a");
+  const children = document.createElement("div");
+  children.dataset.blockDropScope = "local";
+  item.append(children);
+  const inside = { kind: "inside", parentId: "a" } as const;
+  register(item, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 0, destinations: [destination, inside] },
+    },
+  ]);
+  expect(editor.dropTargets.resolve(180, 99, undefined, item)?.destination).toEqual(inside);
+});
+
+it.each(["content", "row"] as const)(
+  "keeps registered own %s out of child-list background",
+  (role) => {
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    const content = document.createElement("div");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    item.append(content, children);
+    children.append(child);
+    rect(item, 0, 0, 200, 200);
+    rect(content, 0, 0, 200, 30);
+    rect(children, 0, 40, 200, 160);
+    rect(child, 0, 50, 200, 100);
+    editor.regions.register("a", "shell", item);
+    editor.regions.register("a", role, content);
+    editor.regions.register("a", "children", children);
+    const inside = { kind: "inside", parentId: "a" } as const;
+    register(item, [{ kind: "inside", destination: inside }]);
+    const before = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+    const entry = register(child, [{ kind: "edge", side: "block-start", destination: before }]);
+    editor.dropTargets.registerLayout({
+      element: children,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [entry],
+    });
+    const target = editor.dropTargets.resolve(100, 20, undefined, content);
+    expect(target?.destination).toEqual(inside);
+    expect(target?.indicator).toBeUndefined();
+  },
+);
+
+it("keeps a declared local block rim above its horizontal child background", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  adapter.setNode("child");
+  rect(item, 0, 0, 200, 200);
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  children.dataset.blockDropScope = "local";
+  item.append(children);
+  children.append(child);
+  rect(children, 0, 0, 200, 200);
+  rect(child, 20, 0, 160, 200);
+  editor.regions.register("a", "shell", item);
+  editor.regions.register("a", "children", children);
+  const outer = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const inner = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+  const parent = register(item, [{ kind: "edge", side: "block-start", destination: outer }]);
+  const entry = register(child, [{ kind: "edge", side: "inline-start", destination: inner }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "horizontal",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [parent],
+  });
+  expect(editor.dropTargets.resolve(2, 2, undefined, children)?.destination).toEqual(outer);
+});
+
+it.each(["merged", "separate"] as const)(
+  "keeps a stationary %s sibling seam above nested endpoint padding",
+  (boundaries) => {
+    adapter.setNode("b", { childIds: ["lane"] });
+    adapter.setNode("lane", { childIds: ["child"] });
+    adapter.setNode("child");
+    rect(item, 0, 0, 200, 200);
+    const next = document.createElement("div");
+    next.dataset.blockId = "b";
+    const group = document.createElement("div");
+    const lane = document.createElement("div");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    host.append(next);
+    next.append(group);
+    group.append(lane);
+    lane.append(children);
+    children.append(child);
+    for (const element of [next, group, lane, children]) {
+      rect(element, 0, 204, 200, 200);
+    }
+    rect(child, 28, 220, 172, 160);
+    const previous = register(item);
+    const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+    const column = register(lane, [
+      { kind: "inside", destination: { kind: "inside", parentId: "lane" } },
+    ]);
+    const inner = { kind: "between", parentId: "lane", previousId: null, nextId: "child" } as const;
+    const entry = register(child, [{ kind: "edge", side: "block-start", destination: inner }]);
+    for (const [element, axis, anchors] of [
+      [children, "vertical", [entry]],
+      [group, "horizontal", [column]],
+      [host, "vertical", [previous, following]],
+    ] as const) {
+      editor.dropTargets.registerLayout({
+        element,
+        axis,
+        boundaries,
+        gaps: true,
+        getItems: () => anchors,
+      });
+    }
+    for (const y of [205, 208, 211]) {
+      const target = editor.dropTargets.resolve(100, y, undefined, children);
+      expect(target?.destination).toEqual(destination);
+      expect(target?.indicator?.top).toBe(boundaries === "merged" ? 201 : 203);
+    }
+    expect(editor.dropTargets.resolve(100, 205, new Set(["a"]), children)?.destination).toEqual(
+      inner,
+    );
+  },
+);
+
+it("keeps a nested block edge above a stationary inline seam at their corner", () => {
+  adapter.setNode("b", { childIds: ["child"] });
+  adapter.setNode("child");
+  rect(item, 0, 0, 200, 200);
+  const next = document.createElement("div");
+  next.dataset.blockId = "b";
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  children.dataset.blockDropScope = "local";
+  host.append(next);
+  next.append(children);
+  children.append(child);
+  rect(next, 204, 0, 200, 200);
+  rect(children, 204, 0, 200, 200);
+  rect(child, 204, 16, 200, 180);
+  editor.regions.register("b", "shell", next);
+  editor.regions.register("b", "children", children);
+  const previous = register(item, [{ kind: "edge", side: "inline-end", destination }]);
+  const following = register(next, [{ kind: "edge", side: "inline-start", destination }]);
+  const inner = { kind: "between", parentId: "b", previousId: null, nextId: "child" } as const;
+  const entry = register(child, [{ kind: "edge", side: "block-start", destination: inner }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "horizontal",
+    gaps: true,
+    getItems: () => [previous, following],
+  });
+  const target = editor.dropTargets.resolve(205, 2, undefined, children);
+  expect(target?.destination).toEqual(inner);
+  expect(target?.indicator?.top).toBe(15);
+});
+
+it("keeps a local shared sibling rim when child edges coincide without padding", () => {
+  adapter.setNode("a");
+  adapter.setNode("b", { childIds: ["child"] });
+  adapter.setNode("child");
+  rect(item, 0, 0, 200, 200);
+  const next = document.createElement("div");
+  next.dataset.blockId = "b";
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "child";
+  children.dataset.blockDropScope = "local";
+  host.append(next);
+  next.append(children);
+  children.append(child);
+  for (const element of [next, children, child]) {
+    rect(element, 0, 204, 200, 200);
+  }
+  editor.regions.register("b", "shell", next);
+  editor.regions.register("b", "children", children);
+  const previous = register(item);
+  const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+  const inner = { kind: "between", parentId: "b", previousId: null, nextId: "child" } as const;
+  const entry = register(child, [{ kind: "edge", side: "block-start", destination: inner }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [previous, following],
+  });
+  const target = editor.dropTargets.resolve(100, 206, undefined, child);
+  expect(target?.destination).toEqual(destination);
+  expect(target?.indicator?.top).toBe(201);
+  expect(editor.dropTargets.resolve(100, 206, new Set(["a"]), child)?.destination).toEqual(inner);
 });

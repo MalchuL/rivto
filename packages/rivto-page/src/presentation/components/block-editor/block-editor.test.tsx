@@ -1960,3 +1960,37 @@ it.each(["row", 0, 16, undefined] as const)(
     expect(host.querySelectorAll('[data-block-id="a"]')).toHaveLength(1);
   },
 );
+
+it.each(["local", "outline"] as const)(
+  "declares %s drop scope on the existing owned child host",
+  (dropScope) => {
+    const adapter = new TestBlockEditorAdapter();
+    adapter.rootIds = ["a"];
+    adapter.setBlockIds(["a"]);
+    adapter.setNode("a", { type: "custom", childIds: ["b"] });
+    adapter.setNode("b");
+    const editor = createEditor(adapter);
+    editor.renderers.register("custom", { layout: () => <BlockChildren dropScope={dropScope} /> });
+    act(() => root.render(<BlockEditor editor={editor} />));
+    const host = container.querySelector('[data-block-id="a"] > .rivto-block-children')!;
+    expect(host.getAttribute("data-block-drop-scope")).toBe(dropScope);
+    expect(host.hasAttribute("dropScope")).toBe(false);
+    act(() => root.render(null));
+    expect(host.isConnected).toBe(false);
+  },
+);
+
+it("declares outline drop scope for the default block layout", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.rootIds = ["a"];
+  adapter.setBlockIds(["a"]);
+  adapter.setNode("a", { childIds: ["b"] });
+  adapter.setNode("b");
+  const editor = createEditor(adapter);
+  act(() => root.render(<BlockEditor editor={editor} />));
+  expect(
+    container
+      .querySelector('[data-block-id="a"] > .rivto-block-children')
+      ?.getAttribute("data-block-drop-scope"),
+  ).toBe("outline");
+});

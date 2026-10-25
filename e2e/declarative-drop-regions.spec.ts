@@ -1684,7 +1684,7 @@ for (const mode of ["block", "edgeless"] as const) {
       if (side === "bottom") {
         x = bounds.x + bounds.width / 2;
       }
-      const y = side === "bottom" ? bounds.y + bounds.height - 2 : first.y + first.height * 0.75;
+      const y = side === "bottom" ? bounds.y + bounds.height - 12 : first.y + first.height * 0.75;
       expect(
         await host.evaluate(
           (element, point) => document.elementFromPoint(point.x, point.y) === element,
@@ -1845,53 +1845,80 @@ for (const mode of ["block", "edgeless"] as const) {
   }
 }
 
+/**
+ * Inserts a second populated layout after the source and first receiving root.
+ *
+ * Structural lanes use their native column types. Only fixture construction
+ * depends on block types; the assertions exercise the same registered boundary
+ * contract. History is cleared before the actual pointer gesture.
+ *
+ * @param page - Demo owning the source and board roots.
+ * @param type - Supported fixture layout; table rows/cells use a separate fixture.
+ * @returns Resolves after model insertion; callers wait for the following root's DOM.
+ */
+async function insertFollowingLayout(page: Page, type: Exclude<Container, "table">) {
+  await page.evaluate((type) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const leaf = {
+      id: "following-child",
+      type: type === "todo-storage" ? "todo-item" : "paragraph",
+      content: "Child",
+    };
+    editor.blocks.insertBlock({
+      id: "following",
+      type: type === "outline" ? "paragraph" : type,
+      content: "Following",
+      children:
+        type === "kanban" || type === "columns"
+          ? [
+              {
+                id: "following-lane",
+                type: `${type}-column`,
+                content: "Next lane",
+                children: [leaf],
+              },
+            ]
+          : [leaf],
+    });
+    editor.history.clear();
+  }, type);
+}
+
 for (const mode of ["block", "edgeless"] as const) {
-  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+  for (const type of ["outline", "columns", "kanban", "bento", "todo-storage"] as const) {
     test(`outer sibling rims remain reachable in ${type}, ${mode}`, async ({ page }) => {
       await load(page, type, mode);
-      await page.evaluate((type) => {
-        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-          .__rivtoDemo.editor;
-        const leaf = {
-          id: "following-child",
-          type: type === "todo-storage" ? "todo-item" : "paragraph",
-          content: "Child",
-        };
-        editor.blocks.insertBlock({
-          id: "following",
-          type: type === "outline" ? "paragraph" : type,
-          content: "Following",
-          children:
-            type === "kanban"
-              ? [
-                  {
-                    id: "following-lane",
-                    type: "kanban-column",
-                    content: "Next lane",
-                    children: [leaf],
-                  },
-                ]
-              : [leaf],
-        });
-        editor.history.clear();
-      }, type);
+      await insertFollowingLayout(page, type);
       const board = page.locator('[data-block-id="board"]');
       const following = page.locator('[data-block-id="following"]');
       await following.scrollIntoViewIfNeeded();
       const a = (await board.boundingBox())!;
       const b = (await following.boundingBox())!;
       await startDrag(page);
-      for (const y of [a.y + a.height - 6, a.y + a.height - 3, a.y + a.height, b.y, b.y + 3]) {
-        await page.mouse.move(a.x + 4, y);
-        await expectBoundaryLine(page);
-        const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
-        expect(line.y + line.height / 2).toBeCloseTo((a.y + a.height + b.y) / 2, 1);
+      const xs = type === "outline" ? [a.x + 4] : [a.x + 4, a.x + a.width / 2, a.x + a.width - 4];
+      for (const y of [
+        a.y + a.height - 6,
+        a.y + a.height - 3,
+        a.y + a.height,
+        b.y,
+        b.y + 3,
+        b.y + 6,
+      ]) {
+        for (const x of xs) {
+          await page.mouse.move(x, y);
+          await expectBoundaryLine(page);
+          const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
+          expect(line.y + line.height / 2).toBeCloseTo((a.y + a.height + b.y) / 2, 1);
+          expect(line.x).toBeCloseTo(a.x, 1);
+          expect(line.width).toBeCloseTo(a.width, 1);
+        }
       }
       await page.mouse.up();
       await expect.poll(() => readRootIds(page)).toEqual(["board", "source", "following"]);
       await expect
         .poll(() => readChildIds(page, "board"))
-        .toEqual(type === "kanban" ? ["lane"] : ["first", "last"]);
+        .toEqual(type === "kanban" || type === "columns" ? ["lane"] : ["first", "last"]);
       await page.keyboard.press("Control+z");
       await expect.poll(() => readRootIds(page)).toEqual(["source", "board", "following"]);
     });
@@ -2012,10 +2039,12 @@ for (const mode of ["block", "edgeless"] as const) {
     expect(first.y - box.y).toBeCloseTo(16, 1);
     expect(box.y + box.height - last.y - last.height).toBeCloseTo(16, 1);
     await startDrag(page);
-    for (const offset of [4, 2, 1]) {
-      await page.mouse.move(first.x + first.width / 2, first.y - offset);
-      const line = await expectBoundaryLine(page);
-      expect(line.y + line.height / 2).toBeCloseTo(first.y, 1);
+    for (const offset of [15, 12, 8, 4, 2, 1, 8, 15]) {
+      for (const x of [box.x + 12, first.x + first.width / 2, first.x + first.width - 2]) {
+        await page.mouse.move(x, first.y - offset);
+        const line = await expectBoundaryLine(page);
+        expect(line.y + line.height / 2).toBeCloseTo(first.y, 1);
+      }
     }
     for (const offset of [1, 4, 8]) {
       await page.mouse.move(last.x + last.width / 2, last.y + last.height + offset);
@@ -2027,4 +2056,57 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.press("Control+z");
     await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
   });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const rtl of [false, true]) {
+    for (const placement of ["before", "after"] as const) {
+      test(`horizontal list endpoint in vertical owner ${placement}, RTL=${rtl}, ${mode}`, async ({
+        page,
+      }) => {
+        await load(page, "kanban", mode);
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.setBlockType("source", "kanban-column");
+          editor.history.clear();
+        });
+        await expect(page.locator('[data-block-id="source"]')).toHaveAttribute(
+          "data-block-type",
+          "kanban-column",
+        );
+        const board = page.locator('[data-block-id="board"]');
+        await board.evaluate((element, rtl) => {
+          element.style.direction = rtl ? "rtl" : "ltr";
+        }, rtl);
+        const host = (await board.locator(":scope > .rivto-kanban-columns").boundingBox())!;
+        const lane = (await page.locator('[data-block-id="lane"]').boundingBox())!;
+        const start = placement === "before";
+        const physicalLeft = start !== rtl;
+        const edge = physicalLeft ? lane.x : lane.x + lane.width;
+        const x = edge + (physicalLeft ? -4 : 4);
+        expect(x).toBeGreaterThan(host.x);
+        expect(x).toBeLessThan(host.x + host.width);
+        await startDrag(page);
+        for (const y of [
+          lane.y + lane.height / 2,
+          lane.y + 2,
+          lane.y + lane.height - 2,
+          lane.y + lane.height / 2,
+        ]) {
+          await page.mouse.move(x, y);
+          const line = await expectBoundaryLine(page);
+          expect(line.x + line.width / 2).toBeCloseTo(edge, 1);
+          expect(line.y).toBeCloseTo(lane.y, 1);
+          expect(line.height).toBeCloseTo(lane.height, 1);
+        }
+        await page.mouse.up();
+        await expect
+          .poll(() => readChildIds(page, "board"))
+          .toEqual(start ? ["source", "lane"] : ["lane", "source"]);
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, "board")).toEqual(["lane"]);
+      });
+    }
+  }
 }

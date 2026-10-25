@@ -2,6 +2,8 @@ import {
   dropBounds,
   dropEdgeRect,
   containsDropPoint,
+  containsDropCrossAxisPoint,
+  continuesDropOutline,
   dropRegionTarget,
   isDropBackground,
   readDropGeometry,
@@ -92,15 +94,15 @@ export function resolveLayoutGap(
     }
     return value;
   };
-  const outer = resolveListEndGap(layout, items, point, hit, read);
+  const rtl =
+    layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
+  const outer = resolveListEndGap(layout, items, point, hit, read, rtl);
   if (outer && (!edge || sameSiblingBoundary(outer.destination, edge.destination))) {
     return outer;
   }
   if (edge && layout.boundaries === "separate") {
     return;
   }
-  const rtl =
-    layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
   const pair = resolveGapPairs(layout, items, point, hit, read, rtl, edge);
   if (pair || edge) {
     return pair;
@@ -109,6 +111,153 @@ export function resolveLayoutGap(
   return gutter
     ? (resolveGapPairs(layout, items, point, hit, read, rtl, gutter) ?? gutter)
     : undefined;
+}
+
+/**
+ * Identifies perpendicular linear flows without assigning a single axis to grids.
+ *
+ * Missing layouts and equal axes do not establish a perpendicular containing scope.
+ *
+ * @param inner - Nearest list's flow, or undefined before reaching a list.
+ * @param outer - Containing list's flow, or undefined on an ordinary anchor.
+ * @returns True for vertical/horizontal pairs in either order; false otherwise.
+ */
+export function areDropAxesPerpendicular(
+  inner: BlockDropLayoutRegistration["axis"] | undefined,
+  outer: BlockDropLayoutRegistration["axis"] | undefined,
+): boolean {
+  return (
+    (inner === "vertical" && outer === "horizontal") ||
+    (inner === "horizontal" && outer === "vertical")
+  );
+}
+
+/**
+ * Identifies a canonical sibling boundary whose two neighbors are stationary.
+ *
+ * Moving roots do not reserve a shared inset strip. This reads declared IDs only;
+ * live adjacency and source permissions remain checked by the target manager.
+ *
+ * @param destination - Candidate carrying actual parent and canonical neighbor IDs.
+ * @param excluded - Captured moving roots, or undefined when none are omitted.
+ * @returns True only for two present neighbor IDs outside the moving group.
+ */
+function hasStationaryDropNeighbors(
+  destination: BlockDropDestination,
+  excluded?: ReadonlySet<string>,
+): boolean {
+  return (
+    destination.kind === "between" &&
+    destination.previousId !== null &&
+    destination.nextId !== null &&
+    !excluded?.has(destination.previousId) &&
+    !excluded?.has(destination.nextId)
+  );
+}
+
+/**
+ * Recognizes an inset choice at its own list level or inside its receiving block.
+ *
+ * Ancestor outdent choices are excluded so their shared feedback can still be
+ * normalized by the appropriate containing layout.
+ *
+ * @param target - Nearest resolved region, or undefined outside its declaration.
+ * @returns True for an edge that stays local rather than selecting an ancestor parent.
+ */
+export function isLocalOutlineEdge(target: ResolvedBlockDropTarget | undefined): boolean {
+  return (
+    target?.region?.kind === "edge" &&
+    (target.destination.kind !== "between" ||
+      target.destination.parentId === target.region.destination.parentId)
+  );
+}
+
+/**
+ * Reserves a declared local owner's stationary sibling strip over a nested edge.
+ *
+ * Block-axis corner priority remains intact. Outline continuation and moving
+ * neighbors preserve the nearer edge's ordinary nesting and endpoint behavior.
+ *
+ * @param outer - Matched ancestor anchor, destination and edge declaration.
+ * @param inner - Nearer explicit edge whose declaration overlaps the ancestor rim.
+ * @param excluded - Captured moving roots used to identify stationary neighbors.
+ * @returns True when the ancestor's local sibling seam wins this overlap.
+ */
+export function prefersOuterSiblingEdge(
+  outer: Pick<ResolvedBlockDropTarget, "element" | "destination" | "region">,
+  inner: Pick<ResolvedBlockDropTarget, "region">,
+  excluded?: ReadonlySet<string>,
+): boolean {
+  if (
+    continuesDropOutline(outer.element) ||
+    !hasStationaryDropNeighbors(outer.destination, excluded)
+  ) {
+    return false;
+  }
+  return (
+    outer.region?.kind === "edge" &&
+    (outer.region.side.startsWith("block") ||
+      inner.region?.kind !== "edge" ||
+      !inner.region.side.startsWith("block"))
+  );
+}
+
+/**
+ * Prefers a nested linear gap over an ancestor boundary when their scopes overlap.
+ *
+ * A boundary between two stationary canonical neighbors keeps its own inset
+ * strip instead of switching to a descendant endpoint while crossing the seam.
+ * Moving source neighbors do not reserve that strip; permissions are still
+ * checked once on the selected result, without rejection-based fallback.
+ * The nested gap must choose a different receiving parent. Within the cross-axis
+ * feedback span it keeps priority; a perpendicular containing layout permits
+ * its complete background span. An owner's local scope preserves its same-axis outer rim; block-axis outer
+ * edges retain corner priority over inline gaps. Ancestor outdent choices
+ * remain available for normalization in their own list. This only proposes geometry, not permission.
+ *
+ * @param layout - Nearest mounted list under the ancestor edge.
+ * @param ancestor - Ancestor boundary's receiving parent and registered anchor; its own local child scope retains its external sibling rim.
+ * @param point - Native viewport pointer.
+ * @param hit - Native hit used to reject occupied or excluded background.
+ * @param perpendicular - Whether a containing linear layout uses the other axis.
+ * @param excluded - Moving roots whose adjacent boundary is not a shared seam between two stationary neighbors.
+ * @returns The preferred inner gap, or undefined for grid flow, occupied space,
+ * the same parent, or a point outside its eligible cross-axis span.
+ */
+export function resolveInnerLayoutGap(
+  layout: BlockDropLayoutRegistration,
+  ancestor: Pick<ResolvedBlockDropTarget, "destination" | "element" | "region">,
+  point: BlockDropPoint,
+  hit: Element,
+  perpendicular: boolean,
+  excluded?: ReadonlySet<string>,
+): ResolvedBlockDropTarget | undefined {
+  const sideAxis = layout.axis === "vertical" ? "block" : "inline";
+  const outerRim =
+    ancestor.region?.kind === "edge" &&
+    (ancestor.region.side.startsWith("block") || ancestor.region.side.startsWith(sideAxis));
+  if (outerRim && hasStationaryDropNeighbors(ancestor.destination, excluded)) {
+    return;
+  }
+  if (layout.axis === "grid" || !isDropBackground(layout.element, hit, point)) {
+    return;
+  }
+  const gap = resolveLayoutGap(layout, point, hit);
+  const ownerId = ancestor.element.dataset.blockId ?? ancestor.element.dataset.blockItemId;
+  if (
+    !continuesDropOutline(ancestor.element) &&
+    gap?.destination.parentId === ownerId &&
+    outerRim
+  ) {
+    return;
+  }
+  if (
+    gap?.indicator &&
+    gap.destination.parentId !== ancestor.destination.parentId &&
+    (perpendicular || containsDropCrossAxisPoint(gap.indicator, point, layout.axis))
+  ) {
+    return gap;
+  }
 }
 
 /**
@@ -436,21 +585,22 @@ function containsPairEdge(
 }
 
 /**
- * Extends declared vertical-list edges through existing free space before/after the list.
+ * Extends declared linear-list edges through existing free space before/after the list.
  *
  * Explicit child targets retain priority. Only complete mounted endpoints are
  * eligible: virtual holes never become insertion areas. Feedback and canonical
  * neighbors come from the endpoint's existing declaration, with trailing child
  * indentation disabled because this free area inserts at the containing list level.
- * Default row continuation includes vertical child-list endpoints as well as roots;
+ * Default row continuation includes linear child-list endpoints as well as roots;
  * numeric and disabled gutters retain their explicit distance policy.
  * No padding mode, CSS measurement policy or synthetic anchor is required.
  *
- * @param layout - Existing vertical list host with registered anchors and continuation policy.
+ * @param layout - Existing linear list host with registered anchors and continuation policy.
  * @param items - Committed anchors in display order, already known to be nonempty.
  * @param point - Actual viewport pointer; native hit rounding does not change it.
  * @param hit - Native hit used to exclude occupied or unrelated child chrome.
  * @param read - Query-local geometry accessor shared with ordinary sibling gaps.
+ * @param rtl - Whether the containing layout's logical inline order runs right to left.
  * @returns Endpoint insertion, or undefined outside free space or at virtual holes.
  */
 function resolveListEndGap(
@@ -459,38 +609,19 @@ function resolveListEndGap(
   point: BlockDropPoint,
   hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
 ): ResolvedBlockDropTarget | undefined {
-  if (layout.axis !== "vertical" || (layout.gutterSize ?? "row") !== "row") {
+  if (layout.axis === "grid" || (layout.gutterSize ?? "row") !== "row") {
     return;
   }
   if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
     return;
   }
-  const first = items[0]!;
-  const last = items[items.length - 1]!;
-  let entry: BlockDropTargetRegistration;
-  let side: "block-start" | "block-end";
-  if (point.y < read(first).rect.top) {
-    if (
-      layout.virtual &&
-      first.element.closest("[data-index]")?.getAttribute("data-index") !== "0"
-    ) {
-      return;
-    }
-    entry = first;
-    side = "block-start";
-  } else if (point.y > read(last).rect.bottom) {
-    if (
-      layout.virtual &&
-      !last.element.closest("[data-index]")?.hasAttribute("data-virtual-last")
-    ) {
-      return;
-    }
-    entry = last;
-    side = "block-end";
-  } else {
+  const endpoint = listEndpoint(layout, items, point, read, rtl);
+  if (!endpoint) {
     return resolveEndpointInset(layout, items, point, hit, read);
   }
+  const [entry, side] = endpoint;
   if (!isDropBackground(layout.element, hit, point) && !entry.element.contains(hit)) {
     return;
   }
@@ -503,6 +634,57 @@ function resolveListEndGap(
 }
 
 /**
+ * Selects a complete mounted endpoint beyond either end of a linear list.
+ *
+ * Horizontal coordinates are projected into logical order for RTL. Virtual
+ * indices must identify the actual first/last display position; holes never
+ * become free endpoint space merely because their neighbors are unmounted.
+ *
+ * @param layout - Linear flow and virtual-index policy of the registered list.
+ * @param items - Nonempty mounted anchors in committed logical order.
+ * @param point - Pointer in viewport coordinates.
+ * @param read - Query-local cached geometry reader.
+ * @param rtl - Whether inline flow runs right to left.
+ * @returns The endpoint and its declared logical side, or undefined inside the
+ * list interval or beyond an incomplete virtual endpoint.
+ */
+function listEndpoint(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+  rtl: boolean,
+): readonly [BlockDropTargetRegistration, BlockDropEdgeRegion["side"]] | undefined {
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  const a = read(first).rect;
+  const b = read(last).rect;
+  const horizontal = layout.axis === "horizontal";
+  const inlinePoint = rtl ? -point.x : point.x;
+  const inlineStart = rtl ? -a.right : a.left;
+  const inlineEnd = rtl ? -b.left : b.right;
+  const coordinate = horizontal ? inlinePoint : point.y;
+  const start = horizontal ? inlineStart : a.top;
+  const end = horizontal ? inlineEnd : b.bottom;
+  const leading = coordinate < start;
+  if (!leading && coordinate <= end) {
+    return;
+  }
+  const entry = leading ? first : last;
+  const indexed = entry.element.closest("[data-index]");
+  if (
+    layout.virtual &&
+    (leading
+      ? indexed?.getAttribute("data-index") !== "0"
+      : !indexed?.hasAttribute("data-virtual-last"))
+  ) {
+    return;
+  }
+  const axis = horizontal ? "inline" : "block";
+  return [entry, `${axis}-${leading ? "start" : "end"}`];
+}
+
+/**
  * Recovers endpoint inset edges when native hit rounding selects the layout background.
  *
  * The point must remain in an actual declared strip; occupied child content is
@@ -510,7 +692,7 @@ function resolveListEndGap(
  * Only the first and last mounted anchors are measured, including virtual lists;
  * no unmounted interval or synthetic endpoint is introduced.
  *
- * @param layout - Owning vertical list whose native background was hit.
+ * @param layout - Owning linear list whose native background was hit.
  * @param items - Nonempty ordered mounted anchors.
  * @param point - Exact viewport pointer, independent of native rounding.
  * @param hit - Native hit used to preserve child and exclusion ownership.
@@ -527,14 +709,16 @@ function resolveEndpointInset(
   if (!isDropBackground(layout.element, hit, point)) {
     return;
   }
-  for (const [entry, side] of [
-    [items[0]!, "block-start"],
-    [items[items.length - 1]!, "block-end"],
+  const axis = layout.axis === "horizontal" ? "inline" : "block";
+  for (const [entry, end] of [
+    [items[0]!, "start"],
+    [items[items.length - 1]!, "end"],
   ] as const) {
     const region = entry
       .getRegions()
       .find(
-        (region): region is BlockDropEdgeRegion => region.kind === "edge" && region.side === side,
+        (region): region is BlockDropEdgeRegion =>
+          region.kind === "edge" && region.side === `${axis}-${end}`,
       );
     if (region && containsDropPoint(dropEdgeRect(region, read(entry)), point)) {
       return dropRegionTarget(entry, region, read(entry), point);
