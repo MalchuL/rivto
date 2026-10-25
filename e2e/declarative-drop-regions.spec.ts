@@ -1600,17 +1600,22 @@ async function sweepBoundaryDepth(
 }
 
 /**
- * Verifies actual composited paint at the center of the visible insertion line.
+ * Verifies actual composited paint at the center of the visible insertion line or an inside outline's edge.
  *
- * @param page - Active gesture whose line is within the viewport.
+ * @param page - Active gesture whose line or receiving outline is within the viewport.
+ * @param outlineId - Optional receiving block whose left outline edge is sampled instead of a line.
  * @returns Resolves after its screenshot pixel matches the opaque indicator color.
  */
-async function expectPaintedBoundary(page: Page) {
-  const line = page.locator(".rivto-block-drop-line:visible");
+async function expectPaintedBoundary(page: Page, outlineId?: string) {
+  const line = outlineId
+    ? page.locator(`[data-block-id="${outlineId}"]`)
+    : page.locator(".rivto-block-drop-line:visible");
   const box = (await line.boundingBox())!;
-  const expected = await line.evaluate((element) =>
-    getComputedStyle(element).backgroundColor.match(/\d+/g)!.map(Number),
-  );
+  const expected = await line.evaluate((element, outline) => {
+    const style = getComputedStyle(element);
+    const color = outline ? style.outlineColor : style.backgroundColor;
+    return color.match(/\d+/g)!.map(Number);
+  }, Boolean(outlineId));
   const png = await page.screenshot({ scale: "css", animations: "disabled" });
   const pixel = await page.evaluate(
     async ({ source, x, y }) => {
@@ -1626,11 +1631,50 @@ async function expectPaintedBoundary(page: Page) {
     },
     {
       source: `data:image/png;base64,${png.toString("base64")}`,
-      x: Math.floor(box.x + box.width / 2),
+      x: Math.floor(box.x + (outlineId ? 2 : box.width / 2)),
       y: Math.floor(box.y + box.height / 2),
     },
   );
   expect(pixel).toEqual([...expected.slice(0, 3), 255]);
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+    test(`TODO content stays below its inside drop outline in ${type}, ${mode}`, async ({
+      page,
+    }) => {
+      await load(page, type, mode);
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.setBlockType("first", "todo-item");
+        editor.blocks.setBlockType("source", "todo-item");
+        editor.history.clear();
+      });
+      const target = page.locator('[data-block-id="first"]');
+      const box = (await target.boundingBox())!;
+      await startDrag(page);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
+      await expectInsideOutline(page, "first");
+      await expectPaintedBoundary(page, "first");
+      expect(await target.boundingBox()).toEqual(box);
+      expect(
+        await target.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2,
+          );
+          return hit !== element && element.contains(hit);
+        }),
+      ).toBe(true);
+      await page.mouse.up();
+      await expect.poll(() => readChildIds(page, "first")).toEqual(["source"]);
+      await expect(target).not.toHaveAttribute("data-block-drop-active");
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+    });
+  }
 }
 
 for (const mode of ["block", "edgeless"] as const) {

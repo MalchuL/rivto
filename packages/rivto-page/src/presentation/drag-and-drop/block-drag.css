@@ -22,6 +22,19 @@
   background: var(--rivto-drop-inside-background, color-mix(in srgb, Highlight 8%, transparent));
 }
 
+/* Positioned opaque content can cover the shell's inset outline. Paint the same
+ * frame above descendants without changing their layout or native hit testing. */
+.rivto-block[data-block-drop-active="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: var(--rivto-drop-indicator-radius, 4px);
+  box-shadow: inset 0 0 0 var(--rivto-drop-indicator-thickness, 4px)
+    var(--rivto-drop-indicator-color, Highlight);
+}
+
 .rivto-block-drop-line {
   position: fixed;
   top: 0;
