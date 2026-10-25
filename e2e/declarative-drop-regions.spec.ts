@@ -907,3 +907,66 @@ test("trailing controls retain their slot across empty, insert and undo", async 
   await surface.getByRole("button", { name: "Add block", exact: true }).click();
   await expect.poll(async () => (await readRootIds(page)).length).toBe(1);
 });
+
+for (const padding of [12, 56]) {
+  test(`existing top padding accepts prepend throughout ${padding}px without adding layout`, async ({
+    page,
+  }) => {
+    await load(page, "outline", "block");
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.moveBlocks(["source"], "board", "after");
+      editor.history.clear();
+    });
+    const surface = page.locator('[data-journal-document="today"] > .page-surface');
+    await surface.evaluate((element, padding) => {
+      (element as HTMLElement).style.paddingTop = `${padding}px`;
+    }, padding);
+    const first = (await page.locator('[data-block-id="board"]').boundingBox())!;
+    const before = (await surface.boundingBox())!;
+    await startDrag(page);
+    for (const offset of [1, padding / 2, padding - 0.25, padding]) {
+      await page.mouse.move(first.x + first.width / 2, before.y + offset);
+      const line = page.locator(".rivto-block-drop-line:visible");
+      await expect(line, `offset=${offset}`).toHaveCount(1);
+      const box = (await line.boundingBox())!;
+      expect(box.y + box.height / 2).toBeCloseTo(first.y, 1);
+      expect(box.x).toBeCloseTo(first.x, 1);
+      expect(box.width).toBeCloseTo(first.width, 1);
+    }
+    expect(await surface.boundingBox()).toEqual(before);
+    await page.mouse.up();
+    await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => readRootIds(page)).toEqual(["board", "source"]);
+  });
+}
+
+test("zero leading space adds no top drop area", async ({ page }) => {
+  await load(page, "outline", "block");
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  await surface.evaluate((element) => {
+    (element as HTMLElement).style.paddingTop = "0px";
+  });
+  const box = (await surface.boundingBox())!;
+  await startDrag(page);
+  await page.mouse.move(box.x + 1, box.y + 0.25);
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  await page.mouse.up();
+  await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
+});
+
+test("existing space below the root list inserts after the last root", async ({ page }) => {
+  await load(page, "outline", "block");
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  const last = (await page.locator('[data-block-id="board"]').boundingBox())!;
+  const box = (await surface.boundingBox())!;
+  await startDrag(page);
+  await page.mouse.move(last.x + last.width / 2, box.y + box.height - 1);
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+  await page.mouse.up();
+  await expect.poll(() => readRootIds(page)).toEqual(["board", "source"]);
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
+});

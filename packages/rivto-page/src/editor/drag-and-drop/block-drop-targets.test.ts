@@ -657,3 +657,64 @@ it("does not borrow the same parent's hierarchy from another occurrence", () => 
     foreign.destroy();
   }
 });
+
+it.each([1, 55.75, 157, 499])("uses existing root-list free space at y=%s", (y) => {
+  rect(root, 0, 0, 400, 500);
+  rect(host, 20, 56, 360, 400);
+  rect(item, 20, 56, 360, 100);
+  root.dataset.blockRootList = "true";
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const entry = register(item, [
+    { kind: "edge", side: "block-start", destination: before },
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+    },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: root,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  const hit = y === 55.75 ? item : root;
+  const target = editor.dropTargets.resolve(300, y, undefined, hit);
+  expect(target?.destination).toEqual(y < 56 ? before : destination);
+  expect(target?.indicator).toEqual({ left: 20, top: y < 56 ? 55 : 155, width: 360, height: 2 });
+});
+
+it("keeps root-list virtual holes unavailable at both endpoints", () => {
+  rect(root, 0, 0, 400, 500);
+  rect(item, 20, 56, 360, 100);
+  root.dataset.blockRootList = "true";
+  item.dataset.index = "4";
+  // An enclosing last-item marker does not mark this indexed item as last.
+  host.dataset.virtualLast = "true";
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const entry = register(item, [
+    { kind: "edge", side: "block-start", destination: before },
+    { kind: "edge", side: "block-end", destination },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: root,
+    axis: "vertical",
+    gaps: true,
+    virtual: true,
+    getItems: () => [entry],
+  });
+  expect(editor.dropTargets.resolve(100, 10, undefined, root)).toBeUndefined();
+  expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
+  item.dataset.index = "0";
+  expect(editor.dropTargets.resolve(100, 10, undefined, root)?.destination).toEqual(before);
+  expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
+  item.dataset.virtualLast = "true";
+  expect(editor.dropTargets.resolve(100, 400, undefined, root)?.destination).toEqual(destination);
+});

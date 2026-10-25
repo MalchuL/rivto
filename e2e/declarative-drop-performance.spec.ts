@@ -2,7 +2,15 @@ import { loseHandleRelease } from "./pointer-release";
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-for (const placement of ["between", "inside", "control", "bento", "end", "column"] as const) {
+for (const placement of [
+  "between",
+  "inside",
+  "control",
+  "bento",
+  "start",
+  "end",
+  "column",
+] as const) {
   for (const repeat of [0, 200]) {
     test(`declared ${placement} region native pointer cost repeat=${repeat} @performance`, async ({
       page,
@@ -19,9 +27,11 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       const ids = await page.evaluate((placement) => {
         const blocks = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
           .__rivtoDemo.editor.blocks;
-        if (placement === "end") {
+        if (placement === "start" || placement === "end") {
           const roots = blocks.getRootIds();
-          return [roots[0]!, roots[roots.length - 1]!];
+          return placement === "start"
+            ? [roots[roots.length - 1]!, roots[0]!]
+            : [roots[0]!, roots[roots.length - 1]!];
         }
         if (placement === "bento") {
           const board = blocks.getBlocks().find((block) => block.type === "bento");
@@ -63,7 +73,7 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       });
       await expect(source).toHaveAttribute("data-dragging", "true");
       const baseline = process.env.DROP_BASELINE === "1";
-      const targetId = intoBlock || placement === "end" ? ids[1] : ids[2];
+      const targetId = intoBlock || placement === "end" || placement === "start" ? ids[1] : ids[2];
       const target = document.locator(`[data-block-id="${targetId}"]`);
       if (placement === "control") {
         await target.evaluate((element) => {
@@ -73,6 +83,8 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       let region = target;
       if (placement === "column") {
         region = target.getByRole("button", { name: /^Add card to / });
+      } else if (placement === "start") {
+        region = baseline ? target : document;
       } else if (placement === "end") {
         region = baseline
           ? document.locator(":scope > .rivto-virtual-tree > .rivto-block-editor-end")
@@ -84,7 +96,11 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       } else if (placement === "control") {
         region = target.getByRole("textbox", { name: "Description", exact: true });
       }
-      await region.scrollIntoViewIfNeeded();
+      if (placement === "start") {
+        await page.evaluate(() => window.scrollTo(0, 0));
+      } else {
+        await region.scrollIntoViewIfNeeded();
+      }
       if (placement === "bento" || placement === "end" || placement === "column") {
         const warm = (await region.boundingBox())!;
         await page.mouse.move(warm.x + warm.width / 2, warm.y + warm.height / 2);
@@ -102,7 +118,9 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       if (placement === "column") {
         x = box.x + box.width / 2;
       }
-      if (placement === "end") {
+      if (placement === "start") {
+        y = box.y + 2;
+      } else if (placement === "end") {
         y = box.y + box.height - 2;
       }
       if (placement === "bento") {
@@ -187,15 +205,15 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
             ),
           )
           .toBe(ids[1]);
-      } else if (placement === "end") {
+      } else if (placement === "start" || placement === "end") {
         await expect
           .poll(() =>
-            page.evaluate(() => {
+            page.evaluate((placement) => {
               const roots = (
                 window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
               ).__rivtoDemo.editor.blocks.getRootIds();
-              return roots[roots.length - 1];
-            }),
+              return placement === "start" ? roots[0] : roots[roots.length - 1];
+            }, placement),
           )
           .toBe(ids[0]);
       } else {

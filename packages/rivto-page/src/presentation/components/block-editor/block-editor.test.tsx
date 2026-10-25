@@ -1789,3 +1789,38 @@ it("retains the host trailing element across empty and populated views", () => {
   expect(entry.getRegions()).toEqual([]);
   expect(end.isConnected).toBe(true);
 });
+
+it("shares projected root anchors with the outer layout and observes parent updates", async () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("parent", { childIds: ["hidden", "a"] });
+  adapter.setNode("hidden");
+  adapter.setNode("a");
+  adapter.setBlockIds(["a"]);
+  const editor = createEditor(adapter);
+  const register = jest.spyOn(editor.dropTargets, "registerLayout");
+  await act(async () => root.render(<BlockEditor editor={editor} />));
+  const layout = register.mock.calls.find(([entry]) => entry.element === editor.getRoot())![0];
+  const tree = register.mock.calls.find(([entry]) =>
+    entry.element.classList.contains("rivto-virtual-tree"),
+  )![0];
+  expect(layout.getItems()).toBe(tree.getItems());
+  const entry = layout.getItems()![0];
+  const before = entry
+    .getRegions()
+    .find((region) => region.kind === "edge" && region.side === "block-start");
+  expect(before?.destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: "hidden",
+    nextId: "a",
+  });
+  act(() => adapter.setNode("parent", { childIds: ["a"] }));
+  expect(entry.getRegions()[0].destination).toEqual({
+    kind: "between",
+    parentId: "parent",
+    previousId: null,
+    nextId: "a",
+  });
+  act(() => root.render(null));
+  expect(adapter.subscriberCount).toBe(0);
+});

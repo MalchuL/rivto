@@ -86,6 +86,10 @@ export function resolveLayoutGap(
     }
     return value;
   };
+  const outer = !edge && resolveRootGap(layout, items, point, hit, read);
+  if (outer) {
+    return outer;
+  }
   const rtl =
     layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
   const pairs = layoutPairIndices(items, layout.axis, point, read, rtl, edge?.region);
@@ -394,4 +398,69 @@ function containsPairEdge(
       )
     );
   });
+}
+
+/**
+ * Extends declared root edges through existing free space before/after the list.
+ *
+ * Explicit child targets retain priority. Only complete mounted endpoints are
+ * eligible: virtual holes never become insertion areas. Feedback and canonical
+ * neighbors come from the endpoint's existing declaration, with trailing child
+ * indentation disabled because this free area inserts at the root-list level.
+ * No padding mode, CSS measurement policy or synthetic anchor is required.
+ *
+ * @param layout - Existing vertical root-list host with registered anchors.
+ * @param items - Committed anchors in display order, already known to be nonempty.
+ * @param point - Actual viewport pointer; native hit rounding does not change it.
+ * @param hit - Native hit used to exclude occupied or unrelated child chrome.
+ * @param read - Query-local geometry accessor shared with ordinary sibling gaps.
+ * @returns Endpoint insertion, or undefined outside free space or at virtual holes.
+ */
+function resolveRootGap(
+  layout: BlockDropLayoutRegistration,
+  items: readonly BlockDropTargetRegistration[],
+  point: BlockDropPoint,
+  hit: Element,
+  read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
+): ResolvedBlockDropTarget | undefined {
+  if (layout.axis !== "vertical" || !layout.element.hasAttribute("data-block-root-list")) {
+    return;
+  }
+  if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
+    return;
+  }
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  let entry: BlockDropTargetRegistration;
+  let side: "block-start" | "block-end";
+  if (point.y < read(first).rect.top) {
+    if (
+      layout.virtual &&
+      first.element.closest("[data-index]")?.getAttribute("data-index") !== "0"
+    ) {
+      return;
+    }
+    entry = first;
+    side = "block-start";
+  } else if (point.y > read(last).rect.bottom) {
+    if (
+      layout.virtual &&
+      !last.element.closest("[data-index]")?.hasAttribute("data-virtual-last")
+    ) {
+      return;
+    }
+    entry = last;
+    side = "block-end";
+  } else {
+    return;
+  }
+  if (!isDropBackground(layout.element, hit, point) && !entry.element.contains(hit)) {
+    return;
+  }
+  const region = entry
+    .getRegions()
+    .find((region) => region.kind === "edge" && region.side === side);
+  return region?.kind === "edge"
+    ? dropRegionTarget(entry, { ...region, depth: undefined }, read(entry), point)
+    : undefined;
 }

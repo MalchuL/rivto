@@ -146,6 +146,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * to an outer target. A matching descendant region remains eligible before that
    * boundary; exclusion wins over registrations on its own element. Control
    * semantics do not imply drop exclusion.
+   * A rounded hit outside a layout's physical bounds can reach an explicitly
+   * registered ancestor layout or region; occupied layouts still bound discovery.
    * The nearest inside declaration is retained while checking placement edges up
    * to that layout boundary; content must not shadow its wrapper's declared edge.
    * The first edge is retained until the layout can normalize shared feedback;
@@ -190,7 +192,12 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       if (gap) {
         return gap;
       }
-      if (layout || element === root) {
+      // A rounded native hit can enter a child layout while the point remains
+      // in its ancestor's free space. Only occupied layout bounds stop lookup.
+      if (
+        element === root ||
+        (layout && (edge || inside || containsDropPoint(element.getBoundingClientRect(), point)))
+      ) {
         return edge ?? inside;
       }
     }

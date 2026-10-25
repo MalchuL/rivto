@@ -637,6 +637,14 @@ its real trailing element after virtual reserves. Views without trailing control
 including embedded editors, retain ordinary block-edge insertion without acquiring
 extra whitespace or a hidden ending box.
 
+Root-list layouts also use existing free space before their first displayed root
+and after their last root as ordinary insertion gaps. No ending/leading spacer,
+extra model subscription, or padding-specific region mode is required. Feedback
+comes from the endpoint's existing edge declaration, preserving hidden canonical
+siblings. Virtual holes remain unavailable until the real first/last displayed
+endpoint is mounted. Existing explicit regions, including trailing controls,
+retain priority over these outer gaps. Empty views still use `emptyDropParentId`.
+
 An edge declaration may use `coverage: "bounds"` to accept its whole anchor while
 keeping the insertion line on the declared edge. `indicatorInset` independently
 adjusts the logical-start inset of a block-edge line in local CSS pixels; negative

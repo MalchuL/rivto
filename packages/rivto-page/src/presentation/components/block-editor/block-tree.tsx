@@ -1,4 +1,9 @@
-import { BlockDropLayoutContext, useBlockDropLayout } from "../../drag-and-drop/block-drop-layout";
+import {
+  BlockDropBoundaryContext,
+  BlockDropLayoutContext,
+  useBlockDropLayout,
+} from "../../drag-and-drop/block-drop-layout";
+import type { BlockDropLayoutRegistration } from "../../../editor/drag-and-drop/types";
 import { BlockRootNode } from "../../drag-and-drop/block-root-node";
 import { BlockDropExclude } from "../../drag-and-drop/block-drop-exclude";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
@@ -6,6 +11,8 @@ import { BlockItemIdentityContext } from "../block-layout/block-item-context";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
+  useContext,
+  type RefObject,
   useLayoutEffect,
   useMemo,
   useReducer,
@@ -66,6 +73,7 @@ export function BlockTree({ virtualization }: BlockTreeProps) {
     },
     setHost,
   );
+  useBlockTreeRootLayout(host, dropLayout.items.read);
   const enabled = virtualization !== undefined && virtualization.enabled !== false;
   const estimate = virtualization?.estimateSize ?? 240;
   const overscan = virtualization?.overscan ?? 3;
@@ -132,4 +140,40 @@ export function BlockTree({ virtualization }: BlockTreeProps) {
       </BlockDropLayoutContext.Provider>
     </div>
   );
+}
+
+/**
+ * Shares a tree's registered anchors with its existing containing editor root.
+ *
+ * The tree still owns mounted-item order and virtual-gap exclusion. The outer
+ * layout only exposes existing space before/after its complete display list;
+ * it adds neither DOM nor a model subscription. React releases this borrowed
+ * root registration on replacement or unmount. Other tree hosts retain their
+ * own layout; only a direct editor-root parent is attached here.
+ *
+ * @param host - Measured tree whose direct parent may be the editor root.
+ * @param getItems - Committed mounted anchors, or undefined during publication.
+ * @returns Registers the outer layout until the effect cleans it up.
+ * @throws If outside an editor or delegated registration fails.
+ */
+function useBlockTreeRootLayout(
+  host: RefObject<HTMLDivElement | null>,
+  getItems: BlockDropLayoutRegistration["getItems"],
+): void {
+  const editor = useBlockEditorController();
+  const boundaries = useContext(BlockDropBoundaryContext);
+  useLayoutEffect(() => {
+    const element = host.current?.parentElement;
+    if (!element?.hasAttribute("data-rivto-block-editor")) {
+      return;
+    }
+    return editor.dropTargets.registerLayout({
+      element,
+      axis: "vertical",
+      gaps: true,
+      virtual: true,
+      boundaries,
+      getItems,
+    });
+  }, [editor, host, getItems, boundaries]);
 }

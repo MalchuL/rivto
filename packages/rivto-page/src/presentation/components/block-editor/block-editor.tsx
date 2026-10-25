@@ -34,6 +34,8 @@ export interface BlockEditorProps extends HTMLAttributes<HTMLDivElement> {
  * One instance supports one mounted view at a time; different views need separate
  * editor objects but may borrow the same data adapter. Server output reads the
  * same synchronous host sources; the host must supply matching hydration data.
+ * Existing free space before/after the complete displayed root list accepts
+ * insertion through its registered layout, without extra elements or dimensions.
  * Optional controller extensions supply selection and pointer dragging; concrete
  * rich-text editing and document commands remain with the host adapter.
  *
@@ -67,6 +69,8 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
     if (!root || emptyDropParentId === undefined) {
       return;
     }
+    const destination = { kind: "inside", parentId: emptyDropParentId } as const;
+    const region = { kind: "inside", coverage: "background", destination } as const;
     return editor.dropTargets.register({
       element: root,
       /**
@@ -75,16 +79,7 @@ export const BlockEditor = forwardRef<HTMLDivElement, BlockEditorProps>(function
        * Display emptiness is read live, so insertion immediately disables the area.
        * @returns Background append for an empty view, otherwise no regions.
        */
-      getRegions: () =>
-        editor.adapter.blocks.getBlockIds().length
-          ? []
-          : [
-              {
-                kind: "inside",
-                coverage: "background",
-                destination: { kind: "inside", parentId: emptyDropParentId },
-              },
-            ],
+      getRegions: () => (editor.adapter.blocks.getBlockIds().length ? [] : [region]),
     });
   }, [editor, root, emptyDropParentId]);
   return (

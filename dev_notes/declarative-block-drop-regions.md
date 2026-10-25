@@ -798,3 +798,152 @@ All 24 measurements passed and asserted canonical root append. The original
 spacer and replacement existing trailing element have different geometry but
 commit the same move. Results show comparable cost, not a claimed speedup;
 large documents still produce long frames. Full workspace suites were not run.
+
+### Existing top-padding insertion (2026-10-25)
+
+Populated `BlockEditor` views now declare insertion before their first displayed
+root on the existing editor root's top padding. No leading element, spacer,
+minimum height, Add block control or host-specific hit-test callback is added.
+`coverage: "padding"` extends the existing edge primitive: current CSS padding
+supplies the hit band and the content-box edge supplies feedback. Zero padding
+has no extra hit area. Bounds remain query-local and scale with the anchor.
+
+`BlockEditorRoot` composes the same native element through `BlockDropTarget`.
+It observes only the first displayed ID and borrows the existing canonical
+placement hook, preserving projected hidden previous siblings without a mounted
+first-root requirement. There is one fixed display-list subscription per view;
+unchanged first IDs do not rerender this declaration. Empty views retain the
+host's existing empty receiving parent. React still owns region/ref/subscription
+cleanup; the host owns its controller and no manager interface is widened.
+The scope moves outside the same root element so declarations can borrow its
+context; the public root, ref, attributes and portalled trailing controls stay
+identical. Ownership review covered all BlockEditor consumers, the shared root
+placement store/hook, target composition/cleanup and both geometry consumers
+(target resolution and sibling-layout edge matching).
+
+A Chromium regression at padding minus 0.25px reproduced with 12 workers and
+again serially. Native hit rounding selected the first block, while its inner
+layout incorrectly stopped lookup for a point outside that layout's actual
+bounds. The shared resolver now permits explicit ancestor discovery only outside
+those bounds; occupied layouts and explicit exclusions still stop discovery.
+This keeps native hit authorization and adds no nearest-target fallback.
+
+Final validation: 103 focused unit tests and 174 DnD/rapid-release browser
+checks passed after the fractional-boundary correction. Chromium and Firefox
+behavior used 12 workers. The eight selected embedding cases initially returned
+seven passes and one Firefox repeat=200 startup timeout while sharing the machine
+with the DnD run; that case passed on its required serial rerun. Page build,
+isolated production demo build, Page/React/demo types and scoped lint passed
+(lint retains five existing long-function warnings). Full workspace suites were
+not run. Tests cover projected hidden siblings, live parent updates, cleanup,
+all logical padding sides/RTL, zero padding, transformed geometry, actual prepend
+and undo, unchanged layout, and the fractional padding-to-first-block transition.
+
+Serial production prepend measurements after the final runtime change, three
+samples per browser/size; median [min–max], ms:
+
+| Hit area / browser / repeat                | Synchronous move | Two-frame rendering proxy |
+| ------------------------------------------ | ---------------: | ------------------------: |
+| existing first-block edge / chromium / 0   |    1.0 [1.0–1.1] |          31.4 [31.3–31.5] |
+| existing first-block edge / chromium / 200 |    8.7 [8.2–9.1] |       321.1 [318.7–326.2] |
+| existing first-block edge / firefox / 0    |    2.0 [2.0–3.0] |          32.0 [31.0–32.0] |
+| existing first-block edge / firefox / 200  | 15.0 [14.0–16.0] |       375.0 [369.0–401.0] |
+| top padding / chromium / 0                 |    1.0 [0.9–1.1] |          31.6 [31.3–31.7] |
+| top padding / chromium / 200               |    8.6 [8.4–8.9] |       353.8 [351.0–358.3] |
+| top padding / firefox / 0                  |    2.0 [2.0–2.0] |          32.0 [30.0–33.0] |
+| top padding / firefox / 200                | 15.0 [15.0–16.0] |       383.0 [383.0–394.0] |
+
+All 24 measurements passed and assert that the dragged last root becomes the
+first canonical root. The baseline serves the preceding ending-layout fix and
+uses its existing first-block edge; the final build uses the added top-padding
+area. Both commit the same move in default demo settings, including repeat=200,
+with tracing disabled and no concurrent builds/browser tests. Large-document
+prepend is slow through both hit areas; these samples do not establish a speedup
+or solve that existing rendering cost. The earlier 24 start/end measurements also
+passed before the fractional-hit correction; they are not substituted for the
+final prepend measurements above.
+
+### Simplify root-list free space (2026-10-25)
+
+The preceding padding-specific implementation is superseded. Public edge coverage
+again has only `edge | bounds`. The padding geometry helpers and the separate
+`BlockEditorRoot` component are removed. There is no replacement public mode,
+start/end component, host geometry callback, invisible element or size token.
+The ordinary BlockEditor root/ref/context structure and live empty-background
+registration are restored; no extra subscription observes the first root.
+
+The existing tree's mounted-anchor getter is also registered on its direct editor
+root. This reuses the same ordered snapshot instead of building a second list.
+The shared gap resolver recognizes existing free space before/after a registered
+vertical root list and reuses that endpoint's canonical edge declaration. Explicit
+trailing bounds targets retain priority. Outer-list insertion ignores trailing
+child-depth choices, so the entire free area inserts a sibling, rather than
+unexpectedly nesting under the last block as X changes. Hidden canonical previous/
+next siblings stay intact. Virtual first/last endpoints must actually be mounted;
+the last marker is checked on the nearest indexed item to avoid borrowing a marker
+from an enclosing occurrence. Native hit authorization, explicit exclusions and
+live model/source acceptance remain in the existing resolver/commit path.
+
+Ownership review covered BlockEditor/BlockTree creation and view attachment,
+shared MountedDropItems order publication, registration/getter passing, root and
+canvas consumers of the existing `data-block-root-list` contract, region geometry,
+canonical root placement, trailing-control portals, and effect/ref disposers.
+The outer helper borrows only the mounted-anchor getter, not the registry object
+or its mutation/lifecycle API. Its registration adds no DOM and is released on
+editor replacement, boundary-policy changes or unmount. No persisted shape,
+manager forwarding API or controller ownership is changed. Existing before/after
+rendered gestures and undo are kept; zero leading space adds no new target.
+
+Validation after the final runtime change: 99 focused unit checks and 178
+Chromium/Firefox DnD/rapid-release checks passed with 12 browser workers. Fourteen
+focused outer-space, zero-leading-space, ending and trailing-control checks also
+passed. The selected embedding run passed six cases and hit startup timeouts in
+the two repeat=200 editing cases under concurrent browser load; both passed their
+required serial rerun. Package/host/demo type checks, Page build, isolated
+production demo build and standalone demo build passed. Scoped lint has no errors
+and six existing long-function warnings; new helpers stay within 50 lines.
+
+The broader standalone virtualization run passed 24 cases and failed four
+(two selection scenarios in both browsers). All four failures reproduced serially
+on the final build and on an isolated baseline reconstructed from HEAD runtime
+sources: block-2 remains mounted after receiving a native caret, while those tests
+expect it to be absent. This baseline uses copied source files and only absolute
+local tsconfig paths for relocation; no worktree/index files were swapped.
+The final-boundary/no-spacer checks pass. Those selection scenarios were left
+unchanged; full workspace checks were not run.
+
+Production pointer measurements, default demo and repeat=200, three serial samples
+per browser/size/placement; median [min–max], ms:
+
+| Build / placement / browser / repeat | Synchronous move | Two-frame rendering proxy |
+| ------------------------------------ | ---------------: | ------------------------: |
+| before / start / chromium / 0        |    1.0 [0.9–1.1] |          31.6 [31.3–31.7] |
+| before / start / chromium / 200      |    8.6 [8.4–8.9] |       353.8 [351.0–358.3] |
+| before / start / firefox / 0         |    2.0 [2.0–2.0] |          32.0 [30.0–33.0] |
+| before / start / firefox / 200       | 15.0 [15.0–16.0] |       383.0 [383.0–394.0] |
+| before / end / chromium / 0          |    1.3 [1.2–1.5] |          31.1 [30.7–31.5] |
+| before / end / chromium / 200        |    6.9 [6.7–8.3] |       117.1 [112.7–134.0] |
+| before / end / firefox / 0           |    2.0 [1.0–2.0] |          31.0 [30.0–33.0] |
+| before / end / firefox / 200         | 15.0 [14.0–16.0] |          92.0 [92.0–94.0] |
+| after / start / chromium / 0         |    1.2 [0.9–1.3] |          31.3 [31.0–31.9] |
+| after / start / chromium / 200       |    8.0 [7.9–9.0] |       346.0 [335.3–352.7] |
+| after / start / firefox / 0          |    2.0 [2.0–2.0] |          32.0 [31.0–32.0] |
+| after / start / firefox / 200        | 15.0 [15.0–16.0] |       378.0 [368.0–379.0] |
+| after / end / chromium / 0           |    1.2 [1.2–1.3] |          31.4 [30.7–31.4] |
+| after / end / chromium / 200         |    8.1 [7.6–8.5] |       117.7 [110.9–123.3] |
+| after / end / firefox / 0            |    1.0 [1.0–1.0] |          31.0 [30.0–33.0] |
+| after / end / firefox / 200          | 14.0 [13.0–17.0] |          92.0 [91.0–99.0] |
+
+All 24 final measurements passed and assert the committed first/last canonical
+root. Prepend uses the existing top area; append uses the existing trailing
+control area, whose explicit declaration retains priority. The added free-space
+append branch is additionally covered by native-pointer/undo checks and bounded
+endpoint unit cases. Final timing runs used the isolated current production build,
+no tracing, and no concurrent builds or browser tests. Baseline values reuse the
+preceding padding implementation's isolated production measurements: its start
+run after the fractional correction and its end run on the unchanged explicit
+ending-target path. Saved assets were checked to contain the old padding
+registration; current assets contain none. Timings remain comparable, with noisy
+large-document rendering; no speedup or fix for that existing cost is claimed.
+The pre-existing staged changes were preserved; this simplification is in the
+working tree and has not been restaged.
