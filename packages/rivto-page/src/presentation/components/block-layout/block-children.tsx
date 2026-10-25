@@ -32,6 +32,8 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly dropGaps?: boolean;
   /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row when gaps are enabled. */
   readonly dropGutterSize?: BlockDropGutterSize;
+  /** Extend linear endpoint boundaries through all remaining free space; defaults to true. False keeps edge-sized continuation while farther space uses the declared background action. */
+  readonly dropEndGaps?: boolean;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly dropBoundaries?: BlockDropBoundaryMode;
   /** Append on unoccupied background, including filtered lists; defaults to false. */
@@ -66,6 +68,7 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.dropBoundaries - Merged midpoint or separate edge feedback; omission inherits the view default.
  * @param props.dropGaps - Enables insertion in physical free gaps; false leaves those gaps neutral.
  * @param props.dropGutterSize - Distance beyond all four item edges in local CSS pixels, respecting viewport scaling. Zero leaves gutters for background regions; row (the default) fills the host. Item edges and physical gaps retain their actions.
+ * @param props.dropEndGaps - Whether full-row linear lists extend endpoint boundaries through all remaining end space; defaults to true. False preserves measured edge continuation and row gutters while leaving farther end space to background declarations.
  * @param props.dropBackground - Enables append on unoccupied host background, including filtered lists.
  * @param props.dropAxis - Flow for declared regions, default vertical. Linear lists register inset edges without forcing indentation; grid items supply wrapping boundaries. Background padding has no implicit action.
  * @param props.targetSize - Optional edge thickness shared by direct items and descendants, including wrapping items; changes hit geometry only. The existing style token takes precedence.
@@ -89,6 +92,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     emptyDropTarget = false,
     dropGaps,
     dropGutterSize,
+    dropEndGaps,
     dropBoundaries,
     dropBackground = false,
     dropAxis = "vertical",
@@ -108,6 +112,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       boundaries: dropBoundaries,
       gaps: !collapsed && (dropGaps ?? dropAxis !== "grid"),
       gutterSize: dropGutterSize,
+      endGaps: dropEndGaps,
       order: childIds,
       regions:
         !collapsed && (dropBackground || (emptyDropTarget && childIds.length === 0))

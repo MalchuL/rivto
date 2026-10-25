@@ -70,6 +70,60 @@ afterEach(() => {
   root.remove();
 });
 
+it.each([
+  [8, false],
+  [8, true],
+  [16, false],
+  [16, true],
+] as const)(
+  "retains terminal outline depth across both sides of a %spx edge, explicit=%s",
+  (size, explicit) => {
+    adapter.setNode("b");
+    item.dataset.blockId = "b";
+    rect(item, 40, 80, 320, 100);
+    const after = { kind: "between", parentId: "parent", previousId: "b", nextId: null } as const;
+    const inside = { kind: "inside", parentId: "b" } as const;
+    const entry = register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        size,
+        destination: after,
+        depth: { ancestors: 0, destinations: [after, inside] },
+      },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [entry],
+    });
+    const footer = document.createElement("footer");
+    if (explicit) {
+      host.append(footer);
+      rect(footer, 40, 180, 320, 100);
+      register(footer, [
+        { kind: "edge", side: "block-end", coverage: "bounds", destination: after },
+      ]);
+    }
+    for (const offset of [-2, -0.25, 0, 0.25, 2, size - 0.25]) {
+      let hit: Element = item;
+      if (offset > 0) {
+        hit = explicit ? footer : host;
+      }
+      const target = editor.dropTargets.resolve(200, 180 + offset, undefined, hit);
+      expect(target?.destination).toEqual(inside);
+      expect(target?.indicator).toEqual({ left: 68, top: 179, width: 292, height: 2 });
+      expect(editor.dropTargets.resolve(45, 180 + offset, undefined, hit)?.destination).toEqual(
+        after,
+      );
+    }
+    expect(editor.dropTargets.resolve(200, 180 + size + 1, undefined, host)?.destination).toEqual(
+      after,
+    );
+  },
+);
+
 it("leaves content neutral and uses configurable edges without changing DOM or styles", () => {
   const count = root.querySelectorAll("*").length;
   register(item, [{ kind: "edge", side: "block-end", size: 12, destination }]);
@@ -140,8 +194,21 @@ it("scales local target thickness with an existing transformed anchor", () => {
   Object.defineProperty(item, "offsetWidth", { value: 100 });
   Object.defineProperty(item, "offsetHeight", { value: 50 });
   register(item);
-  expect(editor.dropTargets.resolve(10, 83, undefined, item)).toBeUndefined();
-  expect(editor.dropTargets.resolve(10, 85, undefined, item)?.destination).toEqual(destination);
+  expect(editor.dropTargets.resolve(10, 75.75, undefined, item)).toBeUndefined();
+  expect(editor.dropTargets.resolve(10, 76, undefined, item)?.destination).toEqual(destination);
+});
+
+it.each([
+  [undefined, undefined, 88],
+  [undefined, "8px", 92],
+  [4, "8px", 96],
+] as const)("uses edge size %s over CSS %s with a 12px fallback", (size, token, start) => {
+  if (token) {
+    item.style.setProperty("--rivto-drop-target-size", token);
+  }
+  register(item, [{ kind: "edge", side: "block-end", size, destination }]);
+  expect(editor.dropTargets.resolve(10, start - 0.25, undefined, item)).toBeUndefined();
+  expect(editor.dropTargets.resolve(10, start, undefined, item)?.destination).toEqual(destination);
 });
 
 it("resolves real gaps, preserves hidden canonical neighbors, and can disable gap insertion", () => {
@@ -711,27 +778,64 @@ it.each(["merged", "separate"] as const)(
   },
 );
 
-it("preserves outline depth when native background hits a mounted endpoint inset", () => {
+it.each(["row", 0, 16] as const)(
+  "preserves outline depth on a native endpoint background hit, gutter=%s",
+  (gutterSize) => {
+    adapter.setNode("a");
+    const entry = register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        destination,
+        depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+      },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      gutterSize,
+      getItems: () => [entry],
+    });
+    expect(editor.dropTargets.resolve(12, 99, undefined, host)?.destination).toEqual(destination);
+    const nested = editor.dropTargets.resolve(40, 99, undefined, host);
+    expect(nested?.destination).toEqual({ kind: "inside", parentId: "a" });
+    expect(nested?.indicator?.left).toBe(28);
+    expect(editor.dropTargets.resolve(40, 50, undefined, host)).toBeUndefined();
+  },
+);
+
+it("keeps full-row gutters and near-edge depth without filling distant end space", () => {
   adapter.setNode("a");
+  rect(item, 40, 80, 320, 100);
   const entry = register(item, [
     {
       kind: "edge",
       side: "block-end",
+      size: 16,
       destination,
       depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
     },
+  ]);
+  register(host, [
+    { kind: "inside", coverage: "background", destination: { kind: "inside", parentId: "parent" } },
   ]);
   editor.dropTargets.registerLayout({
     element: host,
     axis: "vertical",
     gaps: true,
+    endGaps: false,
     getItems: () => [entry],
   });
-  expect(editor.dropTargets.resolve(12, 99, undefined, host)?.destination).toEqual(destination);
-  const nested = editor.dropTargets.resolve(40, 99, undefined, host);
-  expect(nested?.destination).toEqual({ kind: "inside", parentId: "a" });
-  expect(nested?.indicator?.left).toBe(28);
-  expect(editor.dropTargets.resolve(40, 50, undefined, host)).toBeUndefined();
+  const near = editor.dropTargets.resolve(200, 184, undefined, host);
+  expect(near?.destination).toEqual({ kind: "inside", parentId: "a" });
+  expect(near?.indicator?.left).toBe(68);
+  const distant = editor.dropTargets.resolve(200, 210, undefined, host);
+  expect(distant?.destination).toEqual({ kind: "inside", parentId: "parent" });
+  expect(distant?.indicator).toBeUndefined();
+  const gutter = editor.dropTargets.resolve(1, 178, undefined, host);
+  expect(gutter?.destination).toEqual(destination);
+  expect(gutter?.indicator?.left).toBe(40);
 });
 
 it("retains a trailing declaration with a different canonical boundary", () => {
@@ -783,6 +887,7 @@ it("does not borrow the same parent's hierarchy from another occurrence", () => 
 });
 
 it.each([1, 55.75, 157, 499])("uses existing root-list free space at y=%s", (y) => {
+  adapter.setNode("a");
   rect(root, 0, 0, 400, 500);
   rect(host, 20, 56, 360, 400);
   rect(item, 20, 56, 360, 100);
@@ -811,17 +916,26 @@ it.each([1, 55.75, 157, 499])("uses existing root-list free space at y=%s", (y) 
   });
   const hit = y === 55.75 ? item : root;
   const target = editor.dropTargets.resolve(300, y, undefined, hit);
-  expect(target?.destination).toEqual(y < 56 ? before : destination);
-  expect(target?.indicator).toEqual({ left: 20, top: y < 56 ? 55 : 155, width: 360, height: 2 });
+  const nearEnd = y === 157;
+  const sibling = y < 56 ? before : destination;
+  expect(target?.destination).toEqual(nearEnd ? { kind: "inside", parentId: "a" } : sibling);
+  expect(target?.indicator).toEqual({
+    left: nearEnd ? 48 : 20,
+    top: y < 56 ? 55 : 155,
+    width: nearEnd ? 332 : 360,
+    height: 2,
+  });
 });
 
 it.each([false, true])("continues vertical list endpoints through free space, RTL=%s", (rtl) => {
+  adapter.setNode("b");
   host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
   rect(item, 40, 80, 320, 100);
   const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
   const after = { kind: "between", parentId: "parent", previousId: "b", nextId: null } as const;
   const last = document.createElement("div");
   last.dataset.blockId = "b";
+  last.style.direction = rtl ? "rtl" : "ltr";
   host.append(last);
   rect(last, 40, 200, 320, 100);
   const firstEntry = register(item, [{ kind: "edge", side: "block-start", destination: before }]);
@@ -845,11 +959,13 @@ it.each([false, true])("continues vertical list endpoints through free space, RT
   for (const x of [1, 200, 399]) {
     for (const y of [1, 79, 301, 399]) {
       const target = editor.dropTargets.resolve(x, y, undefined, host);
-      expect(target?.destination).toEqual(y < 80 ? before : after);
+      const nested = y === 301 && (rtl ? x <= 332 : x >= 68);
+      const sibling = y < 80 ? before : after;
+      expect(target?.destination).toEqual(nested ? { kind: "inside", parentId: "b" } : sibling);
       expect(target?.indicator).toEqual({
-        left: 40,
+        left: nested && !rtl ? 68 : 40,
         top: y < 80 ? 79 : 299,
-        width: 320,
+        width: nested ? 292 : 320,
         height: 2,
       });
     }

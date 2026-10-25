@@ -43,7 +43,7 @@ export type BlockDropRegion = BlockDropEdgeRegion | BlockDropInsideRegion;
 export interface BlockDropEdgeRegion {
   readonly kind: "edge";
   readonly side: "block-start" | "block-end" | "inline-start" | "inline-end";
-  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 8. Capped to one third of the anchor axis and constrained by the registered own-content middle third, retaining body drops when descendants enlarge the shell. */
+  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 12. Capped to one third of the anchor axis and constrained by the registered own-content middle third, retaining body drops when descendants enlarge the shell. */
   readonly size?: number;
   /** Bounds accepts the whole anchor while retaining feedback on the declared edge; defaults to edge. */
   readonly coverage?: "edge" | "bounds";
@@ -83,6 +83,8 @@ export interface BlockDropLayoutRegistration {
   readonly gaps: boolean;
   /** Finite nonnegative local CSS-pixel continuation distance; zero disables it and row fills the host cross axis. Defaults to row when gaps are enabled. */
   readonly gutterSize?: BlockDropGutterSize;
+  /** Fill remaining free space before/after linear lists with endpoint boundaries; defaults to true. False retains the adjacent measured edge strips and leaves farther space to background declarations. */
+  readonly endGaps?: boolean;
   /** Matching sibling edges share midpoint feedback by default. */
   readonly boundaries?: BlockDropBoundaryMode;
   /** Virtual lists require consecutive displayed indices, even across missing DOM roots. */

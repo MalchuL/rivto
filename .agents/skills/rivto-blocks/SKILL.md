@@ -81,6 +81,16 @@ Read the package theme and owning surface defaults instead of copying numeric
 padding or handle widths from a screenshot. Shared geometry lives in Page CSS;
 the host supplies theme parameters and concrete renderer appearance.
 
+`--rivto-drop-target-size` controls inset insertion strips in local CSS pixels;
+its fallback is **12px**. This changes hit geometry, not layout spacing. Actual
+thickness is scaled with the viewport and limited by the block's own content so
+its body remains available for inside drops. Without `BlockChildren.targetSize`,
+the variable inherits from ancestors. `targetSize` sets that same variable locally;
+an explicit variable in the host's `style` overrides the prop, and a region's
+explicit `size` takes precedence over the variable. Do not add renderer-specific
+drop calculations to tune this distance. Kanban, Bento and TODO storage currently
+set `targetSize={16}`; ordinary outlines and Columns use the 12px fallback.
+
 - Use the existing block-height, padding, indentation, control-size and slot-gap
   tokens. Renderer padding is internal decoration, not compensation for controls.
 - Add no outer renderer margin or page-width assumption. Keep layout roots

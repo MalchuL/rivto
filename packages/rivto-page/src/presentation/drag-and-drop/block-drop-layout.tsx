@@ -85,6 +85,8 @@ export interface BlockDropLayoutOptions {
   readonly gaps?: boolean;
   /** Finite nonnegative local CSS-pixel continuation distance; zero disables it, row fills the host, and omission defaults to row. */
   readonly gutterSize?: BlockDropGutterSize;
+  /** Fill all remaining linear end space; false retains edge-sized continuation and background ownership. Defaults to true. */
+  readonly endGaps?: boolean;
   /** Matching sibling feedback; omission inherits the editor default. */
   readonly boundaries?: BlockDropBoundaryMode;
   readonly virtual?: boolean;
@@ -148,6 +150,14 @@ export function useBlockDropLayout(
          */
         get gutterSize() {
           return current.current.gutterSize ?? "row";
+        },
+        /**
+         * Reads whether endpoint boundaries fill the remaining free list space.
+         *
+         * @returns True by default, or false to retain only measured edge continuation.
+         */
+        get endGaps() {
+          return current.current.endGaps ?? true;
         },
         /**
          * Reads whether mounted roots require consecutive display indices.

@@ -28,8 +28,11 @@ function KanbanCardItem({ children }: BlockChildrenItemProps) {
  *
  * The vertical child host remains mounted on collapse while its cards and
  * add-card footer unmount together. Empty lanes retain their native drop area.
- * Populated lanes also accept append drops on free background and footer controls;
- * nested card regions and sibling insertion edges keep their own destinations.
+ * Populated lanes also accept append drops on free background and footer controls.
+ * Their complete column shell is outlined. Card boundaries extend only their
+ * measured edge thickness (16 local pixels by default) into that background,
+ * leaving the remaining area for inside feedback while retaining full-row gutters.
+ * Nested card regions and sibling insertion edges keep their own destinations.
  * Card edges share ordinary outline depth placement: the leading band sorts
  * siblings and the indented trailing band appends children without entering content.
  *
@@ -47,6 +50,7 @@ export function KanbanColumnLayout({ blockId }: BlockLayoutProps) {
       <BlockChildren
         className="rivto-kanban-cards"
         targetSize={16}
+        dropEndGaps={false}
         dropAxis="vertical"
         dropPlacement="outline"
         dropBackground

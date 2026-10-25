@@ -14,6 +14,8 @@ import type {
   BlockDropEdgeRegion,
   BlockDropLayoutRegistration,
   BlockDropPoint,
+  BlockDropRegion,
+  BlockDropGapRegion,
   BlockDropTargetRegistration,
   ResolvedBlockDropTarget,
 } from "./types";
@@ -96,21 +98,24 @@ export function resolveLayoutGap(
   };
   const rtl =
     layout.element.ownerDocument.defaultView!.getComputedStyle(layout.element).direction === "rtl";
+  // Free endpoint space shares the endpoint's line, including explicit root areas.
   const outer = resolveListEndGap(layout, items, point, hit, read, rtl);
-  if (outer && (!edge || sameSiblingBoundary(outer.destination, edge.destination))) {
+  if (outer && (!edge || matchesEndpointBoundary(outer, edge))) {
     return outer;
   }
   if (edge && layout.boundaries === "separate") {
     return;
   }
+  // Real neighbor seams precede inferred gutter continuation.
   const pair = resolveGapPairs(layout, items, point, hit, read, rtl, edge);
   if (pair || edge) {
     return pair;
   }
   const gutter = resolveLayoutGutter(layout, items, point, hit, read, rtl);
-  return gutter
-    ? (resolveGapPairs(layout, items, point, hit, read, rtl, gutter) ?? gutter)
-    : undefined;
+  if (!gutter) {
+    return;
+  }
+  return resolveGapPairs(layout, items, point, hit, read, rtl, gutter) ?? gutter;
 }
 
 /**
@@ -232,10 +237,7 @@ export function resolveInnerLayoutGap(
   perpendicular: boolean,
   excluded?: ReadonlySet<string>,
 ): ResolvedBlockDropTarget | undefined {
-  const sideAxis = layout.axis === "vertical" ? "block" : "inline";
-  const outerRim =
-    ancestor.region?.kind === "edge" &&
-    (ancestor.region.side.startsWith("block") || ancestor.region.side.startsWith(sideAxis));
+  const outerRim = isOuterLayoutRim(layout.axis, ancestor.region);
   if (outerRim && hasStationaryDropNeighbors(ancestor.destination, excluded)) {
     return;
   }
@@ -243,21 +245,50 @@ export function resolveInnerLayoutGap(
     return;
   }
   const gap = resolveLayoutGap(layout, point, hit);
-  const ownerId = ancestor.element.dataset.blockId ?? ancestor.element.dataset.blockItemId;
-  if (
-    !continuesDropOutline(ancestor.element) &&
-    gap?.destination.parentId === ownerId &&
-    outerRim
-  ) {
+  if (isLocalOwnerGap(ancestor.element, gap) && outerRim) {
     return;
   }
-  if (
-    gap?.indicator &&
-    gap.destination.parentId !== ancestor.destination.parentId &&
-    (perpendicular || containsDropCrossAxisPoint(gap.indicator, point, layout.axis))
-  ) {
+  if (!gap?.indicator || gap.destination.parentId === ancestor.destination.parentId) {
+    return;
+  }
+  if (perpendicular || containsDropCrossAxisPoint(gap.indicator, point, layout.axis)) {
     return gap;
   }
+}
+
+/**
+ * Recognizes ancestor edges that retain a list's external rim and block-axis corners.
+ *
+ * Block edges always retain corner priority. Other edges match the list's flow
+ * axis; horizontal and wrapping layouts use inline edges for this comparison.
+ *
+ * @param axis - Declared flow of the nested list.
+ * @param region - Ancestor's selected declaration, absent for inferred targets.
+ * @returns True for an explicit block edge or an edge along the list's flow axis.
+ */
+function isOuterLayoutRim(
+  axis: BlockDropLayoutRegistration["axis"],
+  region: BlockDropRegion | BlockDropGapRegion | undefined,
+): boolean {
+  const sideAxis = axis === "vertical" ? "block" : "inline";
+  return (
+    region?.kind === "edge" && (region.side.startsWith("block") || region.side.startsWith(sideAxis))
+  );
+}
+
+/**
+ * Detects a nested gap receiving children directly into a locally scoped owner.
+ *
+ * Such a gap cannot replace that owner's external sibling rim. Ordinary outline
+ * owners retain their descendant depth choices.
+ *
+ * @param element - Ancestor anchor carrying its canonical block or placement identity.
+ * @param gap - Nested list candidate, absent when its geometry did not match.
+ * @returns True when outline continuation is disabled and the receiving parent is this owner.
+ */
+function isLocalOwnerGap(element: HTMLElement, gap: ResolvedBlockDropTarget | undefined): boolean {
+  const ownerId = element.dataset.blockId ?? element.dataset.blockItemId;
+  return !continuesDropOutline(element) && gap?.destination.parentId === ownerId;
 }
 
 /**
@@ -552,6 +583,26 @@ function sameSiblingBoundary(before: BlockDropDestination, after: BlockDropDesti
 }
 
 /**
+ * Matches a free endpoint to an explicit area using its declared sibling boundary.
+ *
+ * Near the endpoint, the selected destination can be an indented child append.
+ * Its original boundary still identifies equivalent trailing controls; unrelated
+ * explicit areas retain their own destination and priority.
+ *
+ * @param endpoint - Endpoint candidate including its pointer-selected outline level.
+ * @param edge - Explicit area encountered before its containing list.
+ * @returns True when the endpoint declaration describes the explicit area's gap.
+ */
+function matchesEndpointBoundary(
+  endpoint: ResolvedBlockDropTarget,
+  edge: ResolvedBlockDropTarget,
+): boolean {
+  const destination =
+    endpoint.region?.kind === "edge" ? endpoint.region.destination : endpoint.destination;
+  return sameSiblingBoundary(destination, edge.destination);
+}
+
+/**
  * Covers declared neighboring inset edges when native hit rounding crosses their seam.
  *
  * @param previous - Preceding mounted anchor.
@@ -589,10 +640,15 @@ function containsPairEdge(
  *
  * Explicit child targets retain priority. Only complete mounted endpoints are
  * eligible: virtual holes never become insertion areas. Feedback and canonical
- * neighbors come from the endpoint's existing declaration, with trailing child
- * indentation disabled because this free area inserts at the containing list level.
+ * neighbors come from the endpoint's existing declaration. Outline depth remains
+ * available within one inset-edge thickness beyond the endpoint, matching the
+ * strip inside the block; farther free space inserts at the containing list level.
  * Default row continuation includes linear child-list endpoints as well as roots;
- * numeric and disabled gutters retain their explicit distance policy.
+ * numeric and disabled gutters retain their explicit distance policy. Native
+ * background hits within real endpoint insets remain eligible under every policy;
+ * restricting outer continuation must not disable an item's declared edge.
+ * Disabling end gaps retains the adjacent measured continuation strip while
+ * leaving farther end space to its separately declared background destination.
  * No padding mode, CSS measurement policy or synthetic anchor is required.
  *
  * @param layout - Existing linear list host with registered anchors and continuation policy.
@@ -611,7 +667,7 @@ function resolveListEndGap(
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
   rtl: boolean,
 ): ResolvedBlockDropTarget | undefined {
-  if (layout.axis === "grid" || (layout.gutterSize ?? "row") !== "row") {
+  if (layout.axis === "grid") {
     return;
   }
   if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {
@@ -621,6 +677,9 @@ function resolveListEndGap(
   if (!endpoint) {
     return resolveEndpointInset(layout, items, point, hit, read);
   }
+  if ((layout.gutterSize ?? "row") !== "row") {
+    return;
+  }
   const [entry, side] = endpoint;
   if (!isDropBackground(layout.element, hit, point) && !entry.element.contains(hit)) {
     return;
@@ -628,9 +687,41 @@ function resolveListEndGap(
   const region = entry
     .getRegions()
     .find((region) => region.kind === "edge" && region.side === side);
-  return region?.kind === "edge"
-    ? dropRegionTarget(entry, { ...region, depth: undefined }, read(entry), point)
-    : undefined;
+  if (region?.kind !== "edge") {
+    return;
+  }
+  const geometry = read(entry);
+  const nearEdge = isNearEndpointEdge(region, geometry, point);
+  if (layout.endGaps === false && !nearEdge) {
+    return;
+  }
+  const depth = region.depth && nearEdge ? region.depth : undefined;
+  return dropRegionTarget(entry, { ...region, depth }, geometry, point);
+}
+
+/**
+ * Mirrors an endpoint's inset thickness into its existing outer free space.
+ *
+ * Thickness already accounts for viewport scale and own-content limits. This
+ * check does not create layout space or extend beyond the owning list's bounds.
+ *
+ * @param region - Declared endpoint edge carrying optional outline levels.
+ * @param geometry - Endpoint measurement shared with the current list query.
+ * @param point - Pointer already known to be outside the mounted list interval.
+ * @returns True within one measured edge thickness beyond the endpoint.
+ * @throws If the declared edge size is negative or nonfinite.
+ */
+function isNearEndpointEdge(
+  region: BlockDropEdgeRegion,
+  geometry: BlockDropGeometry,
+  point: BlockDropPoint,
+): boolean {
+  const strip = dropEdgeRect(region, geometry);
+  const block = region.side.startsWith("block");
+  const distance = block
+    ? Math.min(Math.abs(point.y - geometry.rect.top), Math.abs(point.y - geometry.rect.bottom))
+    : Math.min(Math.abs(point.x - geometry.rect.left), Math.abs(point.x - geometry.rect.right));
+  return distance <= (block ? strip.height : strip.width);
 }
 
 /**
@@ -688,7 +779,8 @@ function listEndpoint(
  * Recovers endpoint inset edges when native hit rounding selects the layout background.
  *
  * The point must remain in an actual declared strip; occupied child content is
- * never redirected. Unlike free end space, the inset retains outline depth bands.
+ * never redirected. The inset retains outline depth bands, matching the adjacent
+ * outer continuation strip rather than the more distant list-level free space.
  * Only the first and last mounted anchors are measured, including virtual lists;
  * no unmounted interval or synthetic endpoint is introduced.
  *

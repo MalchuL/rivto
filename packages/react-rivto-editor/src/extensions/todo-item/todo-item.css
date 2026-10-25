@@ -60,7 +60,8 @@
 }
 .rivto-todo-storage-children {
   margin: 0;
-  padding: 8px 7px 8px 31px;
+  padding: var(--rivto-container-padding);
+  padding-inline-start: calc(var(--rivto-container-padding) + 24px);
   gap: 8px;
   min-height: 64px;
   background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));

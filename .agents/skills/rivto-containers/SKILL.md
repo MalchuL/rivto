@@ -121,6 +121,19 @@ Page creates one `BlockNode` / `BlockView` per block. A typical layout returns:
 
 ### Items, gaps and footer controls
 
+Use the shared React stylesheet token `--rivto-container-padding` for the four
+edges of container child areas. Its default is `16px`; hosts may override it on
+any ancestor or individual container with one nonnegative CSS length (not a
+multi-value padding shorthand). Columns uses it around its lanes and their
+writing lists, Kanban around lanes, Bento around tiles, TODO
+storage around tasks, and Table inside cells so row/cell borders stay contiguous.
+Columns writing lists and TODO storage reserve an additional `24px` at inline-start
+for controls; this reservation is separate from the common padding. Headers,
+card interiors and sibling gaps keep their own styling. Kanban card lists retain
+zero padding inside the lane's existing chrome. Do not use
+`--rivto-drop-target-size` or `dropGutterSize` as visual padding: they configure
+hit geometry, while the resolver measures the actual styled child host.
+
 `BlockChildren.item` receives `{ blockId, children }`, with the existing child node
 as `children`. Render it once inside `BlockItem` for placement/counter-aware chrome,
 or `BlockDropWrapper` when a wrapping item needs explicit sibling boundaries.
@@ -140,7 +153,12 @@ Row-gutter continuation is independent as well: `dropGutterSize` accepts a finit
 nonnegative distance in local CSS pixels, zero to disable, or `"row"` (the default)
 to fill the host cross axis. Numeric extents cover all four item edges, respecting viewport scale and host bounds;
 farther space keeps its declared background action without disabling physical
-seams or item edges. Bento uses 32px; other layouts retain full-row continuation.
+seams or item edges. Bento uses 32px. Kanban card lists retain full-row gutters
+with `dropEndGaps={false}`: endpoint lines continue by their measured edge thickness
+(16px by default), while farther free background and footer controls outline the
+complete receiving column. Other layouts retain full remaining end-space insertion
+by default. This declaration changes neither physical sibling gaps nor presentation
+spacing and does not disable the first/last card's actual edge strips.
 Test both sides of the distance boundary separately from nesting into a tile.
 Grid items use existing placement edges; do not create separate gap cells. Bento
 uses declared tile seams and `dropBackground` so space under short tiles remains
@@ -213,6 +231,14 @@ trailing outline levels. Structural columns may intentionally use `siblings`.
 Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
 child gaps and inset edge thickness without container-specific pointer calculations.
 `--rivto-drop-target-size` uses local CSS pixels and never changes presentation spacing.
+Its fallback is **12px**, including ordinary outlines and Columns in the demo.
+Actual strips account for viewport scale and own-content limits, preserving body
+drops. `BlockChildren.targetSize` writes the same CSS variable locally; omitting
+it retains ancestor inheritance, while a variable explicitly passed in `style`
+overrides the prop. A region's explicit `size` precedes the variable. Bento,
+Kanban and TODO storage currently set `targetSize={16}`; their local defaults
+are intentional and do not change when the shared fallback changes. Keep these
+inset strips distinct from `dropGutterSize` continuation and visual container padding.
 
 A drop region proposes a destination; it does not grant permission. Implement
 `canMove` on the applicable concrete behaviors for source and receiving-parent

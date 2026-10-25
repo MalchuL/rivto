@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 export interface BlockEditorTheme extends CSSProperties {
   /** Cursor while the configured block-selection binding is held; defaults to pointer. */
   readonly "--rivto-selection-cursor"?: CSSProperties["cursor"];
-  /** Inset drop edge thickness in local CSS pixels; defaults to 8px, without changing layout. */
+  /** Inset drop edge thickness in local CSS pixels; defaults to 12px, without changing layout. */
   readonly "--rivto-drop-target-size"?: string;
   /** Shared row padding, including its content and in-flow controls; defaults to 16px. */
   readonly "--rivto-block-padding"?: string;

@@ -103,6 +103,56 @@ export function containsDropPoint(rect: BlockDropBounds, point: BlockDropPoint):
 }
 
 /**
+ * Orders declarations sharing an anchor after their explicit registration priority.
+ *
+ * Block edges win corners over inline edges; inside regions have the lowest rank.
+ * Equal ranks retain the first matching declaration.
+ *
+ * @param region - Live declaration on the measured anchor.
+ * @returns Two for block edges, one for inline edges, or zero for inside regions.
+ */
+export function dropRegionRank(region: BlockDropRegion): number {
+  if (region.kind === "inside") {
+    return 0;
+  }
+  return region.side.startsWith("block") ? 2 : 1;
+}
+
+/**
+ * Tests a declaration's physical area and its optional unoccupied-background restriction.
+ *
+ * Measurements are borrowed from this anchor's current query. Background checks
+ * use the native hit, so child content cannot become an ancestor append target.
+ *
+ * @param element - Registered anchor owning the declaration.
+ * @param region - Live edge or inside declaration to test.
+ * @param geometry - Anchor bounds and computed style captured for this query.
+ * @param point - Viewport coordinates in CSS pixels.
+ * @param hit - Current native hit inside the editor occurrence.
+ * @returns True when both physical coverage and background ownership match.
+ * @throws If an inset edge size is negative or nonfinite.
+ */
+export function containsDropRegion(
+  element: HTMLElement,
+  region: BlockDropRegion,
+  geometry: BlockDropGeometry,
+  point: BlockDropPoint,
+  hit: Element,
+): boolean {
+  const rect =
+    region.kind === "edge" && region.coverage !== "bounds"
+      ? dropEdgeRect(region, geometry)
+      : geometry.rect;
+  if (!containsDropPoint(rect, point)) {
+    return false;
+  }
+  if (region.kind === "inside" && region.coverage === "background") {
+    return isDropBackground(element, hit, point);
+  }
+  return true;
+}
+
+/**
  * Tests a point against the cross-axis span of a linear insertion boundary.
  *
  * Vertical lists use the boundary width; horizontal lists use its height. The
@@ -144,7 +194,7 @@ export function dropEdgeRect(
 ): BlockDropBounds {
   const { rect, style, scaleX, scaleY } = geometry;
   const token = style.getPropertyValue("--rivto-drop-target-size").trim();
-  const size = region.size ?? (token ? Number.parseFloat(token) : 8);
+  const size = region.size ?? (token ? Number.parseFloat(token) : 12);
   if (!Number.isFinite(size) || size < 0) {
     throw new Error("Drop target size must be finite and nonnegative");
   }

@@ -97,6 +97,26 @@ able to change; reference it from utilities with the Tailwind variable
 shorthand (`text-(--rivto-todo-accent)`, `shadow-(--rivto-edgeless-chrome-shadow)`,
 `bg-(image:--rivto-edgeless-panel-header)`).
 
+## Container padding
+
+Container child areas share `--rivto-container-padding`, defaulting to `16px` on
+all four edges. Set one nonnegative CSS length on an ancestor or a particular
+container; multi-value padding shorthands are not supported:
+
+```css
+.my-app {
+  --rivto-container-padding: 24px;
+}
+```
+
+Columns applies it around lanes and their writing lists, Kanban around lanes,
+Bento around tiles, TODO storage around tasks, and Table inside cells
+without separating row/cell borders. Columns writing lists and TODO storage add
+their existing `24px` inline-start control reservation. Headers, card interiors
+and gaps between siblings retain their own styling. Kanban card lists retain
+zero padding inside the lane's existing chrome. This is presentation space,
+independent of `--rivto-drop-target-size` and `dropGutterSize` interaction geometry.
+
 ## Scoped reset
 
 shadcn primitives assume preflight's `box-sizing: border-box` and neutral form

@@ -44,7 +44,7 @@
   flex: 0 0 var(--rivto-table-column-width, 180px);
   width: var(--rivto-table-column-width, 180px);
   min-width: 80px;
-  padding: 10px 12px;
+  padding: var(--rivto-container-padding);
   box-sizing: border-box;
   /* Width reflow is not a reorder; suppress the shared FLIP move animation. */
   transform: none !important;
