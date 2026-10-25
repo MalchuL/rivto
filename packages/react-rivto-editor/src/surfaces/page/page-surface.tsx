@@ -1,4 +1,4 @@
-import { BlockEditor, type BlockVirtualizationOptions } from "@chulane/rivto-page";
+import { BlockEditor, BlockEditorEnd, type BlockVirtualizationOptions } from "@chulane/rivto-page";
 import { SurfaceBoundary } from "../surface";
 import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { ESTIMATED_ROOT_HEIGHT } from "./page-virtualization-context";
@@ -79,7 +79,32 @@ function PageSurfaceContent() {
        */}
       {(rootBlockId === undefined ||
         (!reactPanel.blocks.hasBlock(rootBlockId) &&
-          reactPanel.document.blocks.hasBlock(rootBlockId))) && <div data-page-end-slot="true" />}
+          reactPanel.document.blocks.hasBlock(rootBlockId))) && (
+        <PageEndSlot blockId={rootIds.at(-1)} />
+      )}
     </BlockEditor>
+  );
+}
+
+/** Canonical final root for the existing host trailing-control slot. */
+interface PageEndSlotProps {
+  readonly blockId: string | undefined;
+}
+
+/**
+ * Makes the existing trailing-control slot accept end insertion without a spacer.
+ *
+ * Empty views keep their root-owned empty destination. Populated views bind the
+ * actual final root's canonical boundary to the same slot used by trailing controls.
+ *
+ * @param props - Last displayed root in this panel's scope.
+ * @param props.blockId - Last root, or undefined for an empty view.
+ * @returns One unchanged page-end slot with optional declarative drop registration.
+ */
+function PageEndSlot({ blockId }: PageEndSlotProps) {
+  return (
+    <BlockEditorEnd blockId={blockId}>
+      <div data-page-end-slot="true" />
+    </BlockEditorEnd>
   );
 }

@@ -741,3 +741,60 @@ Serial production measurements for column drop, three samples per browser/size; 
 | lost / firefox / 200 | 15.0 [14.0–15.0] | 95.0 [91.0–100.0] |
 
 All 36 serial measurements passed with tracing disabled and asserted the committed parent after native pointer input. Before/after timings compare normal delivery on isolated production builds; the lost-release scenario is measured only after fixing it because it previously performed no move. The different release/move phase changes the two-RAF proxy phase, so shorter lost-release frame timings are not a claim of a rendering speedup. Large documents still have long frames.
+
+### Ending layout correction (2026-10-25)
+
+The earlier unconditional 48px `BlockEditorEnd` was incorrect: it inserted a
+second ending area before the host's existing trailing controls and increased
+embedded and canvas content height. That implementation and its theme token
+are superseded by the following contract.
+
+`BlockTree` renders roots and virtual reserves only. Canvas cards also add no
+ending spacer. `BlockEditorEnd` now requires a single existing ref-forwarding
+child and composes a data-only full-bounds declaration onto it. The React Page
+host applies it to its existing `data-page-end-slot`; it supplies no dimensions.
+Hosts without trailing presentation retain ordinary final-block edge insertion.
+The embedding-specific zero-height override is no longer needed.
+
+The trailing child remains mounted across empty/populated transitions, preserving
+the portal target for Add block controls. Undefined root identity disables model
+reads and regions without replacing that child. Canonical sibling subscriptions
+still retain hidden next siblings and work independently of virtual root DOM.
+Ownership review covered creation in PageSurface, composition through
+BlockEditorEnd/BlockDropTarget, the shared placement hook/store subscriptions,
+TrailingBlock's portal consumer, and React ref/subscription cleanup. No new
+manager dependency, lifecycle forwarding API, or persisted shape is introduced.
+
+Verification: the no-spacer regressions failed on the original production build
+in all eight Page/canvas/embedding browser cases; serial reruns reproduced them.
+After the change, 53 unit tests, 156 existing DnD browser cases, eight focused
+ending/embedding cases, two virtual-final-boundary cases, and two empty/insert/
+undo/reinsert portal cases passed in Chromium/Firefox. Browser behavior used
+12 workers. Page build, production demo build, standalone demo build and both
+package type checks passed.
+
+The older `empty-document.spec.ts` remains unchanged. Its two parallel failures
+also reproduced serially; a baseline run reproduced the same setup failures:
+Chromium's outdated root selector does not reach the document rows, and a
+local selector correction exposed an embedding intercepting Firefox's selection
+clicks. That diagnostic selector edit was reverted. The dedicated new test avoids
+that unrelated selection setup and exercises native trailing-control insertion
+and keyboard undo directly.
+
+Serial production end-drop timings, three samples per browser/size; median [min–max], ms:
+
+| Build / browser / repeat | Synchronous move | Two-frame rendering proxy |
+| ------------------------ | ---------------: | ------------------------: |
+| before / chromium / 0    |    1.0 [1.0–1.1] |          31.1 [30.9–31.2] |
+| before / chromium / 200  |    7.9 [7.8–8.0] |       117.2 [114.6–119.4] |
+| before / firefox / 0     |    2.0 [2.0–2.0] |          32.0 [32.0–32.0] |
+| before / firefox / 200   | 14.0 [14.0–15.0] |          92.0 [92.0–94.0] |
+| after / chromium / 0     |    1.1 [1.0–1.2] |          31.0 [30.8–31.1] |
+| after / chromium / 200   |    8.6 [8.2–8.8] |       114.2 [111.3–125.3] |
+| after / firefox / 0      |    2.0 [2.0–3.0] |          32.0 [31.0–32.0] |
+| after / firefox / 200    | 15.0 [14.0–16.0] |         94.0 [94.0–134.0] |
+
+All 24 measurements passed and asserted canonical root append. The original
+spacer and replacement existing trailing element have different geometry but
+commit the same move. Results show comparable cost, not a claimed speedup;
+large documents still produce long frames. Full workspace suites were not run.

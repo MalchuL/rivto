@@ -1,8 +1,7 @@
 /* Decorate only the embedding reference body, leaving ordinary outline
    children outside its background and border. Keep the right-slot reference
    control overlaid on its anchor without affecting the nested rows. */
-.rivto-block:where([data-block-type="embedding"])
-  > .rivto-block-slot[data-slot-position="body"] {
+.rivto-block:where([data-block-type="embedding"]) > .rivto-block-slot[data-slot-position="body"] {
   background: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));
   border: 1px solid var(--rivto-border);
   border-radius: var(--rivto-radius);
@@ -39,9 +38,7 @@
   background: transparent;
 }
 
-[data-block-type="embedding"]
-  > .rivto-block-row
-  > .rivto-block-slot[data-slot-position="right"] {
+[data-block-type="embedding"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
   left: auto;
   right: 0;
 }

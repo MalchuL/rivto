@@ -89,6 +89,20 @@ async function startDrag(page: Page) {
   await expect(page.locator('[data-block-id="source"]')).toHaveAttribute("data-dragging", "true");
 }
 
+/**
+ * Reads persisted root order independently of rendered insertion feedback.
+ *
+ * @param page - Demo page owning the test document.
+ * @returns Resolves with canonical root IDs in current order.
+ */
+async function readRootIds(page: Page) {
+  return page.evaluate(() =>
+    (
+      window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+    ).__rivtoDemo.editor.blocks.getRootIds(),
+  );
+}
+
 for (const mode of ["block", "edgeless"] as const) {
   for (const type of ["outline", "columns", "kanban", "bento", "table", "todo-storage"] as const) {
     test(`explicit gap commits and undoes in ${type}, ${mode}`, async ({ page }) => {
@@ -664,52 +678,48 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`editor ending space accepts insertion over its full themed height in ${mode}`, async ({
-    page,
-  }) => {
+  test(`ending drop uses existing layout without a spacer in ${mode}`, async ({ page }) => {
     await load(page, "outline", mode);
-    const occurrence = page
-      .locator('[data-block-id="source"]')
-      .locator("xpath=ancestor::*[@data-rivto-block-editor][1]");
-    const end = occurrence.locator(".rivto-block-editor-end");
-    expect((await end.boundingBox())!.height).toBe(48);
-    const board = (await page.locator('[data-block-id="board"]').boundingBox())!;
-    await occurrence.evaluate((element) =>
-      (element as HTMLElement).style.setProperty("--rivto-editor-end-space", "96px"),
-    );
-    expect((await end.boundingBox())!.height).toBe(96);
-    expect(await page.locator('[data-block-id="board"]').boundingBox()).toEqual(board);
+    const last = page.locator('[data-block-id="board"]');
+    const occurrence = last.locator("xpath=ancestor::*[@data-rivto-block-editor][1]");
+    await expect(occurrence.locator(".rivto-block-editor-end")).toHaveCount(0);
+    let target;
+    if (mode === "block") {
+      target = occurrence.locator(":scope > [data-page-end-slot]");
+      const slot = (await target.boundingBox())!;
+      const block = (await last.boundingBox())!;
+      const gap = await occurrence.evaluate((element) =>
+        parseFloat(getComputedStyle(element).rowGap),
+      );
+      expect(slot.y - block.y - block.height).toBeCloseTo(gap, 1);
+    } else {
+      const content = last.locator("xpath=ancestor::*[@data-edgeless-card-content][1]");
+      await expect
+        .poll(async () =>
+          content.evaluate((element) => {
+            const last = element.querySelector<HTMLElement>(':scope > [data-block-id="board"]')!;
+            return Math.abs(
+              element.getBoundingClientRect().bottom -
+                last.getBoundingClientRect().bottom -
+                parseFloat(getComputedStyle(element).paddingBottom),
+            );
+          }),
+        )
+        .toBeLessThanOrEqual(1);
+      target = await blockDropRegion(last, "after");
+    }
     await startDrag(page);
-    const box = (await end.boundingBox())!;
-    await page.mouse.move(box.x + 12, box.y + box.height - 2);
-    const line = page.locator(".rivto-block-drop-line:visible");
-    await expect(line).toHaveCount(1);
-    const indicator = (await line.boundingBox())!;
-    expect(indicator.y + indicator.height / 2).toBeCloseTo(box.y, 1);
+    const box = (await target.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          (
-            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
-          ).__rivtoDemo.editor.blocks.getRootIds(),
-        ),
-      )
-      .toEqual(["board", "source"]);
+    await expect.poll(() => readRootIds(page)).toEqual(["board", "source"]);
     await page.evaluate(() =>
       (
         window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
       ).__rivtoDemo.editor.history.undo(),
     );
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          (
-            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
-          ).__rivtoDemo.editor.blocks.getRootIds(),
-        ),
-      )
-      .toEqual(["source", "board"]);
+    await expect.poll(() => readRootIds(page)).toEqual(["source", "board"]);
   });
 }
 
@@ -874,3 +884,26 @@ for (const mode of ["block", "edgeless"] as const) {
       .toBe("lane");
   });
 }
+
+test("trailing controls retain their slot across empty, insert and undo", async ({ page }) => {
+  await load(page, "outline", "block");
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+    editor.history.clear();
+  });
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  const slot = await surface.locator(":scope > [data-page-end-slot]").elementHandle();
+  await expect(surface).toHaveAttribute("data-empty", "true");
+  await surface.getByRole("button", { name: "Add 3 blocks", exact: true }).click();
+  await expect.poll(async () => (await readRootIds(page)).length).toBe(3);
+  await expect(surface.locator(".page-trailing-block")).toHaveCount(3);
+  expect(await slot!.evaluate((element) => element.isConnected)).toBe(true);
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readRootIds(page)).toEqual([]);
+  await expect(surface.locator(".page-trailing-block")).toHaveCount(3);
+  expect(await slot!.evaluate((element) => element.isConnected)).toBe(true);
+  await surface.getByRole("button", { name: "Add block", exact: true }).click();
+  await expect.poll(async () => (await readRootIds(page)).length).toBe(1);
+});

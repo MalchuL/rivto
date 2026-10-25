@@ -4,8 +4,3 @@
 [data-rivto-block-editor] {
   @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)] page:text-[color:var(--rivto-block-foreground,#172033)];
 }
-
-/* Real ending space stays after virtual reserves and is independent of edge thickness. */
-.rivto-block-editor-end {
-  min-height: var(--rivto-editor-end-space, 48px);
-}

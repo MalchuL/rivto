@@ -26,6 +26,26 @@ interface JournalInspection {
 }
 
 for (const repeat of [0, 200]) {
+  test(`embedded content has no extra ending space with repeat=${repeat}`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/?repeat=${repeat}`);
+    const today = page.locator('[data-journal-document="today"]');
+    for (const mode of ["Page", "Edgeless"]) {
+      await today.getByRole("button", { name: mode, exact: true }).click();
+      const embedded = today.getByRole("region", { name: "Block editor" });
+      await expect(embedded.locator("[data-block-id]")).toHaveCount(5);
+      await expect(embedded.locator(".rivto-block-editor-end")).toHaveCount(0);
+      const spacing = await embedded.evaluate((root, selector) => {
+        const block = root.querySelector<HTMLElement>(selector)!;
+        return {
+          gap: root.getBoundingClientRect().bottom - block.getBoundingClientRect().bottom,
+          padding: parseFloat(getComputedStyle(root).paddingBottom),
+        };
+      }, EMBEDDED_ROOT_SELECTOR);
+      expect(spacing.gap).toBeCloseTo(spacing.padding, 0);
+    }
+  });
+
   test(`default journal embeds its existing nested branch in page and edgeless with repeat=${repeat}`, async ({
     page,
     browserName,

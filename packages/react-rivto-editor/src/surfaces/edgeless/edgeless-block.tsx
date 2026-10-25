@@ -1,5 +1,5 @@
 import { scheduleCardHeight } from "./card-height-updates";
-import { BlockRootNode, BlockDropLayout, BlockEditorEnd } from "@chulane/rivto-page";
+import { BlockRootNode, BlockDropLayout } from "@chulane/rivto-page";
 /**
  * Positioned canvas card for one block element.
  *
@@ -80,7 +80,6 @@ function EdgelessBlockElementView({ element, blockIds }: EdgelessBlockElementPro
           {blockIds.map((blockId) => (
             <BlockRootNode key={blockId} blockId={blockId} />
           ))}
-          <BlockEditorEnd blockId={blockIds[blockIds.length - 1]!} />
         </div>
       </BlockDropLayout>
       <ElementSlots element={element} selected={selected} />

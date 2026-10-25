@@ -55,13 +55,17 @@ const BlockRootNodeView = memo(function BlockRootNodeView(props: BlockChildPlace
  * only to their canonical parent's child order. React releases subscriptions on
  * identity changes and unmount; unchanged placement snapshots retain identity.
  *
- * @param blockId - Existing displayed root, including a currently virtualized root.
- * @returns Canonical placement, or undefined when the block is absent from its parent's children.
+ * Undefined identity disables addressed reads and subscriptions while retaining hook order.
+ *
+ * @param blockId - Existing displayed root, including a virtualized root; undefined for an empty trailing host.
+ * @returns Canonical placement, or undefined for an empty identity or a block absent from its parent's children.
  * @throws If outside an editor or delegated adapter reads fail.
  */
-export function useBlockRootPlacement(blockId: string): BlockChildPlacement | undefined {
+export function useBlockRootPlacement(
+  blockId: string | undefined,
+): BlockChildPlacement | undefined {
   const { blocks } = useBlockEditorController().adapter;
-  const parentId = blocks.getParentId(blockId) ?? null;
+  const parentId = blockId === undefined ? null : (blocks.getParentId(blockId) ?? null);
   const roots = useContext(BlockRootPlacementContext);
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -77,10 +81,10 @@ export function useBlockRootPlacement(blockId: string): BlockChildPlacement | un
     [blocks, parentId],
   );
   const siblings = useSyncExternalStore(subscribe, read, read);
-  const index = siblings?.indexOf(blockId) ?? -1;
+  const index = blockId === undefined ? -1 : (siblings?.indexOf(blockId) ?? -1);
   const subscribeRoot = useCallback(
     (listener: () => void) => {
-      if (parentId !== null) {
+      if (parentId !== null || blockId === undefined) {
         return () => {};
       }
       return roots?.subscribe(blockId, listener) ?? (() => {});
@@ -89,10 +93,10 @@ export function useBlockRootPlacement(blockId: string): BlockChildPlacement | un
   );
   let placement = useSyncExternalStore(
     subscribeRoot,
-    () => roots?.get(blockId),
-    () => roots?.get(blockId),
+    () => (blockId === undefined ? undefined : roots?.get(blockId)),
+    () => (blockId === undefined ? undefined : roots?.get(blockId)),
   );
-  if (parentId !== null) {
+  if (parentId !== null && blockId !== undefined) {
     placement =
       siblings && index >= 0
         ? {

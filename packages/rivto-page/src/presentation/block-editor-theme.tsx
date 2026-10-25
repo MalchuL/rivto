@@ -2,8 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 
 /** Typed CSS parameters inherited by structural blocks, controls, and slots. */
 export interface BlockEditorTheme extends CSSProperties {
-  /** Space after the final displayed root, default 48px; zero removes the ending hit area. */
-  readonly "--rivto-editor-end-space"?: string;
   /** Cursor while the configured block-selection binding is held; defaults to pointer. */
   readonly "--rivto-selection-cursor"?: CSSProperties["cursor"];
   /** Inset drop edge thickness in local CSS pixels; defaults to 8px, without changing layout. */

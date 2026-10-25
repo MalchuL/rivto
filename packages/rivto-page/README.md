@@ -621,12 +621,21 @@ children retain their own feedback.
 Virtual roots merge only across consecutive mounted display indices; unmounted
 intervals remain unavailable. `dropGaps={false}` still disables shared gap handling.
 
-The tree reserves 48px after its final displayed root for end insertion. Override
-`--rivto-editor-end-space` through `BlockEditorTheme` or an ancestor stylesheet;
-zero removes that area's height. Custom projected forests, including canvas cards,
-can place `<BlockEditorEnd blockId={lastDisplayedId} />` after their roots. Its
-canonical neighbor subscription preserves hidden next siblings and works without
-mounting the last root; virtual reserved space stays before the ending area.
+The tree and canvas forests add no ending spacer. Hosts that already render a
+trailing control can declare end insertion on that same element:
+
+```tsx
+<BlockEditorEnd blockId={lastDisplayedId}>
+  <div data-page-end-slot="true">{/* Host-owned trailing controls. */}</div>
+</BlockEditorEnd>
+```
+
+`BlockEditorEnd` composes its single ref-forwarding child without adding DOM,
+classes or minimum dimensions. Its canonical neighbor subscription preserves
+hidden next siblings and works without mounting the final root. The host places
+its real trailing element after virtual reserves. Views without trailing controls,
+including embedded editors, retain ordinary block-edge insertion without acquiring
+extra whitespace or a hidden ending box.
 
 An edge declaration may use `coverage: "bounds"` to accept its whole anchor while
 keeping the insertion line on the declared edge. `indicatorInset` independently

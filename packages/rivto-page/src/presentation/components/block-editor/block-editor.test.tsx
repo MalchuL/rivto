@@ -62,6 +62,7 @@ import { useBlockNode } from "../../hooks/use-block-node";
 import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
 import { TestBlockEditorAdapter } from "../../../test-utils/test-block-editor-adapter";
 import { BlockEditor } from "./block-editor";
+import { BlockEditorEnd } from "./block-editor-end";
 import { BlockEditorContext } from "./block-editor-context";
 import { BlockList } from "../block-layout/block-list";
 import { BlockListSlot, BlockCollapseSlot } from "../../slots/block-controls";
@@ -187,6 +188,7 @@ it("shares one attached root with the host and renders its ending slot last", ()
   expect(hostRoot.current).toBe(container.firstElementChild);
   expect(hostRoot.current?.getAttribute("aria-label")).toBe("Document");
   expect(hostRoot.current?.lastElementChild?.textContent).toBe("Append block");
+  expect(container.querySelector(".rivto-block-editor-end")).toBeNull();
   act(() => root.render(null));
   expect(hostRoot.current).toBeNull();
   expect(editor.getRoot()).toBeNull();
@@ -1704,8 +1706,21 @@ it("keeps the ending region bounded to canonical projected siblings", () => {
   adapter.setBlockIds(["a", "b"]);
   const editor = createEditor(adapter);
   const register = jest.spyOn(editor.dropTargets, "register");
-  act(() => root.render(<BlockEditor editor={editor} />));
-  const end = container.querySelector(".rivto-block-editor-end");
+  act(() =>
+    root.render(
+      <BlockEditor editor={editor}>
+        <BlockEditorEnd blockId="b">
+          <footer data-test-trailing>
+            <button>Append</button>
+          </footer>
+        </BlockEditorEnd>
+      </BlockEditor>,
+    ),
+  );
+  const end = container.querySelector("[data-test-trailing]");
+  expect(end?.parentElement).toBe(editor.getRoot());
+  expect(end?.children).toHaveLength(1);
+  expect(container.querySelector(".rivto-block-editor-end")).toBeNull();
   const entry = register.mock.calls.find(([entry]) => entry.element === end)![0];
   expect(entry.getRegions()).toEqual([
     {
@@ -1724,4 +1739,53 @@ it("keeps the ending region bounded to canonical projected siblings", () => {
   });
   act(() => root.render(null));
   expect(end?.isConnected).toBe(false);
+});
+
+it("retains the host trailing element across empty and populated views", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setBlockIds([]);
+  const editor = createEditor(adapter);
+  const ref = createRef<HTMLButtonElement>();
+  const register = jest.spyOn(editor.dropTargets, "register");
+  /**
+   * Updates only the addressed boundary while retaining the host child.
+   *
+   * @param blockId - Final root, or undefined while empty.
+   * @returns Commits the same trailing presentation with current regions.
+   */
+  function renderEnd(blockId: string | undefined) {
+    root.render(
+      <BlockEditor editor={editor}>
+        <BlockEditorEnd blockId={blockId}>
+          <button ref={ref}>Append</button>
+        </BlockEditorEnd>
+      </BlockEditor>,
+    );
+  }
+  act(() => renderEnd(undefined));
+  const end = ref.current!;
+  const entry = register.mock.calls.find(([entry]) => entry.element === end)![0];
+  expect(entry.getRegions()).toEqual([]);
+  act(() => {
+    adapter.rootIds = ["a"];
+    adapter.setNode("a");
+    adapter.setBlockIds(["a"]);
+    renderEnd("a");
+  });
+  expect(ref.current).toBe(end);
+  expect(end.isConnected).toBe(true);
+  expect(entry.getRegions()[0]?.destination).toEqual({
+    kind: "between",
+    parentId: null,
+    previousId: "a",
+    nextId: null,
+  });
+  act(() => {
+    adapter.rootIds = [];
+    adapter.setBlockIds([]);
+    renderEnd(undefined);
+  });
+  expect(ref.current).toBe(end);
+  expect(entry.getRegions()).toEqual([]);
+  expect(end.isConnected).toBe(true);
 });

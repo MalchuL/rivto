@@ -16,8 +16,6 @@ export const BLOCK_EDITOR_CLASSES = Object.freeze({
   dropLine: "rivto-block-drop-line",
   /** Stable root-list host shared by full and windowed rendering. */
   tree: "rivto-virtual-tree",
-  /** Presentation space accepting insertion after the final displayed root. */
-  end: "rivto-block-editor-end",
   /** Measured placement of one displayed root subtree. */
   virtualRoot: "rivto-virtual-root",
   /** Numeric list marker rendered through the sibling group's CSS counter. */

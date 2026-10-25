@@ -74,7 +74,9 @@ for (const placement of ["between", "inside", "control", "bento", "end", "column
       if (placement === "column") {
         region = target.getByRole("button", { name: /^Add card to / });
       } else if (placement === "end") {
-        region = document.locator(":scope > .rivto-virtual-tree > .rivto-block-editor-end");
+        region = baseline
+          ? document.locator(":scope > .rivto-virtual-tree > .rivto-block-editor-end")
+          : document.locator(":scope > [data-page-end-slot]");
       } else if (placement === "bento") {
         region = target.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
       } else if (placement === "inside") {
