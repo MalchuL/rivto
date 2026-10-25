@@ -87,7 +87,7 @@ export function resolveLayoutGap(
     }
     return value;
   };
-  const outer = !edge && resolveRootGap(layout, items, point, hit, read);
+  const outer = !edge && resolveListEndGap(layout, items, point, hit, read);
   if (outer) {
     return outer;
   }
@@ -428,29 +428,31 @@ function containsPairEdge(
 }
 
 /**
- * Extends declared root edges through existing free space before/after the list.
+ * Extends declared vertical-list edges through existing free space before/after the list.
  *
  * Explicit child targets retain priority. Only complete mounted endpoints are
  * eligible: virtual holes never become insertion areas. Feedback and canonical
  * neighbors come from the endpoint's existing declaration, with trailing child
- * indentation disabled because this free area inserts at the root-list level.
+ * indentation disabled because this free area inserts at the containing list level.
+ * Default row continuation includes vertical child-list endpoints as well as roots;
+ * numeric and disabled gutters retain their explicit distance policy.
  * No padding mode, CSS measurement policy or synthetic anchor is required.
  *
- * @param layout - Existing vertical root-list host with registered anchors.
+ * @param layout - Existing vertical list host with registered anchors and continuation policy.
  * @param items - Committed anchors in display order, already known to be nonempty.
  * @param point - Actual viewport pointer; native hit rounding does not change it.
  * @param hit - Native hit used to exclude occupied or unrelated child chrome.
  * @param read - Query-local geometry accessor shared with ordinary sibling gaps.
  * @returns Endpoint insertion, or undefined outside free space or at virtual holes.
  */
-function resolveRootGap(
+function resolveListEndGap(
   layout: BlockDropLayoutRegistration,
   items: readonly BlockDropTargetRegistration[],
   point: BlockDropPoint,
   hit: Element,
   read: (item: BlockDropTargetRegistration) => BlockDropGeometry,
 ): ResolvedBlockDropTarget | undefined {
-  if (layout.axis !== "vertical" || !layout.element.hasAttribute("data-block-root-list")) {
+  if (layout.axis !== "vertical" || (layout.gutterSize ?? "row") !== "row") {
     return;
   }
   if (!containsDropPoint(layout.element.getBoundingClientRect(), point)) {

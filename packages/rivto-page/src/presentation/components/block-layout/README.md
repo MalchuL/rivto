@@ -157,6 +157,11 @@ Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
 seams insert siblings. Terminal descendants inherit their item's trailing levels,
 so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
+Vertical lists with the default `"row"` continuation also extend their first/last
+insertion boundaries through existing leading/trailing host space. This applies
+to editor roots and container children alike, without adding layout space. Free
+end space inserts at the list's level, with feedback fixed to its endpoint;
+empty lists keep their declared inside action, and virtual holes remain inert.
 `dropGutterSize` controls how far item boundaries continue around all four item edges.
 A finite nonnegative number is a distance in local CSS pixels, respecting viewport
 scaling; zero disables continuation. `"row"` (the default) fills the host's available
@@ -193,8 +198,10 @@ and controls. Layouts declare background append independently. Override intentio
 areas with BlockDropTarget, or exclude an existing subtree using BlockDropExclude
 or BlockDropTarget.exclude. Control tags do not implicitly exclude drop targets. Resolution reads the
 native hit, registered ancestors and logarithmically many local mounted gap anchors.
-The nearest layout bounds discovery; anchor priority then edge rank and registration
-order choose its winner. Source permission
+The nearest layout bounds body/background discovery. Declared ancestor sibling
+rims remain reachable across nested layouts, so a child host cannot swallow the
+outer insertion boundary. Indented inside bands retain their local layout behavior.
+Anchor priority then edge rank and registration order choose the local winner. Source permission
 is applied to that winner; rejection does not search another structural level.
 Commit validates the destination again through host commands and transactions.
 

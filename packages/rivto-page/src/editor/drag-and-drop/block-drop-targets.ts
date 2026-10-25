@@ -152,7 +152,10 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * registered ancestor layout or region; occupied layouts still bound discovery.
    * The nearest inside declaration is retained while checking placement edges up
    * to that layout boundary; content must not shadow its wrapper's declared edge.
-   * The first edge is retained until the layout can normalize shared feedback;
+   * Ancestor sibling rims are checked before local body/background discovery,
+   * keeping outer boundaries reachable through nested lists without promoting
+   * ancestor inside bands. Exclusions still stop that bounded ancestor walk.
+   * The first local edge is retained until the layout can normalize shared feedback;
    * unrelated ancestor registrations cannot replace that winner. A contained
    * block-shell inside hit needs no sibling search because its coordinate is not
    * a gap. Custom inside wrappers can span several anchors and still require it.
@@ -168,6 +171,10 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     const root = this.getRoot();
     if (!root || !hit || !root.contains(hit) || hit.closest("[data-rivto-block-editor]") !== root) {
       return;
+    }
+    const outer = this.resolveOuterEdge(hit, point, root);
+    if (outer) {
+      return outer;
     }
     let inside: ResolvedBlockDropTarget | undefined;
     let edge: ResolvedBlockDropTarget | undefined;
@@ -204,6 +211,48 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
     }
     return edge ?? inside;
+  }
+
+  /**
+   * Keeps declared outer sibling rims reachable through nested child layouts.
+   *
+   * Only an actual ancestor edge beyond a nested layout participates; body and
+   * background declarations never gain priority. Indented inside choices retain
+   * the nearer layout's ordinary resolution. The winning edge is normalized by
+   * its containing layout, preserving shared feedback and canonical neighbors.
+   * Exclusions stop this ancestor lookup before any outer declaration is read.
+   *
+   * @param hit - Connected native hit in this editor occurrence.
+   * @param point - Viewport pointer tested against existing inset declarations.
+   * @param root - Attached editor bounding the ancestor walk.
+   * @returns Outer sibling edge or its merged gap, or undefined without a matching rim.
+   */
+  private resolveOuterEdge(
+    hit: Element,
+    point: BlockDropPoint,
+    root: HTMLElement,
+  ): ResolvedBlockDropTarget | undefined {
+    let nested = false;
+    let edge: ResolvedBlockDropTarget | undefined;
+    for (let element: Element | null = hit; element; element = element.parentElement) {
+      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
+        return;
+      }
+      const layout = this.layouts.get(element as HTMLElement);
+      if (edge && layout) {
+        return resolveLayoutGap(layout, point, hit, edge) ?? edge;
+      }
+      const entries = nested && !edge && this.targets.get(element as HTMLElement);
+      const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
+      if (target?.region?.kind === "edge" && target.destination.kind === "between") {
+        edge = target;
+      }
+      nested ||= Boolean(layout);
+      if (element === root) {
+        return edge;
+      }
+    }
+    return edge;
   }
 
   /**

@@ -315,6 +315,11 @@ Its options provide `axis`, stable `order`, `gaps`, and optional background `reg
 `BlockChildren.dropGaps` defaults to true for linear lists, false for grids. Disabling
 it disables insertion in free gaps, while keeping independently declared item edges.
 `dropBackground` enables append in unoccupied host space, including filtered lists.
+Vertical lists with the default `"row"` continuation also extend their first/last
+insertion boundaries through existing leading/trailing host space. This applies
+to editor roots and container children alike, without adding layout space. Free
+end space inserts at the list's level, with feedback fixed to its endpoint;
+empty lists keep their declared inside action, and virtual holes remain inert.
 `dropGutterSize={16}` continues item boundaries by 16 local CSS pixels around all four
 item edges, accounting for viewport scaling and clipping to the host. Zero disables
 continuation; `"row"` (the default) preserves full-row continuation. Values must be

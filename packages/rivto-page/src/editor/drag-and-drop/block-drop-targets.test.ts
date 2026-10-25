@@ -316,10 +316,7 @@ it("keeps declared placement edges ahead of content inside within the nearest la
     gaps: false,
     getItems: () => [],
   });
-  expect(editor.dropTargets.resolve(100, 99, undefined, item)?.destination).toEqual({
-    kind: "inside",
-    parentId: "a",
-  });
+  expect(editor.dropTargets.resolve(100, 99, undefined, item)?.destination).toEqual(destination);
 });
 
 it.each(["button", "input", "select", "textarea", "div"])(
@@ -514,6 +511,58 @@ it.each(["merged", "separate"] as const)(
   },
 );
 
+it.each(["merged", "separate"] as const)(
+  "keeps outer sibling rims reachable through nested lists in %s mode",
+  (boundaries) => {
+    adapter.setNode("a");
+    const next = document.createElement("div");
+    next.dataset.blockId = "b";
+    host.append(next);
+    rect(next, 0, 104);
+    const childHost = document.createElement("div");
+    item.append(childHost);
+    rect(childHost, 0, 40, 200, 60);
+    const previous = register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        size: 8,
+        destination,
+        depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+      },
+    ]);
+    const following = register(next, [{ kind: "edge", side: "block-start", size: 8, destination }]);
+    register(childHost, [
+      { kind: "inside", coverage: "background", destination: { kind: "inside", parentId: "a" } },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: childHost,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [],
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      boundaries,
+      getItems: () => [previous, following],
+    });
+    for (let y = 92; y < 100; y += 0.5) {
+      const target = editor.dropTargets.resolve(12, y, undefined, childHost);
+      expect(target?.destination).toEqual(destination);
+      expect(target?.indicator?.top).toBe(boundaries === "merged" ? 101 : 99);
+    }
+    expect(editor.dropTargets.resolve(12, 90, undefined, childHost)?.destination).toEqual({
+      kind: "inside",
+      parentId: "a",
+    });
+    expect(editor.dropTargets.resolve(12, 95, undefined, childHost, () => false)).toBeUndefined();
+    childHost.setAttribute("data-drop-inert", "");
+    expect(editor.dropTargets.resolve(12, 95, undefined, childHost)).toBeUndefined();
+  },
+);
+
 it("selects one outline depth across a merged gap and both inset edges", () => {
   adapter.setNode("a");
   const next = document.createElement("div");
@@ -686,33 +735,97 @@ it.each([1, 55.75, 157, 499])("uses existing root-list free space at y=%s", (y) 
   expect(target?.indicator).toEqual({ left: 20, top: y < 56 ? 55 : 155, width: 360, height: 2 });
 });
 
-it("keeps root-list virtual holes unavailable at both endpoints", () => {
-  rect(root, 0, 0, 400, 500);
-  rect(item, 20, 56, 360, 100);
-  root.dataset.blockRootList = "true";
-  item.dataset.index = "4";
-  // An enclosing last-item marker does not mark this indexed item as last.
-  host.dataset.virtualLast = "true";
+it.each([false, true])("continues vertical list endpoints through free space, RTL=%s", (rtl) => {
+  host.style.direction = item.style.direction = rtl ? "rtl" : "ltr";
+  rect(item, 40, 80, 320, 100);
   const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
-  const entry = register(item, [
-    { kind: "edge", side: "block-start", destination: before },
-    { kind: "edge", side: "block-end", destination },
+  const after = { kind: "between", parentId: "parent", previousId: "b", nextId: null } as const;
+  const last = document.createElement("div");
+  last.dataset.blockId = "b";
+  host.append(last);
+  rect(last, 40, 200, 320, 100);
+  const firstEntry = register(item, [{ kind: "edge", side: "block-start", destination: before }]);
+  const lastEntry = register(last, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination: after,
+      depth: { ancestors: 0, destinations: [after, { kind: "inside", parentId: "b" }] },
+    },
+  ]);
+  register(host, [
+    { kind: "inside", coverage: "background", destination: { kind: "inside", parentId: "parent" } },
   ]);
   editor.dropTargets.registerLayout({
-    element: root,
+    element: host,
     axis: "vertical",
     gaps: true,
-    virtual: true,
+    getItems: () => [firstEntry, lastEntry],
+  });
+  for (const x of [1, 200, 399]) {
+    for (const y of [1, 79, 301, 399]) {
+      const target = editor.dropTargets.resolve(x, y, undefined, host);
+      expect(target?.destination).toEqual(y < 80 ? before : after);
+      expect(target?.indicator).toEqual({
+        left: 40,
+        top: y < 80 ? 79 : 299,
+        width: 320,
+        height: 2,
+      });
+    }
+  }
+});
+
+it.each([0, 16, 32])("keeps numeric endpoint continuation bounded at %spx", (gutterSize) => {
+  rect(item, 40, 80, 320, 100);
+  const entry = register(item);
+  register(host, [
+    { kind: "inside", coverage: "background", destination: { kind: "inside", parentId: "parent" } },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    gutterSize,
     getItems: () => [entry],
   });
-  expect(editor.dropTargets.resolve(100, 10, undefined, root)).toBeUndefined();
-  expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
-  item.dataset.index = "0";
-  expect(editor.dropTargets.resolve(100, 10, undefined, root)?.destination).toEqual(before);
-  expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
-  item.dataset.virtualLast = "true";
-  expect(editor.dropTargets.resolve(100, 400, undefined, root)?.destination).toEqual(destination);
+  const target = editor.dropTargets.resolve(200, 399, undefined, host);
+  expect(target?.destination).toEqual({ kind: "inside", parentId: "parent" });
+  expect(target?.indicator).toBeUndefined();
 });
+
+it.each([false, true])(
+  "keeps list virtual holes unavailable at both endpoints, root=%s",
+  (isRoot) => {
+    rect(root, 0, 0, 400, 500);
+    rect(item, 20, 56, 360, 100);
+    if (isRoot) {
+      root.dataset.blockRootList = "true";
+    }
+    item.dataset.index = "4";
+    // An enclosing last-item marker does not mark this indexed item as last.
+    host.dataset.virtualLast = "true";
+    const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+    const entry = register(item, [
+      { kind: "edge", side: "block-start", destination: before },
+      { kind: "edge", side: "block-end", destination },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: root,
+      axis: "vertical",
+      gaps: true,
+      virtual: true,
+      getItems: () => [entry],
+    });
+    expect(editor.dropTargets.resolve(100, 10, undefined, root)).toBeUndefined();
+    expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
+    item.dataset.index = "0";
+    expect(editor.dropTargets.resolve(100, 10, undefined, root)?.destination).toEqual(before);
+    expect(editor.dropTargets.resolve(100, 400, undefined, root)).toBeUndefined();
+    item.dataset.virtualLast = "true";
+    expect(editor.dropTargets.resolve(100, 400, undefined, root)?.destination).toEqual(destination);
+  },
+);
 
 it.each([
   ["vertical", false],
@@ -771,7 +884,7 @@ it("keeps gutter continuation inside its declared layout and gap policy", () => 
   });
   expect(editor.dropTargets.resolve(300, 238, undefined, host)?.destination).toEqual(destination);
   expect(editor.dropTargets.resolve(401, 238, undefined, host)).toBeUndefined();
-  expect(editor.dropTargets.resolve(300, 260, undefined, host)).toBeUndefined();
+  expect(editor.dropTargets.resolve(300, 260, undefined, host)?.destination).toEqual(destination);
   host.setAttribute("data-drop-inert", "");
   expect(editor.dropTargets.resolve(300, 238, undefined, host)).toBeUndefined();
 });

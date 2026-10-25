@@ -782,7 +782,9 @@ for (const mode of ["block", "edgeless"] as const) {
     ).toBeVisible();
   });
 
-  test(`short Kanban column accepts drop below its cards in ${mode}`, async ({ page }) => {
+  test(`short Kanban column continues its final insertion boundary in ${mode}`, async ({
+    page,
+  }) => {
     await load(page, "kanban", mode);
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
@@ -809,17 +811,9 @@ for (const mode of ["block", "edgeless"] as const) {
     const y = (last.y + last.height + footer.y) / 2;
     expect(y).toBeGreaterThan(last.y + last.height + 8);
     await page.mouse.move(box.x + box.width / 2, y, { steps: 10 });
-    await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+    await expectBoundaryLine(page);
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          (
-            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
-          ).__rivtoDemo.editor.blocks.getParentId("source"),
-        ),
-      )
-      .toBe("lane");
+    await expect.poll(() => readChildIds(page, "lane")).toEqual(["first", "last", "source"]);
   });
 
   for (const empty of [true, false]) {
@@ -837,7 +831,11 @@ for (const mode of ["block", "edgeless"] as const) {
       const region = lane.getByRole("button", { name: "Add card to Lane" });
       const box = (await region.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-      await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+      if (empty) {
+        await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+      } else {
+        await expectBoundaryLine(page);
+      }
       await page.mouse.up();
       await expect
         .poll(() =>
@@ -853,7 +851,9 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
-  test(`Kanban append regions share the whole column highlight in ${mode}`, async ({ page }) => {
+  test(`Kanban header outlines the column and footer continues its final boundary in ${mode}`, async ({
+    page,
+  }) => {
     await load(page, "kanban", mode);
     const lane = page.locator('[data-block-id="lane"]');
     const column = (await lane.boundingBox())!;
@@ -863,9 +863,13 @@ for (const mode of ["block", "edgeless"] as const) {
     for (const region of [header, footer, header, footer]) {
       const box = (await region.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
-      await expect(lane).toHaveAttribute("data-block-drop-active", "true");
-      await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
-      expect(await page.locator('[data-block-drop-active="true"]').boundingBox()).toEqual(column);
+      if (region === header) {
+        await expect(lane).toHaveAttribute("data-block-drop-active", "true");
+        await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+        expect(await page.locator('[data-block-drop-active="true"]').boundingBox()).toEqual(column);
+      } else {
+        await expectBoundaryLine(page);
+      }
     }
     for (const id of ["first", "last"]) {
       const card = (await page.locator(`[data-block-id="${id}"]`).boundingBox())!;
@@ -1781,5 +1785,98 @@ for (const mode of ["block", "edgeless"] as const) {
         await expect.poll(() => readChildIds(page, "first")).toEqual([]);
       });
     }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "todo-storage"] as const) {
+    for (const end of [false, true]) {
+      test(`vertical list free endpoint in ${type}, ${mode}, end=${end}`, async ({ page }) => {
+        const parent = await load(page, type, mode);
+        const host = page.locator(`[data-block-id="${parent}"] > .rivto-block-children`);
+        await host.evaluate((element) => {
+          element.style.paddingBlock = "32px";
+        });
+        const initialHost = (await host.boundingBox())!;
+        const anchor = page.locator(`[data-block-id="${end ? "last" : "first"}"]`);
+        const box = (await anchor.boundingBox())!;
+        const edge = end ? box.y + box.height : box.y;
+        await startDrag(page);
+        for (const offset of [1, 8, 24, 8, 1]) {
+          for (const x of [
+            initialHost.x + 1,
+            box.x + box.width / 2,
+            initialHost.x + initialHost.width - 1,
+          ]) {
+            await page.mouse.move(x, edge + (end ? offset : -offset));
+            await expectBoundaryLine(page);
+            const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
+            expect(line.y + line.height / 2).toBeCloseTo(edge, 1);
+            expect(line.x).toBeCloseTo(box.x, 1);
+            expect(line.width).toBeCloseTo(box.width, 1);
+          }
+        }
+        expect(await host.boundingBox()).toEqual(initialHost);
+        await page.mouse.up();
+        await expect
+          .poll(() => readChildIds(page, parent))
+          .toEqual(end ? ["first", "last", "source"] : ["source", "first", "last"]);
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+      });
+    }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban", "bento", "todo-storage"] as const) {
+    test(`outer sibling rims remain reachable in ${type}, ${mode}`, async ({ page }) => {
+      await load(page, type, mode);
+      await page.evaluate((type) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        const leaf = {
+          id: "following-child",
+          type: type === "todo-storage" ? "todo-item" : "paragraph",
+          content: "Child",
+        };
+        editor.blocks.insertBlock({
+          id: "following",
+          type: type === "outline" ? "paragraph" : type,
+          content: "Following",
+          children:
+            type === "kanban"
+              ? [
+                  {
+                    id: "following-lane",
+                    type: "kanban-column",
+                    content: "Next lane",
+                    children: [leaf],
+                  },
+                ]
+              : [leaf],
+        });
+        editor.history.clear();
+      }, type);
+      const board = page.locator('[data-block-id="board"]');
+      const following = page.locator('[data-block-id="following"]');
+      await following.scrollIntoViewIfNeeded();
+      const a = (await board.boundingBox())!;
+      const b = (await following.boundingBox())!;
+      await startDrag(page);
+      for (const y of [a.y + a.height - 6, a.y + a.height - 3, a.y + a.height, b.y, b.y + 3]) {
+        await page.mouse.move(a.x + 4, y);
+        await expectBoundaryLine(page);
+        const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
+        expect(line.y + line.height / 2).toBeCloseTo((a.y + a.height + b.y) / 2, 1);
+      }
+      await page.mouse.up();
+      await expect.poll(() => readRootIds(page)).toEqual(["board", "source", "following"]);
+      await expect
+        .poll(() => readChildIds(page, "board"))
+        .toEqual(type === "kanban" ? ["lane"] : ["first", "last"]);
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readRootIds(page)).toEqual(["source", "board", "following"]);
+    });
   }
 }
