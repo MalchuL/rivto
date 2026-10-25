@@ -36,7 +36,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @param owner - Resource lifecycle capturing synchronous extension registrations.
    * @param blocks - Data source used only to validate candidate parents and neighbors.
    * @param getRoot - Live attachment lookup; returns null while the view is detached.
-   * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines; no registration or teardown capability is retained.
+   * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines and owned child hosts for vertical background scope; no registration or teardown capability is retained.
    */
   constructor(
     private readonly owner: BlockEditorResourceOwner,
@@ -154,7 +154,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * to that layout boundary; content must not shadow its wrapper's declared edge.
    * Ancestor sibling rims are checked before local body/background discovery,
    * keeping outer boundaries reachable through nested lists without promoting
-   * ancestor inside bands. Exclusions still stop that bounded ancestor walk.
+   * ancestor inside bands. An actual nearer item edge keeps its explicit depth
+   * choices before ancestor fallback. Exclusions still stop that bounded ancestor walk.
    * The first local edge is retained until the layout can normalize shared feedback;
    * unrelated ancestor registrations cannot replace that winner. A contained
    * block-shell inside hit needs no sibling search because its coordinate is not
@@ -183,7 +184,6 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         return edge ?? inside;
       }
       const entries = this.targets.get(element as HTMLElement);
-      const layout = this.layouts.get(element as HTMLElement);
       const target = !edge && entries ? this.resolveEntries(entries, point, hit) : undefined;
       if (target && target.region?.kind !== "inside") {
         edge = target;
@@ -191,6 +191,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       if (target?.region?.kind === "inside") {
         inside ??= target;
       }
+      const layout = edge ? this.layouts.get(element as HTMLElement) : this.readLayout(element);
       const gap =
         layout &&
         (!inside?.element.hasAttribute("data-block-id") ||
@@ -217,7 +218,10 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * Keeps declared outer sibling rims reachable through nested child layouts.
    *
    * Only an actual ancestor edge beyond a nested layout participates; body and
-   * background declarations never gain priority. Indented inside choices retain
+   * background declarations never gain priority. A nearer explicit item edge is
+   * resolved locally, so coincident container rims cannot swallow a child edge.
+   * An outdent band may still normalize to its ancestor's shared sibling gap.
+   * Indented inside choices retain
    * the nearer layout's ordinary resolution. The winning edge is normalized by
    * its containing layout, preserving shared feedback and canonical neighbors.
    * Exclusions stop this ancestor lookup before any outer declaration is read.
@@ -242,9 +246,17 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       if (edge && layout) {
         return resolveLayoutGap(layout, point, hit, edge) ?? edge;
       }
-      const entries = nested && !edge && this.targets.get(element as HTMLElement);
+      const entries = !edge && this.targets.get(element as HTMLElement);
       const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
-      if (target?.region?.kind === "edge" && target.destination.kind === "between") {
+      if (
+        !nested &&
+        target?.region?.kind === "edge" &&
+        (target.destination.kind !== "between" ||
+          target.destination.parentId === target.region.destination.parentId)
+      ) {
+        return;
+      }
+      if (nested && target?.region?.kind === "edge" && target.destination.kind === "between") {
         edge = target;
       }
       nested ||= Boolean(layout);
@@ -253,6 +265,36 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
     }
     return edge;
+  }
+
+  /**
+   * Reads a mounted list or its owner's available vertical background scope.
+   *
+   * Registered child lists also own their block's unoccupied padding and remaining
+   * height. Their existing declarations and mounted anchors are reused for this
+   * synchronous query; no extra registration, DOM node or cached geometry is added.
+   * Actual content and nested blocks remain protected by native background checks.
+   * Grid/horizontal layouts and numeric/disabled continuation keep their own
+   * clipping and distance bounds. This child scope never captures an already
+   * selected shell edge: that edge belongs to the shell's containing list.
+   *
+   * @param element - Native ancestor inside the attached editor occurrence.
+   * @returns Its registered layout, an owner-bounded vertical view, or undefined
+   * when no enabled owned child layout is registered in this shell.
+   */
+  private readLayout(element: Element): BlockDropLayoutRegistration | undefined {
+    const registered = this.layouts.get(element as HTMLElement);
+    if (registered) {
+      return registered;
+    }
+    const blockId = element.getAttribute("data-block-id");
+    const children = blockId
+      ? this.regions.get(blockId, "children", element as HTMLElement)
+      : undefined;
+    const layout = children && this.layouts.get(children);
+    if (layout?.axis === "vertical" && layout.gaps && (layout.gutterSize ?? "row") === "row") {
+      return { ...layout, element: element as HTMLElement };
+    }
   }
 
   /**

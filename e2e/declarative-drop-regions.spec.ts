@@ -1897,3 +1897,105 @@ for (const mode of ["block", "edgeless"] as const) {
     });
   }
 }
+
+/**
+ * Adds a longer neighboring lane without changing the receiving lane's styles.
+ *
+ * The fixture keeps native header, padding and empty-region geometry and waits
+ * for the last neighbor to mount before callers measure the stretched layout.
+ *
+ * @param page - Demo owning the canonical board fixture.
+ * @param type - Board whose native structural column type receives the extra children.
+ * @returns Resolves after the tall neighbor's final child is visible.
+ */
+async function addTallLane(page: Page, type: "columns" | "kanban") {
+  await page.evaluate((type) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.insertBlock(
+      {
+        id: "tall-lane",
+        type: `${type}-column`,
+        content: "Tall lane",
+        children: Array.from({ length: 5 }, (_, index) => ({
+          id: `tall-${index}`,
+          type: "paragraph",
+          content: "Tall neighbor",
+        })),
+      },
+      { parentId: "board" },
+    );
+  }, type);
+  await expect(page.locator('[data-block-id="tall-4"]')).toBeVisible();
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["columns", "kanban"] as const) {
+    for (const placement of ["before", "after"] as const) {
+      test(`stretched lane native ${placement} space in ${type}, ${mode}`, async ({ page }) => {
+        const parent = await load(page, type, mode);
+        await addTallLane(page, type);
+        const lane = page.locator(`[data-block-id="${parent}"]`);
+        const visual = type === "columns" ? lane.locator("..") : lane;
+        const bounds = (await visual.boundingBox())!;
+        const first = (await page.locator('[data-block-id="first"]').boundingBox())!;
+        const last = (await page.locator('[data-block-id="last"]').boundingBox())!;
+        expect(bounds.y + bounds.height - last.y - last.height).toBeGreaterThan(40);
+        await startDrag(page);
+        const ys =
+          placement === "before"
+            ? [first.y + 2, type === "kanban" ? first.y - 4 : first.y + 4, first.y + 2]
+            : [
+                last.y + last.height + 4,
+                bounds.y + bounds.height - 4,
+                (last.y + last.height + bounds.y + bounds.height) / 2,
+              ];
+        const edge = placement === "before" ? first : last;
+        for (const y of ys) {
+          await page.mouse.move(edge.x + edge.width / 2, y);
+          await expectBoundaryLine(page);
+          const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
+          expect(line.y + line.height / 2).toBeCloseTo(
+            placement === "before" ? first.y : last.y + last.height,
+            1,
+          );
+        }
+        await page.mouse.up();
+        await expect
+          .poll(() => readChildIds(page, parent))
+          .toEqual(
+            placement === "before" ? ["source", "first", "last"] : ["first", "last", "source"],
+          );
+        await page.keyboard.press("Control+z");
+        await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+      });
+    }
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["columns", "kanban"] as const) {
+    test(`empty stretched lane accepts its native background in ${type}, ${mode}`, async ({
+      page,
+    }) => {
+      const parent = await load(page, type, mode);
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.removeBlocks(["first", "last"]);
+      });
+      await addTallLane(page, type);
+      const lane = page.locator(`[data-block-id="${parent}"]`);
+      const visual = type === "columns" ? lane.locator("..") : lane;
+      const box = (await visual.boundingBox())!;
+      expect(await lane.boundingBox()).toEqual(box);
+      await startDrag(page);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height - 4);
+      await expect(lane).toHaveAttribute("data-block-drop-active", "true");
+      await page.mouse.up();
+      await expect.poll(() => readChildIds(page, parent)).toEqual(["source"]);
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => readChildIds(page, parent)).toEqual([]);
+    });
+  }
+}

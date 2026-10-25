@@ -166,6 +166,19 @@ areas declaring the same canonical boundary share the mounted endpoint's line,
 including when sibling boundaries use separate feedback. Their hit bounds and
 layout dimensions stay independent from the feedback anchor. Native background
 hits inside an endpoint's declared inset retain ordinary outline depth choices.
+An owned vertical list using `"row"` continuation also resolves insertion on its
+block's unoccupied padding and remaining height, even when the child host itself
+is shorter. Registered content keeps its inside action; nested blocks, exclusions
+and numeric/disabled continuation retain their existing boundaries. A selected
+shell edge still belongs to the shell's containing list, so child background
+coverage cannot consume insertion between containers. A nearer explicit child
+edge wins over a coincident ancestor rim; terminal outdent bands can still share
+the ancestor's gap feedback.
+
+Horizontal child hosts stretch an optional `BlockItem` and its existing block
+together. The visual lane, selection shell and owner background therefore cover
+the same available height without adding a spacer or a second block shell.
+
 `dropGutterSize` controls how far item boundaries continue around all four item edges.
 A finite nonnegative number is a distance in local CSS pixels, respecting viewport
 scaling; zero disables continuation. `"row"` (the default) fills the host's available

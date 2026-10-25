@@ -52,6 +52,16 @@
   @apply page:relative page:min-w-0 page:box-border;
 }
 
+/* A stretched horizontal placement must stretch its existing block as well,
+ * so selection and registered child-list background cover the visible lane. */
+.rivto-block-children[data-block-drop-axis="horizontal"] > .rivto-block-item {
+  display: flex;
+  flex-direction: column;
+}
+.rivto-block-children[data-block-drop-axis="horizontal"] > .rivto-block-item > .rivto-block {
+  flex: 1;
+}
+
 /* Contentless structural anchors expose outside controls over their body instead of
  * reserving a blank text row above containers or embedded views. Inside controls
  * need their own in-flow row so they cannot overlap the first child. */

@@ -1382,3 +1382,133 @@ it.each([false, true])("uses exposed grid side orientation in numeric gutters, R
     );
   }
 });
+
+it.each([undefined, "row", 0, 16] as const)(
+  "uses owned vertical background only with row continuation, size=%s",
+  (gutterSize) => {
+    adapter.setNode("a", { childIds: ["child"] });
+    adapter.setNode("child");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "child";
+    item.append(children);
+    children.append(child);
+    rect(children, 20, 20, 160, 40);
+    rect(child, 20, 30, 160, 20);
+    register(item, [{ kind: "inside", destination: { kind: "inside", parentId: "a" } }]);
+    editor.regions.register("a", "children", children);
+    const after = { kind: "between", parentId: "a", previousId: "child", nextId: null } as const;
+    const before = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+    const entry = register(child, [
+      { kind: "edge", side: "block-start", destination: before },
+      { kind: "edge", side: "block-end", destination: after },
+    ]);
+    const release = editor.dropTargets.registerLayout({
+      element: children,
+      axis: "vertical",
+      gaps: true,
+      gutterSize,
+      getItems: () => [entry],
+    });
+    expect(editor.dropTargets.resolve(100, 15, undefined, item)?.destination).toEqual(
+      gutterSize === 0 || gutterSize === 16 ? { kind: "inside", parentId: "a" } : before,
+    );
+    const content = document.createElement("div");
+    content.dataset.blockContent = "";
+    item.append(content);
+    rect(content, 0, 0, 200, 10);
+    expect(editor.dropTargets.resolve(100, 5, undefined, content)?.destination).toEqual({
+      kind: "inside",
+      parentId: "a",
+    });
+    const target = editor.dropTargets.resolve(100, 90, undefined, item);
+    expect(target?.destination).toEqual(
+      gutterSize === 0 || gutterSize === 16 ? { kind: "inside", parentId: "a" } : after,
+    );
+    if (gutterSize === undefined || gutterSize === "row") {
+      expect(target?.indicator?.top).toBe(49);
+    }
+    release();
+    expect(editor.dropTargets.resolve(100, 90, undefined, item)?.destination).toEqual({
+      kind: "inside",
+      parentId: "a",
+    });
+  },
+);
+
+it("keeps a nearer declared child edge ahead of a coincident outer rim", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  adapter.setNode("child");
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "child";
+  item.append(children);
+  children.append(child);
+  rect(children, 20, 0, 180, 100);
+  rect(child, 20, 0, 180, 30);
+  editor.regions.register("a", "children", children);
+  const outer = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  const inner = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+  const parent = register(item, [{ kind: "edge", side: "block-start", destination: outer }]);
+  const entry = register(child, [{ kind: "edge", side: "block-start", destination: inner }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [parent],
+  });
+  expect(editor.dropTargets.resolve(100, 2, undefined, child)?.destination).toEqual(inner);
+  expect(editor.dropTargets.resolve(1, 2, undefined, item)?.destination).toEqual(outer);
+});
+
+it("normalizes a terminal child outdent band to its ancestor sibling gap", () => {
+  adapter.setNode("a", { childIds: ["nested"] });
+  adapter.setNode("nested");
+  const next = document.createElement("div");
+  next.dataset.blockId = "b";
+  host.append(next);
+  rect(next, 0, 104);
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "nested";
+  item.append(children);
+  children.append(child);
+  rect(children, 28, 40, 172, 60);
+  rect(child, 28, 40, 172, 60);
+  editor.regions.register("a", "children", children);
+  const parent = register(item);
+  const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+  const local = { kind: "between", parentId: "a", previousId: "nested", nextId: null } as const;
+  const nested = register(child, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination: local,
+      depth: {
+        ancestors: 1,
+        destinations: [destination, local, { kind: "inside", parentId: "nested" }],
+      },
+    },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [nested],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [parent, following],
+  });
+  const target = editor.dropTargets.resolve(12, 99, undefined, child);
+  expect(target?.destination).toEqual(destination);
+  expect(target?.indicator?.top).toBe(101);
+});
