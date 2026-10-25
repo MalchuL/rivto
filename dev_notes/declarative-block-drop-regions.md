@@ -535,3 +535,209 @@ Direction-correction verification: four Page/Edgeless browser checks passed in C
 - firefox, repeat=0: sync median 2.0 ms [2.0–2.0]; rendered median 32.0 ms [31.0–32.0].
 - firefox, repeat=200: sync median 14.0 ms [14.0–16.0]; rendered median 91.0 ms [88.0–92.0].
 Full workspace tests were not rerun for this feedback-only parameter correction.
+
+### Post-drag activation and column free space
+
+The drag controller retained `suppressedClickId` until any later click on the
+source block. A release outside that block can produce no such click, so the first
+subsequent TODO status or counter activation was consumed. The guard now expires
+on the next window-capture pointerdown, before a control can stop propagation.
+Zero-detail keyboard/programmatic clicks bypass it; a trailing pointer click from
+the activated drag remains suppressed. The existing event registry owns listener
+attachment, detach and disposal; no timer, control-specific callback or new API is
+introduced. The source handle still owns navigation and the drag controller owns
+suppression and pointer release.
+
+The reported column is a populated `kanban-column`. Its child host declared
+`emptyDropTarget` only, so after the first card appeared its free background and
+add-card footer became neutral. The nearest layout correctly prevented fallback
+to the enclosing column shell. Enabling the existing `dropBackground` declaration
+restores append into that canonical lane while preserving nested card targets,
+sibling gaps, exclusions and permissions. No custom resolver, layout box or CSS
+change is introduced. Ordinary `columns` is outside this fix.
+
+Before the fix both browsers reproduced the lost first TODO/counter click in Page
+and Edgeless. Two consecutive counter drags committed on the baseline; the reported
+intermittent second-drag failure was not independently reproduced. The regression
+retains both committed moves, rather than checking only drag feedback. Populated
+Kanban free-area/footer checks failed; empty-lane footer checks passed.
+
+Verification after the Kanban clarification:
+
+- The eight populated Kanban background/footer regressions failed in both browsers
+  with 12 workers and again with one worker on the production baseline. Four empty
+  column cases passed. The final 12-worker run passed all 266 tests across declared
+  regions, column behavior, handle activation, release/capture, pointer commit,
+  cancellation and undo in Chromium/Firefox, including 20 new interaction checks.
+- The first broader run passed 246 tests and exposed 20 stale assertions. Serial
+  reruns confirmed them; a separate production build from unchanged HEAD reproduced
+  one example of each failure in both browsers. Handle activation tests now use
+  existing physical sibling-edge geometry instead of deleted Bento hit strips or
+  the inset Kanban text-row edge. The Bento inset assertion follows the existing
+  16px declaration from commit `7ea90b78`; this fix does not change that offset.
+- Page unit checks: 65 passed across drag lifecycle, native event dispatch and drop
+  targets. Page build, host production build and both package type checks passed.
+  Scoped lint has no errors and five existing long-function warnings.
+- Ownership review: the existing drag installation/event registry owns the new
+  capture observer and its detach/disposal; controls borrow no new capability.
+  Kanban declares background acceptance through the existing child-layout API.
+  The shared resolver, canonical validation, source permissions, hierarchy writes
+  and renderer/selection geometry are unchanged. No public API or dependency added.
+
+### One receiving-block outline for inside regions
+
+Visual inspection confirmed that the Kanban child-list outline touched the cards:
+the list was 326px wide at x=482, while the actual column was 350px wide at x=470.
+The cards obscured the inset frame. Header and list regions already resolved to
+the same canonical column; using the hit anchor as the outline owner made them
+appear to be different destinations.
+
+`BlockDropFeedback` now resolves inside feedback to the nearest block shell when
+its ID matches the destination parent and it belongs to the same editor occurrence.
+Edges keep their measured insertion line and original anchor. Custom regions
+without a matching shell retain their anchor; no nested-editor boundary is crossed.
+Only bounded DOM ancestry is read, with no geometry/model reads or global search.
+The receiver and source gesture still own the feedback lifecycle, including marker
+replacement and cleanup. `ResolvedBlockDropTarget.element`, resolver priorities,
+permissions, canonical destinations and actual hit coverage remain unchanged.
+
+The new unit regression and four real browser cases failed before the change;
+browser failures were confirmed serially. Afterward, 67 unit checks and all 270
+browser checks passed. Screenshots confirmed one outer column frame with cards
+inside it; browser checks compare the exact highlighted bounds across header/footer
+moves and assert the committed parent. Existing TODO/Bento/empty-column assertions
+now inspect the receiving shell. Package/host types and builds passed; scoped lint
+has no errors and seven existing long-function warnings. No public API was added.
+
+Final serial production measurements (three samples, median [min–max], ms):
+
+| Build / browser / placement / repeat | Synchronous commit | Two-frame rendering proxy |
+| --- | ---: | ---: |
+| baseline / chromium / control / 0 | 1.4 [1.1–1.5] | 31.4 [31.3–31.4] |
+| baseline / chromium / control / 200 | 9.4 [9.3–9.6] | 58.1 [54.0–64.7] |
+| baseline / firefox / control / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–31.0] |
+| baseline / firefox / control / 200 | 18.0 [18.0–19.0] | 91.0 [91.0–96.0] |
+| fixed / chromium / column / 0 | 1.7 [1.6–1.9] | 30.8 [30.4–31.8] |
+| fixed / chromium / column / 200 | 6.9 [6.7–7.5] | 112.3 [110.4–119.7] |
+| fixed / chromium / control / 0 | 1.2 [1.2–1.3] | 31.5 [31.5–31.8] |
+| fixed / chromium / control / 200 | 10.1 [9.4–11.9] | 63.0 [57.8–66.2] |
+| fixed / firefox / column / 0 | 2.0 [2.0–2.0] | 32.0 [31.0–32.0] |
+| fixed / firefox / column / 200 | 14.0 [13.0–14.0] | 94.0 [93.0–95.0] |
+| fixed / firefox / control / 0 | 3.0 [1.0–3.0] | 31.0 [30.0–32.0] |
+| fixed / firefox / control / 200 | 18.0 [18.0–18.0] | 91.0 [90.0–93.0] |
+
+All 24 final measurements assert actual committed placement after fractional pointer input. The final preview was copied to an isolated output directory and matched the tested build hash. Baseline control timings use a fresh production build of unchanged HEAD. Kanban background insertion was unavailable on that baseline, so no successful before timing is claimed for it. Large-document commits still contain long frames. Full workspace tests were not run; concurrent TODO toolbar layering changes are outside this fix and were preserved.
+
+The adjacent receiver cleanup/replacement suite also passed both checks (69 unit checks in total across the five focused suites).
+
+### Native click delivery and registered hierarchy outlines
+
+Post-drag click suppression is removed completely from `BlockDragController`:
+no `suppressedClickId`, captured click handler, reset observer or replacement gate
+remains. Native handle activation is deliberately retained, including a browser
+click after captured release or Escape. The initial behavioral run passed 259
+checks and failed 11 assumptions that release could not navigate; serial reruns
+confirmed all 11. Native navigation was explicitly selected as the intended
+behavior. Capture-release tests now assert that the source panel opens, return
+through actual breadcrumbs, then retain the committed order and undo assertions.
+Other gesture tests accept only the document or the dragged source as the active
+panel; navigation to an unrelated block fails. The final behavioral run passed
+all 270 checks with 12 workers in Chromium and Firefox.
+
+`ResolvedBlockDropTarget.outlineElement` now carries the complete registered
+receiving shell separately from its hit anchor. `BlockDropTargets` borrows only
+`BlockLayoutRegions.get`, supplied by the owning controller; it reads the shell
+for an accepted inside destination without measuring or traversing descendants.
+`BlockDropFeedback` paints that supplied element directly. The ancestor search,
+DOM ID comparisons and inferred occurrence checks were deleted from rendering.
+Missing shells/custom targets retain their explicit hit anchor; custom resolvers
+can provide an outline directly. Tests cover registration removal, identical IDs
+in another occurrence, and hierarchy anchors independent of DOM ancestry.
+
+Ownership review covered controller creation/passing/destruction, region ref
+cleanup, shared resolution, local gestures, `PageDragOccurrence` forwarding and
+`BlockDropReceiver` cleanup. The controller still owns the region registry;
+consumers borrow no registration or destruction capabilities. No duplicate manager,
+wrapper or callback layer was added. Native handle documentation and the public
+resolved-target contract were updated. Page build, isolated production demo build,
+both package type checks and 71 focused unit checks passed. Scoped runtime lint
+has no errors and four existing long-function warnings; browser-test lint has no
+errors and four existing long-function warnings. No full workspace run was made.
+
+Native column-drop production timings, three serial samples per browser/size; median [min–max], ms:
+
+| Build / browser / repeat | Synchronous command | Two-frame rendering proxy |
+| --- | ---: | ---: |
+| before / chromium / 0 | 1.2 [1.2–1.4] | 31.5 [31.4–31.5] |
+| before / chromium / 200 | 7.0 [6.9–10.2] | 137.5 [112.0–146.3] |
+| before / firefox / 0 | 2.0 [2.0–2.0] | 32.0 [31.0–32.0] |
+| before / firefox / 200 | 13.0 [13.0–20.0] | 105.0 [94.0–120.0] |
+| after / chromium / 0 | 1.5 [1.3–1.9] | 31.2 [30.6–31.8] |
+| after / chromium / 200 | 7.3 [7.2–7.5] | 127.0 [109.2–135.3] |
+| after / firefox / 0 | 2.0 [2.0–3.0] | 32.0 [31.0–32.0] |
+| after / firefox / 200 | 14.0 [13.0–16.0] | 109.0 [94.0–115.0] |
+
+All 24 production measurements passed with one worker and tracing disabled, with actual committed parent assertions after fractional native pointer movement. Both builds used isolated output directories. Large-document rendering still contains long frames; these are measurements, not a claim of a rendering performance fix.
+
+### Completing a lost release before later pointer movement
+
+Comparison used local `main` at `dca961c8` (`Vs hotfix2 (#39)`). Its
+`PageDragProvider` delegates pointer end/cancellation to dnd-kit, and
+`PageDragController.handleDragEnd` commits the current `displayedPlacement` after
+validating live canonical destination and source policy. The application tracker
+updates raw coordinates but contains no unconditional buttons=0 cancellation.
+
+The Page controller's old buttons=0 branch discarded its current target. The
+regression isolates two kinds of missed release with trusted native browser input:
+a footer stops bubbling, or a pre-application listener intentionally withholds
+pointerup from every editor listener. Releasing and immediately moving to (0, 0)
+then left the source in its old lane. The original build passed the four normal
+quick-release checks and failed all eight stopped/lost-release checks; serial
+reruns confirmed all eight. This demonstrates the lost-release defect, rather
+than claiming that ordinary rapid movement always makes the browser lose events.
+The exact platform cause of the user's unavailable release remains untraced.
+
+Real pointerup now completes in window capture and resolves its actual coordinates
+before descendant handlers can stop bubbling. If pointerup is unavailable, the
+first pointermove reporting the primary button released completes the last
+*displayed* target after a live permission check. It never resolves that later
+movement's coordinates. A neutral last held position performs no move. An explicit
+Escape, blur, pointercancel or detach still cancels without committing. The host
+mutation continues to validate current hierarchy and permissions; cleanup, focus
+restoration and aggregated failures stay with the gesture owner. Native clicks
+remain untouched, as requested.
+
+The shared `finish` cleanup is reused by both release paths; `releaseTarget`
+contains the different target-selection rules. No new manager, API, registration
+capability, geometry cache or type-specific rule was introduced. Review covered
+native registration phase, source/foreign target identity, permission revalidation,
+host move delegation, auto-scroll stop and feedback/pointer disposal. Unit checks
+cover revoked permission, frozen target coordinates, exactly one move and resource
+release. The existing release-outside-viewport and native-click navigation checks
+remain in the behavioral run.
+
+Final verification: 74 unit checks and 258 Chromium/Firefox behavioral checks passed
+with 12 workers. All 12 rapid-release cases passed again after extracting the shared
+fixture used by performance measurements. Page build, isolated production demo
+build, both package type checks and formatting passed. Scoped lint has no errors
+and four existing long-function warnings; the new helpers/tests stay within the
+function-length rule. Full workspace suites were not run.
+
+Serial production measurements for column drop, three samples per browser/size; median [min–max], ms:
+
+| Release / browser / repeat | Synchronous move | Two-frame rendering proxy |
+| --- | ---: | ---: |
+| before / chromium / 0 | 1.4 [1.2–1.8] | 31.4 [31.1–31.5] |
+| before / chromium / 200 | 7.2 [7.1–8.1] | 112.5 [111.4–112.7] |
+| before / firefox / 0 | 1.0 [1.0–3.0] | 30.0 [30.0–31.0] |
+| before / firefox / 200 | 15.0 [14.0–15.0] | 93.0 [90.0–111.0] |
+| after / chromium / 0 | 1.3 [1.3–1.5] | 31.2 [31.2–31.5] |
+| after / chromium / 200 | 7.7 [6.8–8.9] | 115.5 [105.5–116.0] |
+| after / firefox / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–32.0] |
+| after / firefox / 200 | 16.0 [14.0–16.0] | 96.0 [94.0–105.0] |
+| lost / chromium / 0 | 1.2 [1.1–1.4] | 16.5 [16.3–16.5] |
+| lost / chromium / 200 | 8.0 [6.9–8.5] | 110.1 [105.6–119.9] |
+| lost / firefox / 0 | 2.0 [2.0–2.0] | 18.0 [15.0–19.0] |
+| lost / firefox / 200 | 15.0 [14.0–15.0] | 95.0 [91.0–100.0] |
+
+All 36 serial measurements passed with tracing disabled and asserted the committed parent after native pointer input. Before/after timings compare normal delivery on isolated production builds; the lost-release scenario is measured only after fixing it because it previously performed no move. The different release/move phase changes the two-RAF proxy phase, so shorter lost-release frame timings are not a claim of a rendering speedup. Large documents still have long frames.

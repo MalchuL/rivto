@@ -1,12 +1,17 @@
+import { loseHandleRelease } from "./pointer-release";
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-for (const placement of ["between", "inside", "control", "bento", "end"] as const) {
+for (const placement of ["between", "inside", "control", "bento", "end", "column"] as const) {
   for (const repeat of [0, 200]) {
     test(`declared ${placement} region native pointer cost repeat=${repeat} @performance`, async ({
       page,
       browserName,
     }) => {
+      const lostRelease = process.env.DROP_RELEASE_LOST === "1";
+      if (lostRelease) {
+        await loseHandleRelease(page);
+      }
       await page.setViewportSize({ width: 1500, height: 1100 });
       await page.goto(`/?repeat=${repeat}`);
       const document = page.locator('[data-journal-document="today"] > .page-surface');
@@ -26,6 +31,14 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
           }
           return [blocks.getRootIds()[0]!, children[0]!, children[1], board.id];
         }
+        if (placement === "column") {
+          const board = blocks.getBlocks().find((block) => block.type === "kanban");
+          const lane = board?.children.find((block) => block.children.length > 0);
+          if (!lane) {
+            throw new Error("The default Kanban fixture needs a populated lane");
+          }
+          return [blocks.getRootIds()[0]!, lane.id];
+        }
         if (placement === "control") {
           const storage = blocks.getBlocks().find((block) => block.type === "todo-storage");
           const children = storage && blocks.getBlockNode(storage.id)?.childIds;
@@ -38,7 +51,7 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
         }
         return blocks.getRootIds().slice(0, 3);
       }, placement);
-      const intoBlock = placement === "inside" || placement === "control";
+      const intoBlock = placement === "inside" || placement === "control" || placement === "column";
       const source = document.locator(`[data-block-id="${ids[0]}"]`);
       const row = source.locator(":scope > .rivto-block-row");
       await row.hover();
@@ -58,7 +71,9 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
         });
       }
       let region = target;
-      if (placement === "end") {
+      if (placement === "column") {
+        region = target.getByRole("button", { name: /^Add card to / });
+      } else if (placement === "end") {
         region = document.locator(":scope > .rivto-virtual-tree > .rivto-block-editor-end");
       } else if (placement === "bento") {
         region = target.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
@@ -68,7 +83,7 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
         region = target.getByRole("textbox", { name: "Description", exact: true });
       }
       await region.scrollIntoViewIfNeeded();
-      if (placement === "bento" || placement === "end") {
+      if (placement === "bento" || placement === "end" || placement === "column") {
         const warm = (await region.boundingBox())!;
         await page.mouse.move(warm.x + warm.width / 2, warm.y + warm.height / 2);
         // Stop drag autoscroll before measuring a seam after the long fixture scroll.
@@ -82,6 +97,9 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
       const box = (await region.boundingBox())!;
       let x = box.x + (intoBlock ? box.width / 2 : Math.min(12, box.width / 2));
       let y = intoBlock ? box.y + box.height / 2 : box.y - 2;
+      if (placement === "column") {
+        x = box.x + box.width / 2;
+      }
       if (placement === "end") {
         y = box.y + box.height - 2;
       }
@@ -150,7 +168,11 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
       for (let index = 0; index < 90; index += 1) {
         await page.mouse.move(x + (index % 3) * 0.25, y + (index % 2) * 0.25);
       }
-      await page.mouse.up();
+      if (lostRelease) {
+        await Promise.all([page.mouse.up(), page.mouse.move(0, 0)]);
+      } else {
+        await page.mouse.up();
+      }
       if (intoBlock) {
         await expect
           .poll(() =>
@@ -205,6 +227,7 @@ for (const placement of ["between", "inside", "control", "bento", "end"] as cons
           placement,
           repeat,
           baseline,
+          lostRelease,
           ...command,
           frames: frames.length,
           median: sorted[Math.floor(sorted.length / 2)],

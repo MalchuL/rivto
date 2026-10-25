@@ -1,3 +1,4 @@
+import type { BlockLayoutRegions } from "../../presentation/components/block-layout/block-layout-regions";
 import {
   containsDropPoint,
   dropEdgeRect,
@@ -35,11 +36,13 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * @param owner - Resource lifecycle capturing synchronous extension registrations.
    * @param blocks - Data source used only to validate candidate parents and neighbors.
    * @param getRoot - Live attachment lookup; returns null while the view is detached.
+   * @param regions - Borrowed occurrence-local lookup of already registered hierarchy shells for inside outlines; no registration or teardown capability is retained.
    */
   constructor(
     private readonly owner: BlockEditorResourceOwner,
     private readonly blocks: Pick<BlockEditorBlocks, "getBlockNode" | "getRootIds" | "getParentId">,
     private readonly getRoot: () => HTMLElement | null,
+    private readonly regions: Pick<BlockLayoutRegions, "get">,
   ) {}
 
   /**
@@ -73,6 +76,10 @@ export class BlockDropTargets implements BlockDropTargetsApi {
   /**
    * Walks only the topmost browser hit's ancestors inside the current editor.
    *
+   * Inside feedback uses the receiving parent's registered complete shell. The
+   * hit anchor remains separate, so outline ownership cannot affect gap discovery
+   * or canonical validation. Missing shells retain anchor feedback.
+   *
    * @param clientX - Viewport X coordinate in CSS pixels.
    * @param clientY - Viewport Y coordinate in CSS pixels.
    * @param excluded - Captured moving roots omitted after validating the registered gap.
@@ -101,7 +108,17 @@ export class BlockDropTargets implements BlockDropTargetsApi {
     const candidate = this.resolvePoint(hit, { x: clientX, y: clientY });
     const destination = candidate && this.currentDestination(candidate.destination, excluded);
     const target = candidate && destination ? { ...candidate, destination } : undefined;
-    return target && (!accepts || accepts(target.destination)) ? target : undefined;
+    if (!target || (accepts && !accepts(target.destination))) {
+      return undefined;
+    }
+    if (
+      !target.indicator &&
+      target.destination.kind === "inside" &&
+      target.destination.parentId !== null
+    ) {
+      return { ...target, outlineElement: this.regions.get(target.destination.parentId, "shell") };
+    }
+    return target;
   }
 
   /**

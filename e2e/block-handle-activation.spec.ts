@@ -1,3 +1,4 @@
+import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
 
@@ -96,19 +97,17 @@ async function startFromHandle(page: Page) {
  * Drops after the stationary sibling and verifies persisted order and subtree identity.
  *
  * @param page - Page with an active source drag.
- * @param layout - Native destination layout, used only to choose its rendered edge.
+ * @param layout - Native destination layout named in feedback assertion failures.
  * @returns Resolves after a committed move and its undo have restored the expected orders.
  */
 async function commitAndUndo(page: Page, layout: Layout) {
-  let edge = page.locator('[data-block-id="target"] > .rivto-block-row');
-  if (layout === "bento") {
-    edge = page.locator(
-      '[data-block-item-id="target"] > [data-drop-placement="after"][data-drop-edge="block"]',
-    );
-  }
+  const edge = await blockDropRegion(page.locator('[data-block-id="target"]'), "after");
   const box = (await edge.boundingBox())!;
-  await page.mouse.move(box.x + 2, box.y + box.height - 1);
-  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(
+    page.locator(".rivto-block-drop-line:visible"),
+    `${layout} sibling edge`,
+  ).toHaveCount(1);
   await page.mouse.up();
   const order = () =>
     page.evaluate(() => {

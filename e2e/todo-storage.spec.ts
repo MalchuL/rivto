@@ -300,11 +300,31 @@ test("closes Filter and Order menus only when clicking outside them", async ({ p
 
   await storage.getByText("Filter", { exact: true }).click();
   await expect(filterMenu).toBeVisible();
+  // Panels overflow the header over child cards; they must win hit-testing so
+  // filter controls stay usable instead of clicks landing on covered TODO items.
+  await expect
+    .poll(async () =>
+      filterMenu.evaluate((panel) => {
+        const box = panel.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 40);
+        return hit != null && panel.contains(hit);
+      }),
+    )
+    .toBe(true);
   await filterMenu.getByLabel("Todo", { exact: true }).check();
   await expect(filterMenu).toBeVisible();
   await storage.getByText("Order", { exact: true }).click();
   await expect(filterMenu).toHaveCount(0);
   await expect(orderMenu).toBeVisible();
+  await expect
+    .poll(async () =>
+      orderMenu.evaluate((panel) => {
+        const box = panel.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 40);
+        return hit != null && panel.contains(hit);
+      }),
+    )
+    .toBe(true);
   await storage.getByRole("searchbox", { name: "Search TODOs" }).click();
   await expect(orderMenu).toHaveCount(0);
 });

@@ -1,3 +1,4 @@
+import { returnToDocumentAfterNativeHandleClick } from "./drag-handle-navigation";
 import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -190,7 +191,7 @@ for (const mode of ["block", "edgeless"] as const) {
       const box = (await hit.boundingBox())!;
       await startDrag(page);
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 15 });
-      await expect(storageControl ? row : target).toHaveAttribute("data-block-drop-active", "true");
+      await expect(target).toHaveAttribute("data-block-drop-active", "true");
       await page.mouse.up();
       await expect
         .poll(() =>
@@ -436,7 +437,10 @@ for (const mode of ["block", "edgeless"] as const) {
     expect(y).toBeGreaterThan(first.y + first.height);
     await startDrag(page);
     await page.mouse.move(x, y, { steps: 12 });
-    await expect(host).toHaveAttribute("data-block-drop-active", "true");
+    await expect(page.locator('[data-block-id="board"]')).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -645,7 +649,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.move(content.x + content.width / 2, content.y + content.height - 2);
     const line = page.locator(".rivto-block-drop-line:visible");
     await expect(line).toHaveCount(1);
-    expect((await line.boundingBox())!.x).toBeCloseTo(content.x + 8, 1);
+    expect((await line.boundingBox())!.x).toBeCloseTo(content.x + 16, 1);
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -706,5 +710,167 @@ for (const mode of ["block", "edgeless"] as const) {
         ),
       )
       .toEqual(["source", "board"]);
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`first control activation and repeated drag work after drop in ${mode}`, async ({
+    page,
+  }) => {
+    await load(page, "todo-storage", mode);
+    await startDrag(page);
+    const target = await blockDropRegion(page.locator('[data-block-id="first"]'), "after");
+    const box = (await target.boundingBox())!;
+    await page.mouse.move(box.x + 12, box.y + box.height / 2, { steps: 10 });
+    await page.mouse.up();
+    const source = page.locator('[data-block-id="source"]');
+    await expect(source).not.toHaveAttribute("data-dragging", "true");
+    const status = source.getByRole("button", { name: /^Status:/ });
+    const before = await status.getAttribute("aria-label");
+    await status.click();
+    await expect(status).not.toHaveAttribute("aria-label", before!);
+    await startDrag(page);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await returnToDocumentAfterNativeHandleClick(page, "source");
+    await expect(source).not.toHaveAttribute("data-dragging", "true");
+    const after = await status.getAttribute("aria-label");
+    await status.click();
+    await expect(status).not.toHaveAttribute("aria-label", after!);
+  });
+
+  test(`first counter click and consecutive drops work in ${mode}`, async ({ page }) => {
+    await load(page, "outline", mode);
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.setBlockType("source", "demo.counter");
+    });
+    for (const sibling of ["first", "last"]) {
+      await startDrag(page);
+      const target = await blockDropRegion(page.locator(`[data-block-id="${sibling}"]`), "after");
+      const box = (await target.boundingBox())!;
+      await page.mouse.move(box.x + 12, box.y + box.height / 2, { steps: 10 });
+      await page.mouse.up();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              (
+                window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+              ).__rivtoDemo.editor.blocks.getBlockNode("board")?.childIds,
+          ),
+        )
+        .toEqual(sibling === "first" ? ["first", "source", "last"] : ["first", "last", "source"]);
+    }
+    const counter = page
+      .locator('[data-block-id="source"]')
+      .getByRole("button", { name: "Count: 0" });
+    await counter.click();
+    await expect(
+      page.locator('[data-block-id="source"]').getByRole("button", { name: "Count: 1" }),
+    ).toBeVisible();
+  });
+
+  test(`short Kanban column accepts drop below its cards in ${mode}`, async ({ page }) => {
+    await load(page, "kanban", mode);
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.insertBlock(
+        {
+          id: "tall-lane",
+          type: "kanban-column",
+          children: Array.from({ length: 8 }, (_, index) => ({
+            id: `tall-${index}`,
+            type: "paragraph",
+            content: "Tall neighbor",
+          })),
+        },
+        { parentId: "board" },
+      );
+    });
+    const item = page.locator('[data-block-id="lane"] > .rivto-kanban-cards');
+    const box = (await item.boundingBox())!;
+    const last = (await page.locator('[data-block-id="last"]').boundingBox())!;
+    expect(box.y + box.height - (last.y + last.height)).toBeGreaterThan(20);
+    await startDrag(page);
+    const footer = (await item.getByRole("button", { name: "Add card to Lane" }).boundingBox())!;
+    const y = (last.y + last.height + footer.y) / 2;
+    expect(y).toBeGreaterThan(last.y + last.height + 8);
+    await page.mouse.move(box.x + box.width / 2, y, { steps: 10 });
+    await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getParentId("source"),
+        ),
+      )
+      .toBe("lane");
+  });
+
+  for (const empty of [true, false]) {
+    test(`Kanban column accepts drop on its footer empty=${empty} in ${mode}`, async ({ page }) => {
+      await load(page, "kanban", mode);
+      if (empty) {
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.removeBlocks(["first", "last"]);
+        });
+      }
+      await startDrag(page);
+      const lane = page.locator('[data-block-id="lane"]');
+      const region = lane.getByRole("button", { name: "Add card to Lane" });
+      const box = (await region.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+      await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (
+              window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+            ).__rivtoDemo.editor.blocks.getParentId("source"),
+          ),
+        )
+        .toBe("lane");
+    });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`Kanban append regions share the whole column highlight in ${mode}`, async ({ page }) => {
+    await load(page, "kanban", mode);
+    const lane = page.locator('[data-block-id="lane"]');
+    const column = (await lane.boundingBox())!;
+    const header = lane.locator(":scope > .rivto-kanban-lane-header");
+    const footer = lane.getByRole("button", { name: "Add card to Lane" });
+    await startDrag(page);
+    for (const region of [header, footer, header, footer]) {
+      const box = (await region.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+      await expect(lane).toHaveAttribute("data-block-drop-active", "true");
+      await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
+      expect(await page.locator('[data-block-drop-active="true"]').boundingBox()).toEqual(column);
+    }
+    for (const id of ["first", "last"]) {
+      const card = (await page.locator(`[data-block-id="${id}"]`).boundingBox())!;
+      expect(card.x).toBeGreaterThan(column.x + 4);
+      expect(card.x + card.width).toBeLessThan(column.x + column.width - 4);
+    }
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getParentId("source"),
+        ),
+      )
+      .toBe("lane");
   });
 }

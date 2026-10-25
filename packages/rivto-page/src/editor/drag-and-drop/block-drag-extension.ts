@@ -198,7 +198,6 @@ export class BlockDragExtension implements BlockEditorExtension {
 class BlockDragController {
   private static sequence = 0;
   private gesture: BlockDragGesture | undefined;
-  private suppressedClickId: string | undefined;
   private readonly prefix = `block-drag-${++BlockDragController.sequence}`;
 
   /**
@@ -223,11 +222,6 @@ class BlockDragController {
    */
   install(): void {
     this.editor.events.register(
-      `${this.prefix}.click`,
-      { type: "click", capture: true, priority: BLOCK_DRAG_INPUT_PRIORITY, scope: "block" },
-      this.suppressClick,
-    );
-    this.editor.events.register(
       `${this.prefix}.down`,
       { type: "pointerdown", priority: BLOCK_DRAG_INPUT_PRIORITY, scope: "block" },
       (event) => this.start(event),
@@ -239,7 +233,7 @@ class BlockDragController {
     );
     this.editor.events.register(
       `${this.prefix}.up`,
-      { type: "pointerup", target: "window", priority: BLOCK_DRAG_INPUT_PRIORITY },
+      { type: "pointerup", target: "window", capture: true, priority: BLOCK_DRAG_INPUT_PRIORITY },
       (event) => this.finish(event.raw),
     );
     this.editor.events.observe(
@@ -283,9 +277,6 @@ class BlockDragController {
     if (!gesture) {
       return;
     }
-    if (gesture.ids) {
-      this.suppressedClickId = gesture.activeId;
-    }
     const errors: unknown[] = [];
     for (const release of [
       () => gesture.autoScroll?.stop(),
@@ -323,22 +314,6 @@ class BlockDragController {
   }
 
   /**
-   * Prevents a completed or cancelled drag from activating the handle's click action.
-   *
-   * @param input - Captured click in the source occurrence.
-   * @returns Handled only for the click belonging to the preceding activated drag.
-   */
-  private suppressClick = (input: BlockInputEvent<"click">): BlockInputResult => {
-    if (input.blockId !== this.suppressedClickId) {
-      return "continue";
-    }
-    this.suppressedClickId = undefined;
-    input.raw.preventDefault();
-    input.raw.stopPropagation();
-    return "handled";
-  };
-
-  /**
    * Reserves a primary pointer from an explicitly marked handle in this occurrence.
    *
    * @param event - Normalized pointer input with nearest block identity.
@@ -358,7 +333,6 @@ class BlockDragController {
       return "continue";
     }
     this.cancel();
-    this.suppressedClickId = undefined;
     const releasePointer = this.editor.pointer.acquire();
     if (!releasePointer) {
       return "continue";
@@ -382,12 +356,13 @@ class BlockDragController {
   /**
    * Activates after four CSS pixels and updates only bounded DOM feedback.
    *
-   * Losing the primary button cancels a gesture even if release happened outside
-   * the browser viewport and no pointerup reached this occurrence's window.
+   * Losing the primary button completes the last displayed target when pointerup
+   * was unavailable. Coordinates from movement after release never retarget it.
+   * A last held position without an eligible target finishes without a move.
    *
    * @param event - Window pointer event; unrelated pointers are ignored.
    * @returns "handled" for movement of the active pointer; otherwise "continue".
-   * @throws Activation or target failures after cancellation; cleanup failures are aggregated.
+   * @throws Activation, target or host completion failures after cleanup; concurrent failures are aggregated.
    */
   private move(event: PointerEvent): BlockInputResult {
     const gesture = this.gesture;
@@ -395,8 +370,7 @@ class BlockDragController {
       return "continue";
     }
     if ((event.buttons & 1) === 0) {
-      this.cancel();
-      return "handled";
+      return this.finish(event);
     }
     try {
       gesture.x = event.clientX;
@@ -423,14 +397,20 @@ class BlockDragController {
   }
 
   /**
-   * Re-resolves the release point and delegates one validating host transaction.
+   * Completes a real or inferred pointer release through one validating host transaction.
    *
-   * Release always reads current geometry. Earlier pointerup handlers may release
+   * A pointerup reads current geometry. Earlier pointerup handlers may release
    * capture, so hasPointerCapture can already be false while this event still
    * targets the capturing source. That native target cannot authorize a drop.
    * Movement keeps its native-hit optimization; release requests fresh geometry.
+   * Window capture completes this operation before descendant controls can stop
+   * release propagation. Later released-button movement sees no active gesture.
+   * Native handle clicks continue through their ordinary browser delivery.
+   * A released-button move instead completes the last displayed target after a
+   * live permission check. Its later coordinates cannot alter that destination;
+   * Escape, blur, pointercancel and detach still cancel without committing.
    *
-   * @param event - Release for the active pointer.
+   * @param event - Actual release or first movement reporting the primary button released.
    * @returns "handled" for release of a pending or active gesture; otherwise "continue".
    * @throws Host failures propagate after attempting every cleanup and focus restoration;
    * concurrent failures are reported together in an AggregateError.
@@ -443,19 +423,10 @@ class BlockDragController {
     const errors: unknown[] = [];
     let focusRoot = gesture.root;
     try {
-      gesture.x = event.clientX;
-      gesture.y = event.clientY;
-      if (gesture.ids) {
-        // Do not pass pointerup.target: earlier release handlers can clear capture
-        // while this event still targets the source handle. Treating that handle
-        // as the destination rejects a valid drop as a move into its own subtree.
-        // Omit the native hint so the resolver hit-tests the final coordinates.
-        this.resolve(gesture);
-        if (gesture.target) {
-          const target = gesture.target;
-          if (this.adapter.moveBlocks(gesture.ids, target.destination, target.scope)) {
-            focusRoot = target.scope?.root ?? gesture.root;
-          }
+      const target = this.releaseTarget(gesture, event);
+      if (target && gesture.ids) {
+        if (this.adapter.moveBlocks(gesture.ids, target.destination, target.scope)) {
+          focusRoot = target.scope?.root ?? gesture.root;
         }
       }
     } catch (error) {
@@ -480,6 +451,44 @@ class BlockDragController {
       throw new AggregateError(errors, "Block drag completion failed");
     }
     return "handled";
+  }
+
+  /**
+   * Resolves an actual release or revalidates the last displayed target after a lost release.
+   *
+   * Only pointerup coordinates describe the release location. A move with no
+   * primary button arrives after release, so its coordinates cannot select a new
+   * destination. Pending gestures and revoked cached targets do not move blocks.
+   * Actual release updates the gesture coordinates and feedback during resolution;
+   * inferred release reads the captured target without moving its visual frame.
+   *
+   * @param gesture - Captured sources and the last held pointer target.
+   * @param event - Native release or movement reporting the primary button released.
+   * @returns Current permitted target, or undefined for pending, neutral or rejected gestures.
+   * @throws Propagates delegated geometry and permission failures to completion cleanup.
+   */
+  private releaseTarget(
+    gesture: BlockDragGesture,
+    event: PointerEvent,
+  ): ResolvedBlockDropTarget | undefined {
+    if (!gesture.ids) {
+      return undefined;
+    }
+    if (event.type === "pointerup") {
+      gesture.x = event.clientX;
+      gesture.y = event.clientY;
+      // Do not pass pointerup.target: earlier release handlers can clear capture
+      // while this event still targets the source handle. Treating that handle
+      // as the destination rejects a valid drop as a move into its own subtree.
+      // Omit the native hint so the resolver hit-tests the final coordinates.
+      this.resolve(gesture);
+      return gesture.target;
+    }
+    const target = gesture.target;
+    if (target && this.adapter.canMove(gesture.ids, target.destination, target.scope)) {
+      return target;
+    }
+    return undefined;
   }
 
   /**

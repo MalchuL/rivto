@@ -48,7 +48,7 @@ export const TODO_STORAGE_CONTENT_CLASS = "rivto-todo-storage-content relative w
 export const TODO_STORAGE_SUMMARY_CLASS = "rivto-todo-storage-summary flex items-center gap-2";
 export const TODO_STORAGE_SUMMARY_STATS_CLASS = "text-xs tabular-nums text-muted-foreground";
 export const TODO_STORAGE_TOOLBAR_CLASS =
-  "rivto-todo-storage-toolbar relative z-[100] flex w-full items-center gap-1.5";
+  "rivto-todo-storage-toolbar relative flex w-full items-center gap-1.5";
 export const TODO_STORAGE_DROP_FIELD_CLASS =
   "rivto-todo-storage-drop-field mt-2 w-full box-border flex min-h-[54px] cursor-text items-center gap-2.5 rounded-lg border border-dashed border-(--rivto-todo-control-border) bg-background px-3 py-2.5 text-(--rivto-todo-muted-foreground) shadow-[0_1px_2px_rgb(0_0_0/4%)] transition-[border-color, box-shadow] duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 export const TODO_STORAGE_DROP_ICON_CLASS =

@@ -315,6 +315,11 @@ Its options provide `axis`, stable `order`, `gaps`, and optional background `reg
 `BlockChildren.dropGaps` defaults to true for linear lists, false for grids. Disabling
 it disables insertion in free gaps, while keeping independently declared item edges.
 `dropBackground` enables append in unoccupied host space, including filtered lists.
+Inside feedback covers the receiving block's complete registered shell, including
+its descendants. The resolved target carries this explicit `outlineElement`
+separately from the hit anchor; rendering does not infer hierarchy from DOM ancestry.
+Custom resolvers may supply `outlineElement` directly; omission paints their hit anchor.
+
 Bento enables shared boundaries and background append: unoccupied space beneath
 a shorter tile belongs to the board, while declared neighboring edges remain
 available for sibling insertion. `emptyDropTarget` limits background append to a canonical
@@ -517,6 +522,14 @@ policy and cycles before writing, commits the complete group, and preserves
 structural selection in its new canonical order. Return false for a rejected move
 without partial writes. Production hosts supply transactions and undo; the demo
 adapter is in-memory and has no history.
+
+The gesture completes in window capture for `pointerup`, before descendant controls
+can stop bubbling. If release was unavailable and a later pointermove reports the
+primary button released, Page completes the last displayed destination after a
+live permission check. That movement's new coordinates do not select another
+receiver. A last held position without a destination performs no move. Escape,
+blur, pointercancel and detach cancel without committing; native clicks retain
+ordinary browser delivery.
 
 A destination with `parentId: null` addresses real document roots. Page validates
 its neighbors against `blocks.getRootIds()`, independently of display IDs.

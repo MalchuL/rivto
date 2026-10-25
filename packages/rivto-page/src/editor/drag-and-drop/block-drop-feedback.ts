@@ -3,7 +3,7 @@ import type { BlockDropIndicator, ResolvedBlockDropTarget } from "./types";
 
 /** Owns one occurrence's inert insertion line and current target outline. */
 export class BlockDropFeedback {
-  private target: ResolvedBlockDropTarget | undefined;
+  private target: HTMLElement | undefined;
   private line: HTMLElement | undefined;
 
   /**
@@ -20,21 +20,26 @@ export class BlockDropFeedback {
    * input, participates in model selection, or measures mounted blocks independently.
    * No model or geometry reads occur here. Undefined targets hide the retained
    * line and release the old outline; inside targets display only their outline.
+   * The resolver supplies the complete receiving hierarchy as outlineElement,
+   * so header and child-list backgrounds share their declared hierarchy frame.
+   * Without an explicit outline element the region's own anchor is painted.
+   * Feedback never searches ancestors, compares IDs or infers editor ownership.
    *
    * @param target - Permitted current target, or undefined when none is available.
    * @returns Feedback reflects the supplied target until the next update or clear.
    * @throws DOM write failures; the owner must still attempt clear.
    */
   update(target?: ResolvedBlockDropTarget): void {
-    if (this.target?.element !== target?.element) {
-      this.target?.element.removeAttribute("data-block-drop-active");
+    const element = target?.outlineElement ?? target?.element;
+    if (this.target !== element) {
+      this.target?.removeAttribute("data-block-drop-active");
     }
-    this.target = target;
+    this.target = element;
     this.updateLine(target?.indicator);
-    if (target) {
+    if (target && element) {
       const value = target.indicator ? "between" : "true";
-      if (target.element.getAttribute("data-block-drop-active") !== value) {
-        target.element.setAttribute("data-block-drop-active", value);
+      if (element.getAttribute("data-block-drop-active") !== value) {
+        element.setAttribute("data-block-drop-active", value);
       }
     }
   }
@@ -52,7 +57,7 @@ export class BlockDropFeedback {
     this.line = undefined;
     const errors: unknown[] = [];
     for (const release of [
-      () => target?.element.removeAttribute("data-block-drop-active"),
+      () => target?.removeAttribute("data-block-drop-active"),
       () => line?.remove(),
     ]) {
       try {

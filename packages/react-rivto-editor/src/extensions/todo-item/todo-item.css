@@ -52,6 +52,9 @@
   border-radius: 10px;
 }
 .rivto-todo-storage-header {
+  /* Child rows also use z-index: 1 on `.rivto-block-content` (handle layering).
+   * Equal z-index paints later siblings above overflowing Filter/Order panels. */
+  z-index: 2;
   padding: 8px 7px;
   min-height: 44px;
 }

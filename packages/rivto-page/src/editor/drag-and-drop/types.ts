@@ -125,6 +125,8 @@ export interface ResolvedBlockDropTarget {
   /** Foreign receiving attachment; omission keeps the gesture in its source occurrence. */
   readonly scope?: BlockDragTargetScope;
   readonly element: HTMLElement;
+  /** Explicit complete receiving hierarchy to outline; omission paints the hit anchor. Supplied by the owning resolver, without DOM inference in feedback. */
+  readonly outlineElement?: HTMLElement;
   /** Absent for inside targets and custom regions without line geometry. */
   readonly indicator?: BlockDropIndicator;
   readonly destination: BlockDropDestination;

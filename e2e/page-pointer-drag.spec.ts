@@ -1,3 +1,4 @@
+import { returnToDocumentAfterNativeHandleClick } from "./drag-handle-navigation";
 import { blockDropRegion } from "./drop-regions";
 import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -49,6 +50,10 @@ for (const { cancel, capture } of [
       await page.keyboard.press("Escape");
     }
     await page.mouse.up();
+    const navigated = await returnToDocumentAfterNativeHandleClick(page, "drag-one");
+    if (navigated) {
+      await surface.focus();
+    }
     await expect(surface.locator(".rivto-block-drag-preview")).toHaveCount(0);
     await expect(source).toHaveCSS("opacity", "1");
     const roots = await page.evaluate(() =>

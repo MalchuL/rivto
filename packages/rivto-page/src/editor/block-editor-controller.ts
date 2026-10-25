@@ -75,7 +75,12 @@ export class BlockEditorController implements BlockEditorApi {
     this.wrappers = new BlockWrapperRegistry(this.extensions);
     this.events = new BlockEditorEvents(this.extensions);
     this.keyboard = new BlockKeyboard(this.events, this.extensions);
-    this.dropTargets = new BlockDropTargets(this.extensions, adapter.blocks, () => this.getRoot());
+    this.dropTargets = new BlockDropTargets(
+      this.extensions,
+      adapter.blocks,
+      () => this.getRoot(),
+      this.regions,
+    );
   }
 
   /**

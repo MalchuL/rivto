@@ -7,7 +7,7 @@ export interface DragHandleProps extends Omit<
 > {
   readonly children?: ReactNode;
   /**
-   * Requests navigation after a click that was not consumed by dragging.
+   * Requests navigation when the handle receives a click without default prevention.
    *
    * @returns Host navigation has been requested; omission leaves the handle navigation-free.
    */
@@ -25,14 +25,14 @@ export interface DragHandleProps extends Omit<
 /**
  * Renders a sensor-independent button separating navigation, menus, and drag activation.
  *
- * The Page drag controller consumes post-drag clicks during native capture.
- * This button opens navigation only for clicks that reach it without prevention.
+ * Clicks retain ordinary browser delivery after drag completion and cancellation.
+ * This button opens navigation for clicks that reach it without default prevention.
  * React context-menu events prevent the native menu and open block actions
  * directly using the viewport coordinates supplied by the browser. Enter and
- * Space retain native button activation without a second suppression state.
+ * Space retain native button activation through this same click handler.
  *
  * @param props - Native button attributes and host navigation/menu callbacks.
- * @param props.onOpen - Host navigation callback invoked by an unsuppressed click.
+ * @param props.onOpen - Host navigation callback invoked by a click without default prevention.
  * @param props.onMenu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
  * @param ref - Optional drag sensor attachment forwarded to the button.
  * @returns Accessible button with host artwork or the default four-dot grip.
@@ -43,7 +43,7 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
 ) {
   const events: ButtonHTMLAttributes<HTMLButtonElement> = {
     /**
-     * Stops row click propagation and requests navigation unless the drag consumed this click.
+     * Stops row click propagation and requests navigation when default behavior is allowed.
      *
      * @param event - Button click whose propagation is stopped.
      * @returns Native propagation is stopped and the permitted host action is invoked.

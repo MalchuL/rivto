@@ -629,3 +629,31 @@ it.each([false, true])(
     expect(editor.dropTargets.resolve(-4, 99, undefined, item)).toBeUndefined();
   },
 );
+
+it("supplies the registered hierarchy outline independently of DOM ancestry", () => {
+  const shell = document.createElement("section");
+  root.append(shell);
+  const release = editor.regions.register("parent", "shell", shell);
+  register(host, [{ kind: "inside", destination: { kind: "inside", parentId: "parent" } }]);
+  const resolved = editor.dropTargets.resolve(300, 200, undefined, host);
+  expect(resolved?.element).toBe(host);
+  expect(resolved?.outlineElement).toBe(shell);
+  release();
+  const detached = editor.dropTargets.resolve(300, 200, undefined, host);
+  expect(detached?.element).toBe(host);
+  expect(detached?.outlineElement).toBeUndefined();
+});
+
+it("does not borrow the same parent's hierarchy from another occurrence", () => {
+  const foreign = new BlockEditorController({ adapter });
+  const shell = document.createElement("section");
+  shell.dataset.blockId = "parent";
+  root.append(shell);
+  foreign.regions.register("parent", "shell", shell);
+  register(host, [{ kind: "inside", destination: { kind: "inside", parentId: "parent" } }]);
+  try {
+    expect(editor.dropTargets.resolve(300, 200, undefined, host)?.outlineElement).toBeUndefined();
+  } finally {
+    foreign.destroy();
+  }
+});

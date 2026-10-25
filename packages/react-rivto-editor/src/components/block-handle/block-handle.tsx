@@ -41,13 +41,13 @@ export const BlockHandleContext = createContext<BlockHandleOptions>({});
 /**
  * One accessible control for opening, dragging, and block-local extension actions.
  * The button alone is the drag sensor activator; the row remains drag geometry.
- * Page owns gesture activation and click suppression through the shared DragHandle.
+ * Page owns gesture activation; the shared DragHandle preserves native click delivery.
  * The host retains navigation, artwork, menu behavior and accessibility attributes.
  * Page marks the layout-resolved hovered row; visibility, keyboard focus feedback,
  * and collapsed presentation live in block-handle.css.
- * Component callbacks override context callbacks. A completed or cancelled
- * drag suppresses the following click; context-menu events capture structural
- * targets before mounting the menu and moving focus to its actions.
+ * Component callbacks override context callbacks. Clicks after completed or
+ * cancelled dragging retain ordinary browser delivery. Context-menu events capture
+ * structural targets before mounting the menu and moving focus to its actions.
  *
  * @param props - Current slot snapshot and optional application overrides.
  * @param props.block - Detached block snapshot whose ID binds interactions.

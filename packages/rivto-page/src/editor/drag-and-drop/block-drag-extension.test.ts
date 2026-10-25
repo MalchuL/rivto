@@ -421,3 +421,120 @@ it.each(["Escape", "blur", "pointercancel", "detach", "released-button"])(
     }
   },
 );
+
+it.each(["pointerup", "pointercancel"])(
+  "does not consume new control activation after %s without a source click",
+  (ending) => {
+    const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+    editor.extensions.register(
+      "drag",
+      new BlockDragExtension(
+        { canMove: () => true, moveBlocks: () => true },
+        { resolve: () => undefined },
+      ),
+    );
+    const root = document.createElement("div");
+    root.dataset.rivtoBlockEditor = "true";
+    root.innerHTML =
+      '<div data-block-id="source"><button data-block-drag-handle></button><input type="checkbox"></div>';
+    document.body.append(root);
+    editor.attach(root);
+    const handle = root.querySelector("button")!;
+    const control = root.querySelector("input")!;
+    try {
+      pointer(handle, "pointerdown", 100);
+      pointer(window, "pointermove", 110);
+      pointer(window, ending, 110);
+      control.click();
+      expect(control.checked).toBe(true);
+      control.checked = false;
+      control.addEventListener("pointerdown", (event) => event.stopPropagation());
+      pointer(control, "pointerdown", 110);
+      pointer(control, "pointerup", 110);
+      control.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }),
+      );
+      expect(control.checked).toBe(true);
+      pointer(handle, "pointerdown", 100);
+      pointer(window, "pointermove", 110);
+      expect(handle.parentElement!.getAttribute("data-dragging")).toBe("true");
+      pointer(window, "pointerup", 110);
+      const trailingClick = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+      handle.dispatchEvent(trailingClick);
+      expect(trailingClick.defaultPrevented).toBe(false);
+    } finally {
+      editor.destroy();
+      root.remove();
+    }
+  },
+);
+
+it("commits release coordinates before a control stops bubbling and the pointer moves away", () => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const moveBlocks = jest.fn(() => true);
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML =
+    '<div data-block-id="source"><button data-block-drag-handle></button></div><button id="target"></button>';
+  document.body.append(root);
+  editor.attach(root);
+  const target = root.querySelector<HTMLElement>("#target")!;
+  const destination = { kind: "inside" as const, parentId: "receiver" };
+  const resolve = jest.fn(() => ({ element: target, destination }));
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension({ canMove: () => true, moveBlocks }, { resolve }),
+  );
+  target.addEventListener("pointerup", (event) => event.stopPropagation());
+  try {
+    pointer(root.querySelector("[data-block-drag-handle]")!, "pointerdown", 100);
+    pointer(target, "pointermove", 120);
+    pointer(target, "pointerup", 120);
+    pointer(window, "pointermove", 500, 0);
+    pointer(window, "pointerup", 500);
+    expect(moveBlocks).toHaveBeenCalledTimes(1);
+    expect(moveBlocks).toHaveBeenCalledWith(["source"], destination, undefined);
+    expect(resolve).toHaveBeenLastCalledWith(120, 100, new Set(["source"]), undefined);
+    expect(root.querySelector("[data-dragging], .rivto-block-drag-preview")).toBeNull();
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});
+
+it.each([false, true])("finishes the displayed target on a lost release, revoked=%s", (revoked) => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML =
+    '<div data-block-id="source"><button data-block-drag-handle></button></div><div id="target"></div>';
+  document.body.append(root);
+  editor.attach(root);
+  const target = root.querySelector<HTMLElement>("#target")!;
+  const destination = { kind: "inside" as const, parentId: "receiver" };
+  const resolve = jest.fn(() => ({ element: target, destination }));
+  const canMove = jest.fn(() => true);
+  const moveBlocks = jest.fn(() => true);
+  editor.extensions.register("drag", new BlockDragExtension({ canMove, moveBlocks }, { resolve }));
+  try {
+    pointer(root.querySelector("button")!, "pointerdown", 100);
+    pointer(target, "pointermove", 120);
+    canMove.mockReturnValue(!revoked);
+    pointer(window, "pointermove", 500, 0);
+    pointer(window, "pointerup", 500);
+    if (revoked) {
+      expect(moveBlocks).not.toHaveBeenCalled();
+    } else {
+      expect(moveBlocks).toHaveBeenCalledTimes(1);
+      expect(moveBlocks).toHaveBeenCalledWith(["source"], destination, undefined);
+    }
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(root.querySelector("[data-dragging], .rivto-block-drag-preview")).toBeNull();
+    const release = editor.pointer.acquire();
+    expect(release).toBeDefined();
+    release?.();
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});
