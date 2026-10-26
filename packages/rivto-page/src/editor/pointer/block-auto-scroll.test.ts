@@ -167,3 +167,122 @@ it("keeps a locked document stationary in both preflight and scheduled frames", 
     root.remove();
   }
 });
+
+it.each(["ltr", "rtl"])(
+  "scrolls both horizontal edges in %s and stops at the limit",
+  (direction) => {
+    const root = document.createElement("div");
+    const container = document.createElement("div");
+    const content = document.createElement("div");
+    container.style.overflowX = "auto";
+    container.style.direction = direction;
+    container.append(content);
+    root.append(container);
+    document.body.append(root);
+    Object.defineProperties(container, {
+      scrollWidth: { value: 500 },
+      clientWidth: { value: 100 },
+    });
+    container.scrollLeft = direction === "rtl" ? -200 : 200;
+    jest.spyOn(container, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      right: 200,
+      top: 100,
+      bottom: 200,
+    } as DOMRect);
+    const descriptor = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    const hit = jest.fn(() => content);
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: hit });
+    let frame: FrameRequestCallback | undefined;
+    const request = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frame = callback;
+      return 42;
+    });
+    jest.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {
+      frame = undefined;
+    });
+    const refresh = jest.fn();
+    const scroll = new BlockAutoScroll(root, refresh);
+    try {
+      scroll.update({ x: 150, y: 150 }, content);
+      expect(request).not.toHaveBeenCalled();
+      scroll.update({ x: 195, y: 150 }, content);
+      expect(request).toHaveBeenCalledTimes(1);
+      const initial = container.scrollLeft;
+      frame!(0);
+      expect(container.scrollLeft).toBeGreaterThan(initial);
+      expect(hit).toHaveBeenCalledTimes(1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      scroll.update({ x: 105, y: 150 }, content);
+      frame!(0);
+      expect(container.scrollLeft).toBe(initial);
+      scroll.stop();
+      container.scrollLeft = direction === "rtl" ? 0 : 400;
+      const requests = request.mock.calls.length;
+      scroll.update({ x: 195, y: 150 }, content);
+      expect(request).toHaveBeenCalledTimes(requests);
+    } finally {
+      scroll.stop();
+      jest.restoreAllMocks();
+      if (descriptor) {
+        Object.defineProperty(document, "elementFromPoint", descriptor);
+      } else {
+        Reflect.deleteProperty(document, "elementFromPoint");
+      }
+      root.remove();
+    }
+  },
+);
+
+it("advances independent horizontal and vertical ancestors in the same frame", () => {
+  const outer = document.createElement("div");
+  const inner = document.createElement("div");
+  const content = document.createElement("div");
+  outer.style.overflowY = "auto";
+  inner.style.overflowX = "auto";
+  outer.append(inner);
+  inner.append(content);
+  document.body.append(outer);
+  Object.defineProperties(outer, {
+    scrollHeight: { value: 500 },
+    clientHeight: { value: 100 },
+  });
+  Object.defineProperties(inner, {
+    scrollWidth: { value: 500 },
+    clientWidth: { value: 100 },
+  });
+  for (const element of [outer, inner]) {
+    jest.spyOn(element, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      right: 200,
+      top: 100,
+      bottom: 200,
+    } as DOMRect);
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => content });
+  let frame: FrameRequestCallback | undefined;
+  jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    frame = callback;
+    return 42;
+  });
+  jest.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  const refresh = jest.fn();
+  const scroll = new BlockAutoScroll(outer, refresh);
+  try {
+    scroll.update({ x: 195, y: 195 }, content);
+    frame!(0);
+    expect(inner.scrollLeft).toBeGreaterThan(0);
+    expect(outer.scrollTop).toBeGreaterThan(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  } finally {
+    scroll.stop();
+    jest.restoreAllMocks();
+    if (descriptor) {
+      Object.defineProperty(document, "elementFromPoint", descriptor);
+    } else {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
+    outer.remove();
+  }
+});

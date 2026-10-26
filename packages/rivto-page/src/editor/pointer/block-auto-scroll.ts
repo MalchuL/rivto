@@ -4,7 +4,10 @@ export interface BlockScrollPoint {
   readonly y: number;
 }
 
-/** Advances the nearest scrollable ancestor and then the page at pointer edges. */
+/** Physical scroll axes shared by selection and block dragging. */
+type BlockScrollAxis = "x" | "y";
+
+/** Advances the nearest scrollable ancestor on each axis, then the page vertically. */
 export class BlockAutoScroll {
   private frame: number | undefined;
   private point: BlockScrollPoint | undefined;
@@ -42,7 +45,7 @@ export class BlockAutoScroll {
       this.view &&
       hit?.isConnected &&
       hit.ownerDocument === this.root.ownerDocument &&
-      !this.hasScrollableEdge(hit, point.y)
+      !this.hasScrollableEdge(hit, point)
     ) {
       this.stop();
       return;
@@ -92,19 +95,15 @@ export class BlockAutoScroll {
    * clipping and changing layouts cannot retain an obsolete target.
    *
    * @param hit - Connected element from the latest uncaptured pointer input.
-   * @param y - Viewport pointer height in CSS pixels.
-   * @returns Whether an ancestor or page can advance at this pointer height.
+   * @param point - Viewport pointer coordinates in CSS pixels.
+   * @returns Whether an ancestor or page can advance on either axis at this point.
    */
-  private hasScrollableEdge(hit: Element, y: number): boolean {
+  private hasScrollableEdge(hit: Element, point: BlockScrollPoint): boolean {
     let element: Element | null = hit;
     const page = this.root.ownerDocument.scrollingElement;
     while (element && element !== page) {
-      if (
-        /(auto|scroll)/.test(this.view!.getComputedStyle(element).overflowY) &&
-        element.scrollHeight > element.clientHeight
-      ) {
-        const rect = element.getBoundingClientRect();
-        if (this.canAdvance(element, this.edgeStep(y, rect.top, rect.bottom))) {
+      for (const axis of ["x", "y"] as const) {
+        if (this.canAdvance(element, this.elementStep(element, point, axis), axis)) {
           return true;
         }
       }
@@ -113,7 +112,7 @@ export class BlockAutoScroll {
     return (
       !!page &&
       this.pageCanScroll() &&
-      this.canAdvance(page, this.edgeStep(y, 0, this.view!.innerHeight))
+      this.canAdvance(page, this.edgeStep(point.y, 0, this.view!.innerHeight), "y")
     );
   }
 
@@ -122,12 +121,22 @@ export class BlockAutoScroll {
    *
    * @param element - Current scroll container.
    * @param step - Signed CSS pixel displacement requested by edge proximity.
-   * @returns Whether scrolling in that direction has remaining space.
+   * @param axis - Physical axis whose offset and scroll range are inspected.
+   * @returns Whether scrolling in that direction has remaining space, including negative RTL offsets.
    */
-  private canAdvance(element: Element, step: number): boolean {
-    return step < 0
-      ? element.scrollTop > 0
-      : step > 0 && element.scrollTop < element.scrollHeight - element.clientHeight;
+  private canAdvance(element: Element, step: number, axis: BlockScrollAxis): boolean {
+    if (!step) {
+      return false;
+    }
+    const horizontal = axis === "x";
+    const offset = horizontal ? element.scrollLeft : element.scrollTop;
+    const extent = horizontal
+      ? element.scrollWidth - element.clientWidth
+      : element.scrollHeight - element.clientHeight;
+    const rtl = horizontal && this.view!.getComputedStyle(element).direction === "rtl";
+    const minimum = rtl ? -extent : 0;
+    const maximum = rtl ? 0 : extent;
+    return step < 0 ? offset > minimum : offset < maximum;
   }
 
   /**
@@ -137,20 +146,65 @@ export class BlockAutoScroll {
    * @returns Whether an eligible container's scroll offset changed.
    */
   private scroll(point: BlockScrollPoint): boolean {
-    const document = this.root.ownerDocument;
-    let element = document.elementFromPoint(point.x, point.y);
-    while (element && element !== document.scrollingElement) {
-      const style = this.view!.getComputedStyle(element);
-      if (/(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight) {
-        const rect = element.getBoundingClientRect();
-        if (this.advance(element, point.y, rect.top, rect.bottom)) {
-          return true;
-        }
+    const hit = this.root.ownerDocument.elementFromPoint(point.x, point.y);
+    const movedX = this.scrollAxis(hit, point, "x");
+    const movedY = this.scrollAxis(hit, point, "y");
+    return movedX || movedY;
+  }
+
+  /**
+   * Advances the nearest eligible scroll ancestor on one physical axis.
+   *
+   * Each axis resolves independently so a horizontal board does not prevent its
+   * vertically scrolling ancestor from advancing during a diagonal gesture.
+   *
+   * @param hit - Fresh native hit, or null when the pointer is outside rendered content.
+   * @param point - Held viewport coordinates in CSS pixels.
+   * @param axis - Physical axis to advance.
+   * @returns Whether an ancestor changed its offset, or the unlocked page advanced vertically.
+   */
+  private scrollAxis(hit: Element | null, point: BlockScrollPoint, axis: BlockScrollAxis): boolean {
+    const page = this.root.ownerDocument.scrollingElement;
+    for (let element = hit; element && element !== page; element = element.parentElement) {
+      if (this.advance(element, this.elementStep(element, point, axis), axis)) {
+        return true;
       }
-      element = element.parentElement;
     }
-    const page = document.scrollingElement;
-    return !!page && this.pageCanScroll() && this.advance(page, point.y, 0, this.view!.innerHeight);
+    return (
+      axis === "y" &&
+      !!page &&
+      this.pageCanScroll() &&
+      this.advance(page, this.edgeStep(point.y, 0, this.view!.innerHeight), axis)
+    );
+  }
+
+  /**
+   * Computes an edge step only for native scroll containers with overflowing content.
+   *
+   * @param element - Candidate ancestor of the native hit.
+   * @param point - Held viewport coordinates in CSS pixels.
+   * @param axis - Physical scroll axis to inspect.
+   * @returns Signed step, or zero without overflow or edge proximity; bounds are clipped to the viewport.
+   */
+  private elementStep(element: Element, point: BlockScrollPoint, axis: BlockScrollAxis): number {
+    const horizontal = axis === "x";
+    const style = this.view!.getComputedStyle(element);
+    const overflow = horizontal ? style.overflowX : style.overflowY;
+    const extent = horizontal
+      ? element.scrollWidth - element.clientWidth
+      : element.scrollHeight - element.clientHeight;
+    if (!/(auto|scroll)/.test(overflow) || extent <= 0) {
+      return 0;
+    }
+    const rect = element.getBoundingClientRect();
+    return this.edgeStep(
+      point[axis],
+      Math.max(0, horizontal ? rect.left : rect.top),
+      Math.min(
+        horizontal ? this.view!.innerWidth : this.view!.innerHeight,
+        horizontal ? rect.right : rect.bottom,
+      ),
+    );
   }
 
   /**
@@ -169,42 +223,41 @@ export class BlockAutoScroll {
   }
 
   /**
-   * Applies a bounded vertical edge step, preserving browser scroll limits.
+   * Applies an edge step on one axis, preserving browser scroll limits.
    *
    * @param element - Scroll container to advance.
-   * @param y - Pointer position in viewport CSS pixels.
-   * @param top - Visible top edge in viewport CSS pixels.
-   * @param bottom - Visible bottom edge in viewport CSS pixels.
+   * @param step - Signed CSS pixel displacement from edge proximity.
+   * @param axis - Physical axis whose native scroll offset changes.
    * @returns Whether the browser accepted a nonzero scroll movement.
    */
-  private advance(element: Element, y: number, top: number, bottom: number): boolean {
-    const step = this.edgeStep(y, top, bottom);
+  private advance(element: Element, step: number, axis: BlockScrollAxis): boolean {
     if (!step) {
       return false;
     }
-    const before = element.scrollTop;
-    element.scrollTop += step;
-    return element.scrollTop !== before;
+    const property = axis === "x" ? "scrollLeft" : "scrollTop";
+    const before = element[property];
+    element[property] += step;
+    return element[property] !== before;
   }
 
   /**
-   * Computes a capped vertical edge step shared by preflight and actual scrolling.
+   * Computes a capped edge step shared by both axes, preflight and actual scrolling.
    *
-   * @param y - Viewport pointer height in CSS pixels.
-   * @param top - Visible top edge in CSS pixels.
-   * @param bottom - Visible bottom edge in CSS pixels.
+   * @param position - Pointer coordinate along the requested axis in CSS pixels.
+   * @param start - Visible leading coordinate in CSS pixels.
+   * @param end - Visible trailing coordinate in CSS pixels.
    * @returns Signed step, or zero outside the edge bands or for an empty viewport.
    */
-  private edgeStep(y: number, top: number, bottom: number): number {
-    const threshold = Math.min(96, (bottom - top) * 0.2);
+  private edgeStep(position: number, start: number, end: number): number {
+    const threshold = Math.min(96, (end - start) * 0.2);
     if (threshold <= 0) {
       return 0;
     }
     let distance = 0;
-    if (y < top + threshold) {
-      distance = y - top - threshold;
-    } else if (y > bottom - threshold) {
-      distance = y - bottom + threshold;
+    if (position < start + threshold) {
+      distance = position - start - threshold;
+    } else if (position > end - threshold) {
+      distance = position - end + threshold;
     }
     if (!distance) {
       return 0;
