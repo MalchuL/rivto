@@ -7,7 +7,7 @@ export interface DragHandleProps extends Omit<
   "onClick" | "onPointerDown" | "onContextMenu" | "onKeyDown"
 > {
   readonly children?: ReactNode;
-  /** Finite positive excursion from pointer-down in viewport CSS pixels that prevents navigation, even after returning; defaults to 8. */
+  /** Finite positive excursion from pointer-down in viewport CSS pixels that prevents navigation, even after returning; defaults to 4. */
   readonly clickMovementThreshold?: number;
   /**
    * Requests navigation when the handle receives an eligible click without default prevention.
@@ -39,7 +39,7 @@ export interface DragHandleProps extends Omit<
  *
  * @param props - Native button attributes and host navigation/menu callbacks.
  * @param props.onOpen - Host navigation callback invoked by an eligible click without default prevention.
- * @param props.clickMovementThreshold - Positive excursion threshold in viewport CSS pixels; defaults to 8 and reaching it prevents pointer navigation for that press.
+ * @param props.clickMovementThreshold - Positive excursion threshold in viewport CSS pixels; defaults to 4 and reaching it prevents pointer navigation for that press.
  * @param props.onMenu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
  * @param ref - Optional drag sensor attachment forwarded to the button.
  * @returns Accessible button with host artwork or the default four-dot grip.

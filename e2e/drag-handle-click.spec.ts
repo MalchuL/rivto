@@ -37,7 +37,7 @@ async function load(page: Page, mode: "block" | "edgeless"): Promise<void> {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
-  for (const distance of [7, 8, 48]) {
+  for (const distance of [3, 4, 48]) {
     test(`handle round trip of ${distance}px on ${mode} preserves the intended click`, async ({
       page,
     }) => {
@@ -53,11 +53,15 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.mouse.move(x, y);
       await page.mouse.down();
       await page.mouse.move(x + distance, y, { steps: 5 });
-      await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
+      if (distance < 4) {
+        await expect(page.locator(".rivto-block-drag-preview")).not.toBeVisible();
+      } else {
+        await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
+      }
       await page.mouse.move(x, y, { steps: 5 });
       await page.mouse.up();
       const panel = today.locator("[data-panel-root]").first();
-      if (distance < 8) {
+      if (distance < 4) {
         await expect(panel).toHaveAttribute("data-panel-root", "click-gesture");
         return;
       }
@@ -65,7 +69,7 @@ for (const mode of ["block", "edgeless"] as const) {
       const checkbox = today.locator('[data-block-id="click-checkbox"]').getByRole("checkbox");
       await checkbox.click();
       await expect(checkbox).toBeChecked();
-      if (distance === 8) {
+      if (distance === 4) {
         await handle.focus();
         await handle.press("Enter");
       } else {

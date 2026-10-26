@@ -47,7 +47,7 @@ function pointer(target: EventTarget, type: string, x: number, y = 100, pointerI
   });
 }
 
-it("does not open after reaching 8px and returning, but permits the next click and keyboard activation", () => {
+it("does not open after reaching 4px and returning, but permits the next click and keyboard activation", () => {
   const open = jest.fn();
   act(() =>
     root.render(
@@ -59,7 +59,7 @@ it("does not open after reaching 8px and returning, but permits the next click a
   );
   const handle = host.querySelector("button")!;
   pointer(handle, "pointerdown", 100);
-  pointer(window, "pointermove", 108);
+  pointer(window, "pointermove", 104);
   pointer(window, "pointermove", 100);
   pointer(window, "pointerup", 100);
   act(() => {
@@ -81,10 +81,16 @@ it("does not open after reaching 8px and returning, but permits the next click a
 });
 
 it.each([
-  [undefined, 7, 0, true],
-  [undefined, 8, 0, false],
-  [undefined, 4, 4, true],
-  [undefined, 6, 6, false],
+  [undefined, 3, 0, true],
+  [undefined, 4, 0, false],
+  [undefined, -3, 0, true],
+  [undefined, -4, 0, false],
+  [undefined, 0, 3, true],
+  [undefined, 0, 4, false],
+  [undefined, 2, 2, true],
+  [undefined, 3, 3, false],
+  [8, 7, 0, true],
+  [8, 8, 0, false],
   [16, 15, 0, true],
   [16, 16, 0, false],
   [64, 48, 0, true],
@@ -136,7 +142,7 @@ it.each(["pointerup", "pointercancel", "blur", "unmount", "threshold"])(
         window.dispatchEvent(new Event("blur"));
       });
     } else if (ending === "threshold") {
-      pointer(window, "pointermove", 108);
+      pointer(window, "pointermove", 104);
     } else {
       pointer(window, ending, 100);
     }
@@ -166,7 +172,7 @@ it("ignores movement after a lost release and checks the actual release excursio
   });
   expect(open).toHaveBeenCalledTimes(1);
   pointer(handle, "pointerdown", 100);
-  pointer(window, "pointerup", 108);
+  pointer(window, "pointerup", 104);
   act(() => {
     handle.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
   });
