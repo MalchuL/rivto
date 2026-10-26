@@ -416,11 +416,8 @@ function resolvePair(
   if (high < low) {
     return;
   }
-  if (edge) {
-    if (!isPairEdge(edge, previous, next, horizontal, rect)) {
-      return;
-    }
-  } else if (
+  if (
+    !edge &&
     !containsDropPoint(rect, point) &&
     !containsPairEdge(previous, next, horizontal, read, point)
   ) {
@@ -436,7 +433,10 @@ function resolvePair(
     return;
   }
   const merged = mergedTarget(layout, previous, next, point, read, (low + high) / 2, horizontal);
-  if (edge && !merged) {
+  if (
+    edge &&
+    (!merged || !isPairEdge(edge, previous, next, horizontal, rect, merged.destination))
+  ) {
     return;
   }
   return {
@@ -568,6 +568,9 @@ function hasConsecutiveIndices(previous: HTMLElement, next: HTMLElement): boolea
 /**
  * Recognizes the two declarations of one canonical sibling boundary before depth selection.
  *
+ * The same identity comparison also preserves a selected outdent destination
+ * while normalizing its feedback through a containing layout.
+ *
  * @param before - Destination declared by the preceding trailing edge.
  * @param after - Destination declared by the following leading edge.
  * @returns True only for the same actual parent and both canonical neighbors.
@@ -580,6 +583,33 @@ function sameSiblingBoundary(before: BlockDropDestination, after: BlockDropDesti
     before.previousId === after.previousId &&
     before.nextId === after.nextId
   );
+}
+
+/**
+ * Compares selected outline insertions without changing their canonical representation.
+ *
+ * An inside destination appends to its parent, matching a terminal between choice
+ * for that parent. Two between choices still require both identical neighbors;
+ * live adjacency and source permission remain the target manager's responsibility.
+ *
+ * @param before - Selected destination of the proposed shared feedback.
+ * @param after - Physical winner whose insertion must be preserved.
+ * @returns True for the same sibling boundary or equivalent parent append.
+ */
+export function sameOutlineBoundary(
+  before: BlockDropDestination,
+  after: BlockDropDestination,
+): boolean {
+  if (before.parentId !== after.parentId) {
+    return false;
+  }
+  if (before.kind === "inside") {
+    return after.kind === "inside" || after.nextId === null;
+  }
+  if (after.kind === "inside") {
+    return before.nextId === null;
+  }
+  return sameSiblingBoundary(before, after);
 }
 
 /**
@@ -1055,19 +1085,26 @@ function gutterTarget(
  * Registration identity is retained: a foreign or stale descriptor cannot borrow
  * another pair's midpoint or switch its logical axis during normalization.
  *
+ * A descendant outline edge may belong to an ancestor placement when the merged
+ * destination describes the same insertion, including terminal child append.
+ * Comparing after depth selection prevents an ancestor's inside choice from
+ * borrowing feedback for an unrelated sibling destination.
+ *
  * @param edge - Selected anchor and original declaration.
  * @param previous - Mounted preceding sibling registration.
  * @param next - Mounted following sibling registration.
  * @param horizontal - Whether the pair uses inline rather than block edges.
  * @param bounds - Physical pair interval; a nonpositive cross axis cannot normalize feedback.
+ * @param destination - Merged pair's pointer-selected destination, compared without changing the winner.
  * @returns True for that pair's current declaration on the corresponding side.
  */
 function isPairEdge(
-  edge: Pick<ResolvedBlockDropTarget, "element" | "region">,
+  edge: Pick<ResolvedBlockDropTarget, "element" | "region" | "destination">,
   previous: BlockDropTargetRegistration,
   next: BlockDropTargetRegistration,
   horizontal: boolean,
   bounds: BlockDropBounds,
+  destination: BlockDropDestination,
 ): boolean {
   if ((horizontal ? bounds.height : bounds.width) <= 0) {
     return false;
@@ -1077,7 +1114,10 @@ function isPairEdge(
     return false;
   }
   const owner = region.side.endsWith("end") ? previous : next;
-  return owner.element === edge.element && owner.getRegions().includes(region);
+  if (owner.element === edge.element) {
+    return owner.getRegions().includes(region);
+  }
+  return owner.element.contains(edge.element) && sameOutlineBoundary(destination, edge.destination);
 }
 
 /**

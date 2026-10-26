@@ -13,6 +13,7 @@ import {
   prefersOuterSiblingEdge,
   resolveInnerLayoutGap,
   resolveLayoutGap,
+  sameOutlineBoundary,
 } from "./block-drop-layout-geometry";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
@@ -183,10 +184,57 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       return;
     }
     // Reserve shared sibling seams before a nested body or list can consume them.
-    return (
+    const target =
       this.resolveNestedBoundary(hit, point, root, excluded) ??
-      this.resolveLocalTarget(hit, point, root)
-    );
+      this.resolveLocalTarget(hit, point, root);
+    return target && this.normalizeOutlineBoundary(target, point, hit, root);
+  }
+
+  /**
+   * Aligns an outline edge with the shared gap at its selected ancestor or append level.
+   *
+   * A terminal descendant's gutter can select an ancestor boundary before that
+   * ancestor's own inset strip starts. Only an equivalent merged sibling gap may
+   * replace its line; destination, depth and declared hit ownership stay unchanged.
+   * Terminal child append and parent-inside choices share that same physical seam,
+   * even when the selected child edge remains local to its own list.
+   * The walk uses mounted ancestor layouts and their bounded neighbor search;
+   * exclusions, separate boundaries and virtual holes retain their existing rules.
+   *
+   * @param target - Physical winner before live destination and source-policy checks.
+   * @param point - Viewport coordinates selecting the existing outline depth.
+   * @param hit - Native hit already admitted to this editor occurrence.
+   * @param root - Attached editor bounding the ancestor walk.
+   * @returns Original target with shared line geometry, or unchanged without an equivalent gap.
+   */
+  private normalizeOutlineBoundary(
+    target: ResolvedBlockDropTarget,
+    point: BlockDropPoint,
+    hit: Element,
+    root: HTMLElement,
+  ): ResolvedBlockDropTarget {
+    if (
+      target.element === root ||
+      !target.indicator ||
+      target.region?.kind !== "edge" ||
+      !target.region.depth
+    ) {
+      return target;
+    }
+    for (let element = target.element.parentElement; element; element = element.parentElement) {
+      if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
+        break;
+      }
+      const layout = this.layouts.get(element);
+      const gap = layout && resolveLayoutGap(layout, point, hit, target);
+      if (gap?.region?.kind === "gap" && sameOutlineBoundary(gap.destination, target.destination)) {
+        return { ...target, indicator: gap.indicator };
+      }
+      if (element === root) {
+        break;
+      }
+    }
+    return target;
   }
 
   /**

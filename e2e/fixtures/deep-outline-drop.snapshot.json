@@ -1,0 +1,139 @@
+{
+  "version": 9,
+  "blocks": [
+    {
+      "id": "484123b8-5803-491c-bbed-0ea1c82c68ba",
+      "type": "paragraph",
+      "listProps": {
+        "backgroundColor": "",
+        "type": "list",
+        "checked": false,
+        "collapsed": false
+      },
+      "props": {},
+      "pluginData": {},
+      "content": "Nested branch one owns several Markdown children.",
+      "children": [
+        {
+          "id": "52cfea11-0ab3-434c-9709-87b4158226f5",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {},
+          "pluginData": {},
+          "content": "Level 2: this child owns another nested branch.",
+          "children": [
+            {
+              "id": "b1fcfd2d-ebf7-4354-b1f7-7f858ca78acb",
+              "type": "paragraph",
+              "listProps": {
+                "backgroundColor": "",
+                "type": "list",
+                "checked": false,
+                "collapsed": false
+              },
+              "props": {},
+              "pluginData": {},
+              "content": "Level 3: selection now crosses two indentation boundaries.",
+              "children": [
+                {
+                  "id": "786c2c30-3588-46f1-9322-d383e6df3131",
+                  "type": "paragraph",
+                  "listProps": {
+                    "backgroundColor": "",
+                    "type": "list",
+                    "checked": false,
+                    "collapsed": false
+                  },
+                  "props": {},
+                  "pluginData": {},
+                  "content": "Level 4: deepest item for recursive rendering and outdent checks.",
+                  "children": [
+                    {
+                      "id": "61caf1e7-f2fb-4807-a5e4-baa335c4b2d8",
+                      "type": "paragraph",
+                      "listProps": {
+                        "backgroundColor": "",
+                        "type": "list",
+                        "checked": false,
+                        "collapsed": false
+                      },
+                      "props": {},
+                      "pluginData": {},
+                      "content": "Start a selection in the middle of this sentence and drag downward. See [Rivto](https://example.com).",
+                      "children": []
+                    },
+                    {
+                      "id": "e23ef113-6fe6-434d-a2d6-f5093666c2c1",
+                      "type": "paragraph",
+                      "listProps": {
+                        "backgroundColor": "",
+                        "type": "list",
+                        "checked": false,
+                        "collapsed": false
+                      },
+                      "props": {},
+                      "pluginData": {},
+                      "content": "Target block",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "f7a4b092-ff6d-468f-93a9-43cdcd096df4",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {},
+          "pluginData": {},
+          "content": "Level 2: sibling after the deep branch.",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "47db524d-f67b-4e69-b50e-596888de69b8",
+      "type": "paragraph",
+      "listProps": {
+        "backgroundColor": "",
+        "type": "list",
+        "checked": false,
+        "collapsed": false
+      },
+      "props": {},
+      "pluginData": {},
+      "content": "Nested branch two is a second independent structure.",
+      "children": [
+        {
+          "id": "4c5ed890-4720-4eeb-8f91-401dcefeb789",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {},
+          "pluginData": {},
+          "content": "Second branch level 2 child.",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "elements": [],
+  "rootElementIds": [],
+  "pluginData": {}
+}

@@ -9,6 +9,7 @@
  */
 import type { EditorElementNode } from "@chulane/rivto";
 import {
+  BLOCK_TEXT_METADATA_KEY,
   blockExtension,
   editorControlProps,
   useBlockEditing,
@@ -342,7 +343,10 @@ export function reviewReportExtensions(options: {
 }): readonly ReactEditorExtension[] {
   return [
     blockExtension({
-      definition: reviewBlockDefinition,
+      definition: {
+        ...reviewBlockDefinition,
+        metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
+      },
       render: ({ blockId }) => <ReviewBlock blockId={blockId} saveReport={options.saveReport} />,
       slashCommand: {
         title: "Review report",

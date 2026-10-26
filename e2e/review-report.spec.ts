@@ -220,3 +220,55 @@ for (const repeat of [0, 200]) {
     await expect(problem).toHaveValue("Review inputReview input");
   });
 }
+
+for (const mode of ["Page", "Edgeless"] as const) {
+  for (const repeat of [0, 200]) {
+    test(`Review block keeps text editing in ${mode}, repeat=${repeat}`, async ({ page }) => {
+      await page.goto(`/?repeat=${repeat}`);
+      const today = page.locator('[data-journal-document="today"]');
+      const content = today.locator("[data-block-content]").first();
+      const blockId = await content.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+      if (!blockId) {
+        throw new Error("Expected a writing block to convert into a Review report");
+      }
+      await content.click();
+      await page.keyboard.press("End");
+      await page.keyboard.type(" /review");
+      await page.locator('[data-slash-command="type.demo.review"]').click();
+      if (mode === "Edgeless") {
+        await today.getByRole("button", { name: mode, exact: true }).click();
+      }
+      const block = today.locator(blockIdSelector(blockId));
+      const problem = block.getByRole("textbox", { name: "Review problem" });
+      const blockCount = await today.locator(`[${BLOCK_ID_ATTRIBUTE}]`).count();
+      await problem.fill("Report text");
+      await problem.click();
+      await page.keyboard.press("End");
+      await page.keyboard.press("Backspace");
+      await expect(problem).toHaveText("Report tex");
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Delete");
+      await expect(problem).toHaveText("eport tex");
+      await page.keyboard.press("Shift+End");
+      await page.keyboard.press("Control+c");
+      await page.keyboard.press("End");
+      await page.keyboard.press("Control+v");
+      await expect(problem).toHaveText("eport texeport tex");
+      await expect(today.locator(`[${BLOCK_ID_ATTRIBUTE}]`)).toHaveCount(blockCount);
+      await expect
+        .poll(() =>
+          page.evaluate((id) => {
+            const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+              .__rivtoDemo.editor;
+            return editor.blocks.getBlock(id)?.content;
+          }, blockId),
+        )
+        .toBe("eport texeport tex");
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+End");
+      await page.keyboard.press("Backspace");
+      await expect(problem).toHaveText("");
+      await expect(block).toHaveAttribute("data-block-type", "demo.review");
+    });
+  }
+}

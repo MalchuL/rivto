@@ -1,6 +1,7 @@
 import { BlockEditorController } from "../block-editor-controller";
 import { TestBlockEditorAdapter } from "../../test-utils/test-block-editor-adapter";
 import type { BlockDropRegion, BlockDropTargetRegistration } from "./types";
+import { sameOutlineBoundary } from "./block-drop-layout-geometry";
 
 let adapter: TestBlockEditorAdapter;
 let editor: BlockEditorController;
@@ -2238,4 +2239,65 @@ it("normalizes terminal child append feedback through the parent's shared siblin
     expect(target?.destination.parentId).toBe("a");
     expect(target?.indicator?.top).toBe(101);
   }
+});
+
+it.each(["merged", "separate"] as const)(
+  "normalizes an outdent gutter before the ancestor inset starts, boundaries=%s",
+  (boundaries) => {
+    adapter.setNode("a", { childIds: ["nested"] });
+    adapter.setNode("nested");
+    const children = document.createElement("div");
+    const child = document.createElement("div");
+    child.dataset.blockId = "nested";
+    item.append(children);
+    children.append(child);
+    rect(children, 0, 40, 200, 60);
+    rect(child, 28, 40, 172, 60);
+    const next = document.createElement("div");
+    next.dataset.blockId = "b";
+    host.append(next);
+    rect(next, 0, 104);
+    const parent = register(item);
+    const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+    const local = { kind: "between", parentId: "a", previousId: "nested", nextId: null } as const;
+    const nested = register(child, [
+      {
+        kind: "edge",
+        side: "block-end",
+        destination: local,
+        depth: {
+          ancestors: 1,
+          destinations: [destination, local, { kind: "inside", parentId: "nested" }],
+        },
+      },
+    ]);
+    editor.dropTargets.registerLayout({
+      element: children,
+      axis: "vertical",
+      gaps: true,
+      getItems: () => [nested],
+    });
+    editor.dropTargets.registerLayout({
+      element: host,
+      axis: "vertical",
+      gaps: true,
+      boundaries,
+      getItems: () => [parent, following],
+    });
+    for (const y of [87, 88, 99, 88, 87]) {
+      const target = editor.dropTargets.resolve(12, y, undefined, children);
+      expect(target?.destination).toEqual(destination);
+      expect(target?.indicator?.top).toBe(boundaries === "merged" ? 101 : 99);
+    }
+  },
+);
+
+it("compares outline appends without equating unrelated canonical neighbors", () => {
+  const append = { kind: "inside", parentId: "parent" } as const;
+  const end = { ...destination, nextId: null };
+  expect(sameOutlineBoundary(append, end)).toBe(true);
+  expect(sameOutlineBoundary(end, append)).toBe(true);
+  expect(sameOutlineBoundary(append, destination)).toBe(false);
+  expect(sameOutlineBoundary(end, { ...end, previousId: "other" })).toBe(false);
+  expect(sameOutlineBoundary(append, { ...append, parentId: "other" })).toBe(false);
 });
