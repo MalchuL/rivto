@@ -85,10 +85,7 @@ class ContainerOutlineFixture {
     );
     const line = this.page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
-    const upperRow = (await this.page
-      .locator('[data-block-id="upper"] > .rivto-block-row')
-      .boundingBox())!;
-    expect((await line.boundingBox())!.x).toBeCloseTo(nested ? upperRow.x + 24 : upper.x, 0);
+    expect((await line.boundingBox())!.x).toBeCloseTo(upper.x + (nested ? 24 : 0), 0);
     await this.page.mouse.up();
     await expect
       .poll(() =>
@@ -109,20 +106,20 @@ class ContainerOutlineFixture {
   }
 
   /**
-   * Drops above the first card by pointing at the board's padded title.
+   * Appends inside the lane by pointing at its padded title.
    *
-   * This exercises nearest-position selection through a structural lane while
+   * This exercises the declared receiving body inside a structural board while
    * retaining the normal demo and all of its subscribers for performance runs.
    *
-   * @returns Resolves after native release inserts the source before the first card.
+   * @returns Resolves after native release appends a moved card to the lane.
    */
   async moveFromHeader(): Promise<void> {
-    const header = this.page.locator('[data-block-id="container"] > .rivto-block-row');
+    const owner = this.page.locator('[data-block-id="writing"]');
+    const header = owner.locator(":scope > .rivto-block-row");
     await header.evaluate((element) => {
       element.style.paddingTop = "100px";
     });
     const row = (await header.boundingBox())!;
-    const first = (await this.page.locator('[data-block-id="upper"]').boundingBox())!;
     const source = this.page.locator('[data-block-id="moving"] > .rivto-block-row');
     await source.hover();
     const handle = source.locator(".block-handle");
@@ -131,11 +128,9 @@ class ContainerOutlineFixture {
     await this.page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await this.page.mouse.down();
     await this.page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
-    await this.page.mouse.move(first.x + 16, row.y + row.height - 3, { steps: 12 });
-    const line = this.page.locator(".rivto-block-drop-line:visible");
-    await expect(line).toBeVisible();
-    const feedback = (await line.boundingBox())!;
-    expect(feedback.y + feedback.height / 2).toBeCloseTo(first.y, 0);
+    await this.page.mouse.move(row.x + row.width / 2, row.y + row.height / 2, { steps: 12 });
+    await expect(owner).toHaveAttribute("data-block-drop-active", "true");
+    await expect(this.page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
     await this.page.mouse.up();
     await expect
       .poll(() =>
@@ -145,7 +140,7 @@ class ContainerOutlineFixture {
           ).__rivtoDemo.editor.blocks.getChildIds("writing"),
         ),
       )
-      .toEqual(["moving", "upper", "lower"]);
+      .toEqual(["upper", "lower", "moving"]);
   }
 
   /**
@@ -265,6 +260,12 @@ for (const repeat of [0, 200]) {
       const fixture = new ContainerOutlineFixture(page);
       await fixture.load(type, "block", repeat);
       if (header) {
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.moveBlocks(["moving"], "upper", "before");
+          editor.history.clear();
+        });
         await fixture.moveFromHeader();
       } else {
         await fixture.move(false);
@@ -292,7 +293,7 @@ for (const repeat of [0, 200]) {
               ).__rivtoDemo.editor.blocks.getChildIds("writing"),
             ),
           )
-          .toEqual(["upper", "lower", "moving"]);
+          .toEqual(header ? ["moving", "upper", "lower"] : ["upper", "lower", "moving"]);
       }
       console.log(
         JSON.stringify({

@@ -52,13 +52,14 @@ test("expanded Bento keeps real vertical overflow scrollable", async ({ page }) 
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
-    editor.blocks.insertBlock({
+    const board = editor.blocks.insertBlock({
       type: "bento",
       children: Array.from({ length: 60 }, (_, index) => ({
         type: "paragraph",
         content: `Overflow tile ${index}`,
       })),
     });
+    editor.load({ ...editor.dump(), blocks: [board], elements: [], rootElementIds: [] });
   });
   await page.getByRole("button", { name: "Expand Bento", exact: true }).last().click();
   const dialog = page.getByRole("dialog", { name: "Expanded Bento", exact: true });

@@ -110,11 +110,9 @@ for (const mode of ["block", "edgeless"] as const) {
       element.style.padding = "0";
     });
     await startDrag(page);
-    const edge = page.locator(
-      '[data-block-item-id="child"] > [data-drop-placement="after"][data-drop-edge="block"]',
-    );
+    const edge = page.locator('[data-block-item-id="child"]');
     const box = (await edge.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(box.x + 12, box.y + box.height - 1);
     await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
     await page.mouse.up();
     await expect.poll(() => sourceParent(page)).toBe("parent");

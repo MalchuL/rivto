@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { blockIdSelector } from "./dom-markers";
@@ -93,22 +94,10 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   await expect(left.locator(blockIdSelector("left-child"))).toBeVisible();
   await expect(right.locator(blockIdSelector("right-nested"))).toBeVisible();
 
-  const rightRoots = await right
-    .locator(
-      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
-    )
-    .count();
+  const rightRoots = await right.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).count();
   await left.locator(".page-trailing-block").first().click();
-  await expect(
-    left.locator(
-      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
-    ),
-  ).toHaveCount(4);
-  await expect(
-    right.locator(
-      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
-    ),
-  ).toHaveCount(rightRoots);
+  await expect(left.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).toHaveCount(4);
+  await expect(right.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).toHaveCount(rightRoots);
 
   await left.getByRole("button", { name: "Edgeless" }).click();
   await expect(left.locator("[data-edgeless-root]").first()).toBeVisible();

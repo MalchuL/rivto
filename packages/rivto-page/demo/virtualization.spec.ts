@@ -28,7 +28,9 @@ test("keeps offscreen selection and indents/outdents every selected ID", async (
   await page.locator('[data-block-id="block-2"] strong').first().click();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(page.locator('[data-block-id="block-998"]')).toBeVisible();
-  await expect(page.locator('[data-block-id="block-2"]')).toHaveCount(0);
+  await expect(page.locator('[data-block-id="block-2"]')).toBeAttached();
+  await expect(page.locator('[data-block-id="block-2"]')).not.toBeInViewport();
+  await expect(page.locator('[data-block-id="block-500"]')).toHaveCount(0);
   await page.keyboard.down("Shift");
   await page.locator('[data-block-id="block-998"] strong').first().click();
   await page.keyboard.up("Shift");
@@ -252,12 +254,14 @@ for (const repeat of [1, 200]) {
   });
 }
 
-test("mounts an offscreen anchor before extending an exact text range", async ({ page }) => {
+test("retains an offscreen anchor while extending an exact text range", async ({ page }) => {
   await openVirtual(page);
   await page.getByRole("textbox", { name: "range binding", exact: true }).fill("Shift, Shift+Alt");
   await page.locator('[data-block-id="block-2"] strong').first().click();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await expect(page.locator('[data-block-id="block-2"]')).toHaveCount(0);
+  await expect(page.locator('[data-block-id="block-2"]')).toBeAttached();
+  await expect(page.locator('[data-block-id="block-2"]')).not.toBeInViewport();
+  await expect(page.locator('[data-block-id="block-500"]')).toHaveCount(0);
   await page
     .getByRole("textbox", { name: "Text block-998", exact: true })
     .click({ modifiers: ["Shift", "Alt"] });

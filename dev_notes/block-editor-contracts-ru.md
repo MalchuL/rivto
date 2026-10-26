@@ -1609,7 +1609,6 @@ element centers, so the prior failing Kanban run is not a latency comparison.
 No general speedup is claimed. Full-workspace tests and production ReactEditor
 integration were not run for this isolated package correction.
 
-
 ## 32. In-flow BlockWrapper insertion boundaries
 
 The agreed replacement is documented in rivto-page-block-wrapper-ru.md. Public
@@ -1626,7 +1625,6 @@ All required geometry is package-owned and uses --rivto-drop-gap-size (default 8
 No extra decorator registry, alternate node implementation, geometry index, or move
 mutation API is introduced. Earlier overlay measurements remain historical evidence.
 
-
 Stage 32 verification: the old inspected-control-edge failure was reproduced in
 Chromium/Firefox both in parallel and serially. The replacement passes 87 unit tests,
 44 parallel browser cases, and 20 serial production performance cases, plus types,
@@ -1634,7 +1632,6 @@ lint, package/demo builds, and published-export/CSS checks. Bento retains 22 rea
 4 notifications per text edit and 5 reads / 0 notifications for five pointer samples
 at both fixture sizes. Ownership and geometry details, limitations, and before/after
 frame-proxy ranges are recorded in rivto-page-block-wrapper-ru.md.
-
 
 ## 33. Generic registered block decorators
 
@@ -1648,7 +1645,6 @@ ref scope and explicit BlockView refs remain composed. No DnD logic is retained
 inside the generic wrapper folder. Details and verification belong to
 rivto-page-wrapper-registrations-ru.md.
 
-
 ## 34. Wrapper-owned DOM and explicit priorities
 
 Stage 33's shared-ref provider/helper has been removed. Decorators own their ordinary
@@ -1661,7 +1657,6 @@ nested items for the same block do not increment twice, and BlockView resolves i
 item identity inside the composed chain. The demo exercises owned pointer events,
 list counters, view remounts, and the existing tile placement without shared refs.
 Historical shared-ref measurements above remain evidence for the previous design.
-
 
 ## 35. Page events, keyboard и pointer selection
 

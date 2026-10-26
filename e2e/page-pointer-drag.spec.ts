@@ -116,9 +116,9 @@ for (const depth of [0, 1, 2]) {
     const indicator = (await line.boundingBox())!;
     expect(indicator.x).toBeCloseTo(region.x, 0);
     let boundaryY = region.y + region.height;
-    if (depth === 2) {
+    if (depth >= 1) {
       const following = (await surface.locator('[data-block-id="following"]').boundingBox())!;
-      // Root siblings share a boundary; terminal nested levels have only one anchor.
+      // Parent append and root sibling insertion share the same physical seam.
       boundaryY = (boundaryY + following.y) / 2;
     }
     expect(indicator.y + indicator.height / 2).toBeCloseTo(boundaryY, 0);

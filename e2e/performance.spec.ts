@@ -9,6 +9,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 
 const PAGE_SURFACE_CLASS = "page-surface";
 const PAGE_BLOCK_ROW_CLASS = "rivto-block-row";
@@ -639,12 +640,9 @@ test("keeps numbered-list values after earlier roots unmount", async ({ page }) 
   });
   const marker = page.locator('[data-block-id="perf-root-95"] .page-list-marker');
   await expect(marker).toHaveCount(1);
-  const firstVisible = page.locator(".page-surface [data-index]").first();
-  const counter = await firstVisible.evaluate((element) => ({
-    id: element.getAttribute("data-block-id"),
-    set: (element as HTMLElement).style.counterSet,
-  }));
-  expect(counter.set).toBe(`rivto-list-number ${Number(counter.id?.replace("perf-root-", ""))}`);
+  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(0);
+  const root = page.locator('[data-virtual-block-id="perf-root-95"]');
+  await expect(root).toHaveCSS("counter-reset", "rivto-list-number 96");
 });
 
 test("drops on a root first mounted after scrolling during drag", async ({ page }) => {
@@ -667,7 +665,8 @@ test("drops on a root first mounted after scrolling during drag", async ({ page 
   const target = page.locator('[data-block-id="perf-root-100"] > .rivto-block-row');
   await expect(target).toHaveCount(1);
   await target.scrollIntoViewIfNeeded();
-  await expect(page.locator('[data-block-id="perf-root-0"]')).toHaveCount(1);
+  // Drag identities survive source unmounting; feedback remains owned by the gesture.
+  await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
   const box = await target.boundingBox();
   if (!box) {
     throw new Error("Expected newly mounted target row");
@@ -741,7 +740,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const source = page.getByRole("button", { name: "Open block: Performance block **0**" });
     const blockSelector =
       mode === "block"
-        ? `.${PAGE_SURFACE_CLASS} > [data-block-id]`
+        ? `.${PAGE_SURFACE_CLASS} ${ROOT_BLOCK_SELECTOR}`
         : "[data-edgeless-root] [data-block-id]";
     const targets = page.locator(blockSelector).filter({
       has: page.getByText(/^Performance block [1-7]$/),
@@ -947,13 +946,8 @@ for (const mode of ["block", "edgeless"] as const) {
       () => (window as unknown as { __dragStartMs: number }).__dragStartMs,
     );
     await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toBeVisible();
-    expect(
-      await page.evaluate(() => {
-        const event = new Event("selectstart", { cancelable: true });
-        document.dispatchEvent(event);
-        return event.defaultPrevented;
-      }),
-    ).toBe(true);
+    // Native pointer prevention keeps the drag from extending a browser text range.
+    expect(await page.evaluate(() => window.getSelection()?.isCollapsed ?? true)).toBe(true);
     await page.evaluate((overlayClass) => {
       const overlay = document.querySelector<HTMLElement>(`.${overlayClass}`);
       if (!overlay) {
@@ -985,13 +979,17 @@ for (const mode of ["block", "edgeless"] as const) {
       () => (window as unknown as { __dragFollowMs: number }).__dragFollowMs,
     );
     await page.mouse.up();
+    await expect(page.locator(`.${PAGE_DRAG_OVERLAY_CLASS}`)).toHaveCount(0);
     expect(
       await page.evaluate(() => {
-        const event = new Event("selectstart", { cancelable: true });
-        document.dispatchEvent(event);
-        return event.defaultPrevented;
+        const blocks = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor.blocks;
+        return (
+          blocks.getParentId("perf-b0-c0") !== "perf-b0" ||
+          blocks.getChildIds("perf-b0")[0] !== "perf-b0-c0"
+        );
       }),
-    ).toBe(false);
+    ).toBe(true);
     console.log(`${mode} drag: start=${startMs.toFixed(1)} ms, follow=${followMs.toFixed(1)} ms`);
     expect(startMs).toBeLessThan(150);
     expect(followMs).toBeLessThan(80);

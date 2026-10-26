@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { blockDropRegion } from "./drop-regions";
 /**
  * Covers TODO-storage creation, local search/filter presentation, direct-child
@@ -61,14 +62,14 @@ test("keeps the storage surface inside its selection and aligns root controls", 
   const childInset = await todoChildren.evaluate((element) =>
     parseFloat(getComputedStyle(element).paddingInlineStart),
   );
-  const headerInset = await storage
-    .locator(":scope > .rivto-block-row")
-    .evaluate((element) => parseFloat(getComputedStyle(element).paddingInlineStart));
-  expect(childInset - headerInset).toBe(indent);
+  const padding = await storage.evaluate((element) =>
+    parseFloat(getComputedStyle(element).getPropertyValue("--rivto-container-padding")),
+  );
+  expect(childInset).toBe(padding + indent);
 
   const referenceRow = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-type="paragraph"] > .rivto-block-row:has([data-collapse-toggle])',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > .rivto-block-row:has([data-collapse-toggle])`,
     )
     .first();
   const [referenceHandle, referenceToggle, storageHandle, storageToggle] = await Promise.all([

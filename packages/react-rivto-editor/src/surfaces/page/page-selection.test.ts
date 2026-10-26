@@ -162,6 +162,13 @@ it("reserves canvas background and pan gestures while accepting block content", 
   panel.mode.set("block");
   root.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
   expect(accepted).toEqual([false, true, false, true]);
+  panel.mode.set("edgeless");
+  delete root.dataset.panningReady;
+  root.firstElementChild!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+  expect(accepted.at(-1)).toBe(true);
+  root.dataset.rivtoSurface = "block";
+  root.firstElementChild!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+  expect(accepted.at(-1)).toBe(true);
   selection.destroy();
   panel.editor.destroy();
   core.destroy();

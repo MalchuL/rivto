@@ -48,6 +48,35 @@ export interface BlockTreeProps {
  * @throws If called outside BlockEditor, settings are invalid, or host reads/renderers fail.
  */
 export function BlockTree({ virtualization }: BlockTreeProps) {
+  const { blocks } = useBlockEditorController().adapter;
+  const subscribe = useCallback(
+    (listener: () => void) => blocks.subscribeBlockIds(listener),
+    [blocks],
+  );
+  const getSnapshot = useCallback(() => blocks.getBlockIds(), [blocks]);
+  const blockIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return <BlockTreeContent blockIds={blockIds} virtualization={virtualization} />;
+}
+
+/** Complete host display order passed across the local windowing render boundary. */
+interface BlockTreeContentProps extends BlockTreeProps {
+  readonly blockIds: readonly string[];
+}
+
+/**
+ * Maintains window measurements, native endpoint pins and list counters for supplied roots.
+ *
+ * Local focus and geometry updates stay below the display-list subscription so
+ * they do not reread host order. The parent observes actual display-list changes;
+ * this view owns and releases its controller attachment and metadata subscriptions.
+ *
+ * @param props - Current complete display order and optional windowing settings.
+ * @param props.blockIds - Stable host snapshot, including roots outside the viewport.
+ * @param props.virtualization - Same optional windowing settings supplied to BlockTree.
+ * @returns Mounted root wrappers and inert space for the current window.
+ * @throws If window settings are invalid or host reads and renderers fail.
+ */
+function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   const { blocks, selection } = useBlockEditorController().adapter;
   const host = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
@@ -56,12 +85,6 @@ export function BlockTree({ virtualization }: BlockTreeProps) {
     () => new BlockVirtualizationController(blocks, selection, invalidate),
     [blocks, selection],
   );
-  const subscribe = useCallback(
-    (listener: () => void) => blocks.subscribeBlockIds(listener),
-    [blocks],
-  );
-  const getSnapshot = useCallback(() => blocks.getBlockIds(), [blocks]);
-  const blockIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const setHost = useCallback((element: HTMLDivElement | null) => {
     host.current = element;
   }, []);

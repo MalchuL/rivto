@@ -123,3 +123,47 @@ it("skips idle hit-test frames but probes live geometry once an edge can scroll"
     container.remove();
   }
 });
+
+it("keeps a locked document stationary in both preflight and scheduled frames", () => {
+  const root = document.createElement("div");
+  document.body.append(root);
+  const overflow = document.body.style.overflowY;
+  const descriptor = Object.getOwnPropertyDescriptor(document, "scrollingElement");
+  const hitDescriptor = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+  const page = document.documentElement;
+  Object.defineProperty(document, "scrollingElement", { configurable: true, value: page });
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => root });
+  page.scrollTop = 200;
+  document.body.style.overflowY = "hidden";
+  let frame: FrameRequestCallback | undefined;
+  const request = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    frame = callback;
+    return 42;
+  });
+  const refresh = jest.fn();
+  const scroll = new BlockAutoScroll(root, refresh);
+  try {
+    scroll.update({ x: 20, y: 5 }, root);
+    expect(request).not.toHaveBeenCalled();
+    scroll.update({ x: 20, y: 5 });
+    frame!(0);
+    expect(page.scrollTop).toBe(200);
+    expect(refresh).not.toHaveBeenCalled();
+  } finally {
+    scroll.stop();
+    document.body.style.overflowY = overflow;
+    page.scrollTop = 0;
+    jest.restoreAllMocks();
+    if (descriptor) {
+      Object.defineProperty(document, "scrollingElement", descriptor);
+    } else {
+      Reflect.deleteProperty(document, "scrollingElement");
+    }
+    if (hitDescriptor) {
+      Object.defineProperty(document, "elementFromPoint", hitDescriptor);
+    } else {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
+    root.remove();
+  }
+});

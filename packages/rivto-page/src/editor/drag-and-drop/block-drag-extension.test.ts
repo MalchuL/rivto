@@ -538,3 +538,34 @@ it.each([false, true])("finishes the displayed target on a lost release, revoked
     root.remove();
   }
 });
+
+it("refreshes held-pointer geometry on window and nested scroll without retaining the native hit", () => {
+  const editor = new BlockEditorController({ adapter: new TestBlockEditorAdapter() });
+  const resolve = jest.fn(() => undefined);
+  editor.extensions.register(
+    "drag",
+    new BlockDragExtension({ canMove: () => true, moveBlocks: () => true }, { resolve }),
+  );
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.innerHTML = '<div data-block-id="source"><button data-block-drag-handle></button></div>';
+  document.body.append(root);
+  editor.attach(root);
+  try {
+    pointer(root.querySelector("button")!, "pointerdown", 100);
+    pointer(root.querySelector("button")!, "pointermove", 110);
+    resolve.mockClear();
+    window.dispatchEvent(new Event("scroll"));
+    expect(resolve).toHaveBeenLastCalledWith(110, 100, new Set(["source"]), undefined);
+    resolve.mockClear();
+    root.dispatchEvent(new Event("scroll"));
+    expect(resolve).toHaveBeenCalledTimes(1);
+    pointer(window, "pointerup", 110);
+    resolve.mockClear();
+    window.dispatchEvent(new Event("scroll"));
+    expect(resolve).not.toHaveBeenCalled();
+  } finally {
+    editor.destroy();
+    root.remove();
+  }
+});

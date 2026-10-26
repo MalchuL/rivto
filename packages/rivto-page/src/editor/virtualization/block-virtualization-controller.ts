@@ -385,7 +385,11 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
   }
 
   /**
-   * Captures only this occurrence's focused block and native range endpoints.
+   * Captures only this occurrence's focused block and registered native text endpoints.
+   *
+   * Browser ranges on structural labels can remain after whole-block selection
+   * changes. Live carets and text ranges remain protected through their registered
+   * content and focused element, without retaining previously clicked offscreen cards.
    *
    * @returns A changed pin set schedules a range update; unchanged endpoints do no work.
    */
@@ -396,13 +400,13 @@ export class BlockVirtualizationController implements BlockVirtualizationApi {
     }
     const selection = root.ownerDocument.getSelection();
     const ids = new Set<string>();
-    for (const node of [
-      root.ownerDocument.activeElement,
-      selection?.anchorNode,
-      selection?.focusNode,
-    ]) {
+    const active = root.ownerDocument.activeElement;
+    for (const node of [active, selection?.anchorNode, selection?.focusNode]) {
       const element = node?.nodeType === 1 ? (node as Element) : node?.parentElement;
       if (element?.closest("[data-rivto-block-editor]") !== root) {
+        continue;
+      }
+      if (node !== active && !root.contains(element.closest("[data-block-content]"))) {
         continue;
       }
       const id = element.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;

@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Page, type Locator } from "@playwright/test";
 import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
 
@@ -36,29 +37,34 @@ class ContainerPointerFixture {
   /**
    * Drags the source handle to the center of an actual mounted target region.
    *
-   * @param target - Explicit Page region to hit after activating the pointer.
+   * @param target - Existing region or tile to hit after activating the pointer.
+   * @param inlineEnd - Hits the tile's inline-end sibling rim when true.
    * @returns Resolves after pointer release and the synchronous grouped command.
    */
-  async move(target: Locator): Promise<void> {
+  async move(target: Locator, inlineEnd = false): Promise<void> {
     const source = this.page.locator('[data-block-id="source"]');
     await source.locator(":scope > .rivto-block-row").hover();
     const from = (await source.locator(".block-handle").boundingBox())!;
     const to = (await target.boundingBox())!;
     await this.page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await this.page.mouse.down();
-    await this.page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    await this.page.mouse.move(
+      inlineEnd ? to.x + to.width - 1 : to.x + to.width / 2,
+      to.y + to.height / 2,
+      { steps: 12 },
+    );
     await expect(this.page.locator(".rivto-block-drag-preview")).toBeVisible();
     const line = this.page.locator(".rivto-block-drop-line");
-    if ((await target.getAttribute("data-drop-gap")) !== null) {
+    if (inlineEnd || (await target.getAttribute("data-drop-gap")) !== null) {
       await expect(line).toBeVisible();
-      const vertical = await target.evaluate(
-        (element) =>
-          element.dataset.dropAxis === "horizontal" || element.dataset.dropEdge === "inline",
-      );
+      const vertical =
+        inlineEnd ||
+        (await target.evaluate(
+          (element) =>
+            element.dataset.dropAxis === "horizontal" || element.dataset.dropEdge === "inline",
+        ));
       const box = (await line.boundingBox())!;
-      const item = (await target
-        .locator("xpath=ancestor::*[@data-block-item-id][1]")
-        .boundingBox())!;
+      const item = to;
       const before = (await target.getAttribute("data-drop-placement")) === "before";
       const edgeX = before ? item.x : item.x + item.width;
       const edgeY = before ? item.y : item.y + item.height;
@@ -94,9 +100,7 @@ for (const type of ["bento", "kanban-column", "columns-column"]) {
     await expect(target.locator('[data-block-id="source"]')).toHaveCount(1);
     await page.keyboard.press("Control+z");
     await expect(
-      page.locator(
-        '.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id="source"]',
-      ),
+      page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}[data-block-id="source"]`),
     ).toHaveCount(1);
   });
 }
@@ -117,9 +121,7 @@ test("Page pointer reorders Bento tiles through their inline boundary", async ({
   const tile = page
     .locator(".rivto-bento-tile")
     .filter({ has: page.locator('[data-block-id="third"]') });
-  await fixture.move(
-    tile.locator(':scope > [data-drop-placement="after"][data-drop-edge="inline"]'),
-  );
+  await fixture.move(tile, true);
   await expect
     .poll(() =>
       page.evaluate(() =>

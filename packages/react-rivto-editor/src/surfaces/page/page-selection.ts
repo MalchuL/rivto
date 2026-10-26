@@ -123,14 +123,19 @@ export class PageSelection implements BlockEditorSelection {
   /**
    * Reserves canvas background and active pan gestures for the host's element tools.
    *
+   * A mounted surface determines ownership independently of the document mode.
+   * Page embeddings remain selectable inside an Edgeless document, while
+   * unclaimed canvas block input retains ordinary row and body selection.
+   *
    * @param event - Native input about to start block selection.
    * @returns Whether this input belongs to writing-page or canvas block content.
    */
   canStartSelection(event: MouseEvent): boolean {
-    if (this.panel.mode?.get() !== "edgeless") {
+    const root = this.panel.getRoot?.();
+    const surface = root?.dataset.rivtoSurface ?? this.panel.mode?.get();
+    if (surface !== "edgeless") {
       return true;
     }
-    const root = this.panel.getRoot?.();
     if (root?.dataset.panningReady === "true" || root?.dataset.edgelessPanTool === "true") {
       return false;
     }

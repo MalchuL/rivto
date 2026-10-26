@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Page } from "@playwright/test";
 import { BLOCK_ID_SELECTOR, BLOCK_ROW_SELECTOR, blockIdSelector } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -17,7 +18,7 @@ const replaceContent = async (page: Page, content: string): Promise<void> => {
 
 test("shows checkbox and numbered-list examples in the demo", async ({ page }) => {
   const root = (text: string) =>
-    page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
+    page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).filter({
       has: page.getByText(text, { exact: true }),
     });
   await expect(
@@ -112,7 +113,7 @@ test("shows checkbox and numbered-list examples in the demo", async ({ page }) =
 test("creates interactive checkboxes from a shortcut and inherits them with Enter", async ({
   page,
 }) => {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const block = roots.first();
   const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await editor.click();
@@ -150,7 +151,7 @@ test("creates interactive checkboxes from a shortcut and inherits them with Ente
 });
 
 test("empty nested checkbox clears its marker before Enter outdents it", async ({ page }) => {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const first = roots.first();
   const content = first.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await content.click();
@@ -180,7 +181,7 @@ test("empty nested checkbox clears its marker before Enter outdents it", async (
 test("numbers adjacent blocks and resumes through a list gap from slash commands", async ({
   page,
 }) => {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const first = roots.first();
   const editor = first.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   await editor.click();
@@ -228,7 +229,7 @@ test("numbers adjacent blocks and resumes through a list gap from slash commands
 
 test("renumbers unchanged blocks after root and nested hierarchy moves", async ({ page }) => {
   const root = (text: string) =>
-    page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).filter({
+    page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).filter({
       has: page.getByText(text, { exact: true }),
     });
   const start = root("Start a numbered sequence");
@@ -266,7 +267,10 @@ test("renumbers unchanged blocks after root and nested hierarchy moves", async (
   );
   await expect
     .poll(() =>
-      start.evaluate((element) => element.previousElementSibling?.getAttribute("data-block-id")),
+      page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).evaluateAll((blocks, id) => {
+        const index = blocks.findIndex((block) => block.getAttribute("data-block-id") === id);
+        return blocks[index - 1]?.getAttribute("data-block-id");
+      }, startId),
     )
     .toBe(nextId);
   expect(

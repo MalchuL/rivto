@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 /** Browser regression for contentless container headers and collapsed summaries. */
 import { expect, test } from "@playwright/test";
 import type { ReactEditor } from "@chulane/rivto-react";
@@ -17,9 +18,7 @@ test("slash converts the current root to each structural container", async ({ pa
   ] as const) {
     await page.goto("/");
     const content = page
-      .locator(
-        `.${PAGE_SURFACE_CLASS} > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id] > .${ROW_CLASS} [data-block-content]`,
-      )
+      .locator(`.${PAGE_SURFACE_CLASS} ${ROOT_BLOCK_SELECTOR} > .${ROW_CLASS} [data-block-content]`)
       .first();
     const blockId = await content
       .locator("xpath=ancestor::*[@data-block-id][1]")
@@ -79,7 +78,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
   ] as const;
   const referenceToggle = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > .${ROW_CLASS} [data-collapse-toggle]`,
     )
     .first();
   const referenceToggleBox = (await referenceToggle.boundingBox())!;
@@ -91,23 +90,22 @@ test("renders aligned contentless container summaries from reactive block snapsh
     const toggle = row.locator("[data-collapse-toggle]");
     await block.scrollIntoViewIfNeeded();
     await expect(summary).not.toHaveAttribute("contenteditable");
-    await expect(summary).toHaveCSS("height", "0px");
+    await expect(summary).toHaveCSS(
+      "height",
+      type === "table" || type === "columns" ? "0px" : "24px",
+    );
     await expect(row).toHaveCSS("height", "24px");
 
-    // content-visibility can paint skipped descendants after scrolling. Read
-    // both bounds together so a layout update cannot split the measurement.
-    const { blockBox, childrenBox } = await block.evaluate((element) => ({
-      blockBox: element.getBoundingClientRect().toJSON(),
-      childrenBox: element
-        .querySelector(":scope > .rivto-block-children")!
-        .getBoundingClientRect()
-        .toJSON(),
-    }));
-    const topInset = childrenBox.y - blockBox.y;
-    const bottomInset = blockBox.y + blockBox.height - childrenBox.y - childrenBox.height;
-    expect(topInset, `${type} top inset`).toBeCloseTo(bottomInset, 0);
-    if (type === "table" || type === "kanban" || type === "columns") {
-      expect(topInset, `${type} outer inset`).toBeCloseTo(0, 0);
+    const rowBox = (await row.boundingBox())!;
+    const childrenBox = (await block.locator(":scope > .rivto-block-children").boundingBox())!;
+    if (type === "table" || type === "columns") {
+      expect(childrenBox.y, `${type} contentless row overlaps child layout`).toBeLessThan(
+        rowBox.y + rowBox.height,
+      );
+    } else {
+      expect(childrenBox.y, `${type} children below header`).toBeGreaterThanOrEqual(
+        rowBox.y + rowBox.height,
+      );
     }
 
     const toggleBox = (await toggle.boundingBox())!;
@@ -160,7 +158,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
     }
   });
   for (const [type, minimumHeight] of [
-    ["bento", 128],
+    ["bento", 96],
     ["kanban", 192],
     ["table", 96],
   ] as const) {
@@ -205,7 +203,7 @@ test("reveals root block handles in their headers and exposed lateral gutters", 
 
     await page.mouse.move(0, 0);
     await expect(handle, `${type} hidden root handle`).toHaveCSS("opacity", "0");
-    await expect(handle, `${type} idle root handle`).toHaveCSS("pointer-events", "none");
+    await expect(handle, `${type} idle root handle`).toHaveCSS("pointer-events", "auto");
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await expect(handle, `${type} directly hovered root handle`).toHaveCSS("opacity", "1");
     await page.mouse.move(0, 0);
@@ -320,7 +318,7 @@ for (const mode of ["block", "edgeless"] as const) {
     );
     await page.mouse.move(0, 0);
     await expect(handle).toHaveCSS("opacity", "0");
-    await expect(handle).toHaveCSS("pointer-events", "none");
+    await expect(handle).toHaveCSS("pointer-events", "auto");
     await block.locator(":scope > .rivto-block-row").hover();
     await expect(handle).toHaveCSS("opacity", "1");
     await handle.hover();
@@ -346,7 +344,7 @@ for (const mode of ["block", "edgeless"] as const) {
       ).__rivtoDemo.editor.blocks.setBlockType(blockId, "paragraph");
     }, id);
     await page.mouse.move(0, 0);
-    await expect(handle).toHaveCSS("pointer-events", "none");
+    await expect(handle).toHaveCSS("pointer-events", "auto");
   });
 }
 

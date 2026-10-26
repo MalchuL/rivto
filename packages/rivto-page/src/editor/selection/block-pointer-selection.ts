@@ -275,12 +275,15 @@ export class BlockPointerSelection {
    *
    * Controls retain coverage for their commands. Modifier gestures keep their
    * existing anchor, and native ranges are cleared before delayed selectionchange.
+   * A native capture owner may already have published another gesture's selection;
+   * stopped propagation preserves that selection even on the same DOM root.
    *
    * @param input - Primary input scoped to this occurrence, excluding nested editors.
    * @returns Previous coverage is released when ordinary selection may begin.
    */
   private onPlainPointerDown = ({ raw, root }: BlockInputEvent<"pointerdown">): void => {
     if (
+      raw.cancelBubble ||
       this.editor.adapter.selection.canStartSelection?.(raw) === false ||
       raw.button !== 0 ||
       (this.features.has("toggle") && this.bindingHeld(this.bindings.toggle)) ||

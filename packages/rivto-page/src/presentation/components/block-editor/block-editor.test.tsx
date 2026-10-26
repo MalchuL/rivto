@@ -300,6 +300,27 @@ it("displays blocks from different parents and reads their canonical insertion n
   expect(adapter.blocks.getBlockIds).not.toHaveBeenCalled();
 });
 
+it("retains the display-list subscription during local list-counter updates", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const editor = createEditor(adapter);
+  editor.renderers.register("text", { content: createRenderer(adapter, createMetrics()) });
+  adapter.setNode("a");
+  adapter.setNode("b");
+  adapter.setBlockIds(["a", "b"]);
+  act(() => root.render(<BlockEditor editor={editor} />));
+  adapter.blocks.getBlockIds.mockClear();
+
+  act(() => adapter.setNode("a", { listType: "numbered_list" }));
+  expect(
+    (container.querySelector('[data-virtual-block-id="a"]') as HTMLElement).style.counterReset,
+  ).toBe("rivto-list-number 1");
+  expect(adapter.blocks.getBlockIds).not.toHaveBeenCalled();
+
+  act(() => adapter.setBlockIds(["b", "a"]));
+  expect(container.textContent).toBe("ba");
+  expect(adapter.blocks.getBlockIds).toHaveBeenCalled();
+});
+
 it("keeps descendants and content asleep during parent content and selection updates", () => {
   const adapter = new TestBlockEditorAdapter();
   const editor = createEditor(adapter);

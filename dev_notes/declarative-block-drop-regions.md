@@ -378,12 +378,13 @@ child layout and low-level layout APIs all expose the selected mode. Persisted
 model and transaction ownership are unchanged.
 
 Production native-pointer comparison (three samples per browser/size, one worker, tracing off; synchronous command / two-frame rendered milliseconds):
-| Browser / repeat | Before median [range] | After median [range] |
-| --- | --- | --- |
-| chromium / 0 | 1.1 [1.1–1.3] / 31.2 [31.1–31.6] | 1.0 [0.9–1.0] / 31.3 [31.2–31.6] |
-| chromium / 200 | 5.6 [5.3–5.6] / 92.1 [72.3–92.6] | 5.4 [4.6–5.7] / 75.0 [69.2–82.4] |
-| firefox / 0 | 2.0 [1.0–2.0] / 32.0 [31.0–32.0] | 2.0 [1.0–2.0] / 31.0 [31.0–32.0] |
-| firefox / 200 | 11.0 [10.0–12.0] / 84.0 [81.0–111.0] | 10.0 [9.0–10.0] / 74.0 [73.0–81.0] |
+
+| Browser / repeat | Before median [range]                | After median [range]               |
+| ---------------- | ------------------------------------ | ---------------------------------- |
+| chromium / 0     | 1.1 [1.1–1.3] / 31.2 [31.1–31.6]     | 1.0 [0.9–1.0] / 31.3 [31.2–31.6]   |
+| chromium / 200   | 5.6 [5.3–5.6] / 92.1 [72.3–92.6]     | 5.4 [4.6–5.7] / 75.0 [69.2–82.4]   |
+| firefox / 0      | 2.0 [1.0–2.0] / 32.0 [31.0–32.0]     | 2.0 [1.0–2.0] / 31.0 [31.0–32.0]   |
+| firefox / 200    | 11.0 [10.0–12.0] / 84.0 [81.0–111.0] | 10.0 [9.0–10.0] / 74.0 [73.0–81.0] |
 
 All 12 before and 12 after samples passed the same commit assertions. Default-size frame maxima stayed near 17–18 ms; large documents still had one long frame per sample before and after. These noisy timings do not establish a speedup. Full workspace tests and unrelated TODO/virtual-selection baseline failures were not rerun for this change.
 
@@ -450,15 +451,15 @@ setup runs are not included in the final timing measurements.
 Final production measurements: 24 passed, three samples for each browser, size and placement, one worker, tracing off.
 
 | Browser / placement / repeat | Command median [range], ms | Two-frame rendered median [range], ms |
-| --- | --- | --- |
-| chromium / between / 0 | 1.0 [0.9–1.1] | 31.4 [31.1–31.4] |
-| chromium / between / 200 | 5.4 [5.1–6.5] | 72.6 [65.9–89.3] |
-| chromium / bento / 0 | 1.3 [1.3–1.4] | 31.5 [30.9–31.8] |
-| chromium / bento / 200 | 6.9 [6.8–7.1] | 101.9 [101.4–115.1] |
-| firefox / between / 0 | 2.0 [1.0–2.0] | 31.0 [30.0–31.0] |
-| firefox / between / 200 | 11.0 [10.0–12.0] | 75.0 [73.0–82.0] |
-| firefox / bento / 0 | 2.0 [2.0–2.0] | 32.0 [31.0–33.0] |
-| firefox / bento / 200 | 14.0 [12.0–15.0] | 89.0 [86.0–90.0] |
+| ---------------------------- | -------------------------- | ------------------------------------- |
+| chromium / between / 0       | 1.0 [0.9–1.1]              | 31.4 [31.1–31.4]                      |
+| chromium / between / 200     | 5.4 [5.1–6.5]              | 72.6 [65.9–89.3]                      |
+| chromium / bento / 0         | 1.3 [1.3–1.4]              | 31.5 [30.9–31.8]                      |
+| chromium / bento / 200       | 6.9 [6.8–7.1]              | 101.9 [101.4–115.1]                   |
+| firefox / between / 0        | 2.0 [1.0–2.0]              | 31.0 [30.0–31.0]                      |
+| firefox / between / 200      | 11.0 [10.0–12.0]           | 75.0 [73.0–82.0]                      |
+| firefox / bento / 0          | 2.0 [2.0–2.0]              | 32.0 [31.0–33.0]                      |
+| firefox / bento / 200        | 14.0 [12.0–15.0]           | 89.0 [86.0–90.0]                      |
 
 The small default Bento setup also exposed pending drag autoscroll after the long programmatic fixture scroll: targets moved 12 viewport pixels after measurement. The benchmark now moves into the receiving region and waits two frames before measuring the seam, outside interaction timing. This fixes stale test coordinates; the subsequent 90 fractional pointer movements and actual committed order remain asserted. Failed setup samples are excluded.
 
@@ -509,19 +510,19 @@ stays in the TODO extension and Bento supplies only feedback data.
 Final geometry-follow-up production measurements: 36 passed, three samples per browser/size/placement, one worker, tracing off.
 
 | Browser / placement / repeat | Command median [range], ms | Two-frame rendered median [range], ms |
-| --- | --- | --- |
-| chromium / control / 0 | 1.3 [1.2–1.3] | 31.7 [31.2–31.7] |
-| chromium / control / 200 | 9.2 [9.2–10.1] | 57.8 [57.5–58.0] |
-| chromium / bento / 0 | 1.3 [1.3–1.4] | 31.6 [31.4–31.7] |
-| chromium / bento / 200 | 7.0 [7.0–7.1] | 100.1 [95.5–110.9] |
-| chromium / end / 0 | 1.2 [1.1–1.2] | 31.2 [31.0–31.6] |
-| chromium / end / 200 | 8.0 [7.7–8.3] | 122.3 [119.3–123.1] |
-| firefox / control / 0 | 2.0 [2.0–3.0] | 31.0 [30.0–32.0] |
-| firefox / control / 200 | 19.0 [18.0–20.0] | 93.0 [90.0–96.0] |
-| firefox / bento / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–32.0] |
-| firefox / bento / 200 | 14.0 [12.0–15.0] | 89.0 [87.0–93.0] |
-| firefox / end / 0 | 2.0 [1.0–2.0] | 31.0 [31.0–32.0] |
-| firefox / end / 200 | 15.0 [14.0–16.0] | 97.0 [97.0–98.0] |
+| ---------------------------- | -------------------------- | ------------------------------------- |
+| chromium / control / 0       | 1.3 [1.2–1.3]              | 31.7 [31.2–31.7]                      |
+| chromium / control / 200     | 9.2 [9.2–10.1]             | 57.8 [57.5–58.0]                      |
+| chromium / bento / 0         | 1.3 [1.3–1.4]              | 31.6 [31.4–31.7]                      |
+| chromium / bento / 200       | 7.0 [7.0–7.1]              | 100.1 [95.5–110.9]                    |
+| chromium / end / 0           | 1.2 [1.1–1.2]              | 31.2 [31.0–31.6]                      |
+| chromium / end / 200         | 8.0 [7.7–8.3]              | 122.3 [119.3–123.1]                   |
+| firefox / control / 0        | 2.0 [2.0–3.0]              | 31.0 [30.0–32.0]                      |
+| firefox / control / 200      | 19.0 [18.0–20.0]           | 93.0 [90.0–96.0]                      |
+| firefox / bento / 0          | 2.0 [2.0–3.0]              | 31.0 [31.0–32.0]                      |
+| firefox / bento / 200        | 14.0 [12.0–15.0]           | 89.0 [87.0–93.0]                      |
+| firefox / end / 0            | 2.0 [1.0–2.0]              | 31.0 [31.0–32.0]                      |
+| firefox / end / 200          | 15.0 [14.0–16.0]           | 97.0 [97.0–98.0]                      |
 
 The first ending benchmark used a descendant selector and also matched an embedded editor ending. Its strict-selector setup failures are excluded; the final benchmark scopes the ending to the measured occurrence's direct tree. All final samples assert committed parent/order after real fractional pointer movements. Full workspace suites were not run; large-document commits still include long frames.
 
@@ -531,11 +532,12 @@ should move right, not left. The content-edge declaration now uses
 and destination remain unchanged; the browser assertion checks that exact offset.
 
 Direction-correction verification: four Page/Edgeless browser checks passed in Chromium/Firefox (12 workers), host types/build and scoped lint passed (one existing long-test warning). Twelve serial production measurements passed.
+
 - chromium, repeat=0: sync median 1.2 ms [1.1–1.2]; rendered median 31.3 ms [31.3–31.4].
 - chromium, repeat=200: sync median 6.9 ms [6.9–7.0]; rendered median 99.3 ms [97.5–105.9].
 - firefox, repeat=0: sync median 2.0 ms [2.0–2.0]; rendered median 32.0 ms [31.0–32.0].
 - firefox, repeat=200: sync median 14.0 ms [14.0–16.0]; rendered median 91.0 ms [88.0–92.0].
-Full workspace tests were not rerun for this feedback-only parameter correction.
+  Full workspace tests were not rerun for this feedback-only parameter correction.
 
 ### Post-drag activation and column free space
 
@@ -613,19 +615,19 @@ has no errors and seven existing long-function warnings. No public API was added
 Final serial production measurements (three samples, median [min–max], ms):
 
 | Build / browser / placement / repeat | Synchronous commit | Two-frame rendering proxy |
-| --- | ---: | ---: |
-| baseline / chromium / control / 0 | 1.4 [1.1–1.5] | 31.4 [31.3–31.4] |
-| baseline / chromium / control / 200 | 9.4 [9.3–9.6] | 58.1 [54.0–64.7] |
-| baseline / firefox / control / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–31.0] |
-| baseline / firefox / control / 200 | 18.0 [18.0–19.0] | 91.0 [91.0–96.0] |
-| fixed / chromium / column / 0 | 1.7 [1.6–1.9] | 30.8 [30.4–31.8] |
-| fixed / chromium / column / 200 | 6.9 [6.7–7.5] | 112.3 [110.4–119.7] |
-| fixed / chromium / control / 0 | 1.2 [1.2–1.3] | 31.5 [31.5–31.8] |
-| fixed / chromium / control / 200 | 10.1 [9.4–11.9] | 63.0 [57.8–66.2] |
-| fixed / firefox / column / 0 | 2.0 [2.0–2.0] | 32.0 [31.0–32.0] |
-| fixed / firefox / column / 200 | 14.0 [13.0–14.0] | 94.0 [93.0–95.0] |
-| fixed / firefox / control / 0 | 3.0 [1.0–3.0] | 31.0 [30.0–32.0] |
-| fixed / firefox / control / 200 | 18.0 [18.0–18.0] | 91.0 [90.0–93.0] |
+| ------------------------------------ | -----------------: | ------------------------: |
+| baseline / chromium / control / 0    |      1.4 [1.1–1.5] |          31.4 [31.3–31.4] |
+| baseline / chromium / control / 200  |      9.4 [9.3–9.6] |          58.1 [54.0–64.7] |
+| baseline / firefox / control / 0     |      2.0 [2.0–3.0] |          31.0 [31.0–31.0] |
+| baseline / firefox / control / 200   |   18.0 [18.0–19.0] |          91.0 [91.0–96.0] |
+| fixed / chromium / column / 0        |      1.7 [1.6–1.9] |          30.8 [30.4–31.8] |
+| fixed / chromium / column / 200      |      6.9 [6.7–7.5] |       112.3 [110.4–119.7] |
+| fixed / chromium / control / 0       |      1.2 [1.2–1.3] |          31.5 [31.5–31.8] |
+| fixed / chromium / control / 200     |    10.1 [9.4–11.9] |          63.0 [57.8–66.2] |
+| fixed / firefox / column / 0         |      2.0 [2.0–2.0] |          32.0 [31.0–32.0] |
+| fixed / firefox / column / 200       |   14.0 [13.0–14.0] |          94.0 [93.0–95.0] |
+| fixed / firefox / control / 0        |      3.0 [1.0–3.0] |          31.0 [30.0–32.0] |
+| fixed / firefox / control / 200      |   18.0 [18.0–18.0] |          91.0 [90.0–93.0] |
 
 All 24 final measurements assert actual committed placement after fractional pointer input. The final preview was copied to an isolated output directory and matched the tested build hash. Baseline control timings use a fresh production build of unchanged HEAD. Kanban background insertion was unavailable on that baseline, so no successful before timing is claimed for it. Large-document commits still contain long frames. Full workspace tests were not run; concurrent TODO toolbar layering changes are outside this fix and were preserved.
 
@@ -668,15 +670,15 @@ errors and four existing long-function warnings. No full workspace run was made.
 Native column-drop production timings, three serial samples per browser/size; median [min–max], ms:
 
 | Build / browser / repeat | Synchronous command | Two-frame rendering proxy |
-| --- | ---: | ---: |
-| before / chromium / 0 | 1.2 [1.2–1.4] | 31.5 [31.4–31.5] |
-| before / chromium / 200 | 7.0 [6.9–10.2] | 137.5 [112.0–146.3] |
-| before / firefox / 0 | 2.0 [2.0–2.0] | 32.0 [31.0–32.0] |
-| before / firefox / 200 | 13.0 [13.0–20.0] | 105.0 [94.0–120.0] |
-| after / chromium / 0 | 1.5 [1.3–1.9] | 31.2 [30.6–31.8] |
-| after / chromium / 200 | 7.3 [7.2–7.5] | 127.0 [109.2–135.3] |
-| after / firefox / 0 | 2.0 [2.0–3.0] | 32.0 [31.0–32.0] |
-| after / firefox / 200 | 14.0 [13.0–16.0] | 109.0 [94.0–115.0] |
+| ------------------------ | ------------------: | ------------------------: |
+| before / chromium / 0    |       1.2 [1.2–1.4] |          31.5 [31.4–31.5] |
+| before / chromium / 200  |      7.0 [6.9–10.2] |       137.5 [112.0–146.3] |
+| before / firefox / 0     |       2.0 [2.0–2.0] |          32.0 [31.0–32.0] |
+| before / firefox / 200   |    13.0 [13.0–20.0] |        105.0 [94.0–120.0] |
+| after / chromium / 0     |       1.5 [1.3–1.9] |          31.2 [30.6–31.8] |
+| after / chromium / 200   |       7.3 [7.2–7.5] |       127.0 [109.2–135.3] |
+| after / firefox / 0      |       2.0 [2.0–3.0] |          32.0 [31.0–32.0] |
+| after / firefox / 200    |    14.0 [13.0–16.0] |        109.0 [94.0–115.0] |
 
 All 24 production measurements passed with one worker and tracing disabled, with actual committed parent assertions after fractional native pointer movement. Both builds used isolated output directories. Large-document rendering still contains long frames; these are measurements, not a claim of a rendering performance fix.
 
@@ -701,7 +703,7 @@ The exact platform cause of the user's unavailable release remains untraced.
 Real pointerup now completes in window capture and resolves its actual coordinates
 before descendant handlers can stop bubbling. If pointerup is unavailable, the
 first pointermove reporting the primary button released completes the last
-*displayed* target after a live permission check. It never resolves that later
+_displayed_ target after a live permission check. It never resolves that later
 movement's coordinates. A neutral last held position performs no move. An explicit
 Escape, blur, pointercancel or detach still cancels without committing. The host
 mutation continues to validate current hierarchy and permissions; cleanup, focus
@@ -727,19 +729,19 @@ function-length rule. Full workspace suites were not run.
 Serial production measurements for column drop, three samples per browser/size; median [min–max], ms:
 
 | Release / browser / repeat | Synchronous move | Two-frame rendering proxy |
-| --- | ---: | ---: |
-| before / chromium / 0 | 1.4 [1.2–1.8] | 31.4 [31.1–31.5] |
-| before / chromium / 200 | 7.2 [7.1–8.1] | 112.5 [111.4–112.7] |
-| before / firefox / 0 | 1.0 [1.0–3.0] | 30.0 [30.0–31.0] |
-| before / firefox / 200 | 15.0 [14.0–15.0] | 93.0 [90.0–111.0] |
-| after / chromium / 0 | 1.3 [1.3–1.5] | 31.2 [31.2–31.5] |
-| after / chromium / 200 | 7.7 [6.8–8.9] | 115.5 [105.5–116.0] |
-| after / firefox / 0 | 2.0 [2.0–3.0] | 31.0 [31.0–32.0] |
-| after / firefox / 200 | 16.0 [14.0–16.0] | 96.0 [94.0–105.0] |
-| lost / chromium / 0 | 1.2 [1.1–1.4] | 16.5 [16.3–16.5] |
-| lost / chromium / 200 | 8.0 [6.9–8.5] | 110.1 [105.6–119.9] |
-| lost / firefox / 0 | 2.0 [2.0–2.0] | 18.0 [15.0–19.0] |
-| lost / firefox / 200 | 15.0 [14.0–15.0] | 95.0 [91.0–100.0] |
+| -------------------------- | ---------------: | ------------------------: |
+| before / chromium / 0      |    1.4 [1.2–1.8] |          31.4 [31.1–31.5] |
+| before / chromium / 200    |    7.2 [7.1–8.1] |       112.5 [111.4–112.7] |
+| before / firefox / 0       |    1.0 [1.0–3.0] |          30.0 [30.0–31.0] |
+| before / firefox / 200     | 15.0 [14.0–15.0] |         93.0 [90.0–111.0] |
+| after / chromium / 0       |    1.3 [1.3–1.5] |          31.2 [31.2–31.5] |
+| after / chromium / 200     |    7.7 [6.8–8.9] |       115.5 [105.5–116.0] |
+| after / firefox / 0        |    2.0 [2.0–3.0] |          31.0 [31.0–32.0] |
+| after / firefox / 200      | 16.0 [14.0–16.0] |         96.0 [94.0–105.0] |
+| lost / chromium / 0        |    1.2 [1.1–1.4] |          16.5 [16.3–16.5] |
+| lost / chromium / 200      |    8.0 [6.9–8.5] |       110.1 [105.6–119.9] |
+| lost / firefox / 0         |    2.0 [2.0–2.0] |          18.0 [15.0–19.0] |
+| lost / firefox / 200       | 15.0 [14.0–15.0] |         95.0 [91.0–100.0] |
 
 All 36 serial measurements passed with tracing disabled and asserted the committed parent after native pointer input. Before/after timings compare normal delivery on isolated production builds; the lost-release scenario is measured only after fixing it because it previously performed no move. The different release/move phase changes the two-RAF proxy phase, so shorter lost-release frame timings are not a claim of a rendering speedup. Large documents still have long frames.
 
@@ -948,7 +950,6 @@ registration; current assets contain none. Timings remain comparable, with noisy
 large-document rendering; no speedup or fix for that existing cost is claimed.
 The pre-existing staged changes were preserved; this simplification is in the
 working tree and has not been restaged.
-
 
 ### Continue edge strips into side gutters (2026-10-25)
 
@@ -1323,7 +1324,6 @@ existing two-frame proxy after the synchronous host move command.
 | firefox  | 0      | 2.0 [2.0–3.0]    | 2.0 [2.0–2.0]    | 32.0 [30.0–32.0]    | 30.0 [29.0–30.0]    |
 | firefox  | 200    | 14.0 [13.0–14.0] | 15.0 [14.0–16.0] | 93.0 [93.0–95.0]    | 94.0 [91.0–98.0]    |
 
-
 ## Shared own-content geometry and inside feedback — 2026-10-25
 
 The regression was shared by ordinary outlines and container children. Edge inset
@@ -1392,7 +1392,6 @@ Times are median [minimum–maximum], in milliseconds.
 | chromium | 200    | 6.9 [6.7–7.0]    | 6.8 [6.7–6.8]    | 114.0 [113.0–120.7] | 115.2 [108.8–129.7] |
 | firefox  | 0      | 1.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [30.0–32.0]    | 31.0 [30.0–31.0]    |
 | firefox  | 200    | 14.0 [13.0–15.0] | 14.0 [14.0–14.0] | 93.0 [92.0–95.0]    | 94.0 [92.0–95.0]    |
-
 
 ## Restore shared outline nesting outside container content — 2026-10-25
 
@@ -1469,7 +1468,6 @@ Times are median [minimum–maximum], in milliseconds.
 | firefox  | 0      | 1.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [30.0–31.0]    | 31.0 [31.0–32.0]    |
 | firefox  | 200    | 14.0 [13.0–14.0] | 14.0 [13.0–17.0] | 93.0 [93.0–93.0]    | 93.0 [92.0–107.0]   |
 
-
 ## Correct boundary-line feedback independently of inside destination — 2026-10-25
 
 The earlier feedback normalization was incorrect. It discarded an edge/gap's
@@ -1536,7 +1534,6 @@ Times are median [minimum–maximum], in milliseconds.
 | firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]    | 31.0 [31.0–31.0]    |
 | firefox  | 200    | 14.0 [13.0–17.0] | 14.0 [14.0–14.0] | 93.0 [92.0–107.0]   | 93.0 [91.0–96.0]    |
 
-
 ## Keep Bento background append separate from row-gutter continuation — 2026-10-25
 
 The reported point was on Bento's free background; its header still accepted an
@@ -1601,7 +1598,6 @@ Times are median [minimum–maximum], in milliseconds.
 | chromium | 200    | 7.0 [6.8–7.1]    | 7.0 [7.0–7.1]    | 81.8 [81.6–100.9] | 83.2 [80.8–98.6] |
 | firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 31.0 [31.0–32.0]  | 30.0 [30.0–31.0] |
 | firefox  | 200    | 15.0 [14.0–17.0] | 15.0 [14.0–15.0] | 89.0 [86.0–90.0]  | 90.0 [89.0–91.0] |
-
 
 ## Configure numeric row-gutter distance instead of a boolean — 2026-10-25
 
@@ -1669,7 +1665,6 @@ Times are median [minimum–maximum], in milliseconds.
 | firefox  | 0      | 2.0 [1.0–2.0]    | 2.0 [1.0–2.0]    | 30.0 [30.0–31.0] | 31.0 [31.0–32.0] |
 | firefox  | 200    | 15.0 [14.0–15.0] | 14.0 [14.0–14.0] | 90.0 [89.0–91.0] | 87.0 [87.0–89.0] |
 
-
 ## Extend numeric item surroundings on all four sides — 2026-10-25
 
 Numeric dropGutterSize now expands the complete item rectangle, including exposed
@@ -1698,7 +1693,6 @@ grid measurement-count regression covers the newly added lookup's bounded work.
 Ownership review covered the shared layout resolver, query-local cache, declared
 regions and unchanged commit validation; the new private helpers borrow geometry
 and declarations without adding managers, subscriptions or lifecycle resources.
-
 
 ## Match numeric grid-gutter feedback to the exposed side — 2026-10-25
 

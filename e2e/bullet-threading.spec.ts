@@ -1,13 +1,14 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test } from "@playwright/test";
 
 test("draws one continuous top-level line to the focused root", async ({ page }) => {
   await page.goto("/");
   const roots = page.locator(
-    "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block",
+    `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}`,
   );
   const focused = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   await focused.locator(":scope > .rivto-block-row [data-block-content]").click();
@@ -53,7 +54,7 @@ test("threads only the focused page ancestry and follows its controls", async ({
   await page.goto("/");
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const child = parent.locator(":scope > .rivto-block-children > .rivto-block").first();
@@ -62,9 +63,9 @@ test("threads only the focused page ancestry and follows its controls", async ({
 
   await content.click();
   await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* Q .* H .*$/);
-  const positions = await page.evaluate(() => {
+  const positions = await page.evaluate((ROOT_BLOCK_SELECTOR) => {
     const parent = document.querySelector(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )!;
     const child = parent.querySelector(":scope > .rivto-block-children > .rivto-block")!;
     const toggle = parent
@@ -81,7 +82,7 @@ test("threads only the focused page ancestry and follows its controls", async ({
       from: toggle.x + toggle.width / 2 - overlay.x,
       to: childToggle.x + childToggle.width / 2 - overlay.x,
     };
-  });
+  }, ROOT_BLOCK_SELECTOR);
   const d = await path.getAttribute("d");
   const curves = [...(d ?? "").matchAll(/ Q (-?[\d.]+)/g)];
   expect(curves).toHaveLength(2);
@@ -145,7 +146,7 @@ test("repositions the path for a nested scroll container", async ({ page }) => {
   await page.goto("/");
   const leaf = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first()
     .locator(".rivto-block:not(:has(> .rivto-block-children))")

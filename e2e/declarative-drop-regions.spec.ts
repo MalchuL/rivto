@@ -1743,7 +1743,7 @@ for (const mode of ["block", "edgeless"] as const) {
       const board = page.locator('[data-block-id="board"]');
       const host = board.locator(":scope > .rivto-block-children");
       await host.evaluate((element) => {
-        element.style.padding = "48px";
+        element.style.padding = "64px";
       });
       const bounds = (await host.boundingBox())!;
       const first = (await host.locator(":scope > .rivto-block-item").first().boundingBox())!;
@@ -1751,7 +1751,7 @@ for (const mode of ["block", "edgeless"] as const) {
       if (side === "bottom") {
         x = bounds.x + bounds.width / 2;
       }
-      const y = side === "bottom" ? bounds.y + bounds.height - 12 : first.y + first.height * 0.75;
+      const y = side === "bottom" ? bounds.y + bounds.height - 24 : first.y + first.height * 0.75;
       expect(
         await host.evaluate(
           (element, point) => document.elementFromPoint(point.x, point.y) === element,

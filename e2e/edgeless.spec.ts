@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   BLOCK_ID_ATTRIBUTE,
@@ -368,7 +369,7 @@ test("uses identical block typography and spacing in page and edgeless surfaces"
 }) => {
   const pageBlock = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const blockId = await pageBlock.getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -2077,7 +2078,7 @@ test("drags a mixed block and visual selection synchronously from either element
 test("renders two root ranges as cards with their complete nested outlines", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const parentId = await parent.getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -2152,7 +2153,7 @@ test("collapses edgeless blocks by keyboard and slash without claiming canvas fo
 test("selects nested blocks and preserves block selection across surfaces", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const child = parent.locator(`:scope > .rivto-block-children ${BLOCK_ID_SELECTOR}`).first();
@@ -2210,9 +2211,7 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
     .dispatchEvent("pointerdown", { button: 0, ctrlKey: true });
   await switchMode(page, "block");
 
-  const roots = page.locator(
-    `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > ${BLOCK_ID_SELECTOR}`,
-  );
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   let targetId: string | null = null;
   for (let index = 0; index < (await roots.count()); index += 1) {
     const id = await roots.nth(index).getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -2248,10 +2247,7 @@ test("undoes a grouped nested-block drag after switching from edgeless", async (
   });
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   await page.mouse.move(targetBox.x + targetBox.width / 2 + 1, targetBox.y + targetBox.height / 2);
-  await expect(target.locator(":scope > .rivto-block-row")).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(target).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
 
   await expect(
@@ -2477,7 +2473,7 @@ test("moves a card by dragging from the left of an indented nested block", async
     }
     const chromeRect = chrome.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    const x = chromeRect.left + 2;
+    const x = rowRect.left + 2;
     const y = rowRect.top + rowRect.height / 2;
     const hit = document.elementFromPoint(x, y);
     if (!hit) {
@@ -2632,10 +2628,7 @@ test("maps a zoomed cross-card drop to the block under the pointer", async ({ pa
     steps: 8,
   });
   await page.mouse.move(targetBox.x + targetBox.width / 2 + 1, targetBox.y + targetBox.height / 2);
-  await expect(target.locator(":scope > .rivto-block-row")).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(target).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
 
   await expect(
@@ -2842,9 +2835,7 @@ test("renders explicit separators and creates a new card with the separator shor
   await expect(arrows.nth(1)).toHaveClass(/lucide-arrow-down/);
 
   const firstContent = page
-    .locator(
-      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block [data-block-content]",
-    )
+    .locator(`.page-surface ${ROOT_BLOCK_SELECTOR} [data-block-content]`)
     .first();
   await firstContent.click();
   await page.keyboard.press("Control+Shift+Enter");
@@ -2889,9 +2880,7 @@ test("creates and focuses a separator continuation from slash", async ({ page })
 
 test("renders nested separators without splitting document cards", async ({ page }) => {
   const nested = page
-    .locator(
-      ".page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > .rivto-block .rivto-block-children [data-block-content]",
-    )
+    .locator(`.page-surface ${ROOT_BLOCK_SELECTOR} .rivto-block-children [data-block-content]`)
     .first();
   await nested.click();
   await page.keyboard.press("Control+Shift+Enter");

@@ -262,6 +262,15 @@ class BlockDragController {
       { type: "blur", target: "window", priority: BLOCK_DRAG_INPUT_PRIORITY },
       () => this.cancel(),
     );
+    this.editor.events.observe(
+      `${this.prefix}.scroll`,
+      { type: "scroll", target: "window", capture: true, priority: BLOCK_DRAG_INPUT_PRIORITY },
+      () => {
+        if (this.gesture?.ids) {
+          this.resolve(this.gesture);
+        }
+      },
+    );
     this.editor.events.onDetach(() => this.cancel());
   }
 

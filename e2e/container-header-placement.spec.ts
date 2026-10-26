@@ -8,9 +8,10 @@ import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
  * @returns Container input and actual parent accepting ordinary source blocks.
  */
 function receivingContainer(type: string): { block: EditorBlockInput; parent: string } {
+  const itemType = type === "todo-storage" ? "todo-item" : "paragraph";
   const children = [
-    { id: "first", type: "paragraph", content: "First" },
-    { id: "last", type: "paragraph", content: "Last" },
+    { id: "first", type: itemType, content: "First" },
+    { id: "last", type: itemType, content: "Last" },
   ];
   if (type === "kanban") {
     return {
@@ -46,36 +47,25 @@ async function dragToHeader(page: Page, point: { x: number; y: number }): Promis
 }
 
 /**
- * Verifies nearest geometry and actual commit after changing only header padding.
+ * Verifies declared header-body insertion and actual commit after changing only header padding.
  *
  * @param page - Browser containing the mounted fixture.
- * @param parent - Actual child-list parent, separate from structural board ownership.
+ * @param parent - Actual receiving parent whose header owns the body declaration, separate from structural board ownership.
  * @param padding - Additional header padding in CSS pixels.
- * @returns Resolves after checking the chosen line, persisted parent and undo.
+ * @returns Resolves after checking the complete hierarchy outline, persisted append order and undo. The nearest child gap does not replace a declared header body.
  */
 async function verifyHeader(page: Page, parent: string, padding: number): Promise<void> {
-  const header = page.locator('[data-block-id="target"] .rivto-block-row').first();
+  const owner = page.locator(`[data-block-id="${parent}"]`);
+  const header = owner.locator(":scope > .rivto-block-row");
   await header.evaluate((element, padding) => {
     element.style.paddingTop = `${padding}px`;
   }, padding);
   const row = (await header.boundingBox())!;
-  const container = (await page.locator('[data-block-id="target"]').boundingBox())!;
-  const first = await page.locator('[data-block-id="first"]').evaluate((element) => {
-    let item = element;
-    while (item.parentElement && !item.parentElement.classList.contains("rivto-block-children")) {
-      item = item.parentElement;
-    }
-    return item.getBoundingClientRect().toJSON();
-  });
-  const point = { x: Math.max(row.x + 24, first.x + 16), y: row.y + row.height - 3 };
-  const child = Math.abs(first.y - point.y) < Math.abs(container.y - point.y);
-  await dragToHeader(page, point);
-  const line = page.locator(".rivto-block-drop-line:visible");
-  await expect(line).toBeVisible();
-  const rect = (await line.boundingBox())!;
-  expect(rect.y + rect.height / 2).toBeCloseTo(child ? first.y : container.y, 0);
+  await dragToHeader(page, { x: row.x + row.width / 2, y: row.y + row.height / 2 });
+  await expect(owner).toHaveAttribute("data-block-drop-active", "true");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
   await page.mouse.up();
-  await verifyHeaderMove(page, parent, child);
+  await verifyHeaderMove(page, parent);
 }
 
 /**
@@ -83,10 +73,9 @@ async function verifyHeader(page: Page, parent: string, padding: number): Promis
  *
  * @param page - Browser containing the completed gesture.
  * @param parent - Actual receiving child-list owner.
- * @param child - Whether geometry selected that child list instead of the outer gap.
  * @returns Resolves when the move and its single undo have restored the expected hierarchy.
  */
-async function verifyHeaderMove(page: Page, parent: string, child: boolean): Promise<void> {
+async function verifyHeaderMove(page: Page, parent: string): Promise<void> {
   await expect
     .poll(() =>
       page.evaluate(
@@ -96,26 +85,16 @@ async function verifyHeaderMove(page: Page, parent: string, child: boolean): Pro
           ).__rivtoDemo.editor.blocks.getParentId("moving") ?? null,
       ),
     )
-    .toBe(child ? parent : null);
-  if (child) {
-    expect(
-      await page.evaluate(
-        (parent) =>
-          (
-            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
-          ).__rivtoDemo.editor.blocks.getChildIds(parent),
-        parent,
-      ),
-    ).toEqual(["moving", "first", "last"]);
-  } else {
-    expect(
-      await page.evaluate(() =>
+    .toBe(parent);
+  expect(
+    await page.evaluate(
+      (parent) =>
         (
           window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
-        ).__rivtoDemo.editor.blocks.getRootIds(),
-      ),
-    ).toEqual(["moving", "target"]);
-  }
+        ).__rivtoDemo.editor.blocks.getChildIds(parent),
+      parent,
+    ),
+  ).toEqual(["first", "last", "moving"]);
   await page.keyboard.press("ControlOrMeta+z");
   await expect
     .poll(() =>
@@ -130,7 +109,7 @@ async function verifyHeaderMove(page: Page, parent: string, child: boolean): Pro
 
 for (const type of ["bento", "kanban", "todo-storage"]) {
   for (const mode of ["block", "edgeless"] as const) {
-    test(`nearest permitted insertion from ${type} header in ${mode}`, async ({ page }) => {
+    test(`declared inside insertion from ${type} receiving header in ${mode}`, async ({ page }) => {
       await page.setViewportSize({ width: 1400, height: 1200 });
       await page.goto("/");
       await page.locator(".page-surface").first().waitFor();
@@ -141,7 +120,7 @@ for (const type of ["bento", "kanban", "todo-storage"]) {
             .__rivtoDemo.editor;
           editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
           editor.blocks.insertBlock(block);
-          editor.blocks.insertBlock({ id: "moving", type: "paragraph", content: "Moving" });
+          editor.blocks.insertBlock({ id: "moving", type: "todo-item", content: "Moving" });
           if (mode === "edgeless") {
             editor.elements.insertElement({
               type: "block",

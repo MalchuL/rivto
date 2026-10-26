@@ -3,6 +3,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 import {
   HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
   BLOCK_ROW_SELECTOR,
+  ROOT_BLOCK_SELECTOR,
   blockTypeSelector,
 } from "./dom-markers";
 
@@ -368,7 +369,7 @@ test("copies and pastes a mouse-dragged multi-block selection", async ({ page })
   // These three adjacent leaf roots have no embedding or descendants between them.
   const contents = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .filter({ hasText: /^(Finish the selection|Type `\/`|Try the interactive checkbox)/ });
   await contents.first().click();
@@ -402,7 +403,7 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
   await page.setViewportSize({ width: 1280, height: 1800 });
   const contents = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .filter({
       hasText: /^(Start a selection in|This complete|Nested branch one owns|Reverse selection)/,

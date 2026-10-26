@@ -87,20 +87,20 @@ handle находится в end slot, чтобы не менять размер
 не прокручивает страницу внутри измеряемого интервала. Два RAF — proxy кадра,
 а не гарантия завершения всех асинхронных layout updates.
 
-| Browser | Fixture | repeat | virtual | Два RAF, median (min–max), ms | Чтения узлов |
-| --- | --- | --- | --- | --- | --- |
-| Chromium | outline | 1 | no | 26.5 (25.3–27.6) | 57 |
-| Chromium | outline | 200 | no | 41.1 (40.3–42.0) | 57 |
-| Chromium | outline | 200 | yes | 25.2 (23.7–27.2) | 59 |
-| Chromium | Kanban | 1 | no | 27.1 (26.9–27.6) | 51 |
-| Chromium | Kanban | 200 | no | 88.0 (84.7–94.1) | 51 |
-| Chromium | Kanban | 200 | yes | 33.8 (24.0–44.8) | 51–52 |
-| Firefox | outline | 1 | no | 28 (25–30) | 57 |
-| Firefox | outline | 200 | no | 50 (47–51) | 57–58 |
-| Firefox | outline | 200 | yes | 37 (31–40) | 59 |
-| Firefox | Kanban | 1 | no | 31.5 (31–35) | 51 |
-| Firefox | Kanban | 200 | no | 64 (60–109) | 51 |
-| Firefox | Kanban | 200 | yes | 89 (82–153) | 51 |
+| Browser  | Fixture | repeat | virtual | Два RAF, median (min–max), ms | Чтения узлов |
+| -------- | ------- | ------ | ------- | ----------------------------- | ------------ |
+| Chromium | outline | 1      | no      | 26.5 (25.3–27.6)              | 57           |
+| Chromium | outline | 200    | no      | 41.1 (40.3–42.0)              | 57           |
+| Chromium | outline | 200    | yes     | 25.2 (23.7–27.2)              | 59           |
+| Chromium | Kanban  | 1      | no      | 27.1 (26.9–27.6)              | 51           |
+| Chromium | Kanban  | 200    | no      | 88.0 (84.7–94.1)              | 51           |
+| Chromium | Kanban  | 200    | yes     | 33.8 (24.0–44.8)              | 51–52        |
+| Firefox  | outline | 1      | no      | 28 (25–30)                    | 57           |
+| Firefox  | outline | 200    | no      | 50 (47–51)                    | 57–58        |
+| Firefox  | outline | 200    | yes     | 37 (31–40)                    | 59           |
+| Firefox  | Kanban  | 1      | no      | 31.5 (31–35)                  | 51           |
+| Firefox  | Kanban  | 200    | no      | 64 (60–109)                   | 51           |
+| Firefox  | Kanban  | 200    | yes     | 89 (82–153)                   | 51           |
 
 Synchronous host commit во всех финальных samples: 0–0.2 ms Chromium,
 0 ms Firefox на доступной точности таймера. Это не означает нулевую стоимость.

@@ -89,3 +89,37 @@ it.each([
     root.remove();
   }
 });
+
+it("retains selection published by an earlier native capture owner", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("owned");
+  const editor = new BlockEditorController({ adapter });
+  const features = new BlockSelectionExtensions({
+    toggle: "toggle",
+    range: "range",
+    exact: "exact",
+  });
+  editor.extensions.register("click", features.feature("click"));
+  const root = document.createElement("div");
+  root.dataset.rivtoBlockEditor = "true";
+  root.addEventListener(
+    "pointerdown",
+    (event) => {
+      adapter.selection.set({
+        type: "selection",
+        blocks: [{ id: "owned", start: 0, end: -1 }],
+        anchorBlockId: "owned",
+        focusBlockId: "owned",
+      });
+      event.stopPropagation();
+    },
+    { capture: true },
+  );
+  editor.attach(root);
+  try {
+    root.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    expect(adapter.selection.get()?.blocks.map(({ id }) => id)).toEqual(["owned"]);
+  } finally {
+    editor.destroy();
+  }
+});

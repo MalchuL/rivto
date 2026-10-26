@@ -93,7 +93,10 @@ it("renders Kanban lanes once and retains empty Page child hosts", async () => {
     </TestPanel>,
   );
   expect(markup.match(/data-block-id=/g)).toHaveLength(4);
-  expect(markup.match(/class="rivto-block-children"/g)).toHaveLength(4);
+  const childHosts = [...markup.matchAll(/class="([^"]*)"/g)].filter((match) =>
+    match[1]?.split(" ").includes("rivto-block-children"),
+  );
+  expect(childHosts).toHaveLength(4);
   expect(markup.match(/aria-label="Kanban column title"/g)).toHaveLength(3);
   panel.editor.destroy();
   core.destroy();

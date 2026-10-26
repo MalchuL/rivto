@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
@@ -610,7 +611,7 @@ test("bottom-up nested drag does not select a parent from the gap between childr
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const child = parent.locator(`.rivto-block-children ${BLOCK_ID_SELECTOR}`).last();
@@ -700,13 +701,10 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   await page.keyboard.press("Alt+ArrowUp");
   await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("Alt+Shift+ArrowDown");
-  await expect(
-    page
-      .locator(
-        `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > ${BLOCK_ID_SELECTOR}`,
-      )
-      .nth(1),
-  ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId!);
+  await expect(page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).nth(1)).toHaveAttribute(
+    BLOCK_ID_ATTRIBUTE,
+    firstId!,
+  );
   await expect(page.locator(blockIdSelector(firstId!)).locator("[data-block-content]")).toHaveText(
     firstText ?? "",
   );
@@ -924,7 +922,7 @@ for (const mode of ["block", "edgeless"] as const) {
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
   const parent = page
     .locator(
-      "[data-journal-document='today'] > .page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]:has(> .rivto-block-children)",
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
     )
     .first();
   const siblings = parent.locator(`:scope > .rivto-block-children > ${BLOCK_ID_SELECTOR}`);

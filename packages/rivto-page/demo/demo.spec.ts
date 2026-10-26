@@ -122,8 +122,8 @@ test("keeps host state through reorder, renderer registration, and editor remoun
   await page.getByRole("checkbox", { name: "Custom renderer", exact: true }).check();
   await expect(page.getByRole("textbox", { name: "Text block-5", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reverse block order", exact: true }).click();
-  await expect(page.locator("[data-rivto-block-editor] > [data-block-id]").first()).toHaveAttribute(
-    "data-block-id",
+  await expect(page.locator("[data-virtual-block-id]").first()).toHaveAttribute(
+    "data-virtual-block-id",
     "block-5",
   );
   await expect(text).toHaveText("Preserved across remount");
@@ -173,22 +173,22 @@ test("keeps list counter rules scoped to sibling groups after type changes and r
   page,
 }) => {
   await page.goto("/");
-  const third = page.locator('[data-block-id="block-3"]');
-  const fourth = page.locator('[data-block-id="block-4"]');
-  const fifth = page.locator('[data-block-id="block-5"]');
-  await expect(third).toHaveCSS("counter-set", "rivto-list-number 1");
+  const third = page.locator('[data-virtual-block-id="block-3"]');
+  const fourth = page.locator('[data-virtual-block-id="block-4"]');
+  const fifth = page.locator('[data-virtual-block-id="block-5"]');
+  await expect(third).toHaveCSS("counter-reset", "rivto-list-number 1");
   await expect(third).toHaveCSS("counter-increment", "none");
-  await expect(fourth).toHaveCSS("counter-set", "rivto-list-number 1");
-  await expect(fifth).toHaveCSS("counter-increment", "rivto-list-number 1");
+  await expect(fourth).toHaveCSS("counter-reset", "rivto-list-number 1");
+  await expect(fifth).toHaveCSS("counter-reset", "rivto-list-number 2");
   await expect(fifth.locator("[data-list-marker]")).toHaveCount(1);
   await page.getByLabel("List type block-4", { exact: true }).selectOption("");
   await expect(fourth.locator("[data-list-marker]")).toHaveCount(0);
-  await expect(fifth).toHaveCSS("counter-set", "none");
+  await expect(fifth).toHaveCSS("counter-reset", "rivto-list-number 2");
   await page.getByRole("checkbox", { name: "Custom renderer", exact: true }).check();
   await page.getByLabel("List type block-5", { exact: true }).selectOption("numbered_list");
-  await expect(fifth).toHaveCSS("counter-set", "rivto-list-number 1");
+  await expect(fifth).toHaveCSS("counter-reset", "rivto-list-number 1");
   await page.getByRole("button", { name: "Reverse block order", exact: true }).click();
-  await expect(fifth).toHaveCSS("counter-set", "rivto-list-number 1");
+  await expect(fifth).toHaveCSS("counter-reset", "rivto-list-number 1");
   await page.getByLabel("List type child-0", { exact: true }).selectOption("numbered_list");
   const child = page.locator('[data-block-id="child-0"]');
   await expect(child).toHaveCSS("counter-set", "rivto-list-number 1");
@@ -387,7 +387,8 @@ for (const repeat of [1, 200]) {
       );
       expect(metrics.blockIdsReads).toBe(0);
       expect(metrics.nodeReads).toBeLessThanOrEqual(24);
-      expect(metrics.notifications).toBe(2);
+      // Own-node observers cover the renderer, controls and root list-counter metadata.
+      expect(metrics.notifications).toBe(3);
       await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
       samples.push({
         commandMs: metrics.commandMs,
@@ -433,7 +434,8 @@ for (const repeat of [1, 200]) {
       );
       expect(metrics.blockIdsReads).toBe(0);
       expect(metrics.nodeReads).toBeLessThanOrEqual(24);
-      expect(metrics.notifications).toBe(2);
+      // Own-node observers cover the renderer, controls and root list-counter metadata.
+      expect(metrics.notifications).toBe(3);
       await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
       samples.push({
         commandMs: metrics.commandMs,
@@ -480,7 +482,8 @@ for (const repeat of [1, 200]) {
         );
         expect(metrics.blockIdsReads).toBe(0);
         expect(metrics.nodeReads).toBeLessThanOrEqual(control === collapse ? 48 : 24);
-        expect(metrics.notifications).toBe(2);
+        // Own-node observers cover the renderer, controls and root list-counter metadata.
+        expect(metrics.notifications).toBe(3);
         await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
         samples.push({
           control: control === collapse ? "collapse" : "checkbox",
@@ -536,7 +539,7 @@ test("registers an element-owning wrapper dynamically and retains it across edit
   await expect(
     page.locator('[data-demo-wrapper="child-0"] > [data-block-id="child-0"]'),
   ).toHaveCount(1);
-  await expect(page.locator("[data-rivto-block-editor] > [data-demo-wrapper]")).toHaveCount(5);
+  await expect(page.locator("[data-virtual-block-id] > [data-demo-wrapper]")).toHaveCount(5);
   await text.click();
   await expect(wrapper).toHaveAttribute("data-demo-wrapper-pointer", "true");
   await expect(text).toHaveText("Retained through wrapper changes");
@@ -577,7 +580,8 @@ for (const repeat of [1, 200]) {
       );
       expect(metrics.blockIdsReads).toBe(0);
       expect(metrics.nodeReads).toBeLessThanOrEqual(24);
-      expect(metrics.notifications).toBe(2);
+      // Own-node observers cover the renderer, controls and root list-counter metadata.
+      expect(metrics.notifications).toBe(3);
       await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
       samples.push({
         commandMs: metrics.commandMs,
@@ -592,21 +596,21 @@ for (const repeat of [1, 200]) {
   });
 }
 
-test("keeps list counter ownership on wrapper elements and existing tile placements", async ({
+test("keeps list counter ownership on virtual roots and existing tile placements", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByRole("checkbox", { name: "Demo wrapper", exact: true }).check();
   for (const id of ["block-3", "block-4"]) {
-    await expect(page.locator(`[data-demo-wrapper="${id}"]`)).toHaveCSS(
-      "counter-set",
+    await expect(page.locator(`[data-virtual-block-id="${id}"]`)).toHaveCSS(
+      "counter-reset",
       "rivto-list-number 1",
     );
     await expect(page.locator(`[data-block-id="${id}"]`)).toHaveCSS("counter-increment", "none");
   }
   await page.getByRole("checkbox", { name: "Demo wrapper", exact: true }).uncheck();
-  await expect(page.locator('[data-block-id="block-3"]')).toHaveCSS(
-    "counter-set",
+  await expect(page.locator('[data-virtual-block-id="block-3"]')).toHaveCSS(
+    "counter-reset",
     "rivto-list-number 1",
   );
   await page.goto("/?example=bento");
@@ -619,11 +623,8 @@ test("keeps list counter ownership on wrapper elements and existing tile placeme
     "rivto-list-number 1",
   );
   await page.getByRole("checkbox", { name: "Inspect drop zones", exact: true }).check();
-  await page
-    .locator(
-      '[data-demo-tile="board-1-item-1"] > [data-drop-placement="before"][data-drop-edge="block"]',
-    )
-    .hover();
+  const tile = (await page.locator('[data-demo-tile="board-1-item-1"]').boundingBox())!;
+  await page.mouse.move(tile.x + tile.width / 2, tile.y + 1);
   await expect(page.locator("[data-demo-drop-output]")).toContainText('"nextId":"board-1-item-1"');
 });
 

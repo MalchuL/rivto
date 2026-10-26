@@ -72,16 +72,33 @@ test("moves a selected group including an unmounted source from another parent",
   const first = "board-1-item-1-child-1";
   const last = "board-200-item-1-child-1";
   await page.locator(`[data-block-id="${first}"] strong`).click();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+  const middle = await page.locator("[data-virtual-block-id]").evaluateAll((roots) => {
+    const visible = roots.find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < window.innerHeight;
+    });
+    return visible
+      ?.querySelector('[data-block-id$="-item-1-child-1"]')
+      ?.getAttribute("data-block-id");
+  });
+  expect(middle).toBeTruthy();
+  await page.locator(`[data-block-id="${middle}"] strong`).click({ modifiers: ["Control"] });
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(page.locator(`[data-block-id="${last}"]`)).toBeVisible();
-  await expect(page.locator(`[data-block-id="${first}"]`)).toHaveCount(0);
   await page.keyboard.down("Control");
   await page.locator(`[data-block-id="${last}"] strong`).click();
   await page.keyboard.up("Control");
+  // Reconcile the window after replacing the previously pinned focus endpoint.
+  await page.evaluate(() => window.scrollBy(0, -window.innerHeight));
+  await expect(page.locator(`[data-block-id="${middle}"]`)).toHaveCount(0);
   const target = "board-200-item-2";
   await dragBlock(page, last, target);
   const moved = page.locator(`[data-block-id="${target}"] [data-block-id]`);
-  await expect(moved).toHaveCount(4);
+  await expect(moved).toHaveCount(5);
+  await expect(
+    page.locator(`[data-block-id="${target}"] [data-block-id="${middle}"]`),
+  ).toHaveAttribute("data-block-selected", "true");
   await expect(
     page.locator(`[data-block-id="${target}"] [data-block-id="${first}"]`),
   ).toHaveAttribute("data-block-selected", "true");

@@ -521,6 +521,8 @@ it("does not search sibling geometry for a contained inside target", () => {
 });
 
 it("keeps a shared gap ahead of a custom inside wrapper spanning both anchors", () => {
+  host.dataset.blockId = "parent";
+  editor.regions.register("parent", "shell", host);
   const wrapper = document.createElement("div");
   host.append(wrapper);
   wrapper.append(item);
@@ -2120,4 +2122,120 @@ it("keeps a local shared sibling rim when child edges coincide without padding",
   expect(target?.destination).toEqual(destination);
   expect(target?.indicator?.top).toBe(201);
   expect(editor.dropTargets.resolve(100, 206, new Set(["a"]), child)?.destination).toEqual(inner);
+});
+
+it("keeps an explicit header body ahead of its owner's continued child-list endpoints", () => {
+  host.dataset.blockId = "parent";
+  const row = document.createElement("div");
+  host.prepend(row);
+  rect(row, 0, 0, 400, 120);
+  rect(item, 40, 140, 320, 100);
+  const children = document.createElement("div");
+  host.append(children);
+  children.append(item);
+  rect(children, 0, 120, 400, 200);
+  editor.regions.register("parent", "shell", host);
+  editor.regions.register("parent", "row", row);
+  editor.regions.register("parent", "children", children);
+  const entry = register(item, [
+    {
+      kind: "edge",
+      side: "block-start",
+      destination: { kind: "between", parentId: "parent", previousId: null, nextId: "a" },
+    },
+  ]);
+  register(row, [{ kind: "inside", destination: { kind: "inside", parentId: "parent" } }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  const result = editor.dropTargets.resolve(200, 60, undefined, row);
+  expect(result?.destination).toEqual({ kind: "inside", parentId: "parent" });
+  expect(result?.indicator).toBeUndefined();
+  expect(result?.outlineElement).toBe(host);
+});
+
+it("keeps vertical endpoint padding when its owner's edge meets the perpendicular list", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  adapter.setNode("child");
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "child";
+  item.append(children);
+  children.append(child);
+  rect(item, 0, 0, 200, 200);
+  rect(children, 0, 0, 200, 200);
+  rect(child, 40, 40, 120, 120);
+  const inner = { kind: "between", parentId: "a", previousId: null, nextId: "child" } as const;
+  const lane = register(item, [
+    {
+      kind: "edge",
+      side: "inline-start",
+      destination: { kind: "between", parentId: "parent", previousId: null, nextId: "a" },
+    },
+  ]);
+  const entry = register(child, [{ kind: "edge", side: "block-start", destination: inner }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "horizontal",
+    gaps: true,
+    getItems: () => [lane],
+  });
+  expect(editor.dropTargets.resolve(4, 4, undefined, children)?.destination).toEqual(inner);
+});
+
+it("normalizes terminal child append feedback through the parent's shared sibling seam", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  adapter.setNode("child");
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "child";
+  item.append(children);
+  children.append(child);
+  rect(children, 28, 40, 172, 60);
+  rect(child, 28, 40, 172, 60);
+  const next = document.createElement("div");
+  next.dataset.blockId = "b";
+  host.append(next);
+  rect(next, 0, 104);
+  const append = { kind: "between", parentId: "a", previousId: "child", nextId: null } as const;
+  const parent = register(item, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+    },
+  ]);
+  const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+  const entry = register(child, [{ kind: "edge", side: "block-end", destination: append }]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [parent, following],
+  });
+  for (const [y, hit] of [
+    [99, child],
+    [102, host],
+    [105, next],
+  ] as const) {
+    const target = editor.dropTargets.resolve(30, y, undefined, hit);
+    expect(target?.destination.parentId).toBe("a");
+    expect(target?.indicator?.top).toBe(101);
+  }
 });

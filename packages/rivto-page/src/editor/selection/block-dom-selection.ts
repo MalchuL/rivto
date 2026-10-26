@@ -368,6 +368,8 @@ export class BlockDOMSelection {
    * plain-text offset onto a live Text (or Element) node via {@link pointAtOffset}.
    * An active virtual view first mounts the expanded subtree synchronously without
    * scrolling. Collapsed or missing blocks remain unresolved; call outside React render.
+   * Already mounted structural blocks without editable content do not request
+   * another mount and remain unresolved without retaining extra virtual roots.
    *
    * @param root - BlockEditor root used to find the block's content host.
    * @param position - Stable `{ blockId, offset }` from the editor model.
@@ -379,7 +381,7 @@ export class BlockDOMSelection {
     position: EditorPosition,
   ): DOMSelectionPoint | undefined {
     let content = this.findContent(root, position.blockId);
-    if (!content) {
+    if (!content && !this.hasMountedBlock(root, position.blockId)) {
       BlockVirtualizationController.getForRoot(root)?.mountBlocks([position.blockId]);
       content = this.findContent(root, position.blockId);
     }
@@ -705,6 +707,22 @@ export class BlockDOMSelection {
       }
     }
     return undefined;
+  }
+
+  /**
+   * Distinguishes an unmounted block from a mounted structural block without editable text.
+   *
+   * Structural cards cannot supply a native text point. Requesting another mount
+   * for their existing shells would retain unnecessary virtual-root pins without
+   * a native selection change to release them.
+   *
+   * @param root - Editor occurrence whose mounted shells may be inspected.
+   * @param id - Stable identity of the requested text endpoint.
+   * @returns True for an existing shell owned by this occurrence, excluding nested editors.
+   */
+  private hasMountedBlock(root: HTMLElement, id: string): boolean {
+    const blocks = root.querySelectorAll<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`);
+    return Array.from(blocks).some((block) => this.contains(root, block));
   }
 
   /**

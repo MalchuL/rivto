@@ -72,8 +72,8 @@ between line.
 | P23 | Escape, pointer cancel, blur, source deletion, target unmount    | Cleanup restores feedback/source state; unavailable destinations cannot commit                 | Page demo drag; drop-target lifecycle units                             |
 | P24 | Ancestor into descendant, forbidden/stale gap                    | Permission or live destination validation rejects mutation                                     | drop-target units; page-drag-container-boundary                         |
 | P25 | Table compatibility                                              | Shared changes preserve row/cell ownership and ordinary cell outline                           | container-outline; container-layout; page-drop-parity                   |
-| P26 | Container title with changed header/child padding                 | Nearest permitted local insertion follows measured bounds; never header-half-to-distant-bottom | block-container-header units; container-header-placement               |
-| P27 | Header above structural lane, rejected host, collapsed children   | Descend nearest structural branch when needed; omit forbidden/hidden/source candidates          | block-container-header units; container-outline header performance     |
+| P26 | Container title with changed header/child padding                | Nearest permitted local insertion follows measured bounds; never header-half-to-distant-bottom | block-container-header units; container-header-placement                |
+| P27 | Header above structural lane, rejected host, collapsed children  | Descend nearest structural branch when needed; omit forbidden/hidden/source candidates         | block-container-header units; container-outline header performance      |
 
 The test names above identify intended coverage, not a claim that every suite has
 passed on this branch. Run results and remaining gaps must be reported separately.
@@ -178,12 +178,12 @@ descent, collapsed/source exclusion and neutral-wrapper rim coverage.
 Paired ordinary-gap measurements before → after this follow-up, milliseconds,
 median (minimum–maximum):
 
-| Browser / size | Move command | Release to two frames |
-| --- | --- | --- |
-| Chromium normal | 0.9 (0.7–2.7) → 0.9 (0.9–1.0) | 23.9 (23.1–25.5) → 23.0 (20.7–25.3) |
+| Browser / size      | Move command                  | Release to two frames               |
+| ------------------- | ----------------------------- | ----------------------------------- |
+| Chromium normal     | 0.9 (0.7–2.7) → 0.9 (0.9–1.0) | 23.9 (23.1–25.5) → 23.0 (20.7–25.3) |
 | Chromium repeat=200 | 1.8 (1.3–1.9) → 1.7 (1.6–2.6) | 30.6 (26.3–36.9) → 30.0 (27.7–48.2) |
-| Firefox normal | 1 (0–1) → 1 (1–2) | 18 (11–20) → 19 (16–19) |
-| Firefox repeat=200 | 4 (4–5) → 3 (3–4) | 14 (12–15) → 14 (12–48) |
+| Firefox normal      | 1 (0–1) → 1 (1–2)             | 18 (11–20) → 19 (16–19)             |
+| Firefox repeat=200  | 4 (4–5) → 3 (3–4)             | 14 (12–15) → 14 (12–48)             |
 
 New header-path command / release medians (ranges): Chromium normal 1.1 (1.1–1.1)
 / 25.5 (25.4–26.3), large 1.5 (1.0–1.6) / 28.2 (28.2–28.8); Firefox normal
@@ -244,16 +244,16 @@ Final verification for the release fix:
 
 Paired timing results, milliseconds, median (minimum–maximum):
 
-| Browser / size / destination | Move before → after | Release to two frames before → after |
-| --- | --- | --- |
-| Chromium normal / gap | 1.6 (1.0–1.7) → 1.0 (0.8–1.1) | 19.7 (18.1–23.0) → 24.4 (22.9–24.5) |
-| Chromium normal / header | 1.4 (1.0–2.3) → 1.0 (0.8–1.0) | 25.0 (23.3–27.1) → 26.7 (25.6–27.6) |
-| Chromium repeat=200 / gap | 1.6 (1.2–1.6) → 1.6 (1.2–1.7) | 35.9 (30.0–36.3) → 31.5 (29.5–38.9) |
-| Chromium repeat=200 / header | 1.6 (1.1–1.7) → 1.6 (1.2–1.7) | 29.2 (28.4–29.5) → 33.0 (31.4–33.6) |
-| Firefox normal / gap | 1 (1–1) → 2 (1–2) | 7 (5–22) → 17 (15–19) |
-| Firefox normal / header | 1 (1–1) → 1 (1–3) | 21 (19–24) → 23 (22–23) |
-| Firefox repeat=200 / gap | 4 (4–5) → 4 (4–10) | 13 (13–14) → 23 (13–46) |
-| Firefox repeat=200 / header | 5 (4–5) → 5 (5–6) | 24 (20–25) → 19 (16–25) |
+| Browser / size / destination | Move before → after           | Release to two frames before → after |
+| ---------------------------- | ----------------------------- | ------------------------------------ |
+| Chromium normal / gap        | 1.6 (1.0–1.7) → 1.0 (0.8–1.1) | 19.7 (18.1–23.0) → 24.4 (22.9–24.5)  |
+| Chromium normal / header     | 1.4 (1.0–2.3) → 1.0 (0.8–1.0) | 25.0 (23.3–27.1) → 26.7 (25.6–27.6)  |
+| Chromium repeat=200 / gap    | 1.6 (1.2–1.6) → 1.6 (1.2–1.7) | 35.9 (30.0–36.3) → 31.5 (29.5–38.9)  |
+| Chromium repeat=200 / header | 1.6 (1.1–1.7) → 1.6 (1.2–1.7) | 29.2 (28.4–29.5) → 33.0 (31.4–33.6)  |
+| Firefox normal / gap         | 1 (1–1) → 2 (1–2)             | 7 (5–22) → 17 (15–19)                |
+| Firefox normal / header      | 1 (1–1) → 1 (1–3)             | 21 (19–24) → 23 (22–23)              |
+| Firefox repeat=200 / gap     | 4 (4–5) → 4 (4–10)            | 13 (13–14) → 23 (13–46)              |
+| Firefox repeat=200 / header  | 5 (4–5) → 5 (5–6)             | 24 (20–25) → 19 (16–25)              |
 
 The release lookup adds no gesture state or document traversal. Frame values vary
 with browser scheduling; these small samples do not establish a speedup. The
@@ -273,11 +273,11 @@ public options, additional listeners, retained geometry or document-wide scans.
 New coverage in `e2e/bento-placement.spec.ts` uses native pointer input and checks
 persisted parent/order plus one-step undo:
 
-| Placement | Combinations | Feedback assertion |
-| --- | --- | --- |
-| Painted tile rims | First/last tile × top/bottom/left/right × 1/4/7px inset × inline/wrapped | One line; internal gaps centered between full item bounds with the correct orientation |
-| Writing gap below an expanded subtree | Sibling/nested depth × inline/wrapped tile | One insertion line, actual receiving parent and complete child order |
-| Generic registered grid (unit) | All rims, center nesting, resize chrome, moving-source exclusion, RTL, nesting disabled | Canonical gaps and full-item indicator bounds, without a native container type |
+| Placement                             | Combinations                                                                            | Feedback assertion                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Painted tile rims                     | First/last tile × top/bottom/left/right × 1/4/7px inset × inline/wrapped                | One line; internal gaps centered between full item bounds with the correct orientation |
+| Writing gap below an expanded subtree | Sibling/nested depth × inline/wrapped tile                                              | One insertion line, actual receiving parent and complete child order                   |
+| Generic registered grid (unit)        | All rims, center nesting, resize chrome, moving-source exclusion, RTL, nesting disabled | Canonical gaps and full-item indicator bounds, without a native container type         |
 
 The unit reproduction failed five of the original six new assertions before the
 fix. The native first-tile left/right rim reproduction failed all four browser
@@ -313,12 +313,12 @@ three warmed native drops per case, with actual order and undo assertions. Build
 comparison substitutes only the resolver. These measure the shared nested-writing
 path; painted-rim cases are behavioral tests, not separate timing benchmarks.
 
-| Browser / document | Move before → after, ms median (range) | Release to two frames before → after, ms median (range) |
-| --- | --- | --- |
-| Chromium / normal | 0.9 (0.8–1.0) → 0.8 (0.7–0.8) | 23.0 (21.6–24.6) → 23.8 (22.3–25.5) |
-| Chromium / repeat=200 | 1.7 (1.3–1.8) → 1.7 (1.1–1.9) | 41.8 (33.3–45.7) → 35.2 (32.9–41.4) |
-| Firefox / normal | 1 (1–1) → 1 (1–2) | 18 (12–21) → 19 (19–19) |
-| Firefox / repeat=200 | 4 (3–5) → 10 (6–11) | 15 (11–49) → 31 (21–39) |
+| Browser / document    | Move before → after, ms median (range) | Release to two frames before → after, ms median (range) |
+| --------------------- | -------------------------------------- | ------------------------------------------------------- |
+| Chromium / normal     | 0.9 (0.8–1.0) → 0.8 (0.7–0.8)          | 23.0 (21.6–24.6) → 23.8 (22.3–25.5)                     |
+| Chromium / repeat=200 | 1.7 (1.3–1.8) → 1.7 (1.1–1.9)          | 41.8 (33.3–45.7) → 35.2 (32.9–41.4)                     |
+| Firefox / normal      | 1 (1–1) → 1 (1–2)                      | 18 (12–21) → 19 (19–19)                                 |
+| Firefox / repeat=200  | 4 (3–5) → 10 (6–11)                    | 15 (11–49) → 31 (21–39)                                 |
 
 The initial large-Firefox difference prompted one additional paired run, not a
 change to budgets or assertions: move medians were **4 (4–24) → 4 (4–5)ms** and

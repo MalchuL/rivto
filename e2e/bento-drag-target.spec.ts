@@ -52,12 +52,18 @@ for (const mode of ["block", "edgeless"] as const) {
     const row = (await target.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
     for (let y = Math.ceil(row.y); y < row.y + row.height; y++) {
       await page.mouse.move(row.x + row.width / 2, y);
-      const rim = y - row.y < 8 || row.y + row.height - y <= 8;
-      await expect(
-        rim ? target : target.locator(`:scope > .${ROW_CLASS}`),
-        `hovered row at y=${y}`,
-      ).toHaveAttribute("data-block-drop-active", rim ? "between" : "true");
+      await expect(target, `hovered content row at y=${y}`).toHaveAttribute(
+        "data-block-drop-active",
+        "true",
+      );
       await expect(previous).not.toHaveAttribute("data-block-drop-active", "true");
+    }
+    const tile = (await target
+      .locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]")
+      .boundingBox())!;
+    for (const y of [tile.y + 2, tile.y + tile.height - 2]) {
+      await page.mouse.move(tile.x + 12, y);
+      await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
     }
     await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2);
     await page.mouse.up();

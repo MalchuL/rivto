@@ -109,12 +109,12 @@ async function commitAndUndo(page: Page, parent: string, children: string[]): Pr
 }
 
 /**
- * Finds a point within a painted tile rim rather than an implementation-specific strip.
+ * Finds a point within a declared tile rim rather than an implementation-specific strip element.
  *
- * @param box - Complete canonical tile bounds including its own padding.
+ * @param box - Complete placement bounds including the wrapper's measured edge strips.
  * @param edge - Physical rim to approach.
  * @param inset - Distance into the painted tile in CSS pixels.
- * @returns Viewport point at the chosen edge's midpoint.
+ * @returns Viewport point in the sibling band of block edges or at an inline edge's midpoint.
  */
 function edgePoint(
   box: { x: number; y: number; width: number; height: number },
@@ -123,9 +123,11 @@ function edgePoint(
 ): { x: number; y: number } {
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   if (edge === "top") {
+    point.x = box.x + 12;
     point.y = box.y + inset;
   }
   if (edge === "bottom") {
+    point.x = box.x + 12;
     point.y = box.y + box.height - inset;
   }
   if (edge === "left") {
@@ -172,7 +174,7 @@ for (const wrapped of [false, true]) {
           page,
         }) => {
           await loadBento(page, wrapped);
-          const box = (await page.locator(`[data-block-id="${tile}"]`).boundingBox())!;
+          const box = (await page.locator(`[data-block-item-id="${tile}"]`).boundingBox())!;
           const before = edge === "top" || edge === "left";
 
           await dragTo(page, edgePoint(box, edge, inset));
@@ -180,7 +182,10 @@ for (const wrapped of [false, true]) {
             '.rivto-block-drop-line:visible, .page-drop-indicator[data-kind="between"]:visible',
           );
           await expect(line).toHaveCount(1);
-          if ((tile === "first" && !before) || (tile === "last" && before)) {
+          const sharedEdge = wrapped
+            ? (tile === "first" && edge === "bottom") || (tile === "last" && edge === "top")
+            : (tile === "first" && edge === "right") || (tile === "last" && edge === "left");
+          if (sharedEdge) {
             await expectTileGap(page, wrapped);
           }
           const order = ["first", "last"];

@@ -61,7 +61,7 @@ for (const mode of ["block", "edgeless"] as const) {
         for (const offset of [-1, 1, -1]) {
           await page.mouse.move(upper.x + (child ? 36 : 12), box.y + offset, { steps: 15 });
           await expect(lower).not.toHaveAttribute("data-block-drop-active", "true");
-          await expect(page.locator('.rivto-block-drop-line:visible')).toBeVisible();
+          await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
         }
         await page.mouse.up();
         await expect
@@ -154,7 +154,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const b = (await second.boundingBox())!;
     await page.mouse.down();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height - 4, { steps: 12 });
-    const line = page.locator('.rivto-block-drop-line:visible');
+    const line = page.locator(".rivto-block-drop-line:visible");
     for (let y = a.y + a.height - 4; y <= b.y + 4; y++) {
       await page.mouse.move(a.x + a.width / 2, y);
       await expect(line).toBeVisible();

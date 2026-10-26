@@ -110,7 +110,11 @@ export class BlockAutoScroll {
       }
       element = element.parentElement;
     }
-    return !!page && this.canAdvance(page, this.edgeStep(y, 0, this.view!.innerHeight));
+    return (
+      !!page &&
+      this.pageCanScroll() &&
+      this.canAdvance(page, this.edgeStep(y, 0, this.view!.innerHeight))
+    );
   }
 
   /**
@@ -146,7 +150,22 @@ export class BlockAutoScroll {
       element = element.parentElement;
     }
     const page = document.scrollingElement;
-    return !!page && this.advance(page, point.y, 0, this.view!.innerHeight);
+    return !!page && this.pageCanScroll() && this.advance(page, point.y, 0, this.view!.innerHeight);
+  }
+
+  /**
+   * Respects document overflow locks while allowing scroll inside modal content.
+   *
+   * Browsers permit programmatic scrolling even when a modal locks native page
+   * scrolling. Both preflight and frame delivery must honor that same lock.
+   *
+   * @returns False while the body or document element clips vertical overflow.
+   */
+  private pageCanScroll(): boolean {
+    const document = this.root.ownerDocument;
+    return [document.body, document.documentElement].every(
+      (element) => !/^(hidden|clip)$/.test(this.view!.getComputedStyle(element).overflowY),
+    );
   }
 
   /**

@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 /**
  * Browser coverage for Markdown preview, source editing, and custom block commands.
  *
@@ -315,7 +316,7 @@ test("filters typo queries, converts in place, and undoes query removal with con
 }) => {
   const content = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
@@ -378,7 +379,7 @@ test("keeps a filtered slash menu beside the caret when it opens upward", async 
 test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
   const editor = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = editor.locator(BLOCK_ANCESTOR_XPATH);
@@ -416,7 +417,7 @@ test("Escape preserves slash text and custom controls update or select their blo
 }) => {
   const editor = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   await editor.click();
@@ -452,7 +453,7 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
 }) => {
   const content = page
     .locator(
-      `[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);

@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Page, type Locator } from "@playwright/test";
 import { BLOCK_ROW_SELECTOR } from "./dom-markers";
 import type { ReactEditor } from "@chulane/rivto-react";
@@ -59,8 +60,12 @@ for (const repeat of [0, 200]) {
     await open(page, ids.root);
     const today = page.locator('[data-journal-document="today"]');
     await expect(today.getByRole("heading", { name: "Panel section" })).toBeVisible();
-    await expect(today.locator(`.page-surface > [data-block-id="${ids.root}"]`)).toHaveCount(0);
-    await expect(today.locator(`.page-surface > [data-block-id="${ids.child}"]`)).toHaveCount(1);
+    await expect(
+      today.locator(` .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-id="${ids.root}"]`),
+    ).toHaveCount(0);
+    await expect(
+      today.locator(` .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-id="${ids.child}"]`),
+    ).toHaveCount(1);
     const child = today.locator(`[data-block-id="${ids.child}"] [data-block-content]`).first();
     await child.fill("Shared child edited");
     await child.press("Home");
@@ -409,12 +414,11 @@ for (const repeat of [0, 200]) {
     );
     const row = block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     const box = await row.boundingBox();
-    const chromeBox = await card.locator(":scope > .edgeless-card-content").boundingBox();
-    if (!box || !chromeBox) {
+    if (!box) {
       throw new Error("Panel block row is missing");
     }
     // The left hover strip belongs to the row; Markdown's editor covers its right edge.
-    const x = chromeBox.x + 2;
+    const x = box.x + 2;
     const y = box.y + box.height / 2;
     expect(
       await row.evaluate((element, { x, y }) => document.elementFromPoint(x, y) === element, {

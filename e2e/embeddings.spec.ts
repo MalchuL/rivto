@@ -659,7 +659,10 @@ test("a host block drops into the embedded document and moves back out", async (
   const region = page.getByRole("region", { name: "Block editor" }).first();
   const destination = region.locator(`[data-block-id="${room}:child-0"] > ${BLOCK_ROW_SELECTOR}`);
   await dragRow(page, heading.locator(`:scope > ${BLOCK_ROW_SELECTOR}`), destination);
-  await expect(destination).toHaveAttribute("data-block-drop-active", "true");
+  await expect(destination.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -779,7 +782,9 @@ for (const [repeat, canvas] of [
     expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
       false,
     );
-    const firstY = content.y + content.height + 1;
+    // Native pointer coordinates can be integral at canvas zoom; round away
+    // from embedded content to stay inside the enclosing block's inset strip.
+    const firstY = Math.ceil(content.y + content.height + 1);
     for (let y = firstY; y <= after.y + 4; y += 2) {
       await page.mouse.move(x, y);
       await expect(line).toHaveCount(1);
@@ -1015,7 +1020,10 @@ for (const mode of ["Page", "Edgeless"] as const) {
     const source = outer.locator(`[data-block-id="${movedId}"] > ${BLOCK_ROW_SELECTOR}`);
     const destination = region.locator(`[data-block-id="${childId}"] > ${BLOCK_ROW_SELECTOR}`);
     await dragRow(page, source, destination);
-    await expect(destination).toHaveAttribute("data-block-drop-active", "true");
+    await expect(destination.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -1687,10 +1695,7 @@ test("source drag handles move children through shared commands without moving t
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
-  await expect(target.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(target).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
   await expect
     .poll(() =>

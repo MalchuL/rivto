@@ -187,12 +187,12 @@ Median movement-to-two-RAF time was unchanged: Chromium 18.4 ms at both sizes;
 Firefox 19 ms normally and 20 ms at repeat=200. Synchronous movement handlers were
 0–0.2 ms at median. First-press handler / two-RAF timings in milliseconds:
 
-| Browser / repeat | Before | After |
-| --- | --- | --- |
-| Chromium / 0 | 2.5 / 27.5 | 1.7 / 26.2 |
-| Chromium / 200 | 1.5 / 32.3 | 1.8 / 30.8 |
-| Firefox / 0 | 0 / 30 | 0 / 32 |
-| Firefox / 200 | 1 / 39 | 0 / 37 |
+| Browser / repeat | Before     | After      |
+| ---------------- | ---------- | ---------- |
+| Chromium / 0     | 2.5 / 27.5 | 1.7 / 26.2 |
+| Chromium / 200   | 1.5 / 32.3 | 1.8 / 30.8 |
+| Firefox / 0      | 0 / 30     | 0 / 32     |
+| Firefox / 200    | 1 / 39     | 0 / 37     |
 
 These results establish removal of unnecessary document work, not a demonstrated
 frame-rate improvement or reproduction of a severe pan-start stall. Two RAFs are
@@ -227,6 +227,7 @@ of the actual user session, not identical scripted trajectories. The temporary
 recorder, source import and local receiver were removed afterward.
 
 Verification after implementation:
+
 - The new deterministic regression failed before the fix: 100 pan samples
   published the camera 100 times before a frame. It now publishes once using the
   last sample, flushes the exact release position and leaves no pending timer.
@@ -245,11 +246,11 @@ gestures at a requested 4 ms cadence. Native browsers may coalesce those samples
 the final camera endpoint was asserted in every case.
 
 | Browser / repeat | Median movement to two RAFs before → after | Maximum frame gap before → after |
-| --- | --- | --- |
-| Chromium / 0 | 22.7 → 21.2 ms | 16.8 → 16.8 ms |
-| Chromium / 200 | 22.0 → 20.1 ms | 33.4 → 33.4 ms |
-| Firefox / 0 | 19.0 → 17.0 ms | 33.2 → 34.2 ms |
-| Firefox / 200 | 27.0 → 23.0 ms | 66.3 → 67.3 ms |
+| ---------------- | ------------------------------------------ | -------------------------------- |
+| Chromium / 0     | 22.7 → 21.2 ms                             | 16.8 → 16.8 ms                   |
+| Chromium / 200   | 22.0 → 20.1 ms                             | 33.4 → 33.4 ms                   |
+| Firefox / 0      | 19.0 → 17.0 ms                             | 33.2 → 34.2 ms                   |
+| Firefox / 200    | 27.0 → 23.0 ms                             | 66.3 → 67.3 ms                   |
 
 Production/headless measurements do not reproduce the user's development-tab
 starvation at the same magnitude. Large-document mounting/layout and Firefox

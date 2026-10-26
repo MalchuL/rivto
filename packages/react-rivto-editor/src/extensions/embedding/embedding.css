@@ -31,7 +31,15 @@
   background: transparent;
 }
 
+/* Reference padding belongs to the enclosing block. Keeping it outside the
+ * nested editor leaves its sibling and child insertion boundaries reachable. */
+.rivto-embedded-surface {
+  padding: var(--rivto-block-surface-padding);
+}
+
 .rivto-embedded-surface > .page-surface {
+  padding: 0;
+  overflow: visible;
   min-height: 0;
   margin: 0;
   width: 100%;

@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 /**
  * Browser coverage for outline-gap drag targeting.
  *
@@ -139,7 +140,7 @@ test("a gap between outline blocks does not drop inside a later kanban", async (
   const board = page.locator('[data-block-type="kanban"]');
   const alphaBox = (await alpha.boundingBox())!;
   const betaBox = (await beta.boundingBox())!;
-  await holdDragAt(page, alpha, alphaBox.x + 40, betaBox.y - 4);
+  await holdDragAt(page, alpha, alphaBox.x + CHILD_DROP_INDENT / 2, betaBox.y - 2);
   await expect(board).not.toHaveAttribute("data-block-drop-active", "true");
   await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
   await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
@@ -147,9 +148,7 @@ test("a gap between outline blocks does not drop inside a later kanban", async (
 });
 
 test("keeps a block in place from the bottom edge of the block above", async ({ page }) => {
-  const roots = page.locator(
-    `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]`,
-  );
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   await expect(roots.first()).toBeVisible();
   const before = await roots.evaluateAll((blocks) =>
     blocks.map((block) => block.getAttribute("data-block-id")),
@@ -164,7 +163,10 @@ test("keeps a block in place from the bottom edge of the block above", async ({ 
   await expect(line).toHaveCount(1);
   const lineBox = (await line.boundingBox())!;
   const alphaBox = (await alpha.boundingBox())!;
-  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(alphaBox.y + alphaBox.height, 0);
+  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(
+    (alphaBox.y + alphaBox.height + (await beta.boundingBox())!.y) / 2,
+    0,
+  );
   await page.mouse.up();
 
   await expect
@@ -175,9 +177,7 @@ test("keeps a block in place from the bottom edge of the block above", async ({ 
 });
 
 test("keeps a block in place from the top edge of the block below", async ({ page }) => {
-  const roots = page.locator(
-    `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]`,
-  );
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   await expect(roots.first()).toBeVisible();
   const before = await roots.evaluateAll((blocks) =>
     blocks.map((block) => block.getAttribute("data-block-id")),
@@ -192,7 +192,10 @@ test("keeps a block in place from the top edge of the block below", async ({ pag
   await expect(line).toHaveCount(1);
   const lineBox = (await line.boundingBox())!;
   const boardBox = (await board.boundingBox())!;
-  expect(lineBox.y + lineBox.height / 2).toBeCloseTo((await board.boundingBox())!.y, 0);
+  expect(lineBox.y + lineBox.height / 2).toBeCloseTo(
+    ((await beta.boundingBox())!.y + (await beta.boundingBox())!.height + boardBox.y) / 2,
+    0,
+  );
   await page.mouse.up();
 
   await expect
@@ -203,9 +206,7 @@ test("keeps a block in place from the top edge of the block below", async ({ pag
 });
 
 test("drops a block after the last root container", async ({ page }) => {
-  const roots = page.locator(
-    `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]`,
-  );
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const alpha = roots.filter({ has: page.getByText("Alpha", { exact: true }) });
   const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
   const board = page.locator('[data-block-type="kanban"]');
@@ -262,7 +263,10 @@ test("uses the final pointer event for feedback and the committed destination", 
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + 2);
   // One final event must replace the earlier sibling-gap destination with the row body.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await expect(row).toHaveAttribute("data-block-drop-active", "true");
+  await expect(row.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
   await expect(
     beta.locator("[data-block-id]").filter({ has: page.getByText("Alpha", { exact: true }) }),
@@ -270,9 +274,7 @@ test("uses the final pointer event for feedback and the committed destination", 
 });
 
 test("drops a block before the first root container", async ({ page }) => {
-  const roots = page.locator(
-    `.page-surface > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]`,
-  );
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const alpha = roots.filter({ has: page.getByText("Alpha", { exact: true }) });
   const beta = roots.filter({ has: page.getByText("Beta", { exact: true }) });
   const board = page.locator('[data-block-type="kanban"]');
@@ -630,9 +632,18 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   const betaRow = beta.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
   const box = (await betaRow.boundingBox())!;
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height / 2);
-  await expect(betaRow).toHaveAttribute("data-block-drop-active", "true");
-  await expect(betaRow).toHaveCSS("outline-width", "4px");
-  await expect(betaRow).toHaveCSS("outline-style", "solid");
+  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
+  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
+    "outline-width",
+    "4px",
+  );
+  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
+    "outline-style",
+    "solid",
+  );
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute(
     "data-block-drop-active",
     "true",
@@ -683,14 +694,21 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     const parentRow = parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await holdDragAt(page, source, async () => {
       await parentRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
-      const box = (await parentRow.boundingBox())!;
+      const box = (await parent.boundingBox())!;
       return { x: box.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
     });
-    const parentRowBox = (await parentRow.boundingBox())!;
+    const parentRowBox = (await parent.boundingBox())!;
     const line = page.locator(DROP_LINE_SELECTOR);
     await expect(line).toBeVisible();
     const lineBox = (await line.boundingBox())!;
-    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
+    const nextBox = (await page
+      .locator(`[data-block-id="${scenario.nextId}"]`)
+      .first()
+      .boundingBox())!;
+    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(
+      (parentRowBox.y + parentRowBox.height + nextBox.y) / 2,
+      0,
+    );
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -728,7 +746,10 @@ test("keeps the report's parent body and next-block top edge drop zones", async 
     parentRowBox.x + parentRowBox.width / 2,
     parentRowBox.y + parentRowBox.height / 2,
   );
-  await expect(parentRow).toHaveAttribute("data-block-drop-active", "true");
+  await expect(parentRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -800,7 +821,10 @@ test("hovering a block in a free container nests inside that block", async ({ pa
   const betaRow = nestedBeta.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
   const box = (await betaRow.boundingBox())!;
   await holdDragAt(page, nestedAlpha, box.x + box.width / 2, box.y + box.height / 2);
-  await expect(betaRow).toHaveAttribute("data-block-drop-active", "true");
+  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -829,10 +853,7 @@ test("an empty kanban column still accepts an inside drop on its body", async ({
   const emptyId = await empty.getAttribute("data-block-id");
   const box = (await empty.boundingBox())!;
   await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
-  await expect(empty.locator(":scope > .rivto-block-children")).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(empty).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -910,10 +931,7 @@ test("moves an ordinary block between sibling kanban columns", async ({ page }) 
   const destination = page.locator(`[data-block-id="${ids.second}"]`).first();
   const box = (await destination.boundingBox())!;
   await holdDragAt(page, source, box.x + box.width / 2, box.y + box.height * 0.7);
-  await expect(destination.locator(":scope > .rivto-block-children")).toHaveAttribute(
-    "data-block-drop-active",
-    "true",
-  );
+  await expect(destination).toHaveAttribute("data-block-drop-active", "true");
   await page.mouse.up();
   await expect
     .poll(() =>
@@ -1073,7 +1091,10 @@ for (const mode of ["block", "edgeless"] as const) {
       await nestedRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
       await holdDragAt(page, source, async () => {
         const box = (await nestedRow.boundingBox())!;
-        return { x: box.x - CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
+        const parent = (await nestedRow
+          .locator("xpath=ancestor::*[@data-block-id][2]")
+          .boundingBox())!;
+        return { x: parent.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
       });
       await expect(page.locator(DROP_LINE_SELECTOR)).toBeVisible();
       await page.mouse.up();

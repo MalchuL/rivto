@@ -267,7 +267,12 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       return;
     }
     const bodyOwnsPoint =
-      inside?.element.hasAttribute("data-block-id") && inside.element !== layout.element;
+      inside &&
+      inside.element !== layout.element &&
+      (inside.element.hasAttribute("data-block-id") ||
+        (inside.destination.kind === "inside" &&
+          inside.destination.parentId !== null &&
+          this.regions.get(inside.destination.parentId, "row")?.contains(inside.element)));
     if (bodyOwnsPoint && !edge) {
       return;
     }
@@ -337,6 +342,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         return;
       }
       const layout = this.layouts.get(element as HTMLElement);
+      hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(innerLayout?.axis, layout?.axis);
       // Normalize only after reaching the ancestor edge's containing list.
       if (ancestorEdge && layout && innerLayout) {
         const gap = resolveInnerLayoutGap(
@@ -349,14 +355,18 @@ export class BlockDropTargets implements BlockDropTargetsApi {
         );
         return gap ?? resolveLayoutGap(layout, point, hit, ancestorEdge) ?? ancestorEdge;
       }
-      hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(innerLayout?.axis, layout?.axis);
       const entries = !ancestorEdge && this.targets.get(element as HTMLElement);
       const target = entries ? this.resolveEntries(entries, point, hit) : undefined;
       if (!innerLayout && isLocalOutlineEdge(target)) {
         nearestOutlineEdge ??= target;
       }
-      if (innerLayout && this.isSiblingEdge(target)) {
-        if (nearestOutlineEdge && !prefersOuterSiblingEdge(target, nearestOutlineEdge, excluded)) {
+      const sameAppend = this.isSameAppendBoundary(target, nearestOutlineEdge);
+      if (innerLayout && target && (this.isSiblingEdge(target) || sameAppend)) {
+        if (
+          nearestOutlineEdge &&
+          !sameAppend &&
+          !prefersOuterSiblingEdge(target, nearestOutlineEdge, excluded)
+        ) {
           return;
         }
         ancestorEdge = target;
@@ -367,6 +377,31 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
     }
     return ancestorEdge;
+  }
+
+  /**
+   * Recognizes equivalent terminal append choices at two outline levels.
+   *
+   * An inside choice on the parent's trailing edge and a gap after its last
+   * child describe the same append. Normalizing through the parent's containing
+   * list keeps their shared line stationary while crossing the physical seam.
+   *
+   * @param outer - Ancestor edge, absent before reaching a matching declaration.
+   * @param inner - Nearest outline edge, absent outside a child boundary.
+   * @returns True for a trailing parent-inside choice matching a terminal child gap.
+   */
+  private isSameAppendBoundary(
+    outer: ResolvedBlockDropTarget | undefined,
+    inner: ResolvedBlockDropTarget | undefined,
+  ): boolean {
+    return (
+      outer?.region?.kind === "edge" &&
+      outer.region.side === "block-end" &&
+      outer.destination.kind === "inside" &&
+      inner?.destination.kind === "between" &&
+      inner.destination.nextId === null &&
+      inner.destination.parentId === outer.destination.parentId
+    );
   }
 
   /**

@@ -194,14 +194,17 @@ for (const [wrapped, rtl] of [
       center = (b.x + b.width + a.x) / 2;
     }
     await fixture.start();
-    const edge = wrapped ? "block" : "inline";
-    const targets = [
-      first.locator(`:scope > [data-drop-placement="after"][data-drop-edge="${edge}"]`),
-      second.locator(`:scope > [data-drop-placement="before"][data-drop-edge="${edge}"]`),
-    ];
-    for (const target of targets) {
-      const rect = (await target.boundingBox())!;
-      await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2, { steps: 6 });
+    const points = wrapped
+      ? [
+          { x: a.x + 12, y: a.y + a.height - 1 },
+          { x: b.x + 12, y: b.y + 1 },
+        ]
+      : [
+          { x: rtl ? a.x + 1 : a.x + a.width - 1, y: a.y + a.height / 2 },
+          { x: rtl ? b.x + b.width - 1 : b.x + 1, y: b.y + b.height / 2 },
+        ];
+    for (const point of points) {
+      await page.mouse.move(point.x, point.y, { steps: 6 });
       const line = page.locator(".rivto-block-drop-line");
       await expect(line).toBeVisible();
       const indicator = (await line.boundingBox())!;
@@ -210,11 +213,9 @@ for (const [wrapped, rtl] of [
       ).toBeCloseTo(center, 0);
       expect(wrapped ? indicator.height : indicator.width).toBe(4);
     }
-    await page.mouse.move(
-      wrapped ? b.x + b.width / 2 : center,
-      wrapped ? center : b.y + b.height / 2,
-      { steps: 6 },
-    );
+    await page.mouse.move(wrapped ? b.x + 12 : center, wrapped ? center : b.y + b.height / 2, {
+      steps: 6,
+    });
     const line = (await page.locator(".rivto-block-drop-line").boundingBox())!;
     expect(wrapped ? line.y + line.height / 2 : line.x + line.width / 2).toBeCloseTo(center, 0);
     await page.mouse.up();

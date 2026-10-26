@@ -48,9 +48,7 @@ async function seed(page: Page, repeat = 0) {
  */
 async function menu(page: Page, id: string) {
   const row = page
-    .locator(
-      `[data-journal-document="today"] [data-block-id="${id}"] > .rivto-block-row`,
-    )
+    .locator(`[data-journal-document="today"] [data-block-id="${id}"] > .rivto-block-row`)
     .first();
   await row.hover();
   await row
@@ -79,20 +77,18 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
   await expect(page.getByRole("menu").getByRole("separator")).toHaveCount(4);
   await page.getByRole("menuitem", { name: "blue", exact: true }).click();
   for (const id of [ids.parent, ids.other]) {
-    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveCSS("border-radius", "8px");
+    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveCSS("border-radius", "4px");
     await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveAttribute(
       "data-block-background",
-      "blue",
+      "var(--rivto-block-blue)",
     );
   }
   await expect(page.locator(`[data-block-id="${ids.child}"]`).first()).toHaveAttribute(
     "data-block-background",
-    "red",
+    "var(--rivto-block-red)",
   );
   const handle = page
-    .locator(
-      `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-    )
+    .locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`)
     .first();
   await handle.focus();
   await handle.click({ button: "right" });
@@ -102,7 +98,7 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
   await page.keyboard.press("Enter");
   await expect(page.locator(`[data-block-id="${ids.parent}"]`).first()).not.toHaveAttribute(
     "data-block-background",
-    "blue",
+    "var(--rivto-block-blue)",
   );
   await handle.focus();
   await handle.click({ button: "right" });
@@ -117,9 +113,7 @@ test("recursive collapse keeps a visible halo and expand restores hidden descend
   await menu(page, ids.parent);
   await page.getByRole("menuitem", { name: "Collapse subtree", exact: true }).click();
   const handle = page
-    .locator(
-      `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-    )
+    .locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`)
     .first();
   await page.mouse.move(5, 5);
   await expect(handle).toHaveCSS("opacity", "1");
@@ -182,11 +176,7 @@ for (const repeat of [0, 200]) {
     ).toBe(0);
     await page.getByRole("menuitem", { name: "Collapse subtree", exact: true }).click();
     await expect(
-      page
-        .locator(
-          `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-        )
-        .first(),
+      page.locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`).first(),
     ).toHaveAttribute("data-collapsed", "true");
   });
 }
@@ -194,9 +184,7 @@ for (const repeat of [0, 200]) {
 test("Space keeps native handle activation without starting a drag", async ({ page }) => {
   const ids = await seed(page);
   const handle = page
-    .locator(
-      `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-    )
+    .locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`)
     .first();
   await handle.focus();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
@@ -255,11 +243,7 @@ test("the same context actions work inside an edgeless card", async ({ page }) =
   await menu(page, ids.parent);
   await page.getByRole("menuitem", { name: "Collapse subtree", exact: true }).click();
   await expect(
-    page
-      .locator(
-        `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-      )
-      .first(),
+    page.locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`).first(),
   ).toHaveAttribute("data-collapsed", "true");
 });
 
@@ -275,14 +259,10 @@ for (const [repeat, edgeless] of [
     if (edgeless) {
       await page.getByRole("button", { name: "Edgeless", exact: true }).first().click();
     }
-    const child = page
-      .locator(`[data-block-id="${ids.child}"] > .rivto-block-row`)
-      .first();
+    const child = page.locator(`[data-block-id="${ids.child}"] > .rivto-block-row`).first();
     const handle = child.locator(".block-handle");
     const parentHandle = page
-      .locator(
-        `[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`,
-      )
+      .locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`)
       .first();
     await child.locator("[data-block-content]").first().click();
     await page.mouse.move(5, 5);
