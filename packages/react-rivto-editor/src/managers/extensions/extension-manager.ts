@@ -140,37 +140,34 @@ export class ExtensionManager implements ExtensionsApi {
    *
    * Each disposer runs independently. Failures are collected and rethrown after
    * every owned resource has been released.
+   *
+   * @returns Extension and registration cleanup has been attempted; repeated calls do nothing.
+   * @throws The single cleanup failure, or AggregateError containing multiple failures.
    */
   destroy(): void {
     if (this.destroyed) {
       return;
     }
     this.destroyed = true;
-    const errors: unknown[] = [];
-    const run = (dispose: () => void): void => {
-      try {
-        dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-    };
-    [...this.extensionDisposers].reverse().forEach(run);
-    [...this.registrations].reverse().forEach(run);
-    this.components.length = 0;
-    this.store.clear();
-    if (errors.length === 1) {
-      throw errors[0];
-    }
-    if (errors.length > 1) {
-      throw new AggregateError(errors, "Extension teardown failed");
+    try {
+      this.releaseAll([...this.registrations, ...this.extensionDisposers]);
+    } finally {
+      this.components.length = 0;
+      this.store.clear();
     }
   }
 
   /**
    * Installs one extension with duplicate validation and partial rollback.
    *
-   * @param extension - Functional extension with a unique stable ID.
-   * @returns Disposer that runs custom cleanup, then owned registrations.
+   * Nested setup restores the parent's capture scope, and child installations
+   * belong to their parent. Failed setup rolls back captured resources and frees
+   * the ID for reuse, retaining the original error alongside rollback failures.
+   *
+   * @param extension - Functional extension with a unique stable ID and synchronous setup.
+   * @returns Idempotent disposer that runs custom cleanup, then owned registrations.
+   * @throws If inactive, the ID is empty/duplicate, setup fails or returns invalid cleanup,
+   * or rollback fails. Multiple failures are reported together.
    */
   install(extension: ReactEditorExtension): () => void {
     this.assertActive();
@@ -181,54 +178,91 @@ export class ExtensionManager implements ExtensionsApi {
       throw new Error(`React extension ${extension.id} is already registered`);
     }
     const owned: RegistrationDisposer[] = [];
+    const parent = this.activeExtensionRegistrations;
     this.extensionIds.add(extension.id);
     this.activeExtensionRegistrations = owned;
-    let dispose: RegistrationDisposer = () => undefined;
+    let cleanup: void | RegistrationDisposer;
     try {
-      const cleanup = extension.setup(this.reactEditor);
-      dispose = () => {
-        let cleanupError: unknown;
-        try {
-          cleanup?.();
-        } catch (error) {
-          cleanupError = error;
-        }
-        owned
-          .slice()
-          .reverse()
-          .forEach((release) => {
-            try {
-              release();
-            } catch {
-              // Owned registrations must still release after a throwing cleanup.
-            }
-          });
-        this.extensionIds.delete(extension.id);
-        const index = this.extensionDisposers.indexOf(dispose);
-        if (index >= 0) {
-          this.extensionDisposers.splice(index, 1);
-        }
-        if (cleanupError) {
-          throw cleanupError;
-        }
-      };
-      this.extensionDisposers.push(dispose);
-      return dispose;
+      cleanup = extension.setup(this.reactEditor);
+      if (cleanup !== undefined && typeof cleanup !== "function") {
+        throw new TypeError("React extension setup must return synchronous cleanup or undefined");
+      }
     } catch (error) {
-      owned
-        .slice()
-        .reverse()
-        .forEach((release) => {
-          try {
-            release();
-          } catch {
-            // Rollback is best-effort so the original setup error is preserved.
-          }
-        });
       this.extensionIds.delete(extension.id);
+      // Rollback attempts every resource and retains both setup and release failures.
+      this.releaseAll(owned, [error]);
       throw error;
     } finally {
-      this.activeExtensionRegistrations = null;
+      this.activeExtensionRegistrations = parent;
+    }
+    const dispose = this.createExtensionDisposer(extension.id, cleanup, owned);
+    this.extensionDisposers.push(dispose);
+    parent?.push(dispose);
+    return dispose;
+  }
+
+  /**
+   * Creates once-only removal for an installed extension and its captured resources.
+   *
+   * Identity is released before invoking user cleanup, so reentrant removal and
+   * later ID reuse cannot remove another installation. Custom cleanup runs first;
+   * owned registrations must still release after a throwing cleanup.
+   *
+   * @param id - Installation identity reserved by the completed setup.
+   * @param cleanup - Optional synchronous cleanup returned by setup.
+   * @param owned - Resources and nested installations captured during that setup.
+   * @returns Idempotent disposer that attempts all releases in reverse acquisition order.
+   * @throws The single cleanup failure, or AggregateError containing all failures.
+   */
+  private createExtensionDisposer(
+    id: string,
+    cleanup: void | RegistrationDisposer,
+    owned: readonly RegistrationDisposer[],
+  ): RegistrationDisposer {
+    let active = true;
+    const dispose = () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      this.extensionIds.delete(id);
+      const index = this.extensionDisposers.indexOf(dispose);
+      if (index >= 0) {
+        this.extensionDisposers.splice(index, 1);
+      }
+      const releases = [...owned];
+      if (cleanup) {
+        releases.push(cleanup);
+      }
+      this.releaseAll(releases);
+    };
+    return dispose;
+  }
+
+  /**
+   * Attempts every captured cleanup in reverse order and retains all failures.
+   *
+   * A snapshot permits callbacks to remove other registrations during teardown.
+   * A single failure keeps its original identity; multiple failures are aggregated.
+   *
+   * @param releases - Resources ordered by acquisition, including nested installations.
+   * @param errors - Earlier failures to preserve, such as the original setup error.
+   * @returns Every cleanup was attempted without failure.
+   * @throws The single failure, or AggregateError after all cleanup attempts.
+   */
+  private releaseAll(releases: readonly RegistrationDisposer[], errors: unknown[] = []): void {
+    for (const release of [...releases].reverse()) {
+      try {
+        release();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Extension cleanup failed");
     }
   }
 }

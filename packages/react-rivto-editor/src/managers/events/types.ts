@@ -22,8 +22,9 @@ export interface ConnectedListener extends NativeListenerGroup {
 /**
  * Constructor values for one normalized editor event.
  *
- * Registries resolve these values once per native dispatch. The resulting
- * event is then shared by availability predicates and ordered handlers.
+ * PanelEventFactory resolves these values once per native listener group delivery.
+ * The resulting event is then shared by availability predicates and ordered
+ * handlers; later native groups capture their own current panel context.
  */
 export interface EditorEventInit<
   Target extends DOMEventTarget = DOMEventTarget,
@@ -55,6 +56,8 @@ export type AnyEditorEvent = EditorEvent<DOMEventTarget, never>;
 
 export interface DOMRegistration {
   readonly id: string;
+  /** False immediately on removal, including in snapshots retained by an ongoing event. */
+  active: boolean;
   readonly owner?: Pick<PanelRegistration, "id" | "getRoot">;
   readonly type: string;
   readonly target: DOMEventTarget;

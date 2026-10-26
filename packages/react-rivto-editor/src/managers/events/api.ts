@@ -6,6 +6,10 @@ import type { EditorEventHandler } from "./types";
 export interface PanelEventsApi {
   /**
    * Registers a handler restricted to this panel, with automatic panel cleanup.
+   *
+   * Additions during native delivery wait for a later event. Removals take effect
+   * immediately, including handlers waiting in later native phases.
+   *
    * @param definition - Event type, optional filters and listener options, and an ID unique in this panel.
    * @param listener - Returning true stops later editor handlers and requests browser-default cancellation.
    * @returns Idempotent function that removes the registration before panel cleanup.

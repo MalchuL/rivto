@@ -199,6 +199,10 @@ export class ReactEditor implements ReactEditorApi {
    *
    * Writing-block registration is not done here — hosts install
    * `defaultWritingBlockExtension` (included by `standardPreset`).
+   *
+   * @param options - Borrowed document editor, synchronous extensions and presentation defaults.
+   * @throws Propagates manager construction failures. Extension setup failure triggers
+   * runtime cleanup; if cleanup also fails, both failures are retained in AggregateError.
    */
   constructor(options: CreateReactEditorOptions) {
     const editor = options.editor;
@@ -216,13 +220,12 @@ export class ReactEditor implements ReactEditorApi {
     this.slashCommands = slashCommands;
     this.blockContextMenu = new BlockContextMenuRegistry(extensions);
     // Release shared registrations after extension cleanup has finished using them.
-    extensions.registerCleanup(() => {
-      slashCommands.destroy();
-      this.blockContextMenu.destroy();
-      keyboard.destroy();
-      events.destroy();
-      this.panels.destroy();
-    });
+    // Reverse registration order preserves teardown order; each failure is isolated.
+    extensions.registerCleanup(() => this.panels.destroy());
+    extensions.registerCleanup(() => events.destroy());
+    extensions.registerCleanup(() => keyboard.destroy());
+    extensions.registerCleanup(() => this.blockContextMenu.destroy());
+    extensions.registerCleanup(() => slashCommands.destroy());
     this.renderers = new RendererManager(extensions, options.unknownBlockRenderer);
     this.blockBehaviors = new BlockBehaviorRegistry(this, extensions);
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
@@ -243,7 +246,11 @@ export class ReactEditor implements ReactEditorApi {
       );
       this.blockElements.schedule();
     } catch (error) {
-      this.destroy();
+      try {
+        this.destroy();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "React editor setup and cleanup failed");
+      }
       throw error;
     }
   }

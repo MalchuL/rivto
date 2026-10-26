@@ -4,7 +4,6 @@ import type {
 } from "@chulane/rivto-keyboard";
 import type { EditorMode } from "@chulane/rivto";
 import type { EventManager } from "../events/event-manager";
-import { modeMatches, scopeMatches } from "../events/event-manager";
 import { KeyboardEditorEvent } from "./keyboard-editor-event";
 import { shortcutFromKeyboardEvent } from "./shortcut";
 import type { KeyboardDOMEvent } from "./types";
@@ -32,22 +31,40 @@ export class ReactKeyboardTransport implements KeyboardTransport<
   /**
    * Installs the existing surface and window keyboard routes.
    *
+   * Failed setup releases earlier routes in reverse order. Cleanup attempts every
+   * route even after a failure, and repeated disconnection is harmless.
+   *
    * @param dispatch - Runtime action dispatcher.
-   * @returns Disposer removing all four host registrations.
+   * @returns Idempotent disposer removing all four host registrations in reverse order.
+   * @throws The setup failure, or AggregateError preserving setup and rollback failures.
+   * The returned disposer throws AggregateError after attempting every failing cleanup.
    */
   connect(dispatch: (event: KeyboardEditorEvent) => boolean): () => void {
     const disposers: Array<() => void> = [];
-    for (const target of ["surface", "window"] as const) {
-      for (const phase of ["keydown", "keyup"] as const) {
-        disposers.push(
-          this.events.register(
-            { id: `rivto.keyboard.${target}.${phase}`, type: phase, target },
-            (event) => dispatch(this.createEvent(event, phase)),
-          ),
-        );
+    try {
+      for (const target of ["surface", "window"] as const) {
+        for (const phase of ["keydown", "keyup"] as const) {
+          disposers.push(
+            this.events.register(
+              { id: `rivto.keyboard.${target}.${phase}`, type: phase, target },
+              (event) => dispatch(this.createEvent(event, phase)),
+            ),
+          );
+        }
       }
+    } catch (error) {
+      const errors = [error, ...this.releaseRoutes(disposers)];
+      if (errors.length > 1) {
+        throw new AggregateError(errors, "Keyboard transport setup rollback failed");
+      }
+      throw error;
     }
-    return () => disposers.reverse().forEach((dispose) => dispose());
+    return () => {
+      const errors = this.releaseRoutes(disposers);
+      if (errors.length) {
+        throw new AggregateError(errors, "Keyboard transport cleanup failed");
+      }
+    };
   }
 
   /**
@@ -58,7 +75,7 @@ export class ReactKeyboardTransport implements KeyboardTransport<
    * @returns Whether both host filters match.
    */
   matches(definition: KeyboardEventDefinition, event: KeyboardEditorEvent): boolean {
-    return modeMatches(definition.mode, event.mode) && scopeMatches(definition.scope, event);
+    return event.matches(definition);
   }
 
   /**
@@ -89,6 +106,26 @@ export class ReactKeyboardTransport implements KeyboardTransport<
    */
   overlaps(left: KeyboardBindingSnapshot, right: KeyboardBindingSnapshot): boolean {
     return left.scope === right.scope && this.modesOverlap(left.mode, right.mode);
+  }
+
+  /**
+   * Drains owned route disposers before invoking them in reverse installation order.
+   *
+   * Emptying ownership first makes repeated or reentrant disconnection harmless.
+   *
+   * @param disposers - Mutable list of completed route registrations owned by one connection.
+   * @returns All release failures in attempted cleanup order, without throwing early.
+   */
+  private releaseRoutes(disposers: Array<() => void>): unknown[] {
+    const errors: unknown[] = [];
+    for (const release of disposers.splice(0).reverse()) {
+      try {
+        release();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    return errors;
   }
 
   /**

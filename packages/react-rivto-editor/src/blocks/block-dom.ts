@@ -1,3 +1,4 @@
+import { BlockDOMSelection } from "@chulane/rivto-page";
 import type { EditorPosition } from "@chulane/rivto";
 import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR } from "../constants";
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
@@ -120,15 +121,19 @@ export function findParentBlock(block: HTMLElement): HTMLElement | null {
 /**
  * Focuses a rendered block and places a collapsed caret at a text offset.
  *
- * TreeWalker converts the editor's flat string offset back into a DOM text node
- * and node-relative offset. The requested position is clamped by falling back
+ * Page's shared TreeWalker converts the editor's flat string offset back into a
+ * DOM text node and node-relative offset. The requested position is clamped by falling back
  * to the end of the content, which keeps focus restoration safe after concurrent
  * text changes. Empty blocks place the caret directly in their content element.
+ * Missing blocks are offered to the host mounting bridge before lookup; focus
+ * retains native scrolling and does not write canonical model selection.
  *
  * @param root - Active surface root containing the rendered block.
  * @param blockId - Persisted ID of the block to focus.
  * @param offset - Requested plain-text caret offset.
- * @returns True when the block and editable content were found.
+ * @returns True when the block and editable content were found, even if native
+ * Selection is unavailable; false when content remains absent after mounting.
+ * @throws Propagates synchronous mounting, browser focus and Range failures.
  */
 export function focusBlock(root: HTMLElement, blockId: string, offset: number): boolean {
   if (!findRenderedBlock(root, blockId)) {
@@ -140,121 +145,25 @@ export function focusBlock(root: HTMLElement, blockId: string, offset: number): 
     return false;
   }
 
-  content.focus();
-  const selection = content.ownerDocument.getSelection();
-  if (!selection) {
-    return true;
-  }
-
-  const range = content.ownerDocument.createRange();
-  const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-  let remaining = Math.max(0, offset);
-  let textNode = walker.nextNode();
-  let placed = false;
-
-  while (textNode) {
-    const length = textNode.textContent?.length ?? 0;
-    if (remaining <= length) {
-      range.setStart(textNode, remaining);
-      range.collapse(true);
-      placed = true;
-      break;
-    }
-    remaining -= length;
-    textNode = walker.nextNode();
-  }
-
-  if (!placed) {
-    range.selectNodeContents(content);
-    range.collapse(false);
-  }
-
-  selection.removeAllRanges();
-  selection.addRange(range);
+  BlockDOMSelection.focusContent(content, offset);
   return true;
-}
-
-/** One block-relative caret candidate measured from the rendered DOM. */
-interface CaretCandidate {
-  readonly offset: number;
-  readonly left: number;
-  readonly top: number;
-}
-
-/** Resolves a flat UTF-16 text offset to a live DOM text endpoint. */
-function textPoint(content: HTMLElement, requestedOffset: number): { node: Node; offset: number } {
-  const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-  let remaining = Math.max(0, requestedOffset);
-  let last: Node | undefined;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    last = node;
-    const length = node.textContent?.length ?? 0;
-    if (remaining <= length) {
-      return { node, offset: remaining };
-    }
-    remaining -= length;
-  }
-  return last
-    ? { node: last, offset: last.textContent?.length ?? 0 }
-    : { node: content, offset: 0 };
-}
-
-/** Measures a collapsed caret, falling back to an adjacent character box. */
-function caretCandidate(content: HTMLElement, offset: number): CaretCandidate {
-  const length = content.textContent?.length ?? 0;
-  const safeOffset = Math.max(0, Math.min(offset, length));
-  const point = textPoint(content, safeOffset);
-  const range = content.ownerDocument.createRange();
-  range.setStart(point.node, point.offset);
-  range.collapse(true);
-  let rect = range.getBoundingClientRect();
-  if (!rect.height && length) {
-    const fromPrevious = safeOffset === length;
-    const start = textPoint(content, fromPrevious ? safeOffset - 1 : safeOffset);
-    const end = textPoint(content, fromPrevious ? safeOffset : safeOffset + 1);
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    rect = range.getBoundingClientRect();
-    return { offset: safeOffset, left: fromPrevious ? rect.right : rect.left, top: rect.top };
-  }
-  const contentRect = content.getBoundingClientRect();
-  return {
-    offset: safeOffset,
-    left: rect.left || contentRect.left,
-    top: rect.top || contentRect.top,
-  };
-}
-
-/** Groups measured character positions into rendered visual lines. */
-function caretLines(content: HTMLElement): CaretCandidate[][] {
-  const length = content.textContent?.length ?? 0;
-  const lines: CaretCandidate[][] = [];
-  for (let offset = 0; offset <= length; offset += 1) {
-    const candidate = caretCandidate(content, offset);
-    const line = lines.find((items) => Math.abs(items[0]!.top - candidate.top) < 2);
-    if (line) {
-      line.push(candidate);
-    } else {
-      lines.push([candidate]);
-    }
-  }
-  return lines.sort((left, right) => left[0]!.top - right[0]!.top);
-}
-
-/** Chooses the character on one visual line nearest a viewport x-coordinate. */
-function closestOnLine(line: CaretCandidate[], x: number): CaretCandidate {
-  return line.reduce((closest, candidate) =>
-    Math.abs(candidate.left - x) < Math.abs(closest.left - x) ? candidate : closest,
-  );
 }
 
 /**
  * Resolves Up/Down using rendered lines rather than newline characters.
  *
  * Soft wrapping does not exist in the block's stored string, so the only
- * reliable source is DOM geometry. The scan is linear in block text length;
- * page blocks are intentionally short, and a cached layout index can replace
- * it later if profiling shows long code blocks need one.
+ * reliable source is DOM geometry. The scan measures every character offset;
+ * repeated text-node walks and line lookups also depend on markup and wrapping.
+ * Page blocks are intentionally short, and a cached layout index can replace
+ * the scan later if profiling shows long code blocks need one.
+ * Geometry is delegated to Page; occurrence lookup and lazy mounting remain here.
+ *
+ * @param root - Receiving occurrence, including all its Edgeless cards.
+ * @param position - Current block identity and UTF-16 caret offset.
+ * @param direction - Previous or next visual line.
+ * @returns Resolved caret position, or undefined at the occurrence edge or without content.
+ * @throws Propagates DOM measurement and synchronous mounting failures.
  */
 export function verticalCaretPosition(
   root: HTMLElement,
@@ -266,23 +175,31 @@ export function verticalCaretPosition(
   if (!currentContent) {
     return;
   }
-  const current = caretCandidate(currentContent, position.offset);
-  const lines = caretLines(currentContent);
-  const lineIndex = lines.reduce(
-    (best, line, index) =>
-      Math.abs(line[0]!.top - current.top) < Math.abs(lines[best]![0]!.top - current.top)
-        ? index
-        : best,
-    0,
+  return BlockDOMSelection.verticalCaretPosition(currentContent, position.offset, direction, () =>
+    findVerticalAdjacentContent(root, position.blockId, direction),
   );
-  const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
-  if (nextLine) {
-    return { blockId: position.blockId, offset: closestOnLine(nextLine, current.left).offset };
-  }
+}
 
+/**
+ * Mounts a neighboring display root when needed and finds its editable content.
+ *
+ * Vertical movement spans the occurrence, skips contentless blocks and excludes
+ * nested panels. Horizontal movement retains its separate card-local policy.
+ *
+ * @param root - Receiving panel or explicitly bounded DOM region.
+ * @param blockId - Current rendered block whose neighbor is requested.
+ * @param direction - Previous or next visual block in DOM order.
+ * @returns Adjacent editable content, or undefined at the occurrence edge.
+ * @throws Propagates synchronous host mounting failures.
+ */
+function findVerticalAdjacentContent(
+  root: HTMLElement,
+  blockId: string,
+  direction: "up" | "down",
+): HTMLElement | undefined {
   let blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
   let currentIndex = blocks.findIndex(
-    (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId,
+    (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId,
   );
   if (
     ((direction === "up" && currentIndex === 0) ||
@@ -290,13 +207,11 @@ export function verticalCaretPosition(
     PageNavigationController.getForElement(root)
   ) {
     PageNavigationController.getForElement(root)?.mountAdjacentBlocks(
-      position.blockId,
+      blockId,
       direction === "up" ? -1 : 1,
     );
     blocks = findPanelElements(root, BLOCK_ID_SELECTOR);
-    currentIndex = blocks.findIndex(
-      (block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === position.blockId,
-    );
+    currentIndex = blocks.findIndex((block) => block.getAttribute(BLOCK_ID_ATTRIBUTE) === blockId);
   }
   for (
     let index = currentIndex + (direction === "up" ? -1 : 1);
@@ -304,15 +219,11 @@ export function verticalCaretPosition(
     index += direction === "up" ? -1 : 1
   ) {
     const content = findOwnedContent(blocks[index]!);
-    const blockId = blocks[index]!.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!content || !blockId) {
+    const adjacentId = blocks[index]!.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (!content || !adjacentId) {
       continue;
     }
-    const targetLines = caretLines(content);
-    const targetLine = direction === "up" ? targetLines.at(-1) : targetLines[0];
-    return targetLine
-      ? { blockId, offset: closestOnLine(targetLine, current.left).offset }
-      : undefined;
+    return content;
   }
   return;
 }

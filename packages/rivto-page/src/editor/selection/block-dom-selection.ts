@@ -97,6 +97,13 @@ export interface DOMSelectionPoint {
    */
   readonly content: HTMLElement;
 }
+/** One block-relative caret candidate measured from the rendered DOM. */
+interface CaretCandidate {
+  readonly offset: number;
+  readonly left: number;
+  readonly top: number;
+}
+
 /** Native node endpoint, before resolving its owning content host. */
 interface DOMPoint {
   readonly node: Node;
@@ -385,7 +392,9 @@ export class BlockDOMSelection {
       BlockVirtualizationController.getForRoot(root)?.mountBlocks([position.blockId]);
       content = this.findContent(root, position.blockId);
     }
-    return content ? { ...this.pointAtOffset(content, position.offset), content } : undefined;
+    return content
+      ? { ...BlockDOMSelection.pointAtOffset(content, position.offset), content }
+      : undefined;
   }
   /**
    * Restores the browser range represented by an editor text selection.
@@ -426,6 +435,92 @@ export class BlockDOMSelection {
     this.setNativeSelection(anchor, head);
     return true;
   }
+  /**
+   * Focuses mounted editable content and places a collapsed native caret.
+   *
+   * Focus retains the browser's default scrolling behavior. UTF-16 offsets are
+   * clamped through the shared endpoint conversion; past-end requests and empty
+   * content collapse at the end of the content element, including trailing markup.
+   * This changes browser selection only, without writing model selection or mounting.
+   *
+   * @param content - Editable host already resolved within the caller's occurrence.
+   * @param offset - Requested flat UTF-16 offset; negative values clamp to zero.
+   * @returns Content is focused and its native caret placed when Selection is available.
+   * @throws Propagates browser focus and Range failures.
+   */
+  static focusContent(content: HTMLElement, offset: number): void {
+    content.focus();
+    const selection = content.ownerDocument.getSelection();
+    if (!selection) {
+      return;
+    }
+    const point = this.pointAtOffset(content, offset);
+    const range = content.ownerDocument.createRange();
+    if (point.node === content || offset > (content.textContent?.length ?? 0)) {
+      range.selectNodeContents(content);
+      range.collapse(false);
+    } else {
+      range.setStart(point.node, point.offset);
+      range.collapse(true);
+    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  /**
+   * Resolves Up/Down using rendered visual lines rather than stored newline characters.
+   *
+   * Soft wrapping exists only in DOM geometry. Every offset in the current block
+   * is measured; a cached layout index can replace this scan if profiling shows
+   * long blocks need one. The adjacent-content callback runs only when leaving
+   * the current block and may synchronously mount the caller's next display root.
+   * No focus, model selection or scrolling is changed here except by that callback.
+   *
+   * @param content - Current mounted editable host with an owning data-block-id shell.
+   * @param offset - Current flat UTF-16 text offset, clamped for measurement.
+   * @param direction - Previous or next visual line.
+   * @param getAdjacentContent - Resolves the next editable host in the caller's scope;
+   * returns undefined at its edge. Called at most once, only at a block edge.
+   * @returns Position nearest the current horizontal caret coordinate, or undefined
+   * when no owning block or adjacent editable content exists.
+   * @throws Propagates DOM measurement and delegated mounting failures.
+   */
+  static verticalCaretPosition(
+    content: HTMLElement,
+    offset: number,
+    direction: "up" | "down",
+    getAdjacentContent: () => HTMLElement | undefined,
+  ): EditorPosition | undefined {
+    const blockId = content.closest(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (!blockId) {
+      return;
+    }
+    const current = this.caretCandidate(content, offset);
+    const lines = this.caretLines(content);
+    const lineIndex = lines.reduce(
+      (best, line, index) =>
+        Math.abs(line[0]!.top - current.top) < Math.abs(lines[best]![0]!.top - current.top)
+          ? index
+          : best,
+      0,
+    );
+    const nextLine = lines[lineIndex + (direction === "up" ? -1 : 1)];
+    if (nextLine) {
+      return { blockId, offset: this.closestOnLine(nextLine, current.left).offset };
+    }
+
+    const adjacent = getAdjacentContent();
+    const adjacentId = adjacent?.closest(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE);
+    if (!adjacent || !adjacentId) {
+      return;
+    }
+    const targetLines = this.caretLines(adjacent);
+    const targetLine = direction === "up" ? targetLines.at(-1) : targetLines[0];
+    return targetLine
+      ? { blockId: adjacentId, offset: this.closestOnLine(targetLine, current.left).offset }
+      : undefined;
+  }
+
   /**
    * Reads the stable block ID that owns one editable content element.
    *
@@ -643,7 +738,7 @@ export class BlockDOMSelection {
    * @param requestedOffset - UTF-16 offset from the start of that content's text.
    * @returns A Node (usually Text) plus offset inside it.
    */
-  private pointAtOffset(content: HTMLElement, requestedOffset: number): DOMPoint {
+  private static pointAtOffset(content: HTMLElement, requestedOffset: number): DOMPoint {
     // SHOW_TEXT → only Text nodes ("hello"), skipping Element tags in between.
     const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
     let remaining = Math.max(0, requestedOffset);
@@ -744,5 +839,70 @@ export class BlockDOMSelection {
    */
   private contains(root: HTMLElement, element: Element): boolean {
     return root.contains(element) && element.closest(PANEL_SELECTOR) === root;
+  }
+  /**
+   * Measures a collapsed caret, falling back to an adjacent character box.
+   *
+   * @param content - Mounted editable host whose layout is measured synchronously.
+   * @param offset - UTF-16 offset, clamped to the host's text length.
+   * @returns Text offset and viewport coordinates of the caret candidate.
+   */
+  private static caretCandidate(content: HTMLElement, offset: number): CaretCandidate {
+    const length = content.textContent?.length ?? 0;
+    const safeOffset = Math.max(0, Math.min(offset, length));
+    const point = this.pointAtOffset(content, safeOffset);
+    const range = content.ownerDocument.createRange();
+    range.setStart(point.node, point.offset);
+    range.collapse(true);
+    let rect = range.getBoundingClientRect();
+    if (!rect.height && length) {
+      const fromPrevious = safeOffset === length;
+      const start = this.pointAtOffset(content, fromPrevious ? safeOffset - 1 : safeOffset);
+      const end = this.pointAtOffset(content, fromPrevious ? safeOffset : safeOffset + 1);
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+      rect = range.getBoundingClientRect();
+      return { offset: safeOffset, left: fromPrevious ? rect.right : rect.left, top: rect.top };
+    }
+    const contentRect = content.getBoundingClientRect();
+    return {
+      offset: safeOffset,
+      left: rect.left || contentRect.left,
+      top: rect.top || contentRect.top,
+    };
+  }
+
+  /**
+   * Groups measured character positions into rendered visual lines.
+   *
+   * @param content - Mounted editable host; every text offset is measured.
+   * @returns Lines ordered vertically, grouping tops within two CSS pixels.
+   */
+  private static caretLines(content: HTMLElement): CaretCandidate[][] {
+    const length = content.textContent?.length ?? 0;
+    const lines: CaretCandidate[][] = [];
+    for (let offset = 0; offset <= length; offset += 1) {
+      const candidate = this.caretCandidate(content, offset);
+      const line = lines.find((items) => Math.abs(items[0]!.top - candidate.top) < 2);
+      if (line) {
+        line.push(candidate);
+      } else {
+        lines.push([candidate]);
+      }
+    }
+    return lines.sort((left, right) => left[0]!.top - right[0]!.top);
+  }
+
+  /**
+   * Chooses the character on one visual line nearest a viewport x-coordinate.
+   *
+   * @param line - Nonempty measured line in text-offset order.
+   * @param x - Desired horizontal viewport coordinate in CSS pixels.
+   * @returns Nearest candidate, retaining the earlier offset for equal distances.
+   */
+  private static closestOnLine(line: CaretCandidate[], x: number): CaretCandidate {
+    return line.reduce((closest, candidate) =>
+      Math.abs(candidate.left - x) < Math.abs(closest.left - x) ? candidate : closest,
+    );
   }
 }
