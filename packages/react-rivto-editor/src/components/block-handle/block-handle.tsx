@@ -59,7 +59,7 @@ interface BlockHandleProps extends BlockSlotProps, BlockHandleOptions {}
  * @param props.block - Detached block snapshot whose ID binds interactions.
  * @param props.onOpen - Host navigation callback overriding the context value.
  * @param props.renderIcon - Decorative renderer overriding the context value.
- * @param props.clickMovementThreshold - Positive pointer excursion in viewport CSS pixels overriding context; omission uses the shared handle's 32px default.
+ * @param props.clickMovementThreshold - Positive pointer excursion in viewport CSS pixels overriding context; omission uses the shared handle's 8px default.
  * @returns The handle and, only while requested, its context menu.
  * @throws If rendered outside a React editor panel context.
  */

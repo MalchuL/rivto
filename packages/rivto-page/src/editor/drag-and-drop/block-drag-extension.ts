@@ -576,7 +576,7 @@ class BlockDragController {
         this.createPreview(gesture, gesture.ids);
       }
       if (gesture.preview) {
-        gesture.preview.style.transform = `translate(${gesture.x + 12}px, ${gesture.y + 12}px)`;
+        gesture.preview.style.transform = `translate3d(${gesture.x + 12}px, ${gesture.y + 12}px, 0)`;
       }
     } catch (error) {
       this.cancelAfterFailure(error);

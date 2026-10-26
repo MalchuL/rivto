@@ -47,7 +47,7 @@ function pointer(target: EventTarget, type: string, x: number, y = 100, pointerI
   });
 }
 
-it("does not open after reaching 32px and returning, but permits the next click and keyboard activation", () => {
+it("does not open after reaching 8px and returning, but permits the next click and keyboard activation", () => {
   const open = jest.fn();
   act(() =>
     root.render(
@@ -59,7 +59,7 @@ it("does not open after reaching 32px and returning, but permits the next click 
   );
   const handle = host.querySelector("button")!;
   pointer(handle, "pointerdown", 100);
-  pointer(window, "pointermove", 132);
+  pointer(window, "pointermove", 108);
   pointer(window, "pointermove", 100);
   pointer(window, "pointerup", 100);
   act(() => {
@@ -81,10 +81,10 @@ it("does not open after reaching 32px and returning, but permits the next click 
 });
 
 it.each([
-  [undefined, 31, 0, true],
-  [undefined, 32, 0, false],
-  [undefined, 16, 16, true],
-  [undefined, 23, 23, false],
+  [undefined, 7, 0, true],
+  [undefined, 8, 0, false],
+  [undefined, 4, 4, true],
+  [undefined, 6, 6, false],
   [16, 15, 0, true],
   [16, 16, 0, false],
   [64, 48, 0, true],
@@ -104,7 +104,7 @@ it.each([
 
 it("measures maximum excursion rather than accumulated travel and ignores unrelated pointers", () => {
   const open = jest.fn();
-  act(() => root.render(<DragHandle onOpen={open} />));
+  act(() => root.render(<DragHandle onOpen={open} clickMovementThreshold={32} />));
   const handle = host.querySelector("button")!;
   pointer(handle, "pointerdown", 100);
   pointer(window, "pointermove", 200, 100, 2);
@@ -136,7 +136,7 @@ it.each(["pointerup", "pointercancel", "blur", "unmount", "threshold"])(
         window.dispatchEvent(new Event("blur"));
       });
     } else if (ending === "threshold") {
-      pointer(window, "pointermove", 132);
+      pointer(window, "pointermove", 108);
     } else {
       pointer(window, ending, 100);
     }
@@ -166,7 +166,7 @@ it("ignores movement after a lost release and checks the actual release excursio
   });
   expect(open).toHaveBeenCalledTimes(1);
   pointer(handle, "pointerdown", 100);
-  pointer(window, "pointerup", 132);
+  pointer(window, "pointerup", 108);
   act(() => {
     handle.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
   });

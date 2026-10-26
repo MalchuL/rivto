@@ -71,7 +71,7 @@ it does not prescribe a window, tab, or persistence mechanism. The shared handle
 occupies the left-top row slot; do not retain a second Open button there. The
 button alone activates dragging. `clickMovementThreshold` sets the finite positive
 maximum pointer excursion from its press origin in viewport CSS pixels; it defaults
-to **32**. Reaching the threshold prevents that press from opening the block even
+to **8**. Reaching the threshold prevents that press from opening the block even
 if the cursor returns to its origin. It measures distance from the origin rather
 than accumulated path length, independently of the drag activation distance.
 Configure it on `BlockHandleContext` or override it on an individual `BlockHandle`;
@@ -84,7 +84,7 @@ keep the default four-dot grip (2×2) and filled circular halo visible.
 <BlockHandleContext.Provider
   value={{
     onOpen: openBlock,
-    clickMovementThreshold: 32,
+    clickMovementThreshold: 8,
     renderIcon: (block, collapsed) => <MyIcon collapsed={collapsed} />,
   }}
 >

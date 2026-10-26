@@ -8,11 +8,16 @@
   opacity: 0.45;
 }
 .rivto-block-drag-preview {
-  @apply page:fixed page:top-0 page:left-0 page:pointer-events-none page:rounded page:px-3 page:py-2 page:text-sm;
-  z-index: 1000;
-  background: Canvas;
-  color: CanvasText;
-  border: 1px solid currentColor;
+  @apply page:fixed page:top-0 page:left-0 page:pointer-events-none page:rounded-md page:border page:border-border page:bg-background page:text-foreground page:shadow-lg;
+  z-index: 2147483647;
+  box-sizing: border-box;
+  max-height: 220px;
+  width: min(520px, 70vw);
+  max-width: 520px;
+  overflow: hidden;
+  padding: 10px 14px;
+  opacity: 0.7;
+  will-change: transform;
 }
 [data-block-drop-active]:not([data-block-drop-active="between"]) {
   outline: var(--rivto-drop-indicator-thickness, 4px) solid
@@ -46,12 +51,11 @@
 }
 
 .rivto-block-drag-preview-row {
-  max-width: 280px;
-  max-height: 3lh;
+  max-width: 100%;
   overflow: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin-block-start: 4px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-block: 4px;
 }
 
 .rivto-block-drop-line[data-axis="horizontal"] {
