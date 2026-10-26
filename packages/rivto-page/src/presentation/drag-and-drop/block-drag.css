@@ -1,3 +1,9 @@
+/* Gesture cleanup releases this document-wide cursor, including cross-editor drags. */
+:root[data-block-drag-active],
+:root[data-block-drag-active] * {
+  cursor: default !important;
+}
+
 .rivto-block-drag-handle {
   @apply page:p-0 page:m-0 page:cursor-grab;
   width: var(--rivto-block-control-size, 20px);

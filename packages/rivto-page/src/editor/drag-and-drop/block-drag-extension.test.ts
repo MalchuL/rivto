@@ -399,6 +399,7 @@ it.each(["Escape", "blur", "pointercancel", "detach", "released-button"])(
       pointer(handle, "pointerdown", 100);
       pointer(window, "pointermove", 110);
       expect(handle.parentElement!.getAttribute("data-dragging")).toBe("true");
+      expect(document.documentElement.hasAttribute("data-block-drag-active")).toBe(true);
       if (exit === "detach") {
         detach();
       } else if (exit === "Escape") {
@@ -410,6 +411,7 @@ it.each(["Escape", "blur", "pointercancel", "detach", "released-button"])(
       } else {
         window.dispatchEvent(new Event("blur"));
       }
+      expect(document.documentElement.hasAttribute("data-block-drag-active")).toBe(false);
       expect(root.querySelector("[data-dragging]")).toBeNull();
       expect(root.querySelector(".rivto-block-drag-preview")).toBeNull();
       const release = editor.pointer.acquire();
@@ -458,6 +460,7 @@ it.each(["pointerup", "pointercancel"])(
       pointer(handle, "pointerdown", 100);
       pointer(window, "pointermove", 110);
       expect(handle.parentElement!.getAttribute("data-dragging")).toBe("true");
+      expect(document.documentElement.hasAttribute("data-block-drag-active")).toBe(true);
       pointer(window, "pointerup", 110);
       const trailingClick = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
       handle.dispatchEvent(trailingClick);

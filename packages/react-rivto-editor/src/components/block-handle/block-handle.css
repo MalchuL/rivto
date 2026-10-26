@@ -27,9 +27,12 @@
 
 /* Children live outside their parent's row, so only the line under the cursor
    or owning the caret reveals its handle. */
-.rivto-block-row[data-block-row-hover] > .rivto-block-slot > .block-handle,
+:root:not([data-block-drag-active])
+  .rivto-block-row[data-block-row-hover]
+  > .rivto-block-slot
+  > .block-handle,
 .rivto-block-row:focus-within > .rivto-block-slot > .block-handle,
-.block-handle:hover,
+:root:not([data-block-drag-active]) .block-handle:hover,
 .block-handle:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -77,7 +80,7 @@
   width: 16px;
   height: 16px;
 }
-.block-handle:hover .block-handle-icon,
+:root:not([data-block-drag-active]) .block-handle:hover .block-handle-icon,
 .block-handle:focus-visible .block-handle-icon {
   background: color-mix(in srgb, currentColor 12%, transparent);
 }

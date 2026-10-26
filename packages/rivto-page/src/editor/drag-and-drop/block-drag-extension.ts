@@ -277,6 +277,9 @@ class BlockDragController {
   /**
    * Removes feedback and scheduled work without modifying document or selection.
    *
+   * The document cursor marker is released after the last active preview is removed,
+   * so another occurrence's simultaneous gesture retains its cursor and hover styles.
+   *
    * @returns Every gesture resource has been offered cleanup; repeated cancellation is harmless.
    * @throws AggregateError after attempting all cleanup operations if any fail.
    */
@@ -294,6 +297,12 @@ class BlockDragController {
       () => gesture.feedback.clear(),
       () => gesture.sourceFeedback.clear(),
       () => gesture.preview?.remove(),
+      () => {
+        const document = gesture.root.ownerDocument;
+        if (!document.querySelector(".rivto-block-drag-preview")) {
+          document.documentElement.removeAttribute("data-block-drag-active");
+        }
+      },
     ]) {
       try {
         release();
@@ -587,7 +596,8 @@ class BlockDragController {
    * Creates non-interactive text feedback once, after target geometry has been read.
    *
    * The host bounds model reads. Page independently caps DOM rows, displayed text
-   * and indentation; native textContent keeps markup inert. Movement changes only
+   * and indentation; native textContent keeps markup inert. A document marker fixes
+   * the cursor and suppresses handle hover until cleanup. Movement changes only
    * the outer transform and never asks the host for another snapshot.
    *
    * @param gesture - Owner responsible for removing the preview on every exit path.
@@ -610,6 +620,7 @@ class BlockDragController {
       preview.append(content);
     }
     gesture.root.append(preview);
+    document.documentElement.setAttribute("data-block-drag-active", "");
   }
 
   /**
