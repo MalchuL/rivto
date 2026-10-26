@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useDragHandleClick } from "./use-drag-handle-click";
 
 /** Accessible handle capabilities; commands, artwork, and sensor attachment belong to the caller. */
 export interface DragHandleProps extends Omit<
@@ -6,8 +7,10 @@ export interface DragHandleProps extends Omit<
   "onClick" | "onPointerDown" | "onContextMenu" | "onKeyDown"
 > {
   readonly children?: ReactNode;
+  /** Finite positive excursion from pointer-down in viewport CSS pixels that prevents navigation, even after returning; defaults to 32. */
+  readonly clickMovementThreshold?: number;
   /**
-   * Requests navigation when the handle receives a click without default prevention.
+   * Requests navigation when the handle receives an eligible click without default prevention.
    *
    * @returns Host navigation has been requested; omission leaves the handle navigation-free.
    */
@@ -26,22 +29,29 @@ export interface DragHandleProps extends Omit<
  * Renders a sensor-independent button separating navigation, menus, and drag activation.
  *
  * Clicks retain ordinary browser delivery after drag completion and cancellation.
- * This button opens navigation for clicks that reach it without default prevention.
+ * Pointer navigation is omitted once a press reaches clickMovementThreshold from
+ * its origin, even after returning. Keyboard activation and subsequent presses
+ * retain navigation; no other control's click is consumed.
+ * This button opens navigation for eligible clicks that reach it without default prevention.
  * React context-menu events prevent the native menu and open block actions
  * directly using the viewport coordinates supplied by the browser. Enter and
  * Space retain native button activation through this same click handler.
  *
  * @param props - Native button attributes and host navigation/menu callbacks.
- * @param props.onOpen - Host navigation callback invoked by a click without default prevention.
+ * @param props.onOpen - Host navigation callback invoked by an eligible click without default prevention.
+ * @param props.clickMovementThreshold - Positive excursion threshold in viewport CSS pixels; defaults to 32 and reaching it prevents pointer navigation for that press.
  * @param props.onMenu - Menu callback receiving viewport X and Y coordinates in CSS pixels.
  * @param ref - Optional drag sensor attachment forwarded to the button.
  * @returns Accessible button with host artwork or the default four-dot grip.
+ * @throws RangeError when clickMovementThreshold is not finite and positive.
  */
 export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(function DragHandle(
-  { onOpen, onMenu, children, ...props },
+  { onOpen, onMenu, children, clickMovementThreshold = 32, ...props },
   ref,
 ) {
+  const click = useDragHandleClick(clickMovementThreshold);
   const events: ButtonHTMLAttributes<HTMLButtonElement> = {
+    onPointerDown: click.onPointerDown,
     /**
      * Stops row click propagation and requests navigation when default behavior is allowed.
      *
@@ -50,7 +60,7 @@ export const DragHandle = forwardRef<HTMLButtonElement, DragHandleProps>(functio
      */
     onClick: (event) => {
       event.stopPropagation();
-      if (!event.defaultPrevented) {
+      if (!event.defaultPrevented && click.allowsClick(event.detail)) {
         onOpen?.();
       }
     },

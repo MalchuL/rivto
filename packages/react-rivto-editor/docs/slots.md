@@ -69,13 +69,24 @@ Wrap the panel's surface in `BlockHandleContext.Provider` to provide `onOpen`
 and optional `renderIcon(block, collapsed)`. Navigation remains application-owned:
 it does not prescribe a window, tab, or persistence mechanism. The shared handle
 occupies the left-top row slot; do not retain a second Open button there. The
-button alone activates dragging, and a completed or cancelled drag does not open
-the block. Enter opens, Space drags, and Shift+F10 opens the menu. Collapsed blocks
+button alone activates dragging. `clickMovementThreshold` sets the finite positive
+maximum pointer excursion from its press origin in viewport CSS pixels; it defaults
+to **32**. Reaching the threshold prevents that press from opening the block even
+if the cursor returns to its origin. It measures distance from the origin rather
+than accumulated path length, independently of the drag activation distance.
+Configure it on `BlockHandleContext` or override it on an individual `BlockHandle`;
+standalone `DragHandle` accepts the same prop. Enter and Space retain native button
+activation, and Shift+F10 opens the menu. A new press starts a new click decision;
+other controls retain their clicks after dragging. Collapsed blocks
 keep the default four-dot grip (2×2) and filled circular halo visible.
 
 ```tsx
 <BlockHandleContext.Provider
-  value={{ onOpen: openBlock, renderIcon: (block, collapsed) => <MyIcon collapsed={collapsed} /> }}
+  value={{
+    onOpen: openBlock,
+    clickMovementThreshold: 32,
+    renderIcon: (block, collapsed) => <MyIcon collapsed={collapsed} />,
+  }}
 >
   <PageSurface />
 </BlockHandleContext.Provider>

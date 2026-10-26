@@ -1,4 +1,4 @@
-import { DragHandle } from "@chulane/rivto-page";
+import { DragHandle, type DragHandleProps } from "@chulane/rivto-page";
 import { BLOCK_HANDLE_CLASS } from "./constants";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import type { EditorBlockNode } from "@chulane/rivto";
@@ -11,9 +11,9 @@ import type { BlockContextMenuContext } from "../../managers/block-context-menu/
 import { BlockContextMenu } from "./menu";
 
 /** Application-owned navigation and optional handle artwork; no persisted icon state is introduced. */
-export interface BlockHandleOptions {
+export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovementThreshold"> {
   /**
-   * Requests host navigation when the handle is clicked without completing a drag.
+   * Requests host navigation when the handle receives an eligible pointer or keyboard click.
    *
    * A component callback takes precedence over the context callback. When neither
    * is provided, clicking does not navigate; menus and optional dragging still work.
@@ -38,6 +38,9 @@ export interface BlockHandleOptions {
 /** Supplies navigation and artwork to handles within this application view. */
 export const BlockHandleContext = createContext<BlockHandleOptions>({});
 
+/** Slot snapshot and application overrides consumed by one shared handle. */
+interface BlockHandleProps extends BlockSlotProps, BlockHandleOptions {}
+
 /**
  * One accessible control for opening, dragging, and block-local extension actions.
  * The button alone is the drag sensor activator; the row remains drag geometry.
@@ -46,17 +49,26 @@ export const BlockHandleContext = createContext<BlockHandleOptions>({});
  * Page marks the layout-resolved hovered row; visibility, keyboard focus feedback,
  * and collapsed presentation live in block-handle.css.
  * Component callbacks override context callbacks. Clicks after completed or
- * cancelled dragging retain ordinary browser delivery. Context-menu events capture
+ * cancelled dragging retain ordinary browser delivery. Pointer navigation is
+ * skipped after the configured excursion threshold; returning to the press
+ * origin cannot restore it. A new press and keyboard activation remain eligible.
+ * Context-menu events capture
  * structural targets before mounting the menu and moving focus to its actions.
  *
  * @param props - Current slot snapshot and optional application overrides.
  * @param props.block - Detached block snapshot whose ID binds interactions.
  * @param props.onOpen - Host navigation callback overriding the context value.
  * @param props.renderIcon - Decorative renderer overriding the context value.
+ * @param props.clickMovementThreshold - Positive pointer excursion in viewport CSS pixels overriding context; omission uses the shared handle's 32px default.
  * @returns The handle and, only while requested, its context menu.
  * @throws If rendered outside a React editor panel context.
  */
-export function BlockHandle({ block, onOpen, renderIcon }: BlockSlotProps & BlockHandleOptions) {
+export function BlockHandle({
+  block,
+  onOpen,
+  renderIcon,
+  clickMovementThreshold,
+}: BlockHandleProps) {
   const options = useContext(BlockHandleContext);
   const pageDragEnabled = useContext(PageDragContext);
   const reactPanel = useReactPanel();
@@ -90,6 +102,7 @@ export function BlockHandle({ block, onOpen, renderIcon }: BlockSlotProps & Bloc
         data-block-drag-handle="true"
         onOpen={() => (onOpen ?? options.onOpen)?.(block.id)}
         onMenu={openMenu}
+        clickMovementThreshold={clickMovementThreshold ?? options.clickMovementThreshold}
       >
         {(renderIcon ?? options.renderIcon)?.(block, collapsed)}
       </DragHandle>
