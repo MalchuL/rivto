@@ -4,7 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createTestReactEditor, TestPanel } from "../../test-utils";
 import { createTestCoreEditor } from "../../test-utils";
 import { imageExtension } from "./image";
-import { ImageView, type ImageHoverMenuProps, type ImageViewKind } from "./image-view";
+import {
+  ImageView,
+  imageResizeMode,
+  type ImageHoverMenuProps,
+  type ImageViewKind,
+} from "./image-view";
 
 const IMAGE_RESIZE_CLASS = "rivto-image-resize";
 
@@ -18,13 +23,37 @@ function TestHoverMenu({ kind }: ImageHoverMenuProps) {
   return <button type="button">Custom {kind} menu</button>;
 }
 
+const testProvider = { write: async () => "test:asset", read: async () => undefined };
+
 describe("ImageView", () => {
+  test("uses free canvas sizing by default and honors a host override", async () => {
+    const editor = await createTestCoreEditor();
+    const panel = createTestReactEditor({
+      editor,
+      extensions: [imageExtension({ provider: testProvider })],
+    });
+    expect(imageResizeMode(panel.editor, "inline")).toBe("letterbox");
+    expect(imageResizeMode(panel.editor, "block")).toBe("letterbox");
+    expect(imageResizeMode(panel.editor, "element")).toBe("stretch");
+    await panel.editor.destroy();
+    const customized = createTestReactEditor({
+      editor,
+      extensions: [
+        imageExtension({ provider: testProvider, views: { element: { resizeMode: "letterbox" } } }),
+      ],
+    });
+    expect(imageResizeMode(customized.editor, "element")).toBe("letterbox");
+    await customized.editor.destroy();
+    await editor.destroy();
+  });
+
   test("shares host controls and resize behavior across inline, block, and element images", async () => {
     const editor = await createTestCoreEditor();
     const reactPanel = createTestReactEditor({
       editor,
       extensions: [
         imageExtension({
+          provider: testProvider,
           views: {
             inline: { resizeMode: "stretch", HoverMenu: TestHoverMenu },
             block: { HoverMenu: TestHoverMenu },

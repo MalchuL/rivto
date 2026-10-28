@@ -12,7 +12,7 @@ in both page and edgeless modes. This bridge is not included in the package.
 ```ts
 const editor = createReactEditor({
   editor: coreEditor,
-  extensions: [fileExtension(), imageExtension(), ...edgelessPreset(), standardPreset()],
+  extensions: [fileExtension({ provider: fileProvider }), imageExtension({ provider: imageProvider }), ...edgelessPreset(), standardPreset()],
 });
 ```
 
@@ -27,39 +27,20 @@ hold Shift for free resizing, or double-click/press Enter on the handle to reset
 Standard Markdown images such as `![Alt](photo.png)` use the same controls and
 become an image macro only when an adjustment needs persisted dimensions.
 
-Without a host uploader, image files are stored as data URLs up to 10 MiB. Hosts
-can register one uploader, ordered URI postprocessors, and URI resolvers during
-extension setup:
+Both extensions require a `BinaryProvider<string, Blob>`. Providers write bytes and
+return URI strings, then read references they own. An unrecognized reference may
+return `undefined`; HTTP(S), data and blob URLs can then use browser resolution.
+Provider failures are reported rather than falling back to another storage backend.
 
 ```ts
-const filesExtension = {
-  id: "app.files",
-  setup(editor) {
-    editor.files.registerUploadHandler({
-      id: "assets",
-      maxBytes: 25 * 1024 * 1024,
-      upload: async (file, context) => uploadAsset(file, context.signal),
-    });
-    editor.files.registerPostprocessor({
-      id: "cdn",
-      process: (uri) => uri.replace(UPLOAD_ORIGIN, CDN_ORIGIN),
-    });
-    editor.files.registerUriResolver({
-      id: "desktop-assets",
-      resolve: (uri, context) => readAsset(uri, context.signal),
-    });
-  },
+const imageProvider: BinaryProvider<string, Blob> = {
+  write: (blob, context) => cloud.upload(blob, context),
+  read: (uri, context) => cloud.readIfOwned(uri, context),
 };
 ```
 
-An upload handler may return `undefined` for inputs it does not claim; Rivto then
-uses the bounded data-URL fallback. The repository demo uses this to store only
-clipboard file bytes in `<os-temp>/rivto-files`, while drop and picker files
-continue through the data-URL fallback. Existing names are never overwritten;
-missing names and collisions receive UUID filenames.
-
-Desktop apps can instead use `createLocalFileBridge(...)`; its `writeFile` and
-`readFile` callbacks keep privileged filesystem access in the host process.
+`createLocalFileBridge` creates a provider using host filesystem callbacks.
+The demo uses its own bounded local provider; filesystem access is host-owned.
 
 Unsupported file types fall back to an openable `file` chip, block, or canvas
 element. Double-clicking uses a matching typed open handler, then a matcher-less

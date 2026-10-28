@@ -12,6 +12,7 @@ import { createCaretSelection, type EditorMode } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
+import type { BinaryProvider } from "../../managers/files";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
@@ -48,6 +49,7 @@ function escapeHtml(value: string): string {
 
 /** Optional notification for asynchronous file failures. */
 export interface FileExtensionOptions {
+  readonly provider: BinaryProvider<string, Blob>;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -441,7 +443,7 @@ function insertPrepared(
  * @param options - Optional asynchronous error notification.
  * @returns Lifecycle-owned React editor extension.
  */
-export function fileExtension(options: FileExtensionOptions = {}): ReactEditorExtension {
+export function fileExtension(options: FileExtensionOptions): ReactEditorExtension {
   return {
     id: "file",
     setup: (reactEditor) => {
@@ -459,6 +461,7 @@ export function fileExtension(options: FileExtensionOptions = {}): ReactEditorEx
       });
       reactEditor.files.registerPasteHandler({
         id: "file",
+        provider: options.provider,
         elementType: FILE_ELEMENT_TYPE,
         ElementView: FileElementView,
         prepare: ({ reference }) => ({

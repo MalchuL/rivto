@@ -2,11 +2,49 @@
 import { createReactEditor } from "../../editor/react-editor";
 import { createTestCoreEditor } from "../../test-utils";
 import { FILE_BLOCK_TYPE, FILE_ELEMENT_TYPE, fileExtension } from "./file";
+import { imageExtension } from "../image/image";
+
+const testProvider = { write: async () => "test:asset", read: async () => undefined };
 
 describe("fileExtension", () => {
+  test("image and file extensions select their own binary providers", async () => {
+    const editor = await createTestCoreEditor();
+    const imageProvider = {
+      write: async () => "images:one",
+      read: async () => new Blob(["image"]),
+    };
+    const fileProvider = { write: async () => "files:one", read: async () => new Blob(["file"]) };
+    const runtime = createReactEditor({
+      editor,
+      extensions: [
+        fileExtension({ provider: fileProvider }),
+        imageExtension({ provider: imageProvider }),
+      ],
+    });
+    const context = {
+      source: "drop" as const,
+      destination: "block" as const,
+      signal: new AbortController().signal,
+    };
+    await expect(
+      runtime.files.upload(new File(["x"], "picture.png", { type: "image/png" }), context),
+    ).resolves.toBe("images:one");
+    await expect(
+      runtime.files.upload(new File(["x"], "document.pdf", { type: "application/pdf" }), context),
+    ).resolves.toBe("files:one");
+    await expect(
+      runtime.files.resolve("images:one", { signal: context.signal, providerId: "image" }),
+    ).resolves.toBeInstanceOf(Blob);
+    await runtime.destroy();
+    await editor.destroy();
+  });
+
   test("prepares unknown MIME types as generic inline, block, and element attachments", async () => {
     const editor = await createTestCoreEditor();
-    const reactEditor = createReactEditor({ editor, extensions: [fileExtension()] });
+    const reactEditor = createReactEditor({
+      editor,
+      extensions: [fileExtension({ provider: testProvider })],
+    });
     const reference = {
       uri: "data:application/pdf;base64,AA==",
       name: "report.pdf",
@@ -42,7 +80,7 @@ describe("fileExtension", () => {
     const reactEditor = createReactEditor({
       editor,
       extensions: [
-        fileExtension(),
+        fileExtension({ provider: testProvider }),
         {
           id: "file.writer",
           setup: (runtime) =>

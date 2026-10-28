@@ -17,8 +17,8 @@ import {
 const editor = createReactEditor({
   editor: coreEditor,
   extensions: [
-    fileExtension(),
-    imageExtension({ onError: (error) => reportError(error) }),
+    fileExtension({ provider: fileProvider }),
+    imageExtension({ provider: imageProvider, onError: (error) => reportError(error) }),
     ...edgelessPreset(), // Canvas surface and interaction controls.
     standardPreset(),
   ],
@@ -44,6 +44,7 @@ function ProductImageMenu({ alt, onAltChange, onReset }: ImageHoverMenuProps) {
 }
 
 imageExtension({
+  provider: imageProvider,
   views: {
     inline: { resizeMode: "letterbox", dragResize: true, HoverMenu: ProductImageMenu },
     block: { resizeMode: "stretch", dragResize: true, HoverMenu: ProductImageMenu },
@@ -54,7 +55,7 @@ imageExtension({
 
 - `letterbox` preserves aspect ratio during normal dragging and renders with
   `object-fit: contain`; Shift temporarily allows free resizing.
-- `stretch` allows free width/height dragging and renders with `object-fit: fill`.
+- `stretch` allows free width/height dragging and renders with `object-fit: fill`; it is the default for canvas elements.
 - `dragResize` controls the shared component's bottom-right handle. It defaults
   to `true` for inline/block images and `false` for elements because the canvas
   already owns element resize handles.
@@ -87,7 +88,7 @@ are inserted in source order.
 Desktop file managers may expose a copied file as bytes, a `File`, a clipboard
 item, or a redacted `text/uri-list`. The extension handles all four forms. For a
 redacted URI list it reads the path with the asynchronous Clipboard API; local
-paths still require a registered URI resolver because the browser cannot read
+paths still require a provider that can read them because the browser cannot read
 the filesystem directly.
 
 Mixed HTML is left to the normal clipboard pipeline. Non-image files are not
@@ -124,13 +125,12 @@ collection belongs to the host storage system.
 
 ## Storage behavior
 
-Without a host uploader, files become data URLs with a default 10 MiB per-file
-limit. Configure `files.dataUrlMaxBytes` when creating the React editor to change
-that limit. A registered uploader may return `undefined` to decline a file and
-retain the data-URL fallback.
+Image and file extensions each require a `BinaryProvider<string, Blob>`.
+The provider stores binary content and returns a stable URI. Reads can decline
+unrecognized URIs so browser-supported HTTP(S), data and blob URLs remain usable.
+The provider controls size limits and durable storage policy.
 
-For a desktop or native host, `createLocalFileBridge()` registers an uploader
-and matching URI resolver without importing Node APIs into the React package:
+For a desktop or native host, `createLocalFileBridge()` creates a binary provider without importing Node APIs into the React package:
 
 ```ts
 const localFiles = createLocalFileBridge({
@@ -145,7 +145,7 @@ const localFiles = createLocalFileBridge({
 
 createReactEditor({
   editor: coreEditor,
-  extensions: [localFiles, fileExtension(), imageExtension(), standardPreset()],
+  extensions: [fileExtension({ provider: localFiles }), imageExtension({ provider: localFiles }), standardPreset()],
 });
 ```
 
@@ -154,4 +154,4 @@ extension, and returns an encoded logical URI. The privileged callbacks decide
 how files are physically written and read.
 
 See [`../../managers/files/README.md`](../../managers/files/README.md) for custom
-upload, URI postprocessing, and resolver extensions.
+provider configuration and attachment handlers.

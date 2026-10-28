@@ -7,18 +7,17 @@
  *
  * @module
  */
-import type { ReactEditorExtension } from "../../managers";
+import type { BinaryProvider } from "../../managers/files";
 
 /** Settings and privileged callbacks required by the local asset bridge. */
 export interface LocalFileBridgeOptions {
-  readonly id?: string;
   readonly directory: string;
   readonly uriPrefix: string;
   readonly maxBytes?: number;
   readonly writeFile: (input: {
     readonly directory: string;
     readonly fileName: string;
-    readonly file: File;
+    readonly file: Blob;
     readonly signal: AbortSignal;
   }) => void | Promise<void>;
   readonly readFile: (input: {
@@ -30,8 +29,8 @@ export interface LocalFileBridgeOptions {
 }
 
 /** Produces a portable basename while preserving a short useful extension. */
-function safeFileName(file: File): string {
-  const original = file.name || "file";
+function safeFileName(name: string): string {
+  const original = name || "file";
   const dot = original.lastIndexOf(".");
   const extension =
     dot > 0 && original.length - dot <= 12 ? original.slice(dot).replace(/[^.a-z\d_-]/gi, "") : "";
@@ -51,51 +50,66 @@ function logicalUri(prefix: string, fileName: string): string {
 }
 
 /**
- * Creates an extension that registers one local uploader and its matching reader.
+ * Creates a binary provider backed by a host filesystem bridge.
  *
  * Relative URIs are claimed only under `uriPrefix`; file URIs are claimed only
  * under a `file:` directory. Broader filesystem access requires an explicit
  * host resolver and is never inferred from document text.
  *
  * @param options - Opaque directory, logical prefix, limits, and host bridges.
- * @returns Lifecycle-owned file pipeline registrations.
+ * @returns A binary provider for attachment extensions.
  */
-export function createLocalFileBridge(options: LocalFileBridgeOptions): ReactEditorExtension {
-  const id = options.id?.trim() || "local-files";
+export function createLocalFileBridge(
+  options: LocalFileBridgeOptions,
+): BinaryProvider<string, Blob> {
   const prefix = options.uriPrefix.endsWith("/") ? options.uriPrefix : `${options.uriPrefix}/`;
+  const maxBytes = options.maxBytes ?? 10 * 1024 * 1024;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new TypeError("File limit must be a positive integer");
+  }
   return {
-    id: `files.${id}`,
-    setup: (reactEditor) => {
-      reactEditor.files.registerUploadHandler({
-        id,
-        maxBytes: options.maxBytes,
-        upload: async (file, context) => {
-          const fileName = safeFileName(file);
-          await options.writeFile({
-            directory: options.directory,
-            fileName,
-            file,
-            signal: context.signal,
-          });
-          return logicalUri(prefix, fileName);
-        },
+    /** @inheritdoc BinaryProvider.write */
+    async write(file, context) {
+      context.signal.throwIfAborted();
+      if (file.size > maxBytes) {
+        throw new RangeError("File exceeds the configured limit");
+      }
+      const fileName = safeFileName(context.name);
+      await options.writeFile({
+        directory: options.directory,
+        fileName,
+        file,
+        signal: context.signal,
       });
-      reactEditor.files.registerUriResolver({
-        id,
-        resolve: (uri, context) => {
-          const localRelative = !/^[a-z][a-z\d+.-]*:/i.test(uri) && uri.startsWith(prefix);
-          const localFile =
-            options.directory.startsWith("file:") && uri.startsWith(options.directory);
-          return localRelative || localFile
-            ? options.readFile({
-                directory: options.directory,
-                uri,
-                signal: context.signal,
-                documentId: context.documentId,
-              })
-            : undefined;
-        },
+      context.signal.throwIfAborted();
+      return logicalUri(prefix, fileName);
+    },
+    /** @inheritdoc BinaryProvider.read */
+    async read(uri, context) {
+      context.signal.throwIfAborted();
+      const localRelative = !/^[a-z][a-z\d+.-]*:/i.test(uri) && uri.startsWith(prefix);
+      const localFile = options.directory.startsWith("file:") && uri.startsWith(options.directory);
+      if (!localRelative && !localFile) {
+        return undefined;
+      }
+      const result = await options.readFile({
+        directory: options.directory,
+        uri,
+        signal: context.signal,
+        documentId: context.documentId,
       });
+      context.signal.throwIfAborted();
+      if (result instanceof Blob) {
+        return result;
+      }
+      if (!result.trim() || /^(?:javascript|vbscript):/i.test(result.trim())) {
+        throw new TypeError("File bridge returned an unsafe URI");
+      }
+      const response = await fetch(result, { signal: context.signal });
+      if (!response.ok) {
+        throw new Error(`Unable to read file: ${response.status}`);
+      }
+      return response.blob();
     },
   };
 }

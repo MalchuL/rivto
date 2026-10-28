@@ -186,7 +186,7 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
     )
     .toContain("data:image/png;base64,");
   if (browserName === "chromium") {
-    await imageBlock.locator(".rivto-image").click({ button: "right" });
+    await imageBlock.locator(".rivto-image-frame").click({ button: "right" });
     const copyImage = page.getByRole("menuitem", { name: "Copy image" });
     await expect(copyImage).toBeVisible();
     await copyImage.click();
@@ -200,7 +200,7 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
       )
       .toBe(true);
   }
-  await imageBlock.hover();
+  await imageBlock.locator(".rivto-image-frame").hover();
   const resize = imageBlock.locator(IMAGE_RESIZE_SELECTOR);
   await expect(resize).toBeVisible();
   const handle = await resize.boundingBox();
@@ -224,7 +224,7 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
       }),
     )
     .toBe(true);
-  await imageBlock.hover();
+  await imageBlock.locator(".rivto-image-frame").hover();
   await resize.dblclick();
   await expect
     .poll(() =>
