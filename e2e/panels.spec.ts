@@ -7,7 +7,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Inspection = { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor } };
 
 async function seed(page: Page, repeat = 0) {
-  await page.goto(`/?repeat=${repeat}`);
+  await page.goto(`/?test_features=1&repeat=${repeat}`);
   await expect(
     page.locator('[data-journal-document="today"] [data-block-content]').first(),
   ).toBeVisible();

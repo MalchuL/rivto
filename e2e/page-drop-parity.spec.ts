@@ -22,7 +22,7 @@ class DropParityFixture {
    */
   async load(upper: Kind, lower: Kind): Promise<void> {
     await this.page.setViewportSize({ width: 1280, height: 1500 });
-    await this.page.goto("/");
+    await this.page.goto("/?test_features=1");
     await this.page.locator('[data-journal-document="today"] .page-surface').first().waitFor();
     await this.page.evaluate(
       ({ upper, lower }) => {

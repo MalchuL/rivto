@@ -7,7 +7,7 @@ for (const mode of ["block", "edgeless"] as const) {
     test(`structural paste keeps selection until a text click in ${mode}, repeat=${repeat}`, async ({
       page,
     }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const today = page.locator('[data-journal-document="today"]');
       await today.locator("[data-block-content]").first().waitFor();
       await today.locator(`[data-editor-mode="${mode}"]`).click();
@@ -112,7 +112,7 @@ for (const repeat of [0, 200]) {
   test(`plain pointerdown releases whole-block selection immediately, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     const contents = today
       .locator("[data-block-content]")

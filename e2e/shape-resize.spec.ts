@@ -5,7 +5,7 @@ for (const repeat of [0, 200]) {
   for (const kind of ["Rectangle", "Ellipse"]) {
     test(`${kind} borders stay fixed during resize, repeat=${repeat}`, async ({ page }) => {
       test.setTimeout(120_000);
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       await page.locator('[data-editor-mode="edgeless"]').click();
       const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
       await toolbar.getByRole("button", { name: "Shapes", exact: true }).click();

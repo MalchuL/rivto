@@ -11,7 +11,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  */
 async function load(page: Page, mode: "block" | "edgeless", type = "paragraph") {
   await page.setViewportSize({ width: 1400, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
     ({ mode, type }) => {
@@ -96,6 +96,8 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.move(child.x + 2, parent.y + parent.height - 1);
     const line = page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
+    await expect(line).toHaveCSS("background-color", "rgb(80, 56, 179)");
+    await expect(line).toHaveCSS("height", "4px");
     const upper = (await line.boundingBox())!;
     await page.mouse.move(child.x + 2, child.y + 1);
     await expect.poll(async () => (await line.boundingBox())?.y).toBe(upper.y);

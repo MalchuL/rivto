@@ -12,7 +12,7 @@ for (const repeat of [0, 200]) {
     });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const content = page.locator('[data-journal-document="today"] [data-block-content]').first();
     await expect(content).toBeVisible();
     await content.fill("HTTP demo editing");

@@ -4,7 +4,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 test("creates nested groups without child IDs and preserves their children when ungrouping", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const today = page.locator('[data-journal-document="today"]');
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();

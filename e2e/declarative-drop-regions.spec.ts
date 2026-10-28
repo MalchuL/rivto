@@ -50,7 +50,7 @@ for (const mode of ["block", "edgeless"] as const) {
  */
 async function load(page: Page, type: Container, mode: "block" | "edgeless") {
   await page.setViewportSize({ width: 1500, height: 1100 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   const parent = await page.evaluate(
     ({ type, mode }) => {

@@ -4,7 +4,7 @@ for (const repeat of [0, 200]) {
   test(`middle-button panning preserves blocks without rereading root ranges, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const journal = page.locator('[data-journal-document="today"]');
     await journal.locator('[data-editor-mode="edgeless"]').click();
     const canvas = journal.locator(".edgeless-viewport");
@@ -64,7 +64,7 @@ for (const repeat of [0, 200]) {
   test(`first pan movement reaches the next paint without an extra frame, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const journal = page.locator('[data-journal-document="today"]');
     await journal.locator('[data-editor-mode="edgeless"]').click();
     const canvas = journal.locator(".edgeless-viewport");

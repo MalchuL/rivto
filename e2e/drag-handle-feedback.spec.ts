@@ -9,7 +9,7 @@ for (const { repeat, mode } of [
     test(`drag handle feedback mode=${mode}, repeat=${repeat}, cancel=${cancel}`, async ({
       page,
     }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       await page.locator(`[data-editor-mode="${mode}"]`).first().click();
       const surface = page
         .locator('[data-journal-document="today"] [data-rivto-block-editor]')

@@ -12,7 +12,7 @@ const BLOCK_NUMBER_CLASS = "demo-block-number";
 for (const repeat of [0, 200]) {
   test(`shares outline reads during indent and outdent with repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await expect(
       page.locator('[data-journal-document="today"] [data-block-content]').first(),
     ).toBeVisible();

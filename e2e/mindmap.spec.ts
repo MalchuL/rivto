@@ -7,7 +7,7 @@ for (const repeat of [0, 200]) {
     test.setTimeout(120_000);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
     const diagrams = toolbar.getByRole("button", { name: "Diagrams", exact: true });

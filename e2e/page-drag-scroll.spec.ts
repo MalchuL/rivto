@@ -128,7 +128,7 @@ async function scrollRowToCursor(page: Page, row: Locator, cursorY: number): Pro
 
 test.describe("page drag with a scrolling window", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
   });
 
   test("drops onto the row under the cursor after scrolling mid-drag", async ({ page }) => {

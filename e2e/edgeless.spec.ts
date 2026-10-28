@@ -256,7 +256,7 @@ test.beforeEach(async ({ page }, info) => {
   ) {
     await page.setViewportSize({ width: 1280, height: 1800 });
   }
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("darkens grid dots around the pointer with a CSS-configurable radius", async ({ page }) => {
@@ -864,7 +864,7 @@ test("resizes visuals on one axis and rotates them with Shift snapping", async (
 
 for (const repeat of [1, 200]) {
   test(`disables grid snapping for rotated visuals (repeat=${repeat})`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await switchMode(page, "edgeless");
     const rectangle = await createVisual(page, "Rectangle");
     await page.getByRole("button", { name: "Disable object alignment" }).click();

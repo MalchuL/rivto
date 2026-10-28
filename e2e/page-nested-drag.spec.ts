@@ -4,7 +4,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 for (const edge of ["before", "after"] as const) {
   test(`Page inserts ${edge} an embedded editor through its enclosing region`, async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1200 });
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const ids = await page.evaluate((edge) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;

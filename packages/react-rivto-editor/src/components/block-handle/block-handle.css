@@ -33,6 +33,7 @@
   > .block-handle,
 .rivto-block-row:focus-within > .rivto-block-slot > .block-handle,
 :root:not([data-block-drag-active]) .block-handle:hover,
+.block-handle[data-always-visible],
 .block-handle:focus-visible {
   opacity: 1;
   pointer-events: auto;

@@ -12,7 +12,7 @@ test("saves a slash-created Review report and reproduces it with native load", a
   const slug = problem.toLowerCase().replaceAll(" ", "-");
   const reportDirectory = resolve(process.cwd(), "reports");
   try {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const content = page.locator("[data-block-content]").filter({
       hasText: "Type `/` anywhere here",
     });
@@ -122,7 +122,7 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     await page.route("**/__review-reports", (route) => route.fulfill({ json: { ok: true } }));
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     await today.locator("[data-block-content]").first().waitFor();
     await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -224,7 +224,7 @@ for (const repeat of [0, 200]) {
 for (const mode of ["Page", "Edgeless"] as const) {
   for (const repeat of [0, 200]) {
     test(`Review block keeps text editing in ${mode}, repeat=${repeat}`, async ({ page }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const today = page.locator('[data-journal-document="today"]');
       const content = today.locator("[data-block-content]").first();
       const blockId = await content.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);

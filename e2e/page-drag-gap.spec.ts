@@ -98,7 +98,7 @@ async function loadSingleChildReport(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (
       window as unknown as {
@@ -406,7 +406,7 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 test("moves a card out of the demo Kanban into the Kanban–Columns gap", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const document = page.locator('[data-journal-document="today"]');
   const board = document.locator('[data-block-type="kanban"]').first();
   const columns = document.locator('[data-block-type="columns"]').first();
@@ -450,7 +450,7 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
 });
 
 test("moves a block between the demo TODO storage and Bento", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const document = page.locator('[data-journal-document="today"]');
   const storage = document.locator('[data-block-type="todo-storage"]').first();
   const bento = document.locator('[data-block-type="bento"]').first();
@@ -643,6 +643,10 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
     "outline-style",
     "solid",
+  );
+  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
+    "outline-color",
+    "rgb(80, 56, 179)",
   );
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute(
     "data-block-drop-active",

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const route of ["/", "/?editors=2", "/?sync=1&room=block-labels"]) {
+for (const route of ["/?test_features=1", "/?editors=2", "/?sync=1&room=block-labels"]) {
   test(`block labels default to hidden and can be toggled on ${route}`, async ({ page }) => {
     await page.goto(route);
     const numbers = page.getByRole("checkbox", { name: "Block numbers", exact: true }).first();

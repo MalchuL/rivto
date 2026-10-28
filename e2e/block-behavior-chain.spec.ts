@@ -6,7 +6,7 @@ for (const outcome of ["unhandled", "handled"] as const) {
   test(`shared structural deletion runs once across types and ${outcome} controls deletion`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.locator('[data-journal-document="today"] [data-block-content]').first().click();
     const ids = await page.evaluate((outcome) => {
       const host = window as unknown as {
@@ -75,7 +75,7 @@ for (const count of [1, 200]) {
   test(`structural deletion avoids repeated behavior snapshots for ${count} blocks`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.locator('[data-journal-document="today"] [data-block-content]').first().click();
     const ids = await page.evaluate((count) => {
       const host = window as unknown as {
@@ -147,7 +147,7 @@ for (const count of [1, 200]) {
 test("availability uses current properties independently for blocks of the same native type", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
   const ids = await page.evaluate(() => {
     const { editor, reactEditor } = (
@@ -211,7 +211,7 @@ test("availability uses current properties independently for blocks of the same 
 for (const mode of ["block", "edgeless"] as const) {
   for (const gesture of ["indent", "outdent", "reorder", "drag"] as const) {
     test(`semantic move veto preserves state for ${gesture} in ${mode}`, async ({ page }) => {
-      await page.goto("/");
+      await page.goto("/?test_features=1");
       const ids = await page.evaluate(
         ({ mode, gesture }) => {
           const host = window as unknown as {

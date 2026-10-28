@@ -107,10 +107,20 @@
   right: -4px;
   bottom: 0;
   width: 8px;
-  background: linear-gradient(90deg, transparent 3px, var(--rivto-accent) 3px 5px, transparent 5px);
+  background: transparent;
   cursor: col-resize;
   opacity: 0;
   touch-action: none;
+}
+
+.rivto-table-resize-column::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 3px;
+  width: 2px;
+  background: var(--rivto-accent);
+  pointer-events: none;
 }
 
 .rivto-table-resize-column:hover,

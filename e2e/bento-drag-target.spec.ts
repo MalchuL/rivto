@@ -7,7 +7,7 @@ const HANDLE_CLASS = "block-handle";
 
 for (const mode of ["block", "edgeless"] as const) {
   test(`Bento row sweep distinguishes sibling rims from nesting in ${mode}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const ids = await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;

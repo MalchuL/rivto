@@ -9,7 +9,7 @@ import { BLOCK_ID_ATTRIBUTE } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("aligns the inline priority with the project chip without an arrow", async ({ page }) => {

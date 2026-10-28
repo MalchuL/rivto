@@ -2,7 +2,7 @@ import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test } from "@playwright/test";
 
 test("renders today and yesterday as one seamless two-document journal", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const documents = page.locator("[data-journal-document]");
   await expect(documents).toHaveCount(2);
 
@@ -27,7 +27,7 @@ test("renders today and yesterday as one seamless two-document journal", async (
 });
 
 test("moves the caret across journal editors at page boundaries", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const today = page.locator('[data-journal-document="today"]');
   const yesterday = page.locator('[data-journal-document="yesterday"]');
   await yesterday.getByRole("button", { name: "Add block", exact: true }).click();

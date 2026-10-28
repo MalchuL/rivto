@@ -15,7 +15,7 @@ for (const mode of ["block", "edgeless"] as const) {
       test(`gap above ${container.type} places a ${child ? "child" : "sibling"} in ${mode}`, async ({
         page,
       }) => {
-        await page.goto("/");
+        await page.goto("/?test_features=1");
         const ids = await page.evaluate(
           ({ input, nextMode }) => {
             const editor = (
@@ -99,7 +99,7 @@ for (const mode of ["block", "edgeless"] as const) {
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const ids = await page.evaluate((nextMode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -195,7 +195,7 @@ for (const mode of ["block", "edgeless"] as const) {
     test(`${type} background rejects content without inventing a column in ${mode}`, async ({
       page,
     }) => {
-      await page.goto("/");
+      await page.goto("/?test_features=1");
       const ids = await page.evaluate(
         ({ type, mode }) => {
           const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

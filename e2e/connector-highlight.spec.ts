@@ -45,7 +45,7 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     await page.locator(".edgeless-viewport").evaluate((element) => element.scrollIntoView());
     const ids = await page.evaluate(() => {
@@ -176,7 +176,7 @@ for (const repeat of [0, 200]) {
     test.setTimeout(120_000);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     await page.locator(".edgeless-viewport").evaluate((element) => element.scrollIntoView());
     const initial = await page.evaluate(() => {
@@ -248,7 +248,7 @@ for (const repeat of [0, 200]) {
         errors.push(message.text());
       }
     });
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     await page.locator(".edgeless-viewport").evaluate((element) => element.scrollIntoView());
     const ids = await page.evaluate(() => {

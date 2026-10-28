@@ -11,7 +11,7 @@ for (const mode of ["block", "edgeless"] as const) {
     test(`parent intercepts ${key} once in ${mode}, preserving content and selection`, async ({
       page,
     }) => {
-      await page.goto("/");
+      await page.goto("/?test_features=1");
       await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
       const fixture = await page.evaluate(() => {
         const host = window as unknown as Host;

@@ -13,7 +13,7 @@ interface DemoWindow extends Window {
  * @returns Completion after the visible first card mounts in edgeless mode.
  */
 async function seedCards(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await expect(
     page.locator('[data-journal-document="today"] [data-block-content]').first(),
   ).toBeVisible();

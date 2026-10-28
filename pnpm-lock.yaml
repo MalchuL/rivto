@@ -191,6 +191,9 @@ importers:
       '@chulane/rivto-react':
         specifier: workspace:*
         version: link:../packages/react-rivto-editor
+      lucide-react:
+        specifier: ^1.28.0
+        version: 1.28.0(react@19.2.7)
       react:
         specifier: ^19.2.0
         version: 19.2.7

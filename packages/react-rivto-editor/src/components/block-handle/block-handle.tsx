@@ -12,6 +12,8 @@ import { BlockContextMenu } from "./menu";
 
 /** Application-owned navigation and optional handle artwork; no persisted icon state is introduced. */
 export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovementThreshold"> {
+  /** Keeps handles visible without hover or focus; defaults to false. */
+  readonly alwaysVisible?: boolean;
   /**
    * Requests host navigation when the handle receives an eligible pointer or keyboard click.
    *
@@ -35,7 +37,7 @@ export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovement
    */
   readonly renderIcon?: (block: EditorBlockNode, collapsed: boolean) => ReactNode;
 }
-/** Supplies navigation and artwork to handles within this application view. */
+/** Supplies navigation, artwork, and visibility to handles within this application view. */
 export const BlockHandleContext = createContext<BlockHandleOptions>({});
 
 /** Slot snapshot and application overrides consumed by one shared handle. */
@@ -59,6 +61,7 @@ interface BlockHandleProps extends BlockSlotProps, BlockHandleOptions {}
  * @param props.block - Detached block snapshot whose ID binds interactions.
  * @param props.onOpen - Host navigation callback overriding the context value.
  * @param props.renderIcon - Decorative renderer overriding the context value.
+ * @param props.alwaysVisible - Visibility override; omission uses the context value.
  * @param props.clickMovementThreshold - Positive pointer excursion in viewport CSS pixels overriding context; omission uses the shared handle's 4px default.
  * @returns The handle and, only while requested, its context menu.
  * @throws If rendered outside a React editor panel context.
@@ -67,6 +70,7 @@ export function BlockHandle({
   block,
   onOpen,
   renderIcon,
+  alwaysVisible,
   clickMovementThreshold,
 }: BlockHandleProps) {
   const options = useContext(BlockHandleContext);
@@ -97,6 +101,7 @@ export function BlockHandle({
         aria-haspopup="menu"
         aria-expanded={Boolean(menu)}
         data-collapsed={collapsed || undefined}
+        data-always-visible={(alwaysVisible ?? options.alwaysVisible) || undefined}
         data-draggable={pageDragEnabled || undefined}
         aria-roledescription={pageDragEnabled ? "draggable" : undefined}
         data-block-drag-handle="true"

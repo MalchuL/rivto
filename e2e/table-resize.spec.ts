@@ -17,7 +17,7 @@ class TableResizeBrowserFixture {
    * @returns Resolves when the first column's separator is mounted and visible.
    */
   async load(mode: "block" | "edgeless"): Promise<void> {
-    await this.page.goto("/");
+    await this.page.goto("/?test_features=1");
     await this.page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 for (const repeat of [0, 200]) {
   test(`drag handle keeps compact icon geometry, repeat=${repeat}`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const handle = page.locator(".block-handle").first();
     await handle.locator("..").locator("..").hover();
     await handle.hover();

@@ -206,7 +206,7 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').first().click();
     const canvas = page.locator(".edgeless-viewport").first();
     await expect(canvas.locator("[data-edgeless-root]").first()).toBeVisible();

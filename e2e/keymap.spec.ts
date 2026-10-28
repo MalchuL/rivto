@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { BLOCK_ID_ATTRIBUTE } from "./dom-markers";
 
 test("edits and restores a live binding without reloading the editor", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const token = await page.evaluate(
     () => (window as unknown as { __rivtoDemo?: { token: string } }).__rivtoDemo?.token,
   );

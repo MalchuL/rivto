@@ -79,12 +79,15 @@ standalone `DragHandle` accepts the same prop. Enter and Space retain native but
 activation, and Shift+F10 opens the menu. A new press starts a new click decision;
 other controls retain their clicks after dragging. Collapsed blocks
 keep the default four-dot grip (2×2) and filled circular halo visible.
+Set `alwaysVisible: true` in the context to show handles without hover or focus;
+it defaults to `false` and can also be overridden on an individual `BlockHandle`.
 
 ```tsx
 <BlockHandleContext.Provider
   value={{
     onOpen: openBlock,
     clickMovementThreshold: 4,
+    alwaysVisible: true,
     renderIcon: (block, collapsed) => <MyIcon collapsed={collapsed} />,
   }}
 >

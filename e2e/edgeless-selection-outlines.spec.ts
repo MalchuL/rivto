@@ -7,7 +7,7 @@ interface OutlineTestWindow extends Window {
 
 for (const repeat of [0, 200]) {
   test(`each selected shape has its own frame, repeat=${repeat}`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const canvas = page.locator(".edgeless-viewport");
     await canvas.evaluate((root) => root.scrollIntoView({ block: "start" }));
@@ -54,7 +54,7 @@ for (const repeat of [0, 200]) {
   test(`mixed card and shape selection keeps individual frames, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const canvas = page.locator(".edgeless-viewport");
     await canvas.evaluate((root) => root.scrollIntoView({ block: "start" }));

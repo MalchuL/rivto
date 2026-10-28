@@ -54,7 +54,7 @@ function blockById(page: Page, id: string): Locator {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("Backspace and Delete remove root-focused block selections atomically", async ({ page }) => {

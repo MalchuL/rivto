@@ -25,7 +25,6 @@
   background: var(--rivto-background);
   border: 1px solid var(--rivto-border);
   border-radius: 12px;
-  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
   overflow-x: clip;
 }
 

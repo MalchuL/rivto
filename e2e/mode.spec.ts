@@ -9,7 +9,7 @@ interface DemoInspection {
 test("panel mode changes render the surface while embeddings keep their page view", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const today = page.locator('[data-journal-document="today"]');
   await expect(today.locator("[data-rivto-surface]").first()).toHaveAttribute(
     "data-rivto-surface",

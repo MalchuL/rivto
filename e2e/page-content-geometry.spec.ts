@@ -4,7 +4,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 test("keeps the Markdown editing layer inside its preview and accepts native editing", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await expect(
     page.locator('[data-journal-document="today"] [data-block-content]').first(),
   ).toBeVisible();

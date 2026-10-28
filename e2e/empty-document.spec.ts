@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { ROOT_BLOCK_SELECTOR, BLOCK_ROW_SELECTOR } from "./dom-markers";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("creates every paragraph through the chosen trailing insertion target", async ({ page }) => {

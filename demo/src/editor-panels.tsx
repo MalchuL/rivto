@@ -2,6 +2,7 @@ import { BlockHandleContext } from "@chulane/rivto-react";
 import {
   Fragment,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useState,
@@ -73,6 +74,7 @@ export function DemoEditorPanels({
   onPresentationChange,
   ...props
 }: DemoEditorPanelsProps) {
+  const handleOptions = useContext(BlockHandleContext);
   const [state, setState] = useState(() => {
     const root: DemoPanel = {
       panel: {
@@ -183,7 +185,7 @@ export function DemoEditorPanels({
       rootElementId={active.panel.rootElementId}
       mode={active.mode}
     >
-      <BlockHandleContext.Provider value={{ onOpen: openBlock }}>
+      <BlockHandleContext.Provider value={{ ...handleOptions, onOpen: openBlock }}>
         {children(header)}
       </BlockHandleContext.Provider>
     </EditorPanel>

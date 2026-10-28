@@ -4,7 +4,7 @@ for (const repeat of [0, 200]) {
   test(`keeps the visible block in place across virtualization toggles, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const surface = page.locator('[data-journal-document="today"] .page-surface').first();
     await surface.locator("[data-block-id]").first().waitFor();
     const id = await surface.evaluate((root) => {
@@ -46,7 +46,7 @@ for (const repeat of [0, 200]) {
   test(`retains visible embedding DOM while switching virtualization, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const embedding = page
       .locator('[data-journal-document="today"] .rivto-embedding')
       .first()

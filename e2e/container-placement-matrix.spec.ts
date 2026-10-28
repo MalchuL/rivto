@@ -33,7 +33,7 @@ async function loadContainers(
   mode: "block" | "edgeless",
 ): Promise<void> {
   await page.setViewportSize({ width: 1500, height: 1600 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] .page-surface').first().waitFor();
   await page.evaluate(
     ({ blocks, mode }) => {

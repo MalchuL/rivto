@@ -8,7 +8,7 @@ const BLOCK_CHILDREN_SELECTOR = ".rivto-block-children";
 const BLOCK_SLOT_SELECTOR = ":is(.rivto-block-slot, .rivto-slot)";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 const replaceContent = async (page: Page, content: string): Promise<void> => {

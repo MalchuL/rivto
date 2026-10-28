@@ -23,7 +23,7 @@ for (const placement of [
         await loseHandleRelease(page);
       }
       await page.setViewportSize({ width: 1500, height: 1100 });
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const document = page.locator('[data-journal-document="today"] > .page-surface');
       await document.waitFor();
       const ids = await page.evaluate((placement) => {

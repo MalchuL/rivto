@@ -5,7 +5,7 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const id = await page.evaluate(
       () =>

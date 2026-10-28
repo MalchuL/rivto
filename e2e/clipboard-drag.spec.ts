@@ -86,7 +86,7 @@ async function paste(page: Page, asPlainText: boolean): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 for (const mode of ["block", "edgeless"] as const) {

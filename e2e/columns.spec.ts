@@ -11,7 +11,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  * @returns Resolves once the document is seeded and the surface is selected.
  */
 async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate((mode) => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -152,7 +152,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -199,7 +199,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
 test("creates a writing block on empty-column click without retaining the empty control height", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -230,7 +230,7 @@ test("creates a writing block on empty-column click without retaining the empty 
 });
 
 test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -285,7 +285,7 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
 });
 
 test("aligns sibling drag handles when only one block has a collapse toggle", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (
       window as unknown as {

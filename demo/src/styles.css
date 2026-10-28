@@ -1,8 +1,32 @@
+/* Hallmark · shape: app screen · theme: Dusk (adapted for editor) · v2.0.0 */
+/* Flat surfaces keep the editor simple; small controls provide the interaction detail. */
+/* waive 24b: Existing control and slot spacing preserves compact layout and interaction geometry. */
 :root {
-  font-family: system-ui, sans-serif;
-  color: #222;
-  background: #f7f7f7;
-  --rivto-accent: #6c5ce7;
+  --demo-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --demo-background: #e8eaf1;
+  --demo-control-duration: 120ms;
+  --demo-glass-solid: #f3f4fa;
+  --demo-chrome-ink: #151522;
+  --demo-chrome-muted: #505268;
+  --demo-chrome-rule: rgb(47 49 72 / 22%);
+  --demo-chrome-control: rgb(255 255 255 / 65%);
+  --demo-chrome-hover: rgb(211 214 234 / 85%);
+  --demo-chrome-accent: #b6c0fb;
+  --demo-chrome-accent-ink: #1c234a;
+  font-family: var(--demo-font);
+  color: var(--rivto-foreground);
+  background: var(--demo-background);
+  --demo-shadow-soft: rgb(28 29 53 / 12%);
+  --demo-accent-shadow: rgb(52 40 130 / 30%);
+  --demo-accent-highlight: rgb(255 255 255 / 28%);
+  --demo-highlight: rgb(255 255 255 / 80%);
+  --demo-backdrop: rgb(20 20 20 / 35%);
+  --demo-modal-shadow: rgb(0 0 0 / 18%);
+  --demo-banner-ink: #555;
+  --demo-code-background: #f1f3f5;
+  --demo-gutter-ink: #999;
+  --demo-error-ink: #9a3412;
+  --demo-preview-border: #cfcfcf;
 }
 
 /* Keep the viewport scrollbar reserved so collapsing nested blocks cannot
@@ -13,27 +37,61 @@ html {
 
 body {
   margin: 0;
+  background: var(--demo-background);
 }
 
 .demo-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  color: #666;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px 24px;
+  color: var(--demo-chrome-muted);
+  background: var(--demo-glass-solid);
   font-size: 14px;
+}
+
+.demo-toolbar-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-wordmark {
+  margin-right: auto;
+  color: var(--demo-chrome-ink);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.demo-wordmark span {
+  color: var(--demo-chrome-muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .demo-mode-switch {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--demo-chrome-control);
+  box-shadow:
+    inset 0 1px 3px var(--demo-shadow-soft),
+    0 1px var(--demo-chrome-rule);
 }
 
 .demo-toolbar-controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 10px 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--demo-chrome-rule);
+  font-size: 12px;
 }
 
 .demo-block-id-toggle {
@@ -51,11 +109,53 @@ body {
   width: 72px;
 }
 
-.demo-toolbar-controls button {
-  padding: 5px 9px;
-  border: 1px solid #ddd;
+.demo-toolbar-main button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--demo-chrome-rule);
+  border-radius: 999px;
+  background: var(--demo-chrome-control);
+  color: var(--demo-chrome-ink);
+  box-shadow:
+    0 2px 6px var(--demo-shadow-soft),
+    inset 0 1px var(--demo-chrome-rule);
+  font: inherit;
+  font-weight: 500;
+  transition:
+    background-color var(--demo-control-duration),
+    border-color var(--demo-control-duration),
+    transform var(--demo-control-duration);
+  cursor: pointer;
+}
+
+.demo-mode-switch button {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.demo-toolbar-controls input[type="number"] {
+  padding: 4px 6px;
+  border: 1px solid var(--demo-chrome-rule);
   border-radius: 6px;
-  background: white;
+  background: var(--demo-chrome-control);
+  color: var(--demo-chrome-ink);
+}
+
+.demo-toolbar-controls input[type="number"]::placeholder {
+  color: var(--demo-chrome-muted);
+}
+
+.demo-toolbar-controls input[type="file"]::file-selector-button {
+  padding: 5px 9px;
+  border: 1px solid var(--demo-chrome-rule);
+  border-radius: 8px;
+  background: var(--demo-chrome-control);
+  color: var(--demo-chrome-ink);
   cursor: pointer;
 }
 
@@ -63,14 +163,13 @@ body {
   width: min(720px, calc(100% - 32px));
   margin: 24px auto 64px;
   overflow: hidden;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--rivto-border);
   border-radius: 12px;
-  background: white;
-  box-shadow: 0 12px 36px rgb(0 0 0 / 6%);
+  background: var(--rivto-background);
 }
 
 .journal-document + .journal-document {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--rivto-border);
 }
 
 .journal-document {
@@ -93,8 +192,10 @@ body {
 
 .journal-date {
   margin: 0;
-  padding: 20px 64px 4px;
-  font-size: 24px;
+  padding: 28px 64px 4px;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 
 .journal-document .page-surface {
@@ -117,8 +218,9 @@ body {
 }
 
 .journal-document:first-child .demo-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid #eee;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--demo-chrome-rule);
+  background: var(--demo-glass-solid);
 }
 
 /* Canvas gestures need the viewport, not the journal paper, as their clipping
@@ -146,16 +248,16 @@ body {
   align-items: center;
   gap: 12px 20px;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e5e5;
-  background: #fff;
-  color: #555;
+  border-bottom: 1px solid var(--rivto-border);
+  background: var(--rivto-card);
+  color: var(--demo-banner-ink);
   font-size: 13px;
 }
 
 .sync-editor-banner code {
   padding: 2px 6px;
   border-radius: 4px;
-  background: #f1f3f5;
+  background: var(--demo-code-background);
   font-size: 12px;
 }
 
@@ -169,9 +271,9 @@ body {
 .multi-editor-pane {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid #ddd;
+  border: 1px solid var(--rivto-border);
   border-radius: 10px;
-  background: white;
+  background: var(--rivto-card);
 }
 
 .multi-editor-pane .demo-header {
@@ -193,9 +295,11 @@ body {
 }
 
 .demo-mode-switch button[aria-pressed="true"] {
-  border-color: var(--rivto-accent);
-  color: white;
-  background: var(--rivto-accent);
+  color: var(--demo-chrome-accent-ink);
+  background: var(--demo-chrome-accent);
+  box-shadow:
+    0 2px 6px var(--demo-accent-shadow),
+    inset 0 1px var(--demo-accent-highlight);
 }
 
 /* The left slot sits against its row. Each nested row starts one Page indent further right:
@@ -211,7 +315,7 @@ body {
 .rivto-block-slot > .demo-block-number {
   padding-right: 6px;
   transform: translateX(calc(-1 * var(--demo-block-depth, 0) * var(--rivto-block-indent, 24px)));
-  color: #999;
+  color: var(--demo-gutter-ink);
   font:
     11px/var(--rivto-default-block-height) ui-monospace,
     monospace;
@@ -223,8 +327,8 @@ body {
 
 .rivto-block-slot > .demo-block-id {
   padding-left: 12px;
-  color: #999;
-  background: linear-gradient(to right, transparent, white 12px);
+  color: var(--demo-gutter-ink);
+  background: var(--rivto-background);
   font:
     11px/1 ui-monospace,
     monospace;
@@ -233,11 +337,7 @@ body {
 }
 
 .edgeless-card .rivto-block-slot > .demo-block-id {
-  background: linear-gradient(
-    to right,
-    transparent,
-    var(--rivto-edgeless-card-background, white) 12px
-  );
+  background: var(--rivto-edgeless-card-background, var(--rivto-background));
 }
 
 .custom-slider-block {
@@ -255,19 +355,38 @@ body {
 
 .custom-counter-block {
   padding: 6px 12px;
-  border: 1px solid #d8d2ff;
-  border-radius: 6px;
-  background: #f7f5ff;
+  border: 1px solid var(--rivto-block-selection-outline);
+  border-radius: 999px;
+  background: var(--rivto-subtle);
+  color: var(--rivto-subtle-foreground);
+  box-shadow:
+    0 2px 6px var(--demo-shadow-soft),
+    inset 0 1px var(--demo-highlight);
+  font: inherit;
+  font-weight: 500;
+  transition:
+    background-color var(--demo-control-duration),
+    border-color var(--demo-control-duration),
+    transform var(--demo-control-duration);
   cursor: pointer;
+}
+
+.custom-counter-block:hover {
+  border-color: var(--rivto-accent);
+}
+
+.custom-counter-block:focus-visible {
+  outline: 2px solid var(--rivto-ring);
+  outline-offset: 2px;
 }
 
 .keyboard-panel,
 .revision-panel {
   margin: 0 24px 12px;
   padding: 8px 12px;
-  border: 1px solid #eee;
+  border: 1px solid var(--rivto-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--rivto-card);
   font-size: 13px;
 }
 
@@ -290,7 +409,7 @@ body {
 .revision-panel-table th,
 .revision-panel-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--rivto-border);
   text-align: left;
   vertical-align: top;
 }
@@ -299,8 +418,8 @@ body {
 .revision-panel-table thead th {
   position: sticky;
   top: 0;
-  background: #fafafa;
-  color: #666;
+  background: var(--rivto-card);
+  color: var(--rivto-muted-foreground);
   font-weight: 600;
 }
 
@@ -319,9 +438,9 @@ body {
 .keyboard-panel-key,
 .keyboard-panel-actions button {
   padding: 3px 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--rivto-border);
   border-radius: 6px;
-  background: white;
+  background: var(--rivto-card);
   font: inherit;
   cursor: pointer;
 }
@@ -333,7 +452,7 @@ body {
 
 .keyboard-panel-conflict {
   margin: 4px 0 0;
-  color: #9a3412;
+  color: var(--demo-error-ink);
   font-weight: 400;
 }
 
@@ -341,7 +460,7 @@ body {
 .keyboard-panel-indent-hint,
 .revision-panel-help {
   margin: 8px 0 0;
-  color: #666;
+  color: var(--rivto-muted-foreground);
 }
 
 .keyboard-shortcut-backdrop {
@@ -351,15 +470,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(20 20 20 / 35%);
+  background: var(--demo-backdrop);
 }
 
 .keyboard-shortcut-modal {
-  width: min(420px, calc(100vw - 32px));
+  width: min(420px, calc(100% - 32px));
   padding: 20px 22px;
   border-radius: 12px;
-  background: white;
-  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+  background: var(--rivto-card);
+  box-shadow: 0 18px 48px var(--demo-modal-shadow);
 }
 
 .keyboard-shortcut-modal h2 {
@@ -371,9 +490,9 @@ body {
   min-height: 2.2em;
   margin: 0;
   padding: 10px 12px;
-  border: 1px dashed #cfcfcf;
+  border: 1px dashed var(--demo-preview-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--rivto-card);
   font-family: ui-monospace, monospace;
 }
 
@@ -383,9 +502,42 @@ body {
 }
 
 .keyboard-shortcut-hint {
-  color: #666;
+  color: var(--rivto-muted-foreground);
 }
 
 .keyboard-shortcut-error {
-  color: #9a3412;
+  color: var(--demo-error-ink);
+}
+
+.demo-toolbar-main button:hover:not([aria-pressed="true"]) {
+  background: var(--demo-chrome-hover);
+  border-color: var(--demo-chrome-muted);
+}
+
+.keyboard-panel-actions button:hover {
+  background: var(--rivto-subtle);
+  border-color: var(--rivto-accent);
+}
+
+.demo-toolbar-main button:active,
+.custom-counter-block:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-toolbar-main button,
+  .custom-counter-block {
+    transition: none;
+  }
+}
+
+.demo-toolbar-main button:focus-visible,
+.demo-toolbar-controls input:focus-visible {
+  outline: 2px solid var(--rivto-ring);
+  outline-offset: 2px;
+}
+
+.keyboard-panel-actions button:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 2px;
 }

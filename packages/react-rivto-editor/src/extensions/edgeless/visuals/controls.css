@@ -47,12 +47,12 @@
 /* Center without a transform: the nested fixed Popover portal must use viewport coordinates. */
 .edgeless-tool-bar,
 .edgeless-tool-bar[data-slot] {
-  @apply absolute inset-x-0 bottom-3.5 z-21 mx-auto flex w-max max-w-[calc(100%-160px)] flex-row items-center gap-[3px] rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow) data-[menu-open]:z-24;
+  @apply absolute inset-x-0 bottom-3.5 z-21 mx-auto flex w-max max-w-[calc(100%-160px)] flex-row items-center gap-[3px] rounded-2xl border border-border bg-(--rivto-glass) p-[5px] shadow-(--rivto-glass-shadow) data-[menu-open]:z-24;
 }
 
 .edgeless-selection-toolbar,
 .edgeless-selection-toolbar[data-slot] {
-  @apply absolute bottom-[62px] left-1/2 z-21 flex max-w-[calc(100%-48px)] -translate-x-1/2 gap-[3px] overflow-x-auto rounded-xl border border-border bg-background/95 p-[5px] shadow-(--rivto-edgeless-chrome-shadow);
+  @apply absolute bottom-[62px] left-1/2 z-21 flex max-w-[calc(100%-48px)] -translate-x-1/2 gap-[3px] overflow-x-auto rounded-2xl border border-border bg-(--rivto-glass) p-[5px] shadow-(--rivto-glass-shadow);
 }
 
 .edgeless-tool-popover,
@@ -67,7 +67,7 @@
 
 .edgeless-tool-popover-heading,
 .edgeless-tool-popover-heading[data-slot] {
-  @apply text-[0.68rem]/none font-[650] tracking-[0.04em] text-muted-foreground uppercase;
+  @apply text-xs font-medium text-muted-foreground;
 }
 
 .edgeless-tool-popover-tools,
@@ -102,7 +102,7 @@
 
 .edgeless-properties-panel-header,
 .edgeless-properties-panel-header[data-slot] {
-  @apply flex items-center justify-between gap-2.5 border-b border-(--rivto-edgeless-panel-divider) bg-(image:--rivto-edgeless-panel-header) py-2.5 pr-2.5 pl-3.5 group-data-[collapsed]/panel:border-b-0;
+  @apply flex items-center justify-between gap-2.5 border-b border-(--rivto-edgeless-panel-divider) bg-(--rivto-edgeless-panel-header) py-2.5 pr-2.5 pl-3.5 group-data-[collapsed]/panel:border-b-0;
 }
 
 .edgeless-properties-panel-title,

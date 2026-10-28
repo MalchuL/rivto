@@ -131,12 +131,12 @@ Open **http://localhost:5173**, or the URL Vite prints if that port is busy.
 The demo imports workspace TypeScript sources, so no package build is needed
 before starting it. Source changes hot-reload.
 
-1. Start in **Page** mode to explore nested blocks, Markdown, and slash commands
-   (type `/` inside a writing block).
-2. Scroll down for the table, kanban, columns, bento layout, and todo collection.
-   Use a kanban's expand control for a larger board.
-3. Select **Edgeless** to explore document cards and canvas tools.
-4. Uncheck **Block IDs** for a cleaner view like the screenshots above.
+1. Start in **Page** mode with a weekend notebook covering birdwatching, a picnic,
+   and game night. Try Markdown or type `/` inside a writing block for commands.
+2. Explore the picnic's TODO collection and the game ideas in a Bento layout.
+3. Select **Edgeless** to explore the same sections as document cards and try canvas tools.
+4. Open the feature showcase below for tables, kanban, columns, nested blocks and
+   additional interaction examples. Use a kanban's expand control for a larger board.
 
 Additional demo routes:
 
@@ -144,6 +144,7 @@ Additional demo routes:
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/?sync=1&room=my-room` | Two editors synchronized through BroadcastChannel. Open the same URL in another tab on the same browser/origin to join; no server is needed. |
 | `/?editors=2`           | Independent documents for cross-document dragging and selection.                                                                             |
+| `/?test_features=1`     | Original feature showcase, including the blocks and canvas objects used by browser regression tests.                                         |
 | `/?repeat=10`           | Additional seeded document content for exploration.                                                                                          |
 
 The default demo creates fresh in-memory documents on reload. BroadcastChannel

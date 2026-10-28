@@ -12,7 +12,7 @@ for (const { cancel, capture } of [
   test(`Page pointer owner ${cancel ? "cancels with Escape" : "commits one undoable root move"}, capture=${capture}`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const surface = page.locator('[data-journal-document="today"] > .page-surface');
     await expect(surface).toBeVisible();
     await page.evaluate(() => {
@@ -78,7 +78,7 @@ for (const { cancel, capture } of [
 
 for (const depth of [0, 1, 2]) {
   test(`Page pointer gap selects ancestor depth ${depth}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const surface = page.locator('[data-journal-document="today"] > .page-surface');
     await expect(surface).toBeVisible();
     await page.evaluate(() => {
@@ -143,7 +143,7 @@ for (const depth of [0, 1, 2]) {
 test("Page pointer uses the intermediate root gap instead of appending to the page", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await expect(surface).toBeVisible();
   await page.evaluate(() => {
@@ -180,7 +180,7 @@ test("Page pointer uses the intermediate root gap instead of appending to the pa
 test("Page pointer scrolls a nested container and releases its frame on Escape", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await expect(surface).toBeVisible();
   await page.evaluate(() => {
@@ -222,7 +222,7 @@ test("Page pointer scrolls a nested container and releases its frame on Escape",
 });
 
 test("Page preview caps a large subtree and skips collapsed descendants", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await expect(surface).toBeVisible();
   await page.evaluate(() => {
@@ -276,7 +276,7 @@ test("Page preview caps a large subtree and skips collapsed descendants", async 
 test("Page cancels a drag when the primary button is released outside the viewport", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   const source = surface
     .locator(":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]")
