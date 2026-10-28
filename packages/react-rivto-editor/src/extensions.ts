@@ -84,3 +84,8 @@ export {
   separatorBlockFactory,
 } from "./block-factories";
 export type { BlockFactory } from "./block-factories";
+
+export * from "./extensions/file";
+export * from "./extensions/image";
+
+export type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "./managers/files";

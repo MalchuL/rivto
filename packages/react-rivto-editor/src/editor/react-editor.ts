@@ -33,6 +33,7 @@ import {
   SlashCommandRegistry,
   SurfaceManager,
 } from "../managers";
+import { FileManager } from "../managers/files";
 import type { SurfacesApi } from "../managers/surfaces/api";
 import type { CreateReactEditorOptions } from "./types";
 
@@ -183,6 +184,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly blockContextMenu: BlockContextMenuRegistry;
   /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandRegistry;
+  /** File upload and resolution pipeline. */
+  readonly files: FileManager;
   private destroyed = false;
   /** Maintains the document's block elements and their default canvas geometry.
    * Mounted surfaces share this projection instead of rebuilding it independently. */
@@ -231,6 +234,7 @@ export class ReactEditor implements ReactEditorApi {
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor, extensions);
     this.clipboard = new ClipboardManager(editor, this, extensions);
+    this.files = new FileManager(this, extensions, options.files);
     this.edgelessToolbar = new EdgelessToolbarManager(extensions);
     this.elementTypes = new ElementTypeManager(this, extensions);
     this.clipboardFormats = new ClipboardFormatRegistry(extensions, this.clipboard.converters);
