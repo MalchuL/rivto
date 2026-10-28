@@ -95,8 +95,13 @@ export class BlockNativeSelection {
       // Losing the browser range keeps a structural selection and clears carets.
       const current = this.selection.get();
       // Virtualized missing endpoints were handled above. An absent native range
-      // with mounted endpoints represents a normal loss of the editable caret.
-      if (current && !BlockSelectionRanges.isStructuralSelection(current)) {
+      // with mounted endpoints clears the caret only while this occurrence retains focus.
+      // Another panel taking focus must preserve this occurrence's retained selection.
+      if (
+        current &&
+        root.contains(root.ownerDocument.activeElement) &&
+        !BlockSelectionRanges.isStructuralSelection(current)
+      ) {
         this.selection.clear();
       }
     }

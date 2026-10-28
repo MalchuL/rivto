@@ -84,3 +84,8 @@ export {
   separatorBlockFactory,
 } from "./block-factories";
 export type { BlockFactory } from "./block-factories";
+
+export {
+  collaborationExtension,
+  type CollaborationUser,
+} from "./extensions/collaboration/extension";

@@ -10,6 +10,23 @@ export interface CRDTTextDelta {
  */
 export interface CRDTText extends Serializible {
   /**
+   * Anchors a boundary so concurrent edits can move its offset.
+   *
+   * @param offset - Valid UTF-16 boundary in attached text.
+   * @param association - Defaults to zero, following the next character; -1 follows the preceding character.
+   * @returns Opaque serializable position token.
+   * @throws If detached or the offset is invalid.
+   */
+  createRelativePosition(offset: number, association?: -1 | 0): string;
+  /**
+   * Resolves an anchor against the current text.
+   *
+   * @param position - Opaque token created for this shared text.
+   * @returns Current offset, or undefined when malformed, deleted, or belonging to another text.
+   */
+  resolveRelativePosition(position: string): number | undefined;
+
+  /**
    * Insert text at the specified position.
    */
   insert(pos: number, text: string, attributes?: Record<string, unknown>): void;

@@ -9,3 +9,5 @@ export * from "./provider";
 export * from "./undo";
 export * from "./error";
 export * from "./utils";
+
+export * from "./collaboration";

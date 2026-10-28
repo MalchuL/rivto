@@ -1,3 +1,4 @@
+import { YjsCollaboration } from "./collaboration";
 import {
   CRDTType,
   BasicType,
@@ -20,6 +21,8 @@ import type { YJSType } from "./structures/utils/types";
 
 export class YjsDoc implements CRDTDoc {
   public readonly doc: Y.Doc;
+  /** Transient awareness shared by providers, outside all document roots. */
+  public readonly collaboration: YjsCollaboration;
   private transactionDepth = 0;
   private readonly localOrigin = Symbol("yjs-doc-local");
   /**
@@ -36,6 +39,7 @@ export class YjsDoc implements CRDTDoc {
     doc?: Y.Doc,
   ) {
     this.doc = doc || new Y.Doc();
+    this.collaboration = new YjsCollaboration(this.doc);
   }
 
   /**
@@ -129,6 +133,10 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Detaches a provider from the YjsDoc.
+   *
+   * Disconnecting the last provider clears cached remote presence while retaining
+   * local presence for a later attachment. Document content remains unchanged.
+   *
    * @param id - Optional provider ID, required when multiple providers are attached.
    * @returns A Promise that resolves when the provider is detached.
    */
@@ -137,6 +145,9 @@ export class YjsDoc implements CRDTDoc {
       id === undefined ? this.providersStorage.getOne() : this.providersStorage.getItem(id);
     await provider.disconnect(this);
     this.providersStorage.removeItem(provider.id);
+    if (this.providersStorage.values().length === 0) {
+      this.collaboration.clearRemoteStates();
+    }
   }
 
   /**
