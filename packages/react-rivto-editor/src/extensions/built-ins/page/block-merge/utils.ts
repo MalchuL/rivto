@@ -4,33 +4,37 @@
  * @module
  */
 import { createStructuralSelection } from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-} from "../../../../constants";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_SELECTOR } from "../../../../constants";
 import type { ReactPanelApi } from "../../../../panels/types";
-import { findRenderedBlock } from "../../../../managers/events/block-dom";
+import { findRenderedBlock } from "../../../../blocks/block-dom";
 
-/** Returns true when a BlockView directly owns an editable content host. */
+/** Returns true when a block shell directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
   return Array.from(block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)).some(
     (content) => content.closest(BLOCK_ID_SELECTOR) === block,
   );
 }
 
-/** Resolves the current BlockView's immediately preceding sibling BlockView. */
+/**
+ * Resolves the preceding canonical root within the current rendered occurrence.
+ *
+ * Virtualization and modal wrappers do not change sibling identity. A predecessor
+ * absent from this surface remains unavailable rather than crossing card bounds.
+ *
+ * @param blocks - Borrowed lookup supplying canonical root order.
+ * @param root - Current page or card occurrence boundary.
+ * @param blockId - Existing root whose predecessor is requested.
+ * @returns Mounted predecessor and ID, or undefined at the start or outside this occurrence.
+ */
 function previousSiblingBlock(
+  blocks: Pick<ReactPanelApi["blocks"], "getRootIds">,
   root: HTMLElement,
   blockId: string,
 ): { readonly element: HTMLElement; readonly id: string } | undefined {
-  const current = findRenderedBlock(root, blockId);
-  const previous = current?.previousElementSibling;
-  if (!(previous instanceof HTMLElement) || !previous.matches(BLOCK_ID_SELECTOR)) {
-    return;
-  }
-  const id = previous.getAttribute(BLOCK_ID_ATTRIBUTE);
-  return id ? { element: previous, id } : undefined;
+  const roots = blocks.getRootIds();
+  const id = roots[roots.indexOf(blockId) - 1];
+  const element = id ? findRenderedBlock(root, id) : undefined;
+  return id && element ? { element, id } : undefined;
 }
 
 /**
@@ -58,7 +62,7 @@ export function removeEmptyBlockAfterStructuralPredecessor(
     return false;
   }
 
-  const previous = previousSiblingBlock(root, block.id);
+  const previous = previousSiblingBlock(reactPanel.blocks, root, block.id);
   if (!previous || hasOwnedEditableContent(previous.element)) {
     return false;
   }

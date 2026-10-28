@@ -43,7 +43,7 @@ for (const repeat of [0, 200]) {
     });
     const samples: Omit<Measurement, "start">[] = [];
     const row = page
-      .locator(`[data-journal-document="today"] [data-block-id="${id}"] > .page-block-row`)
+      .locator(`[data-journal-document="today"] [data-block-id="${id}"] > .rivto-block-row`)
       .first();
     for (let index = 0; index < 6; index++) {
       await row.hover();

@@ -48,9 +48,34 @@ Run Playwright behavioral tests with `--workers=12`. Rerun failed tests with `--
 
 Use `*.test.ts(x)` for Jest and `*.spec.ts` for Playwright. Run checks proportionate to the change; use focused tests first and build when exports or packaging change. Run relevant local checks and fix failures caused by the requested change without asking for approval at each step.
 
+## Required API and ownership review
+
+Before completing any API or dependency change, inspect the entire affected path:
+creation, passing dependencies, use, and destruction. Complete these checks after
+the final implementation change:
+
+1. Inspect all consumers and identify the methods each actually uses. Limit their
+   dependency interfaces to those operations; do not expose unrelated registration,
+   attachment, or teardown capabilities.
+2. Identify who creates each object, who borrows it, and who destroys it. Justify
+   concrete implementation types by actual lifecycle responsibilities; a consumer
+   needing only resource cleanup must not depend on an entire extension manager.
+3. Check adjacent managers, constructors, hooks, contexts, and extension callbacks
+   for the same dependency mistake. Apply the principle throughout the affected
+   path, without expanding into unrelated refactors.
+4. Remove duplicate references, unnecessary wrappers, type casts used to bypass
+   boundaries, forwarding methods, and API options with no current consumer. Do
+   not introduce replacement abstractions without a present requirement.
+5. Review architectural boundaries separately from behavioral validation. Passing
+   tests does not establish that an interface is minimal or ownership is correct.
+   Report which boundaries were inspected and any remaining limitations; do not
+   claim an architecture review solely from green tests.
+
 ## Style and Reviews
 
 Use ES modules and nearby formatting. Use `PascalCase` for types/components, `camelCase` for functions/values, and kebab-case directories. Prefer existing managers and narrow types.
+
+Keep one field per manager in a controller. A lifecycle owner may use the concrete implementation type to create, attach, and destroy its manager. Consumers must depend on the smallest interface covering their actual operations; receiving a manager does not imply ownership of its lifecycle. Do not keep duplicate references merely to expose a narrow API, such as `events`/`eventManager` or `extensions`/`registrations`. Define the narrow editor interface at the consumer boundary: components, hooks, and extension setup receive manager interfaces that exclude internal attachment and teardown methods. Pass the existing controller object through that interface; do not replace duplicate fields with wrapper objects, type casts, forwarding methods, or duplicate getters. The host retains the concrete controller and owns its lifecycle. Interface narrowing is a TypeScript contract, not runtime access control.
 
 Use concrete names that describe the implemented behavior and reuse existing domain terminology. Name functions for what they actually do, including meaningful scope or side effects; name values for what they contain. Avoid vague names such as `processData`, `handleLogic`, or `AbstractManager` when the code has a specific responsibility. Do not imply validation, persistence, synchronization, or completeness unless the implementation provides it. Check the implementation and callers before choosing or changing a name.
 

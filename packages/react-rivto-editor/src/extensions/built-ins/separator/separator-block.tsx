@@ -129,7 +129,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         separatorBlockFactory,
         reactEditor.defaultWritingBlockFactory,
       );
-      const root = reactPanel.events.getRoot();
+      const root = reactPanel.getRoot();
       if (writing && root) {
         requestAnimationFrame(() => focusBlock(root, writing.id, 0));
       }

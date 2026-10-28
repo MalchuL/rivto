@@ -21,7 +21,6 @@ import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-
 import { createElement, type ReactNode } from "react";
 import { ReactPanelContext } from "./components/editor-panel/react-panel-context";
 import { EditorRootContext } from "./components/editor-panel/editor-root-context";
-import { BlockElementRefBoundary } from "./blocks/block-wrapper/block-wrapper";
 
 /**
  * Supplies an already constructed test panel to synchronous renderer and hook tests.
@@ -38,14 +37,13 @@ export function TestPanel({ panel, children }: { panel: ReactPanel; children?: R
         document: panel.document.getDocument(),
         documentId: panel.documentId,
         rootBlockId: panel.rootBlockId,
-        domIdPrefix: panel.id,
         enabled: true,
       },
     },
     createElement(
       EditorRootContext.Provider,
       { value: { element: null, ref: panel.setRoot } },
-      createElement(BlockElementRefBoundary, null, children),
+      children,
     ),
   );
 }

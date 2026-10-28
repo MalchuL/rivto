@@ -1,3 +1,5 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
+import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { blockIdSelector } from "./dom-markers";
 
@@ -26,27 +28,30 @@ async function snapshot(editor: Locator): Promise<Snapshot> {
  *
  * @param source - Block containing the source handle.
  * @param target - Block whose direct page row receives the drop.
- * @param edge - Row center by default, or the narrow before/after insertion edge.
+ * @param edge - Explicit child append by default, or the declared before/after edge.
  * @returns Resolves after mouse release; callers assert the resulting document change.
  * @throws If either bounding box is unavailable or browser input fails.
  */
 async function drag(source: Locator, target: Locator, edge: "body" | "before" | "after" = "body") {
+  await source.locator(":scope > .rivto-block-row").hover();
   const handleBox = await source.locator(".block-handle").boundingBox();
-  const targetBox = await target.locator(":scope > .page-block-row").boundingBox();
-  if (!handleBox || !targetBox) {
+  let region;
+  const children = target.locator(":scope > .rivto-block-children > [data-block-id]");
+  if (edge === "body" && (await children.count())) {
+    region = await blockDropRegion(children.last(), "after");
+  } else {
+    region = await blockDropRegion(target, edge === "body" ? "inside" : edge);
+  }
+  const targetBox = await region.boundingBox();
+  if (!handleBox) {
     throw new Error("Expected drag geometry");
   }
-  let y = targetBox.y + targetBox.height / 2;
-  if (edge === "before") {
-    y = targetBox.y + 1;
-  } else if (edge === "after") {
-    y = targetBox.y + targetBox.height - 1;
-  }
+  const x = targetBox.x + targetBox.width / 2;
+  const y = targetBox.y + targetBox.height / 2;
   await source
     .page()
     .mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await source.page().mouse.down();
-  const x = edge === "body" ? targetBox.x + targetBox.width / 2 : targetBox.x + 2;
   await source.page().mouse.move(x, y, { steps: 12 });
   await source.page().mouse.up();
 }
@@ -74,8 +79,11 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
 
   await leftParent.locator("[data-block-content]").first().click();
   await page.keyboard.down("Control");
-  await expect(left.locator(".page-surface")).toHaveAttribute("data-block-selecting", "true");
-  await expect(right.locator(".page-surface")).not.toHaveAttribute("data-block-selecting", "true");
+  await expect(leftParent.locator("[data-block-selection-anchor]").first()).toHaveAttribute(
+    "data-block-selecting",
+    "",
+  );
+  await expect(right.locator("[data-block-selecting]")).toHaveCount(0);
   await page.keyboard.up("Control");
 
   await left.locator(blockIdSelector("left-counter")).locator(".custom-counter-block").click();
@@ -86,10 +94,10 @@ test("keeps selection, controls, mode, history, and modifier UI editor-local", a
   await expect(left.locator(blockIdSelector("left-child"))).toBeVisible();
   await expect(right.locator(blockIdSelector("right-nested"))).toBeVisible();
 
-  const rightRoots = await right.locator(".page-surface > [data-block-id]").count();
+  const rightRoots = await right.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).count();
   await left.locator(".page-trailing-block").first().click();
-  await expect(left.locator(".page-surface > [data-block-id]")).toHaveCount(4);
-  await expect(right.locator(".page-surface > [data-block-id]")).toHaveCount(rightRoots);
+  await expect(left.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).toHaveCount(4);
+  await expect(right.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).toHaveCount(rightRoots);
 
   await left.getByRole("button", { name: "Edgeless" }).click();
   await expect(left.locator("[data-edgeless-root]").first()).toBeVisible();
@@ -174,6 +182,7 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   const emptyLeft = multiEditor(page, "left");
   const emptyRight = multiEditor(page, "right");
   const source = emptyLeft.locator(blockIdSelector("left-counter"));
+  await source.locator(":scope > .rivto-block-row").hover();
   const sourceBox = await source.locator(".block-handle").boundingBox();
   const targetBox = await emptyRight.locator(".page-surface").boundingBox();
   if (!sourceBox || !targetBox) {
@@ -182,9 +191,15 @@ test("supports a cross-document gap and an empty destination", async ({ page }) 
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 120, { steps: 12 });
-  await expect(emptyRight.locator(".page-surface")).toHaveAttribute("data-drop-empty", "true");
+  await expect(emptyRight.locator(".page-surface")).toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   await page.mouse.up();
-  await expect(emptyRight.locator(".page-surface")).not.toHaveAttribute("data-drop-empty", "true");
+  await expect(emptyRight.locator(".page-surface")).not.toHaveAttribute(
+    "data-block-drop-active",
+    "true",
+  );
   expect((await snapshot(emptyRight)).blocks.map(({ id }) => id)).toEqual(["left-counter"]);
 });
 
@@ -229,5 +244,45 @@ test("rejects destination block ID conflicts without mutating either editor", as
   );
   expect(await snapshot(left)).toEqual(sourceBefore);
   expect(await snapshot(right)).toEqual(destinationBefore);
-  await expect(right.locator("[data-drop-inside]")).toHaveCount(0);
+  await expect(right.locator("[data-block-drop-active]")).toHaveCount(0);
 });
+
+for (const [sourceMode, destinationMode] of [
+  ["Page", "Page"],
+  ["Page", "Edgeless"],
+  ["Edgeless", "Page"],
+  ["Edgeless", "Edgeless"],
+] as const) {
+  test(`transfers a block between ${sourceMode} and ${destinationMode} documents and keeps independent undo`, async ({
+    page,
+  }) => {
+    const left = multiEditor(page, "left");
+    const right = multiEditor(page, "right");
+    await left.getByRole("button", { name: sourceMode, exact: true }).click();
+    await right.getByRole("button", { name: destinationMode, exact: true }).click();
+    const source = left.locator(blockIdSelector("left-counter"));
+    await drag(source, right.locator(blockIdSelector("right-target")));
+    await expect
+      .poll(async () => (await snapshot(left)).blocks.map((block) => block.id))
+      .toEqual(["left-parent", "left-stay"]);
+    await expect
+      .poll(async () => (await snapshot(right)).blocks[0]?.children.map((block) => block.id))
+      .toEqual(["right-nested", "left-counter"]);
+    expect((await snapshot(right)).blocks[0]?.children[1]?.props).toEqual({ count: 7 });
+    if (sourceMode === "Page") {
+      await expect(right.locator("[data-rivto-cross-document-page-root]")).toBeFocused();
+    }
+    await right.locator('[data-editor-action="undo"]').click();
+    await expect
+      .poll(async () => (await snapshot(right)).blocks[0]?.children.map((block) => block.id))
+      .toEqual(["right-nested"]);
+    expect((await snapshot(left)).blocks.map((block) => block.id)).toEqual([
+      "left-parent",
+      "left-stay",
+    ]);
+    await left.locator('[data-editor-action="undo"]').click();
+    await expect
+      .poll(async () => (await snapshot(left)).blocks.map((block) => block.id))
+      .toEqual(["left-parent", "left-counter", "left-stay"]);
+  });
+}

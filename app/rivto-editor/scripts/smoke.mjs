@@ -34,6 +34,9 @@ try {
       console.error(message.text());
     }
   });
+  // firstWindow precedes loadFile completion; reloading before UI readiness aborts startup.
+  await page.getByRole("textbox", { name: "Document title", exact: true }).waitFor();
+  await page.waitForLoadState("load");
   await page.reload();
   await page.getByRole("textbox", { name: "Document title", exact: true }).fill("Smoke notes");
   const editable = page.locator("[data-block-content]").first();

@@ -17,7 +17,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm test:eslint-rules
+      - run: pnpm --filter @chulane/rivto-page test
       - run: pnpm --filter @chulane/rivto test
       - run: pnpm --filter @chulane/rivto-react test
+      - run: pnpm --filter @chulane/rivto-edgeless test
       - run: pnpm check-types
+      - run: pnpm --filter @chulane/rivto-edgeless demo:check
       - run: pnpm lint

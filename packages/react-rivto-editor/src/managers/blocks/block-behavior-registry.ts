@@ -1,3 +1,4 @@
+import { RevisionStore } from "../../internal-store";
 import {
   createBlockBehaviorContext,
   createBlockOutlineContext,
@@ -32,6 +33,7 @@ import type { BlockBehaviorsApi } from "./block-behaviors-api";
  * not render blocks or keep per-block interaction state on behavior instances.
  */
 export class BlockBehaviorRegistry implements BlockBehaviorsApi {
+  private readonly store = new RevisionStore();
   private readonly registrations: Array<{
     readonly behavior: BlockBehavior;
     readonly priority: number;
@@ -47,6 +49,7 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
     private readonly reactEditor: ReactEditorApi,
     private readonly extensions: RegistrationOwner,
   ) {
+    extensions.registerCleanup(() => this.store.clear());
     this.register(new DefaultBlockBehavior(), -1000);
   }
 
@@ -66,13 +69,44 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
     const registration = { behavior, priority };
     this.registrations.push(registration);
     this.sortRegistrations();
-    return this.extensions.registerCleanup(() => {
+    const dispose = this.extensions.registerCleanup(() => {
       const index = this.registrations.indexOf(registration);
       if (index >= 0) {
         this.registrations.splice(index, 1);
         this.sortRegistrations();
+        this.store.changed();
       }
     });
+    try {
+      this.store.changed();
+    } catch (error) {
+      try {
+        dispose();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Behavior publication and rollback failed");
+      }
+      throw error;
+    }
+    return dispose;
+  }
+
+  /**
+   * Reads the revision used to invalidate structural presentation snapshots.
+   *
+   * @returns The current registration revision, unchanged by document edits.
+   */
+  get revision(): number {
+    return this.store.revision;
+  }
+
+  /**
+   * Observes installed behavior changes without owning the registry lifecycle.
+   *
+   * @param listener - Callback rereading behavior-dependent presentation.
+   * @returns Idempotent disposer removing only this listener.
+   */
+  subscribe(listener: () => void): () => void {
+    return this.store.subscribe(listener);
   }
 
   /**

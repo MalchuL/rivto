@@ -1,5 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR, blockTypeSelector } from "./dom-markers";
+import type { DocumentEditorAPI } from "@chulane/rivto";
+import {
+  HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
+  BLOCK_ROW_SELECTOR,
+  ROOT_BLOCK_SELECTOR,
+  blockTypeSelector,
+} from "./dom-markers";
 
 async function textPoint(content: Locator, offset: number): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
@@ -146,7 +152,9 @@ test("normal structured text paste merges into the target", async ({ page }) => 
 });
 
 test("Ctrl+Shift+V pastes multiline plain text inside one block", async ({ page }) => {
-  const rootsBefore = await page.locator(`${BLOCK_ID_SELECTOR}.page-block`).count();
+  await expect(page.locator(BLOCK_ID_SELECTOR).first()).toBeVisible();
+  const rootsBefore = await page.locator(BLOCK_ID_SELECTOR).count();
+  expect(rootsBefore).toBeGreaterThan(0);
   const original = await page
     .locator("[data-block-content]:not([data-rivto-panel] [data-rivto-panel] [data-block-content])")
     .first()
@@ -173,7 +181,7 @@ test("Ctrl+Shift+V pastes multiline plain text inside one block", async ({ page 
       ),
     )
     .toBe(`${original}Copied\n    second line`.length);
-  await expect(page.locator(`${BLOCK_ID_SELECTOR}.page-block`)).toHaveCount(rootsBefore);
+  await expect(page.locator(BLOCK_ID_SELECTOR)).toHaveCount(rootsBefore);
 });
 
 test("copies a mouse text selection and pastes it inline", async ({ page }) => {
@@ -361,7 +369,7 @@ test("copies and pastes a mouse-dragged multi-block selection", async ({ page })
   // These three adjacent leaf roots have no embedding or descendants between them.
   const contents = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .filter({ hasText: /^(Finish the selection|Type `\/`|Try the interactive checkbox)/ });
   await contents.first().click();
@@ -395,7 +403,7 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
   await page.setViewportSize({ width: 1280, height: 1800 });
   const contents = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .filter({
       hasText: /^(Start a selection in|This complete|Nested branch one owns|Reverse selection)/,
@@ -444,9 +452,14 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
 });
 
 test("drags selected sibling roots together", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1800 });
   const blocks = page.locator(BLOCK_ID_SELECTOR);
   const firstText = await blocks.nth(0).locator("[data-block-content]").textContent();
   const secondText = await blocks.nth(1).locator("[data-block-content]").textContent();
+  const ids = [
+    await blocks.nth(0).getAttribute("data-block-id"),
+    await blocks.nth(1).getAttribute("data-block-id"),
+  ];
   await blocks
     .nth(0)
     .locator("[data-block-content]")
@@ -456,20 +469,35 @@ test("drags selected sibling roots together", async ({ page }) => {
     .locator("[data-block-content]")
     .click({ modifiers: ["Control"] });
 
+  await blocks.nth(0).locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
   const handle = blocks.nth(0).locator(".block-handle");
-  const target = blocks.nth(4);
+  const target = blocks.nth(4).locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
+  const targetId = await target.locator("..").getAttribute("data-block-id");
   const handleBox = await handle.boundingBox();
   const targetBox = await target.boundingBox();
   if (!handleBox || !targetBox) {
     throw new Error("Expected drag geometry");
   }
+  expect(handleBox.y).toBeGreaterThanOrEqual(0);
+  expect(targetBox.y + targetBox.height).toBeLessThan(page.viewportSize()!.height);
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
     steps: 10,
   });
-  await expect(page.locator(".page-drag-overlay")).toContainText(firstText ?? "");
-  await expect(page.locator(".page-drag-overlay")).toContainText(secondText ?? "");
+  await expect(page.locator(".rivto-block-drag-preview")).toContainText(firstText ?? "");
+  await expect(page.locator(".rivto-block-drag-preview")).toContainText(secondText ?? "");
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-dragging]`)).toHaveCount(2);
   await page.mouse.up();
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-dragging]`)).toHaveCount(0);
   await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(2);
+  const readParents = () =>
+    page.evaluate((ids) => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      return ids.map((id) => editor.blocks.getParentId(id!));
+    }, ids);
+  await expect.poll(readParents).toEqual([targetId, targetId]);
+  await page.keyboard.press("Control+z");
+  await expect.poll(readParents).toEqual([null, null]);
 });

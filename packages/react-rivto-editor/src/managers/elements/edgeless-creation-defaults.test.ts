@@ -69,9 +69,11 @@ it("remembers only committed changed fields and leaves memory unchanged on previ
   f.first.updateProperties(old.id, { cornerRadius: 12 });
   expect(f.defaults.get({ type: "rectangle" }).props?.fill).toBe("blue");
   const before = f.defaults.get({ type: "rectangle" });
-  f.first.previewProperties([old.id], { cornerRadius: 24 });
+  f.first.previewProperties([old.id], { cornerRadius: 24, fill: "green" });
   expect(f.defaults.get({ type: "rectangle" })).toEqual(before);
+  expect(f.defaults.getGroupPreview("shapes").props?.fill).toBe("green");
   f.first.discardPropertyPreview();
+  expect(f.defaults.getGroupPreview("shapes").props?.fill).toBe("blue");
   expect(() => f.first.updateProperties(old.id, { cornerRadius: -1 })).toThrow();
   expect(() => f.first.createElement({ type: "rectangle", props: { cornerRadius: -1 } })).toThrow();
   expect(f.defaults.get({ type: "rectangle" })).toEqual(before);
@@ -161,3 +163,45 @@ it("remembers final programmatic resize dimensions and rejects invalid geometry 
   expect(f.defaults.get({ type: "rectangle" })).toEqual(before);
   await f.dispose();
 });
+
+it.each([1, 200])(
+  "publishes bounded settings notifications for %i selected elements and releases observation",
+  async (count) => {
+    const f = await fixture();
+    const tools = new EdgelessToolContext(f.panel, f.defaults);
+    const other = new EdgelessToolContext(f.panel);
+    const stop = tools.observeChanges();
+    const nodes = Array.from({ length: count }, () => f.first.createElement({ type: "rectangle" }));
+    let calls = 0;
+    const unsubscribe = tools.subscribe(() => {
+      calls += 1;
+      expect(tools.getGroup("shapes")!.getSettings().props?.fill).toBe("#123456");
+    });
+    const revision = tools.revision;
+    const otherRevision = other.revision;
+    f.first.previewProperties(
+      nodes.map((node) => node.id),
+      { fill: "#123456", strokeWidth: 3 },
+    );
+    expect(calls).toBe(1);
+    expect(tools.revision).toBe(revision + 1);
+    expect(f.defaults.get({ group: "shapes" }).props?.fill).not.toBe("#123456");
+    f.first.commitPropertyPreview();
+    expect(calls).toBe(3);
+    expect(other.revision).toBe(otherRevision);
+    f.defaults.set({ group: "shapes" }, { props: { fill: "#123456", strokeWidth: 3 } });
+    expect(calls).toBe(3);
+    unsubscribe();
+    stop();
+    stop();
+    const stoppedRevision = tools.revision;
+    f.defaults.set({ group: "shapes" }, { props: { fill: "#abcdef" } });
+    expect(tools.revision).toBe(stoppedRevision);
+    const stopAgain = tools.observeChanges();
+    const resumedRevision = tools.revision;
+    f.defaults.set({ group: "shapes" }, { props: { fill: "#123456" } });
+    expect(tools.revision).toBe(resumedRevision + 1);
+    stopAgain();
+    await f.dispose();
+  },
+);

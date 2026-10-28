@@ -3,7 +3,7 @@ import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-to
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
-import { PanelRegistry } from "../managers/events/panel-registry";
+import { PanelRegistry } from "../panels/panel-registry";
 import type { ReactEditorApi } from "./types";
 /**
  * React runtime coordinator.
@@ -199,6 +199,10 @@ export class ReactEditor implements ReactEditorApi {
    *
    * Writing-block registration is not done here — hosts install
    * `defaultWritingBlockExtension` (included by `standardPreset`).
+   *
+   * @param options - Borrowed document editor, synchronous extensions and presentation defaults.
+   * @throws Propagates manager construction failures. Extension setup failure triggers
+   * runtime cleanup; if cleanup also fails, both failures are retained in AggregateError.
    */
   constructor(options: CreateReactEditorOptions) {
     const editor = options.editor;
@@ -206,23 +210,22 @@ export class ReactEditor implements ReactEditorApi {
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
     this.disposers.push(() => extensions.destroy());
-    this.panels = new PanelRegistry(this, extensions);
-    const events = new EventManager(this, extensions);
+    this.panels = new PanelRegistry(this.selection, extensions);
+    const events = new EventManager(this.panels, extensions);
     this.events = events;
     this.disposers.push(() => this.panels.cancelPendingSelections());
-    const keyboard = new KeyboardManager(this, extensions, options.keymap);
+    const keyboard = new KeyboardManager(this.events, extensions, options.keymap);
     this.keyboard = keyboard;
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;
     this.blockContextMenu = new BlockContextMenuRegistry(extensions);
     // Release shared registrations after extension cleanup has finished using them.
-    extensions.registerCleanup(() => {
-      slashCommands.destroy();
-      this.blockContextMenu.destroy();
-      keyboard.destroy();
-      events.destroy();
-      this.panels.destroy();
-    });
+    // Reverse registration order preserves teardown order; each failure is isolated.
+    extensions.registerCleanup(() => this.panels.destroy());
+    extensions.registerCleanup(() => events.destroy());
+    extensions.registerCleanup(() => keyboard.destroy());
+    extensions.registerCleanup(() => this.blockContextMenu.destroy());
+    extensions.registerCleanup(() => slashCommands.destroy());
     this.renderers = new RendererManager(extensions, options.unknownBlockRenderer);
     this.blockBehaviors = new BlockBehaviorRegistry(this, extensions);
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
@@ -243,7 +246,11 @@ export class ReactEditor implements ReactEditorApi {
       );
       this.blockElements.schedule();
     } catch (error) {
-      this.destroy();
+      try {
+        this.destroy();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "React editor setup and cleanup failed");
+      }
       throw error;
     }
   }

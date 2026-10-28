@@ -1,9 +1,14 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR, blockIdSelector } from "./dom-markers";
+import {
+  BLOCK_ROW_SELECTOR,
+  BLOCK_ID_ATTRIBUTE,
+  ROOT_BLOCK_SELECTOR,
+  hostBlockIdSelector,
+} from "./dom-markers";
 
 /** Selects root blocks through the same Ctrl+click gesture used by the demo. */
 async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const ids: string[] = [];
   for (const index of indexes) {
     const root = roots.nth(index);
@@ -13,7 +18,7 @@ async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
     }
     ids.push(id);
     await root
-      .locator(":scope > .page-block-row [data-block-content]")
+      .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
       .click({ modifiers: ["Control"] });
   }
   return ids;
@@ -27,13 +32,13 @@ async function insertSeparatorContinuation(page: Page): Promise<{
   readonly separatorId: string;
   readonly writingId: string;
 }> {
-  const sourceContent = page.locator(".page-surface > .page-block [data-block-content]").first();
-  const source = sourceContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
+  const sourceContent = roots.first().locator("[data-block-content]").first();
   await sourceContent.click();
   await page.keyboard.press("Control+Shift+Enter");
-  const separator = source.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
-  const writing = separator.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
-  const content = writing.locator(":scope > .page-block-row [data-block-content]");
+  const separator = roots.nth(1);
+  const writing = roots.nth(2);
+  const content = writing.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   const separatorId = await separator.getAttribute(BLOCK_ID_ATTRIBUTE);
   const writingId = await writing.getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!separatorId || !writingId) {
@@ -45,7 +50,7 @@ async function insertSeparatorContinuation(page: Page): Promise<{
 
 /** Resolves a stable block locator after undo recreates its rendered element. */
 function blockById(page: Page, id: string): Locator {
-  return page.locator(blockIdSelector(id));
+  return page.locator(hostBlockIdSelector(id));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -124,7 +129,9 @@ test("removing an empty parent promotes its first child and adopts later childre
     throw new Error("Expected second child ID");
   }
 
-  const collapse = inserted.writing.locator(":scope > .page-block-row [data-collapse-toggle]");
+  const collapse = inserted.writing.locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} [data-collapse-toggle]`,
+  );
   await collapse.click();
   await inserted.content.click();
   await page.keyboard.press("Backspace");
@@ -312,7 +319,9 @@ test("focused block controls do not delete an existing structural selection", as
   await page.keyboard.press("Delete");
   await expect(blockById(page, selectedId!)).toBeVisible();
 
-  const dragHandle = blockById(page, selectedId!).locator(":scope > .page-block-row .block-handle");
+  const dragHandle = blockById(page, selectedId!).locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} .block-handle`,
+  );
   await dragHandle.focus();
   await page.keyboard.press("Backspace");
   await expect(blockById(page, selectedId!)).toBeVisible();

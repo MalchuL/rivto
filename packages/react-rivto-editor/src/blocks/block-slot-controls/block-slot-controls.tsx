@@ -4,7 +4,7 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  * Built-in list and collapse contributions for the shared block left slot.
  *
  * These controls interpret extension-owned list properties but do not own
- * traversal or persistence. BlockTree remains responsible for descendants,
+ * traversal or persistence. Page remains responsible for descendants,
  * while the editor manager supplies transactional mutations for the current row.
  * The public `.page-list-checkbox`, `.page-list-marker`, and
  * `.page-collapse-toggle` classes remain stable slot-geometry hooks styled in
@@ -58,8 +58,14 @@ export function BlockListSlot({ block }: BlockSlotProps) {
 /**
  * Renders the accessible expand/collapse button for a block with descendants.
  *
+ * Width follows the shared control-size token, including in-flow controls whose
+ * slot grows when a leaf acquires its first child. Removing the final child
+ * removes the toggle and releases its width; collapsing a branch retains it.
+ *
  * @param props - Current block-slot context.
+ * @param props.block - Shallow snapshot supplying direct children and the collapsed flag.
  * @returns Collapse toggle for a branch block, otherwise nothing.
+ * @throws If the panel provider is missing or a delegated update fails.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const panel = usePanel();
@@ -76,7 +82,7 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
       size="icon-xs"
       className={cn(
         COLLAPSE_TOGGLE_CLASS,
-        "h-6 w-5 rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground",
+        "h-6 w-[var(--rivto-block-control-size,20px)] rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground",
       )}
       data-collapse-toggle="true"
       aria-label={`${collapsed ? "Expand" : "Collapse"} block: ${block.content || block.type}`}

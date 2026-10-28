@@ -9,6 +9,7 @@ import type { EdgelessBrush } from "../../../../elements/visuals/types";
 import type { CanvasPoint } from "../../../../elements/visuals/utils/canvas-point";
 import { drawingDefaults } from "../../../../elements/visuals/creation-defaults";
 import { padDrawingFrame } from "../../../../elements/visuals/utils/drawing-frame";
+import { drawingPath } from "../../../../elements/visuals/utils/drawing-path";
 import { DrawingCapture } from "../components/drawing-capture";
 import { VISUAL_ELEMENT_TYPES } from "../../../../elements/visuals/constants";
 
@@ -119,7 +120,7 @@ export class DrawingTool extends EdgelessCreationTool {
   }
 
   /**
-   * Renders the stroke with screen-sized width and current group appearance.
+   * Renders the smoothed stroke with screen-sized width and current group appearance.
    *
    * @param zoom - Canvas scale.
    * @returns SVG draft content without persisted identity.
@@ -130,9 +131,7 @@ export class DrawingTool extends EdgelessCreationTool {
       <DrawingCapture>
         {this.points.length > 1 && (
           <path
-            d={this.points
-              .map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`)
-              .join(" ")}
+            d={drawingPath(this.points)}
             fill="none"
             stroke={String(props.stroke)}
             strokeWidth={Number(props.strokeWidth) / zoom}

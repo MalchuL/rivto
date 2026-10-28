@@ -5,7 +5,7 @@ import { DBDocumentModel, DemoDatabase } from "../../../demo/src/database";
 import { createReactEditor } from "./editor/react-editor";
 import { EditorStorage } from "./editor/editor-storage";
 import { standardPreset } from "./extensions/built-ins/built-ins";
-import { crossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
 
 const element = {
   childIds: [],
@@ -201,10 +201,13 @@ test("clipboard remaps destination collisions, while transfer and independent un
   ).toBe(copiedElement.id);
   f.a.history.clear();
   f.b.history.clear();
-  crossDocumentBlockTransfer(f.editors.getEditor("A")!, f.editors.getEditor("B")!, ["source"], {
-    targetId: null,
-    position: "after",
-  });
+  new CrossDocumentBlockTransfer(f.editors.getEditor("A")!, f.editors.getEditor("B")!).move(
+    ["source"],
+    {
+      targetId: null,
+      position: "after",
+    },
+  );
   expect(f.a.blocks.hasBlock("source")).toBe(false);
   expect(f.b.blocks.getBlock("source")?.children[0]?.id).toBe("child");
   expect(f.database.findDocumentIdsWithBlock("source")).toEqual(["B"]);

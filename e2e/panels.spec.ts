@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
+import { expect, test, type Page, type Locator } from "@playwright/test";
+import { BLOCK_ROW_SELECTOR } from "./dom-markers";
 import type { ReactEditor } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -46,8 +48,8 @@ async function seed(page: Page, repeat = 0) {
  */
 async function open(page: Page, id: string) {
   const block = page.locator(`[data-journal-document="today"] [data-block-id="${id}"]`).first();
-  await block.locator(":scope > .page-block-row").hover();
-  await block.locator(":scope > .page-block-row").locator(".block-handle").click();
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).locator(".block-handle").click();
   await expect(page.locator(`[data-panel-root="${id}"]`)).toBeVisible();
 }
 
@@ -58,8 +60,12 @@ for (const repeat of [0, 200]) {
     await open(page, ids.root);
     const today = page.locator('[data-journal-document="today"]');
     await expect(today.getByRole("heading", { name: "Panel section" })).toBeVisible();
-    await expect(today.locator(`.page-surface > [data-block-id="${ids.root}"]`)).toHaveCount(0);
-    await expect(today.locator(`.page-surface > [data-block-id="${ids.child}"]`)).toHaveCount(1);
+    await expect(
+      today.locator(` .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-id="${ids.root}"]`),
+    ).toHaveCount(0);
+    await expect(
+      today.locator(` .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-id="${ids.child}"]`),
+    ).toHaveCount(1);
     const child = today.locator(`[data-block-id="${ids.child}"] [data-block-content]`).first();
     await child.fill("Shared child edited");
     await child.press("Home");
@@ -159,7 +165,9 @@ test("creates and reuses a separate element group for an empty Panel", async ({ 
 test("clicking the universal handle navigates", async ({ page }) => {
   const ids = await seed(page);
   const row = page
-    .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
+    .locator(
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR}`,
+    )
     .first();
   await row.hover();
   await row.locator(".block-handle").click();
@@ -174,9 +182,11 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
   const handle = page
     .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"]`)
     .first()
-    .locator(":scope > .page-block-row .block-handle");
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} .block-handle`);
   await page
-    .locator(`[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row`)
+    .locator(
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR}`,
+    )
     .first()
     .hover();
   await handle.hover();
@@ -184,7 +194,7 @@ test("does not open a Panel after dragging or cancelling a drag", async ({ page 
   await page.mouse.move(rect!.x + rect!.width / 2, rect!.y + rect!.height / 2);
   await page.mouse.down();
   await page.mouse.move(rect!.x + 40, rect!.y + 55, { steps: 10 });
-  await expect(page.locator(".page-drag-overlay")).toBeVisible();
+  await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(page.locator('[data-journal-document="today"] [data-panel-root]')).toHaveAttribute(
@@ -289,7 +299,7 @@ test("opens a Panel from the application button with the keyboard", async ({ pag
   const ids = await seed(page);
   const handle = page
     .locator(
-      `[data-journal-document="today"] [data-block-id="${ids.root}"] > .page-block-row .block-handle`,
+      `[data-journal-document="today"] [data-block-id="${ids.root}"] > ${BLOCK_ROW_SELECTOR} .block-handle`,
     )
     .first();
   await handle.focus();
@@ -402,14 +412,13 @@ for (const repeat of [0, 200]) {
         (window as unknown as Inspection).__rivtoDemo.editor.elements.getElementNode(id!)!.frame,
       cardId,
     );
-    const row = block.locator(":scope > .page-block-row");
+    const row = block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     const box = await row.boundingBox();
-    const chromeBox = await card.locator(":scope > .edgeless-card-content").boundingBox();
-    if (!box || !chromeBox) {
+    if (!box) {
       throw new Error("Panel block row is missing");
     }
     // The left hover strip belongs to the row; Markdown's editor covers its right edge.
-    const x = chromeBox.x + 2;
+    const x = box.x + 2;
     const y = box.y + box.height / 2;
     expect(
       await row.evaluate((element, { x, y }) => document.elementFromPoint(x, y) === element, {
@@ -455,11 +464,19 @@ for (const repeat of [0, 200]) {
     const heading = await today.locator("h1").boundingBox();
     expect(navigation!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
     expect(heading!.y).toBeGreaterThanOrEqual(navigation!.y + navigation!.height);
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    await expect(page.locator(".journal-stack")).toHaveCSS("overflow", "visible");
+    await expect(today.locator("h1")).toBeVisible();
     await breadcrumbs.getByRole("button", { name: "Panel section", exact: true }).press("Enter");
     await expect(today.locator("h1")).toHaveText("Panel section");
     await breadcrumbs.getByRole("button").first().click();
     await expect(today.locator("h1 time")).toBeVisible();
+    await expect(page.locator(".journal-stack")).toHaveCSS("overflow", "hidden");
     await expect(page.locator('[data-journal-document="yesterday"]')).toBeVisible();
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    await expect(today.locator("h1 time")).toBeHidden();
+    await today.getByRole("button", { name: "Page", exact: true }).click();
+    await expect(today.locator("h1 time")).toBeVisible();
   });
 }
 
@@ -495,3 +512,131 @@ test("keeps the panel path live when blocks change or disappear", async ({ page 
   await expect(today.locator("h1 time")).toBeVisible();
   await expect(page.locator('[data-journal-document="yesterday"]')).toBeVisible();
 });
+
+/**
+ * Moves a subtree card with native input and navigates back to the document canvas.
+ *
+ * @param page - Demo receiving pointer input and breadcrumb navigation.
+ * @param today - Active journal occurrence containing the block panel.
+ * @returns Resolves after navigation with IDs of the retained subtree card and its containing element group.
+ * @throws If native input, card movement, or breadcrumb navigation fails.
+ */
+async function moveCardAndReturnToDocument(page: Page, today: Locator) {
+  const card = today.locator("[data-edgeless-root]").first();
+  const previousCard = await card.getAttribute("data-edgeless-root");
+  const previousGroup = await today
+    .locator("[data-panel-root]")
+    .getAttribute("data-panel-element-root");
+  const before = await page.evaluate(
+    (id) =>
+      (window as unknown as Inspection).__rivtoDemo.editor.elements.getElementNode(id!)!.frame,
+    previousCard,
+  );
+  const box = (await card.boundingBox())!;
+  await page.keyboard.down("Alt");
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 60, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (id) =>
+          (window as unknown as Inspection).__rivtoDemo.editor.elements.getElementNode(id!)!.frame
+            .x,
+        previousCard,
+      ),
+    )
+    .toBe(before.x + 60);
+  await today
+    .getByRole("navigation", { name: "Panel breadcrumbs" })
+    .getByRole("button")
+    .first()
+    .click();
+  await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+  return { previousCard, previousGroup };
+}
+
+/**
+ * Measures a native marquee move through synchronous subscribers and two rendering frames.
+ *
+ * Fixture creation and pointer positioning finish before timing starts. The next
+ * move crosses drag slop, captures scene geometry and publishes the selection.
+ *
+ * @param page - Demo browser receiving the marquee gesture.
+ * @param canvas - Active full-document canvas after returning from a block panel.
+ * @returns Resolves after two frames with synchronous event duration and the rendering proxy, in milliseconds.
+ * @throws If pointer input fails or the scheduled rendering frames do not complete.
+ */
+async function measurePanelMarquee(page: Page, canvas: Locator) {
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.move(bounds.x + 5, bounds.y + 5);
+  await page.mouse.down();
+  await page.evaluate(() => {
+    const sample = { start: 0, sync: 0, paint: 0 };
+    (window as typeof window & { panelMarquee: typeof sample }).panelMarquee = sample;
+    window.addEventListener(
+      "pointermove",
+      () => {
+        sample.start = performance.now();
+      },
+      { capture: true, once: true },
+    );
+    window.addEventListener(
+      "pointermove",
+      () => {
+        sample.sync = performance.now() - sample.start;
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            sample.paint = performance.now() - sample.start;
+          }),
+        );
+      },
+      { once: true },
+    );
+  });
+  await page.mouse.move(bounds.x + bounds.width - 10, bounds.y + Math.min(bounds.height - 10, 500));
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as typeof window & { panelMarquee: { paint: number } }).panelMarquee.paint,
+      ),
+    )
+    .toBeGreaterThan(0);
+  return page.evaluate(
+    () =>
+      (window as typeof window & { panelMarquee: { sync: number; paint: number } }).panelMarquee,
+  );
+}
+
+for (const repeat of [0, 200]) {
+  test(`marquee ignores cards from a previously opened block panel, repeat=${repeat}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const ids = await seed(page, repeat);
+    await open(page, ids.root);
+    const today = page.locator('[data-journal-document="today"]');
+    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+    const { previousCard, previousGroup } = await moveCardAndReturnToDocument(page, today);
+    const canvas = today.locator(".edgeless-viewport");
+    await expect(today.locator(`[data-edgeless-root="${previousCard}"]`)).toHaveCount(0);
+    const samples = [];
+    let selected: readonly string[] = [];
+    for (let sample = 0; sample < 4; sample++) {
+      const timing = await measurePanelMarquee(page, canvas);
+      selected = await page.evaluate(
+        () => (window as unknown as Inspection).__rivtoDemo.editor.selection.get()?.elements ?? [],
+      );
+      if (sample > 0) {
+        samples.push(timing);
+      }
+    }
+    console.log(`panel marquee repeat=${repeat}: ${JSON.stringify(samples)}`);
+    expect(selected.length).toBeGreaterThan(0);
+    expect(selected).not.toContain(previousCard);
+    expect(selected).not.toContain(previousGroup);
+  });
+}

@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 /**
  * Browser coverage for Markdown preview, source editing, and custom block commands.
  *
@@ -8,6 +9,7 @@
  */
 import { expect, test } from "@playwright/test";
 import {
+  BLOCK_ROW_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
   BLOCK_ID_SELECTOR,
   blockIdSelector,
@@ -57,7 +59,7 @@ for (const mode of ["block", "edgeless"]) {
       }
       const block = page
         .locator(blockIdSelector(id))
-        .locator(":scope > .page-block-row .markdown-content");
+        .locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-content`);
       const editor = block.locator(".markdown-editor");
       await block.scrollIntoViewIfNeeded();
       const before = await block.boundingBox();
@@ -135,8 +137,8 @@ test("preserves an existing caret during an external text update", async ({ page
 
 test("shows full GFM at rest and raw source while editing", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
-  const editor = block.locator(":scope > .page-block-row .markdown-editor");
-  const preview = block.locator(":scope > .page-block-row .markdown-preview");
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-editor`);
+  const preview = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-preview`);
 
   await expect(preview.locator("strong")).toHaveText("Rivto editor");
   await expect(editor).toHaveText("**Rivto editor**");
@@ -185,8 +187,8 @@ test("shows full GFM at rest and raw source while editing", async ({ page }) => 
 
 test("opens ordinary Markdown links and delegates custom protocols", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
-  const editor = block.locator(":scope > .page-block-row .markdown-editor");
-  const preview = block.locator(":scope > .page-block-row .markdown-preview");
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-editor`);
+  const preview = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-preview`);
   await editor.click();
   await editor.evaluate((element) => {
     element.textContent = "[Browser](#markdown-target) [Local](chulane:page/example)";
@@ -216,8 +218,8 @@ test("opens ordinary Markdown links and delegates custom protocols", async ({ pa
 
 test("scrolls Markdown code without opening the raw editor", async ({ page }) => {
   const block = page.locator(blockTypeSelector("paragraph")).first();
-  const editor = block.locator(":scope > .page-block-row .markdown-editor");
-  const preview = block.locator(":scope > .page-block-row .markdown-preview");
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-editor`);
+  const preview = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-preview`);
 
   await editor.click();
   await editor.evaluate((element) => {
@@ -275,7 +277,7 @@ test("preserves a newer Markdown edit when code input arrives before React reren
   if (!id) {
     throw new Error("Expected block ID");
   }
-  const editor = block.locator(":scope > .page-block-row .markdown-editor");
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .markdown-editor`);
   const code = block.locator(`.${MARKDOWN_CODE_EDITOR_CLASS}`);
   const source = "```text\nold\n```\n\nOriginal tail";
   const newer = "```text\nold\n```\n\nNewer tail";
@@ -314,7 +316,7 @@ test("filters typo queries, converts in place, and undoes query removal with con
 }) => {
   const content = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);
@@ -377,7 +379,7 @@ test("keeps a filtered slash menu beside the caret when it opens upward", async 
 test("executes the highlighted command after grouped slash navigation", async ({ page }) => {
   const editor = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = editor.locator(BLOCK_ANCESTOR_XPATH);
@@ -415,7 +417,7 @@ test("Escape preserves slash text and custom controls update or select their blo
 }) => {
   const editor = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   await editor.click();
@@ -451,7 +453,7 @@ test("mouse slash execution creates a contentless Counter and undo restores dorm
 }) => {
   const content = page
     .locator(
-      '[data-journal-document="today"] > .page-surface > [data-block-type="paragraph"] > .page-block-row [data-block-content]',
+      `[data-journal-document="today"] > .page-surface ${ROOT_BLOCK_SELECTOR}[data-block-type="paragraph"] > ${BLOCK_ROW_SELECTOR} [data-block-content]`,
     )
     .last();
   const block = content.locator(BLOCK_ANCESTOR_XPATH);

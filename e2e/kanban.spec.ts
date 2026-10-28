@@ -1,64 +1,64 @@
+import { blockDropRegion } from "./drop-regions";
 /** Browser regression for moving real editor blocks across Kanban boundaries. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-const ROW_CLASS = "page-block-row";
+import { BLOCK_ROW_SELECTOR } from "./dom-markers";
 const HANDLE_CLASS = "block-handle";
-const DROP_INDICATOR_CLASS = "page-drop-indicator";
+const DROP_INDICATOR_SELECTOR = ".rivto-block-drop-line:visible";
 
 /**
- * Moves a block through the pointer sensor to a target's interior.
+ * Moves a block through the pointer sensor into an explicitly declared region.
  * @param page - Browser page owning the editor.
  * @param source - Block subtree to move.
  * @param target - Destination rectangle.
- * @param fraction - Vertical fraction of the target used for before/after placement.
- * @param axis - Direction used to choose the destination half.
- * @param crossOffset - Optional horizontal outline-depth offset for vertical drops.
+ * @param position - Canonical sibling side or append action; defaults to inside.
+ * @param axis - Flow axis used to check the physical indicator orientation.
  * @returns Completion of the drag gesture.
  */
 async function move(
   page: Page,
   source: Locator,
   target: Locator,
-  fraction = 0.5,
+  position: "before" | "after" | "inside" = "inside",
   axis: "vertical" | "horizontal" = "vertical",
-  crossOffset?: number,
 ) {
   await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
   await source.scrollIntoViewIfNeeded();
-  const handle = source.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
-  await source.locator(`:scope > .${ROW_CLASS}`).hover();
+  const handle = source.locator(`:scope > ${BLOCK_ROW_SELECTOR} .${HANDLE_CLASS}`);
+  await source.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
   await handle.hover();
   const from = (await handle.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+  await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, { steps: 3 });
+  await expect(source).toHaveAttribute("data-dragging", "true");
   // A horizontally clipped lane is not a drop field until it is visible.
   await target.scrollIntoViewIfNeeded();
-  const to = (await target.boundingBox())!;
-  await page.mouse.move(
-    to.x + (axis === "horizontal" ? to.width * fraction : (crossOffset ?? to.width / 2)),
-    to.y + to.height * (axis === "vertical" ? fraction : 0.5),
-    { steps: 15 },
-  );
+  const region = await blockDropRegion(target, position);
+  const to = (await region.boundingBox())!;
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
+  if (position !== "inside") {
+    await expect(page.locator(DROP_INDICATOR_SELECTOR)).toBeVisible();
+  }
   if (axis === "horizontal") {
-    const indicator = page.locator(`.${DROP_INDICATOR_CLASS}[data-axis="vertical"]`);
+    const indicator = page.locator(DROP_INDICATOR_SELECTOR);
     await expect(indicator).toBeVisible();
     const line = (await indicator.boundingBox())!;
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
     expect(line.width).toBe(4);
-    if (fraction < 0.5) {
-      expect(line.x + line.width / 2).toBeCloseTo(column.x, 0);
-    } else {
-      expect(line.x + line.width / 2).toBeCloseTo(column.x + column.width, 0);
-    }
+    expect(line.x + line.width / 2).toBeCloseTo(
+      position === "after" ? column.x + column.width : column.x,
+      0,
+    );
     await expect(target).not.toHaveCSS("background-color", "rgb(220, 234, 255)");
-    await expect(source).toHaveCSS("outline-style", "dashed");
+    await expect(source).toHaveAttribute("data-dragging", "true");
+    await expect(source).toHaveCSS("opacity", "0.45");
   }
   await page.mouse.up();
   if (axis === "horizontal") {
-    await expect(page.locator(`.${DROP_INDICATOR_CLASS}`)).toHaveCount(0);
+    await expect(page.locator(DROP_INDICATOR_SELECTOR)).toHaveCount(0);
     await expect(source).not.toHaveAttribute("data-dragging", "true");
   }
 }
@@ -80,16 +80,8 @@ test("moves cards between columns, back to the outline, and into an empty column
   const stableCard = page.locator(`[data-block-id="${id}"]`);
   await move(page, stableCard, columns.nth(1));
   await expect(columns.nth(1).locator(`[data-block-id="${id}"]`)).toHaveCount(1);
-  // The board title is at the outline level; its top edge inserts before it.
-  const handle = stableCard.locator(`:scope > .${ROW_CLASS} .${HANDLE_CLASS}`);
-  await stableCard.locator(`:scope > .${ROW_CLASS}`).hover();
-  await handle.hover();
-  const from = (await handle.boundingBox())!;
-  const to = (await board.locator(`:scope > .${ROW_CLASS}`).boundingBox())!;
-  await page.mouse.move(from.x + 3, from.y + 3);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + 1, { steps: 20 });
-  await page.mouse.up();
+  // Measure the receiving edge after activation applies drag feedback and layout settles.
+  await move(page, stableCard, board, "before");
   await expect(board.locator(`[data-block-id="${id}"]`)).toHaveCount(0);
   await expect(stableCard).toHaveCount(1);
   await move(page, stableCard, columns.nth(2));
@@ -112,7 +104,7 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
   });
   await page.locator('[data-editor-mode="edgeless"]').click();
   const chrome = page.locator("[data-edgeless-root] > .edgeless-card-content");
-  const lanes = page.locator('[data-block-type="kanban"] > .page-block-children');
+  const lanes = page.locator('[data-block-type="kanban"] > .rivto-block-children');
   await expect
     .poll(() => chrome.evaluate((element) => element.scrollWidth - element.clientWidth))
     .toBeLessThanOrEqual(1);
@@ -175,16 +167,19 @@ for (const mode of ["block", "edgeless"] as const) {
     }, mode);
     await page.locator(`[data-editor-mode="${mode}"]`).click();
     const column = page.locator('[data-block-type="kanban-column"]').first();
-    const cards = column.locator(':scope > div > [data-block-type="paragraph"]');
+    const cards = column.locator(
+      ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+    );
     const ids = await cards.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-block-id")),
     );
     const byId = (id: string | null) => page.locator(`[data-block-id="${id}"]`);
-    const rowById = (id: string | null) => byId(id).locator(`:scope > .${ROW_CLASS}`).first();
-    await move(page, byId(ids[2]!), rowById(ids[0]!), 0.01);
+    const rowById = (id: string | null) =>
+      byId(id).locator(`:scope > ${BLOCK_ROW_SELECTOR}`).first();
+    await move(page, byId(ids[2]!), rowById(ids[0]!), "before");
     await expect(cards).toHaveCount(3);
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[2]!);
-    await move(page, byId(ids[2]!), rowById(ids[1]!), 0.99, "vertical", 12);
+    await move(page, byId(ids[2]!), rowById(ids[1]!), "after");
     await expect(cards.last()).toHaveAttribute("data-block-id", ids[2]!);
     await expect(cards).toHaveCount(3);
     // Wait for the visible reorder transition before beginning a new action.
@@ -194,7 +189,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await column.getByRole("button", { name: "Add card to To do" }).click();
     await expect(cards).toHaveCount(4);
     await expect(
-      column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child"),
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
     ).toHaveCount(1);
     await expect(column.getByLabel("4 cards", { exact: true })).toHaveText("4");
     await page.getByRole("button", { name: "Expand Kanban", exact: true }).click();
@@ -205,7 +200,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const progress = modal.locator('[data-block-type="kanban-column"]').nth(1);
     await move(page, byId(ids[0]!), progress);
     await expect(progress.locator(`[data-block-id="${ids[0]}"]`)).toHaveCount(1);
-    await move(page, byId(ids[0]!), rowById(ids[1]!), 0.01);
+    await move(page, byId(ids[0]!), rowById(ids[1]!), "before");
     await expect(cards.first()).toHaveAttribute("data-block-id", ids[0]!);
     const lanes = modal.locator(
       '[data-block-type="kanban"] > div > [data-block-type="kanban-column"]',
@@ -213,7 +208,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const laneIds = await lanes.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-block-id")),
     );
-    await move(page, byId(laneIds[0]!), byId(laneIds[2]!), 0.8, "horizontal");
+    await move(page, byId(laneIds[0]!), byId(laneIds[2]!), "after", "horizontal");
     await expect(lanes.last()).toHaveAttribute("data-block-id", laneIds[0]!);
     await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
     await modal.getByRole("button", { name: "Add Kanban column" }).click();
@@ -222,7 +217,9 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.type("Ideas ");
     await expect(lanes.last().getByLabel("Kanban column title")).toContainText("Ideas");
     await expect(
-      byId(laneIds[0]!).locator(':scope > div > [data-block-type="paragraph"]'),
+      byId(laneIds[0]!).locator(
+        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+      ),
     ).toHaveCount(4);
     await expect(
       modal
@@ -234,7 +231,9 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(page.getByRole("dialog", { name: "Expanded Kanban" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Expand Kanban", exact: true })).toBeFocused();
     await expect(
-      byId(laneIds[0]!).locator(':scope > div > [data-block-type="paragraph"]'),
+      byId(laneIds[0]!).locator(
+        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+      ),
     ).toHaveCount(4);
   });
 }
@@ -247,7 +246,9 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   await board.scrollIntoViewIfNeeded();
   const addColumn = board.getByRole("button", { name: "Add Kanban column" });
   await expect(addColumn).toBeVisible();
-  const boardToggle = board.locator(":scope > .page-block-row [data-collapse-toggle]");
+  const boardToggle = board.locator(
+    ':scope > .rivto-block-row :is([data-block-control="collapse"], [data-collapse-toggle])',
+  );
   await boardToggle.click();
   await expect(boardToggle).toHaveAttribute("aria-expanded", "false");
   await expect(addColumn).toHaveCount(0);
@@ -258,24 +259,29 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   const addCard = column.getByRole("button", { name: "Add card to To do" });
   await expect(addCard).toBeVisible();
   await expect(
-    column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child"),
+    column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
   ).toHaveCount(1);
   await expect
     .poll(() =>
       column.evaluate((element) => {
         const card = element.querySelector(
-          ":scope > .page-block-children > .page-block:last-of-type",
+          ":scope > .rivto-block-children > .rivto-kanban-card:last-of-type",
         );
         const button = element.querySelector(
-          ":scope > .page-block-children > .rivto-kanban-add-card",
+          ":scope > .rivto-block-children > .rivto-kanban-add-card",
         );
-        return card && button
-          ? button.getBoundingClientRect().top - card.getBoundingClientRect().bottom
+        const list = button?.parentElement;
+        return card && button && list
+          ? button.getBoundingClientRect().top -
+              card.getBoundingClientRect().bottom -
+              Number.parseFloat(getComputedStyle(list).rowGap)
           : -1;
       }),
     )
-    .toBe(10);
-  const columnToggle = column.locator(":scope > .page-block-row [data-collapse-toggle]");
+    .toBe(0);
+  const columnToggle = column.locator(
+    ':scope > .rivto-block-row :is([data-block-control="collapse"], [data-collapse-toggle])',
+  );
   await columnToggle.click();
   await expect(columnToggle).toHaveAttribute("aria-expanded", "false");
   await expect(addCard).toHaveCount(0);
@@ -283,19 +289,25 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   await expect(addCard).toBeVisible();
   for (const count of [2, 3]) {
     await addCard.click();
-    await expect(column.locator(":scope > .page-block-children > .page-block")).toHaveCount(count);
     await expect(
-      column.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child"),
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
+    ).toHaveCount(count);
+    await expect(
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
     ).toHaveCount(1);
   }
 
   const emptyColumn = board.locator('[data-block-type="kanban-column"]').nth(1);
   const emptyAddCard = emptyColumn.getByRole("button", { name: "Add card to In progress" });
-  await expect(emptyColumn.locator(":scope > .rivto-kanban-add-card:last-child")).toHaveCount(1);
-  await emptyAddCard.click();
-  await expect(emptyColumn.locator(":scope > .page-block-children > .page-block")).toHaveCount(1);
   await expect(
-    emptyColumn.locator(":scope > .page-block-children > .rivto-kanban-add-card:last-child"),
+    emptyColumn.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
+  ).toHaveCount(1);
+  await emptyAddCard.click();
+  await expect(
+    emptyColumn.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
+  ).toHaveCount(1);
+  await expect(
+    emptyColumn.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
   ).toHaveCount(1);
 });
 
@@ -304,7 +316,7 @@ test("keeps one add-column control in each synced Kanban board", async ({ page }
   const left = page.locator('[data-editor-sync="left"]');
   const right = page.locator('[data-editor-sync="right"]');
   const content = left
-    .locator('.page-surface > [data-block-type="paragraph"] [data-block-content]')
+    .locator('.page-surface [data-block-type="paragraph"] [data-block-content]')
     .first();
   await content.click();
   await page.keyboard.press("End");
@@ -315,7 +327,7 @@ test("keeps one add-column control in each synced Kanban board", async ({ page }
     const board = pane.locator('[data-block-type="kanban"]');
     await expect(board).toHaveCount(1);
     await expect(
-      board.locator(":scope > .page-block-children > .rivto-kanban-add-column"),
+      board.locator(":scope > .rivto-block-children > .rivto-kanban-add-column"),
     ).toHaveCount(1);
   }
 });

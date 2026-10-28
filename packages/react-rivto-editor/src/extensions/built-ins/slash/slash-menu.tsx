@@ -244,7 +244,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
           setSession(null);
         } else {
           const position = popupPosition(content, { width, maxHeight, gap, viewportPadding });
-          const panelRoot = reactPanel.events.getRoot();
+          const panelRoot = reactPanel.getRoot();
           if (!panelRoot) {
             return;
           }

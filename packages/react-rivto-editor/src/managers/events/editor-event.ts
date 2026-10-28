@@ -4,13 +4,13 @@ import type { EditorEventInit } from "./types";
  */
 import type { EditorMode, Selection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-import type { DOMEventMap, DOMEventName, DOMEventTarget } from "./dom-types";
+import type { DOMEventDefinition, DOMEventMap, DOMEventName, DOMEventTarget } from "./dom-types";
 
 /**
  * Immutable-by-convention value passed through one editor event dispatch.
  *
- * This class is deliberately data-only. Registration, ordering, claiming, and
- * cleanup remain responsibilities of EventManager.
+ * This class stores captured context and evaluates mode/scope filters against it.
+ * Registration, ordering, claiming, and cleanup remain responsibilities of EventManager.
  */
 export class EditorEvent<
   Target extends DOMEventTarget = DOMEventTarget,
@@ -27,7 +27,14 @@ export class EditorEvent<
   readonly blockId: string | undefined;
   readonly contentElement: HTMLElement | null;
 
-  /** Creates one normalized snapshot from registry-resolved values. */
+  /**
+   * Creates one normalized snapshot from registry-resolved values.
+   *
+   * Values are retained as supplied, without querying live panel state or cloning
+   * the selection. The caller supplies the detached selection snapshot.
+   *
+   * @param init - Captured panel, DOM and selection context for this delivery.
+   */
   constructor(init: EditorEventInit<Target, Type>) {
     this.raw = init.raw;
     this.reactPanel = init.reactPanel;
@@ -39,5 +46,30 @@ export class EditorEvent<
     this.blockElement = init.blockElement;
     this.blockId = init.blockId;
     this.contentElement = init.contentElement;
+  }
+  /**
+   * Checks host mode and DOM scope restrictions against this captured context.
+   *
+   * Omitted restrictions accept every mode or scope, including outside-root events.
+   * Dynamic availability predicates remain the dispatcher's responsibility.
+   *
+   * @param definition - Optional mode and scope restrictions from a DOM or keyboard registration.
+   * @returns Whether both restrictions match the receiving panel and target markers.
+   */
+  matches(definition: Pick<DOMEventDefinition, "mode" | "scope">): boolean {
+    const { mode, scope } = definition;
+    if (mode && !(Array.isArray(mode) ? mode.includes(this.mode) : mode === this.mode)) {
+      return false;
+    }
+    if (!scope) {
+      return true;
+    }
+    if (scope === "surface") {
+      return this.insideRoot;
+    }
+    if (scope === "block") {
+      return Boolean(this.blockElement);
+    }
+    return Boolean(this.contentElement);
   }
 }

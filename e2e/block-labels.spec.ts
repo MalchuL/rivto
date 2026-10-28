@@ -24,7 +24,7 @@ for (const route of ["/", "/?editors=2", "/?sync=1&room=block-labels"]) {
     await expect(page.locator(".edgeless-card .demo-block-id").first()).toBeVisible();
     await numbers.check();
     await expect(
-      page.locator(".edgeless-card > [data-block-id] > .page-block-row .demo-block-number"),
+      page.locator(".edgeless-card > [data-block-id] > .rivto-block-row .demo-block-number"),
     ).toHaveCount(0);
   });
 }

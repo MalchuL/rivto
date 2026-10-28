@@ -26,7 +26,7 @@ Public mutable properties отсутствуют. Manager хранит type regi
 
 ### Modes
 
-Один registration действует в обеих surfaces: `BlockTree` выбирает тот же renderer. `separatesBlockElements` влияет только на разбиение root flow в edgeless; page hierarchy не меняется.
+Один registration действует в обеих surfaces: `Page` выбирает тот же renderer. `separatesBlockElements` влияет только на разбиение root flow в edgeless; page hierarchy не меняется.
 
 ## `blockListProps` lifecycle adapter
 
@@ -57,7 +57,7 @@ Defaults объединяются shallowly в registration order. Ошибка 
 - `onSplit(context, target)` определяет свойства продолжения и выполняет Enter через общий алгоритм разделения. Первое применимое поведение с `handled` или `rejected` останавливает цепочку; свойства нескольких поведений не объединяются. При отсутствии специализированного обработчика `DefaultBlockBehavior` использует defaults writing factory.
 - `childrenVisible(block)` возвращает `false`, если хотя бы одно применимое поведение скрывает детей.
 - `canMove({ sources, destination })` проверяет семантическое перемещение независимо от keyboard или drag. Parent читается один раз; пустые sources, отсутствующий parent и beforeId не из его списка отклоняются. Любой применимый hook с `false` запрещает перемещение независимо от приоритета. Root insertion передаёт `parent: null`; ограничения источников продолжают действовать. Foreign sources проверяются по переданным снимкам, без поиска их ID в документе назначения. Проверка не изменяет документ и не заменяет core hierarchy validation.
-- Drag feedback и commit, keyboard move и Tab/Shift+Tab используют `canMove`. Outdent до первой мутации проверяет и подъём roots, и перенос последующих siblings внутрь последнего поднятого блока. Геометрия (`dropAxis`, `dropPlacement.allowChildPlacement`, `acceptsDropContainer`, `fixed`) хранится в `definition.metadata[PAGE_DRAG_METADATA_KEY]` и читается расширением через `getDefinition(type)?.metadata`. Hover handle определяется независимо через `metadata[BLOCK_HANDLE_METADATA_KEY].showOnContainerHover`; размеры зон остаются глобальными параметрами dragging.
+- Drag feedback и commit, keyboard move и Tab/Shift+Tab используют `canMove`. Outdent до первой мутации проверяет и подъём roots, и перенос последующих siblings внутрь последнего поднятого блока. Геометрия задаётся Page layout: `BlockChildren.dropAxis` описывает расположение потомков, а `BlockDropTarget` передаёт явные canonical destinations; отдельная drag metadata не нужна. Hover handle определяется независимо через Page row feedback: `BlockChildren.hoverBoundary` ограничивает область текущим layout, обычный outline наследует область через `hoverBoundary={false}`. Native hit определяет владельца строки; размеры drag-зон остаются параметрами dragging.
 
 List extension регистрирует `CheckboxBlockBehavior`, `NumberedListBlockBehavior` и обычный `ListBlockBehavior`. Checkbox наследует свой маркер, numbered-варианты продолжаются через `numbered_list`; оба снимают пустой маркер перед следующим Enter. Все три поведения задают `listProps` нового блока непосредственно в `onSplit` и вызывают общий алгоритм, сохраняющий outdent, размещение детей, диапазон edgeless-карточки и каретку. Обычный list сохраняет default split-свойства и восстановление отсутствующего маркера пустого корневого writing-блока. Collapse extension регистрирует `CollapseBlockBehavior` для видимости детей. `blockListProps` сохраняет только defaults и validation.
 

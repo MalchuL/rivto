@@ -78,8 +78,7 @@ body {
 }
 
 /* An opened panel replaces the dated stack until navigation returns to the document. */
-.journal-stack:has([data-panel-root]:not([data-panel-root=""]))
-  [data-journal-document="yesterday"] {
+.journal-stack[data-open-panel] > [data-journal-document="yesterday"] {
   display: none;
 }
 
@@ -124,7 +123,7 @@ body {
 
 /* Canvas gestures need the viewport, not the journal paper, as their clipping
    boundary. Page mode returns to the seamless dated stack automatically. */
-.journal-stack:has(.edgeless-viewport) {
+.journal-stack[data-edgeless] {
   width: 100%;
   margin: 0;
   overflow: visible;
@@ -133,7 +132,7 @@ body {
   box-shadow: none;
 }
 
-.journal-document:has(.edgeless-viewport) .journal-date:has(time) {
+.journal-document[data-edgeless] .journal-date[data-document-title] {
   display: none;
 }
 
@@ -199,19 +198,19 @@ body {
   background: var(--rivto-accent);
 }
 
-/* The left slot sits against its row. Each nested row starts 32px further right:
-   24px from .page-block-children plus 8px from .page-block padding. Shift the
+/* The left slot sits against its row. Each nested row starts one Page indent further right:
+   24px from .rivto-block-outline, with the same row padding at each depth. Shift the
    label back by that amount so every number shares the page gutter. */
-.page-surface .rivto-slot[data-slot-position="left"]:has(> .demo-block-number) {
+.page-surface .rivto-block-slot[data-slot-position="left"]:has(> .demo-block-number) {
   top: 0;
   left: 0;
   height: var(--rivto-default-block-height);
   transform: translate(-100%, 0);
 }
 
-.rivto-slot > .demo-block-number {
+.rivto-block-slot > .demo-block-number {
   padding-right: 6px;
-  transform: translateX(calc(-1 * var(--demo-block-depth, 0) * 32px));
+  transform: translateX(calc(-1 * var(--demo-block-depth, 0) * var(--rivto-block-indent, 24px)));
   color: #999;
   font:
     11px/var(--rivto-default-block-height) ui-monospace,
@@ -222,7 +221,7 @@ body {
   user-select: none;
 }
 
-.rivto-slot > .demo-block-id {
+.rivto-block-slot > .demo-block-id {
   padding-left: 12px;
   color: #999;
   background: linear-gradient(to right, transparent, white 12px);
@@ -233,7 +232,7 @@ body {
   user-select: none;
 }
 
-.edgeless-card .rivto-slot > .demo-block-id {
+.edgeless-card .rivto-block-slot > .demo-block-id {
   background: linear-gradient(
     to right,
     transparent,

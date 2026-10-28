@@ -39,7 +39,7 @@ for (const outcome of ["unhandled", "handled"] as const) {
         focusBlockId: selected[1]!,
       });
       const panel = reactEditor.panels.getActive() ?? reactEditor.panels.getDefault();
-      panel!.events.getRoot()!.focus();
+      panel!.getRoot()!.focus();
       return { selected, left: left!.id, child: child.id, childContent: child.content };
     }, outcome);
     await page.keyboard.press("Delete");
@@ -109,7 +109,7 @@ for (const count of [1, 200]) {
         anchorBlockId: ids[0]!,
         focusBlockId: ids.at(-1)!,
       });
-      panel.events.getRoot()!.focus();
+      panel.getRoot()!.focus();
       snapshots = 0;
       return ids;
     }, count);
@@ -268,7 +268,7 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.locator('[data-editor-mode="edgeless"]').click();
       }
       const source = page.locator(`[data-block-id="${ids.source}"]`).first();
-      const content = source.locator(":scope > .page-block-row [data-block-content]").first();
+      const content = source.locator(":scope > .rivto-block-row [data-block-content]").first();
       await content.click();
       await page.keyboard.press("End");
       const selection = await page.evaluate(() => {
@@ -289,8 +289,8 @@ for (const mode of ["block", "edgeless"] as const) {
           await page.keyboard.press(keys[gesture]);
           return;
         }
-        await source.locator(":scope > .page-block-row").hover();
-        const handle = source.locator(":scope > .page-block-row .block-handle");
+        await source.locator(":scope > .rivto-block-row").hover();
+        const handle = source.locator(":scope > .rivto-block-row .block-handle");
         await handle.hover();
         const from = (await handle.boundingBox())!;
         const target = (await page

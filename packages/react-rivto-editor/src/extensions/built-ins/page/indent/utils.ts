@@ -16,7 +16,7 @@ import {
   type KeyboardSelectionTarget,
 } from "../../../../managers";
 import type { PanelSelectionApi } from "../../../../managers/selection/api";
-import { getPageVirtualizationControllerForElement } from "../../../../surfaces/page/page-virtualization-controller";
+import { PageNavigationController } from "../../../../surfaces/page/page-navigation-controller";
 
 /** Active viewport settlement for one page surface. */
 interface ViewportSettlement {
@@ -196,7 +196,7 @@ export function applyIndentShortcut(
   // Reparenting a virtualized root block partially above the viewport changes
   // both the root count and its DOM parent. Preserve the viewport through that
   // render instead of letting browser scroll anchoring reveal the hidden row edge.
-  const virtualizationController = getPageVirtualizationControllerForElement(root);
+  const virtualizationController = PageNavigationController.getForElement(root);
   const mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
   const previousSettlement = viewportSettlements.get(root);
   const inheritedAnchor =
@@ -265,7 +265,7 @@ export function applyIndentShortcut(
     restoreBlockViewportTop(root, scrollElement, anchorId, anchorTop);
   }
 
-  // React may reparent every selected BlockView and cause the browser to emit
+  // React may reparent every selected block shell and cause the browser to emit
   // a transient empty selectionchange. Re-publish the selection captured
   // before the command, then resolve its text endpoints in the committed DOM.
   // Virtual measurements can settle across several frames for a large moved
@@ -283,7 +283,7 @@ export function applyIndentShortcut(
       // The controller captured before dispatch still indexes the old root list.
       // Resolve it again after React commits so an outdented viewport window is
       // pinned as new roots instead of being looked up in the former parent root.
-      getPageVirtualizationControllerForElement(root)?.mountBlocks(mountIds, { scroll: false });
+      PageNavigationController.getForElement(root)?.mountBlocks(mountIds, { scroll: false });
       selectionManager.set(selection!);
       selectionManager.restoreDOM(selection, { scroll: false });
       if (!scrollElement || !anchorId || anchorTop === undefined) {

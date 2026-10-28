@@ -8,6 +8,7 @@
 import {
   bentoExtension,
   BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  BLOCK_TEXT_METADATA_KEY,
   blockExtension,
   columnsExtension,
   editorControlProps,
@@ -211,7 +212,7 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
   tableExtension(),
   columnsExtension(),
   blockExtension({
-    definition: sliderBlockDefinition,
+    definition: { ...sliderBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
     render: SliderBlock,
     slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
   }),

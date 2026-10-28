@@ -48,8 +48,8 @@ for (const mode of ["block", "edgeless"] as const) {
           await page.locator('[data-editor-mode="edgeless"]').click();
         }
         const source = page.locator(`[data-block-id="${ids.source}"]`).first();
-        const handle = source.locator(":scope > .page-block-row .block-handle");
-        await source.locator(":scope > .page-block-row").hover();
+        const handle = source.locator(":scope > .rivto-block-row .block-handle");
+        await source.locator(":scope > .rivto-block-row").hover();
         await handle.hover();
         const from = (await handle.boundingBox())!;
         const lower = page.locator(`[data-block-id="${ids.lower}"]`).first();
@@ -60,8 +60,8 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
         for (const offset of [-1, 1, -1]) {
           await page.mouse.move(upper.x + (child ? 36 : 12), box.y + offset, { steps: 15 });
-          await expect(lower).not.toHaveAttribute("data-drop-inside", "true");
-          await expect(page.locator('.page-drop-indicator[data-kind="between"]')).toBeVisible();
+          await expect(lower).not.toHaveAttribute("data-block-drop-active", "true");
+          await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
         }
         await page.mouse.up();
         await expect
@@ -146,15 +146,15 @@ for (const mode of ["block", "edgeless"] as const) {
     const first = page.locator(`[data-block-id="${ids.siblings[0]}"]`).first();
     const second = page.locator(`[data-block-id="${ids.siblings[1]}"]`).first();
     const handle = page
-      .locator(`[data-block-id="${ids.source}"] > .page-block-row .block-handle`)
+      .locator(`[data-block-id="${ids.source}"] > .rivto-block-row .block-handle`)
       .first();
-    await page.locator(`[data-block-id="${ids.source}"] > .page-block-row`).first().hover();
+    await page.locator(`[data-block-id="${ids.source}"] > .rivto-block-row`).first().hover();
     await handle.hover();
     const a = (await first.boundingBox())!;
     const b = (await second.boundingBox())!;
     await page.mouse.down();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height - 4, { steps: 12 });
-    const line = page.locator('.page-drop-indicator[data-kind="between"]');
+    const line = page.locator(".rivto-block-drop-line:visible");
     for (let y = a.y + a.height - 4; y <= b.y + 4; y++) {
       await page.mouse.move(a.x + a.width / 2, y);
       await expect(line).toBeVisible();
@@ -239,15 +239,15 @@ for (const mode of ["block", "edgeless"] as const) {
         .first()
         .boundingBox())!;
       const handle = page
-        .locator(`[data-block-id="${ids.source}"] > .page-block-row .block-handle`)
+        .locator(`[data-block-id="${ids.source}"] > .rivto-block-row .block-handle`)
         .first();
-      await page.locator(`[data-block-id="${ids.source}"] > .page-block-row`).first().hover();
+      await page.locator(`[data-block-id="${ids.source}"] > .rivto-block-row`).first().hover();
       await handle.hover();
       await page.mouse.down();
       await page.mouse.move((left.x + left.width + right.x) / 2, left.y + left.height / 2, {
         steps: 15,
       });
-      await expect(page.locator(".page-drop-indicator")).toHaveCount(0);
+      await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
       await page.mouse.up();
       expect(
         await page.evaluate(({ source, board }) => {

@@ -33,19 +33,32 @@
   counter-increment: rivto-list-number;
 }
 
-.page-list-marker[data-list-type="start_numbered_list"],
-.page-block:not(:has(> .page-block-row .page-list-marker))
-  + .page-block
-  > .page-block-row
-  .page-list-marker[data-list-type="numbered_list"] {
-  counter-set: rivto-list-number 1;
-  counter-increment: none;
-}
-
 .page-list-marker::before {
   content: counter(rivto-list-number) ".";
 }
 
-.rivto-slot[data-slot-owner="block"][data-slot-position="start"] > .page-list-checkbox {
+.rivto-block-slot[data-slot-owner="block"][data-slot-position="start"] > .page-list-checkbox {
   margin-inline-end: 4px;
+}
+
+/* A checked control styles only its owning row, leaving descendant tasks independent. */
+.rivto-block:has(> .rivto-block-row > .rivto-block-slot > .page-list-checkbox[data-state="checked"])
+  > .rivto-block-row
+  .page-block-content {
+  color: var(--rivto-muted-foreground);
+  text-decoration: line-through;
+}
+
+/* Concrete list controls participate in the in-flow slot on both surfaces. */
+.rivto-block-slot > :is(.page-list-marker, .page-list-checkbox) {
+  position: relative;
+  inset: auto;
+  margin-block: 0;
+  translate: none;
+}
+
+/* Page increments the structural shell; its host marker only displays that value. */
+.rivto-block-slot > .page-list-marker {
+  counter-increment: none;
+  counter-set: none;
 }

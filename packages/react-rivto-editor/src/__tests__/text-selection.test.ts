@@ -1,8 +1,5 @@
-import {
-  createTextSelection,
-  createVisibleStructuralSelection,
-  resolveSelectionEndpoints,
-} from "../managers";
+import { BlockDOMSelection, BlockSelectionEndpoints } from "@chulane/rivto-page";
+import { createTextSelection } from "../managers";
 
 const blocks = [
   { id: "first", length: 10 },
@@ -13,7 +10,12 @@ const blocks = [
 
 describe("cross-block selection items", () => {
   it("creates an inclusive block range while preserving reverse direction", () => {
-    expect(createVisibleStructuralSelection(["a", "b", "c", "d"], "d", "b")).toEqual({
+    expect(
+      new BlockDOMSelection({
+        getSelectableBlockIds: () => [],
+        getTextLength: () => undefined,
+      }).createVisibleStructuralSelection(["a", "b", "c", "d"], "d", "b"),
+    ).toEqual({
       type: "selection",
       blocks: [
         { id: "b", start: 0, end: -1 },
@@ -65,7 +67,7 @@ describe("cross-block selection items", () => {
       reversed: false,
     });
     expect(
-      resolveSelectionEndpoints(
+      BlockSelectionEndpoints.resolve(
         selection,
         (id) => blocks.find((block) => block.id === id)?.length ?? 0,
       ),

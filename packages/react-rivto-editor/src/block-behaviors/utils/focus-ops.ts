@@ -1,7 +1,7 @@
 /**
  * Caret-placement primitives used by block behaviors after a mutation.
  *
- * Views schedule focus on the next frame so React can remount the BlockView
+ * Views schedule focus on the next frame so React can remount the block shell
  * that owns the new caret host. The shared selection scheduler skips stale
  * focus work when another operation publishes a newer selection first.
  *
@@ -9,13 +9,13 @@
  */
 import { createCaretSelection } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-import { focusBlock } from "../../managers/events/block-dom";
+import { focusBlock } from "../../blocks/block-dom";
 
 /**
  * Publishes a collapsed caret and focuses it after the next paint.
  *
  * @param reactPanel - Editor view whose portable selection is updated immediately.
- * @param root - Surface or card that contains the target BlockView.
+ * @param root - Surface or card that contains the target block shell.
  * @param blockId - Block that should own the caret.
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.
@@ -37,7 +37,7 @@ export function focusCaret(
  * scheduler, so delayed work cannot replace a more recent selection.
  *
  * @param reactPanel - Editor view whose current selection guards deferred focus.
- * @param root - Surface or card that contains the target BlockView.
+ * @param root - Surface or card that contains the target block shell.
  * @param blockId - Block that should own the caret.
  * @param offset - UTF-16 caret offset inside that block.
  * @returns Nothing; focus is scheduled asynchronously.

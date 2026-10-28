@@ -3,14 +3,12 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
-import { BlockElementRefBoundary } from "../../blocks/block-wrapper/block-wrapper";
 import type { PanelAPI, PanelOptions } from "@chulane/rivto";
 import type { ReactEditorApi } from "../../editor/types";
 import {
@@ -125,7 +123,6 @@ export function ReactPanelProvider({
     }
   }, [snapshot.retained, snapshot.document, onReady]);
   const reactPanel = snapshot.api;
-  const domIdPrefix = useId();
   const [root, setRoot] = useState<HTMLElement | null>(null);
 
   const subscribeSurfaces = useCallback(
@@ -149,9 +146,9 @@ export function ReactPanelProvider({
   const panelContextValue = useMemo(
     () =>
       reactPanel
-        ? { reactPanel, documentId, document: snapshot.document, rootBlockId, domIdPrefix, enabled }
+        ? { reactPanel, documentId, document: snapshot.document, rootBlockId, enabled }
         : null,
-    [reactPanel, documentId, snapshot.document, rootBlockId, domIdPrefix, instance, enabled],
+    [reactPanel, documentId, snapshot.document, rootBlockId, instance, enabled],
   );
   const virtualization = useMemo(() => {
     let threshold = virtualizePageThreshold;
@@ -208,9 +205,7 @@ export function ReactPanelProvider({
   return (
     <ReactPanelContext.Provider value={panelContextValue}>
       <PageVirtualizationContext.Provider value={virtualization}>
-        <EditorRootContext.Provider value={rootContext}>
-          <BlockElementRefBoundary>{content}</BlockElementRefBoundary>
-        </EditorRootContext.Provider>
+        <EditorRootContext.Provider value={rootContext}>{content}</EditorRootContext.Provider>
       </PageVirtualizationContext.Provider>
     </ReactPanelContext.Provider>
   );

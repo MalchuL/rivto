@@ -10,6 +10,7 @@ import {
   createDocumentEditor,
   type DocumentEditorAPI,
   type EditorElementNode,
+  type EditorMode,
 } from "@chulane/rivto";
 import {
   DEFAULT_WRITING_BLOCK_TYPE,
@@ -40,7 +41,7 @@ import {
   type ReactEditorApi,
   type MarkdownLinkClick,
 } from "@chulane/rivto-react";
-import { useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
   COUNTER_BLOCK_TYPE,
   customBlockExtensions,
@@ -147,7 +148,7 @@ function demoRepeatCount(): number {
  * Opacity is not checked, so a hover-hidden handle still supplies a stable anchor.
  */
 function demoThreadAnchor(block: Element): Element | null {
-  const row = block.querySelector(":scope > .page-block-row");
+  const row = block.querySelector(":scope > .rivto-block-row");
   for (const selector of [BLOCK_HANDLE_SELECTOR, ".page-collapse-toggle"]) {
     const control = row?.querySelector(selector);
     if (control) {
@@ -1033,6 +1034,12 @@ function DemoToolbar({
   );
 }
 
+/** Presentation of the active journal panel, independent of rendered descendants. */
+interface JournalPresentation {
+  mode: EditorMode;
+  hasOpenBlock: boolean;
+}
+
 /**
  * Default demo: stacked today (seeded) + yesterday (empty) journals.
  *
@@ -1043,6 +1050,25 @@ function DemoToolbar({
  * The component disposes created runtimes on unmount, including late completions.
  */
 function JournalDemoApp() {
+  const [presentation, setPresentation] = useState<JournalPresentation>({
+    mode: "block",
+    hasOpenBlock: false,
+  });
+  /**
+   * Updates journal chrome only when the active panel's presentation changes.
+   *
+   * @param mode - Mode owned by the active panel.
+   * @param hasOpenBlock - Whether the panel displays a nested block.
+   * @returns Schedules changed chrome state while preserving equal state identity.
+   */
+  const onPresentationChange = useCallback((mode: EditorMode, hasOpenBlock: boolean) => {
+    setPresentation((previous) => {
+      if (previous.mode === mode && previous.hasOpenBlock === hasOpenBlock) {
+        return previous;
+      }
+      return { mode, hasOpenBlock };
+    });
+  }, []);
   const [runtime, setRuntime] = useState<{
     today: Awaited<ReturnType<typeof createDemoEditor>>;
     yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>>;
@@ -1103,12 +1129,21 @@ function JournalDemoApp() {
   return (
     <BlockNumbersVisibleProvider visible={showBlockNumbers}>
       <BlockIdsVisibleProvider visible={showBlockIds}>
-        <div className="journal-stack">
+        <div
+          className="journal-stack"
+          data-open-panel={presentation.hasOpenBlock || undefined}
+          data-edgeless={presentation.mode === "edgeless" || undefined}
+        >
           {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
-          <section className="journal-document" data-journal-document="today">
+          <section
+            className="journal-document"
+            data-journal-document="today"
+            data-edgeless={presentation.mode === "edgeless" || undefined}
+          >
             <EditorStorageContext.Provider value={todayEditor.editorStorage}>
               <DemoEditorPanels
                 editor={todayEditor.reactEditor}
+                onPresentationChange={onPresentationChange}
                 documentTitle={
                   <time dateTime={localDateKey(dates.today)}>
                     {new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(dates.today)}

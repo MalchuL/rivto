@@ -1,12 +1,11 @@
 /**
  * Optional equal-width column layout around ordinary document blocks. Nested
- * blocks keep the shared BlockTree shell; this extension only arranges column
+ * blocks keep the shared Page shell; this extension only arranges column
  * shells side by side. Removing a column relocates its children instead of
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { BLOCK_HANDLE_METADATA_KEY } from "../../built-ins/block-handle/metadata";
-import { PAGE_DRAG_METADATA_KEY } from "../../block-drag/block-drag-options";
+import { ColumnsLayout, ColumnsColumnLayout } from "./columns-layout";
 import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useId, type KeyboardEvent, type MouseEvent } from "react";
@@ -43,9 +42,9 @@ export const COLUMNS_DEFAULT_COUNT = 2;
 export const COLUMNS_MIN_COUNT = 1;
 export const COLUMNS_MAX_COUNT = 6;
 
-const COLUMNS_CLASS = "rivto-columns flex items-center gap-2";
-const COLUMNS_STATS_CLASS = "text-xs tabular-nums text-muted-foreground";
-const COLUMN_CLASS = "rivto-columns-column min-h-[120px]";
+const COLUMNS_CLASS = "rivto-columns";
+const COLUMNS_STATS_CLASS = "rivto-columns-count-label";
+const COLUMN_CLASS = "rivto-columns-column";
 const SETTINGS_CLASS = "rivto-columns-settings relative inline-flex";
 const PANEL_CLASS = "rivto-columns-settings-panel w-56 p-4";
 const COUNT_CLASS = "rivto-columns-count mt-2 flex items-center justify-between gap-2";
@@ -148,7 +147,7 @@ export function setColumnsCount(
 }
 
 /**
- * Occupies the board content slot and summarizes hidden columns when collapsed.
+ * Occupies the board management row and summarizes hidden columns when collapsed.
  *
  * Divider visibility is reflected on this board's selection region for the
  * shared page and edgeless layout stylesheet. Missing preferences show dividers.
@@ -187,14 +186,22 @@ export function Columns({ blockId }: { readonly blockId: string }) {
 
 /**
  * Marks an empty column as a click-to-start writing target.
+ *
+ * Empty lanes own keyboard activation and are marked as canvas controls so Space
+ * starts writing instead of enabling Edgeless panning. Populated collapsed lanes
+ * remain structural selection anchors without claiming empty-control interaction.
+ *
  * @param props - Identity of the persisted column.
- * @returns Empty-lane control; drop and sort markers live on the column shell.
+ * @param props.blockId - Stable lane ID receiving the first writing block.
+ * @returns Empty-lane control or collapsed summary; drop markers live on its row.
+ * @throws If rendered outside an editor panel or insertion fails.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
   const empty = block?.childIds.length === 0;
+  const attributes = useBlockSelectionAnchor(blockId);
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.
@@ -216,13 +223,17 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   };
   return (
     <div
+      {...attributes}
       className={COLUMN_CLASS}
       tabIndex={empty ? 0 : -1}
       role={empty ? "button" : undefined}
       aria-label="Column"
+      data-canvas-control={empty ? "" : undefined}
       onClick={startWriting}
       onKeyDown={startWriting}
-    />
+    >
+      {block?.listProps.collapsed === true ? `${block.childIds.length} blocks` : null}
+    </div>
   );
 }
 
@@ -340,25 +351,18 @@ export function columnsExtension(): ReactEditorExtension {
           title: "Columns",
           defaultProps: { showDividers: true },
           propSchema: z.object({ showDividers: z.boolean().default(true) }),
-          metadata: {
-            [PAGE_DRAG_METADATA_KEY]: {
-              dropAxis: "horizontal",
-              acceptsDropContainer: false,
-              fixed: true,
-            },
-            [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
-          },
         },
         render: Columns,
+        layout: ColumnsLayout,
         behavior: columnsBehavior,
       });
       reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
-          metadata: { [PAGE_DRAG_METADATA_KEY]: { acceptsDropContainer: true } },
         },
         render: ColumnsColumn,
+        layout: ColumnsColumnLayout,
         behavior: columnsColumnBehavior,
       });
       reactEditor.surfaces.registerBlockSlot({

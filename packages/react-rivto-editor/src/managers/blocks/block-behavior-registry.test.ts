@@ -1,8 +1,3 @@
-import { BLOCK_HANDLE_METADATA_KEY } from "../../extensions/built-ins/block-handle/metadata";
-import {
-  PAGE_DRAG_METADATA_KEY,
-  getBlockDragOptions,
-} from "../../extensions/block-drag/block-drag-options";
 import { createCaretSelection } from "@chulane/rivto";
 import { createBlockBehaviorContext } from "../../block-behaviors/utils/context";
 import { DefaultBlockBehavior } from "../../block-behaviors/default-block-behavior";
@@ -16,7 +11,7 @@ import {
   listShortcutsExtension,
 } from "../../extensions/built-ins/built-ins";
 import { createTableBlockInput, tableExtension } from "../../extensions/containers/table/table";
-import { firstKeyboardTarget } from "../events/selection";
+import { firstKeyboardTarget } from "../keyboard/selection";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 
 /** @returns An owned headless panel, block, and action/applicability contexts for registry tests. */
@@ -180,19 +175,18 @@ test("drag geometry is owned by a type registration and cleaned up on disposal o
       type: "geometry",
       title: "Geometry",
       metadata: {
-        [PAGE_DRAG_METADATA_KEY]: { dropAxis: "horizontal" as const },
-        [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+        ["test.geometry"]: { dropAxis: "horizontal" as const },
       },
     },
     render: panel.editor.renderers.get("paragraph")!,
   };
   const release = types.register(registration);
-  expect(getBlockDragOptions(types.getDefinition("geometry")?.metadata)).toEqual(
-    registration.definition.metadata[PAGE_DRAG_METADATA_KEY],
+  expect(types.getDefinition("geometry")?.metadata?.["test.geometry"]).toEqual(
+    registration.definition.metadata["test.geometry"],
   );
-  expect(getBlockDragOptions(types.getDefinition("missing")?.metadata)).toBeUndefined();
+  expect(types.getDefinition("missing")?.metadata?.["test.geometry"]).toBeUndefined();
   release();
-  expect(getBlockDragOptions(types.getDefinition("geometry")?.metadata)).toBeUndefined();
+  expect(types.getDefinition("geometry")?.metadata?.["test.geometry"]).toBeUndefined();
   panel.editor.slashCommands.register({
     id: "conflict",
     title: "Existing",
@@ -201,11 +195,11 @@ test("drag geometry is owned by a type registration and cleaned up on disposal o
   expect(() =>
     types.register({ ...registration, slashCommand: { id: "conflict", title: "Conflict" } }),
   ).toThrow();
-  expect(getBlockDragOptions(types.getDefinition("geometry")?.metadata)).toBeUndefined();
+  expect(types.getDefinition("geometry")?.metadata?.["test.geometry"]).toBeUndefined();
   expect(panel.editor.renderers.has("geometry")).toBe(false);
   types.register(registration);
   panel.editor.destroy();
-  expect(getBlockDragOptions(types.getDefinition("geometry")?.metadata)).toBeUndefined();
+  expect(types.getDefinition("geometry")?.metadata?.["test.geometry"]).toBeUndefined();
   core.destroy();
 });
 
@@ -552,3 +546,17 @@ test.each([{ ids: [] }, { ids: ["missing"] }])(
     core.destroy();
   },
 );
+
+test("rolls back a behavior when live presentation observers reject publication", async () => {
+  const { core, panel, registry, availability } = await fixture();
+  const previous = registry.resolveAll(availability);
+  const failure = new Error("presentation subscription failed");
+  const stop = registry.subscribe(() => {
+    throw failure;
+  });
+  expect(() => registry.register(behavior(), 100)).toThrow(AggregateError);
+  expect(registry.resolveAll(availability)).toEqual(previous);
+  stop();
+  panel.editor.destroy();
+  core.destroy();
+});

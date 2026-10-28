@@ -2,7 +2,7 @@
 
 ## Page mode
 
-`pageSurfaceExtension()` регистрирует `PageSurface` для mode `"block"`. Surface выводит `<main class="page-surface">`, назначает его active editor root и передаёт root IDs в `BlockTree`.
+`pageSurfaceExtension()` регистрирует `PageSurface` для mode `"block"`. Surface выводит `<main class="page-surface">`, назначает его active editor root и передаёт root IDs в Page.
 
 Page behavior из `standardPreset()` включает:
 

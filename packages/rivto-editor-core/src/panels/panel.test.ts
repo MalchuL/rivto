@@ -132,3 +132,23 @@ it.each(["children", "embedding"] as const)(
     }
   },
 );
+
+it("moves into a hidden panel boundary without permitting moves beside or of that boundary", async () => {
+  const editor = await createTestEditor();
+  editor.blocks.insertBlock({
+    id: "boundary",
+    type: "paragraph",
+    children: [{ id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] }],
+  });
+  editor.blocks.insertBlock({ id: "outside", type: "paragraph" });
+  const panel = new ChildrenPanel(editor, { rootBlockId: "boundary" });
+  editor.history.clear();
+  expect(() => panel.blocks.moveBlocks(["child"], "boundary", "before")).toThrow();
+  expect(() => panel.blocks.moveBlocks(["boundary"], "parent", "inside")).toThrow();
+  expect(() => panel.blocks.moveBlocks(["child"], "outside", "inside")).toThrow();
+  panel.blocks.moveBlocks(["child"], "boundary", "inside");
+  expect(panel.blocks.getRootIds()).toEqual(["parent", "child"]);
+  editor.history.undo();
+  expect(editor.blocks.getChildIds("parent")).toEqual(["child"]);
+  await editor.destroy();
+});

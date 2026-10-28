@@ -1,7 +1,13 @@
+import { CanvasEditorProvider } from "@chulane/rivto-edgeless/react";
+import { EdgelessEditor } from "./edgeless-editor";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
-import { createContext, useContext, useMemo, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 import { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
+
+/** Independent canvas shared by the surface and its editor adapters. */
+const CanvasContext = createContext<CanvasApi | null>(null);
 
 /** Surface-local tool instances shared by all operation and preview consumers. */
 const ToolsContext = createContext<EdgelessToolContext | null>(null);
@@ -10,7 +16,7 @@ const ToolsContext = createContext<EdgelessToolContext | null>(null);
 export const EdgelessCreationDefaultsContext = createContext<EdgelessCreationDefaults | null>(null);
 
 /**
- * Owns tool instances, document operations and creation defaults for one edgeless representation.
+ * Owns canvas state, tool instances, document operations and creation defaults for one edgeless representation.
  *
  * Construction installs no external subscriptions. The provider observes registrations
  * and document changes after mount, and disposes tools and subscriptions on cleanup.
@@ -22,14 +28,18 @@ export const EdgelessCreationDefaultsContext = createContext<EdgelessCreationDef
  */
 export function EdgelessToolsProvider({ children }: { readonly children: ReactNode }) {
   const panel = useReactPanel();
-  const tools = useMemo(() => new EdgelessToolContext(panel), [panel]);
-  useEffect(() => tools.observeChanges(), [tools]);
+  const editor = useMemo(() => new EdgelessEditor(panel), [panel]);
+  const tools = editor.tools;
   return (
-    <ToolsContext.Provider value={tools}>
-      <EdgelessCreationDefaultsContext.Provider value={tools.defaults}>
-        {children}
-      </EdgelessCreationDefaultsContext.Provider>
-    </ToolsContext.Provider>
+    <CanvasEditorProvider editor={editor}>
+      <CanvasContext.Provider value={editor.canvas}>
+        <ToolsContext.Provider value={tools}>
+          <EdgelessCreationDefaultsContext.Provider value={tools.defaults}>
+            {children}
+          </EdgelessCreationDefaultsContext.Provider>
+        </ToolsContext.Provider>
+      </CanvasContext.Provider>
+    </CanvasEditorProvider>
   );
 }
 
@@ -59,4 +69,12 @@ export function useEdgelessTools(): EdgelessToolContext {
     throw new Error("Tools require an EdgelessSurface");
   }
   return tools;
+}
+
+/**
+ * Reads the independent canvas owned by this edgeless occurrence.
+ * @returns Shared canvas, or null outside an edgeless surface.
+ */
+export function useEdgelessCanvas(): CanvasApi | null {
+  return useContext(CanvasContext);
 }

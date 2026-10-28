@@ -553,16 +553,19 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Moves several sibling subtree roots as one undo item.
+   * Moves several subtree roots, including roots from different parents, as one undo item.
    *
-   * Descendant IDs of other supplied roots are dropped and remaining roots must
-   * share a parent. Document storage `moveBlocks` is the lower-level placement
-   * batch and does not apply those grouping rules.
+   * Every supplied ID must exist. Descendant IDs of other supplied roots are dropped
+   * and remaining roots follow canonical document order, regardless of their parents.
+   * Document storage `moveBlocks` is the lower-level placement batch and does not
+   * apply those grouping rules. A null target retains each root's current parent
+   * and prepends within that sibling list; it does not mean the document root.
    *
-   * @param ids - Ordered block identifiers to move together.
-   * @param targetId - Destination, or null for the sibling-list start.
-   * @param position - Placement before, after, or inside the destination.
-   * @returns No value.
+   * @param ids - Block identifiers to move together, in any order; duplicates are ignored.
+   * @param targetId - Destination, or null for each source sibling-list start.
+   * @param position - Placement before, after, or inside the destination; defaults to after.
+   * @returns The validated roots have moved as one undoable update, or no change for an empty group.
+   * @throws Before writes when any source or destination is missing or the destination lies in a selected subtree.
    */
   moveBlocks(
     ids: string[],
@@ -718,27 +721,40 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Moves grouped sibling roots in visible order, carrying descendants once.
-   * @param ids - Candidate block identifiers in arbitrary order.
-   * @param targetId - Destination anchor, or null for sibling-list start.
+   * Moves grouped roots in canonical document order, carrying selected descendants once.
+   *
+   * Sources are checked before filtering so a stale selection cannot partially move.
+   * Destination ancestry is checked without traversing each selected subtree.
+   *
+   * @param ids - Candidate block identifiers in arbitrary order and from any parents.
+   * @param targetId - Destination anchor, or null for each source sibling-list start.
    * @param position - Placement relative to the anchor.
-   * @returns No value.
+   * @returns The complete validated group has moved in one history batch.
+   * @throws Before writes if a source is missing or the destination lies within a selected subtree.
    */
   private moveGroupedBlocks(
     ids: string[],
     targetId: string | null,
     position: "before" | "after" | "inside",
   ): void {
+    for (const id of ids) {
+      if (!this.getBlockNode(id)) {
+        throw new Error(`Block ${id} not found`);
+      }
+    }
     const roots = this.topLevelRoots(ids);
     if (!roots.length) {
       return;
     }
-    const parentId = this.getParentId(roots[0]!);
-    if (roots.some((id) => this.getParentId(id) !== parentId)) {
-      throw new Error("Moved blocks must share the same parent");
-    }
-    if (targetId !== null && roots.some((id) => this.collectTreeIds(id).includes(targetId))) {
-      throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
+    const selected = new Set(roots);
+    for (
+      let ancestor = targetId;
+      ancestor !== null;
+      ancestor = this.getParentId(ancestor) ?? null
+    ) {
+      if (selected.has(ancestor)) {
+        throw new Error(`Cannot move blocks relative to their descendant ${targetId}`);
+      }
     }
     // Inserting repeatedly after the same anchor reverses order unless the
     // grouped roots are processed backwards. Prepending has the same rule.
@@ -902,21 +918,16 @@ export class BlockManager implements BlockManagerApi {
       return this.getBlockNode(ids[0]!) ? ids : [];
     }
     const listed = new Set(ids);
-    return this.getRootIds()
-      .flatMap((id) => this.collectTreeIds(id))
-      .filter((id) => {
-        if (!listed.has(id)) {
+    return this.getOrderedIds(listed).filter((id) => {
+      let parentId = this.getParentId(id);
+      while (parentId) {
+        if (listed.has(parentId)) {
           return false;
         }
-        let parentId = this.getParentId(id);
-        while (parentId) {
-          if (listed.has(parentId)) {
-            return false;
-          }
-          parentId = this.getParentId(parentId);
-        }
-        return true;
-      });
+        parentId = this.getParentId(parentId);
+      }
+      return true;
+    });
   }
 
   /**

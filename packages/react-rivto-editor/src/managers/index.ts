@@ -6,3 +6,7 @@ export * from "./selection";
 export * from "./slash";
 export * from "./surfaces";
 export * from "./keyboard";
+export * from "../blocks/block-dom";
+export { PanelDOM } from "../panels/panel-dom";
+export * from "../dom/dom-nodes";
+export type { PanelRegistration } from "../panels/types";

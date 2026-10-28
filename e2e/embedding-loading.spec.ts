@@ -74,7 +74,10 @@ async function insertReference(page: Page, scenario: Scenario): Promise<void> {
       }
       return acquire(id, options);
     };
-    editor.getEditor("references")!.blocks.insertBlock({
+    const references = editor.getEditor("references")!;
+    references.elements.removeElements(references.elements.getRootIds());
+    references.blocks.removeBlocks(references.blocks.getRootIds());
+    references.blocks.insertBlock({
       id: "load-embedding",
       type: "embedding",
       props: { targetDocumentId: "load-source", targetBlockId: "load-target" },
@@ -89,17 +92,6 @@ async function insertReference(page: Page, scenario: Scenario): Promise<void> {
  * @returns Completion after switching the reference pane to edgeless mode.
  */
 async function showEdgelessReference(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const editor = (
-      window as unknown as { __rivtoDocuments: { editor: EditorStorage } }
-    ).__rivtoDocuments.editor.getEditor("references")!;
-    editor.elements.insertElement({
-      type: "block",
-      zIndex: 10,
-      frame: { x: 20, y: 20, width: 600, height: 300 },
-      props: { startBlockId: "load-embedding", endBlockId: "load-embedding" },
-    });
-  });
   await page
     .locator('[data-document-pane="references"]')
     .getByRole("button", { name: "Toggle mode", exact: true })
@@ -115,7 +107,9 @@ for (const mode of ["page", "edgeless"] as const) {
       if (mode === "edgeless") {
         await showEdgelessReference(page);
       }
-      const embedding = page.locator('[data-block-id="load-embedding"]');
+      const embedding = page.locator(
+        '[data-document-pane="references"] [data-block-id="load-embedding"]',
+      );
       await expect(embedding.getByRole("status")).toHaveText(
         scenario === "missing"
           ? "Referenced block is unavailable."
@@ -179,6 +173,7 @@ for (const mode of ["page", "edgeless"] as const) {
         )
         .toBeGreaterThan(before);
       await expect(source).toHaveText("Keep source history");
+      await page.keyboard.press("Escape");
       expect(
         await page.evaluate(() => {
           const editor = (
@@ -192,6 +187,8 @@ for (const mode of ["page", "edgeless"] as const) {
         }),
       ).toBe(true);
       await expect(source).toHaveText("Loaded source");
+      await embedding.hover();
+      await embedding.getByRole("button", { name: "Edit embedding", exact: true }).click();
       await page.evaluate(() => {
         (
           window as unknown as { __embeddingLoadTest: LoadingInspection }
@@ -210,7 +207,9 @@ for (const mode of ["page", "edgeless"] as const) {
     if (mode === "edgeless") {
       await showEdgelessReference(page);
     }
-    const embedding = page.locator('[data-block-id="load-embedding"]');
+    const embedding = page.locator(
+      '[data-document-pane="references"] [data-block-id="load-embedding"]',
+    );
     const status = embedding.getByRole("status");
     await expect(status).toHaveText("Loading embedded block…");
     await status.scrollIntoViewIfNeeded();
@@ -288,7 +287,9 @@ for (const scenario of ["lookup-error", "missing", "failure"] as const) {
     page,
   }) => {
     await insertReference(page, scenario);
-    const embedding = page.locator('[data-block-id="load-embedding"]');
+    const embedding = page.locator(
+      '[data-document-pane="references"] [data-block-id="load-embedding"]',
+    );
     await expect(embedding.getByRole("status")).toHaveText(
       scenario === "missing"
         ? "Referenced block is unavailable."

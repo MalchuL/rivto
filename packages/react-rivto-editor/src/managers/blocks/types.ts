@@ -1,28 +1,23 @@
+import type { BlockLayout } from "@chulane/rivto-page";
+import { BLOCK_TEXT_METADATA_KEY } from "../selection/block-text-metadata";
 import type { BlockDefinition } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
 import type { BlockBehavior } from "../../block-behaviors/types";
 import type { BlockClipboardConverter } from "../clipboard/types";
-import type {
-  BlockDragOptions,
-  PAGE_DRAG_METADATA_KEY,
-} from "../../extensions/block-drag/block-drag-options";
-import type {
-  BlockHandleMetadata,
-  BLOCK_HANDLE_METADATA_KEY,
-} from "../../extensions/built-ins/block-handle/metadata";
 
 /**
  * Runtime annotations interpreted only by their owning integrations.
  *
- * Current drag and handle namespaces use their extension option types. Other
- * keys accept opaque values through the record intersection. These annotations
+ * The current text namespace uses its extension option type. Other namespaces
+ * retain their own contracts and accept opaque values through the record
+ * intersection. These annotations
  * do not install their owning extensions or add runtime validation.
  */
 export type ReactBlockDefinitionMetadata = Readonly<
   {
-    [PAGE_DRAG_METADATA_KEY]?: BlockDragOptions;
-    [BLOCK_HANDLE_METADATA_KEY]?: BlockHandleMetadata;
+    /** Whether this renderer exposes persisted content as a selectable text range, including empty text. */
+    [BLOCK_TEXT_METADATA_KEY]?: boolean;
   } & Record<string, unknown>
 >;
 
@@ -54,6 +49,8 @@ export interface ReactBlockRegistration {
   readonly definition: ReactBlockDefinition;
   /** React content renderer selected by all registered surfaces. */
   readonly render: BlockRenderer;
+  /** Optional Page layout composing shared primitives; content renderers never traverse descendants. */
+  readonly layout?: BlockLayout;
   /**
    * Editing and movement integration owned together with this block definition.
    *

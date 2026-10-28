@@ -24,12 +24,13 @@
 }
 
 /* Keep root controls anchored to the inline board wrapper. */
-.page-surface > .rivto-block-modal > .page-block {
+.page-surface > .rivto-block-modal > .rivto-block {
   position: relative;
 }
 
 .rivto-block-modal-content[data-slot="dialog-content"] {
-  @apply translate-x-0 translate-y-0;
+  /* Even a zero translation would offset Page's fixed drag feedback. */
+  translate: none;
   position: fixed;
   inset: 3vh 3vw;
   display: block;
@@ -59,12 +60,5 @@
   overflow: visible;
 }
 
-/* Viewport-wide hover targets must not enlarge the dialog's scroll bounds. */
-.rivto-block-modal-content .page-block-row::before {
-  inset-inline: 0;
-}
-
-.rivto-block-modal-content [data-block-handle-container]::before,
-.rivto-block-modal-content [data-block-handle-container]::after {
-  width: 24px;
-}
+/* Row hover uses Page's native pointer resolver rather than wide pseudo-elements,
+ * so it does not enlarge dialog scroll bounds or require modal-specific hit strips. */

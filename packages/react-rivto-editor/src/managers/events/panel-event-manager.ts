@@ -1,23 +1,21 @@
 import type { PanelEventsApi } from "./api";
-import type { PanelRegistry } from "./panel-registry";
 import type { EventManager } from "./event-manager";
-import type { PanelRegistration } from "./types";
-import type { ReactPanelApi } from "../../panels/types";
+import type { PanelRegistration } from "../../panels/types";
 
 /** Local operations over the document's shared registrations. */
 export class PanelEventManager implements PanelEventsApi {
   /**
-   * Binds event registrations and DOM operations to one mounted occurrence.
+   * Binds event registrations to one mounted occurrence.
+   *
    * Shared listener state stays on the supplied document manager; the panel owns local disposers.
+   * Registrations retain this panel even when another panel gains focus.
+   *
    * @param shared - Document event registrations and native listener transport.
    * @param owner - Stable occurrence identity, current DOM root, and registration cleanup.
-   * @param panels - Mounted roots and their rendered surface kinds.
-   * @returns Event methods that retain this panel even when another panel gains focus.
    */
   constructor(
-    private readonly shared: EventManager,
-    private readonly owner: PanelRegistration & Pick<ReactPanelApi, "mode">,
-    private readonly panels: PanelRegistry,
+    private readonly shared: Pick<EventManager, "register" | "delete">,
+    private readonly owner: PanelRegistration,
   ) {}
   /**
    * Registers a DOM event handler scoped to this panel and owned by its cleanup lifecycle.
@@ -37,29 +35,5 @@ export class PanelEventManager implements PanelEventsApi {
    */
   delete(id: string): boolean {
     return this.shared.delete(`${this.owner.id}:${id}`);
-  }
-  /**
-   * Reads this panel's mounted surface root.
-   *
-   * @returns Root element, or null when unmounted.
-   */
-  getRoot(): HTMLElement | null {
-    return this.owner.getRoot();
-  }
-  /**
-   * Publishes this panel's current root element, or clears it on unmount.
-   *
-   * @param root - Mounted surface root, or null when clearing its registration.
-   */
-  setRoot(root: HTMLElement | null): void {
-    this.owner.setRoot(root);
-  }
-  /**
-   * Reads the mounted surface's mode, falling back to the panel's declared mode.
-   *
-   * @returns Current block or edgeless surface type.
-   */
-  getSurfaceType() {
-    return this.getRoot() ? this.panels.getSurfaceType(this.getRoot()) : this.owner.mode.get();
   }
 }

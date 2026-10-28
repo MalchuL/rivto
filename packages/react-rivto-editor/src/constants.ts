@@ -5,10 +5,10 @@
  *
  * @module
  */
-/** Stable DOM attribute placed on every BlockView container. */
+/** Stable DOM attribute placed on every block shell container. */
 export const BLOCK_ID_ATTRIBUTE = "data-block-id";
 
-/** CSS selector matching every BlockView container. */
+/** CSS selector matching every block shell container. */
 export const BLOCK_ID_SELECTOR = `[${BLOCK_ID_ATTRIBUTE}]`;
 
 /** Stable DOM attribute placed on every plain-text editable block element. */
@@ -68,7 +68,10 @@ export const PREVENT_TEXT_EDITING_SELECTOR = `[${PREVENT_TEXT_EDITING_ATTRIBUTE}
  * Pointer selection uses that split so a hit in a wrapping gap does not
  * promote the parent.
  */
-export const BLOCK_ROW_CLASS = "page-block-row";
+export const BLOCK_ROW_CLASS = "rivto-block-row";
+
+/** Own-row selector shared by Page and the retained Edgeless block tree. */
+export const BLOCK_ROW_SELECTOR = ".rivto-block-row";
 
 /**
  * Marks a control that owns clicks and pointer input inside a block.

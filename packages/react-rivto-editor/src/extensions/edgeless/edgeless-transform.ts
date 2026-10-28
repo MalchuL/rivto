@@ -1,3 +1,5 @@
+import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import { flushSync } from "react-dom";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 import { createElement, useContext, useLayoutEffect, useMemo } from "react";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
@@ -172,6 +174,19 @@ export class EdgelessTransformController {
     root: HTMLElement,
     ids: readonly string[],
   ): HTMLElement[] {
+    const leaves = new Set(this.getMoveTargetIds(reactPanel, ids));
+    return [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].filter((host) =>
+      leaves.delete(host.dataset.edgelessObjectId!),
+    );
+  }
+
+  /**
+   * Expands selected groups into concrete leaf identities without requiring mounted DOM.
+   * @param reactPanel - Occurrence supplying the selected element tree.
+   * @param ids - Selected element or group IDs in selection order.
+   * @returns Unique existing leaf IDs, including offscreen participants.
+   */
+  getMoveTargetIds(reactPanel: ReactPanelApi, ids: readonly string[]): string[] {
     const leaves = new Set<string>();
     const visit = (id: string) => {
       const element = reactPanel.elements.getElementNode(id);
@@ -185,9 +200,7 @@ export class EdgelessTransformController {
       }
     };
     ids.forEach(visit);
-    return [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].filter((host) =>
-      leaves.delete(host.dataset.edgelessObjectId!),
-    );
+    return [...leaves];
   }
 
   /**
@@ -199,6 +212,8 @@ export class EdgelessTransformController {
     return this.reactPanel === reactPanel && this.start?.kind === "move";
   }
 
+  private releaseCanvasPins?: () => void;
+  private sourceRotations = new Map<string, number>();
   private start: TransformStart | null = null;
   private previewTargets: HTMLElement[] | null = null;
   private hiddenConnectors: HTMLElement[] = [];
@@ -228,7 +243,7 @@ export class EdgelessTransformController {
    * No document writes occur until finishControls commits the final geometry.
    * @param reactPanel - View owning the selected element and its Panel coordinates.
    * @param root - Mounted edgeless viewport containing the target and connector previews.
-   * @param id - Selected element or group ID; missing elements and standalone connectors are rejected.
+   * @param ids - Selected element or group IDs; missing elements and standalone connectors are rejected.
    * Group children are expanded recursively without changing their stored parentage.
    * @param kind - Move, size change, or rotation requested by a library control.
    * @param stop - Stops Moveable's pointer tracking if Escape cancels the gesture.
@@ -237,7 +252,7 @@ export class EdgelessTransformController {
   beginControls(
     reactPanel: ReactPanelApi,
     root: HTMLElement,
-    id: string,
+    ids: readonly string[],
     kind: "move" | "resize" | "rotate",
     stop: () => void,
   ): boolean {
@@ -245,13 +260,24 @@ export class EdgelessTransformController {
       this.finish(false);
     }
     this.reactPanel = reactPanel;
-    const element = this.elements.getElementNode(id);
-    if (!element || this.reactEditor.elementTypes.get(element.type)?.behavior?.absoluteGeometry) {
+    if (
+      !ids.length ||
+      ids.some((id) => {
+        const element = this.elements.getElementNode(id);
+        return (
+          !element || this.reactEditor.elementTypes.get(element.type)?.behavior?.absoluteGeometry
+        );
+      })
+    ) {
       return false;
     }
-    const moving = new Set(this.leaves([id]));
+    const moving = new Set(this.leaves(ids));
+    this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
+    flushSync(() => {
+      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+    });
     const frames = new Map<string, EditorElementFrame>();
-    [id, ...moving].forEach((item) => {
+    [...ids, ...moving].forEach((item) => {
       const frame = this.transformFrame(item);
       if (frame) {
         frames.set(item, { ...frame });
@@ -266,25 +292,25 @@ export class EdgelessTransformController {
       groupRotations.set(item, this.rotation(item));
       node.childIds.forEach(visitGroups);
     };
-    visitGroups(id);
+    ids.forEach(visitGroups);
     this.start = {
       groupRotations,
       root,
       kind,
       stopMoveable: stop,
-      ids: [id],
+      ids: [...ids],
       dx: 0,
       dy: 0,
       moved: false,
       frames,
       moving,
-      attachedConnectors: this.connectorTargets(moving, new Set([id]), kind),
+      attachedConnectors: this.connectorTargets(moving, new Set(ids), kind),
     };
     root.dataset.transforming = kind;
     root.focus({ preventScroll: true });
     // Moveable previews write size and transform while left/top stay fixed; lock
     // those styles so React cannot clobber opposite-corner-stable geometry mid-drag.
-    this.lockGeometry(root, [id]);
+    this.lockGeometry(root, ids);
     return true;
   }
 
@@ -402,6 +428,28 @@ export class EdgelessTransformController {
   /** Mounts per-view Moveable controls and installs move handlers; destruction cancels previews. */
   setup(reactPanel: ReactPanelApi): () => void {
     const disposers: Array<() => void> = [];
+    disposers.push(
+      reactPanel.editor.subscribe(() => {
+        const active = this.start;
+        if (!active) {
+          return;
+        }
+        for (const [id, original] of active.frames) {
+          const current = this.transformFrame(id);
+          if (
+            !current ||
+            current.x !== original.x ||
+            current.y !== original.y ||
+            current.width !== original.width ||
+            current.height !== original.height ||
+            (this.sourceRotations.has(id) && this.rotation(id) !== this.sourceRotations.get(id))
+          ) {
+            this.finish(false);
+            break;
+          }
+        }
+      }),
+    );
     // Cancelling pointerdown suppresses the mouse events that Moveable tracks.
     disposers.push(
       reactPanel.events.register(
@@ -653,7 +701,7 @@ export class EdgelessTransformController {
    * @returns Connected overlay svg, or null when the plane is missing.
    */
   private ensureOverlay = (root: HTMLElement) => {
-    const plane = root.querySelector<HTMLElement>("[data-edgeless-plane]");
+    const plane = CanvasViewport.forElement(root)?.layers.get()?.plane;
     if (!plane) {
       return null;
     }
@@ -992,6 +1040,8 @@ export class EdgelessTransformController {
     }
     this.clearPreview(!commit);
     this.start = null;
+    this.releaseCanvasPins?.();
+    this.releaseCanvasPins = undefined;
     if (!commit) {
       active.stopMoveable?.();
       return true;
@@ -1181,6 +1231,10 @@ export class EdgelessTransformController {
       return false;
     }
     const kind = "move" as const;
+    this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
+    flushSync(() => {
+      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+    });
     const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
     this.start = {
       root,

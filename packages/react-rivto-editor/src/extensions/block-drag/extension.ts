@@ -7,7 +7,6 @@
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
-import { PAGE_DRAG_METADATA_KEY } from "./block-drag-options";
 import { registerPageDrag } from "./register";
 import type { PageDragExtensionOptions } from "./types";
 
@@ -22,7 +21,7 @@ export type PageDragOptions = Omit<PageDragExtensionOptions, "children">;
  */
 export function pageDragExtension(options: PageDragOptions = {}): ReactEditorExtension {
   return {
-    id: PAGE_DRAG_METADATA_KEY,
+    id: "drag.page",
     setup: (reactEditor) => registerPageDrag(reactEditor, options),
   };
 }

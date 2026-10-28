@@ -44,9 +44,16 @@ it("releases its projection when constructor subscription setup fails", async ()
   const runtime = createReactEditor({ editor: core });
   const mode = new ModeManager();
   const release = jestApi.fn();
-  jestApi.spyOn(runtime.blockElements, "maintainBlockCards").mockReturnValue(release);
+  let projectionAcquired = false;
+  jestApi.spyOn(runtime.blockElements, "maintainBlockCards").mockImplementation(() => {
+    projectionAcquired = true;
+    return release;
+  });
   jestApi.spyOn(mode, "subscribe").mockImplementation(() => {
-    throw new Error("Expected subscription failure");
+    if (projectionAcquired) {
+      throw new Error("Expected subscription failure");
+    }
+    return () => undefined;
   });
   expect(() => new ReactPanel(runtime, new ChildrenPanel(core), { mode })).toThrow(
     "Expected subscription failure",

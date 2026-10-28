@@ -122,11 +122,10 @@ export class SurfaceManager implements SurfacesApi {
   registerBlockWrapper(mode: EditorMode, wrapper: BlockWrapperComponent): () => void {
     this.registrations.assertActive();
     const wrappers = this.blockWrappers.get(mode) ?? [];
-    const registration = { wrapper };
+    const registration = Object.freeze({ wrapper });
     wrappers.push(registration);
     this.blockWrappers.set(mode, wrappers);
-    this.store.changed();
-    return this.registrations.registerCleanup(() => {
+    const dispose = this.registrations.registerCleanup(() => {
       const current = this.blockWrappers.get(mode);
       if (!current) {
         return;
@@ -143,6 +142,20 @@ export class SurfaceManager implements SurfacesApi {
       }
       this.store.changed();
     });
+    try {
+      this.store.changed();
+    } catch (error) {
+      try {
+        dispose();
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Block wrapper publication and rollback failed",
+        );
+      }
+      throw error;
+    }
+    return dispose;
   }
 
   /**
@@ -152,6 +165,16 @@ export class SurfaceManager implements SurfacesApi {
    */
   getBlockWrappers(mode: EditorMode): readonly BlockWrapperComponent[] {
     return (this.blockWrappers.get(mode) ?? []).map(({ wrapper }) => wrapper);
+  }
+
+  /**
+   * Reads decorator entries without losing their individual registration identities.
+   *
+   * @param mode - Surface mode whose ordered decorators are requested.
+   * @returns Defensive list of immutable entries, including repeated components.
+   */
+  getBlockWrapperRegistrations(mode: EditorMode): readonly Readonly<BlockWrapperRegistration>[] {
+    return [...(this.blockWrappers.get(mode) ?? [])];
   }
 
   /**
@@ -166,11 +189,10 @@ export class SurfaceManager implements SurfacesApi {
       registration.priority,
       BLOCK_SLOT_POSITION_SET,
     );
-    const entry = { ...registration, id: this.nextSlotId++ };
+    const entry = Object.freeze({ ...registration, id: this.nextSlotId++ });
     this.blockSlots.push(entry);
     this.blockSlots.sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0));
-    this.store.changed();
-    return this.registrations.registerCleanup(() => {
+    const dispose = this.registrations.registerCleanup(() => {
       const index = this.blockSlots.indexOf(entry);
       if (index < 0) {
         return;
@@ -178,6 +200,20 @@ export class SurfaceManager implements SurfacesApi {
       this.blockSlots.splice(index, 1);
       this.store.changed();
     });
+    try {
+      this.store.changed();
+    } catch (error) {
+      try {
+        dispose();
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Block slot publication and rollback failed",
+        );
+      }
+      throw error;
+    }
+    return dispose;
   }
 
   /**
@@ -192,6 +228,18 @@ export class SurfaceManager implements SurfacesApi {
     props: BlockSlotProps,
   ): readonly ComponentType<BlockSlotProps>[] {
     return this.getBlockSlotEntries(position, props).map(({ component }) => component);
+  }
+
+  /**
+   * Reads installed block contributions before owner-specific filtering.
+   *
+   * Entry identity survives adjacent registrations so occurrence adapters retain
+   * mounted components when unrelated extensions change.
+   *
+   * @returns A defensive priority-ordered list of immutable installed entries.
+   */
+  getBlockSlotRegistrations(): readonly Readonly<BlockSlotRegistration>[] {
+    return [...this.blockSlots];
   }
 
   /**

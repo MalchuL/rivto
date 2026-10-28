@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test } from "@playwright/test";
 
 test("renders today and yesterday as one seamless two-document journal", async ({ page }) => {
@@ -21,8 +22,8 @@ test("renders today and yesterday as one seamless two-document journal", async (
   await expect(documents.locator(":scope > .page-surface")).toHaveCount(2);
 
   await documents.nth(1).getByRole("button", { name: "Add block", exact: true }).click();
-  await expect(documents.nth(1).locator(".page-surface > [data-block-id]")).toHaveCount(1);
-  await expect(documents.nth(0).locator(".page-surface > [data-block-id]")).not.toHaveCount(0);
+  await expect(documents.nth(1).locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).toHaveCount(1);
+  await expect(documents.nth(0).locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)).not.toHaveCount(0);
 });
 
 test("moves the caret across journal editors at page boundaries", async ({ page }) => {

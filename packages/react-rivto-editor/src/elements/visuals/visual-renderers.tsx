@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "./utils/geometry";
 import { ConnectorEndpoints, useConnectorPreview } from "./connector-endpoints";
+import { drawingPath } from "./utils/drawing-path";
 import { RectangleShape } from "./rectangle-shape";
 
 /** Shared label control; editing state belongs to the receiving canvas host. */
@@ -39,14 +40,16 @@ function labelControl({
 
 /**
  * Built-in figure content; placement, selection and geometry remain owned by the common element host.
+ *
+ * Drawing ink and its invisible selection path use the same midpoint curves as
+ * the live drawing preview, derived from the stored samples without changing them.
+ *
  * @param props - Current element data, preview flag and shared panel interaction state.
  * @returns Registered content inside the surface-owned host; creation previews never commit label edits.
  */
 export function DrawingContent(props: ElementRenderProps) {
   const visual = { ...props.element.props, frame: props.element.frame } as unknown as DrawingVisual;
-  const d = visual.points
-    .map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`)
-    .join(" ");
+  const d = drawingPath(visual.points);
   return (
     <svg
       className="edgeless-drawing"

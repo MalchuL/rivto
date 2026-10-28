@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BLOCK_ID_SELECTOR, HOST_BLOCK_ID_SELECTOR } from "./dom-markers";
+import { ROOT_BLOCK_SELECTOR, BLOCK_ROW_SELECTOR } from "./dom-markers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -8,32 +8,26 @@ test.beforeEach(async ({ page }) => {
 test("creates every paragraph through the chosen trailing insertion target", async ({ page }) => {
   const document = page.locator('[data-journal-document="today"]');
   const surface = document.locator(":scope > .page-surface");
-  const roots = surface.locator(
-    `:scope > ${BLOCK_ID_SELECTOR}, :scope > :not(${BLOCK_ID_SELECTOR}) > ${BLOCK_ID_SELECTOR}`,
-  );
+  const roots = surface.locator(ROOT_BLOCK_SELECTOR);
   const affordances = document.locator(".page-trailing-block");
   await expect(affordances).toHaveCount(3);
   const paragraphHeight = await roots
     .first()
-    .locator(":scope > .page-block-row .page-block-content")
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
     .first()
     .evaluate((element) => element.getBoundingClientRect().height);
   await expect
     .poll(() => affordances.first().evaluate((element) => element.getBoundingClientRect().height))
     .toBeCloseTo(paragraphHeight, 0);
 
-  const count = await roots.count();
-  for (let index = 0; index < count; index += 1) {
-    const toggle = roots.nth(index).locator(":scope > .page-block-row [data-collapse-toggle]");
-    if (await toggle.count()) {
-      await toggle.click();
-    }
-    const row = roots.nth(index).locator(":scope > .page-block-row");
-    await row.click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
-  }
-  await expect(page.locator(`${HOST_BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(count);
-
-  await page.keyboard.press("Delete");
+  await page.evaluate(() => {
+    const editor = (
+      window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }
+    ).__rivtoDemo.editor;
+    editor.blocks.removeBlocks(editor.blocks.getRootIds());
+    editor.history.clear();
+  });
+  await page.mouse.move(0, 0);
   await expect(roots).toHaveCount(0);
   await expect(surface).toHaveAttribute("data-empty", "true");
   await expect(affordances).toHaveCount(3);

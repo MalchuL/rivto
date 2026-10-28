@@ -26,7 +26,18 @@ export interface ExtensionsApi {
    * @returns A defensive list of components in registration order for the requested scope.
    */
   getComponents(position?: ExtensionMountPosition): readonly ExtensionComponent[];
-  /** Installs one extension after creation and returns its disposer. */
+  /**
+   * Installs one extension after creation and returns its disposer.
+   *
+   * Setup is synchronous. Registrations and nested installations created during
+   * setup belong to this installation; failed setup rolls them back. Removal runs
+   * custom cleanup before captured resources, attempting all releases despite failures.
+   *
+   * @param extension - Unique nonempty identity and synchronous setup callback.
+   * @returns Idempotent disposer; the installation ID is released before cleanup runs.
+   * @throws If inactive, the ID is invalid/duplicate, setup returns invalid cleanup,
+   * or setup/rollback fails. Removal throws cleanup failures; multiple failures are aggregated.
+   */
   install(extension: ReactEditorExtension): () => void;
   readonly revision: number;
   /**

@@ -3,11 +3,12 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ModeManager } from "@chulane/rivto";
+import { ModeManager, type EditorMode } from "@chulane/rivto";
 import type { Panel } from "./panel-types";
 import { EditorPanel, type ReactEditorApi, type EditorPanelProps } from "@chulane/rivto-react";
 
@@ -25,6 +26,31 @@ interface DemoPanel {
   mode: ModeManager;
 }
 
+interface DemoEditorPanelsProps extends Omit<
+  EditorPanelProps,
+  "editor" | "panel" | "mode" | "children"
+> {
+  editor: ReactEditorApi;
+  documentTitle: ReactNode;
+  /**
+   * Places navigation and the heading within the active panel chrome.
+   *
+   * @param header - Breadcrumb navigation and the current page heading.
+   * @returns Toolbar, supplied header, and editor surface in display order.
+   */
+  children: (header: ReactNode) => ReactNode;
+  /**
+   * Publishes the active panel's mode and document scope before browser paint.
+   *
+   * The subscription follows the active panel and ends on replacement or unmount.
+   *
+   * @param mode - Current mode of the active panel.
+   * @param hasOpenBlock - Whether navigation displays a block rather than the document.
+   * @returns Updates the caller's presentation state.
+   */
+  onPresentationChange: (mode: EditorMode, hasOpenBlock: boolean) => void;
+}
+
 /**
  * Application navigation example with a separate element group for each opened block.
  * Panel records and modes are retained while the demo is mounted; element groups
@@ -37,24 +63,16 @@ interface DemoPanel {
  * @param props.editor - Editor shared by the retained panel records.
  * @param props.documentTitle - Journal date displayed as the document title and root breadcrumb.
  * @param props.children - Renders panel content with navigation and its current heading.
+ * @param props.onPresentationChange - Receives the active panel mode and scope before paint.
  * @returns Breadcrumb navigation and active panel with handle-driven block opening.
  */
 export function DemoEditorPanels({
   editor,
   children,
   documentTitle,
+  onPresentationChange,
   ...props
-}: Omit<EditorPanelProps, "editor" | "panel" | "mode" | "children"> & {
-  editor: ReactEditorApi;
-  documentTitle: ReactNode;
-  /**
-   * Places navigation and the heading within the active panel chrome.
-   *
-   * @param header - Breadcrumb navigation and the current page heading.
-   * @returns Toolbar, supplied header, and editor surface in display order.
-   */
-  children: (header: ReactNode) => ReactNode;
-}) {
+}: DemoEditorPanelsProps) {
   const [state, setState] = useState(() => {
     const root: DemoPanel = {
       panel: {
@@ -102,6 +120,18 @@ export function DemoEditorPanels({
     [editor, state],
   );
   const { active } = state;
+  useLayoutEffect(() => {
+    /**
+     * Copies the retained panel's current mode into its parent's presentation.
+     *
+     * @returns Publishes mode and scope without reading the rendered subtree.
+     */
+    const publish = () => {
+      onPresentationChange(active.mode.get(), active.panel.rootBlockId !== null);
+    };
+    publish();
+    return active.mode.subscribe(publish);
+  }, [active, onPresentationChange]);
   const blockId = active.panel.rootBlockId;
   const path = usePanelPath(editor, blockId);
   useEffect(() => {
@@ -139,7 +169,7 @@ export function DemoEditorPanels({
           </BreadcrumbList>
         </Breadcrumb>
       )}
-      <h1 className="journal-date">
+      <h1 className="journal-date" data-document-title={!blockId || undefined}>
         {blockId ? <PanelTitle editor={editor} blockId={blockId} /> : documentTitle}
       </h1>
     </header>

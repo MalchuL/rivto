@@ -1,5 +1,3 @@
-import { BLOCK_HANDLE_METADATA_KEY } from "../../extensions/built-ins/block-handle/metadata";
-import { PAGE_DRAG_METADATA_KEY } from "../../extensions/block-drag/block-drag-options";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { z } from "zod";
 import type { ReactBlockDefinitionMetadata } from "./types";
@@ -9,8 +7,7 @@ test("registers the exact complete definition and publishes metadata through cor
   const panel = createTestReactEditor({ editor: core });
   const opaque = new Map([["owner", "extension"]]);
   const metadata = {
-    [PAGE_DRAG_METADATA_KEY]: { fixed: true, dropAxis: "horizontal" },
-    [BLOCK_HANDLE_METADATA_KEY]: { showOnContainerHover: true },
+    ["test.geometry"]: { fixed: true, dropAxis: "horizontal" },
     custom: { values: [1, 2], opaque },
   } satisfies ReactBlockDefinitionMetadata;
   const definition = { type: "complete", metadata };

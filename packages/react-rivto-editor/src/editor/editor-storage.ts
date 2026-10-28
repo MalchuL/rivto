@@ -1,11 +1,11 @@
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
 import { createDocumentEditor } from "@chulane/rivto";
-import { BlockReferenceResolver } from "../extensions/embedding/block-reference-resolver";
+import { BlockReferenceResolver } from "@chulane/rivto";
 import { createReactEditor } from "./react-editor";
 import type { EditorAcquisition, EditorStorageOptions, Entry, ReactEditorApi } from "./types";
-import { waitWithAbort } from "./wait-with-abort";
-export type { BlockReference, BlockResolution } from "../extensions/embedding/types";
+import { waitWithAbort } from "@chulane/rivto";
+export type { BlockReference, BlockResolution } from "@chulane/rivto";
 
 /**
  * Loads documents and shares one React runtime and core editor for each document ID.
@@ -25,7 +25,7 @@ export type { BlockReference, BlockResolution } from "../extensions/embedding/ty
  */
 export class EditorStorage {
   /** Resolves embedding sources without acquiring candidate documents. */
-  readonly blockReferences: BlockReferenceResolver;
+  readonly blockReferences: BlockReferenceResolver<DocumentModel, ReactEditorApi>;
   private readonly entries = new Map<string, Entry>();
   private readonly documentListeners = new Set<() => void>();
   private destroyed = false;

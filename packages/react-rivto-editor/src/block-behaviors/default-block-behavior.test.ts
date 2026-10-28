@@ -14,7 +14,7 @@ import {
   listShortcutsExtension,
 } from "../extensions/built-ins/built-ins";
 import { createTableBlockInput, tableExtension } from "../extensions/containers/table/table";
-import { firstKeyboardTarget } from "../managers/events/selection";
+import { firstKeyboardTarget } from "../managers/keyboard/selection";
 import { createBlockBehaviorContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
 import type { BlockBehavior, BlockBehaviorAvailabilityContext, BlockMoveContext } from "./types";

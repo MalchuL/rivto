@@ -386,7 +386,7 @@ export class ClipboardManager {
     bundle = structuredClone(bundle);
     if (
       "editor" in reactPanel &&
-      reactPanel.events.getSurfaceType() !== "edgeless" &&
+      reactPanel.getSurfaceType() !== "edgeless" &&
       bundle.elements?.length
     ) {
       bundle = this.pageBundle(bundle, input.defaultBlockType);

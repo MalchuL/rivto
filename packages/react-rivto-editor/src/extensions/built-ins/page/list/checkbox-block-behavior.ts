@@ -1,4 +1,4 @@
-import type { KeyboardSelectionTarget } from "../../../../managers/events/selection";
+import type { KeyboardSelectionTarget } from "../../../../managers/keyboard/selection";
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,

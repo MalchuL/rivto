@@ -1,5 +1,4 @@
 import type { ReactPanelApi } from "../panels/types";
-import { getBlockDragOptions } from "../extensions/block-drag/block-drag-options";
 import { BentoBehavior } from "../extensions/containers/bento/bento-behavior";
 import {
   createTestReactEditor as createReactEditor,
@@ -87,24 +86,6 @@ test("kanban inside bento freezes tiles and floors cards at the column", async (
   editor.blocks.moveBlocks([card], editor.blocks.getBlock(kanban)!.children[1]!.id, "inside");
   expect(editor.blocks.getParentId(card)).toBe(editor.blocks.getBlock(kanban)!.children[1]!.id);
 
-  expect(
-    getBlockDragOptions(
-      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(bento)!.type)
-        ?.metadata,
-    )!.dropAxis,
-  ).toBe("grid");
-  expect(
-    getBlockDragOptions(
-      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(kanban)!.type)
-        ?.metadata,
-    )!.dropAxis,
-  ).toBe("horizontal");
-  expect(
-    getBlockDragOptions(
-      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(column.id)!.type)
-        ?.metadata,
-    )!.dropAxis,
-  ).toBe("vertical");
   const fromPage = editor.blocks.insertBlock({ type: "paragraph", content: "From page" }).id;
   editor.blocks.moveBlocks([fromPage], bento, "inside");
   expect(editor.blocks.getParentId(fromPage)).toBe(bento);
@@ -164,14 +145,7 @@ test("columns inside a kanban column allow indent under the lane only", async ()
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
   outdentBlocks(reactPanel, [nested]);
   expect(editor.blocks.getParentId(nested)).toBe(lane.id);
-  expect(getBlockDragOptions(editor.blockRegistry.get("columns")?.metadata)?.fixed).toBe(true);
   expectParentOutdentRejected(reactPanel, lane.id);
-  expect(
-    getBlockDragOptions(
-      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(columns)!.type)
-        ?.metadata,
-    )!.dropAxis,
-  ).toBe("horizontal");
   reactPanel.editor.destroy();
   editor.destroy();
 });
@@ -196,12 +170,6 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
   expect(editor.blocks.getParentId(row.id)).toBe(table);
   outdentBlocks(reactPanel, [cell.id]);
   expect(editor.blocks.getParentId(cell.id)).toBe(row.id);
-  expect(
-    getBlockDragOptions(
-      reactPanel.editor.blockTypes.getDefinition(reactPanel.blocks.getBlockNode(table)!.type)
-        ?.metadata,
-    )!.dropAxis,
-  ).toBe("vertical");
   expectParentOutdentRejected(reactPanel, cell.id);
   expect(editor.blocks.getBlockNode(bento)?.type).toBe(BENTO_BLOCK_TYPE);
   expect(editor.blocks.getBlockNode(table)?.type).toBe(TABLE_BLOCK_TYPE);

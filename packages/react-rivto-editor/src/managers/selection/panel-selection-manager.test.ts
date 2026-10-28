@@ -1,3 +1,4 @@
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 import {
   createCaretSelection,
   createStructuralSelection,
@@ -21,7 +22,7 @@ describe("PanelSelectionManager", () => {
       },
     }) as unknown as HTMLElement;
     let currentRoot = root;
-    reactPanel.events.getRoot = () => currentRoot;
+    jestApi.spyOn(reactPanel, "getRoot").mockImplementation(() => currentRoot);
     const cancel = reactPanel.selection.scheduleIfSelectionUnchanged(() => {});
     expect(reactPanel.selection.hasPendingSelectionCallback).toBe(true);
     currentRoot = {} as HTMLElement;
@@ -54,7 +55,7 @@ describe("PanelSelectionManager", () => {
           },
         },
       }) as unknown as HTMLElement;
-      reactPanel.events.getRoot = () => root;
+      jestApi.spyOn(reactPanel, "getRoot").mockImplementation(() => root);
       const calls: string[] = [];
       const oldCancel = reactPanel.selection.scheduleIfSelectionUnchanged(
         () => {
@@ -121,7 +122,7 @@ describe("PanelSelectionManager", () => {
         },
       },
     }) as unknown as HTMLElement;
-    reactPanel.events.getRoot = () => root;
+    jestApi.spyOn(reactPanel, "getRoot").mockImplementation(() => root);
     editor.selection.set(createCaretSelection(first, 1));
     if (change === "empty-away-and-back") {
       editor.selection.clear();

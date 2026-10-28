@@ -5,3 +5,5 @@ export * from "./keyboard-editor-event";
 export * from "./keymap";
 export * from "./shortcut";
 export type { KeyboardEditorEventInit } from "./types";
+
+export * from "./selection";

@@ -1,3 +1,4 @@
+import { BLOCK_TEXT_METADATA_KEY } from "../../../../managers/selection/block-text-metadata";
 import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Runtime registration for the host-provided default writing block.
@@ -39,7 +40,7 @@ export function registerDefaultWritingBlock(
       : MarkdownContent);
   const restoreWriting = reactEditor.installDefaultWriting(defaultWritingBlockFactory);
   const unregisterBlock = reactEditor.blockTypes.register({
-    definition: { type, title },
+    definition: { type, title, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
     render,
     slashCommand,
   });

@@ -1,388 +1,378 @@
 ---
 name: rivto-containers
-description: Implement or review Rivto blocks that own child layout, such as boards, columns, and tables. Use for native containers in packages/react-rivto-editor; use rivto-blocks for leaf blocks.
+description: Implement or review Rivto blocks that own child layout, such as boards, columns, task storage, and tables, using the shared Page layout components. Use for native blocks in packages/react-rivto-editor; use rivto-blocks for leaf blocks.
 ---
 
 # Rivto Containers
 
-Build containers from Rivto's ordinary block hierarchy. Keep persistence and
-mutations in the existing document/core layers, behavior in block views, and
-presentation in React extensions. Do not create a parallel child store, custom
-tree renderer, or container-specific drag system.
+A container is an ordinary block whose registered layout arranges its children.
+There is no separate container tree or rendering engine. `ContainerBlockBehavior`
+implements `BlockBehavior`; it is interaction policy, not a renderer or a second
+model entity.
 
-## Start from the current implementation
+Keep persisted hierarchy in document-model, user operations in core/panel managers,
+concrete block definitions and UI in React extensions, and generic rendering,
+placement, hover and selection in `@chulane/rivto-page`.
 
-Patterns can evolve. Trace the affected behavior and inspect relevant shared
-owners; do not rely only on this guide:
+## Read the affected path
 
-- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.tsx` — recursive rendering,
-  collapse visibility, slots, wrappers, and stable DOM shells.
-- `packages/react-rivto-editor/src/hooks/blocks/use-block-editing.ts` — text and
-  structural selection anchors.
-- `packages/react-rivto-editor/src/views/container-view.ts` and
-  `src/views/types.ts` — container keyboard and drop behavior.
-- `packages/react-rivto-editor/src/block-behaviors/default-block-behavior.ts` —
-  standard indent/outdent algorithms and their permission preflight.
-- `packages/react-rivto-editor/src/block-behaviors/container-block-behavior.ts` —
-  shared empty-container child insertion, selection and deferred DOM focus.
-- `packages/react-rivto-editor/src/extensions/containers/convert-leaf-to-container.ts` —
-  seeded in-place conversion shared by container slash commands.
-- `packages/react-rivto-editor/src/managers/blocks/block-types.ts` — block
-  registration and parent outline handlers.
-- `packages/rivto-editor-core/src/managers/block-registry-manager/types.ts` —
-  defaults, property schemas, and `allowedParents`.
-- `packages/react-rivto-editor/src/blocks/block-tree/block-tree.css` — shared
-  block-tree geometry. Read `packages/react-rivto-editor/docs/styling.md` before
-  styling a container or adding a feature stylesheet.
+Paths below are relative to the repository root. Inspect callers and current
+contracts before editing; examples are not proof that every interaction is correct.
 
-Then inspect the closest example end to end:
+- `packages/rivto-page/AGENTS.md` — Page ownership and layout contracts.
+- `packages/rivto-page/src/presentation/components/block-layout/` — `BlockNode`,
+  `BlockView`, `BlockRow`, `BlockContent`, `BlockBody`, `BlockChildren`, `BlockList`,
+  `BlockItem`, and layout-bounded row hover.
+- `packages/rivto-page/src/presentation/drag-and-drop/` — explicit drop regions,
+  gaps and wrapping-item boundaries.
+- `packages/react-rivto-editor/src/managers/blocks/block-types-api.ts` and
+  `packages/react-rivto-editor/src/managers/blocks/types.ts` — registration contract.
+- `packages/react-rivto-editor/src/block-behaviors/container-block-behavior.ts`,
+  `default-block-behavior.ts`, and `types.ts` — interaction policy and fallback.
+- `packages/react-rivto-editor/src/hooks/blocks/use-block.ts` and
+  `use-block-editing.ts` — addressed snapshots, text editing and selection anchors.
+- `packages/react-rivto-editor/src/extensions/containers/convert-leaf-to-container.ts`
+  — identity-preserving seeded conversion and its transaction limitations.
+- `packages/react-rivto-editor/docs/styling.md` — stylesheet ownership, tokens and
+  the whole-block selection background contract.
 
-| Need                                                                 | Primary example       |
-| -------------------------------------------------------------------- | --------------------- |
-| Flat wrapping tiles and per-child resize props                       | `extensions/bento/`   |
-| Horizontal lanes containing ordinary cards                           | `extensions/kanban/`  |
-| Headerless equal-width lanes and safe shell removal                  | `extensions/columns/` |
-| Multi-level fixed structure, row/column changes, synchronized widths | `extensions/table/`   |
+Choose a nearby composition, then inspect its registration, behavior and tests:
 
-## Choose the container shape
+| Need                                                               | Current implementation under `packages/react-rivto-editor/src/`        |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Wrapping tiles with persisted preferred widths and resize previews | `extensions/containers/bento/bento-layout.tsx`, `bento-tile.tsx`       |
+| Board lanes with ordinary cards and declarative add controls       | `extensions/containers/kanban/kanban-layout.tsx`, `kanban-content.tsx` |
+| Equal-width lanes and dividers in canonical gaps                   | `extensions/containers/columns/columns-layout.tsx`                     |
+| Layout-local query/filter state and direct-child visibility        | `extensions/todo-item/todo-storage.tsx`                                |
+| Fixed row/cell hierarchy and synchronized widths                   | `extensions/containers/table/`                                         |
 
-Use the smallest shape that enforces the real invariant:
+Bento, Kanban, Columns and TODO storage are undergoing a layout redesign. Consult
+`dev_notes/container-layout-redesign-ru.md` for current scope and validation limits.
+Table was not part of that rewrite. Do not copy obsolete DOM assumptions from an
+example or claim that passing selection tests validates all of its features.
 
-- A free container owns ordinary child blocks directly. Bento is the model.
-- A fixed-shell container owns structural children such as lanes or rows. Those
-  shells may own ordinary content or another structural level. Kanban, Columns,
-  and Table are the models.
-- A visual control around a single value is a leaf block, not a container. Follow
-  Counter-style registration instead.
+## Define the block and register its layout
 
-Every persisted node must be a native block with a stable ID. Children belong in
-`EditorBlock.children`; layout-only relationships must not live in React state,
-plugin data, or a second CRDT structure.
+Use native blocks with stable IDs for structural lanes, rows and cells. Store
+children in the canonical hierarchy, never in a parallel list of IDs in props,
+React state, or plugin data. Persist meaningful layout preferences such as widths
+and divider visibility as block props; keep temporary interaction state local.
 
-## Define the data contract
+Register through `reactEditor.blockTypes.register({ definition, render, layout,
+behavior, slashCommand })` in a `ReactEditorExtension.setup`:
 
-For each native type:
+- `definition` owns the native type, accessible title, defaults, property schema
+  and applicable semantic metadata. Check the current `BlockDefinition` contract;
+  do not resurrect removed fields such as `allowedParents`.
+- `render` supplies the content region, not descendants.
+- `layout` composes shared Page regions around that content.
+- `behavior` supplies demonstrated semantic differences from ordinary blocks.
+- Optional `slashCommand` handles simple type conversion. Seeded structures use
+  an explicit slash registration and the existing conversion helper.
 
-- Export one type constant and reuse it everywhere.
-- Register a `title` for UI and accessibility.
-- Put creation defaults in `defaultProps`; validate meaningful props with the
-  existing Zod-backed `propSchema` facility.
-- Add `allowedParents` to structural shell types when they are invalid elsewhere.
-  It is enforced during insert, move, and load. Include `null` only if root
-  placement is valid.
-- Keep container and layout-shell `content` as `""` unless the node genuinely has
-  an editable persisted title, such as a Kanban column.
-- Provide an `EditorBlockInput` factory when creation needs children or caller
-  parameters. Construct the full portable subtree there.
-- Seed only meaningful structure. Do not add empty paragraph children merely to
-  produce height or click targets.
+The registration owns the complete core definition and presentation; a duplicate
+native type is a conflict, not an opportunity to supplement someone else's type.
+Return owned disposers from extension setup and release them in reverse order.
+Register slots through `reactEditor.surfaces.registerBlockSlot`. Use surface
+wrappers only for actual subtree decoration, such as `BlockModal`, in supported
+surfaces; wrappers do not own child traversal, placement, widths or filtering.
 
-Do not import Yjs in React. Persisted shape belongs in the document model only
-when it introduces a new canonical invariant; ordinary containers need no new
-document type.
+Export factories, extension entrypoints and required public types through the
+existing package entrypoints. Add a preset contribution only when that preset
+should include the feature. Do not add runtime stylesheet injection: feature CSS
+belongs in the package stylesheet entry.
 
-## Register through one React extension
+## Compose one canonical subtree
 
-Use a `ReactEditorExtension` when the feature needs coordinated registrations;
-its `setup` can register:
-
-- `runtime.blocks.register` for every native type, renderer, optional behavior
-  view, and simple slash conversion.
-- `runtime.surfaces.registerBlockSlot` for controls anchored to a block.
-- `runtime.surfaces.registerBlockWrapper` for subtree-level presentation such as
-  a modal, in both `"block"` and `"edgeless"` modes when applicable.
-- `runtime.extensions.mount` for extension-local styles.
-
-Let runtime registration own cleanup. When collecting explicit disposers, return
-one cleanup that invokes them in reverse order. Export the public extension,
-factory, constants, operations, and public prop types from `src/extensions.ts`
-and `src/index.ts` when consumers need them; add the extension to a preset only
-when that preset is meant to include the feature.
-
-## Render content, never the subtree
-
-`BlockTree` is the only recursive renderer. A container renderer supplies the
-root content region; it must not map `block.children`, mount nested `BlockTree`
-instances, duplicate drag targets, or manage collapse visibility.
-
-For a contentless root or structural shell:
+Page creates one `BlockNode` / `BlockView` per block. A typical layout returns:
 
 ```tsx
-const editing = useBlockNode(blockId);
-const attributes = useBlockSelectionAnchor(blockId);
-return <div {...attributes}>{/* structural UI */}</div>;
+<>
+  <BlockRow className="rivto-example-header">
+    <BlockContent />
+  </BlockRow>
+  <BlockBody />
+  <BlockChildren className="rivto-example-children" dropAxis="vertical" emptyDropTarget>
+    {/* Optional non-block footer controls. */}
+  </BlockChildren>
+</>
 ```
 
-Spread `attributes` on the region representing the block so selection
-and dragging retain a `data-block-selection-anchor`. Do not add
-`contentEditable` to contentless roots.
+- Keep one primary row and one canonical child host per block. Their committed
+  refs register ownership, so neutral DOM wrappers, fragments and context
+  providers may separate them from the shell without changing hover or placement
+  ownership. `BlockDropTarget asChild` can register an existing region without
+  another shell. Use `BlockRow slots="manual"` and owner-bound `BlockSlot` when
+  contributions need explicit JSX placement; do not duplicate automatic slots.
+- Let `BlockChildren` traverse child IDs once. Do not map descendants in a content
+  renderer, mount a second `BlockNode`/`BlockView`, or manually reimplement collapse.
+- Headers and management rows participate in normal flow. Do not overlay an empty
+  parent row on its first child with negative margins or absolute positioning.
+  Whether a header is visible while expanded is a product choice, not a universal
+  collapsed-summary rule.
+- Use `useBlockSelectionAnchor(blockId)` for contentless structural UI and spread
+  the attributes onto its actual selectable region. Do not make it contenteditable.
+  Editable titles use `useBlockEditing(blockId)` and persisted content. Protect
+  nested controls using the existing editing attributes when appropriate.
+- Derive summaries from the narrowest reactive source that supplies their data.
+  `useBlockNode` is shallow; recursive counts need an appropriate structural
+  subscription or recursive snapshot. Do not mirror derived counts into state
+  or subscribe to the entire document for a direct-child count.
 
-For a collapsed root, derive the label and cheap statistics directly from the
-reactive `editing.block` snapshot. Render only the name and useful counts or
-dimensions. Do not add subscriptions, mirrored state, effects, or custom
-rerendering for summaries.
+### Items, gaps and footer controls
 
-Render the summary only while `block.listProps.collapsed === true`. Expanded
-contentless roots should leave the structural anchor empty; the shared block-row
-CSS overlays that row instead of reserving a blank line above children.
+Use the shared React stylesheet token `--rivto-container-padding` for the four
+edges of container child areas. Its default is `16px`; hosts may override it on
+any ancestor or individual container with one nonnegative CSS length (not a
+multi-value padding shorthand). Columns uses it around its lanes and their
+writing lists, Kanban around lanes, Bento around tiles, TODO
+storage around tasks, and Table inside cells so row/cell borders stay contiguous.
+Columns writing lists and TODO storage reserve an additional `24px` at inline-start
+for controls; this reservation is separate from the common padding. Headers,
+card interiors and sibling gaps keep their own styling. Kanban card lists retain
+zero padding inside the lane's existing chrome. Do not use
+`--rivto-drop-target-size` or `dropGutterSize` as visual padding: they configure
+hit geometry, while the resolver measures the actual styled child host.
 
-Editable structural titles use ordinary `useBlockEditing(blockId)` and persisted
-`content`. Interactive nested controls use the hook's
-`preventTextEditingAttributes` where needed.
+`BlockChildren.item` receives `{ blockId, children }`, with the existing child node
+as `children`. Render it once inside `BlockItem` for placement/counter-aware chrome,
+or `BlockDropWrapper` when a wrapping item needs explicit sibling boundaries.
+Declare item components outside render so their identities remain stable.
 
-## Declare behavior and extension annotations
+`BlockChildren.dropGaps` enables physical gaps between mounted canonical anchors.
+Use `BlockDropExclude asChild` or `BlockDropTarget.exclude` for intentional subtree
+exclusions. Controls participate in containing drop regions during an active drag;
+HTML tags and `data-editor-control` do not imply exclusion. The primitive and property
+preserve existing DOM and stop ancestor fallback. Matching descendant drop regions
+remain eligible; a deeper exclusion blocks its own area again. Exclusion wins over
+a target on the same element.
 
-Extend `ContainerBlockBehavior` instead of adding type switches to page keyboard
-or drag extensions. Register the behavior with `blockTypes.register()`; it already:
+Edges, gaps and background append are independent declarations; never infer model
+neighbors from DOM siblings. No declaration adds layout boxes or minimum sizes.
+Row-gutter continuation is independent as well: `dropGutterSize` accepts a finite
+nonnegative distance in local CSS pixels, zero to disable, or `"row"` (the default)
+to fill the host cross axis. Numeric extents cover all four item edges, respecting viewport scale and host bounds;
+farther space keeps its declared background action without disabling physical
+seams or item edges. Bento uses 32px. Kanban card lists retain full-row gutters
+with `dropEndGaps={false}`: endpoint lines continue by their measured edge thickness
+(16px by default), while farther free background and footer controls outline the
+complete receiving column. Other layouts retain full remaining end-space insertion
+by default. This declaration changes neither physical sibling gaps nor presentation
+spacing and does not disable the first/last card's actual edge strips.
+Test both sides of the distance boundary separately from nesting into a tile.
+Grid items use existing placement edges; do not create separate gap cells. Bento
+uses declared tile seams and `dropBackground` so space under short tiles remains
+owned by its parent instead of borrowing a taller neighboring tile.
 
-- inserts and focuses a host-provided default writing block on Enter when empty;
-- defers ordinary outline actions to the registered `DefaultBlockBehavior`;
-- leaves move and parent outline restrictions to the concrete native behavior.
+Width and resize previews belong to the item, not a global block wrapper. Keep
+visual card bounds aligned with the actual child block. Extra item padding must
+not leave visible card areas outside selection, hover or drop bounds. Commit
+resize props once at gesture completion; cancel/unmount must release listeners
+and restore temporary styles. Reuse existing resize controllers where applicable.
 
-Full-body empty-container drop targets belong to the optional drag extension and
-are configured through `definition.metadata[PAGE_DRAG_METADATA_KEY]`, independently of behavior.
-Set its `dropAxis` to match direct-child layout:
+Pass add-card/add-column controls directly as JSX children of `BlockChildren`.
+They appear after canonical child nodes and disappear with them on collapse.
+Do not find `#block-children-*`, portal controls into it, append DOM nodes or reorder
+them in effects. Portalled dialogs for genuine modal UI are a different concern.
 
-- `"vertical"` for stacked children;
-- `"horizontal"` for lanes or cells in a row;
-- `"grid"` for wrapping tiles;
-- `undefined` when sibling sorting is not meaningful.
+### Empty, collapsed and filtered children
 
-Set `metadata[PAGE_DRAG_METADATA_KEY].acceptsDropContainer = false` when the shell must not
-accept body drops. Implement `canMove({ destination, sources, parent, editor })`
-on fixed-shell owners and structural children; an axis does not imply type
-acceptance. The shared resolver validates explicit sibling gaps or body destinations
-against source snapshots. Each applicable behavior inspects the actual receiving
-parent, not a neighboring block's edge. Any false veto prevents the move for both
-keyboard and dragging. Override semantic methods only for a demonstrated difference. Examples:
+`BlockChildren` defaults to `renderEmpty=true` and `hoverBoundary=true`.
+`emptyDropTarget` defaults to false; enable it when the retained empty host should
+accept an inside drop. `renderEmpty=false` removes the entire empty host, including
+footer controls. On collapse, the host is hidden and descendants and footers unmount.
+Do not infer expansion solely from the host's presence in the DOM.
 
-- Table cells override `onSplit` because Enter always inserts a nested writing
-  block rather than splitting cell text.
-- Columns shells override `onStructuralDelete` to relocate nested content before
-  deletion.
+Keep empty states selectable without fake paragraph children. Give the empty region
+an appropriate minimum size; remove an empty-only writing control once content
+exists. An empty-lane writing action must support keyboard activation, accessible
+labelling and focus restoration. Use the existing behavior/manager insertion path.
 
-Implement outline restrictions in the concrete parent behavior:
+For TODO-style filtering, place the query/filter provider inside the owning layout
+without an extra DOM shell. Its item component decides whether to render its supplied
+direct child. Do not register a global visibility wrapper or filter grandchildren
+recursively. Nested storages receive their own provider. Query/filter state remains
+transient; persist only intentional document settings such as ordering mode.
+Filtering does not redefine canonical order: verify DnD against hidden neighbors,
+empty filtered results, nested storage isolation and model-backed selection.
 
-- `onChildIndent` returns `rejected` when structural children must not nest into siblings.
-- `onChildOutdent` returns `rejected` for fixed structural children and for content
-  that must not lift beyond its owning lane, cell, or TODO storage.
-- Both hooks receive the parent's shallow `BlockOutlineContext` and the complete
-  requested ID group. `unhandled` continues to the child chain; `handled` or `rejected`
-  stops the whole operation, including Enter and Backspace paths.
+## Keep geometry separate from permission
 
-Parent handlers govern outline interactions. `allowedParents` governs model
-validity. They solve different problems and fixed structures commonly need both.
-Metadata contains extension presentation only: `metadata[PAGE_DRAG_METADATA_KEY]` supplies
-`dropAxis`, `acceptsDropContainer`, and `fixed` geometry; it is not permission.
-`metadata[BLOCK_HANDLE_METADATA_KEY].showOnContainerHover` supplies universal handle hover.
-React `blockTypes.register()` owns the complete definition, including metadata,
-and passes it directly to core without merging annotation contributions.
-Registering an already defined native type is a conflict; cleanup removes the
-owned definition together with its presentation. Core lifecycle notifications
-update metadata readers through `blockTypes.subscribe()`.
-Core API remains unchanged; no `registerMetadata` is required.
+All blocks use the same [shared interaction contract](../../../packages/rivto-page/src/presentation/components/block-layout/README.md#shared-block-interaction).
+A container supplies canonical children, flow and declarative region policy. It
+does not supply a second body/edge algorithm, type-specific pointer resolver or
+its own feedback interpretation. Shared geometry changes belong in Page and must
+also be verified on ordinary blocks outside containers.
 
-## Create and convert correctly
+A block's own content remains available when children enlarge its shell. Edge
+thickness must respect registered content/row bounds, including inherited target
+sizes and padding; reducing one container's size token is not a general repair.
+Body, header and child-list background inside regions paint the complete receiving
+hierarchy with no insertion line. Boundaries retain their line at the chosen depth,
+including child append proposed by an outline edge or physical gap. Keep hit
+ownership, canonical destination and feedback geometry separate: destination kind
+alone does not identify whether the user is over a body or an insertion boundary.
 
-Insertion factories are also used by APIs, tests, and demo seed data. Slash
-commands have an additional invariant: “Turn into” must preserve the current
-block ID and create no sibling root.
+Choose `BlockChildren.dropAxis` for actual child flow: vertical, horizontal or grid.
+Vertical layout retains ordinary outline depth placement. Register explicit regions
+with `BlockDropTarget asChild`, canonical gaps with `dropGaps`, and wrapping edges
+with `BlockDropWrapper`. Do not reintroduce `PAGE_DRAG_METADATA_KEY`,
+`acceptsDropContainer` or per-type axis switches in shared Page code.
 
-- If conversion only changes the type and destination props, provide
-  `slashCommand` in `runtime.blocks.register`; the manager uses
-  `editor.blocks.setBlockType`.
-- If conversion must attach initial children, register a manual slash command
-  and call `convertLeafToContainer(runtime, blockId, factory())`.
-- Make seeded conversion available only for leaf blocks. Converting a populated
-  block to a fixed structure needs a separate, explicit content-placement policy.
+Choose `dropPlacement="siblings"` when background gaps must stay at the list's
+own level; the default `outline` preserves horizontal depth selection. This is
+independent of flow axis. `BlockDropWrapper.axis` selects block-start/end edges for
+vertical flow, inline edges for horizontal flow, or all four for its default grid.
+Linear items and wrapping block-end edges share the same canonical declaration
+builder and inherit this list policy. Direct cards/tiles retain outline nesting;
+do not disable it merely to make sibling insertion span a larger area. Inline
+grid seams keep sibling order, while terminal descendants inherit their item's
+trailing outline levels. Structural columns may intentionally use `siblings`.
+Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
+child gaps and inset edge thickness without container-specific pointer calculations.
+`--rivto-drop-target-size` uses local CSS pixels and never changes presentation spacing.
+Its fallback is **12px**, including ordinary outlines and Columns in the demo.
+Actual strips account for viewport scale and own-content limits, preserving body
+drops. `BlockChildren.targetSize` writes the same CSS variable locally; omitting
+it retains ancestor inheritance, while a variable explicitly passed in `style`
+overrides the prop. A region's explicit `size` precedes the variable. Bento,
+Kanban and TODO storage currently set `targetSize={16}`; their local defaults
+are intentional and do not change when the shared fallback changes. Keep these
+inset strips distinct from `dropGutterSize` continuation and visual container padding.
 
-`convertLeafToContainer` exists because `setBlockType` preserves identity but
-cannot attach initial children, while restricted rows, cells, or lanes cannot be
-created temporarily at the document root. It builds one valid temporary subtree,
-changes the original root type, transfers the structural children, and removes
-the temporary shell inside one undo transaction. Do not replace it with
-insert-after behavior or remove-and-recreate using the same ID.
+A drop region proposes a destination; it does not grant permission. Implement
+`canMove` on the applicable concrete behaviors for source and receiving-parent
+restrictions. Inspect the actual destination parent, not the neighboring block's
+edge. Keep structural policy in the owning behavior/core path rather than CSS.
 
-Do not enlarge the core conversion API for one extension. Reconsider a core
-replace-with-subtree command only when multiple non-React consumers require the
-same atomic operation.
+Explicit header declarations use their existing anchor bounds. The native hit and
+nearest layout scope limit lookup; controls, nested editors and virtual holes remain
+isolated. The host supplies live source permission to the shared resolver. Rejection
+returns no target rather than falling through to an outer level. Gap resolution
+binary-searches local mounted anchors and never scans the whole document. Source
+exclusion preserves physical feedback; commit still revalidates the chosen move.
 
-## Mutate through managers
+`ContainerBlockBehavior` provides empty-container Enter insertion and returns
+`unhandled` where the ordinary behavior chain should continue. Override methods
+only for actual semantic differences, for example a cell's Enter handling or a
+column's content relocation on structural deletion. Parent `onChildIndent` and
+`onChildOutdent` receive the requested group: `unhandled` continues the chain;
+`handled` or `rejected` stops that operation. Check all affected operation paths;
+UI move restrictions do not establish a persisted hierarchy invariant.
 
-Use `runtime.blocks` and `runtime.editor.blocks`; never mutate detached snapshots
-or call `editor.document` from a view or extension.
+Page's row hover is layout-bounded. Custom child hosts normally keep
+`hoverBoundary=true`; ordinary outlines may use false to inherit available width.
+This controls hover geometry, not block width, indentation or drop permission.
+Keep headers, children and gaps in their owning regions; do not add viewport-wide
+pseudo-elements, transparent hit slabs or type-specific hover lists.
 
-- Wrap multi-step user actions in `editor.batchUpdates` so undo sees one action.
-- Use `runtime.defaultWritingBlockFactory.createEmptyBlock()` rather than hardcoding `paragraph`.
-- The insertion API creates siblings. When adding the first nested block or a
-  restricted shell, insert through a valid portable subtree or insert a legal
-  root and move it `"inside"` in the same batch.
-- Expand affected ancestors before adding content that must become visible.
-- Set portable selection in the transaction when possible; perform DOM focus
-  after rendering with existing focus helpers or `requestAnimationFrame`.
-- Preserve child IDs and order during layout changes.
-- Before deleting a structural shell, explicitly relocate user-authored
-  descendants if deletion should not mean data loss.
-- Persist resize results as block props through existing setters. DOM/CSS custom
-  properties may preview pointer movement, but commit one validated model update.
+`BlockItem` supplies its own border box; in-flow slots contribute to its size,
+but absolute slots overflowing that box do not. Hover over item padding and
+placement edges reveals its block's handle, with native nested rows taking
+priority. This is shared Page behavior, not an item-local pointer listener.
 
-## Empty states and controls
+Keep handles hidden at rest and reachable from their own row/exposed gutter.
+Hovering a child must not activate the whole parent. Do not translate or raise a
+parent handle over the first child's handle to conceal overlapping geometry.
+Keep horizontal overflow on the layout owner and dividers in actual gaps rather
+than persisted separator blocks. Preserve ordinary sibling placement and outline
+nesting wherever the concrete behavior allows them.
 
-An empty container must remain selectable and usable without fake children.
+## Preserve selection color and subtree bounds
 
-- Give the empty expanded root or lane a CSS minimum height.
-- Scope that minimum height to the empty state; populated containers should wrap
-  tightly around their real content unless the design explicitly requires a
-  floor.
-- If clicking an empty lane starts writing, expose a keyboard-accessible control
-  (`role`, `tabIndex`, label, Enter/Space), then use its view's
-  `insertFirstChild` behavior.
-- Remove or hide the empty control after a child exists.
-- Buttons need `type="button"`, accessible names, disabled states where relevant,
-  and visible focus styles.
+The shared Page shell owns one outline around the complete selected subtree.
+Nested selected markers must not add separate outlines. Preserve the host's existing
+selection color and outline; do not change radii or replace the palette to hide a
+geometry defect.
 
-Use registered block slots for settings, add, collapse-adjacent, or expand
-controls. If a control must participate inside the shared child layout, portal
-only that control into `#block-children-${blockId}`; do not portal or remount the
-block subtree. Use `BlockModal` for the existing native-dialog expansion pattern.
+Opaque layout/card backgrounds consume Page's inherited selection fill before
+their ordinary background:
 
-## Style against the shared DOM contract
+```css
+.rivto-example-children {
+  background: var(--rivto-block-selection-fill, var(--rivto-example-background));
+}
+```
 
-Prefer Tailwind CSS utilities on the owning element, with a stable `rivto-*`,
-`page-*`, or `edgeless-*` hook first. Keep utilities in the component; add a
-colocated feature `.css` file only for rules utilities cannot express, such as
-recursive geometry, structural `:has()`, pseudo-elements, or imperatively
-created elements. Import package feature CSS from `src/styles/index.css` into
-`layer(components)` and start it with a comment explaining why CSS is needed.
-Change shared block-tree CSS only for geometry that belongs to every block tree.
+Page sets this fill from `--rivto-block-selection-background` (`#e5dfff` in the
+React host). Layouts read it; they do not assign it independently to descendants.
+Account for priority-colored cards as well as plain surfaces. Removing selection
+must restore each surface's original background. Do not use `mix-blend-mode`,
+opacity or a tint overlay over text: retaining the token alone does not preserve
+the rendered color. Text, icons and semantic control colors remain legible.
 
-Keep block content outside the `rivto-ui` scoped reset so document typography
-retains host defaults. Add a `--rivto-*` token in `src/styles/tokens.css` only
-for a color or dimension hosts should be able to override. For package chrome,
-reuse installed shadcn/ui primitives where they fit; add a missing one with
-`pnpm --filter @chulane/rivto-react ui:add <name>` rather than editing generated
-files in `src/components/ui/`. Keep draggable rows in an in-flow disclosure
-instead of a portalled popover or dialog; see the styling guide's floating-panel
-constraint. Use `lucide-react` icons with `aria-hidden="true"` inside labelled
-controls; add `pointer-events-none` to an icon inside a plain button so the
-button remains the pointer target.
+Follow the styling guide for feature CSS imports, scoped resets, shadcn primitives
+and host tokens. Use named layout classes and direct relationships, not recursive
+rules rewriting every descendant row's padding, slots or background. Shared Page
+geometry belongs in Page, never in demo CSS or container-specific patches.
 
-Keep repeated or cross-file HTML class names in named constants. Prefer stable attributes such as
-`[data-block-type]`, direct-child selectors, and slot ownership attributes for
-structural relationships.
+## Convert and mutate through existing managers
 
-Check these geometry rules:
+Factories return complete portable block inputs, with only meaningful initial
+structure. A “Turn into” action must retain the original root ID and create no
+additional root. Use simple registered slash conversion for type/prop changes;
+use `convertLeafToContainer(reactPanel, blockId, input)` when initial children are
+required. It ignores missing/populated sources, transfers the seeded children,
+and uses a temporary subtree inside one history batch. It is not rollback on
+failure and does not copy all factory root fields: read its current contract.
 
-- Reset `.page-block-children`'s default `margin-left: 24px` on layout roots and
-  internal shells that should align with the container edge.
-- Do not add top padding to compensate for the empty root row. The shared
-  `:has(> .rivto-block-content-flow > [data-block-selection-anchor]:empty)` rule
-  already overlays its 24px hit target.
-- Keep top and bottom selection insets visually balanced.
-- Clip the page-wide `.page-block-row::before` hover slab only below the layout
-  root (for example `> .page-block-children .page-block-row::before`). A broad
-  descendant selector also clips the root row and breaks its handle hover area.
-- Treat full-height lateral hover as an invariant of every layout root. Its
-  ordinary root row is only 24px tall, so add transparent left and right hit
-  regions beside the rendered container body in the shared container selector.
-  Keep the regions outside the container border so they reveal the direct root
-  handle without covering nested content or controls, and let the surface clip
-  their page-wide extent.
-- Keep root drag handles visually hidden at rest like ordinary blocks. Expanded
-  contentless roots may reveal only their direct handle on root hover and keep
-  only that handle's small hitbox pointer-active while transparent, so entering
-  or re-entering the handle can recover hover without a fast mouse movement.
-- Keep descendant handles hover-only. When a root handle overlaps the first
-  descendant, prefer a lane gutter that preserves the ordinary absolute
-  `left-top` slot. Put the slot in row flow only when the layout genuinely needs
-  it, and verify that an optional collapse toggle neither shifts sibling handles
-  nor inserts control-width space before block content. Do not translate or
-  raise the root handle to win the overlap.
-- Anchor absolute insertion indicators to the intended lane or tile with a
-  positioned child shell.
-- Keep horizontal overflow on the layout owner, not the page.
-- Style empty expanded roots separately from collapsed summaries. Existing
-  containers distinguish them by the absence of `.page-block-children` and the
-  presence of an empty summary anchor.
-- Use pseudo-elements for purely visual dividers; inset their ends rather than
-  adding persisted separator blocks.
-- Respect `prefers-reduced-motion` when adding transitions.
+Use panel/block managers, not `editor.document` or detached snapshot mutations.
+Insert directly with a valid `{ parentId }` destination where the API supports it;
+do not create a temporary root merely to move a first child inside a container.
+Use `defaultWritingBlockFactory.createEmptyBlock()` instead of hardcoding paragraph.
+Expand the destination, insert and set portable selection in one history batch;
+restore occurrence-local DOM focus after rendering through the existing helpers.
 
-Verify page and edgeless DOM because they share `BlockTree` but use different
-wrappers and available width.
+Preserve child IDs/order, snapshot and clipboard behavior, and one-step undo for
+compound actions. Before removing a structural shell, decide whether authored
+children are deleted or relocated; implement the intended policy explicitly.
+Do not enlarge the core API for one presentation-only need.
 
-For block dragging, each container reserves a narrow boundary for its sibling
-gap at every nesting level. The shared resolver walks child layouts and returns
-the exact parent and neighbors with the indicator line. Do not reintroduce a
-nearest-row search, hit reasons, source-axis matching, or container-type switches.
-Kanban/Columns background outside lanes rejects ordinary content; entering a
-visible lane accepts it. Scroll horizontally clipped lanes into view before
-asserting a body drop.
+## Validate the changed behavior
 
-Test adjacent root and nested containers with one-pixel pointer sweeps through
-their shared gap. Assert both indicator position and persisted sibling order in
-page and edgeless modes, including a scrolled TODO-storage/Bento pair. Cover
-ordinary blocks above Kanban, TODO storage, Bento, Columns, and Table without
-stealing the preceding block's own row. Keep row-center nesting and horizontal
-outline depth selection available within free child layouts.
+For implementation work, read and execute
+`.agents/skills/rivto-performance-testing/SKILL.md`. Follow repository worker rules:
+behavior checks use 12 workers, failed cases rerun with one worker before diagnosis;
+performance measurements run serially on production builds at default size and
+`?repeat=200`. Report architectural review separately from test results.
 
-## Test the invariant, then the browser
+Choose focused model/operation checks for factories, props, structural permission,
+stable identities, undo, snapshot/clipboard preservation, shell deletion and slash
+conversion. Use browser tests for the behavior that depends on actual layout:
 
-Add focused checks for the behavior changed. Model or operation checks may cover:
+- Main demo integration in both Page and Edgeless, plus modal occurrences when
+  supported; verify the preview serves the current build.
+- Native pointer/keyboard access to empty writing controls, reactive summaries,
+  collapse/expand and footer controls without a top-only gap or overlap.
+- Real handle reachability: move from outside through exposed gutters and into
+  the handle with small steps; check the hit target, not only opacity. Root and
+  first-child handles must remain independently reachable.
+- DnD between ordinary blocks, lanes and neighboring containers, including one-pixel
+  sweeps across shared boundaries, overflow clipping and scrolling. Assert both
+  feedback placement and persisted parent/order; test rejected destinations too.
+  Exercise the own row of a populated block, not only a leaf or the center of its
+  entire subtree. A large shell can hide an edge that consumes its short header.
+  Check body inside actions against the hierarchy outline and edge/gap-derived
+  child insertion against an indented line. Sweep horizontally in both directions
+  and across both neighboring edges without losing the line or changing its Y.
+  Independently exercise indented lower edges, physical gaps and exposed row
+  gutters outside content on direct children, comparing ordinary outlines with
+  containers. A passing body drop or a deeper nested-row drop does not verify
+  this boundary gesture. Assert the receiving child IDs and one-step undo.
+- Width/resize persistence and cancellation, filters, menus, ordering and modal
+  expansion when those features are in scope. A redesign preserves existing
+  features unless the user explicitly chooses a smaller scope.
+- Exact screenshot pixels on blank selected surfaces, including colored children
+  and priority TODOs; one subtree outline; unchanged text color; restored backgrounds
+  after deselection. Wait for transitions or finish animations for screenshot
+  comparisons instead of loosening the expected color.
 
-- factory shape and property validation;
-- exact structural types and parent restrictions;
-- stable IDs and child order across moves or resizing;
-- one-step undo for compound actions;
-- snapshot round trip and clipboard preservation;
-- safe relocation before shell deletion;
-- slash conversion retains the original ID.
+Useful current integration suites include `e2e/container-layout.spec.ts`,
+`e2e/selection.spec.ts`, `e2e/block-row-hover.spec.ts`, `e2e/kanban.spec.ts`,
+`e2e/bento.spec.ts`, `e2e/columns.spec.ts` and `e2e/todo-storage.spec.ts`.
+Update obsolete selectors to the real layout contract without weakening behavioral
+assertions to match an accidental implementation. Passing focused suites does not
+establish that the full container redesign or host migration is complete.
 
-Use Playwright only for browser/cross-layer behavior:
-
-- actual slash-menu conversion changes the current root and does not add a root;
-- collapse summary label and reactive statistics;
-- expanded contentless roots have no top-only gap;
-- empty state has a usable height and creates content on click/keyboard;
-- populated lanes lose empty-state minimum height and wrap content;
-- selection, drag/drop axis and acceptance, overflow, separators, resize handles,
-  slots, or modal behavior;
-- page and edgeless parity when the feature supports both.
-
-When changing container drag behavior, test it in a runtime with
-`pageDragExtension()` installed. Add a new container root to the shared
-full-height lateral hover implementation and its parameterized handle test.
-
-For drag-handle regressions, test interaction rather than computed visibility
-alone. Start outside the container, verify the root handle is transparent but
-its hitbox is recoverable, enter the hitbox directly, then hover the body and
-move to the handle in roughly one-pixel steps. At the body's vertical midpoint,
-enter from both the left and right surface whitespace and require the root
-handle to appear; checking only the 24px root-row Y coordinate misses the
-full-height regression. Use `elementFromPoint` to prove the intended accessible
-handle receives the pointer. Also verify the first descendant handle remains
-separately reachable and its rectangle does not overlap the root handle. For
-lane layouts, pair a collapsed block with a plain sibling and assert equal
-handle X positions plus no control-width content offset. Build the demo and use
-a fresh or isolated preview; `reuseExistingServer` can otherwise serve stale CSS
-and produce a false result.
-
-Run the narrowest relevant checks first and `git diff --check`.
-
-## Reject these shortcuts
-
-- Rendering children inside the extension renderer.
-- Keeping child IDs or layout membership in component state.
-- Manually forcing rerenders for counts available on the reactive block snapshot.
-- Inserting a new container after the slash target.
-- Creating blank paragraph children for spacing.
-- Encoding structural policy only in CSS or only in drag checks.
-- Making every container handle permanently visible to mask a broken hover path.
-- Moving or stacking a root handle over a descendant instead of separating their
-  owning slot geometry.
-- Treating a coarse synthetic pointer jump or an opacity assertion as proof that
-  a real mouse can reach the correct handle.
-- Calling document-model internals from React.
-- Adding container-specific keyboard or drag type switches to shared page code
-  when a block view can express the behavior.
-- Deleting structural shells without deciding what happens to authored content.
+Documentation-only skill edits do not require browser or performance runs: check
+paths, contracts, formatting and skill validation, and verify no runtime changes.

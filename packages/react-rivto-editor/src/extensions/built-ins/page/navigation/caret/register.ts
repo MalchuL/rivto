@@ -1,3 +1,5 @@
+import { PageNavigationController } from "../../../../../surfaces/page/page-navigation-controller";
+import { BlockDOMSelection, BlockSelectionEndpoints } from "@chulane/rivto-page";
 import type { ReactEditorApi } from "../../../../../editor/types";
 /**
  * Keyboard registration for native-looking horizontal and vertical caret movement.
@@ -5,7 +7,6 @@ import type { ReactEditorApi } from "../../../../../editor/types";
  * @module
  */
 import {
-  createTextSelection,
   type EditorMode,
   hasBlockRanges,
   isCaretSelection,
@@ -17,11 +18,9 @@ import {
   findNextEditableBlock,
   findPreviousEditableBlock,
   KEYBOARD_BINDING_IDS,
-  resolveSelectionEndpoints,
   verticalCaretPosition,
 } from "../../../../../managers";
-import { pageEntries } from "../utils/outline";
-import { navigationDomRoot, navigationOutlineBlocks } from "../utils/scope";
+import { navigationDomRoot } from "../utils/scope";
 import {
   currentNavigationSelection,
   focusAdjacentEditor,
@@ -53,7 +52,7 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) {
       return false;
     }
-    const ends = resolveSelectionEndpoints(
+    const ends = BlockSelectionEndpoints.resolve(
       item,
       (id) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0,
     );
@@ -86,7 +85,7 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
         handled = true;
       }
     } else {
-      const moved = verticalCaretPosition(scope, ends.head, direction);
+      const moved = verticalCaretPosition(root, ends.head, direction);
       if (moved) {
         setNavigationCaret(root, reactPanel, moved);
         handled = true;
@@ -107,29 +106,24 @@ export function registerCaretNavigation(reactEditor: ReactEditorApi): void {
     if (!item || !hasBlockRanges(item) || isStructuralSelection(selection)) {
       return false;
     }
-    const ends = resolveSelectionEndpoints(
+    const ends = BlockSelectionEndpoints.resolve(
       item,
       (id) => reactPanel.blocks.getBlockNode(id)?.content.length ?? 0,
     );
     if (!ends) {
       return false;
     }
-    const scope = navigationDomRoot(root, ends.head.blockId);
-    const moved = verticalCaretPosition(scope, ends.head, direction);
+    const moved = verticalCaretPosition(root, ends.head, direction);
     if (!moved) {
       return false;
     }
-    const outline = pageEntries(navigationOutlineBlocks(reactPanel, ends.head.blockId)).map(
-      ({ block }) => ({
-        id: block.id,
-        length: block.content.length,
-      }),
-    );
-    const next = createTextSelection(outline, ends.anchor, moved);
+    const navigation = PageNavigationController.getForElement(root);
+    const next =
+      navigation && new BlockDOMSelection(navigation.selection).createSelection(ends.anchor, moved);
     if (!next) {
       return false;
     }
-    reactPanel.selection.set(next);
+    reactPanel.selection.set({ ...next, blocks: next.blocks.map((block) => ({ ...block })) });
     reactPanel.selection.restoreDOM();
     return true;
   };
