@@ -118,7 +118,7 @@
   flex: 1 1 auto;
   min-height: 0;
   box-sizing: border-box;
-  padding: var(--rivto-block-surface-padding);
+  padding: var(--rivto-edgeless-card-padding);
   /* clip, not hidden: hidden still accepts programmatic scrollLeft. */
   overflow-x: clip;
   overflow-y: auto;
