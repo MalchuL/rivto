@@ -26,6 +26,7 @@ const IMAGE_CONTROLS_CLASS = "rivto-image-controls";
 const IMAGE_RESIZE_CLASS = "rivto-image-resize";
 const IMAGE_ERROR_CLASS = "rivto-image-error";
 const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
+const IMAGE_LOADING_DELAY_MS = 200;
 
 /** Persisted presentation context using the shared image component. */
 export type ImageViewKind = "inline" | "block" | "element";
@@ -80,10 +81,12 @@ export function configureImageViews(
  *
  * @param editor - React editor owning the image configuration.
  * @param kind - Image persistence context whose resize mode is required.
- * @returns The registered mode or the aspect-preserving default.
+ * @returns The registered mode or the default for the image context.
  */
 export function imageResizeMode(editor: ReactEditor, kind: ImageViewKind): ImageResizeMode {
-  return CUSTOMIZATIONS.get(editor)?.[kind]?.resizeMode ?? "letterbox";
+  return (
+    CUSTOMIZATIONS.get(editor)?.[kind]?.resizeMode ?? (kind === "element" ? "stretch" : "letterbox")
+  );
 }
 
 /**
@@ -130,6 +133,7 @@ export interface ImageViewProps {
 }
 
 interface ResizeStart {
+  readonly maxWidth: number;
   readonly pointerId: number;
   readonly width: number;
   readonly height: number;
@@ -158,7 +162,7 @@ export function ImageView({
   const reactPanel = useReactPanel();
   const reactEditor = reactPanel.editor;
   const registered = CUSTOMIZATIONS.get(reactEditor)?.[kind];
-  const resizeMode = customization?.resizeMode ?? registered?.resizeMode ?? "letterbox";
+  const resizeMode = customization?.resizeMode ?? imageResizeMode(reactEditor, kind);
   const dragResize = customization?.dragResize ?? registered?.dragResize ?? kind !== "element";
   const configuredHoverMenu =
     customization && Object.hasOwn(customization, "HoverMenu")
@@ -172,6 +176,7 @@ export function ImageView({
   const previewRef = useRef<{ width: number; height: number } | undefined>(undefined);
   const [source, setSource] = useState<string>();
   const [error, setError] = useState<string>();
+  const [showLoading, setShowLoading] = useState(false);
   const [preview, setPreview] = useState<{ width: number; height: number }>();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number }>();
   const [copyError, setCopyError] = useState<string>();
@@ -215,22 +220,32 @@ export function ImageView({
     let objectUrl: string | undefined;
     setSource(undefined);
     setError(undefined);
+    setShowLoading(false);
+    // Fast local images resolve before a loading label is useful.
+    const loadingTimer = window.setTimeout(() => setShowLoading(true), IMAGE_LOADING_DELAY_MS);
     reactEditor.files
-      .resolve(uri, { signal: abort.signal, mode: reactPanel.getSurfaceType() })
+      .resolve(uri, {
+        signal: abort.signal,
+        mode: reactPanel.getSurfaceType(),
+        providerId: "image",
+      })
       .then((resolved) => {
         if (abort.signal.aborted) {
           return;
         }
+        window.clearTimeout(loadingTimer);
         objectUrl = resolved instanceof Blob ? URL.createObjectURL(resolved) : resolved;
         setSource(objectUrl);
       })
       .catch((reason: unknown) => {
         if (!abort.signal.aborted) {
+          window.clearTimeout(loadingTimer);
           setError(reason instanceof Error ? reason.message : "Unable to load image");
         }
       });
     return () => {
       abort.abort();
+      window.clearTimeout(loadingTimer);
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -253,6 +268,7 @@ export function ImageView({
       return;
     }
     resize.current = {
+      maxWidth: frameRef.current?.parentElement?.getBoundingClientRect().width ?? Infinity,
       pointerId: event.pointerId,
       width: bounds.width,
       height: bounds.height,
@@ -274,11 +290,22 @@ export function ImageView({
     if (!start || start.pointerId !== event.pointerId) {
       return;
     }
-    const nextWidth = Math.max(24, Math.round(start.width + event.clientX - start.x));
-    const nextHeight =
-      resizeMode === "stretch" || event.shiftKey
-        ? Math.max(24, Math.round(start.height + event.clientY - start.y))
-        : Math.max(24, Math.round((nextWidth * start.height) / start.width));
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    const freeResize = resizeMode === "stretch" || event.shiftKey;
+    // Keep the frame proportional after it reaches the available content width.
+    const proportionalDelta =
+      Math.abs(dx / start.width) >= Math.abs(dy / start.height)
+        ? dx
+        : (dy * start.width) / start.height;
+    const desiredWidth = start.width + (freeResize ? dx : proportionalDelta);
+    const minWidth = freeResize ? 24 : Math.max(24, (24 * start.width) / start.height);
+    const nextWidth = Math.round(
+      Math.min(Math.max(minWidth, desiredWidth), Math.max(minWidth, start.maxWidth)),
+    );
+    const nextHeight = freeResize
+      ? Math.max(24, Math.round(start.height + dy))
+      : Math.max(24, Math.round((nextWidth * start.height) / start.width));
     previewRef.current = { width: nextWidth, height: nextHeight };
     setPreview(previewRef.current);
   };
@@ -319,7 +346,7 @@ export function ImageView({
         setContextMenu({ x: event.clientX, y: event.clientY });
       }}
     >
-      {source && !error ? (
+      {source && !error && (
         <img
           className={IMAGE_CLASS}
           src={source}
@@ -330,7 +357,8 @@ export function ImageView({
           }
           onError={() => setError("Unable to decode image")}
         />
-      ) : (
+      )}
+      {(!source || error) && (error || showLoading) && (
         <span className={IMAGE_ERROR_CLASS} role={error ? "alert" : "status"}>
           {error ?? "Loading image…"}
         </span>
@@ -390,7 +418,11 @@ export function ImageView({
               const data = reactEditor.files.read(
                 uri,
                 type === "application/octet-stream" ? undefined : type,
-                { signal: new AbortController().signal, mode: reactPanel.getSurfaceType() },
+                {
+                  signal: new AbortController().signal,
+                  mode: reactPanel.getSurfaceType(),
+                  providerId: "image",
+                },
               );
               void reactEditor.clipboard
                 .writeBinary({ name: name || alt || "image", mimeType: type, data })

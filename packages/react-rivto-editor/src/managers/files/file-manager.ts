@@ -1,20 +1,18 @@
 /**
  * Browser-safe file storage and logical-URI resolution pipeline.
  *
- * Hosts may replace the bounded data-URL fallback with one durable uploader,
- * compose URI postprocessors, and register readers for local/custom schemes.
+ * Attachment handlers select their binary provider before writing, and resolve
+ * existing references through their owning provider or browser URL handling.
  * The manager owns registration lifecycle only; persisted references remain
  * ordinary strings in block or element properties.
  *
  * @module
  */
+import type { BinaryProvider, BinaryWriteContext } from "./binary-provider";
 import type { EditorMode } from "@chulane/rivto";
 import type { ComponentType } from "react";
 import type { ReactEditorApi } from "../../editor/types";
 import type { RegistrationOwner } from "../extensions/types";
-
-/** Default per-file limit used by the built-in data-URL fallback. */
-export const DEFAULT_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
 /** User action and destination supplied to storage integrations. */
 export interface FileOperationContext {
@@ -26,38 +24,8 @@ export interface FileOperationContext {
   readonly reportProgress?: (progress: number) => void;
 }
 
-/** One host-owned durable file writer. */
-export interface FileUploadHandler {
-  readonly id: string;
-  readonly maxBytes?: number;
-  readonly upload: (
-    file: File,
-    context: FileOperationContext,
-  ) => string | undefined | Promise<string | undefined>;
-}
-
-/** Ordered rewrite applied to every freshly uploaded URI. */
-export interface FileUriPostprocessor {
-  readonly id: string;
-  readonly process: (
-    uri: string,
-    file: File,
-    context: FileOperationContext,
-  ) => string | Promise<string>;
-}
-
-/** Ordered reader for persisted URIs not directly usable by an image element. */
-export interface FileUriResolver {
-  readonly id: string;
-  readonly resolve: (
-    uri: string,
-    context: Omit<FileOperationContext, "source" | "destination" | "reportProgress">,
-  ) => string | Blob | undefined | Promise<string | Blob | undefined>;
-}
-
 /** Creation-time defaults for the file pipeline. */
 export interface FileManagerOptions {
-  readonly dataUrlMaxBytes?: number;
   readonly documentBaseUri?: string | ((documentId: string) => string | undefined);
 }
 
@@ -104,6 +72,7 @@ export interface PreparedFilePaste {
 /** Ordered media-specific preparation and optional canvas presentation. */
 export interface FilePasteHandler {
   readonly id: string;
+  readonly provider: BinaryProvider<string, Blob>;
   /** First-class element discriminator rendered by this handler, when any. */
   readonly elementType?: string;
   /** Omit only for the single default handler consulted after every matcher. */
@@ -135,16 +104,11 @@ export interface FileOpenHandler {
 export interface FileRequestContext {
   readonly signal: AbortSignal;
   readonly mode?: EditorMode;
+  readonly providerId?: string;
 }
 
 /** Public file pipeline exposed by one React editor. */
 export interface FilesCapability {
-  /** Registers the host uploader. @param handler - Uploader to install. @returns Owned disposer. */
-  registerUploadHandler(handler: FileUploadHandler): () => void;
-  /** Registers a URI rewrite. @param postprocessor - Rewrite to install. @returns Owned disposer. */
-  registerPostprocessor(postprocessor: FileUriPostprocessor): () => void;
-  /** Registers a URI resolver. @param resolver - Resolver to install. @returns Owned disposer. */
-  registerUriResolver(resolver: FileUriResolver): () => void;
   /** Registers a file presentation handler. @param handler - Handler to install. @returns Owned disposer. */
   registerPasteHandler(handler: FilePasteHandler): () => void;
   /** Registers a file opener. @param handler - Opener to install. @returns Owned disposer. */
@@ -171,58 +135,17 @@ export interface FilesCapability {
   open(reference: FileReference, context: FileRequestContext): Promise<void>;
 }
 
-/** Reads a browser File as a data URL. */
-function readDataUrl(file: File, signal: AbortSignal): Promise<string> {
-  return new Promise((resolve, reject) => {
-    signal.throwIfAborted();
-    const reader = new FileReader();
-    const abort = () => reader.abort();
-    signal.addEventListener("abort", abort, { once: true });
-    reader.addEventListener("load", () => resolve(String(reader.result)), { once: true });
-    reader.addEventListener(
-      "error",
-      () => reject(reader.error ?? new Error("Unable to read file")),
-      { once: true },
-    );
-    reader.addEventListener(
-      "abort",
-      () => reject(signal.reason ?? new DOMException("Aborted", "AbortError")),
-      { once: true },
-    );
-    reader.addEventListener("loadend", () => signal.removeEventListener("abort", abort), {
-      once: true,
-    });
-    reader.readAsDataURL(file);
-  });
-}
-
-/** Validates a handler-specific byte limit. */
-function assertWithinLimit(file: File, handlerId: string, configured?: number): void {
-  const maxBytes = configured ?? DEFAULT_FILE_MAX_BYTES;
-  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
-    throw new TypeError(`File handler ${handlerId} maxBytes must be a positive integer`);
-  }
-  if (file.size > maxBytes) {
-    throw new RangeError(
-      `${file.name || "File"} exceeds the ${maxBytes}-byte limit for file handler ${handlerId}; change its maxBytes option to allow larger files`,
-    );
-  }
-}
-
 /** Rejects empty or unsafe resolved browser source strings. */
 function validateResolvedUri(uri: string): string {
   const value = uri.trim();
   if (!value || /^(?:javascript|vbscript):/i.test(value)) {
-    throw new TypeError("File resolver returned an unsafe URI");
+    throw new TypeError("Binary provider returned an unsafe URI");
   }
   return value;
 }
 
 /** Owns upload, rewrite, and read hooks for one React editor runtime. */
 export class FileManager implements FilesCapability {
-  private uploadHandler?: FileUploadHandler;
-  private readonly postprocessors: FileUriPostprocessor[] = [];
-  private readonly resolvers: FileUriResolver[] = [];
   private readonly pasteHandlers: FilePasteHandler[] = [];
   private defaultPasteHandler?: FilePasteHandler;
   private readonly openHandlers: FileOpenHandler[] = [];
@@ -240,53 +163,6 @@ export class FileManager implements FilesCapability {
     private readonly options: FileManagerOptions = {},
   ) {}
 
-  /** Registers the single host uploader. */
-  registerUploadHandler(handler: FileUploadHandler): () => void {
-    this.owner.assertActive();
-    if (!handler.id.trim()) {
-      throw new Error("File upload handler ID is required");
-    }
-    if (this.uploadHandler) {
-      throw new Error(`File upload handler ${this.uploadHandler.id} is already registered`);
-    }
-    this.uploadHandler = handler;
-    return this.owner.registerCleanup(() => {
-      if (this.uploadHandler === handler) {
-        this.uploadHandler = undefined;
-      }
-    });
-  }
-
-  /** Registers one ordered uploaded-URI rewrite. */
-  registerPostprocessor(postprocessor: FileUriPostprocessor): () => void {
-    this.owner.assertActive();
-    if (!postprocessor.id.trim() || this.postprocessors.some(({ id }) => id === postprocessor.id)) {
-      throw new Error(`File postprocessor ${postprocessor.id || "<empty>"} is already registered`);
-    }
-    this.postprocessors.push(postprocessor);
-    return this.owner.registerCleanup(() => {
-      const index = this.postprocessors.indexOf(postprocessor);
-      if (index >= 0) {
-        this.postprocessors.splice(index, 1);
-      }
-    });
-  }
-
-  /** Registers one first-match logical-URI reader. */
-  registerUriResolver(resolver: FileUriResolver): () => void {
-    this.owner.assertActive();
-    if (!resolver.id.trim() || this.resolvers.some(({ id }) => id === resolver.id)) {
-      throw new Error(`File URI resolver ${resolver.id || "<empty>"} is already registered`);
-    }
-    this.resolvers.push(resolver);
-    return this.owner.registerCleanup(() => {
-      const index = this.resolvers.indexOf(resolver);
-      if (index >= 0) {
-        this.resolvers.splice(index, 1);
-      }
-    });
-  }
-
   /**
    * Registers one rich matcher or the single matcher-less default handler.
    * @param handler - File preparation and optional canvas view registration.
@@ -294,6 +170,13 @@ export class FileManager implements FilesCapability {
    */
   registerPasteHandler(handler: FilePasteHandler): () => void {
     this.owner.assertActive();
+    if (
+      !handler.provider ||
+      typeof handler.provider.write !== "function" ||
+      typeof handler.provider.read !== "function"
+    ) {
+      throw new TypeError("File paste handler requires a binary provider");
+    }
     if (
       !handler.id.trim() ||
       this.pasteHandlers.some(({ id }) => id === handler.id) ||
@@ -398,7 +281,7 @@ export class FileManager implements FilesCapability {
     )?.InlineView;
   }
 
-  /** Uploads one file and passes its logical URI through every postprocessor. */
+  /** Uploads a file through the provider for its matching attachment handler. */
   async upload(
     file: File,
     context: Omit<FileOperationContext, "documentId" | "mode"> & { readonly mode?: EditorMode },
@@ -413,15 +296,25 @@ export class FileManager implements FilesCapability {
         this.reactEditor.panels.getDefault()?.getSurfaceType() ??
         "block",
     } satisfies FileOperationContext;
-    const handler = this.uploadHandler;
-    const handlerId = handler?.id ?? "data-url";
-    assertWithinLimit(file, handlerId, handler?.maxBytes ?? this.options.dataUrlMaxBytes);
-    const uploaded = handler ? await handler.upload(file, complete) : undefined;
-    let uri = uploaded === undefined ? await readDataUrl(file, complete.signal) : uploaded;
-    for (const postprocessor of this.postprocessors) {
-      complete.signal.throwIfAborted();
-      uri = await postprocessor.process(validateResolvedUri(uri), file, complete);
+    const reference: FileReference = {
+      uri: "",
+      name: file.name || "file",
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+    };
+    const candidate = { file, reference };
+    const handler =
+      this.pasteHandlers.find((entry) => entry.matches?.(candidate)) ?? this.defaultPasteHandler;
+    if (!handler) {
+      throw new TypeError(`No binary provider accepted ${reference.name}`);
     }
+    const writeContext: BinaryWriteContext = {
+      ...complete,
+      name: reference.name,
+      mimeType: reference.mimeType,
+    };
+    const uri = await handler.provider.write(file, writeContext);
+    complete.signal.throwIfAborted();
     return validateResolvedUri(uri);
   }
 
@@ -437,14 +330,15 @@ export class FileManager implements FilesCapability {
         this.reactEditor.panels.getDefault()?.getSurfaceType() ??
         "block",
     };
-    for (const resolver of this.resolvers) {
-      complete.signal.throwIfAborted();
-      const resolved = await resolver.resolve(uri, complete);
-      if (resolved instanceof Blob) {
+    const handler = this.pasteHandlers.find((entry) => entry.id === (context.providerId ?? "file"));
+    if (handler) {
+      const resolved = await handler.provider.read(uri, complete);
+      context.signal.throwIfAborted();
+      if (resolved !== undefined) {
+        if (!(resolved instanceof Blob)) {
+          throw new TypeError("Binary provider must return a Blob");
+        }
         return resolved;
-      }
-      if (typeof resolved === "string") {
-        return validateResolvedUri(resolved);
       }
     }
     const value = uri.trim();
@@ -452,7 +346,7 @@ export class FileManager implements FilesCapability {
       return validateResolvedUri(value);
     }
     if (/^[a-z][a-z\d+.-]*:/i.test(value)) {
-      throw new TypeError(`No file URI resolver accepted ${value.split(":", 1)[0]}:`);
+      throw new TypeError(`No binary provider accepted ${value.split(":", 1)[0]}:`);
     }
     const configured = this.options.documentBaseUri;
     const base = typeof configured === "function" ? configured(complete.documentId) : configured;

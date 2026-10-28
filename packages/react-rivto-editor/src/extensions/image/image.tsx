@@ -12,6 +12,7 @@ import { useSyncExternalStore } from "react";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorExtension } from "../../managers";
+import type { BinaryProvider } from "../../managers/files";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import { configureImageViews, ImageView, type ImageViewCustomizations } from "./image-view";
@@ -37,6 +38,7 @@ export interface ImageProps extends FileReference {
 
 /** Optional host notification for asynchronous image failures. */
 export interface ImageExtensionOptions {
+  readonly provider: BinaryProvider<string, Blob>;
   readonly onError?: (error: unknown) => void;
   readonly views?: ImageViewCustomizations;
 }
@@ -383,7 +385,7 @@ function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
 }
 
 /** Installs image upload events, block rendering, and slash insertion. */
-export function imageExtension(options: ImageExtensionOptions = {}): ReactEditorExtension {
+export function imageExtension(options: ImageExtensionOptions): ReactEditorExtension {
   return {
     id: "image",
     setup: (reactEditor) => {
@@ -402,6 +404,7 @@ export function imageExtension(options: ImageExtensionOptions = {}): ReactEditor
       });
       reactEditor.files.registerPasteHandler({
         id: "image",
+        provider: options.provider,
         elementType: "image",
         InlineView: InlineImageFileView,
         matches: ({ file, reference }) =>
@@ -410,11 +413,13 @@ export function imageExtension(options: ImageExtensionOptions = {}): ReactEditor
           const resolved = file
             ? file
             : await reactEditor.files.resolve(reference.uri, {
-                signal: abort.signal,
+                signal: context.signal,
                 mode: context.mode,
+                providerId: "image",
               });
           const localUrl = resolved instanceof Blob ? URL.createObjectURL(resolved) : resolved;
           const dimensions = await inspectImage(localUrl, resolved instanceof Blob);
+          context.signal.throwIfAborted();
           const completeReference = {
             ...reference,
             mimeType:
@@ -456,7 +461,10 @@ export function imageExtension(options: ImageExtensionOptions = {}): ReactEditor
             ? {
                 name: image.name,
                 mimeType: image.mimeType,
-                data: reactEditor.files.read(image.uri, image.mimeType, { signal: abort.signal }),
+                data: reactEditor.files.read(image.uri, image.mimeType, {
+                  signal: abort.signal,
+                  providerId: "image",
+                }),
               }
             : undefined;
         },
@@ -653,7 +661,11 @@ export function imageExtension(options: ImageExtensionOptions = {}): ReactEditor
         };
         statuses.set({ id, name: remote.uri, x: point.x, y: point.y, retry });
         void reactEditor.files
-          .resolve(remote.uri, { signal: abort.signal, mode: reactPanel.getSurfaceType() })
+          .resolve(remote.uri, {
+            signal: abort.signal,
+            mode: reactPanel.getSurfaceType(),
+            providerId: "image",
+          })
           .then(async (resolved) => {
             const source = resolved instanceof Blob ? URL.createObjectURL(resolved) : resolved;
             const dimensions = await inspectImage(source, resolved instanceof Blob);

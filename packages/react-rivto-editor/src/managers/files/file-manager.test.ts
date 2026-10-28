@@ -3,94 +3,112 @@ import { createTestCoreEditor } from "../../test-utils";
 import { createReactEditor } from "../../editor/react-editor";
 import type { ReactEditorApi } from "../../editor/types";
 
+const testProvider = { write: async () => "test:asset", read: async () => undefined };
+
 describe("FileManager", () => {
-  test("enforces handler bytes and applies postprocessors in order", async () => {
+  test("routes writes to the matching provider and preserves context", async () => {
     const editor = await createTestCoreEditor();
-    let runtime: ReactEditorApi | undefined;
+    const calls: string[] = [];
+    const provider = (id: string) => ({
+      write: async (_data: Blob, context: import("./binary-provider").BinaryWriteContext) => {
+        calls.push(`${id}:${context.mode}:${context.name}`);
+        return `${id}:asset`;
+      },
+      read: async (uri: string) => (uri.startsWith(id + ":") ? new Blob([id]) : undefined),
+    });
     const reactEditor = createReactEditor({
       editor,
       extensions: [
         {
-          id: "files.test",
-          setup: (value) => {
-            runtime = value;
-            value.files.registerUploadHandler({ id: "host", maxBytes: 3, upload: () => "asset:a" });
-            value.files.registerPostprocessor({ id: "one", process: (uri) => `${uri}:one` });
-            value.files.registerPostprocessor({ id: "two", process: async (uri) => `${uri}:two` });
+          id: "routing",
+          /** Installs the test providers. */
+          setup(runtime) {
+            const prepare = ({ reference }: import("./file-manager").FilePasteCandidate) => ({
+              inline: reference.uri,
+              block: { type: "file", props: { ...reference } },
+              element: { type: "file", props: { ...reference }, width: 1, height: 1 },
+            });
+            runtime.files.registerPasteHandler({ id: "file", provider: provider("file"), prepare });
+            runtime.files.registerPasteHandler({
+              id: "image",
+              provider: provider("image"),
+              matches: ({ reference }) => reference.mimeType.startsWith("image/"),
+              prepare,
+            });
           },
         },
       ],
     });
     const context = {
       source: "drop" as const,
-      destination: "block" as const,
+      destination: "element" as const,
+      mode: "edgeless" as const,
       signal: new AbortController().signal,
     };
-
     await expect(
-      runtime!.files.upload({ name: "large.png", size: 4 } as File, context),
-    ).rejects.toThrow(/3-byte limit.*maxBytes/);
-    await expect(runtime!.files.upload({ name: "ok.png", size: 3 } as File, context)).resolves.toBe(
-      "asset:a:one:two",
-    );
+      reactEditor.files.upload(new File(["x"], "pic.png", { type: "image/png" }), context),
+    ).resolves.toBe("image:asset");
+    await expect(
+      reactEditor.files.upload(new File(["x"], "doc.txt", { type: "text/plain" }), context),
+    ).resolves.toBe("file:asset");
+    expect(calls).toEqual(["image:edgeless:pic.png", "file:edgeless:doc.txt"]);
+    await expect(
+      reactEditor.files.resolve("image:asset", { signal: context.signal, providerId: "image" }),
+    ).resolves.toBeInstanceOf(Blob);
+    await expect(
+      reactEditor.files.resolve("https://example.test/a", { signal: context.signal }),
+    ).resolves.toBe("https://example.test/a");
+    await expect(
+      reactEditor.files.resolve("image:asset", { signal: context.signal, providerId: "file" }),
+    ).rejects.toThrow();
     await reactEditor.destroy();
     await editor.destroy();
   });
 
-  test("preserves the initiating surface mode for asynchronous file work", async () => {
+  test("propagates provider failures and cancellation without falling back", async () => {
     const editor = await createTestCoreEditor();
-    const modes: string[] = [];
-    const reactEditor = createReactEditor({
+    const provider = {
+      write: async () => {
+        throw new Error("write failed");
+      },
+      read: async () => {
+        throw new Error("read failed");
+      },
+    };
+    const runtime = createReactEditor({
       editor,
       extensions: [
         {
-          id: "files.mode",
-          setup: (runtime) => {
-            runtime.files.registerUploadHandler({
-              id: "mode",
-              upload: (_file, context) => {
-                modes.push(context.mode);
-                return "asset:test";
-              },
-            });
-            runtime.files.registerUriResolver({
-              id: "mode",
-              resolve: (_uri, context) => {
-                modes.push(context.mode);
-                return "https://example.test/file";
+          id: "failing",
+          /** Installs the failing provider. */
+          setup(value) {
+            value.files.registerPasteHandler({
+              id: "file",
+              provider,
+              prepare: () => {
+                throw new Error("unused");
               },
             });
           },
         },
       ],
     });
-    const signal = new AbortController().signal;
-    await reactEditor.files.upload(new File(["a"], "a.txt"), {
-      source: "drop",
-      destination: "element",
-      mode: "edgeless",
-      signal,
-    });
-    await reactEditor.files.resolve("asset:test", { mode: "edgeless", signal });
-    expect(modes).toEqual(["edgeless", "edgeless"]);
-    await reactEditor.destroy();
-    await editor.destroy();
-  });
-
-  test("resolves relative URIs against the configured document base", async () => {
-    const editor = await createTestCoreEditor();
-    const reactEditor = createReactEditor({
-      editor,
-      files: { documentBaseUri: "https://example.test/pages/note" },
-    });
-
+    const controller = new AbortController();
     await expect(
-      reactEditor.files.resolve("../assets/a.png", { signal: new AbortController().signal }),
-    ).resolves.toBe("https://example.test/assets/a.png");
+      runtime.files.upload(new File(["x"], "x.txt"), {
+        source: "drop",
+        destination: "block",
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("write failed");
     await expect(
-      reactEditor.files.resolve("file:///tmp/a.png", { signal: new AbortController().signal }),
-    ).rejects.toThrow(/No file URI resolver/);
-    await reactEditor.destroy();
+      runtime.files.resolve("https://example.test/file", { signal: controller.signal }),
+    ).rejects.toThrow("read failed");
+    controller.abort();
+    await expect(
+      runtime.files.resolve("https://example.test/file", { signal: controller.signal }),
+    ).rejects.toThrow();
+    await runtime.destroy();
     await editor.destroy();
   });
 
@@ -104,6 +122,7 @@ describe("FileManager", () => {
           setup: (runtime) => {
             runtime.files.registerPasteHandler({
               id: "image",
+              provider: testProvider,
               matches: ({ reference }) => reference.mimeType.startsWith("image/"),
               prepare: ({ reference }) => ({
                 inline: "image",
@@ -113,6 +132,7 @@ describe("FileManager", () => {
             });
             runtime.files.registerPasteHandler({
               id: "file",
+              provider: testProvider,
               prepare: ({ reference }) => ({
                 inline: "file",
                 block: { type: "file", props: { ...reference } },

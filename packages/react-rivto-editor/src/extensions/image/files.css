@@ -1,5 +1,6 @@
 .rivto-image-frame {
   position: relative;
+  z-index: 2;
   display: inline-flex;
   max-width: 100%;
   min-width: 24px;
@@ -8,6 +9,8 @@
 }
 
 .markdown-preview .rivto-image-frame {
+  /* Keep the centered handle inside the Markdown paint boundary. */
+  margin: 0 14px 14px 0;
   z-index: 2;
   pointer-events: auto;
 }
@@ -138,9 +141,10 @@
 .rivto-image-resize {
   position: absolute;
   z-index: 4;
-  right: -5px;
-  bottom: -5px;
-  display: none;
+  right: -6px;
+  bottom: -6px;
+  display: block;
+  opacity: 0;
   width: 12px;
   height: 12px;
   padding: 0;
@@ -150,19 +154,27 @@
   cursor: nwse-resize;
 }
 
+.rivto-image-resize::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
 .rivto-image-frame:hover .rivto-image-resize,
 .rivto-image-frame:focus-within .rivto-image-resize {
-  display: block;
+  opacity: 1;
+}
+
+/* Keep the small out-of-bounds resize target above the next block. */
+.rivto-block:has(> .rivto-block-row > .rivto-block-content > .rivto-image-block) {
+  position: relative;
+  z-index: 2;
 }
 
 .rivto-image-block {
   display: block;
   max-width: 100%;
   padding: 0.25rem 0;
-}
-
-.rivto-image-block > .rivto-image-frame {
-  display: flex;
 }
 
 .rivto-image-uploads,

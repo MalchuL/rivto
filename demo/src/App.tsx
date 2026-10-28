@@ -36,6 +36,7 @@ import {
   fileExtension,
   imageExtension,
   type ReactEditorExtension,
+  type BinaryProvider,
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -94,28 +95,58 @@ async function storeDemoFile(
     signal,
   });
   if (!response.ok) {
-throw new Error("The demo server could not store the file");
-}
-  const result = await response.json() as { readonly uri?: unknown };
+    throw new Error("The demo server could not store the file");
+  }
+  const result = (await response.json()) as { readonly uri?: unknown };
   if (typeof result.uri !== "string") {
-throw new TypeError("The demo server returned an invalid file URI");
-}
+    throw new TypeError("The demo server returned an invalid file URI");
+  }
   return result.uri;
 }
 
-/** Demo-only adapter that reads pasted absolute paths through localhost Vite middleware. */
+/** Demo storage keeps pasted files on disk and other files as bounded data URLs. */
+const demoBinaryProvider: BinaryProvider<string, Blob> = {
+  /** @inheritdoc BinaryProvider.write */
+  async write(file, context) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new RangeError("File exceeds the 10 MiB limit");
+    }
+    if (context.source === "clipboard") {
+      return storeDemoFile(file, context.name, context.mimeType, context.signal);
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const abort = () => reader.abort();
+      context.signal.throwIfAborted();
+      context.signal.addEventListener("abort", abort, { once: true });
+      reader.addEventListener("loadend", () => context.signal.removeEventListener("abort", abort), {
+        once: true,
+      });
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
+      reader.onabort = () => reject(context.signal.reason);
+      reader.readAsDataURL(file);
+    });
+  },
+  /** @inheritdoc BinaryProvider.read */
+  async read(uri, context) {
+    if (!isDemoLocalFileUri(uri)) {
+      return undefined;
+    }
+    const response = await fetch(`${DEMO_LOCAL_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
+      signal: context.signal,
+    });
+    if (!response.ok) {
+      throw new Error("The pasted local file is unavailable to the demo server");
+    }
+    return response.blob();
+  },
+};
+
+/** Demo-only native opener. */
 const demoLocalFileExtension: ReactEditorExtension = {
   id: "demo.local-files",
   setup: (editor) => {
-    editor.files.registerUploadHandler({
-      id: "demo.clipboard-files",
-      upload: async (file, context) => {
-        if (context.source !== "clipboard") {
-return undefined;
-}
-        return storeDemoFile(file, file.name, file.type, context.signal);
-      },
-    });
     editor.files.registerOpenHandler({
       id: "demo.native-files",
       open: async (reference, context) => {
@@ -132,28 +163,12 @@ return undefined;
           signal: context.signal,
         });
         if (!response.ok) {
-throw new Error("The demo server could not open the file with its native app");
-}
-      },
-    });
-    editor.files.registerUriResolver({
-      id: "demo.local-files",
-      resolve: async (uri, context) => {
-        if (!isDemoLocalFileUri(uri)) {
-return undefined;
-}
-        const response = await fetch(`${DEMO_LOCAL_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
-          signal: context.signal,
-        });
-        if (!response.ok) {
-throw new Error("The pasted local file is unavailable to the demo server");
-}
-        return response.blob();
+          throw new Error("The demo server could not open the file with its native app");
+        }
       },
     });
   },
 };
-
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
 const DEMO_BLOCK_IDS_TOOLTIP =
@@ -494,9 +509,9 @@ async function createDemoEditor() {
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
-          fileExtension(),
+          fileExtension({ provider: demoBinaryProvider }),
           demoLocalFileExtension,
-          imageExtension(),
+          imageExtension({ provider: demoBinaryProvider }),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
@@ -894,9 +909,9 @@ async function createEmptyDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     extensions: [
-      fileExtension(),
+      fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,
-      imageExtension(),
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1304,9 +1319,9 @@ async function createMultiEditor(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
-      fileExtension(),
+      fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,
-      imageExtension(),
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1559,9 +1574,9 @@ async function createSyncedPeer(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
-      fileExtension(),
+      fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,
-      imageExtension(),
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),

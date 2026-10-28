@@ -5,88 +5,27 @@ dispatching pasted file types, and resolving persisted logical URIs. It contains
 no filesystem or cloud SDK. Hosts register those capabilities from a normal
 `ReactEditorExtension`.
 
-## Default behavior
+## Binary providers
+
+`fileExtension` and `imageExtension` require a `BinaryProvider<string, Blob>`.
+A provider writes attachment bytes and returns a durable URI, then reads bytes
+for URIs it owns. Return `undefined` for unrecognized URIs; browser-readable
+HTTP(S), data and blob URLs retain their normal fallback. Provider failures
+propagate to the attachment error UI.
 
 ```ts
-const reactEditor = createReactEditor({
-  editor: coreEditor,
-  files: {
-    dataUrlMaxBytes: 10 * 1024 * 1024,
-    documentBaseUri: "https://example.test/documents/current/",
-  },
-});
-```
-
-- Uploads use a data URL when no handler claims the file.
-- The default and fallback limit is 10 MiB per file.
-- HTTP(S), `data:*`, and `blob:` URIs resolve directly.
-- Relative URIs resolve against `documentBaseUri` when configured.
-- Custom schemes and `file:` URIs require a registered resolver.
-- Abort signals are checked before upload, postprocessing, and resolution.
-
-## Upload extension
-
-```ts
-const storageExtension = {
-  id: "app.storage",
-  setup(editor) {
-    editor.files.registerUploadHandler({
-      id: "object-storage",
-      maxBytes: 25 * 1024 * 1024,
-      upload: async (file, context) => {
-        if (context.source !== "clipboard") return undefined;
-        context.reportProgress?.(0.25);
-        const uri = await storage.put(file, { signal: context.signal });
-        context.reportProgress?.(1);
-        return uri;
-      },
-    });
-  },
+const provider: BinaryProvider<string, Blob> = {
+  write: (content, context) => storage.write(content, context),
+  read: (uri, context) => storage.readIfOwned(uri, context),
 };
+fileExtension({ provider });
+imageExtension({ provider });
 ```
 
-There is one uploader per editor. Returning a URI claims the file; returning
-`undefined` delegates to the bounded data-URL fallback. The context contains:
-
-- `documentId` and current `mode`;
-- source: `clipboard`, `drop`, or `picker`;
-- destination: `inline`, `block`, or `element`;
-- cancellation signal and optional progress reporter.
-
-## URI postprocessors
-
-Postprocessors run in registration order after either host upload or fallback:
-
-```ts
-editor.files.registerPostprocessor({
-  id: "cdn",
-  process: (uri, file, context) => signOrRewrite(uri, file, context.documentId),
-});
-```
-
-Use them for stable URI rewriting, CDN mapping, encryption envelopes, or other
-storage-wide policy. A postprocessor must return a non-empty safe URI.
-
-## URI resolvers
-
-Resolvers run in registration order and the first returned string or `Blob`
-wins:
-
-```ts
-editor.files.registerUriResolver({
-  id: "asset-scheme",
-  resolve: (uri, context) => uri.startsWith("asset:")
-    ? storage.read(uri, { signal: context.signal })
-    : undefined,
-});
-```
-
-Return `undefined` for URIs the resolver does not own. Blob results become
-component-owned object URLs and are revoked after replacement/unmount. Resolver
-strings are validated against empty, `javascript:`, and `vbscript:` values.
-
-All registrations are lifecycle-owned: install them during extension `setup`
-and they are removed when the editor/extension is destroyed.
+Providers receive document ID, surface mode and cancellation; writes also receive
+file metadata, source, destination and optional progress. Hosts can adapt the
+generic `BinaryProvider<Reference, Binary>` contract to URI strings and Blobs.
+`createLocalFileBridge` provides an adapter around host filesystem callbacks.
 
 ## Open handlers
 
@@ -118,6 +57,7 @@ fallback. Rich extensions register a matcher before users interact:
 ```ts
 editor.files.registerPasteHandler({
   id: "audio",
+  provider: audioProvider,
   elementType: "audio",
   matches: ({ reference }) => reference.mimeType.startsWith("audio/"),
   prepare: async ({ reference }) => ({
