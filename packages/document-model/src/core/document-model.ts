@@ -76,8 +76,10 @@ export class DocumentModelImpl implements DocumentModel {
     // extra undo stacks). The adapter's transaction window also identifies local
     // writes with an explicit origin, such as history-excluded card measurements.
     // Their different history policy must not cause a full-document repair scan.
-    // Provider updates and native undo remain outside that window and still repair
-    // merged hierarchy references. Repair only foreign merges.
+    // Provider updates and native undo normally remain outside that window and
+    // still repair merged hierarchy references. Repair only foreign merges.
+    // TODO: Verify foreign updates during an adapter transaction are not skipped;
+    // if possible, defer their normalization until the transaction finishes.
     this.unsubscribeFromUpdates = this.crdt.on(
       "update",
       (update: unknown, updateOrigin?: unknown) => {
