@@ -145,6 +145,7 @@ test("Page pointer reorders Bento tiles through their inline boundary", async ({
 
 for (const type of ["kanban", "columns"]) {
   test(`Page pointer reorders ${type} lanes through the horizontal gap`, async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
     const fixture = new ContainerPointerFixture(page);
     const laneType = type === "kanban" ? "kanban-column" : "columns-column";
     await fixture.load([
@@ -160,15 +161,14 @@ for (const type of ["kanban", "columns"]) {
     ]);
     const source = page.locator('[data-block-id="source"]');
     await source.locator(":scope > .rivto-block-row").hover();
-    await page.locator('[data-block-id="second"]').evaluate((lane) => {
-      const host = lane.parentElement!;
-      host.scrollLeft += lane.getBoundingClientRect().left - host.getBoundingClientRect().left - 32;
-    });
     const from = (await source.locator(".block-handle").first().boundingBox())!;
-    const second = (await page.locator('[data-block-id="second"]').boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(second.x - 8, second.y + second.height / 2, { steps: 12 });
+    await page.locator('[data-block-id="second"]').evaluate((lane) => {
+      lane.parentElement!.scrollLeft = 0;
+    });
+    const second = (await page.locator('[data-block-id="second"]').boundingBox())!;
+    await page.mouse.move(second.x - 5, second.y + second.height / 2, { steps: 12 });
     await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
     await page.mouse.up();
     await expect

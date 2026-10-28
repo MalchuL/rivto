@@ -1,4 +1,3 @@
-import { returnToDocumentAfterNativeHandleClick } from "./drag-handle-navigation";
 import { blockDropRegion } from "./drop-regions";
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -77,8 +76,7 @@ for (const earlyRelease of [false, true]) {
     await page.mouse.up();
     await expect.poll(() => rootOrder(page)).toEqual(["moving", "upper", "lower"]);
     await expect(page.locator(".rivto-block-drag-preview")).toHaveCount(0);
-    await expect(page.locator('.demo-panel-header[data-panel-root="moving"]')).toBeVisible();
-    await returnToDocumentAfterNativeHandleClick(page, "moving");
+    await expect(page.locator(".demo-panel-header").first()).toHaveAttribute("data-panel-root", "");
     await page.locator('[data-journal-document="today"] > .page-surface').focus();
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => rootOrder(page)).toEqual(["upper", "lower", "moving"]);
