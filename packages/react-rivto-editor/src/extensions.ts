@@ -70,6 +70,13 @@ export {
   tableExtension,
   type TableCellProps,
 } from "./extensions/containers/table/table";
+export {
+  OPENUI_BLOCK_TYPE,
+  OpenUiBlock,
+  createOpenUiBlockInput,
+  openuiExtension,
+} from "./extensions/openui/openui-block";
+export type { OpenUiBlockProps, OpenUiExtensionOptions } from "./extensions/openui/openui-block";
 
 export {
   EMBEDDING_BLOCK_TYPE,

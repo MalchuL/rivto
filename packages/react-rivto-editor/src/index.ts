@@ -113,6 +113,13 @@ export type {
 } from "./extensions/todo-item/todo-item";
 export * from "./hooks";
 export {
+  OPENUI_BLOCK_TYPE,
+  OpenUiBlock,
+  createOpenUiBlockInput,
+  openuiExtension,
+} from "./extensions/openui/openui-block";
+export type { OpenUiBlockProps, OpenUiExtensionOptions } from "./extensions/openui/openui-block";
+export {
   BLOCK_FLOW_SLOT_POSITIONS,
   BUILTIN_KEYMAP,
   KEYBOARD_BINDING_IDS,

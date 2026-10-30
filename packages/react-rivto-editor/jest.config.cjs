@@ -14,6 +14,8 @@ module.exports = {
     "^react-markdown$": "<rootDir>/src/test-mocks/react-markdown.ts",
     "^rehype-highlight$": "<rootDir>/src/test-mocks/empty-plugin.ts",
     "^remark-gfm$": "<rootDir>/src/test-mocks/empty-plugin.ts",
+    "^@openuidev/react-lang$": "<rootDir>/src/test-mocks/openui-react-lang.tsx",
+    "^@openuidev/react-ui$": "<rootDir>/src/test-mocks/openui-react-ui.ts",
   },
   transform: {
     "^.+\\.tsx?$": ["<rootDir>/jest-transformer.cjs", { tsconfig: "tsconfig.json", useESM: true }],

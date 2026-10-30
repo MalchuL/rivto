@@ -36,6 +36,8 @@ import {
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
+  createOpenUiBlockInput,
+  openuiExtension,
   todoItemExtension,
   useEditorMode,
   type ReactEditorApi,
@@ -47,6 +49,7 @@ import {
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { OPENUI_DEMO_EXAMPLES } from "./blocks/openui-examples";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
@@ -360,9 +363,9 @@ async function destroyDemoEditor(runtime: {
  * Builds today's journal editor with rich seed content.
  *
  * Needed as the main playground document: Markdown, nested lists, checkboxes,
- * numbered lists, custom blocks, separators, block elements, embeddings, and edgeless
- * showcase — so selection, slash commands, and extensions are immediately
- * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
+ * numbered lists, custom blocks, separators, block elements, OpenUI programs,
+ * embeddings, and edgeless showcase — so selection, slash commands, and extensions
+ * are immediately testable. Optional `?keymap=alternate` remaps indent for keymap demos.
  * Optional `?repeat=N` clones the second edgeless card N extra times, each
  * preceded by a separator so reconciliation mounts N additional cards.
  *
@@ -401,6 +404,7 @@ async function createDemoEditor() {
         extensions: [
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
+          openuiExtension(),
           pageDragExtension(),
           bulletThreadingExtension({
             anchor: demoThreadAnchor,
@@ -750,7 +754,7 @@ async function createDemoEditor() {
     },
     editor.blocks.getInsertionDestinationAfter(todoId),
   ).id;
-  editor.blocks.insertBlock(
+  const doneTodoId = editor.blocks.insertBlock(
     {
       type: TODO_ITEM_BLOCK_TYPE,
       content: "Set up the workspace",
@@ -762,7 +766,21 @@ async function createDemoEditor() {
       },
     },
     editor.blocks.getInsertionDestinationAfter(doingId),
-  );
+  ).id;
+  let openUiAfterId = editor.blocks.insertBlock(
+    {
+      ...paragraphBlockFactory.createEmptyBlock(),
+      content:
+        "OpenUI blocks draw a program. Use **Edit** to change the source, then **Draw** to render it again.",
+    },
+    editor.blocks.getInsertionDestinationAfter(doneTodoId),
+  ).id;
+  for (const source of OPENUI_DEMO_EXAMPLES) {
+    openUiAfterId = editor.blocks.insertBlock(
+      createOpenUiBlockInput(source),
+      editor.blocks.getInsertionDestinationAfter(openUiAfterId),
+    ).id;
+  }
   seedEdgelessShowcase(editor);
   editor.elements.insertElement(
     createReviewElementInput({
@@ -797,6 +815,7 @@ async function createEmptyDemoEditor() {
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),
@@ -1204,6 +1223,7 @@ async function createMultiEditor(
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),
@@ -1456,6 +1476,7 @@ async function createSyncedPeer(
     editor,
     extensions: [
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      openuiExtension(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),
