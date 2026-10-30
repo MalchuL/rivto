@@ -115,6 +115,7 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
     [controller, revision, blockIds, enabled],
   );
   const virtualizer = useWindowVirtualizer({
+    enabled,
     count: blockIds.length,
     estimateSize: () => estimate,
     getItemKey: (index) => blockIds[index]!,
@@ -145,7 +146,7 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
                   counterReset: `rivto-list-number ${controller.getListNumber(blockIds[item.index]!)}`,
                 }}
                 className={BLOCK_EDITOR_CLASSES.virtualRoot}
-                ref={virtualizer.measureElement}
+                ref={enabled ? virtualizer.measureElement : undefined}
               >
                 <BlockItemIdentityContext.Provider value={blockIds[item.index]}>
                   <BlockRootNode blockId={blockIds[item.index]!} />
