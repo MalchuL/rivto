@@ -1,0 +1,146 @@
+/*
+ * Demo AI chrome.
+ *
+ * The right-slot button and the ghost text are positioned against the editor
+ * surface. The panel is normal flow above the document so each synced pane
+ * keeps its own transcript.
+ */
+
+.ai-agent-panel {
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border: 1px solid #e4dffc;
+  border-radius: 8px;
+  background: #faf8ff;
+  color: #333;
+  font-size: 13px;
+}
+
+.ai-agent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ai-agent-heading h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ai-agent-heading-actions,
+.ai-agent-actions,
+.ai-agent-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-agent-panel button {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.ai-agent-panel button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ai-agent-log {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin-bottom: 8px;
+  overflow: auto;
+}
+
+.ai-agent-log p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-agent-empty,
+.ai-agent-hint,
+.ai-agent-reasoning {
+  color: #777;
+}
+
+.ai-agent-reasoning span,
+.ai-agent-tool span,
+.ai-agent-error span {
+  display: inline-block;
+  margin-right: 6px;
+  color: #6c5ce7;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ai-agent-error,
+.ai-agent-error span {
+  color: #c92a2a;
+}
+
+.ai-agent-form {
+  margin-top: 8px;
+}
+
+.ai-agent-form textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.ai-agent-hint {
+  margin: 8px 0 0;
+}
+
+.ai-block-edit {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #d8d2ff;
+  border-radius: 6px;
+  background: white;
+  color: #6c5ce7;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.page-block-row:hover .ai-block-edit,
+.page-block-row:focus-within .ai-block-edit,
+.ai-block-edit:focus-visible {
+  opacity: 1;
+}
+
+.ai-block-edit:focus-visible {
+  outline: 2px solid #6c5ce7;
+  outline-offset: 1px;
+}
+
+.rivto-slot[data-slot-position="right"]:has(> .ai-block-edit) {
+  position: absolute;
+  margin-left: 4px;
+}
+
+.ai-ghost {
+  position: fixed;
+  z-index: 4;
+  color: #8b909a;
+  pointer-events: none;
+  white-space: pre;
+  user-select: none;
+}

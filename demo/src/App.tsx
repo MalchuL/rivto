@@ -50,6 +50,7 @@ import {
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
+import { aiAgentExtension, AiToolbarButton } from "./extensions/ai/ai-agent";
 import { blockIdExtension, BlockIdsVisibleProvider } from "./extensions/block-id";
 import { blockNumberExtension, BlockNumbersVisibleProvider } from "./extensions/block-number";
 import {
@@ -416,6 +417,7 @@ async function createDemoEditor() {
           mindmapExtension(),
           blockIdExtension(),
           blockNumberExtension(),
+          aiAgentExtension(),
           ...customBlockExtensions,
           embeddingExtension(),
           ...demoReviewReports(),
@@ -802,6 +804,7 @@ async function createEmptyDemoEditor() {
       mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(),
     ],
@@ -1013,6 +1016,7 @@ function DemoToolbar({
             Edgeless
           </button>
         </div>
+        <AiToolbarButton />
         <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>
           Delete
         </button>
@@ -1209,6 +1213,7 @@ async function createMultiEditor(
       mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(),
     ],
@@ -1461,6 +1466,7 @@ async function createSyncedPeer(
       mindmapExtension(),
       blockIdExtension(),
       blockNumberExtension(),
+      aiAgentExtension(),
       ...customBlockExtensions,
       ...demoReviewReports(),
     ],
