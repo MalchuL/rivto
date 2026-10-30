@@ -224,7 +224,7 @@ export function registerVisualToolbar(
       VISUAL_TOOL_IDS.text,
       "Text",
       VISUAL_TOOL_GROUPS.text,
-      { kind: VISUAL_ELEMENT_TYPES.text },
+      { kind: VISUAL_ELEMENT_TYPES.text, text: "Text" },
       "text",
     );
     for (const sticker of stickers) {
