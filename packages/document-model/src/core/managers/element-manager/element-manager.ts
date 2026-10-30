@@ -33,6 +33,12 @@ import {
 import { ElementHierarchy } from "./hierarchy";
 import { ElementCache } from "./cache";
 
+/** Element snapshots are keyed by ID; collection, membership, and structure channels are independent. */
+type ElementListenerEvents = Record<
+  `tree:${string}` | `node:${string}` | "changed" | "membership" | "structure",
+  void
+>;
+
 type PreparedElementInput = ElementInput & { id: string; frame: ElementFrame };
 
 const ELEMENTS_KEY = "rivto.editor.elements";
@@ -54,20 +60,17 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   private readonly cache = new ElementCache();
   private readonly hierarchy: ElementHierarchy;
   private readonly rootIds: CRDTArray<string>;
-  private readonly structureListeners = new Listeners<{ changed: void }>();
   private readonly pendingNodes = new Set<string>();
   private readonly pendingTrees = new Set<string>();
   private pendingStructure = false;
   private pendingMembership = false;
   private pendingCollection = false;
-  /** Subscribers to any element record or collection change. */
-  private readonly listeners = new Listeners<{ changed: void }>();
-  /** Subscribers to element insertion or deletion. */
-  private readonly membershipListeners = new Listeners<{ changed: void }>();
-  /** Subscribers to individual element records, keyed by element ID for subtree changes. */
-  private readonly treeListeners = new Listeners<Record<string, void>>();
-  /** Subscribers keyed by element ID for changes to the individual element. */
-  private readonly elementListeners = new Listeners<Record<string, void>>();
+  /**
+   * Subscribers to any element record or collection change, and to element insertion or deletion.
+   * Tree and node subscriptions are keyed by element ID for subtree and individual record changes.
+   * Structure subscriptions observe hierarchy changes independently.
+   */
+  private readonly listeners = new Listeners<ElementListenerEvents>();
 
   /**
    * Creates an element manager over existing collaborative document storage.
@@ -176,7 +179,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this listener.
    */
   subscribeElement(id: string, listener: () => void): () => void {
-    return this.treeListeners.subscribe(id, listener);
+    return this.listeners.subscribe(`tree:${id}`, listener);
   }
 
   /**
@@ -324,7 +327,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeElementNode(id: string, listener: () => void): () => void {
-    return this.elementListeners.subscribe(id, listener);
+    return this.listeners.subscribe(`node:${id}`, listener);
   }
 
   /**
@@ -335,7 +338,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeStructure(listener: () => void): () => void {
-    return this.structureListeners.subscribe("changed", listener);
+    return this.listeners.subscribe("structure", listener);
   }
 
   /**
@@ -349,7 +352,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeMembership(listener: () => void): () => void {
-    return this.membershipListeners.subscribe("changed", listener);
+    return this.listeners.subscribe("membership", listener);
   }
 
   /**
@@ -792,13 +795,13 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     this.pendingCollection = false;
     this.pendingStructure = false;
     this.pendingMembership = false;
-    nodes.forEach((id) => this.elementListeners.emit(id));
-    trees.forEach((id) => this.treeListeners.emit(id));
+    nodes.forEach((id) => this.listeners.emit(`node:${id}`));
+    trees.forEach((id) => this.listeners.emit(`tree:${id}`));
     if (structure) {
-      this.structureListeners.emit("changed");
+      this.listeners.emit("structure");
     }
     if (membership) {
-      this.membershipListeners.emit("changed");
+      this.listeners.emit("membership");
     }
     this.listeners.emit("changed");
   }

@@ -479,6 +479,29 @@ test.each(["block", "edgeless"] as const)(
   },
 );
 
+test("notifies availability while clearing deactivation subscriptions on destruction", async () => {
+  const f = await fixture();
+  const panel = new ReactPanel(f.editor, new ChildrenPanel(f.editor, {}), {});
+  await eventually(() => expect(panel.getSnapshot().retained).toBe(true));
+  let calls = 0;
+  const listener = () => {
+    calls += 1;
+  };
+  panel.subscribeAvailability(listener);
+  panel.subscribeDeactivation(listener);
+
+  panel.destroy();
+
+  expect(calls).toBe(1);
+  expect(panel.getSnapshot().status).toBe("loading");
+  panel.destroy();
+  expect(calls).toBe(1);
+  await f.a.release();
+  await f.b.release();
+  await f.core.destroy();
+  await f.storage.destroy();
+});
+
 test("a standalone panel leaves editor and document disposal to its caller", async () => {
   const f = await fixture();
   const reactPanel = new ReactPanel(

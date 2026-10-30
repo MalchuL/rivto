@@ -124,6 +124,34 @@ describe("document reactivity", () => {
     void doc.destroy();
   });
 
+  test("isolates block notification kinds even when IDs resemble channel names", async () => {
+    const model = new DocumentModelImpl(new YjsDoc("block-listener-keys"));
+    model.blocks.insertBlock({ id: "roots", type: "paragraph" });
+    model.blocks.insertBlock({ id: "node:roots", type: "paragraph" });
+    const block = jest.fn();
+    const node = jest.fn();
+    const other = jest.fn();
+    const roots = jest.fn();
+    const structure = jest.fn();
+    const release = model.blocks.subscribeBlock("roots", block);
+    model.blocks.subscribeBlockNode("roots", node);
+    model.blocks.subscribeBlock("node:roots", other);
+    model.blocks.subscribeRootIds(roots);
+    model.blocks.subscribeStructure(structure);
+
+    model.blocks.updateBlock("roots", { content: "changed" });
+    expect(block).toHaveBeenCalledTimes(1);
+    expect(node).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(roots).not.toHaveBeenCalled();
+    expect(structure).not.toHaveBeenCalled();
+    release();
+    model.blocks.updateBlock("roots", { content: "again" });
+    expect(block).toHaveBeenCalledTimes(1);
+    expect(node).toHaveBeenCalledTimes(2);
+    await model.destroy();
+  });
+
   test("recursive snapshots share the cached child objects", () => {
     const doc = new YjsDoc("shared-recursive-snapshots");
     const model = new DocumentModelImpl(doc);
