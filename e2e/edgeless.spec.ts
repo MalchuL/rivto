@@ -1059,6 +1059,21 @@ const pasteIntoLabel = async (
   }, payload);
 };
 
+test("new text elements start with Text after editing an earlier element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const first = await createVisual(page, "Text");
+  await expect(first.locator(".edgeless-visual-text")).toHaveText("Text");
+  await first.dblclick();
+  const editor = first.locator(".edgeless-label-editor");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.insertText("Changed");
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+  await expect(first.locator(".edgeless-visual-text")).toHaveText("Changed");
+  const second = await createVisual(page, "Text");
+  await expect(second.locator(".edgeless-visual-text")).toHaveText("Text");
+});
+
 test("pastes plain text into visual labels instead of the previous block", async ({ page }) => {
   await switchMode(page, "edgeless");
   const blockContent = page.locator("[data-edgeless-root] [data-block-content]").first();
