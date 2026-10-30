@@ -149,7 +149,7 @@ it("keeps custom properties separate from canvas identity and rejects foreign pa
   firstOperations.subscribe(() => notifications++);
   firstOperations.setCreationDefaults({ group: "shapes" }, { props: { fill: "red" } });
   expect(notifications).toBe(1);
-  firstOperations.previewProperties([node.id], { title: "Draft" });
+  firstOperations.setPropertyPreview([node.id], { title: "Draft" });
   expect(firstOperations.getVisuals()[0]).toMatchObject({ title: "Draft" });
   firstOperations.destroy();
   expect(firstOperations.getVisuals()[0]).not.toHaveProperty("title");
@@ -194,7 +194,7 @@ it("shares validated custom property previews, preserves opaque keys and remembe
   expect(first.props.optional).toBeNull();
   const second = operations.createElement({ type: "custom-tree" });
   core.history.stopCapturing();
-  operations.previewProperties([first.id, second.id], {
+  operations.setPropertyPreview([first.id, second.id], {
     color: "red",
     count: 2.8,
     id: "still-opaque",
@@ -205,7 +205,7 @@ it("shares validated custom property previews, preserves opaque keys and remembe
     id: "still-opaque",
   });
   expect(core.elements.getElementNode(first.id)?.props.color).toBe("blue");
-  expect(() => operations.previewProperties([first.id, second.id], { count: 0 })).toThrow(
+  expect(() => operations.setPropertyPreview([first.id, second.id], { count: 0 })).toThrow(
     "Invalid count",
   );
   expect(operations.getRenderedElement(second.id)?.props.count).toBe(3);
@@ -219,7 +219,7 @@ it("shares validated custom property previews, preserves opaque keys and remembe
   const third = operations.createElement({ type: "custom-tree" });
   expect(third.props).toMatchObject({ color: "red", count: 1 });
   expect(third.props.id).toBeUndefined();
-  operations.previewProperties([third.id], { color: "green" });
+  operations.setPropertyPreview([third.id], { color: "green" });
   operations.discardPropertyPreview();
   expect(operations.getRenderedElement(third.id)?.props.color).toBe("red");
   panel.editor.destroy();
@@ -252,7 +252,7 @@ it("validates every preview target before committing and preserves concurrent un
   });
   const first = operations.createElement({ type: "guarded" });
   const second = operations.createElement({ type: "guarded" });
-  operations.previewProperties([first.id, second.id], { color: "red" });
+  operations.setPropertyPreview([first.id, second.id], { color: "red" });
   core.elements.updateElement(second.id, { props: { locked: true } });
   expect(operations.getRenderedElement(second.id)?.props).toMatchObject({
     color: "blue",
@@ -263,27 +263,27 @@ it("validates every preview target before committing and preserves concurrent un
     "blue",
   ]);
   expect(operations.getVisuals().map((element) => element.color)).toEqual(["red", "blue"]);
-  expect(() => operations.previewProperties([second.id], { title: "Still invalid" })).toThrow(
+  expect(() => operations.setPropertyPreview([second.id], { title: "Still invalid" })).toThrow(
     "Locked color",
   );
   expect(() => operations.commitPropertyPreview()).toThrow("Locked color");
   expect(core.elements.getElementNode(first.id)?.props.color).toBe("blue");
   expect(core.elements.getElementNode(second.id)?.props.color).toBe("blue");
   expect(operations.hasPropertyPreview()).toBe(true);
-  operations.previewProperties([second.id], { color: "green" });
+  operations.setPropertyPreview([second.id], { color: "green" });
   expect(operations.getRenderedElement(second.id)?.props).toMatchObject({
     color: "green",
     locked: true,
   });
   operations.discardPropertyPreview();
-  operations.previewProperties([first.id], { color: "green" });
+  operations.setPropertyPreview([first.id], { color: "green" });
   core.elements.updateElement(first.id, { props: { title: "Concurrent title" } });
   operations.commitPropertyPreview();
   expect(core.elements.getElementNode(first.id)?.props).toMatchObject({
     color: "green",
     title: "Concurrent title",
   });
-  operations.previewProperties([first.id], { color: "red" });
+  operations.setPropertyPreview([first.id], { color: "red" });
   core.elements.removeElement(first.id);
   expect(() => operations.commitPropertyPreview()).not.toThrow();
   expect(operations.hasPropertyPreview()).toBe(false);
@@ -364,7 +364,7 @@ it("persists rectangle corner radius and rejects invalid updates without changin
     expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(0);
   }
   expect(operations.createElement({ type: "rectangle" }).props.cornerRadius).toBe(0);
-  operations.previewProperties([rectangle.id], { cornerRadius: 24 });
+  operations.setPropertyPreview([rectangle.id], { cornerRadius: 24 });
   expect(operations.getRenderedElement(rectangle.id)?.props.cornerRadius).toBe(24);
   expect(editor.elements.getElementNode(rectangle.id)?.props.cornerRadius).toBe(0);
   expect(operations.createElement({ type: "rectangle" }).props.cornerRadius).toBe(0);

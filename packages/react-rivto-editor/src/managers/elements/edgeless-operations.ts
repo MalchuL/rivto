@@ -132,7 +132,7 @@ export class EdgelessOperations {
     return this.elements
       .getElementNodes()
       .filter((element) => element.type !== "block" && element.type !== "group")
-      .map((element) => this.renderedElement(element));
+      .map((element) => this.getRenderedElementSnapshot(element));
   }
 
   /**
@@ -145,7 +145,7 @@ export class EdgelessOperations {
     if (!element) {
       return undefined;
     }
-    return this.renderedElement(element);
+    return this.getRenderedElementSnapshot(element);
   }
 
   /**
@@ -159,23 +159,27 @@ export class EdgelessOperations {
    * @throws If the selection is empty, a target is missing, types differ, or validation rejects a patch.
    * All targets are checked before any pending preview is changed.
    */
-  previewProperties(ids: readonly string[], patch: Record<string, unknown>): void {
-    const targets = ids.map((id) => this.getRenderedElement(id));
+  setPropertyPreview(ids: readonly string[], patch: Record<string, unknown>): void {
+    const targetElements = ids.map((id) => this.getRenderedElement(id));
     if (
-      !targets.length ||
-      targets.some((element) => !element || element.type !== targets[0]!.type)
+      !targetElements.length ||
+      targetElements.some((element) => !element || element.type !== targetElements[0]!.type)
     ) {
       throw new Error("Property preview requires existing elements of one type");
     }
-    const prepared = targets.map((element) => {
-      const props = copy({ ...element!.props, ...this.propertyPreview.get(element!.id), ...patch });
-      this.runtime.elementRegistry.get(element!.type)?.validate?.(props);
+    const validatedIds = targetElements.map((element) => {
+      const previewProperties = copy({
+        ...element!.props,
+        ...this.propertyPreview.get(element!.id),
+        ...patch,
+      });
+      this.runtime.elementRegistry.get(element!.type)?.validate?.(previewProperties);
       return element!.id;
     });
-    prepared.forEach((id) => {
+    validatedIds.forEach((id) => {
       this.propertyPreview.set(id, { ...this.propertyPreview.get(id), ...copy(patch) });
     });
-    this.creationDefaults.preview(targets[0]!.type, patch);
+    this.creationDefaults.setGroupPropertyPreview(targetElements[0]!.type, patch);
     this.emit();
   }
 
@@ -188,12 +192,12 @@ export class EdgelessOperations {
    * @throws If a remaining target rejects the patch; pending previews remain available for cancellation.
    */
   commitPropertyPreview(): void {
-    const entries = [...this.propertyPreview.entries()];
-    if (!entries.length) {
+    const previewEntries = [...this.propertyPreview.entries()];
+    if (!previewEntries.length) {
       this.emit();
       return;
     }
-    const updates = entries
+    const updates = previewEntries
       .filter(([id]) => this.elements.hasElement(id))
       .map(([id, props]) => ({ id, patch: { props } }));
     const updated = this.elements.updateElements(updates);
@@ -201,7 +205,7 @@ export class EdgelessOperations {
       this.rememberUpdatedProperties(element, updates[index]!.patch.props),
     );
     this.propertyPreview.clear();
-    this.creationDefaults.clearPreview();
+    this.creationDefaults.clearGroupPropertyPreviews();
     this.emit();
   }
 
@@ -215,7 +219,7 @@ export class EdgelessOperations {
       return;
     }
     this.propertyPreview.clear();
-    this.creationDefaults.clearPreview();
+    this.creationDefaults.clearGroupPropertyPreviews();
     this.emit();
   }
 
@@ -257,7 +261,7 @@ export class EdgelessOperations {
    * @returns Derived outer geometry, or undefined when geometry is unavailable.
    */
   getBounds(item: EdgelessSelectionRef): VisualFrame | undefined {
-    return this.bounds(item);
+    return this.getElementBounds(item);
   }
   /**
    * Reads canvas geometry before applying visual rotation.
@@ -276,7 +280,7 @@ export class EdgelessOperations {
    * @returns Its normalized visual rotation in degrees, or zero for absolute-geometry types or missing rotation.
    */
   getRotation(item: EdgelessSelectionRef): number {
-    return this.rotation(item);
+    return this.getNormalizedRotation(item);
   }
   /**
    * Reads the stored stacking order without deriving group bounds.
@@ -285,7 +289,7 @@ export class EdgelessOperations {
    * @returns Its persisted stacking order, or zero when the element is missing.
    */
   getZIndex(item: EdgelessSelectionRef): number {
-    return this.element(item)?.zIndex ?? 0;
+    return this.getElement(item)?.zIndex ?? 0;
   }
   /**
    * Derives the stacking order used by a group hit target.
@@ -296,7 +300,7 @@ export class EdgelessOperations {
   getGroupHitZIndex(item: EdgelessSelectionRef): number {
     return (
       Math.min(
-        ...this.leaves([item]).map((id) => this.element(id)?.zIndex ?? 0),
+        ...this.getLeafIds([item]).map((id) => this.getElement(id)?.zIndex ?? 0),
         this.getZIndex(item),
       ) - 1
     );
@@ -422,7 +426,7 @@ export class EdgelessOperations {
     return this.createElement({
       type: kind,
       frame: frame
-        ? this.frame({
+        ? this.validateFrame({
             ...DEFAULT_FRAME,
             ...this.creationDefaults.get({ type: kind }).frame,
             ...frame,
@@ -442,24 +446,28 @@ export class EdgelessOperations {
    * @throws If the visual is missing or processing or validation rejects the patch.
    */
   update({ id, patch }: UpdateVisualPayload): EditorElementNode {
-    const current = this.visual(id);
+    const current = this.getVisual(id);
     if (!current) {
       throw new Error(`Edgeless visual ${id} not found`);
     }
-    const safe = copy(patch) as Record<string, unknown>;
-    delete safe.id;
-    delete safe.kind;
-    if ("rotation" in safe) {
-      safe.rotation = normalizeRotation(typeof safe.rotation === "number" ? safe.rotation : 0);
+    const propertyPatch = copy(patch) as Record<string, unknown>;
+    delete propertyPatch.id;
+    delete propertyPatch.kind;
+    if ("rotation" in propertyPatch) {
+      propertyPatch.rotation = normalizeRotation(
+        typeof propertyPatch.rotation === "number" ? propertyPatch.rotation : 0,
+      );
     }
-    const framePatch = isRecord(safe.frame) ? (safe.frame as Partial<VisualFrame>) : undefined;
-    delete safe.frame;
-    delete safe.zIndex;
+    const framePatch = isRecord(propertyPatch.frame)
+      ? (propertyPatch.frame as Partial<VisualFrame>)
+      : undefined;
+    delete propertyPatch.frame;
+    delete propertyPatch.zIndex;
     const updated = this.elements.updateElement(id, {
       frame: framePatch,
-      props: safe,
+      props: propertyPatch,
     });
-    this.rememberUpdatedProperties(updated, safe, framePatch);
+    this.rememberUpdatedProperties(updated, propertyPatch, framePatch);
     return updated;
   }
 
@@ -484,7 +492,7 @@ export class EdgelessOperations {
    * @throws If the selection is empty, a target is missing, types differ, or a patch fails validation.
    */
   updateMany(ids: readonly string[], patch: Record<string, unknown>): void {
-    const visuals = ids.map((id) => this.visual(id));
+    const visuals = ids.map((id) => this.getVisual(id));
     if (!visuals.length || visuals.some((visual) => !visual || visual.type !== visuals[0]!.type)) {
       throw new Error("Shared properties require one visual type");
     }
@@ -506,7 +514,7 @@ export class EdgelessOperations {
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
       throw new Error("Move delta must be finite");
     }
-    this.translate(this.selection.get().items, dx, dy);
+    this.translateLeaves(this.selection.get().items, dx, dy);
   }
 
   /**
@@ -521,14 +529,14 @@ export class EdgelessOperations {
    */
   resize(width: number, height: number): void {
     const items = this.selection.get().items;
-    const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? []));
+    const bounds = unionFrames(items.flatMap((id) => this.getElementBounds(id) ?? []));
     if (!bounds || width <= 0 || height <= 0 || bounds.width <= 0 || bounds.height <= 0) {
       return;
     }
     const scaleX = width / bounds.width;
     const scaleY = height / bounds.height;
-    const updates = this.leaves(items).flatMap((id) => {
-      const element = this.element(id);
+    const updates = this.getLeafIds(items).flatMap((id) => {
+      const element = this.getElement(id);
       if (!element || element.type === "group") {
         return [];
       }
@@ -539,7 +547,7 @@ export class EdgelessOperations {
         {
           id,
           patch: {
-            frame: this.frame({
+            frame: this.validateFrame({
               x: bounds.x + (frame.x + frame.width / 2 - bounds.x) * scaleX - nextWidth / 2,
               y: bounds.y + (frame.y + frame.height / 2 - bounds.y) * scaleY - nextHeight / 2,
               width: nextWidth,
@@ -574,7 +582,7 @@ export class EdgelessOperations {
    */
   group(): EditorElementNode {
     const selected = [...this.selection.get().items];
-    const internalConnectors = this.relatedElementIds(selected);
+    const internalConnectors = this.findRelatedElementIds(selected);
     const items = [...new Set([...selected, ...internalConnectors])];
     if (items.some((id) => !this.elements.hasElement(id))) {
       throw new Error("Grouped objects must exist");
@@ -582,13 +590,14 @@ export class EdgelessOperations {
     if (items.length < 2) {
       throw new Error("Grouping requires at least two objects");
     }
-    const parents = new Set(items.map((id) => this.parentId(id)));
+    const parents = new Set(items.map((id) => this.getSelectableParentId(id)));
     if (parents.size !== 1) {
       throw new Error("Grouped objects must share one parent");
     }
-    const bounds = unionFrames(items.flatMap((id) => this.bounds(id) ?? [])) ?? DEFAULT_FRAME;
-    const parentId = this.parentId(items[0]!) ?? null;
-    const parent = parentId ? this.element(parentId) : undefined;
+    const bounds =
+      unionFrames(items.flatMap((id) => this.getElementBounds(id) ?? [])) ?? DEFAULT_FRAME;
+    const parentId = this.getSelectableParentId(items[0]!) ?? null;
+    const parent = parentId ? this.getElement(parentId) : undefined;
     // A Panel exposes its root's children, but excludes the root element itself.
     const siblings = parent?.childIds ?? this.elements.getRootIds();
     const selectedIds = new Set(items);
@@ -597,7 +606,7 @@ export class EdgelessOperations {
       const group = this.elements.insertElement({
         type: "group",
         frame: bounds,
-        zIndex: Math.max(0, ...items.map((item) => this.element(item)?.zIndex ?? 0)),
+        zIndex: Math.max(0, ...items.map((item) => this.getElement(item)?.zIndex ?? 0)),
         props: { title: `Group ${this.getGroups().length + 1}` },
       });
       if (this.reactPanel) {
@@ -624,11 +633,13 @@ export class EdgelessOperations {
    * batch; the resulting children replace the active selection. Non-group IDs are ignored.
    */
   ungroup(): void {
-    const selected = this.selection.get().items.filter((id) => this.element(id)?.type === "group");
+    const selected = this.selection
+      .get()
+      .items.filter((id) => this.getElement(id)?.type === "group");
     const children: string[] = [];
     this.runtime.history.batchUpdates(() =>
       selected.forEach((id) => {
-        const group = this.groupRecord(id);
+        const group = this.getGroupRecord(id);
         if (!group) {
           return;
         }
@@ -649,7 +660,7 @@ export class EdgelessOperations {
    */
   align(mode: EdgelessAlignment): void {
     const entries = this.selection.get().items.flatMap((id) => {
-      const bounds = this.bounds(id);
+      const bounds = this.getElementBounds(id);
       return bounds ? [{ id, bounds }] : [];
     });
     const outer = unionFrames(entries.map(({ bounds }) => bounds));
@@ -675,7 +686,7 @@ export class EdgelessOperations {
           dy = outer.y + outer.height - bounds.height - bounds.y;
         }
         if (dx || dy) {
-          this.translate([id], dx, dy);
+          this.translateLeaves([id], dx, dy);
         }
       }),
     );
@@ -693,7 +704,7 @@ export class EdgelessOperations {
     const entries = this.selection
       .get()
       .items.flatMap((id) => {
-        const bounds = this.bounds(id);
+        const bounds = this.getElementBounds(id);
         return bounds ? [{ id, bounds }] : [];
       })
       .sort((a, b) => (axis === "horizontal" ? a.bounds.x - b.bounds.x : a.bounds.y - b.bounds.y));
@@ -714,7 +725,11 @@ export class EdgelessOperations {
       entries.forEach(({ id, bounds }) => {
         const delta = cursor - (axis === "horizontal" ? bounds.x : bounds.y);
         if (delta) {
-          this.translate([id], axis === "horizontal" ? delta : 0, axis === "vertical" ? delta : 0);
+          this.translateLeaves(
+            [id],
+            axis === "horizontal" ? delta : 0,
+            axis === "vertical" ? delta : 0,
+          );
         }
         cursor += (axis === "horizontal" ? bounds.width : bounds.height) + gap;
       }),
@@ -731,7 +746,7 @@ export class EdgelessOperations {
    */
   reorder(direction: EdgelessReorder): void {
     const items = this.selection.get().items;
-    const selected = new Set([...this.leaves(items), ...this.relatedElementIds(items)]);
+    const selected = new Set([...this.getLeafIds(items), ...this.findRelatedElementIds(items)]);
     const layers = this.elements
       .getElementNodes()
       .filter((element) => element.type !== "group")
@@ -763,7 +778,7 @@ export class EdgelessOperations {
    * @param enabled - Whether content measurement controls card height.
    */
   setBlockAutoHeight(items: readonly EdgelessSelectionRef[], enabled: boolean): void {
-    const blocks = items.filter((id) => this.element(id)?.type === "block");
+    const blocks = items.filter((id) => this.getElement(id)?.type === "block");
     if (!blocks.length) {
       return;
     }
@@ -793,10 +808,10 @@ export class EdgelessOperations {
    */
   deleteItems(items: readonly string[]): void {
     const selected = [...items];
-    const leaves = this.leaves(selected);
+    const leaves = this.getLeafIds(selected);
     const blockIds = leaves.flatMap((id) => {
-      const element = this.element(id);
-      return element?.type === "block" ? blockIdsOf(element, this.rootIds()) : [];
+      const element = this.getElement(id);
+      return element?.type === "block" ? blockIdsOf(element, this.getRootBlockIds()) : [];
     });
     const reactPanel = this.reactPanel;
     if (reactPanel && blockIds.some((id) => !reactPanel.blocks.canRemove(id))) {
@@ -804,15 +819,15 @@ export class EdgelessOperations {
     }
     this.runtime.history.batchUpdates(() => {
       leaves.forEach((id) => {
-        const element = this.element(id);
+        const element = this.getElement(id);
         if (element?.type === "block") {
-          blockIdsOf(element, this.rootIds()).forEach((blockId) =>
+          blockIdsOf(element, this.getRootBlockIds()).forEach((blockId) =>
             this.runtime.blocks.removeBlock(blockId),
           );
         }
       });
       this.elements.removeElements([
-        ...new Set([...leaves, ...selected.filter((id) => this.element(id)?.type === "group")]),
+        ...new Set([...leaves, ...selected.filter((id) => this.getElement(id)?.type === "group")]),
       ]);
     });
   }
@@ -824,7 +839,7 @@ export class EdgelessOperations {
    * @returns Leaf IDs represented by an element or nested group selection.
    */
   getLeaves(items: readonly string[]): string[] {
-    return this.leaves(items);
+    return this.getLeafIds(items);
   }
   /**
    * Resolves parentage without exposing an excluded panel container.
@@ -833,7 +848,7 @@ export class EdgelessOperations {
    * @returns Direct parent within this panel, or undefined for a panel root or missing element.
    */
   getParentId(id: string): string | undefined {
-    return this.parentId(id);
+    return this.getSelectableParentId(id);
   }
 
   /**
@@ -852,7 +867,10 @@ export class EdgelessOperations {
    * @throws If the value is not an array of strings or any element is absent or outside the panel.
    */
   select(value: unknown): void {
-    if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !this.element(id))) {
+    if (
+      !Array.isArray(value) ||
+      value.some((id) => typeof id !== "string" || !this.getElement(id))
+    ) {
       throw new Error("Edgeless selection must contain existing element IDs");
     }
     this.selection.set(value as string[]);
@@ -894,8 +912,8 @@ export class EdgelessOperations {
    */
   private get geometry() {
     return new ElementGeometry(
-      (id) => this.element(id),
-      (id) => this.rotation(id),
+      (id) => this.getElement(id),
+      (id) => this.getNormalizedRotation(id),
     );
   }
   /**
@@ -903,7 +921,7 @@ export class EdgelessOperations {
    *
    * @returns Panel root IDs when mounted, otherwise document root IDs.
    */
-  private rootIds() {
+  private getRootBlockIds() {
     return this.reactPanel ? this.reactPanel.blocks.getRootIds() : this.runtime.blocks.getRootIds();
   }
 
@@ -921,7 +939,7 @@ export class EdgelessOperations {
    * @param element - Element snapshot or DOM host used by the operation.
    * @returns Detached rendered node; invalid previews fall back to persisted properties and defaults.
    */
-  private renderedElement(element: EditorElementNode): EditorElementNode {
+  private getRenderedElementSnapshot(element: EditorElementNode): EditorElementNode {
     const definition = this.runtime.elementRegistry.get(element.type);
     const preview = this.propertyPreview.get(element.id);
     let props = { ...definition?.defaults, ...element.props, ...preview };
@@ -976,28 +994,32 @@ export class EdgelessOperations {
     if (!registration) {
       throw new Error(`Element type ${input.type} is not registered`);
     }
-    const session = this.creationDefaults.get({ type: input.type });
+    const resolvedSettings = this.creationDefaults.get({ type: input.type });
     const preparedInput = {
       ...copy(input),
-      frame: this.frame({ ...DEFAULT_FRAME, ...session.frame, ...input.frame }),
+      frame: this.validateFrame({ ...DEFAULT_FRAME, ...resolvedSettings.frame, ...input.frame }),
       zIndex: input.zIndex ?? 0,
     };
-    const defaults =
-      registration.behavior?.creationDefaults?.(session.props ?? {}, preparedInput) ??
-      session.props;
-    const props = copy({ ...defaults });
+    // A type can derive defaults for this input from the resolved session settings.
+    // This optional function differs from a toolbar group's creationDefaults object,
+    // which supplies initial settings; absent results leave the session values unchanged.
+    const creationProperties =
+      registration.behavior?.creationDefaults?.(resolvedSettings.props ?? {}, preparedInput) ??
+      resolvedSettings.props;
+    const props = copy({ ...creationProperties });
     for (const [key, value] of Object.entries(input.props ?? {})) {
       if (value !== undefined || !(key in props)) {
         props[key] = copy(value);
       }
     }
-    const prepared = { ...preparedInput, props };
-    const result =
-      registration.behavior?.create?.(prepared, this.reactPanel ?? this.documentPanel) ?? prepared;
+    const inputWithProperties = { ...preparedInput, props };
+    const preparedCreation =
+      registration.behavior?.create?.(inputWithProperties, this.reactPanel ?? this.documentPanel) ??
+      inputWithProperties;
     return {
-      ...result,
-      frame: this.frame({ ...DEFAULT_FRAME, ...result.frame }),
-      props: result.props ?? {},
+      ...preparedCreation,
+      frame: this.validateFrame({ ...DEFAULT_FRAME, ...preparedCreation.frame }),
+      props: preparedCreation.props ?? {},
     };
   }
 
@@ -1041,12 +1063,12 @@ export class EdgelessOperations {
    * @param dx - Horizontal translation in canvas coordinates.
    * @param dy - Vertical translation in canvas coordinates.
    */
-  private translate(items: readonly string[], dx: number, dy: number): void {
+  private translateLeaves(items: readonly string[], dx: number, dy: number): void {
     this.runtime.history.batchUpdates(() =>
-      this.leaves(items).forEach((id) => {
-        const frame = this.element(id)?.frame;
+      this.getLeafIds(items).forEach((id) => {
+        const frame = this.getElement(id)?.frame;
         if (frame) {
-          this.setFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy });
+          this.updateElementFrame(id, { ...frame, x: frame.x + dx, y: frame.y + dy });
         }
       }),
     );
@@ -1059,17 +1081,17 @@ export class EdgelessOperations {
    * @param visited - IDs already visited; updated during recursive group expansion.
    * @returns Unique reachable leaf IDs; missing elements are omitted.
    */
-  private leaves(items: readonly string[], visited = new Set<string>()): string[] {
+  private getLeafIds(items: readonly string[], visited = new Set<string>()): string[] {
     return items.flatMap((id): string[] => {
       if (visited.has(id)) {
         return [];
       }
       visited.add(id);
-      const group = this.groupRecord(id);
+      const group = this.getGroupRecord(id);
       if (group) {
-        return this.leaves(group.children, visited);
+        return this.getLeafIds(group.children, visited);
       }
-      return this.element(id) ? [id] : [];
+      return this.getElement(id) ? [id] : [];
     });
   }
 
@@ -1082,10 +1104,10 @@ export class EdgelessOperations {
    * @param items - Selected element or group IDs.
    * @returns Related element IDs in document layer order; connectors register both endpoints.
    */
-  private relatedElementIds(items: readonly string[]): string[] {
+  private findRelatedElementIds(items: readonly string[]): string[] {
     const contained = new Set(items);
     const collect = (id: string): void => {
-      this.groupRecord(id)?.children.forEach((child) => {
+      this.getGroupRecord(id)?.children.forEach((child) => {
         if (contained.has(child)) {
           return;
         }
@@ -1094,7 +1116,7 @@ export class EdgelessOperations {
       });
     };
     items.forEach(collect);
-    const parents = new Set(items.map((id) => this.parentId(id)));
+    const parents = new Set(items.map((id) => this.getSelectableParentId(id)));
     const parentId = parents.size === 1 ? [...parents][0] : undefined;
     if (parents.size !== 1) {
       return [];
@@ -1102,7 +1124,7 @@ export class EdgelessOperations {
     return this.elements
       .getElementNodes()
       .filter((element) => {
-        if (contained.has(element.id) || this.parentId(element.id) !== parentId) {
+        if (contained.has(element.id) || this.getSelectableParentId(element.id) !== parentId) {
           return false;
         }
         const references = this.runtime.elementTypes
@@ -1118,7 +1140,7 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Axis-aligned bounds, or undefined when unavailable.
    */
-  private bounds(id: string): VisualFrame | undefined {
+  private getElementBounds(id: string): VisualFrame | undefined {
     return this.geometry.bounds(id);
   }
 
@@ -1129,12 +1151,12 @@ export class EdgelessOperations {
    * @param frame - Requested element frame in canvas coordinates.
    * @throws If the new frame has non-finite coordinates or non-positive dimensions.
    */
-  private setFrame(id: string, frame: VisualFrame): void {
-    const element = this.element(id);
+  private updateElementFrame(id: string, frame: VisualFrame): void {
+    const element = this.getElement(id);
     if (!element || element.type === "group") {
       return;
     }
-    this.elements.updateElement(id, { frame: this.frame(frame) });
+    this.elements.updateElement(id, { frame: this.validateFrame(frame) });
   }
   /**
    * Reads a selectable parent while stopping at the panel boundary.
@@ -1142,7 +1164,7 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Parent element ID, or undefined outside the selectable subtree.
    */
-  private parentId(id: string): string | undefined {
+  private getSelectableParentId(id: string): string | undefined {
     const parent = this.elements.getParentId(id);
     // Stop group selection and connector attachment at the Panel boundary.
     return parent && this.elements.hasElement(parent) ? parent : undefined;
@@ -1154,8 +1176,8 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Rotation in degrees, defaulting to zero.
    */
-  private rotation(id: string): number {
-    const element = this.element(id);
+  private getNormalizedRotation(id: string): number {
+    const element = this.getElement(id);
     return !this.runtime.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry &&
       typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
@@ -1168,7 +1190,7 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Element node, or undefined when missing.
    */
-  private element(id: string): EditorElementNode | undefined {
+  private getElement(id: string): EditorElementNode | undefined {
     return this.elements.getElementNode(id);
   }
   /**
@@ -1177,7 +1199,7 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Rendered node, or undefined when missing.
    */
-  private visual(id: string): EditorElementNode | undefined {
+  private getVisual(id: string): EditorElementNode | undefined {
     return this.getRenderedElement(id);
   }
   /**
@@ -1186,8 +1208,8 @@ export class EdgelessOperations {
    * @param id - Stable ID of the record or registration to access.
    * @returns Group ID, title, and children, or undefined for other or missing elements.
    */
-  private groupRecord(id: string): VisualGroup | undefined {
-    const element = this.element(id);
+  private getGroupRecord(id: string): VisualGroup | undefined {
+    const element = this.getElement(id);
     if (element?.type !== "group") {
       return undefined;
     }
@@ -1205,7 +1227,7 @@ export class EdgelessOperations {
    * @returns Frame containing only x, y, width, and height.
    * @throws If any coordinate is non-finite or a dimension is non-positive.
    */
-  private frame(value: VisualFrame): VisualFrame {
+  private validateFrame(value: VisualFrame): VisualFrame {
     if (
       ![value.x, value.y, value.width, value.height].every(Number.isFinite) ||
       value.width <= 0 ||
