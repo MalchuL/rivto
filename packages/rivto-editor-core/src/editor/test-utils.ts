@@ -1,12 +1,21 @@
-import { createRivtoEditor, type EditorRuntime } from "./rivto-editor";
-import type { CreateRivtoEditorOptions } from "./types";
+import { createDocumentEditor, type DocumentEditor } from "./document-editor";
+import type { CreateDocumentEditorOptions, DocumentEditorAPI } from "./types";
 import type { EditorPosition } from "../managers/selection-manager";
-import { createCaretSelection, createTextSelection, createStructuralSelection } from "../managers/selection-manager";
-import type { Block, DocumentModel } from "@chulane/document-model";
+import {
+  createCaretSelection,
+  createTextSelection,
+  createStructuralSelection,
+} from "../managers/selection-manager";
+import type { Block } from "@chulane/document-model";
 import { DocumentModelImpl } from "@chulane/document-model";
 import { YjsDoc } from "@chulane/crdt-doc";
 
-type CreateTestEditorOptions = CreateRivtoEditorOptions;
+type CreateTestEditorOptions = Partial<CreateDocumentEditorOptions>;
+
+/** Test-owned consumer and explicit command API over a shared runtime. */
+export interface TestEditor extends DocumentEditorAPI {
+  readonly runtime: DocumentEditor;
+}
 
 /**
  * Core test editor with a local writing block registered.
@@ -14,28 +23,24 @@ type CreateTestEditorOptions = CreateRivtoEditorOptions;
  * Production hosts / React extensions own writing types; core no longer
  * auto-installs `paragraph`.
  */
-export function createTestEditor(options: CreateTestEditorOptions = {}): EditorRuntime {
-  const document = new DocumentModelImpl(new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
-  const editor = createRivtoEditor(options);
-  editor.setDocument(document);
-  const documents = new Set<DocumentModel>([document]);
-  const setDocument = editor.setDocument.bind(editor);
-  const destroy = editor.destroy.bind(editor);
+export async function createTestEditor(options: CreateTestEditorOptions = {}): Promise<TestEditor> {
+  const document =
+    options.document ?? new DocumentModelImpl(new YjsDoc(`rivto-test-${crypto.randomUUID()}`));
+  const runtime = createDocumentEditor({ ...options, document });
+  const destroy = runtime.destroy.bind(runtime);
   let destroyed = false;
-  editor.setDocument = (next) => {
-    documents.add(next);
-    setDocument(next);
-  };
-  editor.destroy = async () => {
-    if (destroyed) return;
+  runtime.destroy = async () => {
+    if (destroyed) {
+      return;
+    }
     destroyed = true;
-    const runtimeCleanup = destroy();
-    const documentCleanup = Promise.all([...documents].map((item) => item.destroy()));
-    await runtimeCleanup;
-    await documentCleanup;
+    await destroy();
+    if (!options.document) {
+      await document.destroy();
+    }
   };
-  editor.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
-  return editor;
+  runtime.blockRegistry.defineBlock({ type: "paragraph", title: "Paragraph" });
+  return Object.assign(runtime, { runtime });
 }
 
 /**
@@ -43,12 +48,15 @@ export function createTestEditor(options: CreateTestEditorOptions = {}): EditorR
  * @param editor - Runtime providing the document forest.
  * @returns Ordered `{ id, length }` rows for {@link createTextSelection}.
  */
-function orderedLengths(editor: EditorRuntime): { id: string; length: number }[] {
+function orderedLengths(
+  editor: Pick<DocumentEditorAPI, "blocks">,
+): { id: string; length: number }[] {
   const ordered: { id: string; length: number }[] = [];
-  const visit = (blocks: Block[]): void => blocks.forEach((block) => {
-    ordered.push({ id: block.id, length: block.content.length });
-    visit(block.children);
-  });
+  const visit = (blocks: Block[]): void =>
+    blocks.forEach((block) => {
+      ordered.push({ id: block.id, length: block.content.length });
+      visit(block.children);
+    });
   visit(editor.blocks.getBlocks());
   return ordered;
 }
@@ -70,9 +78,15 @@ export function testCaret(blockId: string, offset: number) {
  * @param head - Gesture head.
  * @returns Canonical block selection.
  */
-export function testRange(editor: EditorRuntime, anchor: EditorPosition, head: EditorPosition) {
+export function testRange(
+  editor: Pick<DocumentEditorAPI, "blocks">,
+  anchor: EditorPosition,
+  head: EditorPosition,
+) {
   const item = createTextSelection(orderedLengths(editor), anchor, head);
-  if (!item) throw new Error("testRange: endpoint block not found");
+  if (!item) {
+    throw new Error("testRange: endpoint block not found");
+  }
   return item;
 }
 

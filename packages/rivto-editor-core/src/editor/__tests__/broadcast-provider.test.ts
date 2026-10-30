@@ -1,6 +1,6 @@
 import { BroadcastChannelProvider, YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl } from "@chulane/document-model";
-import { createTestEditor as createRivtoEditor } from "../test-utils";
+import { createTestEditor as createDocumentEditor } from "../test-utils";
 
 async function eventually(assertion: () => void, timeoutMs = 500): Promise<void> {
   const started = Date.now();
@@ -9,7 +9,9 @@ async function eventually(assertion: () => void, timeoutMs = 500): Promise<void>
       assertion();
       return;
     } catch (error) {
-      if (Date.now() - started > timeoutMs) throw error;
+      if (Date.now() - started > timeoutMs) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
@@ -20,10 +22,10 @@ describe("BroadcastChannelProvider editor sync", () => {
     const roomId = `room-${crypto.randomUUID()}`;
     const leftDoc = new YjsDoc(`${roomId}:left`);
     const rightDoc = new YjsDoc(`${roomId}:right`);
-    const left = createRivtoEditor();
-    const right = createRivtoEditor();
-    left.setDocument(new DocumentModelImpl(leftDoc));
-    right.setDocument(new DocumentModelImpl(rightDoc));
+    const leftFixture = await createDocumentEditor({ document: new DocumentModelImpl(leftDoc) });
+    const left = leftFixture;
+    const rightFixture = await createDocumentEditor({ document: new DocumentModelImpl(rightDoc) });
+    const right = rightFixture;
     const leftProvider = new BroadcastChannelProvider(roomId);
     const rightProvider = new BroadcastChannelProvider(roomId);
 
@@ -54,8 +56,10 @@ describe("BroadcastChannelProvider editor sync", () => {
     } finally {
       await leftDoc.detachProvider().catch(() => undefined);
       await rightDoc.detachProvider().catch(() => undefined);
-      left.destroy();
-      right.destroy();
+      leftFixture.destroy();
+      void leftDoc.destroy();
+      rightFixture.destroy();
+      void rightDoc.destroy();
     }
   });
 });

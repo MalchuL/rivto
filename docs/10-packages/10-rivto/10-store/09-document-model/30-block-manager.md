@@ -55,17 +55,17 @@ rivto.editor.roots: CRDTArray<string>            (CRDT object; ID корней �
 
 ### Гранулярность каждого persisted key блока
 
-| Key | Live-тип | Можно изменить | Как изменять | Что получает отдельный CRDT update |
-| --- | --- | --- | --- | --- |
-| root `roots` | `CRDTArray<string>` | порядок и состав root IDs | `insertBlock`, `moveBlock(s)`, `indentBlock(s)`, `outdentBlock(s)`, `removeBlock` | вставка/удаление ID в конкретной позиции; block payload не переписывается |
-| root `blocks[blockId]` | `CRDTMap<BlockStorage>` | создание или удаление record | `insertBlock`, `removeBlock`, snapshot load | key конкретного `blockId` в root map |
-| `id` | `string` | после создания — нет | задаётся в `BlockInput`, иначе UUID | атомарная запись только при создании нового record |
-| `type` | `string` | да, целиком | `setBlockType` | одно атомарное поле `type`; одновременно manager заменяет содержимое `props` |
-| `listProps` | `CRDTMap` | да, по top-level key | `updateBlock(s)`, `deleteListProps(Batch)` | каждый изменённый key, например `collapsed`; nested plain object под одним key остаётся атомарным |
-| `props` | `CRDTMap` | да, по top-level key | `updateBlock(s)`, `setBlockProp`, `setBlockType` | каждый изменённый prop key; `setBlockType` очищает/заполняет map, но сохраняет identity map |
-| `content` | `CRDTText` | да, по диапазону символов | `setBlockText`, `insertText`, `deleteText` | character insert/delete; независимые text edits могут merge-иться внутри одной строки |
-| `children` | `CRDTArray<string>` | порядок, parent ownership и состав | hierarchy methods и subtree operations | вставка/удаление child ID в позиции; payload child остаётся прежним |
-| `pluginData` | `CRDTMap<pluginId, value>` | да, по namespace | `setPluginData` | key конкретного `pluginId`; значение namespace записывается целиком |
+| Key                    | Live-тип                   | Можно изменить                     | Как изменять                                                                      | Что получает отдельный CRDT update                                                                |
+| ---------------------- | -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| root `roots`           | `CRDTArray<string>`        | порядок и состав root IDs          | `insertBlock`, `moveBlock(s)`, `indentBlock(s)`, `outdentBlock(s)`, `removeBlock` | вставка/удаление ID в конкретной позиции; block payload не переписывается                         |
+| root `blocks[blockId]` | `CRDTMap<BlockStorage>`    | создание или удаление record       | `insertBlock`, `removeBlock`, snapshot load                                       | key конкретного `blockId` в root map                                                              |
+| `id`                   | `string`                   | после создания — нет               | задаётся в `BlockInput`, иначе UUID                                               | атомарная запись только при создании нового record                                                |
+| `type`                 | `string`                   | да, целиком                        | `setBlockType`                                                                    | одно атомарное поле `type`; одновременно manager заменяет содержимое `props`                      |
+| `listProps`            | `CRDTMap`                  | да, по top-level key               | `updateBlock(s)`, `deleteListProps(Batch)`                                        | каждый изменённый key, например `collapsed`; nested plain object под одним key остаётся атомарным |
+| `props`                | `CRDTMap`                  | да, по top-level key               | `updateBlock(s)`, `setBlockProp`, `setBlockType`                                  | каждый изменённый prop key; `setBlockType` очищает/заполняет map, но сохраняет identity map       |
+| `content`              | `CRDTText`                 | да, по диапазону символов          | `setBlockText`, `insertText`, `deleteText`                                        | character insert/delete; независимые text edits могут merge-иться внутри одной строки             |
+| `children`             | `CRDTArray<string>`        | порядок, parent ownership и состав | hierarchy methods и subtree operations                                            | вставка/удаление child ID в позиции; payload child остаётся прежним                               |
+| `pluginData`           | `CRDTMap<pluginId, value>` | да, по namespace                   | `setPluginData`                                                                   | key конкретного `pluginId`; значение namespace записывается целиком                               |
 
 ### Можно ли изменить свойство внутри `pluginData`
 
@@ -154,7 +154,7 @@ document.blocks.setPluginData("task-1", "comments", {
 - **Возвращает:** `void`.
 - **Исключения:** собственных проверок нет.
 
-`EditorRuntime` устанавливает validator `BlockRegistryManager`, чтобы document storage не зависел от registry или React.
+`ReactEditor` устанавливает validator `BlockRegistryManager`, чтобы document storage не зависел от registry или React.
 
 После установки каждый create/update/type-change сначала передаёт validator-у полный предполагаемый набор props. Возвращённый объект считается нормализованным состоянием; исключение останавливает операцию. Метод не перепроверяет уже сохранённые блоки и не запускает транзакцию.
 
@@ -204,15 +204,15 @@ Parent не хранится отдельным полем: manager выводи
 
 ## Создание и обновление блоков
 
-### `insertBlock(block, afterId?)`
+### `insertBlock(block, destination?)`
 
-- **Аргументы:** `block: BlockInput`; optional `afterId: string | null`, где `null` означает начало roots, а отсутствие — конец roots.
-- **Возвращает:** stable inserted ID.
+- **Аргументы:** `block: BlockInput`; optional `{ parentId: string | null, beforeId?: string }`, где null parent выбирает document roots, а отсутствие destination — конец roots.
+- **Возвращает:** рекурсивный inserted block со stable ID.
 - **Исключения:** пустой type, duplicate ID, invalid `listProps`, validator rejection, malformed CRDT storage и ошибки insertion.
 
-Если `afterId` существует, новый block вставляется после него в том же sibling array. Метод рекурсивно создаёт children через `insertInto()` в одной транзакции.
+`parentId` выбирает реальный контейнер, а `beforeId` — существующего следующего соседа. Без beforeId новый block добавляется в конец выбранного массива. Метод рекурсивно создаёт children через `insertInto()` в одной транзакции.
 
-Важная семантика `afterId`: он выбирает не только позицию, но и sibling container. Например, если target является child, новый блок станет его соседом с тем же parent. При `null` вставка всегда идёт в начало `roots`; вставить первым child публично можно последующим `moveBlock(..., parentId, "inside")` и reorder.
+Контейнер и beforeId проверяются до записи: anchor обязан принадлежать выбранному parent. Для вставки первым child передайте parentId и первый ID из getChildIds(parentId) как beforeId. Вставка сразу создаёт запись внутри родителя, без промежуточного document root и последующего move. getInsertionDestinationAfter(id) переводит существующего соседа в явное назначение.
 
 **Примечание об assignment:** метод транзитивно вызывает recursive `insertInto()`, а тот использует `assignMap()` для `listProps`, `props`, `pluginData` и `assignText()` для `content`. Каждый child получает собственные CRDT maps/text/children array, однако nested objects внутри map values остаются cloned plain objects. Их property mutation не создаёт update; менять нужно соответствующий top-level key через manager.
 

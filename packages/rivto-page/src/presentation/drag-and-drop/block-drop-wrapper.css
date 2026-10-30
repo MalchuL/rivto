@@ -1,0 +1,16 @@
+/* Placement padding preserves the existing visual frame. Interaction thickness
+ * comes from --rivto-drop-target-size and never participates in layout. */
+.rivto-block-drop-wrapper {
+  padding: 8px;
+  box-sizing: border-box;
+}
+.rivto-block-drop-wrapper-content {
+  /* Host controls use the content box rather than the outer placement frame. */
+  @apply page:relative page:min-w-0;
+}
+.rivto-block-drop-wrapper[data-drop-wrapper-axis="vertical"] {
+  padding-inline: 0;
+}
+.rivto-block-drop-wrapper[data-drop-wrapper-axis="horizontal"] {
+  padding-block: 0;
+}

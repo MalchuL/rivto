@@ -4,9 +4,18 @@ import type { ReactEditorExtension } from "../../../managers";
 
 export const ERROR_BLOCK_TYPE = "rivto.error";
 
-const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
-})[character]!);
+const escapeHtml = (value: string): string =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[character]!,
+  );
 
 /**
  * Renders quarantined clipboard data that failed block validation.
@@ -17,7 +26,9 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
  */
 export function ErrorBlock({ blockId }: { readonly blockId: string }) {
   const { block } = useBlockNode(blockId);
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   return (
     <div role="alert" data-error-block="true">
       <strong>{block.content || "Invalid block data"}</strong>
@@ -33,7 +44,10 @@ export function ErrorBlock({ blockId }: { readonly blockId: string }) {
  * @param error - Validation failure reported by clipboard preparation.
  * @returns A new Error block input containing a detached copy of the original.
  */
-export const createErrorBlockInput = (block: EditorBlockInput, error: unknown): EditorBlockInput => ({
+export const createErrorBlockInput = (
+  block: EditorBlockInput,
+  error: unknown,
+): EditorBlockInput => ({
   type: ERROR_BLOCK_TYPE,
   content: error instanceof Error ? error.message : "Invalid block data",
   props: { originalBlock: structuredClone(block) },
@@ -50,18 +64,16 @@ export const errorBlockExtension = (): ReactEditorExtension => ({
     reactEditor.blockTypes.register({
       definition: { type: ERROR_BLOCK_TYPE, title: "Invalid block" },
       render: ErrorBlock,
-    });
-    reactEditor.clipboard.registerFormatter({
-      id: "error",
-      matches: ({ block }) => block.type === ERROR_BLOCK_TYPE,
-      format: ({ block }) => {
-        const data = JSON.stringify(block.props.originalBlock, null, 2);
-        const text = `${block.content}\n${data}`;
-        return {
-          plain: text,
-          markdown: `> ${block.content}\n\n\`\`\`json\n${data}\n\`\`\``,
-          html: `<aside><strong>${escapeHtml(block.content)}</strong><pre>${escapeHtml(data)}</pre></aside>`,
-        };
+      clipboard: {
+        format: ({ block }) => {
+          const data = JSON.stringify(block.props.originalBlock, null, 2);
+          const text = `${block.content}\n${data}`;
+          return {
+            plain: text,
+            markdown: `> ${block.content}\n\n\`\`\`json\n${data}\n\`\`\``,
+            html: `<aside><strong>${escapeHtml(block.content)}</strong><pre>${escapeHtml(data)}</pre></aside>`,
+          };
+        },
       },
     });
   },

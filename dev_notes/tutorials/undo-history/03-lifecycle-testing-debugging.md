@@ -38,14 +38,14 @@ clear()    manager продолжает работать, stack становит
 destroy()  manager освобождает adapter subscriptions и больше не используется
 ```
 
-`EditorRuntime.destroy()` вызывает `this.history.destroy()`.
+`DocumentEditor.destroy()` вызывает `this.history.destroy()`.
 
 После destroy runtime является завершённым объектом. Код не должен продолжать
 рендерить его или выполнять commands.
 
 ## 3. Почему document не уничтожается runtime
 
-Комментарий в `EditorRuntime.destroy()` подчёркивает ownership:
+Комментарий в `DocumentEditor.destroy()` подчёркивает ownership:
 
 - runtime освобождает собственные subscriptions, plugins, definitions и
   history manager;
@@ -66,7 +66,7 @@ doc.destroy();
 Хороший тест проверяет observable document value, а не внутренний stack Yjs:
 
 ```ts
-const editor = createRivtoEditor({
+const editor = createDocumentEditor({
   initialContent: [{ id: "a", type: "paragraph", content: "Alpha" }],
 });
 
@@ -172,7 +172,7 @@ history/transaction layer, а не view timing hacks.
 ```text
 CRDT update
   → DocumentModel.subscribe
-  → EditorRuntime.changed
+  → DocumentEditor.changed
   → revision
   → useSyncExternalStore
 ```

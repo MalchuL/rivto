@@ -3,7 +3,7 @@
  *
  * The module contains no React or filesystem code, so tests and host adapters
  * can reuse the same snapshot rules. Captures always read current manager state
- * and return detached schema-v6 snapshots suitable for `editor.load()`.
+ * and return detached schema-v9 snapshots suitable for `editor.load()`.
  *
  * @module
  */
@@ -11,22 +11,25 @@ import type {
   BlockDefinition,
   EditorBlock,
   EditorBlockInput,
-  EditorElement,
+  EditorElementNode,
   EditorElementInput,
   EditorSnapshot,
-  RivtoEditorApi,
+  DocumentEditorAPI,
 } from "@chulane/rivto";
 import { z } from "zod";
 
 /** Persisted discriminator shared by Review blocks and canvas elements. */
 export const REVIEW_REPORT_TYPE = "demo.review";
 
-const SNAPSHOT_SCHEMA = z.object({
-  version: z.literal(6),
-  blocks: z.array(z.unknown()),
-  elements: z.array(z.unknown()),
-  pluginData: z.record(z.string(), z.unknown()).optional(),
-}).strict();
+const SNAPSHOT_SCHEMA = z
+  .object({
+    version: z.literal(9),
+    rootElementIds: z.array(z.string().min(1)),
+    blocks: z.array(z.unknown()),
+    elements: z.array(z.unknown()),
+    pluginData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
 
 /** Persisted properties owned by a Review block. */
 export interface ReviewBlockProps extends Record<string, unknown> {
@@ -39,6 +42,8 @@ export interface ReviewBlockProps extends Record<string, unknown> {
 
 /** Persisted properties owned by a Review canvas element. */
 export interface ReviewElementProps extends Record<string, unknown> {
+  /** Clockwise canvas rotation in degrees; omitted values render without rotation. */
+  rotation?: number;
   problem: string;
   elementsAbove: number;
   elementsBelow: number;
@@ -77,22 +82,27 @@ export type ReviewReport = ReviewBlockReport | ReviewElementReport;
 export type SaveReviewReport = (report: ReviewReport) => Promise<void>;
 
 /** Strict runtime schema for Review block properties. */
-export const reviewBlockPropsSchema = z.object({
-  blocksAbove: z.number().int().nonnegative(),
-  blocksBelow: z.number().int().nonnegative(),
-  includeReportBlock: z.boolean().default(false),
-  snapshot: SNAPSHOT_SCHEMA.nullable(),
-  savedAt: z.iso.datetime().nullable(),
-}).strict() as z.ZodType<ReviewBlockProps>;
+export const reviewBlockPropsSchema = z
+  .object({
+    blocksAbove: z.number().int().nonnegative(),
+    blocksBelow: z.number().int().nonnegative(),
+    includeReportBlock: z.boolean().default(false),
+    snapshot: SNAPSHOT_SCHEMA.nullable(),
+    savedAt: z.iso.datetime().nullable(),
+  })
+  .strict() as z.ZodType<ReviewBlockProps>;
 
 /** Strict runtime schema for Review canvas-element properties. */
-export const reviewElementPropsSchema = z.object({
-  problem: z.string(),
-  elementsAbove: z.number().int().nonnegative(),
-  elementsBelow: z.number().int().nonnegative(),
-  snapshot: SNAPSHOT_SCHEMA.nullable(),
-  savedAt: z.iso.datetime().nullable(),
-}).strict() as z.ZodType<ReviewElementProps>;
+export const reviewElementPropsSchema = z
+  .object({
+    rotation: z.number().finite().optional(),
+    problem: z.string(),
+    elementsAbove: z.number().int().nonnegative(),
+    elementsBelow: z.number().int().nonnegative(),
+    snapshot: SNAPSHOT_SCHEMA.nullable(),
+    savedAt: z.iso.datetime().nullable(),
+  })
+  .strict() as z.ZodType<ReviewElementProps>;
 
 /** Demo Review block definition installed by the standalone extension. */
 export const reviewBlockDefinition: BlockDefinition<ReviewBlockProps> = {
@@ -135,7 +145,7 @@ export function createReviewBlockInput(problem = ""): EditorBlockInput {
  * @returns A complete first-class element input with validated defaults.
  */
 export function createReviewElementInput(input: {
-  frame: EditorElementInput["frame"];
+  frame: NonNullable<EditorElementInput["frame"]>;
   zIndex: number;
   id?: string;
   problem?: string;
@@ -164,13 +174,13 @@ export function createReviewElementInput(input: {
  * @param rootIds - Current ordered root identifiers.
  * @returns Roots between valid endpoints, or an empty array.
  */
-function blockCardRootIds(element: EditorElement, rootIds: readonly string[]): string[] {
-  const start = typeof element.props.startBlockId === "string"
-    ? rootIds.indexOf(element.props.startBlockId)
-    : -1;
-  const end = typeof element.props.endBlockId === "string"
-    ? rootIds.indexOf(element.props.endBlockId)
-    : -1;
+function blockCardRootIds(element: EditorElementNode, rootIds: readonly string[]): string[] {
+  const start =
+    typeof element.props.startBlockId === "string"
+      ? rootIds.indexOf(element.props.startBlockId)
+      : -1;
+  const end =
+    typeof element.props.endBlockId === "string" ? rootIds.indexOf(element.props.endBlockId) : -1;
   return start >= 0 && end >= 0
     ? rootIds.slice(Math.min(start, end), Math.max(start, end) + 1)
     : [];
@@ -182,11 +192,10 @@ function blockCardRootIds(element: EditorElement, rootIds: readonly string[]): s
  * @param block - Complete live subtree to detach.
  * @returns Detached subtree safe to embed in another Review snapshot.
  */
-function copyBlockForReport(
-  block: EditorBlock,
-  excludedBlockId?: string,
-): EditorBlock | null {
-  if (block.id === excludedBlockId) return null;
+function copyBlockForReport(block: EditorBlock, excludedBlockId?: string): EditorBlock | null {
+  if (block.id === excludedBlockId) {
+    return null;
+  }
   const copy = structuredClone(block);
   copy.children = copy.children.flatMap((child) => {
     const childCopy = copyBlockForReport(child, excludedBlockId);
@@ -204,7 +213,7 @@ function copyBlockForReport(
  * @param element - Live element record to detach.
  * @returns Detached element safe to embed in a Review snapshot.
  */
-function copyElementForReport(element: EditorElement): EditorElement {
+function copyElementForReport(element: EditorElementNode): EditorElementNode {
   const copy = structuredClone(element);
   if (copy.type === REVIEW_REPORT_TYPE) {
     copy.props = { ...copy.props, snapshot: null, savedAt: null };
@@ -223,7 +232,7 @@ function copyElementForReport(element: EditorElement): EditorElement {
  * @returns Detached snapshot plus report placement from the same live read.
  */
 export function captureBlockReview(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   reviewId: string,
   blocksAbove: number,
   blocksBelow: number,
@@ -240,12 +249,15 @@ export function captureBlockReview(
     parentId = editor.blocks.getParentId(anchorRootId) ?? null;
   }
   const rootIds = editor.blocks.getRootIds();
-  const siblingIds = parentReportId === null
-    ? rootIds
-    : (editor.blocks.getBlockNode(parentReportId)?.childIds ?? []);
+  const siblingIds =
+    parentReportId === null
+      ? rootIds
+      : (editor.blocks.getBlockNode(parentReportId)?.childIds ?? []);
   const siblingIndex = siblingIds.indexOf(reviewId);
   const anchorIndex = rootIds.indexOf(anchorRootId);
-  if (anchorIndex < 0) throw new Error(`Review block ${reviewId} is not in the document`);
+  if (anchorIndex < 0) {
+    throw new Error(`Review block ${reviewId} is not in the document`);
+  }
   const selectedIds = rootIds.slice(
     Math.max(0, anchorIndex - blocksAbove),
     Math.min(rootIds.length, anchorIndex + 1 + blocksBelow),
@@ -253,14 +265,20 @@ export function captureBlockReview(
   const selected = new Set(selectedIds.filter((id) => includeReportBlock || id !== reviewId));
   const blocks = selectedIds.flatMap((id): EditorBlock[] => {
     const block = editor.blocks.getBlock(id);
-    if (!block) throw new Error(`Captured root block ${id} is missing`);
+    if (!block) {
+      throw new Error(`Captured root block ${id} is missing`);
+    }
     const copy = copyBlockForReport(block, includeReportBlock ? undefined : reviewId);
     return copy ? [copy] : [];
   });
-  const elements = editor.elements.getElements().flatMap((element): EditorElement[] => {
-    if (element.type !== "block") return [];
+  const elements = editor.elements.getElementNodes().flatMap((element): EditorElementNode[] => {
+    if (element.type !== "block") {
+      return [];
+    }
     const overlap = blockCardRootIds(element, rootIds).filter((id) => selected.has(id));
-    if (!overlap.length) return [];
+    if (!overlap.length) {
+      return [];
+    }
     const copy = copyElementForReport(element);
     copy.props = {
       ...copy.props,
@@ -270,11 +288,12 @@ export function captureBlockReview(
     return [copy];
   });
   return {
-    snapshot: { version: 6, blocks, elements, pluginData: {} },
+    snapshot: createReviewSnapshot(editor, blocks, elements),
     previousReportSiblingId: siblingIndex > 0 ? siblingIds[siblingIndex - 1]! : null,
-    nextReportSiblingId: siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
-      ? siblingIds[siblingIndex + 1]!
-      : null,
+    nextReportSiblingId:
+      siblingIndex >= 0 && siblingIndex + 1 < siblingIds.length
+        ? siblingIds[siblingIndex + 1]!
+        : null,
     parentReportId,
   };
 }
@@ -290,67 +309,111 @@ export function captureBlockReview(
  * @param reviewId - Review element acting as the capture anchor.
  * @param elementsAbove - Maximum preceding element count.
  * @param elementsBelow - Maximum following element count.
- * @returns Detached loadable schema-v6 snapshot.
+ * @returns Detached loadable schema-v9 snapshot.
  */
 export function captureElementReviewSnapshot(
-  editor: RivtoEditorApi,
+  editor: DocumentEditorAPI,
   reviewId: string,
   elementsAbove: number,
   elementsBelow: number,
 ): EditorSnapshot {
-  const ordered = [...editor.elements.getElements()].sort(
+  const ordered = [...editor.elements.getElementNodes()].sort(
     (left, right) => left.zIndex - right.zIndex || left.id.localeCompare(right.id),
   );
   const anchorIndex = ordered.findIndex(({ id }) => id === reviewId);
-  if (anchorIndex < 0) throw new Error(`Review element ${reviewId} is not in the document`);
-  const included = new Set(ordered.slice(
-    Math.max(0, anchorIndex - elementsAbove),
-    Math.min(ordered.length, anchorIndex + 1 + elementsBelow),
-  ).map(({ id }) => id));
+  if (anchorIndex < 0) {
+    throw new Error(`Review element ${reviewId} is not in the document`);
+  }
+  const included = new Set(
+    ordered
+      .slice(
+        Math.max(0, anchorIndex - elementsAbove),
+        Math.min(ordered.length, anchorIndex + 1 + elementsBelow),
+      )
+      .map(({ id }) => id),
+  );
   const byId = new Map(ordered.map((element) => [element.id, element]));
 
   /** Adds existing group descendants until the included set is closed. */
   const includeChildren = (id: string): void => {
     const element = byId.get(id);
-    if (element?.type !== "group" || !Array.isArray(element.props.children)) return;
-    element.props.children.forEach((child) => {
-      if (typeof child !== "string" || !byId.has(child) || included.has(child)) return;
+    if (element?.type !== "group" || !Array.isArray(element.childIds)) {
+      return;
+    }
+    element.childIds.forEach((child) => {
+      if (typeof child !== "string" || !byId.has(child) || included.has(child)) {
+        return;
+      }
       included.add(child);
       includeChildren(child);
     });
   };
   [...included].forEach(includeChildren);
 
-  const elements = ordered.filter(({ id }) => included.has(id)).map((element) => {
-    const copy = copyElementForReport(element);
-    if (copy.type === "group" && Array.isArray(copy.props.children)) {
-      copy.props.children = copy.props.children.filter(
-        (child): child is string => typeof child === "string" && included.has(child),
-      );
-    }
-    if (copy.type === "connector") {
-      for (const key of ["source", "target"] as const) {
-        const endpoint = copy.props[key];
-        if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) continue;
-        const detached = { ...endpoint } as Record<string, unknown>;
-        if (typeof detached.elementId === "string" && !included.has(detached.elementId)) {
-          delete detached.elementId;
-        }
-        copy.props[key] = detached;
+  const elements = ordered
+    .filter(({ id }) => included.has(id))
+    .map((element) => {
+      const copy = copyElementForReport(element);
+      if (copy.type === "group" && Array.isArray(copy.childIds)) {
+        copy.childIds = copy.childIds.filter(
+          (child): child is string => typeof child === "string" && included.has(child),
+        );
       }
-    }
-    return copy;
-  });
+      if (copy.type === "connector") {
+        for (const key of ["source", "target"] as const) {
+          const endpoint = copy.props[key];
+          if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) {
+            continue;
+          }
+          const detached = { ...endpoint } as Record<string, unknown>;
+          if (typeof detached.elementId === "string" && !included.has(detached.elementId)) {
+            delete detached.elementId;
+          }
+          copy.props[key] = detached;
+        }
+      }
+      return copy;
+    });
   const rootIds = editor.blocks.getRootIds();
-  const capturedRoots = new Set(elements.flatMap((element) => (
-    element.type === "block" ? blockCardRootIds(element, rootIds) : []
-  )));
-  const blocks = rootIds.filter((id) => capturedRoots.has(id)).map((id) => {
-    const block = editor.blocks.getBlock(id);
-    if (!block) throw new Error(`Captured root block ${id} is missing`);
-    const copy = copyBlockForReport(block);
-    if (!copy) throw new Error(`Captured root block ${id} is missing`);
-    return copy;
-  });
-  return { version: 6, blocks, elements, pluginData: {} };
+  const capturedRoots = new Set(
+    elements.flatMap((element) =>
+      element.type === "block" ? blockCardRootIds(element, rootIds) : [],
+    ),
+  );
+  const blocks = rootIds
+    .filter((id) => capturedRoots.has(id))
+    .map((id) => {
+      const block = editor.blocks.getBlock(id);
+      if (!block) {
+        throw new Error(`Captured root block ${id} is missing`);
+      }
+      const copy = copyBlockForReport(block);
+      if (!copy) {
+        throw new Error(`Captured root block ${id} is missing`);
+      }
+      return copy;
+    });
+  return createReviewSnapshot(editor, blocks, elements);
+}
+
+/** Builds complete canvas roots for the captured subset, promoting children whose parents were omitted. */
+function createReviewSnapshot(
+  editor: DocumentEditorAPI,
+  blocks: EditorBlock[],
+  elements: EditorElementNode[],
+): EditorSnapshot {
+  const included = new Set(elements.map((element) => element.id));
+  const records = elements.map(({ id, type, childIds, frame, zIndex, props }) => ({
+    id,
+    type,
+    childIds: childIds.filter((child) => included.has(child)),
+    frame,
+    zIndex,
+    props,
+  }));
+  const children = new Set(records.flatMap((element) => element.childIds));
+  const rootElementIds = elements
+    .filter((element) => !children.has(element.id))
+    .map((element) => element.id);
+  return { version: 9, blocks, elements: records, rootElementIds, pluginData: {} };
 }

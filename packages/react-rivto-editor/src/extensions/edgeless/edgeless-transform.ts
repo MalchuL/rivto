@@ -1,157 +1,663 @@
+import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import { flushSync } from "react-dom";
+import { useReactPanel } from "../../hooks/editor/use-react-panel";
+import { createElement, useContext, useLayoutEffect, useMemo } from "react";
+import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
+import type { ReactPanelApi } from "../../panels/types";
+import type { ReactEditorApi } from "../../editor/types";
+import type { EditorEvent } from "../../managers/events/editor-event";
+import { EdgelessCreationDefaultsContext } from "../../surfaces/edgeless/edgeless-tools-context";
+import type { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
+import { SurfaceContext } from "../../surfaces/surface";
+import { EdgelessTransformControls } from "./edgeless-transform-controls";
+import { ElementGeometry } from "../../elements/element-geometry";
+import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
- * Pointerdown snapshots attached connectors and snap candidates so pointermove
+ * Moveable supplies movement, resize, rotation, and snapping geometry.
+ * Editor events resolve selection and decide whether a target may start a drag.
+ * Gesture start snapshots attached connectors and element frames so pointermove
  * only writes CSS transforms and, when needed, updates reused SVG path `d`
  * attributes. An empty connector snapshot never mounts the live-preview overlay.
  */
 import type { EditorElementFrame } from "@chulane/rivto";
-import type { ReactEditor } from "../../types";
+import { elementContainsBlock } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { canvasDelta } from "./edgeless-geometry";
+import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import {
   attachedConnectorsForTransform,
   isConnectorEndpoint,
   type ConnectorPreviewTarget,
 } from "./edgeless-transform-connectors";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
-import { elementContainsBlock } from "../../elements/block-element-projection";
+import type { ConnectorRoute, ConnectorTextRotation } from "../../elements/visuals/types";
 import {
-  applyRotatedResize,
   connectorLabelCssDegrees,
   connectorLabelPoint,
   connectorPath,
   connectorPoints,
-  EDGELESS_GRID_SIZE,
   endpointPoint,
   normalizeRotation,
   rotatedFrameBounds,
-  snapFrame,
-  snapMoveToGrid,
-  snapResize,
-  snapResizeToGrid,
-  unionFrames,
-  type ResizeCorner,
-  type SnapGuide,
-} from "./visuals/utils/geometry";
-import { showSnapGuides } from "./visuals/utils/snap-guides";
-import type { ConnectorRoute, ConnectorTextRotation } from "./visuals/types";
+} from "../../elements/visuals/utils/geometry";
+
+/**
+ * Mounts controls only when this view renders an edgeless surface.
+ *
+ * The controller receives the surface settings session and connects document
+ * gestures in a layout effect; page occurrences do not install these controls.
+ *
+ * @returns Mounted transform controls, or null outside edgeless mode.
+ */
+function TransformControls() {
+  const mode = useContext(SurfaceContext);
+  const creationDefaults = useContext(EdgelessCreationDefaultsContext);
+  const reactPanel = useReactPanel();
+  const controller = useMemo(
+    () => new EdgelessTransformController(reactPanel.editor, creationDefaults),
+    [reactPanel, creationDefaults],
+  );
+  // Claim object gestures before the passive marquee selection handlers change selection.
+  useLayoutEffect(
+    () => (mode === "edgeless" ? controller.setup(reactPanel) : undefined),
+    [controller, reactPanel, mode],
+  );
+  if (mode !== "edgeless") {
+    return null;
+  }
+  return createElement(EdgelessTransformControls, { controller });
+}
 
 const ROOT_SELECTOR = "[data-edgeless-root]";
 const OBJECT_SELECTOR = "[data-edgeless-object-kind][data-edgeless-object-id]";
 const BLOCK_SELECTOR = "[data-block-id]";
 // Bento edge handles are not buttons. Exclude them so card transform does not
 // steal pointerdown before the tile can preview a width.
-const CONTROL_SELECTOR = "[data-block-content], [data-edgeless-ui], button:not([data-edgeless-drag-handle]), input, textarea, select, a, [contenteditable=true], [data-bento-resize-edge]";
-const RESIZE_CORNERS = new Set<ResizeCorner>(["n", "e", "s", "w", "nw", "ne", "sw", "se"]);
+const CONTROL_SELECTOR = `[data-block-content], [data-edgeless-ui], ${EDITOR_CONTROL_SELECTOR}, ${PREVENT_TEXT_EDITING_SELECTOR}, [contenteditable=true], [data-bento-resize-edge]`;
 const CONNECTOR_PREVIEW_CLASS = "edgeless-connector-live-preview";
 const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
 const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-interface TransformStart {
-  readonly kind: "move" | "resize" | "rotate";
-  readonly x: number;
-  readonly y: number;
-  readonly ids: string[];
-  readonly frames: Map<string, EditorElementFrame>;
-  /** Leaf IDs in this gesture, including group children. */
-  readonly moving: ReadonlySet<string>;
-  /** Connectors that must live-preview; empty means pointermove skips overlay work. */
-  readonly attachedConnectors: readonly ConnectorPreviewTarget[];
-  /** Align-snap frames excluding moving leaves, captured once at pointerdown. */
-  readonly snapCandidates: readonly EditorElementFrame[];
-  readonly corner?: ResizeCorner;
-  readonly rotation?: number;
-  readonly pointerAngle?: number;
-  /**
-   * AFFiNE progressive groups: after drilling into a child, a click-without-drag
-   * should re-select this parent group (exit drill-in) instead of leaving the child selected.
-   */
-  readonly returnToGroup?: string;
-  lastX: number;
-  lastY: number;
-  moved: boolean;
-  guides: readonly SnapGuide[];
-  snapDisabled: boolean;
-  rotationSnapped: boolean;
-  previewRotation?: number;
-}
-
-/** Reused SVG path and optional label for one path-rebuild connector. */
-interface ConnectorOverlayNode {
-  readonly path: SVGPathElement;
-  label: HTMLElement | null;
-}
-
 /** Adds one delegated move/resize path for cards, visuals, and nested groups. */
-export function registerEdgelessTransform(reactEditor: ReactEditor): () => void {
-  const selection = getEdgelessRuntime(reactEditor);
-  let start: TransformStart | null = null;
-  let previewTargets: HTMLElement[] | null = null;
-  let hiddenConnectors: HTMLElement[] = [];
-  let translatedConnectors: HTMLElement[] = [];
-  let overlayLabels: HTMLElement[] = [];
-  let overlaySvg: SVGSVGElement | null = null;
-  const overlayNodes = new Map<string, ConnectorOverlayNode>();
-  const connectorHosts = new Map<string, HTMLElement | null>();
+export function registerEdgelessTransform(reactEditor: ReactEditorApi): () => void {
+  return reactEditor.extensions.mount(TransformControls);
+}
 
-  const groupChildren = (id: string): string[] => {
-    const element = reactEditor.elements.getElement(id);
-    return element?.type === "group" && Array.isArray(element.props.children) ? element.props.children.filter((child): child is string => typeof child === "string") : [];
+/** Owns transform gesture state, preview geometry, and commit for one mounted panel. */
+export class EdgelessTransformController {
+  private reactPanel?: ReactPanelApi;
+  /**
+   * Reads element operations within the transform controller's scope.
+   *
+   * @returns Panel operations when mounted, otherwise editor-wide operations.
+   */
+  private get elements() {
+    return this.reactPanel?.elements ?? this.reactEditor.elements;
+  }
+  /**
+   * Reads the edgeless selection runtime for the transform controller's scope.
+   *
+   * @returns The panel or editor edgeless runtime.
+   */
+  private get selection() {
+    return getEdgelessRuntime(this.reactPanel ?? this.reactEditor);
+  }
+
+  private controls = new Map<
+    ReactPanelApi,
+    {
+      /**
+       * Sets and measures the DOM targets before starting a native drag.
+       *
+       * @param targets - DOM hosts participating in the transform gesture.
+       */
+      prepareDrag(targets: HTMLElement[]): void;
+      /**
+       * Starts transform controls from a native mouse or touch event.
+       *
+       * @param event - Native or React event supplying the current input.
+       */
+      dragStart(event: MouseEvent | TouchEvent): void;
+      /**
+       * Stops an active transform-control gesture.
+       */
+      stop(): void;
+    }
+  >();
+
+  /**
+   * Registers the mounted view's Moveable instance for drags started by editor selection.
+   * @param reactPanel - View whose DOM targets and gestures the controls own.
+   * @param controls - Prepares selected hosts, forwards native mouse/touch starts,
+   * and stops library tracking on cancellation.
+   * @returns Cleanup that cancels this view's gesture and releases the registration.
+   */
+  registerControls(
+    reactPanel: ReactPanelApi,
+    controls: {
+      /**
+       * Sets and measures the DOM targets before starting a native drag.
+       *
+       * @param targets - DOM hosts participating in the transform gesture.
+       */
+      prepareDrag(targets: HTMLElement[]): void;
+      /**
+       * Starts transform controls from a native mouse or touch event.
+       *
+       * @param event - Native or React event supplying the current input.
+       */
+      dragStart(event: MouseEvent | TouchEvent): void;
+      /**
+       * Stops an active transform-control gesture.
+       */
+      stop(): void;
+    },
+  ): () => void {
+    this.controls.set(reactPanel, controls);
+    return () => {
+      this.finishControls(reactPanel, false);
+      this.controls.delete(reactPanel);
+    };
+  }
+
+  /**
+   * Resolves mounted leaves for Moveable's single or group target.
+   * Groups expand recursively; their hit areas follow the preview and are not Moveable targets.
+   * @param reactPanel - View supplying the selected element tree.
+   * @param root - DOM root restricting the search to this mounted view.
+   * @param ids - Selected element or group IDs, in selection order.
+   * @returns Unique mounted leaf hosts for the supplied selection; missing elements are skipped.
+   */
+  getMoveTargets(
+    reactPanel: ReactPanelApi,
+    root: HTMLElement,
+    ids: readonly string[],
+  ): HTMLElement[] {
+    const leaves = new Set(this.getMoveTargetIds(reactPanel, ids));
+    return [...root.querySelectorAll<HTMLElement>(OBJECT_SELECTOR)].filter((host) =>
+      leaves.delete(host.dataset.edgelessObjectId!),
+    );
+  }
+
+  /**
+   * Expands selected groups into concrete leaf identities without requiring mounted DOM.
+   * @param reactPanel - Occurrence supplying the selected element tree.
+   * @param ids - Selected element or group IDs in selection order.
+   * @returns Unique existing leaf IDs, including offscreen participants.
+   */
+  getMoveTargetIds(reactPanel: ReactPanelApi, ids: readonly string[]): string[] {
+    const leaves = new Set<string>();
+    const visit = (id: string) => {
+      const element = reactPanel.elements.getElementNode(id);
+      if (!element) {
+        return;
+      }
+      if (element.type === "group" && element.childIds.length) {
+        element.childIds.forEach(visit);
+      } else {
+        leaves.add(id);
+      }
+    };
+    ids.forEach(visit);
+    return [...leaves];
+  }
+
+  /**
+   * Checks whether editor selection accepted a move before Moveable begins tracking it.
+   * @param reactPanel - View reporting the library's drag-start event.
+   * @returns False for content editing, controls, or a gesture owned by another view.
+   */
+  isMoving(reactPanel: ReactPanelApi): boolean {
+    return this.reactPanel === reactPanel && this.start?.kind === "move";
+  }
+
+  private releaseCanvasPins?: () => void;
+  private sourceRotations = new Map<string, number>();
+  private start: TransformStart | null = null;
+  private previewTargets: HTMLElement[] | null = null;
+  private hiddenConnectors: HTMLElement[] = [];
+  private translatedConnectors: HTMLElement[] = [];
+  private overlayLabels: HTMLElement[] = [];
+  private overlaySvg: SVGSVGElement | null = null;
+  private overlayNodes = new Map<string, ConnectorOverlayNode>();
+  private connectorHosts = new Map<string, HTMLElement | null>();
+  private readonly geometry = new ElementGeometry(
+    (id) => this.elements.getElementNode(id),
+    (id) => this.rotation(id),
+  );
+
+  /**
+   * Creates gesture controls with optional surface-owned creation settings.
+   *
+   * @param reactEditor - Runtime receiving transform events and document commands.
+   * @param creationDefaults - Settings updated after committed resizes; omitted controls do not remember dimensions.
+   */
+  constructor(
+    private readonly reactEditor: ReactEditorApi,
+    private readonly creationDefaults?: EdgelessCreationDefaults | null,
+  ) {}
+
+  /**
+   * Captures editor state when a Moveable edge or handle starts a move, resize, or rotation.
+   * No document writes occur until finishControls commits the final geometry.
+   * @param reactPanel - View owning the selected element and its Panel coordinates.
+   * @param root - Mounted edgeless viewport containing the target and connector previews.
+   * @param ids - Selected element or group IDs; missing elements and standalone connectors are rejected.
+   * Group children are expanded recursively without changing their stored parentage.
+   * @param kind - Move, size change, or rotation requested by a library control.
+   * @param stop - Stops Moveable's pointer tracking if Escape cancels the gesture.
+   * @returns Whether the editor accepted the gesture.
+   */
+  beginControls(
+    reactPanel: ReactPanelApi,
+    root: HTMLElement,
+    ids: readonly string[],
+    kind: "move" | "resize" | "rotate",
+    stop: () => void,
+  ): boolean {
+    if (this.start) {
+      this.finish(false);
+    }
+    this.reactPanel = reactPanel;
+    if (
+      !ids.length ||
+      ids.some((id) => {
+        const element = this.elements.getElementNode(id);
+        return (
+          !element || this.reactEditor.elementTypes.get(element.type)?.behavior?.absoluteGeometry
+        );
+      })
+    ) {
+      return false;
+    }
+    const moving = new Set(this.leaves(ids));
+    this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
+    flushSync(() => {
+      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+    });
+    const frames = new Map<string, EditorElementFrame>();
+    [...ids, ...moving].forEach((item) => {
+      const frame = this.transformFrame(item);
+      if (frame) {
+        frames.set(item, { ...frame });
+      }
+    });
+    const groupRotations = new Map<string, number>();
+    const visitGroups = (item: string) => {
+      const node = this.elements.getElementNode(item);
+      if (node?.type !== "group") {
+        return;
+      }
+      groupRotations.set(item, this.rotation(item));
+      node.childIds.forEach(visitGroups);
+    };
+    ids.forEach(visitGroups);
+    this.start = {
+      groupRotations,
+      root,
+      kind,
+      stopMoveable: stop,
+      ids: [...ids],
+      dx: 0,
+      dy: 0,
+      moved: false,
+      frames,
+      moving,
+      attachedConnectors: this.connectorTargets(moving, new Set(ids), kind),
+    };
+    root.dataset.transforming = kind;
+    root.focus({ preventScroll: true });
+    // Moveable previews write size and transform while left/top stay fixed; lock
+    // those styles so React cannot clobber opposite-corner-stable geometry mid-drag.
+    this.lockGeometry(root, ids);
+    return true;
+  }
+
+  /**
+   * Displays geometry computed by Moveable without recording pointer samples.
+   * Attached connector previews use the same frame and angle as the HTML target.
+   * @param previews - Leaf IDs with their rectangles before center rotation and
+   * clockwise angles. Group events supply every child in one call so connectors
+   * and group bounds observe the same pointer sample. No document writes occur.
+   * @param rotationDelta - Group rotation since gesture start, in clockwise degrees.
+   * Nested group angles follow this delta without applying it to children twice.
+   */
+  previewControls(previews: readonly ElementTransformPreview[], rotationDelta = 0): void {
+    const active = this.start;
+    if (!active || active.kind === "move") {
+      return;
+    }
+    const next = new Map(previews.map((preview) => [preview.id, preview]));
+    const geometry = new ElementGeometry(
+      (id) => {
+        const node = this.elements.getElementNode(id);
+        if (!node) {
+          return undefined;
+        }
+        const preview = next.get(id);
+        const groupAngle = active.groupRotations?.get(id);
+        const rotation =
+          groupAngle === undefined
+            ? (preview?.rotation ?? this.rotation(id))
+            : groupAngle + rotationDelta;
+        return { ...node, frame: preview?.frame ?? node.frame, props: { ...node.props, rotation } };
+      },
+      (id) => next.get(id)?.rotation,
+    );
+    active.groupRotations?.forEach((rotation, id) => {
+      const frame = geometry.frame(id);
+      if (frame) {
+        next.set(id, { id, frame, rotation: rotation + rotationDelta });
+      }
+    });
+    active.previews = next;
+    active.previewGeometry = geometry;
+    active.moved = previews.some(({ id, frame, rotation }) => {
+      const initial = active.frames.get(id)!;
+      return (
+        frame.x !== initial.x ||
+        frame.y !== initial.y ||
+        frame.width !== initial.width ||
+        frame.height !== initial.height ||
+        rotation !== this.rotation(id)
+      );
+    });
+    this.previewTargets?.forEach((target) => {
+      const id = this.targetId(target);
+      const preview = active.previews!.get(id);
+      if (!preview) {
+        return;
+      }
+      const { frame, rotation } = preview;
+      target.style.width = `${frame.width}px`;
+      target.style.height = `${frame.height}px`;
+      target.style.transform =
+        preview.transform ?? `translate(${frame.x}px, ${frame.y}px) rotate(${rotation}deg)`;
+    });
+    this.previewAttachedConnectors(active.root, active, 0, 0);
+  }
+
+  /**
+   * Finishes only a Moveable gesture belonging to the supplied view.
+   * Cancellation restores DOM styles; commitment records one history operation.
+   * @param reactPanel - View that mounted the Moveable controls.
+   * @param commit - False on unmount, pointer cancellation, or explicit cancellation.
+   * @param eventDetail - Click count used to preserve double-click text editing.
+   */
+  finishControls(reactPanel: ReactPanelApi, commit: boolean, eventDetail = 1): void {
+    if (this.reactPanel === reactPanel && this.start) {
+      this.finish(commit, eventDetail);
+    }
+  }
+
+  /**
+   * Applies a Moveable drag delta to all selected objects and their connector previews.
+   * @param dx - Horizontal displacement from gesture start in canvas units, after snapping.
+   * @param dy - Vertical displacement from gesture start in canvas units, after snapping.
+   */
+  previewMove(dx: number, dy: number): void {
+    const active = this.start;
+    if (!active || active.kind !== "move") {
+      return;
+    }
+    active.dx = dx;
+    active.dy = dy;
+    active.previewGeometry = new ElementGeometry(
+      (id) => {
+        const node = this.elements.getElementNode(id);
+        const frame = active.frames.get(id);
+        return node && frame && active.moving.has(id)
+          ? { ...node, frame: { ...frame, x: frame.x + dx, y: frame.y + dy } }
+          : node;
+      },
+      (id) => this.rotation(id),
+    );
+    if (!active.moved && Math.hypot(dx, dy) < 2) {
+      return;
+    }
+    active.moved = true;
+    this.previewTargets?.forEach((target) => {
+      const id = this.targetId(target);
+      const frame = active.frames.get(id)!;
+      target.style.transform = `translate(${frame.x + dx}px, ${frame.y + dy}px) rotate(${this.rotation(id)}deg)`;
+    });
+    this.previewAttachedConnectors(active.root, active, dx, dy);
+  }
+
+  /** Mounts per-view Moveable controls and installs move handlers; destruction cancels previews. */
+  setup(reactPanel: ReactPanelApi): () => void {
+    const disposers: Array<() => void> = [];
+    disposers.push(
+      reactPanel.editor.subscribe(() => {
+        const active = this.start;
+        if (!active) {
+          return;
+        }
+        for (const [id, original] of active.frames) {
+          const current = this.transformFrame(id);
+          if (
+            !current ||
+            current.x !== original.x ||
+            current.y !== original.y ||
+            current.width !== original.width ||
+            current.height !== original.height ||
+            (this.sourceRotations.has(id) && this.rotation(id) !== this.sourceRotations.get(id))
+          ) {
+            this.finish(false);
+            break;
+          }
+        }
+      }),
+    );
+    // Cancelling pointerdown suppresses the mouse events that Moveable tracks.
+    disposers.push(
+      reactPanel.events.register(
+        {
+          id: "edgeless.transform.pointer-start",
+          type: "pointerdown",
+          capture: true,
+          preventDefault: false,
+          mode: "edgeless",
+        },
+        this.onPointerDown,
+      ),
+    );
+    disposers.push(
+      reactPanel.events.register(
+        {
+          id: "edgeless.transform.mouse-start",
+          type: "mousedown",
+          capture: true,
+          mode: "edgeless",
+        },
+        ({ raw, reactPanel }) => {
+          if (!this.isMoving(reactPanel)) {
+            return false;
+          }
+          this.controls.get(reactPanel)?.dragStart(raw);
+          return true;
+        },
+      ),
+    );
+    disposers.push(
+      reactPanel.events.register(
+        {
+          id: "edgeless.transform.touch-start",
+          type: "touchstart",
+          capture: true,
+          mode: "edgeless",
+        },
+        ({ raw, reactPanel }) => {
+          if (!this.isMoving(reactPanel)) {
+            return false;
+          }
+          this.controls.get(reactPanel)?.dragStart(raw);
+          return true;
+        },
+      ),
+    );
+    disposers.push(
+      reactPanel.events.register(
+        {
+          id: "edgeless.transform.pointer-cancel",
+          type: "pointercancel",
+          target: "window",
+          mode: "edgeless",
+        },
+        () => this.finish(false),
+      ),
+    );
+    disposers.push(
+      reactPanel.keyboard.register(
+        {
+          id: KEYBOARD_BINDING_IDS.edgelessTransformCancel,
+          keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel],
+          mode: "edgeless",
+          when: () => Boolean(this.start),
+        },
+        () => this.finish(false),
+      ),
+    );
+    disposers.push(reactPanel.subscribeDeactivation(() => this.finish(false)));
+    return () => {
+      disposers.reverse().forEach((dispose) => dispose());
+      this.finish(false);
+      this.clearPreview();
+    };
+  }
+
+  /**
+   * Reads a group's direct child element IDs.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Group children, or an empty list for other or missing elements.
+   */
+  private groupChildren = (id: string): string[] => {
+    const element = this.elements.getElementNode(id);
+    return element?.type === "group" && Array.isArray(element.childIds) ? element.childIds : [];
   };
-  const parentId = (id: string): string | undefined => reactEditor.elements.getElements().find((element) => groupChildren(element.id).includes(id))?.id;
-  const rotation = (id: string): number => {
-    const element = reactEditor.elements.getElement(id);
-    return element?.type !== "block" && element?.type !== "connector" && typeof element?.props.rotation === "number"
+  /**
+   * Finds an element's selectable parent without crossing the panel container.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Parent element ID, or undefined at the panel boundary.
+   */
+  private parentId = (id: string): string | undefined => {
+    const parent = this.elements.getParentId(id);
+    // The Panel container is outside its selectable element subtree.
+    return parent && this.elements.hasElement(parent) ? parent : undefined;
+  };
+  /**
+   * Reads normalized rotation while leaving absolute-geometry types unrotated.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Rotation in degrees, defaulting to zero.
+   */
+  private rotation = (id: string): number => {
+    const element = this.elements.getElementNode(id);
+    return !this.reactEditor.elementTypes.get(element?.type ?? "")?.behavior?.absoluteGeometry &&
+      typeof element?.props.rotation === "number"
       ? normalizeRotation(element.props.rotation)
       : 0;
   };
-  const leaves = (ids: readonly string[], seen = new Set<string>()): string[] => ids.flatMap((id): string[] => {
-    if (seen.has(id)) return [];
-    seen.add(id);
-    const children = groupChildren(id);
-    return children.length ? leaves(children, seen) : reactEditor.elements.hasElement(id) ? [id] : [];
-  });
-  const bounds = (id: string): EditorElementFrame | undefined => {
-    const children = groupChildren(id);
-    const element = reactEditor.elements.getElement(id);
-    return children.length ? unionFrames(children.flatMap((child) => bounds(child) ?? [])) : element ? rotatedFrameBounds(element.frame, rotation(id)) : undefined;
-  };
-  const transformFrame = (id: string): EditorElementFrame | undefined => groupChildren(id).length ? bounds(id) : reactEditor.elements.getElement(id)?.frame;
-  const rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
-    const included = new Set([...ids, ...leaves(ids)]);
-    return [...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id], [data-edgeless-group-bound-id]")].filter((element) => {
-      // Drag handles are chrome inside a frame — never their own transform target.
-      if (element.matches("[data-edgeless-drag-handle]")) return false;
-      const id = element.dataset.edgelessRoot ?? element.dataset.edgelessObjectId ?? element.dataset.edgelessGroupBoundId ?? "";
-      if (!included.has(id)) return false;
-      // Connectors are live-previewed from attachments instead of CSS-translated.
-      return reactEditor.elements.getElement(id)?.type !== "connector";
+  /**
+   * Expands groups into existing leaf element IDs without revisiting IDs.
+   *
+   * @param ids - Selected IDs whose groups are recursively expanded.
+   * @param seen - Traversal IDs already visited; updated to suppress duplicates and cycles.
+   * @returns Unique reachable leaves; missing elements are omitted.
+   */
+  private leaves = (ids: readonly string[], seen = new Set<string>()): string[] =>
+    ids.flatMap((id): string[] => {
+      if (seen.has(id)) {
+        return [];
+      }
+      seen.add(id);
+      const children = this.groupChildren(id);
+      if (children.length) {
+        return this.leaves(children, seen);
+      }
+      return this.elements.hasElement(id) ? [id] : [];
+    });
+  /**
+   * Computes the element's visual bounds through the geometry resolver.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Axis-aligned bounds, or undefined when geometry is unavailable.
+   */
+  private bounds = (id: string): EditorElementFrame | undefined => this.geometry.bounds(id);
+  /**
+   * Reads the geometry used to transform an element.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Transform frame, or undefined when unavailable.
+   */
+  private transformFrame = (id: string): EditorElementFrame | undefined => this.geometry.frame(id);
+  /**
+   * Finds rendered hosts for selected elements and their leaves, including hidden connector hosts for resize and rotation.
+   *
+   * @param root - Mounted surface root, or null when clearing its registration.
+   * @param ids - Selected element IDs whose DOM hosts should be collected.
+   * @returns DOM hosts participating in the current transform preview.
+   */
+  private rendered = (root: HTMLElement, ids: readonly string[]): HTMLElement[] => {
+    const included = new Set([...ids, ...this.leaves(ids)]);
+    return [
+      ...root.querySelectorAll<HTMLElement>("[data-edgeless-root], [data-edgeless-object-id]"),
+    ].filter((element) => {
+      const id = element.dataset.edgelessRoot ?? element.dataset.edgelessObjectId ?? "";
+      if (!included.has(id)) {
+        return false;
+      }
+      // Moves draw connectors from their attachments. Rotation and resize must
+      // also transform hidden connector hosts because Moveable measures them.
+      return (
+        this.start?.kind === "rotate" ||
+        this.start?.kind === "resize" ||
+        this.elements.getElementNode(id)?.type !== "connector"
+      );
     });
   };
-  const minSize = (id: string) => reactEditor.elements.getElement(id)?.type === "block" ? { width: 180, height: 100 } : { width: 1, height: 1 };
-  const previewFrame = (id: string, active: TransformStart, dx: number, dy: number): EditorElementFrame | undefined => {
-    const base = active.frames.get(id) ?? transformFrame(id);
-    if (!base) return undefined;
-    if (active.kind === "move") return { ...base, x: base.x + dx, y: base.y + dy };
-    if (active.kind === "rotate") return base;
-    const min = minSize(id);
-    return applyRotatedResize(base, dx, dy, active.corner ?? "se", min.width, min.height, rotation(id));
+  /**
+   * Reads preview geometry or derives a translated frame for an active move.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @param active - Active gesture state or whether the keyboard gesture is enabled.
+   * @param dx - Horizontal translation in canvas coordinates.
+   * @param dy - Vertical translation in canvas coordinates.
+   * @returns Preview frame, or undefined when no base frame exists.
+   */
+  private previewFrame = (
+    id: string,
+    active: TransformStart,
+    dx: number,
+    dy: number,
+  ): EditorElementFrame | undefined => {
+    const preview = active.previewGeometry?.frame(id);
+    if (preview) {
+      return preview;
+    }
+    const base = active.frames.get(id) ?? this.transformFrame(id);
+    if (!base) {
+      return undefined;
+    }
+    if (active.kind === "move") {
+      return { ...base, x: base.x + dx, y: base.y + dy };
+    }
+    if (active.kind === "rotate") {
+      return base;
+    }
+    return base;
   };
-  const targetId = (target: HTMLElement): string => target.dataset.edgelessRoot ?? target.dataset.edgelessObjectId ?? target.dataset.edgelessGroupBoundId ?? "";
-  const rotationAt = (root: HTMLElement, active: TransformStart, clientX: number, clientY: number, shiftKey = false): number => {
-    const frame = active.frames.get(active.ids[0]!);
-    if (!frame) return active.rotation ?? 0;
-    const rect = root.getBoundingClientRect();
-    const zoom = Number(root.dataset.edgelessZoom) || 1;
-    const panX = Number(root.dataset.edgelessPanX) || 0;
-    const panY = Number(root.dataset.edgelessPanY) || 0;
-    const point = { x: (clientX - rect.left - panX) / zoom, y: (clientY - rect.top - panY) / zoom };
-    const angle = Math.atan2(point.y - frame.y - frame.height / 2, point.x - frame.x - frame.width / 2) * 180 / Math.PI;
-    const next = normalizeRotation((active.rotation ?? 0) + angle - (active.pointerAngle ?? angle));
-    return shiftKey ? normalizeRotation(Math.round(next / 15) * 15) : next;
-  };
+  /**
+   * Reads the persisted element ID associated with a transform host.
+   *
+   * @param target - DOM host or proxied owner being accessed.
+   * @returns Element ID, or an empty string when the host has no marker.
+   */
+  private targetId = (target: HTMLElement): string =>
+    target.dataset.edgelessRoot ?? target.dataset.edgelessObjectId ?? "";
   /**
    * Returns the rendered connector host, caching the query for the gesture.
    *
@@ -159,31 +665,34 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
    * @param id - Connector element ID.
    * @returns Host node, or null when it is not mounted.
    */
-  const hostFor = (root: HTMLElement, id: string): HTMLElement | null => {
-    if (!connectorHosts.has(id)) {
-      connectorHosts.set(id, root.querySelector<HTMLElement>(`[data-edgeless-object-id="${id}"]`));
+  private hostFor = (root: HTMLElement, id: string): HTMLElement | null => {
+    if (!this.connectorHosts.has(id)) {
+      this.connectorHosts.set(
+        id,
+        root.querySelector<HTMLElement>(`[data-edgeless-object-id="${id}"]`),
+      );
     }
-    return connectorHosts.get(id) ?? null;
+    return this.connectorHosts.get(id) ?? null;
   };
   /**
    * Restores connector hosts and removes the reused preview overlay.
    *
    * @returns Nothing.
    */
-  const clearConnectorPreview = () => {
-    hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
-    hiddenConnectors = [];
-    translatedConnectors.forEach((host) => {
+  private clearConnectorPreview = () => {
+    this.hiddenConnectors.forEach((host) => host.style.removeProperty("visibility"));
+    this.hiddenConnectors = [];
+    this.translatedConnectors.forEach((host) => {
       host.style.removeProperty("transform");
       delete host.dataset.edgelessGeometryLock;
     });
-    translatedConnectors = [];
-    overlayLabels.forEach((label) => label.remove());
-    overlayLabels = [];
-    overlayNodes.clear();
-    connectorHosts.clear();
-    overlaySvg?.remove();
-    overlaySvg = null;
+    this.translatedConnectors = [];
+    this.overlayLabels.forEach((label) => label.remove());
+    this.overlayLabels = [];
+    this.overlayNodes.clear();
+    this.connectorHosts.clear();
+    this.overlaySvg?.remove();
+    this.overlaySvg = null;
   };
   /**
    * Creates the connector preview SVG once per gesture, with a persistent defs node.
@@ -191,42 +700,44 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
    * @param root - Edgeless viewport that owns the plane.
    * @returns Connected overlay svg, or null when the plane is missing.
    */
-  const ensureOverlay = (root: HTMLElement) => {
-    const plane = root.querySelector<HTMLElement>("[data-edgeless-plane]");
-    if (!plane) return null;
-    if (overlaySvg?.isConnected) return overlaySvg;
+  private ensureOverlay = (root: HTMLElement) => {
+    const plane = CanvasViewport.forElement(root)?.layers.get()?.plane;
+    if (!plane) {
+      return null;
+    }
+    if (this.overlaySvg?.isConnected) {
+      return this.overlaySvg;
+    }
     const svg = root.ownerDocument.createElementNS(SVG_NS, "svg");
     svg.setAttribute("data-edgeless-connector-preview", "true");
     svg.setAttribute("class", CONNECTOR_PREVIEW_CLASS);
-    Object.assign(svg.style, {
-      position: "absolute",
-      inset: "0",
-      width: "100%",
-      height: "100%",
-      overflow: "visible",
-      pointerEvents: "none",
-      zIndex: "2147483638",
-    });
     svg.append(root.ownerDocument.createElementNS(SVG_NS, "defs"));
     plane.append(svg);
-    overlaySvg = svg;
+    this.overlaySvg = svg;
     return svg;
   };
   /**
    * Appends a reusable arrow marker to the overlay defs.
    *
+   * The triangle tip at (8, 4) extends one stroke width beyond the path endpoint for both orientations.
+   *
    * @param defs - Overlay defs element.
    * @param id - Marker element ID, stable for the gesture.
    * @param stroke - Fill color matching the connector stroke.
    * @param start - True for the source-end marker.
-   * @returns Nothing.
+   * @returns Appends the marker with its outward tip offset to the overlay definitions.
    */
-  const appendMarker = (defs: SVGDefsElement, id: string, stroke: string, start: boolean): void => {
+  private appendMarker = (
+    defs: SVGDefsElement,
+    id: string,
+    stroke: string,
+    start: boolean,
+  ): void => {
     const marker = defs.ownerDocument.createElementNS(SVG_NS, "marker");
     marker.setAttribute("id", id);
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX", start ? "1" : "7");
+    marker.setAttribute("refX", "7");
     marker.setAttribute("refY", "4");
     marker.setAttribute("orient", start ? "auto-start-reverse" : "auto");
     const tip = defs.ownerDocument.createElementNS(SVG_NS, "path");
@@ -247,45 +758,98 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
    * @param dy - Preview translation Y in canvas units.
    * @returns Nothing.
    */
-  const previewAttachedConnectors = (root: HTMLElement, active: TransformStart, dx: number, dy: number) => {
+  private previewAttachedConnectors = (
+    root: HTMLElement,
+    active: TransformStart,
+    dx: number,
+    dy: number,
+  ) => {
     const attached = active.attachedConnectors;
-    if (!attached.length) return;
+    if (!attached.length) {
+      return;
+    }
     for (const item of attached) {
-      if (item.kind !== "translate") continue;
-      const host = hostFor(root, item.id);
-      if (!host) continue;
+      if (item.kind !== "translate") {
+        continue;
+      }
+      const host = this.hostFor(root, item.id);
+      if (!host) {
+        continue;
+      }
       host.dataset.edgelessGeometryLock = "true";
       host.style.transform = `translate(${dx}px, ${dy}px)`;
-      if (!translatedConnectors.includes(host)) translatedConnectors.push(host);
+      if (!this.translatedConnectors.includes(host)) {
+        this.translatedConnectors.push(host);
+      }
     }
     const pathItems = attached.filter((item) => item.kind === "path");
-    if (!pathItems.length) return;
-    const overlay = ensureOverlay(root);
+    if (!pathItems.length) {
+      return;
+    }
+    const overlay = this.ensureOverlay(root);
     const plane = overlay?.parentElement;
     const defs = overlay?.querySelector<SVGDefsElement>("defs");
-    if (!overlay || !plane || !defs) return;
+    if (!overlay || !plane || !defs) {
+      return;
+    }
     for (const item of pathItems) {
-      const element = reactEditor.elements.getElement(item.id);
+      const element = this.elements.getElementNode(item.id);
       const source = element?.props.source;
       const target = element?.props.target;
-      if (!element || !isConnectorEndpoint(source) || !isConnectorEndpoint(target)) continue;
-      const sourceBound = source.elementId ? bounds(source.elementId) : undefined;
-      const targetBound = target.elementId ? bounds(target.elementId) : undefined;
-      const sourceFrame = source.elementId ? previewFrame(source.elementId, active, item.sourceMoves ? dx : 0, item.sourceMoves ? dy : 0) : undefined;
-      const targetFrame = target.elementId ? previewFrame(target.elementId, active, item.targetMoves ? dx : 0, item.targetMoves ? dy : 0) : undefined;
-      const sourceRotation = source.elementId && active.kind === "rotate" && active.ids.includes(source.elementId)
-        ? active.previewRotation ?? rotation(source.elementId)
-        : source.elementId ? rotation(source.elementId) : 0;
-      const targetRotation = target.elementId && active.kind === "rotate" && active.ids.includes(target.elementId)
-        ? active.previewRotation ?? rotation(target.elementId)
-        : target.elementId ? rotation(target.elementId) : 0;
-      let nextSource = endpointPoint(source, sourceFrame, sourceRotation);
-      let nextTarget = endpointPoint(target, targetFrame, targetRotation);
-      if (item.connectorMoves && !source.elementId) nextSource = { x: source.position.x + dx, y: source.position.y + dy };
-      if (item.connectorMoves && !target.elementId) nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
-      const route = (typeof element.props.route === "string" ? element.props.route : "straight") as ConnectorRoute;
-      const routeSourceFrame = sourceFrame ? rotatedFrameBounds(sourceFrame, sourceRotation) : sourceBound;
-      const routeTargetFrame = targetFrame ? rotatedFrameBounds(targetFrame, targetRotation) : targetBound;
+      if (!element || !isConnectorEndpoint(source) || !isConnectorEndpoint(target)) {
+        continue;
+      }
+      const sourceBound = source.elementId ? this.bounds(source.elementId) : undefined;
+      const targetBound = target.elementId ? this.bounds(target.elementId) : undefined;
+      const sourceFrame = source.elementId
+        ? this.previewFrame(
+            source.elementId,
+            active,
+            item.sourceMoves ? dx : 0,
+            item.sourceMoves ? dy : 0,
+          )
+        : undefined;
+      const targetFrame = target.elementId
+        ? this.previewFrame(
+            target.elementId,
+            active,
+            item.targetMoves ? dx : 0,
+            item.targetMoves ? dy : 0,
+          )
+        : undefined;
+      const sourceRotation = source.elementId
+        ? (active.previews?.get(source.elementId)?.rotation ?? this.rotation(source.elementId))
+        : 0;
+      const targetRotation = target.elementId
+        ? (active.previews?.get(target.elementId)?.rotation ?? this.rotation(target.elementId))
+        : 0;
+      const connectorPreview = active.previews?.get(item.id);
+      const connectorProps = connectorPreview
+        ? this.connectorControlProps(item.id, connectorPreview.frame, connectorPreview.rotation)
+        : {};
+      const previewSource = isConnectorEndpoint(connectorProps.source)
+        ? connectorProps.source
+        : source;
+      const previewTarget = isConnectorEndpoint(connectorProps.target)
+        ? connectorProps.target
+        : target;
+      let nextSource = endpointPoint(previewSource, sourceFrame, sourceRotation);
+      let nextTarget = endpointPoint(previewTarget, targetFrame, targetRotation);
+      if (active.kind === "move" && item.connectorMoves && !source.elementId) {
+        nextSource = { x: source.position.x + dx, y: source.position.y + dy };
+      }
+      if (active.kind === "move" && item.connectorMoves && !target.elementId) {
+        nextTarget = { x: target.position.x + dx, y: target.position.y + dy };
+      }
+      const route = (
+        typeof element.props.route === "string" ? element.props.route : "straight"
+      ) as ConnectorRoute;
+      const routeSourceFrame = sourceFrame
+        ? rotatedFrameBounds(sourceFrame, sourceRotation)
+        : sourceBound;
+      const routeTargetFrame = targetFrame
+        ? rotatedFrameBounds(targetFrame, targetRotation)
+        : targetBound;
       const absPoints = connectorPoints(
         nextSource,
         nextTarget,
@@ -304,46 +868,63 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
         routeSourceFrame,
         routeTargetFrame,
       );
-      let nodes = overlayNodes.get(item.id);
+      let nodes = this.overlayNodes.get(item.id);
       if (!nodes) {
-        const host = hostFor(root, item.id);
+        const host = this.hostFor(root, item.id);
         if (host) {
           host.style.visibility = "hidden";
-          hiddenConnectors.push(host);
+          this.hiddenConnectors.push(host);
         }
         const stroke = typeof element.props.stroke === "string" ? element.props.stroke : "#52525b";
-        const lineStyle = element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
-          ? element.props.lineStyle
-          : "solid";
+        const lineStyle =
+          element.props.lineStyle === "dashed" || element.props.lineStyle === "dashed-animated"
+            ? element.props.lineStyle
+            : "solid";
         const startStyle = element.props.startStyle === "arrow" ? "arrow" : "none";
         const endStyle = element.props.endStyle === "arrow" ? "arrow" : "none";
         const markerEndId = `connector-preview-end-${element.id}`;
         const markerStartId = `connector-preview-start-${element.id}`;
-        if (endStyle === "arrow") appendMarker(defs, markerEndId, stroke, false);
-        if (startStyle === "arrow") appendMarker(defs, markerStartId, stroke, true);
+        if (endStyle === "arrow") {
+          this.appendMarker(defs, markerEndId, stroke, false);
+        }
+        if (startStyle === "arrow") {
+          this.appendMarker(defs, markerStartId, stroke, true);
+        }
         const path = root.ownerDocument.createElementNS(SVG_NS, "path");
         path.setAttribute("data-edgeless-connector-preview-stroke", "true");
         path.setAttribute("data-line-style", lineStyle);
         path.setAttribute("fill", "none");
         path.setAttribute("stroke", stroke);
-        path.setAttribute("stroke-width", String(typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2));
-        path.setAttribute("opacity", String(typeof element.props.opacity === "number" ? element.props.opacity : 1));
+        path.setAttribute(
+          "stroke-width",
+          String(typeof element.props.strokeWidth === "number" ? element.props.strokeWidth : 2),
+        );
+        path.setAttribute(
+          "opacity",
+          String(typeof element.props.opacity === "number" ? element.props.opacity : 1),
+        );
         path.setAttribute("vector-effect", "non-scaling-stroke");
-        if (startStyle === "arrow") path.setAttribute("marker-start", `url(#${markerStartId})`);
-        if (endStyle === "arrow") path.setAttribute("marker-end", `url(#${markerEndId})`);
+        if (startStyle === "arrow") {
+          path.setAttribute("marker-start", `url(#${markerStartId})`);
+        }
+        if (endStyle === "arrow") {
+          path.setAttribute("marker-end", `url(#${markerEndId})`);
+        }
         overlay.append(path);
         nodes = { path, label: null };
-        overlayNodes.set(item.id, nodes);
+        this.overlayNodes.set(item.id, nodes);
       }
       nodes.path.setAttribute("d", d);
       const text = typeof element.props.text === "string" ? element.props.text : "";
-      if (!text) continue;
+      if (!text) {
+        continue;
+      }
       const textRotation = (
-        element.props.textRotation === "90"
-        || element.props.textRotation === "180"
-        || element.props.textRotation === "270"
-        || element.props.textRotation === "along"
-        || element.props.textRotation === "horizontal"
+        element.props.textRotation === "90" ||
+        element.props.textRotation === "180" ||
+        element.props.textRotation === "270" ||
+        element.props.textRotation === "along" ||
+        element.props.textRotation === "horizontal"
           ? element.props.textRotation
           : "horizontal"
       ) as ConnectorTextRotation;
@@ -356,13 +937,17 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
         label.dataset.edgelessConnectorPreviewLabel = element.id;
         label.dataset.textRotation = textRotation;
         label.textContent = text;
-        label.style.color = typeof element.props.color === "string" ? element.props.color : "#222222";
-        label.style.fontFamily = typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit";
-        label.style.fontSize = typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px";
-        label.style.textAlign = typeof element.props.align === "string" ? element.props.align : "center";
+        label.style.color =
+          typeof element.props.color === "string" ? element.props.color : "#222222";
+        label.style.fontFamily =
+          typeof element.props.fontFamily === "string" ? element.props.fontFamily : "inherit";
+        label.style.fontSize =
+          typeof element.props.fontSize === "number" ? `${element.props.fontSize}px` : "14px";
+        label.style.textAlign =
+          typeof element.props.align === "string" ? element.props.align : "center";
         label.style.zIndex = "2147483639";
         plane.append(label);
-        overlayLabels.push(label);
+        this.overlayLabels.push(label);
         nodes.label = label;
       }
       label.style.left = `${labelAt.x}px`;
@@ -370,107 +955,188 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       label.style.transform = degrees ? `rotate(${degrees}deg)` : "";
     }
   };
-  const guidesEqual = (left: readonly SnapGuide[], right: readonly SnapGuide[]) =>
-    left.length === right.length && left.every((guide, index) => {
-      const other = right[index]!;
-      return guide.kind === other.kind && guide.axis === other.axis && guide.position === other.position && guide.from === other.from && guide.to === other.to;
-    });
-  const clearPreview = (restoreSize = true) => {
-    const root = reactEditor.events.getRoot();
-    if (!root) return;
-    (previewTargets ?? rendered(root, start?.ids ?? [])).forEach((element) => {
-      const id = targetId(element);
-      if (rotation(id)) element.style.transform = `rotate(${rotation(id)}deg)`;
-      else element.style.removeProperty("transform");
+  /**
+   * Clears transform locks and connector previews, optionally restoring pre-gesture geometry.
+   *
+   * @param restoreGeometry - Whether to restore original geometry; false retains the committed geometry while releasing locks.
+   */
+  private clearPreview = (restoreGeometry = true) => {
+    const root = this.start?.root;
+    if (!root) {
+      return;
+    }
+    (this.previewTargets ?? this.rendered(root, this.start?.ids ?? [])).forEach((element) => {
+      const id = this.targetId(element);
+      if (this.elements.getElementNode(id)?.type === "connector") {
+        // The SVG overlay owns the visible path; discard its target's temporary
+        // CSS transform before React renders the committed endpoint geometry.
+        const frame = this.start?.frames.get(id);
+        if (frame) {
+          element.style.left = `${frame.x}px`;
+          element.style.top = `${frame.y}px`;
+          element.style.width = `${frame.width}px`;
+          element.style.height = `${frame.height}px`;
+        }
+        element.style.removeProperty("transform");
+        delete element.dataset.edgelessGeometryLock;
+        return;
+      }
+      // Keep committed handle geometry: React may already have rendered the preview.
+      if (restoreGeometry || this.start?.kind === "move") {
+        const frame = this.transformFrame(id);
+        if (frame) {
+          element.style.transform = `translate(${frame.x}px, ${frame.y}px) rotate(${this.rotation(id)}deg)`;
+        }
+      }
       delete element.dataset.edgelessGeometryLock;
-      if (start?.kind === "resize" && restoreSize) {
-        element.style.removeProperty("left");
-        element.style.removeProperty("top");
-        element.style.removeProperty("width");
-        element.style.removeProperty("height");
+      if (this.start?.kind !== "move" && restoreGeometry) {
+        const frame = this.start?.frames.get(id);
+        if (frame) {
+          element.style.left = "0px";
+          element.style.top = "0px";
+          element.style.width = `${frame.width}px`;
+          element.style.height = `${frame.height}px`;
+        }
       }
     });
-    clearConnectorPreview();
-    previewTargets = null;
-    showSnapGuides(root, []);
+    this.clearConnectorPreview();
+    this.previewTargets = null;
     delete root.dataset.transforming;
   };
-  const lockGeometry = (root: HTMLElement, ids: readonly string[]) => {
-    previewTargets = rendered(root, ids);
-    previewTargets.forEach((element) => {
+  /**
+   * Locks selected DOM hosts against React geometry updates during the transform preview.
+   *
+   * @param root - Mounted surface root, or null when clearing its registration.
+   * @param ids - Stable IDs of the elements or blocks to include.
+   */
+  private lockGeometry = (root: HTMLElement, ids: readonly string[]) => {
+    this.previewTargets = this.rendered(root, ids);
+    this.previewTargets.forEach((element) => {
       element.dataset.edgelessGeometryLock = "true";
     });
   };
-  const snappedDelta = (root: HTMLElement, active: TransformStart, rawDx: number, rawDy: number, altKey = false) => {
-    if (altKey) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-    const alignEnabled = root.dataset.edgelessAlign !== "false";
-    const snapEnabled = root.dataset.edgelessSnap !== "false";
-    if (!alignEnabled && !snapEnabled) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-    const candidates = active.snapCandidates;
-    const zoom = Number(root.dataset.edgelessZoom) || 1;
-    const grid = Number(root.dataset.edgelessGrid) || EDGELESS_GRID_SIZE;
-    if (active.kind === "rotate") return { dx: 0, dy: 0, guides: [] as readonly SnapGuide[] };
-    if (active.kind === "resize") {
-      const id = active.ids[0]!;
-      const frame = active.frames.get(id);
-      if (!frame) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-      const min = minSize(id);
-      const corner = active.corner ?? "se";
-      if (rotation(id)) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-      let dx = rawDx;
-      let dy = rawDy;
-      let guides: readonly SnapGuide[] = [];
-      if (alignEnabled) {
-        const aligned = snapResize(frame, dx, dy, candidates, 8 / zoom, corner, min.width, min.height);
-        dx = aligned.dx;
-        dy = aligned.dy;
-        guides = aligned.guides;
+  /**
+   * Ends a transform gesture, committing final geometry when requested or restoring the preview on cancellation.
+   *
+   * @param commit - Whether to commit the gesture; false cancels without creating or updating document entities.
+   * @param eventDetail - Native click count; defaults to one and prevents drill-out during double clicks.
+   * @returns Whether a gesture was committed, cancelled, or used to return selection to its group.
+   */
+  private finish = (commit: boolean, eventDetail = 1): boolean => {
+    const active = this.start;
+    const root = active?.root;
+    if (!root || !active) {
+      return false;
+    }
+    // Keep the final absolute translation when releasing the React style lock.
+    if (commit && active.previews) {
+      this.previewTargets?.forEach((target) => {
+        const preview = active.previews!.get(this.targetId(target));
+        if (!preview || this.elements.getElementNode(preview.id)?.type === "connector") {
+          return;
+        }
+        target.style.transform = `translate(${preview.frame.x}px, ${preview.frame.y}px) rotate(${preview.rotation}deg)`;
+      });
+    }
+    this.clearPreview(!commit);
+    this.start = null;
+    this.releaseCanvasPins?.();
+    this.releaseCanvasPins = undefined;
+    if (!commit) {
+      active.stopMoveable?.();
+      return true;
+    }
+    if (active.kind !== "move") {
+      if (active.moved && active.previews) {
+        this.reactEditor.history.batchUpdates(() =>
+          this.elements.updateElements(
+            [...active.previews!.values()].map(({ id, frame, rotation }) => ({
+              id,
+              patch: {
+                frame: this.groupChildren(id).length ? undefined : frame,
+                props: {
+                  ...(this.elements.getElementNode(id)?.type === "connector" ? {} : { rotation }),
+                  ...(active.kind === "resize" && this.elements.getElementNode(id)?.type === "block"
+                    ? { autoHeight: false }
+                    : {}),
+                  ...this.connectorControlProps(id, frame, rotation),
+                },
+              },
+            })),
+          ),
+        );
+        if (active.kind === "resize") {
+          for (const { id } of active.previews.values()) {
+            const element = this.elements.getElementNode(id);
+            const before = active.frames.get(id);
+            if (
+              element &&
+              before &&
+              !this.groupChildren(id).length &&
+              (before.width !== element.frame.width || before.height !== element.frame.height)
+            ) {
+              this.creationDefaults?.remember(element.type, { frame: element.frame });
+            }
+          }
+        }
       }
-      if (snapEnabled) {
-        const locked = { x: guides.some((guide) => guide.axis === "x"), y: guides.some((guide) => guide.axis === "y") };
-        ({ dx, dy } = snapResizeToGrid(frame, dx, dy, corner, min.width, min.height, grid, locked));
+      return active.moved;
+    }
+    if (!active.moved) {
+      /**
+       * Purpose: exit drill-in on a plain click (AFFiNE: leave the child, select the group again).
+       * Skip when pointerup is part of a double-click (detail >= 2) so VisualElement can
+       * still receive dblclick and enter text/sticky editing.
+       */
+      if (active.returnToGroup && eventDetail < 2) {
+        this.selection.set([active.returnToGroup]);
+        return true;
       }
-      return { dx, dy, guides };
+      return false;
     }
-    const moving = unionFrames(active.ids.flatMap((id) => {
-      const frame = active.frames.get(id) ?? transformFrame(id);
-      return frame ? [rotatedFrameBounds(frame, rotation(id))] : [];
-    }));
-    if (!moving) return { dx: rawDx, dy: rawDy, guides: [] as readonly SnapGuide[] };
-    let dx = rawDx;
-    let dy = rawDy;
-    let guides: readonly SnapGuide[] = [];
-    if (alignEnabled) {
-      const aligned = snapFrame({ ...moving, x: moving.x + dx, y: moving.y + dy }, candidates, 8 / zoom);
-      dx += aligned.dx;
-      dy += aligned.dy;
-      guides = aligned.guides;
+    if (this.reactEditor.commands.has("edgeless.selection.move")) {
+      this.reactEditor.commands.execute("edgeless.selection.move", {
+        reactPanel: this.reactPanel,
+        payload: { dx: active.dx, dy: active.dy },
+      });
+    } else {
+      this.reactEditor.history.batchUpdates(() =>
+        active.ids.forEach((id) => {
+          const frame = this.previewFrame(id, active, active.dx, active.dy);
+          if (frame) {
+            this.elements.updateElement(id, { frame });
+          }
+        }),
+      );
     }
-    if (snapEnabled) {
-      const locked = { x: guides.some((guide) => guide.axis === "x"), y: guides.some((guide) => guide.axis === "y") };
-      ({ dx, dy } = snapMoveToGrid(moving, dx, dy, grid, locked));
-    }
-    return { dx, dy, guides };
+    return true;
   };
 
-  reactEditor.events.register({ id: "edgeless.transform.pointer-start", type: "pointerdown", capture: true, mode: "edgeless" }, ({ raw: event, root }) => {
-    if (event.button !== 0 || !(event.target instanceof Element)) return false;
-    if (root.dataset.panningReady === "true" || root.dataset.edgelessTool === "pan") return false;
-    const resizeHandle = event.target.closest<HTMLElement>("[data-edgeless-resize-handle]");
-    const resize = Boolean(resizeHandle);
-    const rotationHandle = event.target.closest<HTMLElement>("[data-edgeless-rotation-handle]");
-    const rotating = Boolean(rotationHandle);
-    const cornerAttr = resizeHandle?.dataset.edgelessResizeHandle;
-    const corner: ResizeCorner | undefined = cornerAttr && RESIZE_CORNERS.has(cornerAttr as ResizeCorner)
-      ? cornerAttr as ResizeCorner
-      : resize ? "se" : undefined;
+  /** Resolves click/drill-in selection and starts a permitted object move. */
+  private onPointerDown = ({
+    raw: event,
+    root,
+    reactPanel,
+  }: EditorEvent<"surface", "pointerdown">): boolean => {
+    if (event.button !== 0 || !(event.target instanceof Element)) {
+      return false;
+    }
+    if (root.dataset.panningReady === "true" || root.dataset.edgelessPanTool === "true") {
+      return false;
+    }
+    if (event.target.closest("[data-edgeless-ui]")) {
+      return false;
+    }
     const card = event.target.closest<HTMLElement>(ROOT_SELECTOR);
     const object = event.target.closest<HTMLElement>(OBJECT_SELECTOR);
     let id = card?.dataset.edgelessRoot ?? object?.dataset.edgelessObjectId;
-    if (!id) return false;
+    if (!id) {
+      return false;
+    }
+    this.reactPanel = reactPanel;
     const childId = id;
-    const parent = parentId(id);
-    const current = selection.get().items;
+    const parent = this.parentId(id);
+    const current = this.selection.get().items;
     const primary = event.ctrlKey || event.metaKey;
     /**
      * AFFiNE-style progressive group selection (single clicks only).
@@ -484,21 +1150,20 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
      * 3. This child already selected → keep it for drag/resize; click-without-drag
      *    later returns to the group (except editable labels — text/sticker/shape/connector —
      *    which stay selected so double-click can enter edit mode).
-     * Resize handles always target the concrete child, never the whole group.
+     * Moveable handles target the concrete selection through beginControls;
+     * they do not enter this pointer-based group selection path.
      */
     let returnToGroup: string | undefined;
     if (parent && !primary) {
       const selectedId = current.length === 1 ? current[0] : undefined;
-      const inActiveGroup = Boolean(selectedId && (selectedId === parent || parentId(selectedId) === parent));
-      if (resize || rotating) {
-        // Purpose: scale only the handle's child; group bounds follow children.
-        id = childId;
-        if (!current.includes(childId)) selection.set([childId]);
-      } else if (selectedId === childId) {
+      const inActiveGroup = Boolean(
+        selectedId && (selectedId === parent || this.parentId(selectedId) === parent),
+      );
+      if (selectedId === childId) {
         // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
         id = childId;
-        const kind = reactEditor.elements.getElement(childId)?.type;
-        if (kind !== "text" && kind !== "sticker" && kind !== "rectangle" && kind !== "ellipse" && kind !== "connector") {
+        const kind = this.elements.getElementNode(childId)?.type;
+        if (!this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel) {
           returnToGroup = parent;
         }
       } else if (inActiveGroup) {
@@ -510,158 +1175,149 @@ export function registerEdgelessTransform(reactEditor: ReactEditor): () => void 
       }
     }
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
-    const element = reactEditor.elements.getElement(id);
+    const element = this.elements.getElementNode(id);
     const hitBlockId = hitBlock?.dataset.blockId ?? "";
     // Nested/indented hits must count: card ranges store roots only, and the
     // row hover strip (::before) often lands on a child block, not the root.
-    const movable = !event.target.closest(CONTROL_SELECTOR) && (
-      !card ||
-      !hitBlock ||
-      (element?.type === "block" && elementContainsBlock(reactEditor, element, reactEditor.blocks.getRootIds(), hitBlockId))
-    );
-    if (!resize && !rotating && !movable) return false;
+    const movable =
+      !event.target.closest(CONTROL_SELECTOR) &&
+      (!card ||
+        !hitBlock ||
+        (element?.type === "block" &&
+          elementContainsBlock(
+            reactPanel.blocks,
+            element,
+            reactPanel.blocks.getRootIds(),
+            hitBlockId,
+          )));
+    if (!movable) {
+      return false;
+    }
     event.stopPropagation();
     const selected = current.includes(id);
     if (primary) {
       // Primary toggles membership only — never start a move (that wiped multi-select
       // when adding a shape to an existing group selection for nested grouping).
-      selection.set(selected ? current.filter((item) => item !== id) : [...current, id]);
+      // Preserve canvas focus for clipboard shortcuts; this click does not start Moveable.
+      event.preventDefault();
+      root.focus({ preventScroll: true });
+      this.selection.set(selected ? current.filter((item) => item !== id) : [...current, id]);
       return true;
     }
-    if (!selected) selection.set([id]);
-    const ids = resize || rotating ? [id] : selected ? [...current] : [id];
+    if (!selected) {
+      this.selection.set([id]);
+    }
+    const ids = selected ? [...current] : [id];
     const frames = new Map<string, EditorElementFrame>();
     ids.forEach((item) => {
-      const frame = transformFrame(item);
-      if (frame) frames.set(item, { ...frame });
+      const frame = this.transformFrame(item);
+      if (frame) {
+        frames.set(item, { ...frame });
+      }
     });
     // Cache leaf frames so attached connector previews stay accurate for groups.
-    const moving = new Set(leaves(ids));
+    const moving = new Set(this.leaves(ids));
     moving.forEach((item) => {
-      if (frames.has(item)) return;
-      const frame = transformFrame(item);
-      if (frame) frames.set(item, { ...frame });
+      if (frames.has(item)) {
+        return;
+      }
+      const frame = this.transformFrame(item);
+      if (frame) {
+        frames.set(item, { ...frame });
+      }
     });
-    const canvasElements = reactEditor.elements.getElements();
-    const kind = rotating ? "rotate" as const : resize ? "resize" as const : "move" as const;
-    const attachedConnectors = attachedConnectorsForTransform(canvasElements, moving, new Set(ids), kind);
-    const snapCandidates = canvasElements
-      .filter((element) => element.type !== "connector" && element.type !== "group" && !moving.has(element.id))
-      .map((element) => rotatedFrameBounds(element.frame, rotation(element.id)));
-    start = {
+    const controls = this.controls.get(reactPanel);
+    if (!controls) {
+      return false;
+    }
+    const kind = "move" as const;
+    this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
+    flushSync(() => {
+      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+    });
+    const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
+    this.start = {
+      root,
       kind,
-      x: event.clientX,
-      y: event.clientY,
+      stopMoveable: controls.stop,
+      dx: 0,
+      dy: 0,
       ids,
       frames,
       moving,
       attachedConnectors,
-      snapCandidates,
-      corner: resize ? corner ?? "se" : undefined,
-      rotation: rotating ? rotation(id) : undefined,
-      pointerAngle: rotating && frames.get(id)
-        ? Math.atan2(
-          (event.clientY - root.getBoundingClientRect().top - (Number(root.dataset.edgelessPanY) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.y - frames.get(id)!.height / 2,
-          (event.clientX - root.getBoundingClientRect().left - (Number(root.dataset.edgelessPanX) || 0)) / (Number(root.dataset.edgelessZoom) || 1) - frames.get(id)!.x - frames.get(id)!.width / 2,
-        ) * 180 / Math.PI
-        : undefined,
-      returnToGroup: resize || rotating ? undefined : returnToGroup,
-      lastX: event.clientX,
-      lastY: event.clientY,
+      returnToGroup,
       moved: false,
-      guides: [],
-      snapDisabled: event.altKey,
-      rotationSnapped: event.shiftKey,
-      previewRotation: rotating ? rotation(id) : undefined,
     };
-    root.dataset.transforming = start.kind;
-    // Resize previews write left/top/width/height on the host; lock so React
-    // style props cannot clobber the opposite-corner-stable geometry mid-drag.
-    if (resize || rotating) lockGeometry(root, ids);
-    (card ?? object)?.focus({ preventScroll: true });
-    return true;
-  });
-
-
-  reactEditor.events.register({ id: "edgeless.transform.pointer-move", type: "pointermove", target: "window", mode: "edgeless", passive: false }, ({ raw: event, root }) => {
-    const active = start;
-    if (!active) return false;
-    active.lastX = event.clientX; active.lastY = event.clientY;
-    if (active.kind === "rotate") {
-      active.rotationSnapped = event.shiftKey;
-      const next = rotationAt(root, active, event.clientX, event.clientY, event.shiftKey);
-      active.previewRotation = next;
-      active.moved ||= Math.abs(next - (active.rotation ?? 0)) >= .1;
-      if (!active.moved) return false;
-      previewTargets ??= rendered(root, active.ids);
-      previewTargets.forEach((target) => { target.style.transform = `rotate(${next}deg)`; });
-      previewAttachedConnectors(root, active, 0, 0);
-      return true;
-    }
-    const zoom = Number(root.dataset.edgelessZoom) || 1;
-    active.snapDisabled = event.altKey;
-    const result = snappedDelta(root, active, canvasDelta(event.clientX - active.x, zoom), canvasDelta(event.clientY - active.y, zoom), active.snapDisabled);
-    if (!active.moved && Math.hypot(result.dx, result.dy) < 2) return false;
-    active.moved = true;
-    if (!guidesEqual(active.guides, result.guides)) {
-      active.guides = result.guides;
-      showSnapGuides(root, result.guides);
-    }
-    previewTargets ??= rendered(root, active.ids);
-    previewTargets.forEach((target) => {
-      if (active.kind === "move") target.style.transform = `translate(${result.dx}px, ${result.dy}px) rotate(${rotation(targetId(target))}deg)`;
-      else {
-        const frame = previewFrame(active.ids[0]!, active, result.dx, result.dy);
-        if (frame) {
-          target.style.left = `${frame.x}px`;
-          target.style.top = `${frame.y}px`;
-          target.style.width = `${frame.width}px`;
-          target.style.height = `${frame.height}px`;
-        }
-      }
-    });
-    previewAttachedConnectors(root, active, result.dx, result.dy);
-    return true;
-  });
-
-  const finish = (commit: boolean, eventDetail = 1): boolean => {
-    const root = reactEditor.events.getRoot(), active = start;
-    if (!root || !active) return false;
-    const zoom = Number(root.dataset.edgelessZoom) || 1;
-    const result = snappedDelta(root, active, canvasDelta(active.lastX - active.x, zoom), canvasDelta(active.lastY - active.y, zoom), active.snapDisabled);
-    clearPreview(!commit); start = null;
-    if (!commit) return false;
-    if (!active.moved) {
-      /**
-       * Purpose: exit drill-in on a plain click (AFFiNE: leave the child, select the group again).
-       * Skip when pointerup is part of a double-click (detail >= 2) so VisualElement can
-       * still receive dblclick and enter text/sticky editing.
-       */
-      if (active.returnToGroup && eventDetail < 2) {
-        selection.set([active.returnToGroup]);
-        return true;
-      }
-      return false;
-    }
-    if (active.kind === "rotate") {
-      reactEditor.elements.updateElement(active.ids[0]!, { props: { rotation: rotationAt(root, active, active.lastX, active.lastY, active.rotationSnapped) } });
-      return true;
-    }
-    if (active.kind === "move" && reactEditor.commands.has("edgeless.selection.move")) { reactEditor.commands.execute("edgeless.selection.move", { dx: result.dx, dy: result.dy }); return true; }
-    reactEditor.history.batchUpdates(() => active.ids.forEach((id) => {
-      const frame = previewFrame(id, active, result.dx, result.dy);
-      if (frame) reactEditor.elements.updateElement(id, {
-        frame,
-        props: reactEditor.elements.getElement(id)?.type === "block" ? { autoHeight: false } : undefined,
-      });
-    }));
+    root.dataset.transforming = this.start.kind;
+    root.focus({ preventScroll: true });
+    this.lockGeometry(root, ids);
+    controls.prepareDrag(this.getMoveTargets(reactPanel, root, ids));
     return true;
   };
-  reactEditor.events.register({ id: "edgeless.transform.pointer-end", type: "pointerup", target: "window", mode: "edgeless" }, ({ raw }) => {
-    if (start) { start.lastX = raw.clientX; start.lastY = raw.clientY; }
-    return finish(true, raw.detail);
-  });
-  reactEditor.events.register({ id: "edgeless.transform.pointer-cancel", type: "pointercancel", target: "window", mode: "edgeless" }, () => finish(false));
-  reactEditor.keyboard.register({ id: KEYBOARD_BINDING_IDS.edgelessTransformCancel, keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessTransformCancel], mode: "edgeless", when: () => Boolean(start) }, () => finish(false));
-  return clearPreview;
+  /** Includes ancestor groups whose derived bounds change when a child moves. */
+  private connectorTargets(
+    moving: ReadonlySet<string>,
+    selected: ReadonlySet<string>,
+    kind: TransformStart["kind"],
+  ): readonly ConnectorPreviewTarget[] {
+    const affected = new Set(moving);
+    moving.forEach((id) => {
+      let parent = this.parentId(id);
+      while (parent) {
+        affected.add(parent);
+        parent = this.parentId(parent);
+      }
+    });
+    return attachedConnectorsForTransform(
+      this.elements.getElementNodes(),
+      affected,
+      selected,
+      kind,
+    ).map((item) => {
+      const node = this.elements.getElementNode(item.id)!;
+      const groupEndpoint = [node.props.source, node.props.target].some(
+        (endpoint) =>
+          isConnectorEndpoint(endpoint) &&
+          endpoint.elementId &&
+          this.elements.getElementNode(endpoint.elementId)?.type === "group",
+      );
+      // An ancestor can grow around a moved child rather than translating rigidly.
+      return groupEndpoint ? { ...item, kind: "path" } : item;
+    });
+  }
+
+  /**
+   * Maps free connector endpoints into Moveable's resized and rotated frame.
+   * Attached endpoints continue to follow their elements; the connector host
+   * itself stays unrotated because its path is rendered from absolute endpoints.
+   */
+  private connectorControlProps(
+    id: string,
+    frame: EditorElementFrame,
+    rotation: number,
+  ): Record<string, unknown> {
+    const element = this.elements.getElementNode(id);
+    if (element?.type !== "connector") {
+      return {};
+    }
+    const base = element.frame;
+    const transform = (value: unknown) => {
+      if (!isConnectorEndpoint(value) || value.elementId) {
+        return value;
+      }
+      const x = ((value.position.x - base.x) * frame.width) / base.width - frame.width / 2;
+      const y = ((value.position.y - base.y) * frame.height) / base.height - frame.height / 2;
+      const radians = (rotation * Math.PI) / 180;
+      return {
+        ...value,
+        position: {
+          x: frame.x + frame.width / 2 + x * Math.cos(radians) - y * Math.sin(radians),
+          y: frame.y + frame.height / 2 + x * Math.sin(radians) + y * Math.cos(radians),
+        },
+      };
+    };
+    // Connectors store endpoints, not a rotated HTML host.
+    return { source: transform(element.props.source), target: transform(element.props.target) };
+  }
 }

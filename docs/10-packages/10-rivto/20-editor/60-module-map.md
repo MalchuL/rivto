@@ -1,12 +1,12 @@
 # Карта editor-модулей
 
-## `editor/rivto-editor.ts`
+## `editor/document-editor.ts`
 
-Владеет `EditorRuntime`, composition order, subscriptions, batching, built-in runtime/clipboard commands, selection reconciliation, persistence facade и destroy sequence. Также экспортирует `createRivtoEditor()`.
+Владеет `ReactEditor`, composition order, subscriptions, batching, built-in runtime/clipboard commands, selection reconciliation, persistence facade и destroy sequence. Также экспортирует `createDocumentEditor()`.
 
 ## `editor/types.ts`
 
-Определяет `EditorMode`, selection shapes, creation options и `RivtoEditorApi`. Типы не зависят от React/DOM.
+Определяет `EditorMode`, selection shapes, creation options и `DocumentEditorAPI`. Типы не зависят от React/DOM.
 
 ## `editor/model.ts`
 
@@ -25,14 +25,14 @@ Public barrel экспортирует model/types, clipboard-manager API и run
 - `block-commands.test.ts` — runtime command delegation, props validation и hierarchy operations.
 - `clipboard-commands.test.ts` — data-only clipboard command integration.
 - `element-commands.test.ts` — first-class element commands.
-- `rivto-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
+- `document-editor-methods.test.ts` — public convenience API, snapshots и subscriptions.
 - `selection-manager.test.ts` — direction, ordering, reconciliation и heterogeneous ranges.
 - `history-manager.test.ts` — capture boundaries, remote origin filtering и load baseline.
 
 ## Ownership между слоями
 
 ```text
-EditorRuntime
+ReactEditor
   owns runtime lifecycle and cross-cutting state
 
 DocumentModel
@@ -49,7 +49,7 @@ React package
 
 1. Определить, является ли state persisted или local.
 2. Persisted operation разместить во focused manager/document model.
-3. Local mode/selection behavior оставить в соответствующем manager.
+3. Local selection behavior оставить в single core manager; surface choice принадлежит React host.
 4. Runtime method добавлять только для действительно cross-cutting lifecycle operation.
 5. Named command должен валидировать unknown payload на своей boundary.
 6. Document mutation обернуть `documentCommand()` или explicit `history.batchUpdates()`.
@@ -59,7 +59,7 @@ React package
 ## Основные consumers
 
 - React hooks используют `subscribe()` и `revision` через external-store pattern.
-- Page/edgeless surfaces читают `blocks`, `elements`, `mode` и `selection`.
+- Page/edgeless surfaces читают `blocks`, `elements` и `selection` своей document view; surface type задан компонентом.
 - Keyboard, slash, clipboard и drag extensions вызывают typed methods или named commands.
 - Demo использует public managers и factory как integration host.
 - Applications могут внедрить custom `CRDTDoc`, persistence и provider lifecycle.

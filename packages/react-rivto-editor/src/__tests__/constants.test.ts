@@ -20,11 +20,7 @@ describe("React block DOM constants", () => {
   it.each([
     [BLOCK_ID_ATTRIBUTE, BLOCK_ID_SELECTOR, "data-block-id"],
     [BLOCK_CONTENT_ATTRIBUTE, BLOCK_CONTENT_SELECTOR, "data-block-content"],
-    [
-      PREVENT_TEXT_EDITING_ATTRIBUTE,
-      PREVENT_TEXT_EDITING_SELECTOR,
-      "data-prevent-text-editing",
-    ],
+    [PREVENT_TEXT_EDITING_ATTRIBUTE, PREVENT_TEXT_EDITING_SELECTOR, "data-prevent-text-editing"],
     [
       BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
       BLOCK_SELECTION_ANCHOR_SELECTOR,
@@ -35,7 +31,7 @@ describe("React block DOM constants", () => {
     expect(selector).toBe(`[${attribute}]`);
   });
 
-  it("keeps the owned-row class aligned with BlockTree shells", () => {
-    expect(BLOCK_ROW_CLASS).toBe("page-block-row");
+  it("keeps the owned-row class aligned with Page shells", () => {
+    expect(BLOCK_ROW_CLASS).toBe("rivto-block-row");
   });
 });

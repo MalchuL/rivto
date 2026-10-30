@@ -1,0 +1,76 @@
+.rivto-block-slot {
+  @apply page:absolute page:flex page:items-center page:gap-[var(--rivto-slot-gap,4px)] page:z-[1] page:pointer-events-none;
+}
+.rivto-block-slot > * {
+  @apply page:flex-none page:pointer-events-auto;
+}
+.rivto-block-slot:is([data-slot-position="start"], [data-slot-position="end"]) {
+  @apply page:relative page:flex-none page:min-h-[var(--rivto-default-block-height,24px)];
+}
+.rivto-block-slot[data-slot-position="start"] {
+  @apply page:flex-row-reverse;
+  @apply page:[min-inline-size:var(--rivto-block-start-width,calc(var(--rivto-block-control-size,20px)+var(--rivto-block-marker-width,24px)+var(--rivto-slot-gap,4px)))];
+}
+.rivto-block-slot[data-slot-position="body"] {
+  @apply page:relative page:block page:z-auto;
+}
+.rivto-block-slot[data-slot-position="left"] {
+  @apply page:top-1/2;
+  @apply page:left-0 page:flex-row-reverse;
+  @apply page:-translate-x-full page:-translate-y-1/2;
+}
+.rivto-block-slot[data-slot-position="right"] {
+  @apply page:top-1/2;
+  @apply page:left-full;
+  @apply page:-translate-y-1/2;
+}
+.rivto-block-slot:is([data-slot-position="right-top"], [data-slot-position="right-bottom"]) {
+  @apply page:left-full;
+}
+.rivto-block-slot:is([data-slot-position="left-top"], [data-slot-position="left-bottom"]) {
+  @apply page:right-full page:flex-row-reverse;
+}
+.rivto-block-slot:is([data-slot-position="right-top"], [data-slot-position="left-top"]) {
+  @apply page:top-0 page:items-start;
+}
+.rivto-block-slot:is([data-slot-position="right-bottom"], [data-slot-position="left-bottom"]) {
+  @apply page:bottom-0 page:items-end;
+}
+.rivto-block-slot:is(
+  [data-slot-position="top-left"],
+  [data-slot-position="top"],
+  [data-slot-position="top-right"]
+) {
+  @apply page:bottom-full page:flex-col-reverse;
+}
+.rivto-block-slot:is(
+  [data-slot-position="bottom-left"],
+  [data-slot-position="bottom"],
+  [data-slot-position="bottom-right"]
+) {
+  @apply page:top-full page:flex-col;
+}
+.rivto-block-slot:is([data-slot-position="top-left"], [data-slot-position="bottom-left"]) {
+  @apply page:left-0;
+}
+.rivto-block-slot:is([data-slot-position="top"], [data-slot-position="bottom"]) {
+  @apply page:left-1/2;
+  @apply page:-translate-x-1/2;
+}
+.rivto-block-slot:is([data-slot-position="top-right"], [data-slot-position="bottom-right"]) {
+  @apply page:right-0;
+}
+
+/* Only the owning row opts in; nested rows retain their own placement. */
+.rivto-block-row[data-controls-placement="inside"]
+  > .rivto-block-slot[data-slot-position="left-top"] {
+  @apply page:relative page:inset-auto page:transform-none page:order-first page:shrink-0;
+  /* Each rendered control contributes its own width in row flow.
+   * Collapse buttons exist only for blocks with children, so leaf rows keep
+   * their handle width without reserving an empty second control position. */
+}
+.rivto-block-row[data-controls-placement="inside"]
+  > .rivto-block-slot[data-slot-position="left-top"]
+  > * {
+  @apply page:relative page:inset-auto page:translate-none;
+}

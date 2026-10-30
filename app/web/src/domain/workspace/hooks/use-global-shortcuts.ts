@@ -11,7 +11,9 @@ export function useGlobalShortcuts(): void {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey)) return;
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
       const key = event.key.toLowerCase();
       if (key === "k" || key === "p") {
         event.preventDefault();

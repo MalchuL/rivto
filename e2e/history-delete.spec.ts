@@ -1,20 +1,25 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  blockIdSelector,
+  BLOCK_ROW_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
+  ROOT_BLOCK_SELECTOR,
+  hostBlockIdSelector,
 } from "./dom-markers";
 
 /** Selects root blocks through the same Ctrl+click gesture used by the demo. */
 async function selectRoots(page: Page, indexes: number[]): Promise<string[]> {
-  const roots = page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
   const ids: string[] = [];
   for (const index of indexes) {
     const root = roots.nth(index);
     const id = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!id) throw new Error("Expected root block ID");
+    if (!id) {
+      throw new Error("Expected root block ID");
+    }
     ids.push(id);
-    await root.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+    await root
+      .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
+      .click({ modifiers: ["Control"] });
   }
   return ids;
 }
@@ -27,23 +32,25 @@ async function insertSeparatorContinuation(page: Page): Promise<{
   readonly separatorId: string;
   readonly writingId: string;
 }> {
-  const sourceContent = page.locator(".page-surface > .page-block [data-block-content]").first();
-  const source = sourceContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
+  const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
+  const sourceContent = roots.first().locator("[data-block-content]").first();
   await sourceContent.click();
   await page.keyboard.press("Control+Shift+Enter");
-  const separator = source.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
-  const writing = separator.locator(`xpath=following-sibling::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
-  const content = writing.locator(":scope > .page-block-row [data-block-content]");
+  const separator = roots.nth(1);
+  const writing = roots.nth(2);
+  const content = writing.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
   const separatorId = await separator.getAttribute(BLOCK_ID_ATTRIBUTE);
   const writingId = await writing.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!separatorId || !writingId) throw new Error("Expected inserted separator continuation IDs");
+  if (!separatorId || !writingId) {
+    throw new Error("Expected inserted separator continuation IDs");
+  }
   await expect(content).toBeFocused();
   return { separator, writing, content, separatorId, writingId };
 }
 
 /** Resolves a stable block locator after undo recreates its rendered element. */
 function blockById(page: Page, id: string): Locator {
-  return page.locator(blockIdSelector(id));
+  return page.locator(hostBlockIdSelector(id));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -73,38 +80,58 @@ test("Backspace and Delete remove root-focused block selections atomically", asy
   await expect(blockById(page, secondId!)).toHaveCount(0);
 });
 
-test("Backspace and Delete remove an empty writing block after a structural block", async ({ page }) => {
+test("Backspace and Delete remove an empty writing block after a structural block", async ({
+  page,
+}) => {
   const inserted = await insertSeparatorContinuation(page);
 
   await page.keyboard.press("Backspace");
   await expect(blockById(page, inserted.writingId)).toHaveCount(0);
-  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 
   await page.keyboard.press("Control+z");
   await expect(blockById(page, inserted.writingId)).toBeVisible();
   await blockById(page, inserted.writingId).locator("[data-block-content]").click();
   await page.keyboard.press("Delete");
   await expect(blockById(page, inserted.writingId)).toHaveCount(0);
-  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
-test("removing an empty parent promotes its first child and adopts later children", async ({ page }) => {
+test("removing an empty parent promotes its first child and adopts later children", async ({
+  page,
+}) => {
   const inserted = await insertSeparatorContinuation(page);
   await page.keyboard.press("Enter");
+  await expect(inserted.content).not.toBeFocused();
+  await expect(page.locator("[data-block-content]:focus")).toHaveCount(1);
   await page.keyboard.type("First child");
   const firstContent = page.locator("[data-block-content]:focus");
   const first = firstContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
   const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!firstId) throw new Error("Expected first child ID");
+  if (!firstId) {
+    throw new Error("Expected first child ID");
+  }
   await page.keyboard.press("Tab");
+  await expect(blockById(page, firstId).locator("[data-block-content]")).toBeFocused();
   await page.keyboard.press("Enter");
+  await expect(page.locator("[data-block-content]:focus")).not.toHaveText("First child");
   await page.keyboard.type("Second child");
   const secondContent = page.locator("[data-block-content]:focus");
   const second = secondContent.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
   const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
-  if (!secondId) throw new Error("Expected second child ID");
+  if (!secondId) {
+    throw new Error("Expected second child ID");
+  }
 
-  const collapse = inserted.writing.locator(":scope > .page-block-row [data-collapse-toggle]");
+  const collapse = inserted.writing.locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} [data-collapse-toggle]`,
+  );
   await collapse.click();
   await inserted.content.click();
   await page.keyboard.press("Backspace");
@@ -115,17 +142,25 @@ test("removing an empty parent promotes its first child and adopts later childre
   await page.keyboard.press("Backspace");
 
   await expect(blockById(page, inserted.writingId)).toHaveCount(0);
-  await expect(blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}]`)).toHaveCount(0);
-  await expect(blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
-    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId);
-  await expect(blockById(page, inserted.separatorId)).toHaveAttribute("data-block-selected", "true");
+  await expect(
+    blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}]`),
+  ).toHaveCount(0);
+  await expect(
+    blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`),
+  ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId);
+  await expect(blockById(page, inserted.separatorId)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 
   await page.keyboard.press("Control+z");
   await expect(blockById(page, inserted.writingId)).toBeVisible();
-  await expect(blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
-    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
-  await expect(blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
-    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
+  await expect(
+    blockById(page, firstId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`),
+  ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
+  await expect(
+    blockById(page, secondId).locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`),
+  ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, inserted.writingId);
 });
 
 test("undo works immediately after deleting blocks from a focused editable", async ({ page }) => {
@@ -136,19 +171,23 @@ test("undo works immediately after deleting blocks from a focused editable", asy
     const requestFrame = window.requestAnimationFrame;
     window.requestAnimationFrame = () => 1;
     (element as HTMLElement).focus();
-    element.dispatchEvent(new KeyboardEvent("keydown", {
-      bubbles: true,
-      cancelable: true,
-      key: "Delete",
-    }));
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Delete",
+      }),
+    );
     await new Promise((resolve) => setTimeout(resolve));
     const active = document.activeElement;
-    active?.dispatchEvent(new KeyboardEvent("keydown", {
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: true,
-      key: "z",
-    }));
+    active?.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+        key: "z",
+      }),
+    );
     window.requestAnimationFrame = requestFrame;
     return active?.getAttribute("data-block-content") !== null;
   });
@@ -159,6 +198,10 @@ test("undo works immediately after deleting blocks from a focused editable", asy
 });
 
 test("history shortcuts replace native contenteditable history", async ({ page }) => {
+  // Browsers can defer selectionchange until after an input and its undo.
+  await page.evaluate(() =>
+    document.addEventListener("selectionchange", (event) => event.stopImmediatePropagation(), true),
+  );
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();
   await content.click();
@@ -185,15 +228,19 @@ test("history shortcuts work when the active layout reports Cyrillic keys", asyn
   await page.keyboard.press("End");
   await page.keyboard.type("!");
 
-  const press = (key: string, code: string, shiftKey = false) => content.evaluate(
-    (element, init) => element.dispatchEvent(new KeyboardEvent("keydown", {
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: true,
-      ...init,
-    })),
-    { key, code, shiftKey },
-  );
+  const press = (key: string, code: string, shiftKey = false) =>
+    content.evaluate(
+      (element, init) =>
+        element.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+            ...init,
+          }),
+        ),
+      { key, code, shiftKey },
+    );
 
   expect(await press("я", "KeyZ")).toBe(false);
   await expect(content).toHaveText(initial ?? "");
@@ -205,31 +252,43 @@ test("history shortcuts work when the active layout reports Cyrillic keys", asyn
   await expect(content).toHaveText(`${initial}!`);
 });
 
-test("beforeinput history commands are canceled and routed through CRDT history", async ({ page }) => {
+test("beforeinput history commands are canceled and routed through CRDT history", async ({
+  page,
+}) => {
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();
   await content.click();
   await page.keyboard.press("End");
   await page.keyboard.type("!");
 
-  const undoDispatched = await content.evaluate((element) => element.dispatchEvent(new InputEvent("beforeinput", {
-    bubbles: true,
-    cancelable: true,
-    inputType: "historyUndo",
-  })));
+  const undoDispatched = await content.evaluate((element) =>
+    element.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "historyUndo",
+      }),
+    ),
+  );
   expect(undoDispatched).toBe(false);
   await expect(content).toHaveText(initial ?? "");
 
-  const redoDispatched = await content.evaluate((element) => element.dispatchEvent(new InputEvent("beforeinput", {
-    bubbles: true,
-    cancelable: true,
-    inputType: "historyRedo",
-  })));
+  const redoDispatched = await content.evaluate((element) =>
+    element.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "historyRedo",
+      }),
+    ),
+  );
   expect(redoDispatched).toBe(false);
   await expect(content).toHaveText(`${initial}!`);
 });
 
-test("unsupported modifiers and IME history requests do not change the document", async ({ page }) => {
+test("unsupported modifiers and IME history requests do not change the document", async ({
+  page,
+}) => {
   const content = page.locator("[data-block-content]").first();
   const initial = await content.textContent();
   await content.click();
@@ -239,12 +298,16 @@ test("unsupported modifiers and IME history requests do not change the document"
   await page.keyboard.press("Control+Alt+z");
   await expect(content).toHaveText(`${initial}!`);
 
-  const dispatched = await content.evaluate((element) => element.dispatchEvent(new InputEvent("beforeinput", {
-    bubbles: true,
-    cancelable: true,
-    inputType: "historyUndo",
-    isComposing: true,
-  })));
+  const dispatched = await content.evaluate((element) =>
+    element.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "historyUndo",
+        isComposing: true,
+      }),
+    ),
+  );
   expect(dispatched).toBe(false);
   await expect(content).toHaveText(`${initial}!`);
 });
@@ -256,7 +319,9 @@ test("focused block controls do not delete an existing structural selection", as
   await page.keyboard.press("Delete");
   await expect(blockById(page, selectedId!)).toBeVisible();
 
-  const dragHandle = blockById(page, selectedId!).locator(":scope > .page-block-row .page-drag-handle");
+  const dragHandle = blockById(page, selectedId!).locator(
+    `:scope > ${BLOCK_ROW_SELECTOR} .block-handle`,
+  );
   await dragHandle.focus();
   await page.keyboard.press("Backspace");
   await expect(blockById(page, selectedId!)).toBeVisible();

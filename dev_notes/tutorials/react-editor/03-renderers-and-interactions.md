@@ -267,14 +267,14 @@ Renderer превращает metadata в buttons.
 
 ## 18. Event normalization table
 
-| Browser/React source | Runtime type | Основной context |
-| --- | --- | --- |
-| `onInput` | `input` | block ID и text |
-| `onKeyDown` | `keydown` | key/modifiers/default type/empty |
-| root `onCopy` | `copy` | active block и native clipboard event |
-| root `onPaste` | `paste` | caret block, clipboard event, default type |
-| `onDrop` | `drop` | target block и source ID |
-| block `onPointerDown` | `pointerdown` | block ID и button |
+| Browser/React source  | Runtime type  | Основной context                           |
+| --------------------- | ------------- | ------------------------------------------ |
+| `onInput`             | `input`       | block ID и text                            |
+| `onKeyDown`           | `keydown`     | key/modifiers/default type/empty           |
+| root `onCopy`         | `copy`        | active block и native clipboard event      |
+| root `onPaste`        | `paste`       | caret block, clipboard event, default type |
+| `onDrop`              | `drop`        | target block и source ID                   |
+| block `onPointerDown` | `pointerdown` | block ID и button                          |
 
 ## 19. Cleanup window listeners
 

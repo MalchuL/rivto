@@ -1,0 +1,144 @@
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { DocumentStorage } from "@chulane/document-model";
+import { createStructuralSelection } from "@chulane/rivto";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TestPanel } from "../../test-utils";
+import { ReactPanel } from "../../panels/react-panel";
+import { ChildrenPanel } from "@chulane/rivto";
+import { EditorStorageContext } from "../../editor/editor-storage-context";
+import { PageSurface } from "../../surfaces/page/page-surface";
+import { createTestMultiEditor } from "../../test-utils";
+import { standardPreset } from "../built-ins/built-ins";
+import { CrossDocumentBlockTransfer } from "../built-ins/clipboard/cross-document-block-transfer";
+import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
+
+test("embedding props validate, snapshots and structured clipboard retain references, and cleanup removes registration", async () => {
+  const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
+  const source = await storage.create("source", [
+    { id: "target", type: "paragraph", content: "source" },
+  ]);
+  const host = await storage.create("host");
+  const runtime = await createTestMultiEditor([host, source], storage, {
+    extensions: [standardPreset(), embeddingExtension()],
+  });
+  const editor = (await runtime.acquireEditor(host.id)).editor;
+  const reactEditor = runtime.getEditor(host.id)!;
+  const reference = reactEditor.blocks.insertBlock({
+    type: EMBEDDING_BLOCK_TYPE,
+    props: { targetDocumentId: "source", targetBlockId: "target" },
+  });
+  expect(reference.content).toBe("");
+  expect(() => reactEditor.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
+  editor.selection.set(createStructuralSelection([reference.id], reference.id));
+  const copied = editor.clipboard.copy();
+  expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
+  expect(copied?.blocks[0]?.children).toEqual([]);
+  expect(editor.dump().blocks[0]?.props).toEqual({
+    targetDocumentId: "source",
+    targetBlockId: "target",
+  });
+  const formats = reactEditor.clipboardFormats.format([reference]);
+  expect(formats.plain).toBe("Embedded block: source/target");
+  const panel = new ReactPanel(reactEditor, new ChildrenPanel(reactEditor));
+  const standalone = renderToStaticMarkup(
+    <TestPanel panel={panel}>
+      <PageSurface />
+    </TestPanel>,
+  );
+  expect(standalone).toContain("Block resolution is unavailable.");
+  expect(standalone).toContain("lucide-triangle-alert");
+  const markup = renderToStaticMarkup(
+    <EditorStorageContext.Provider value={runtime}>
+      <TestPanel panel={panel}>
+        <PageSurface />
+      </TestPanel>
+    </EditorStorageContext.Provider>,
+  );
+  expect(markup).toContain("Loading embedded block…");
+  expect(markup).not.toContain("Block resolution is unavailable.");
+  expect(markup).not.toContain("lucide-triangle-alert");
+  expect("editorStorage" in reactEditor).toBe(false);
+  expect(markup).toContain('aria-label="Edit embedding"');
+  expect(markup).not.toContain('aria-label="Target block ID"');
+  expect(markup).not.toContain('aria-label="Target document ID"');
+  expect(markup).toContain('data-slot-position="right"');
+  expect(markup).not.toContain("Live reference");
+  expect(markup).not.toContain(">Embedded block<");
+  expect(markup).toContain('data-block-selection-anchor=""');
+  expect(markup).toContain('data-slot-position="body"');
+  expect(
+    reactEditor.blockBehaviors.canMove({
+      destination: { parentId: reference.id },
+      sources: [source.blocks.getBlock("target")!],
+    }),
+  ).toBe(true);
+  const sourceEditor = (await runtime.acquireEditor(source.id)).editor;
+  new CrossDocumentBlockTransfer(sourceEditor, editor).move(["target"], {
+    targetId: null,
+    position: "after",
+  });
+  expect(source.blocks.hasBlock("target")).toBe(false);
+  expect(host.blocks.hasBlock("target")).toBe(true);
+  panel.destroy();
+  reactEditor.destroy();
+  expect(editor.blockRegistry.has(EMBEDDING_BLOCK_TYPE)).toBe(false);
+  await runtime.destroy();
+  await storage.destroy();
+});
+
+test.each(["A", ""])(
+  "clipboard retargets internal references with document ID %p and preserves qualified external references in one undo",
+  async (documentId) => {
+    const storage = new DocumentStorage({ registry: new YjsDocumentRegistry(crypto.randomUUID()) });
+    const source = await storage.create("A");
+    const target = await storage.create("B");
+    const runtime = await createTestMultiEditor([source, target], storage, {
+      extensions: [standardPreset(), embeddingExtension()],
+    });
+    const a = (await runtime.acquireEditor("A")).editor;
+    const b = (await runtime.acquireEditor("B")).editor;
+    a.blocks.insertBlock({
+      id: "branch",
+      type: "paragraph",
+      children: [
+        { id: "target", type: "paragraph", content: "Copied target" },
+        {
+          id: "internal",
+          type: EMBEDDING_BLOCK_TYPE,
+          props: { targetDocumentId: documentId, targetBlockId: "target" },
+        },
+        {
+          id: "external",
+          type: EMBEDDING_BLOCK_TYPE,
+          props: { targetDocumentId: "other", targetBlockId: "target" },
+        },
+      ],
+    });
+    b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
+    b.history.clear();
+    a.selection.set(createStructuralSelection(["branch"]));
+    const bundle = runtime.getEditor("A")!.clipboard.copy()!;
+    expect(bundle.sourceDocumentId).toBe("A");
+    const receivingRuntime = runtime.getEditor("B")!;
+    receivingRuntime.clipboard.paste({ bundle, placement: { mergeText: false } }, receivingRuntime);
+    const branch = b.blocks.getBlock("branch")!;
+    const copied = branch.children[0]!;
+    expect(copied.id).not.toBe("target");
+    expect(branch.children[1]!.props).toEqual({ targetDocumentId: "B", targetBlockId: copied.id });
+    expect(branch.children[2]!.props).toEqual({
+      targetDocumentId: "other",
+      targetBlockId: "target",
+    });
+    expect(bundle.blocks[0]!.children[1]!.props).toEqual({
+      targetDocumentId: documentId,
+      targetBlockId: "target",
+    });
+    expect(b.blocks.getBlockNode("target")?.content).toBe("Existing target");
+    b.history.undo();
+    expect(b.blocks.hasBlock("branch")).toBe(false);
+    b.history.redo();
+    expect(b.blocks.getBlock("branch")!.children[1]!.props.targetBlockId).toBe(copied.id);
+    await runtime.destroy();
+    await storage.destroy();
+  },
+);

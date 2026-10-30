@@ -92,9 +92,10 @@ export function createDocumentationPagePath(
   title: string,
 ): string {
   const selectedParent = getParentPath(selectedPath);
-  const targetParent = placement === "child"
-    ? [selectedParent, getPageBasename(selectedPath)].filter(Boolean).join("/")
-    : selectedParent;
+  const targetParent =
+    placement === "child"
+      ? [selectedParent, getPageBasename(selectedPath)].filter(Boolean).join("/")
+      : selectedParent;
   const targetPrefix = targetParent ? `${targetParent}/` : "";
   const siblingOrders = pages.flatMap(function readSiblingOrder(page) {
     if (getParentPath(page.path) !== targetParent) {
@@ -123,7 +124,10 @@ function compareNavigationNodes(
   const rightPath = right.kind === "page" ? right.page.path : right.path;
   const leftSegment = leftPath.split("/").at(-1) ?? leftPath;
   const rightSegment = rightPath.split("/").at(-1) ?? rightPath;
-  return parseNumericPrefix(leftSegment) - parseNumericPrefix(rightSegment) || leftPath.localeCompare(rightPath);
+  return (
+    parseNumericPrefix(leftSegment) - parseNumericPrefix(rightSegment) ||
+    leftPath.localeCompare(rightPath)
+  );
 }
 
 /**

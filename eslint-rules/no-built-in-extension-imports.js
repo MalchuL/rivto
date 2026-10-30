@@ -11,10 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const EXTENSIONS_ROOT = path.join(
-  REPOSITORY_ROOT,
-  "packages/react-rivto-editor/src/extensions",
-);
+const EXTENSIONS_ROOT = path.join(REPOSITORY_ROOT, "packages/react-rivto-editor/src/extensions");
 const BUILT_INS_ROOT = path.join(EXTENSIONS_ROOT, "built-ins");
 
 /**
@@ -49,7 +46,9 @@ const noBuiltInExtensionImports = {
    */
   create(context) {
     const filename = path.resolve(context.filename);
-    if (!isWithin(BUILT_INS_ROOT, filename)) return {};
+    if (!isWithin(BUILT_INS_ROOT, filename)) {
+      return {};
+    }
 
     /**
      * Validates one static or dynamic module specifier.
@@ -59,7 +58,9 @@ const noBuiltInExtensionImports = {
      * @returns Nothing.
      */
     const checkSource = (node, source) => {
-      if (typeof source !== "string" || !source.startsWith(".")) return;
+      if (typeof source !== "string" || !source.startsWith(".")) {
+        return;
+      }
       const target = path.resolve(path.dirname(filename), source);
       if (isWithin(EXTENSIONS_ROOT, target) && !isWithin(BUILT_INS_ROOT, target)) {
         context.report({ node, messageId: "reverseDependency" });

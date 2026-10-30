@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { useReactEditor, type ReactEditor } from "@chulane/rivto-react";
+import { useReactPanel, type ReactPanelApi } from "@chulane/rivto-react";
 import { useCallback, useSyncExternalStore } from "react";
 
 const REVISION_PANEL_CLASS = "revision-panel";
@@ -26,7 +26,7 @@ interface RevisionSnapshot {
   readonly rows: readonly ManagerRevision[];
 }
 
-const snapshots = new WeakMap<ReactEditor, RevisionSnapshot>();
+const snapshots = new WeakMap<ReactPanelApi, RevisionSnapshot>();
 
 /**
  * Reads every public manager revision and caches the row list by value.
@@ -34,42 +34,44 @@ const snapshots = new WeakMap<ReactEditor, RevisionSnapshot>();
  * Returning the previous array when counters are unchanged keeps
  * `useSyncExternalStore` from scheduling a render on every listener fire.
  *
- * @param reactEditor - Runtime whose managers are inspected.
+ * @param panel - Editor view whose managers are inspected.
  * @returns Stable snapshot of manager names and revision counters.
  */
-function readManagerRevisions(reactEditor: ReactEditor): RevisionSnapshot {
+function readManagerRevisions(reactPanel: ReactPanelApi): RevisionSnapshot {
   const rows: readonly ManagerRevision[] = [
-    { manager: "editor", revision: reactEditor.revision },
-    { manager: "blocks", revision: reactEditor.blocks.revision },
-    { manager: "renderers", revision: reactEditor.renderers.revision },
-    { manager: "keyboard", revision: reactEditor.keyboard.revision },
-    { manager: "surfaces", revision: reactEditor.surfaces.revision },
-    { manager: "extensions", revision: reactEditor.extensions.revision },
-    { manager: "slashCommands", revision: reactEditor.slashCommands.revision },
+    { manager: "editor", revision: reactPanel.document.revision },
+    { manager: "blocks", revision: reactPanel.blocks.revision },
+    { manager: "renderers", revision: reactPanel.editor.renderers.revision },
+    { manager: "keyboard", revision: reactPanel.keyboard.revision },
+    { manager: "surfaces", revision: reactPanel.editor.surfaces.revision },
+    { manager: "extensions", revision: reactPanel.editor.extensions.revision },
+    { manager: "slashCommands", revision: reactPanel.slashCommands.revision },
   ];
   const key = rows.map((row) => `${row.manager}:${row.revision}`).join("|");
-  const cached = snapshots.get(reactEditor);
-  if (cached?.key === key) return cached;
+  const cached = snapshots.get(reactPanel);
+  if (cached?.key === key) {
+    return cached;
+  }
   const next = { key, rows };
-  snapshots.set(reactEditor, next);
+  snapshots.set(reactPanel, next);
   return next;
 }
 
 /**
  * Subscribes to every manager stream that owns an independent revision.
  *
- * @param reactEditor - Runtime whose revision stores are observed.
+ * @param panel - Editor view whose revision stores are observed.
  * @param listener - Callback invoked after any subscribed counter changes.
  * @returns Combined disposer for every subscription.
  */
-function subscribeManagerRevisions(reactEditor: ReactEditor, listener: () => void): () => void {
+function subscribeManagerRevisions(reactPanel: ReactPanelApi, listener: () => void): () => void {
   const stop = [
-    reactEditor.subscribe(listener),
-    reactEditor.renderers.subscribe(listener),
-    reactEditor.keyboard.subscribe(listener),
-    reactEditor.surfaces.subscribe(listener),
-    reactEditor.extensions.subscribe(listener),
-    reactEditor.slashCommands.subscribe(listener),
+    reactPanel.subscribe(listener),
+    reactPanel.editor.renderers.subscribe(listener),
+    reactPanel.keyboard.subscribe(listener),
+    reactPanel.editor.surfaces.subscribe(listener),
+    reactPanel.editor.extensions.subscribe(listener),
+    reactPanel.slashCommands.subscribe(listener),
   ];
   return () => stop.forEach((unsubscribe) => unsubscribe());
 }
@@ -80,24 +82,27 @@ function subscribeManagerRevisions(reactEditor: ReactEditor, listener: () => voi
  * @returns Details panel used next to the keyboard-shortcut inventory.
  */
 export function RevisionsPanel() {
-  const reactEditor = useReactEditor();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => subscribeManagerRevisions(reactEditor, listener),
-    [reactEditor],
+    (listener: () => void) => subscribeManagerRevisions(reactPanel, listener),
+    [reactPanel],
   );
   const snapshot = useSyncExternalStore(
     subscribe,
-    () => readManagerRevisions(reactEditor),
-    () => readManagerRevisions(reactEditor),
+    () => readManagerRevisions(reactPanel),
+    () => readManagerRevisions(reactPanel),
   );
 
   return (
-    <details className={REVISION_PANEL_CLASS} data-revision-panel="" data-revision-key={snapshot.key}>
+    <details
+      className={REVISION_PANEL_CLASS}
+      data-revision-panel=""
+      data-revision-key={snapshot.key}
+    >
       <summary>Manager revisions</summary>
       <p className={REVISION_HELP_CLASS}>
-        Counters bump when that manager publishes. <code>editor</code> follows
-        document and mode; <code>blocks</code> follows block data; the rest are
-        React registries.
+        Counters bump when that manager publishes. <code>editor</code> follows document and mode;{" "}
+        <code>blocks</code> follows block data; the rest are React registries.
       </p>
       <div className={REVISION_TABLE_WRAP_CLASS}>
         <table className={REVISION_TABLE_CLASS}>

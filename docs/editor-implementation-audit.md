@@ -27,7 +27,7 @@ Severity means: **High** can corrupt state, break a primary interaction, or unde
 
 ### 1. Snapshot loading mutates valid state before late validation can fail
 
-`loadSnapshot` validates only the outer block/element arrays, then replaces blocks before loading links and plugin data ([document-model.ts:127](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L127)). `loadLinks` clears existing links and validates endpoints one at a time ([link-manager.ts:92](../packages/rivto-editor-core/src/store/document-model/core/managers/link-manager/link-manager.ts#L92)). Yjs transactions do not roll back thrown writes ([rivto-editor.ts:145](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L145)).
+`loadSnapshot` validates only the outer block/element arrays, then replaces blocks before loading links and plugin data ([document-model.ts:127](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L127)). `loadLinks` clears existing links and validates endpoints one at a time ([link-manager.ts:92](../packages/rivto-editor-core/src/store/document-model/core/managers/link-manager/link-manager.ts#L92)). Yjs transactions do not roll back thrown writes ([rivto-editor.ts:145](../packages/rivto-editor-core/src/editor/document-editor.ts#L145)).
 
 Reproduction: loading valid new blocks plus one invalid link threw, but the old blocks and links were already gone and the new blocks remained. Fully validate and normalize every supplied section, including cross-references, before the transaction begins; the transaction should perform writes only.
 
@@ -45,7 +45,7 @@ The partial-update contract says omitted sections remain unchanged ([document-mo
 
 ### 5. Remote structural conflicts are normalized only at construction, and cycles are unsafe
 
-The tree is normalized once in `DocumentModelImpl` construction, not after remote updates ([document-model.ts:63](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L63); [rivto-editor.ts:102](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L102)). Move is a delete/insert across CRDT arrays, so concurrent moves can create duplicate or orphan ownership. Current normalization can leave an orphan cycle invisible, while `removeTree` and `collectTreeIds` recurse without a visited set ([block-manager.ts:708](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L708); [block-manager.ts:922](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L922)). Add a deterministic post-remote-update reconciler and make every traversal cycle-safe.
+The tree is normalized once in `DocumentModelImpl` construction, not after remote updates ([document-model.ts:63](../packages/rivto-editor-core/src/store/document-model/core/document-model.ts#L63); [rivto-editor.ts:102](../packages/rivto-editor-core/src/editor/document-editor.ts#L102)). Move is a delete/insert across CRDT arrays, so concurrent moves can create duplicate or orphan ownership. Current normalization can leave an orphan cycle invisible, while `removeTree` and `collectTreeIds` recurse without a visited set ([block-manager.ts:708](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L708); [block-manager.ts:922](../packages/rivto-editor-core/src/store/document-model/core/managers/block-manager/block-manager.ts#L922)). Add a deterministic post-remote-update reconciler and make every traversal cycle-safe.
 
 ### 6. `YjsDoc.fromJSON` manipulates Yjs root internals instead of collaborative content
 
@@ -53,7 +53,7 @@ The tree is normalized once in `DocumentModelImpl` construction, not after remot
 
 ### 7. Collapsed-caret copy/cut claims the clipboard with an empty structured block
 
-Selection normalization intentionally returns a one-block range for a caret ([selection-manager.ts:166](../packages/rivto-editor-core/src/managers/selection-manager/selection-manager.ts#L166)). Clipboard copy slices identical offsets to `""` and still returns a bundle ([clipboard-manager.ts:114](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L114)); commands then prevent native behavior and write custom MIME ([rivto-editor.ts:332](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L332)). Reproduction produced a version-4 bundle containing one empty block. Return `undefined` for a pure collapsed text selection so the system clipboard is untouched.
+Selection normalization intentionally returns a one-block range for a caret ([selection-manager.ts:166](../packages/rivto-editor-core/src/managers/selection-manager/selection-manager.ts#L166)). Clipboard copy slices identical offsets to `""` and still returns a bundle ([clipboard-manager.ts:114](../packages/rivto-editor-core/src/managers/clipboard-manager/clipboard-manager.ts#L114)); commands then prevent native behavior and write custom MIME ([rivto-editor.ts:332](../packages/rivto-editor-core/src/editor/document-editor.ts#L332)). Reproduction produced a version-4 bundle containing one empty block. Return `undefined` for a pure collapsed text selection so the system clipboard is untouched.
 
 ### 8. Structured clipboard input is not a real trust boundary
 
@@ -61,19 +61,19 @@ Core parses JSON directly and aborts instead of falling back to text ([clipboard
 
 ### 9. The keyboard manager cannot report its installed/effective bindings
 
-The public capability exposes mutation but no list, revision, or subscription ([capabilities.ts:99](../packages/react-rivto-editor/src/capabilities.ts#L99)); registrations and overrides are private ([keyboard-manager.ts:33](../packages/react-rivto-editor/src/managers/events/keyboard-manager.ts#L33)). Demo derives overrides from the URL only during creation ([App.tsx:179](../demo/src/App.tsx#L179)). Applications therefore cannot build the requested complete live editor. Add `list()`, a stable cached snapshot, `revision`, and `subscribe()`; publish changes on register, delete, replace, and single override.
+The public capability exposes mutation but no list, revision, or subscription ([capabilities.ts:99](../packages/react-rivto-editor/src/capabilities.ts#L99)); registrations and overrides are private ([keyboard-manager.ts:33](../packages/react-rivto-editor/src/managers/keyboard/keyboard-manager.ts#L33)). Demo derives overrides from the URL only during creation ([App.tsx:179](../demo/src/App.tsx#L179)). Applications therefore cannot build the requested complete live editor. Add `list()`, a stable cached snapshot, `revision`, and `subscribe()`; publish changes on register, delete, replace, and single override.
 
 ### 10. The central keymap is not the runtime source of truth
 
-The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/events/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/built-ins/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
+The static catalog owns IDs/defaults ([keymap.ts:1](../packages/react-rivto-editor/src/managers/keyboard/keymap.ts#L1)), but each extension repeats its ID and reads defaults back from it; extension options can change declared defaults ([history.ts:76](../packages/react-rivto-editor/src/extensions/built-ins/history/history.ts#L76)), and third-party actions never appear in the catalog. Move each ID/default beside its registration and derive the complete list from installed registrations. This matches BlockSuite's extension-owned keymap pattern ([BlockSuite keymap extension](../blocksuite/packages/framework/std/src/extension/keymap.ts#L37); [paragraph keymap](../blocksuite/packages/affine/blocks/paragraph/src/paragraph-keymap.ts#L31)).
 
 ### 11. Runtime remapping can silently shadow unrelated actions
 
-Override application reparses bindings but performs no conflict analysis ([keyboard-manager.ts:176](../packages/react-rivto-editor/src/managers/events/keyboard-manager.ts#L176)). Dispatch uses priority and then registration order ([keyboard-manager.ts:216](../packages/react-rivto-editor/src/managers/events/keyboard-manager.ts#L216)); remapping `history.undo` to `Enter`, for example, can claim the event before block creation. Expose potential conflicts in the inventory using shortcut plus phase/target/mode/scope/priority. Warn in Demo rather than rejecting all overlaps because `when` predicates can make shared keys intentional. Logseq already builds both ID and key indexes and conflict checks ([data_helper.cljs:14](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L14); [data_helper.cljs:206](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L206)).
+Override application reparses bindings but performs no conflict analysis ([keyboard-manager.ts:176](../packages/react-rivto-editor/src/managers/keyboard/keyboard-manager.ts#L176)). Dispatch uses priority and then registration order ([keyboard-manager.ts:216](../packages/react-rivto-editor/src/managers/keyboard/keyboard-manager.ts#L216)); remapping `history.undo` to `Enter`, for example, can claim the event before block creation. Expose potential conflicts in the inventory using shortcut plus phase/target/mode/scope/priority. Warn in Demo rather than rejecting all overlaps because `when` predicates can make shared keys intentional. Logseq already builds both ID and key indexes and conflict checks ([data_helper.cljs:14](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L14); [data_helper.cljs:206](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L206)).
 
 ### 12. `Primary` accepts both Ctrl and Meta on every platform
 
-Matching treats either exclusive modifier as `Primary` ([shortcut.ts:64](../packages/react-rivto-editor/src/managers/events/shortcut.ts#L64)), contradicting Demo documentation and normal `Mod` semantics. Ctrl+Z can trigger editor undo on macOS and Meta/Windows+Z can trigger it elsewhere. Resolve `Primary` from an injected/detected platform; retain explicit `Ctrl` and `Meta`. BlockSuite uses platform-specific selection ([keyboard.ts:29](../blocksuite/packages/framework/std/src/event/control/keyboard.ts#L29)), and Logseq resolves `mod` by platform ([data_helper.cljs:71](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L71)).
+Matching treats either exclusive modifier as `Primary` ([shortcut.ts:64](../packages/react-rivto-editor/src/managers/keyboard/shortcut.ts#L64)), contradicting Demo documentation and normal `Mod` semantics. Ctrl+Z can trigger editor undo on macOS and Meta/Windows+Z can trigger it elsewhere. Resolve `Primary` from an injected/detected platform; retain explicit `Ctrl` and `Meta`. BlockSuite uses platform-specific selection ([keyboard.ts:29](../blocksuite/packages/framework/std/src/event/control/keyboard.ts#L29)), and Logseq resolves `mod` by platform ([data_helper.cljs:71](../logseq/src/main/frontend/modules/shortcut/data_helper.cljs#L71)).
 
 ### 13. Paste-as-plain-text mode can become stuck
 
@@ -85,7 +85,7 @@ One semantic keydown action sets a closure boolean, while a separately configura
 
 ### 15. Extension cleanup exceptions abort the rest of teardown
 
-`ExtensionManager.destroy` uses a throwing `forEach`; a single custom cleanup prevents later extension and registration cleanup ([extension-manager.ts:102](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L102)). Its installed-extension disposer also runs custom cleanup before owned registrations without `finally` ([extension-manager.ts:123](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L123)). Core editor teardown has the same sequential failure mode before its `finally`-guarded CRDT destroy ([rivto-editor.ts:456](../packages/rivto-editor-core/src/editor/rivto-editor.ts#L456)). Make teardown best-effort: always release every owned resource, collect errors, and throw one aggregate afterward if useful.
+`ExtensionManager.destroy` uses a throwing `forEach`; a single custom cleanup prevents later extension and registration cleanup ([extension-manager.ts:102](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L102)). Its installed-extension disposer also runs custom cleanup before owned registrations without `finally` ([extension-manager.ts:123](../packages/react-rivto-editor/src/managers/extensions/extension-manager.ts#L123)). Core editor teardown has the same sequential failure mode before its `finally`-guarded CRDT destroy ([rivto-editor.ts:456](../packages/rivto-editor-core/src/editor/document-editor.ts#L456)). Make teardown best-effort: always release every owned resource, collect errors, and throw one aggregate afterward if useful.
 
 ### 16. Cross-document DOM support is inconsistent
 
@@ -151,11 +151,11 @@ The effect depends only on binding ID and editor; a ref refreshes only `when` an
 
 ### 31. Keyboard docs/types contradict live behavior
 
-`KeymapOverrides` is described as creation-time ([keyboard-types.ts:5](../packages/react-rivto-editor/src/managers/events/keyboard-types.ts#L5)), although runtime replacement is public and tested. Unknown IDs are retained for future registrations, not simply ignored. Update docs and surface orphan/future overrides in the inventory so typos are visible.
+`KeymapOverrides` is described as creation-time ([keyboard-types.ts:5](../packages/react-rivto-editor/src/managers/keyboard/keyboard-types.ts#L5)), although runtime replacement is public and tested. Unknown IDs are retained for future registrations, not simply ignored. Update docs and surface orphan/future overrides in the inventory so typos are visible.
 
 ### 32. Shortcut grammar mishandles plus and duplicate/empty components
 
-The parser splits on every `+`, drops empty pieces, and deduplicates modifiers through a `Set` ([shortcut.ts:23](../packages/react-rivto-editor/src/managers/events/shortcut.ts#L23)). Some printable keys cannot be expressed and malformed forms normalize unexpectedly. Support a named `Plus`/code form and reject empty or duplicate components.
+The parser splits on every `+`, drops empty pieces, and deduplicates modifiers through a `Set` ([shortcut.ts:23](../packages/react-rivto-editor/src/managers/keyboard/shortcut.ts#L23)). Some printable keys cannot be expressed and malformed forms normalize unexpectedly. Support a named `Plus`/code form and reject empty or duplicate components.
 
 ### 33. Edgeless popovers listen on the global window
 
@@ -163,7 +163,7 @@ Toolbar and properties UI use global `window`/`Node` ([tool-bar.tsx:58](../packa
 
 ### 34. Caret geometry performs synchronous layout once per character
 
-Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/managers/events/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
+Vertical navigation measures a Range for each text offset ([block-dom.ts:171](../packages/react-rivto-editor/src/blocks/block-dom.ts#L171)); pointer fallback repeats similar work ([editor-dom-selection.ts:384](../packages/react-rivto-editor/src/managers/selection/editor-dom-selection.ts#L384)). Prefer browser caret hit-testing, cache line geometry until layout/content changes, or binary-search positions. The complexity is certain; user-visible threshold still needs a benchmark.
 
 ### 35. Pointer listeners can survive component unmount
 
@@ -179,15 +179,15 @@ Every registration/disposal calls `reconnect`, which detaches and recreates all 
 
 ### 38. Dynamic uninstall would leave stale default-writing callbacks
 
-`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/react-editor.tsx#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
+`defaultWritingBlockExtension` installs global factories but its cleanup only unregisters the block contribution ([default-writing-block.tsx:75](../packages/react-rivto-editor/src/extensions/built-ins/page/default-writing-block.tsx#L75)); `installDefaultWriting` has no disposer or ownership stack ([react-editor.tsx:104](../packages/react-rivto-editor/src/editor-view-api.ts#L104)). Once extensions become dynamic, uninstall leaves callbacks for an unavailable type. Make default-writing installation an owned, reversible registration.
 
-### 39. `EditorView` has one hard-coded layout bucket
+### 39. `EditorPanel` has one hard-coded layout bucket
 
 The second TODO asks how to separate before/after content ([TODO.md:2](../TODO.md#L2)). Current order is host children, all extension components, then surface, all inside every editor wrapper ([editor-view.tsx:86](../packages/react-rivto-editor/src/editor-view.tsx#L86)). Add only two explicit positions—`beforeSurface` and `afterSurface`—to extension mounts or props; avoid a general layout framework until another placement is needed.
 
-### 40. Global editor revision invalidates the entire `EditorView`
+### 40. Global editor revision invalidates the entire `EditorPanel`
 
-`EditorView` subscribes to the core editor revision at its top boundary ([editor-view.tsx:40](../packages/react-rivto-editor/src/editor-view.tsx#L40)). Every document update can re-enter surface and extension rendering even where focused hooks already provide narrower subscriptions. Measure typing and collaborative bursts, then move block data to selector-level subscriptions or memoized row boundaries; do not add a second state model.
+`EditorPanel` subscribes to the core editor revision at its top boundary ([editor-view.tsx:40](../packages/react-rivto-editor/src/editor-view.tsx#L40)). Every document update can re-enter surface and extension rendering even where focused hooks already provide narrower subscriptions. Measure typing and collaborative bursts, then move block data to selector-level subscriptions or memoized row boundaries; do not add a second state model.
 
 ## Lower-priority maintainability and delivery findings
 
@@ -237,7 +237,7 @@ interface KeyboardBindingSnapshot {
   readonly priority: number;
 }
 
-interface KeyboardCapability {
+interface KeyboardApi {
   register(definition: KeyboardEventDefinition, listener: Handler): () => void;
   delete(id: string): boolean;
   list(): readonly KeyboardBindingSnapshot[];
@@ -257,7 +257,7 @@ Implementation rules:
 5. Keep `setKeymapOverride` for instant edits. `undefined` restores declared defaults; `[]` disables. Persistence belongs to Demo/application state, not the editor package.
 6. Make keydown/keyup pairing internal for stateful gestures such as paste-as-plain-text and pan.
 
-Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `ReactEditor` instance and page did not reload.
+Demo should add a `KeyboardPanel` that subscribes with `useSyncExternalStore`, lists default/effective bindings and status, edits a local input, calls `setKeymapOverride`, and offers Disable/Restore buttons. Replace the URL-only E2E with a test that edits a binding, uses it immediately, restores it, and confirms that the `PanelAPI` instance and page did not reload.
 
 BlockSuite supplies the right ownership precedent (extension-local keymaps); Logseq supplies the useful inventory, display, persistence, and conflict precedent. Rivto does not need Logseq's heavyweight global reinstall because its manager already reparses overrides in place.
 
@@ -279,16 +279,16 @@ BlockSuite supplies the right ownership precedent (extension-local keymaps); Log
 
 ## Verification results and limitations
 
-| Check | Result |
-|---|---|
-| `pnpm check-types` | Passed for core, React, Demo, and docs |
-| `pnpm --filter @chulane/rivto build` | Passed |
-| `pnpm --filter @chulane/rivto-react build` | Passed |
-| `pnpm --dir demo build` | Passed with 1.0 MB chunk warning |
-| `pnpm exec playwright test e2e/keymap.spec.ts --project=chromium` | Passed, 1 test |
-| `pnpm lint` | Failed, 2 test-file errors |
-| Core Jest | Did not start: `Preset ts-jest not found` |
-| React Jest | Did not start: `Preset ts-jest/presets/default-esm not found` |
+| Check                                                             | Result                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `pnpm check-types`                                                | Passed for core, React, Demo, and docs                        |
+| `pnpm --filter @chulane/rivto build`                              | Passed                                                        |
+| `pnpm --filter @chulane/rivto-react build`                        | Passed                                                        |
+| `pnpm --dir demo build`                                           | Passed with 1.0 MB chunk warning                              |
+| `pnpm exec playwright test e2e/keymap.spec.ts --project=chromium` | Passed, 1 test                                                |
+| `pnpm lint`                                                       | Failed, 2 test-file errors                                    |
+| Core Jest                                                         | Did not start: `Preset ts-jest not found`                     |
+| React Jest                                                        | Did not start: `Preset ts-jest/presets/default-esm not found` |
 
 The audit is static plus targeted runtime reproduction, not exhaustive browser QA or fuzzing. Performance findings 28, 34, 36, 40, and 44 need measurements before optimization. Parent/child constraints and same-kind provider multiplicity need product decisions. Jest failure means existing unit assertions were inspected but not executed in this checkout.
 

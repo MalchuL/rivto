@@ -9,7 +9,11 @@ import { BlockGraph } from "./block-graph";
 import type { BlockValueHost } from "./host";
 
 /** Runs the headless block graph example and returns its final values and calls. */
-export async function runInMemoryExample(): Promise<{ title: unknown; mirror: unknown; calls: unknown[] }> {
+export async function runInMemoryExample(): Promise<{
+  title: unknown;
+  mirror: unknown;
+  calls: unknown[];
+}> {
   const values = new Map<string, unknown>();
   const listeners = new Map<string, Set<(value: unknown, context?: PropagationContext) => void>>();
   const key = (address: BlockPropertyAddress) => blockPropertyId(address);
@@ -39,7 +43,12 @@ export async function runInMemoryExample(): Promise<{ title: unknown; mirror: un
   graph.registerSlot("finish", "finish-block", (payload) => calls.push(payload));
   graph.runtime.connect({ id: "sync", kind: "undirected-value", endpoints: ["title", "mirror"] });
   graph.runtime.connect({ id: "copy", kind: "directed-value", from: "mirror", to: "output" });
-  graph.runtime.connect({ id: "call", kind: "slot-flow", from: { slotId: "start", output: "next" }, to: "finish" });
+  graph.runtime.connect({
+    id: "call",
+    kind: "slot-flow",
+    from: { slotId: "start", output: "next" },
+    to: "finish",
+  });
   graph.runtime.enable();
   values.set(key(title), "Hello");
   await graph.runtime.publishValue("title", "Hello");

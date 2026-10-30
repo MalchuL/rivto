@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  useProjectTagsQuery,
-  useUpdatePageMutation,
-} from "@chulane/app/client";
+import { useProjectTagsQuery, useUpdatePageMutation } from "@chulane/app/client";
 import { Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +30,7 @@ export function PageTagPicker({
   const byId = new Map(available.map((tag) => [tag.id, tag]));
 
   const toggle = (tagId: string) => {
-    const next = selected.has(tagId)
-      ? tagIds.filter((id) => id !== tagId)
-      : [...tagIds, tagId];
+    const next = selected.has(tagId) ? tagIds.filter((id) => id !== tagId) : [...tagIds, tagId];
     void updatePage.mutateAsync({ id: pageId, tagIds: next });
   };
 
@@ -43,7 +38,9 @@ export function PageTagPicker({
     <div className="flex flex-wrap items-center gap-1.5">
       {tagIds.map((id) => {
         const tag = byId.get(id);
-        if (!tag) return null;
+        if (!tag) {
+          return null;
+        }
         return <TagChip key={id} tag={tag} />;
       })}
       <DropdownMenu>

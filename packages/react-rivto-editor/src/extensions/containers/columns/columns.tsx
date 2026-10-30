@@ -1,47 +1,55 @@
 /**
  * Optional equal-width column layout around ordinary document blocks. Nested
- * blocks keep the shared BlockTree shell; this extension only arranges column
+ * blocks keep the shared Page shell; this extension only arranges column
  * shells side by side. Removing a column relocates its children instead of
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
-import { type KeyboardEvent, type MouseEvent } from "react";
-import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
-import { Button } from "../../../components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
+import { ColumnsLayout, ColumnsColumnLayout } from "./columns-layout";
 import { type EditorBlockInput } from "@chulane/rivto";
-import { useBlockEditing, useBlockNode, useReactEditor } from "../../../hooks";
+import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { useId, type KeyboardEvent, type MouseEvent } from "react";
+import { z } from "zod";
+import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
+import { convertLeafToContainer } from "../convert-leaf-to-container";
+import { Button } from "../../../components/ui/button";
+import { Checkbox } from "../../../components/ui/checkbox";
+import { Label } from "../../../components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
+import { editorControlProps } from "../../../constants";
+import type { ReactPanelApi } from "../../../panels/types";
 import {
-  type BlockSlotProps,
-  type ReactEditorExtension,
-} from "../../../managers";
-import type { ReactEditor } from "../../../types";
-import { createBlockViewContext } from "../../../views/context";
+  useBlockNode,
+  useBlockSelectionAnchor,
+  useEditorRoot,
+  useReactPanel,
+} from "../../../hooks";
+import { type BlockSlotProps, type ReactEditorExtension } from "../../../managers";
 import {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
-  columnsColumnView,
-  columnsView,
+  columnsBehavior,
+  columnsColumnBehavior,
   relocateColumnContents,
-} from "./columns-view";
-import { convertLeafToContainer } from "../../../views/ops/outline-ops";
+} from "./columns-behavior";
 
 export {
   COLUMNS_BLOCK_TYPE,
   COLUMNS_COLUMN_BLOCK_TYPE,
   relocateColumnContents,
-} from "./columns-view";
+} from "./columns-behavior";
 export const COLUMNS_DEFAULT_COUNT = 2;
 export const COLUMNS_MIN_COUNT = 1;
 export const COLUMNS_MAX_COUNT = 6;
 
-const COLUMNS_CLASS = "rivto-columns flex items-center gap-2";
-const COLUMNS_STATS_CLASS = "text-xs tabular-nums text-muted-foreground";
-const COLUMN_CLASS = "rivto-columns-column min-h-[120px]";
+const COLUMNS_CLASS = "rivto-columns";
+const COLUMNS_STATS_CLASS = "rivto-columns-count-label";
+const COLUMN_CLASS = "rivto-columns-column";
 const SETTINGS_CLASS = "rivto-columns-settings relative inline-flex";
 const PANEL_CLASS = "rivto-columns-settings-panel w-56 p-4";
 const COUNT_CLASS = "rivto-columns-count mt-2 flex items-center justify-between gap-2";
 const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
+const DIVIDERS_CLASS = "rivto-columns-dividers";
 
 /**
  * Rejects counts that would create an empty or overflowing column board.
@@ -50,7 +58,9 @@ const COUNT_VALUE_CLASS = "min-w-[1.5ch] text-center tabular-nums";
  */
 function columnCount(value: number): number {
   if (!Number.isInteger(value) || value < COLUMNS_MIN_COUNT || value > COLUMNS_MAX_COUNT) {
-    throw new Error(`Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`);
+    throw new Error(
+      `Columns count must be an integer from ${COLUMNS_MIN_COUNT} to ${COLUMNS_MAX_COUNT}`,
+    );
   }
   return value;
 }
@@ -89,120 +99,238 @@ export function createColumnsBlockInput(
 
 /**
  * Changes how many column shells a board owns, relocating nested blocks first.
- * @param reactEditor - Active React editor runtime.
+ * @param reactPanel - Active editor view.
  * @param blockId - Columns board identifier.
  * @param count - Desired column count in the supported range.
  * @returns Whether the board existed and the count could be applied.
  */
-export function setColumnsCount(reactEditor: ReactEditor, blockId: string, count: number): boolean {
-  const board = reactEditor.blocks.getBlock(blockId);
-  if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) return false;
+export function setColumnsCount(
+  reactPanel: ReactPanelApi,
+  blockId: string,
+  count: number,
+): boolean {
+  const board = reactPanel.blocks.getBlock(blockId);
+  if (board?.type !== COLUMNS_BLOCK_TYPE || !Number.isFinite(count)) {
+    return false;
+  }
   const next = Math.max(COLUMNS_MIN_COUNT, Math.min(COLUMNS_MAX_COUNT, Math.round(count)));
   const columns = board.children.filter((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE);
-  if (next === columns.length) return true;
-  reactEditor.history.batchUpdates(() => {
-    reactEditor.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
+  if (next === columns.length) {
+    return true;
+  }
+  reactPanel.batchUpdates(() => {
+    reactPanel.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
-        const insertedId = reactEditor.blocks.insertBlock({
-          type: COLUMNS_COLUMN_BLOCK_TYPE,
-          content: "",
-        }, afterId === board.id ? undefined : afterId).id;
-        if (afterId === board.id) {
-          reactEditor.blocks.moveBlocks([insertedId], board.id, "inside");
-        }
+        const insertedId = reactPanel.blocks.insertBlock(
+          {
+            type: COLUMNS_COLUMN_BLOCK_TYPE,
+            content: "",
+          },
+          afterId === board.id
+            ? { parentId: board.id }
+            : reactPanel.blocks.getInsertionDestinationAfter(afterId),
+        ).id;
         afterId = insertedId;
       }
       return;
     }
     const removed = columns.slice(next);
-    relocateColumnContents(reactEditor, removed.map((column) => column.id));
-    reactEditor.blocks.removeBlocks(removed.map((column) => column.id));
+    relocateColumnContents(
+      reactPanel,
+      removed.map((column) => column.id),
+    );
+    reactPanel.blocks.removeBlocks(removed.map((column) => column.id));
   });
   return true;
 }
 
 /**
- * Occupies the board content slot and summarizes hidden columns when collapsed.
+ * Occupies the board management row and summarizes hidden columns when collapsed.
+ *
+ * Divider visibility is reflected on this board's selection region for the
+ * shared page and edgeless layout stylesheet. Missing preferences show dividers.
+ *
  * @param props - Identity of the persisted board; content is intentionally empty.
- * @returns Structural selection region and a compact collapsed summary.
+ * @param props.blockId - Stable ID of the board to observe.
+ * @returns Structural selection region and a compact collapsed summary, or null
+ * when the board no longer exists.
+ * @throws If rendered outside an editor panel.
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing(blockId, { textEdit: false });
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   const count = block.childIds.length;
-  return <div {...editing.attributes} className={COLUMNS_CLASS}>
-    {block.listProps.collapsed === true && <>
-      <strong>Columns</strong>
-      <span className={COLUMNS_STATS_CLASS}>{count} {count === 1 ? "column" : "columns"}</span>
-    </>}
-  </div>;
+  return (
+    <div
+      {...attributes}
+      className={COLUMNS_CLASS}
+      data-show-dividers={block.props.showDividers !== false}
+    >
+      {block.listProps.collapsed === true && (
+        <>
+          <strong>Columns</strong>
+          <span className={COLUMNS_STATS_CLASS}>
+            {count} {count === 1 ? "column" : "columns"}
+          </span>
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
  * Marks an empty column as a click-to-start writing target.
+ *
+ * Empty lanes own keyboard activation and are marked as canvas controls so Space
+ * starts writing instead of enabling Edgeless panning. Populated collapsed lanes
+ * remain structural selection anchors without claiming empty-control interaction.
+ *
  * @param props - Identity of the persisted column.
- * @returns Empty-lane control; drop and sort markers live on the column shell.
+ * @param props.blockId - Stable lane ID receiving the first writing block.
+ * @returns Empty-lane control or collapsed summary; drop markers live on its row.
+ * @throws If rendered outside an editor panel or insertion fails.
  */
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
-  const reactEditor = useReactEditor();
+  const reactPanel = useReactPanel();
+  const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
   const empty = block?.childIds.length === 0;
+  const attributes = useBlockSelectionAnchor(blockId);
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.
    * @returns Nothing; insertion is a single undo step.
    */
   const startWriting = (event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) => {
-    if (!empty || event.defaultPrevented) return;
-    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
+    if (!empty || event.defaultPrevented) {
+      return;
+    }
+    if ("key" in event && event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
-    const root = reactEditor.events.getRoot();
-    const context = root ? createBlockViewContext(reactEditor, blockId, root) : undefined;
-    if (context) columnsColumnView.insertFirstChild(context);
+    const context = root ? createBlockBehaviorContext(reactPanel, blockId, root) : undefined;
+    if (context) {
+      columnsColumnBehavior.appendWritingBlock(context);
+    }
   };
   return (
     <div
+      {...attributes}
       className={COLUMN_CLASS}
       tabIndex={empty ? 0 : -1}
       role={empty ? "button" : undefined}
       aria-label="Column"
+      data-canvas-control={empty ? "" : undefined}
       onClick={startWriting}
       onKeyDown={startWriting}
-    />
+    >
+      {block?.listProps.collapsed === true ? `${block.childIds.length} blocks` : null}
+    </div>
+  );
+}
+
+/**
+ * Changes the board's column count with the existing relocation and undo rules.
+ *
+ * @param props - Board identity and its current number of columns.
+ * @param props.blockId - Stable ID of the board to resize.
+ * @param props.count - Live count used to disable the supported range boundaries.
+ * @returns Count display and buttons for adding or removing a column.
+ * @throws If rendered outside an editor panel or a delegated count change fails.
+ */
+function ColumnsCountControls({ blockId, count }: { blockId: string; count: number }) {
+  const reactPanel = useReactPanel();
+  return (
+    <div className={COUNT_CLASS}>
+      <Button
+        {...editorControlProps}
+        variant="outline"
+        size="icon-sm"
+        type="button"
+        aria-label="Remove column"
+        disabled={count <= COLUMNS_MIN_COUNT}
+        onClick={() => setColumnsCount(reactPanel, blockId, count - 1)}
+      >
+        <MinusIcon />
+      </Button>
+      <output className={COUNT_VALUE_CLASS} aria-live="polite">
+        {count}
+      </output>
+      <Button
+        {...editorControlProps}
+        variant="outline"
+        size="icon-sm"
+        type="button"
+        aria-label="Add column"
+        disabled={count >= COLUMNS_MAX_COUNT}
+        onClick={() => setColumnsCount(reactPanel, blockId, count + 1)}
+      >
+        <PlusIcon />
+      </Button>
+    </div>
   );
 }
 
 /**
  * Provides the right-side control that changes how many columns the board owns.
+ *
+ * The divider checkbox persists its preference through the panel's block manager
+ * and shares the ordinary history, clipboard, and snapshot behavior.
+ *
  * @param props - Live board snapshot.
- * @returns Settings button and count panel.
+ * @param props.block - Board whose column count and divider visibility are edited.
+ * @returns Settings button and count panel with a divider visibility checkbox.
+ * @throws If rendered outside an editor panel or a delegated block update fails.
  */
 function ColumnsControls({ block }: BlockSlotProps) {
-  const reactEditor = useReactEditor();
-  const count = block.childIds.filter((childId) => (
-    reactEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE
-  )).length;
+  const reactPanel = useReactPanel();
+  const dividersId = useId();
+  const count = block.childIds.filter(
+    (childId) => reactPanel.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
+  ).length;
   return (
     <div className={SETTINGS_CLASS}>
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon-sm" type="button" aria-label="Columns settings">
+          <Button
+            {...editorControlProps}
+            variant="outline"
+            size="icon-sm"
+            type="button"
+            aria-label="Columns settings"
+          >
             <SettingsIcon />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className={PANEL_CLASS} role="group" aria-label="Column count">
+        <PopoverContent
+          align="end"
+          className={PANEL_CLASS}
+          role="group"
+          aria-label="Columns settings"
+        >
           <strong>Columns</strong>
-          <div className={COUNT_CLASS}>
-            <Button variant="outline" size="icon-sm" type="button" aria-label="Remove column" disabled={count <= COLUMNS_MIN_COUNT}
-              onClick={() => setColumnsCount(reactEditor, block.id, count - 1)}><MinusIcon /></Button>
-            <output className={COUNT_VALUE_CLASS} aria-live="polite">{count}</output>
-            <Button variant="outline" size="icon-sm" type="button" aria-label="Add column" disabled={count >= COLUMNS_MAX_COUNT}
-              onClick={() => setColumnsCount(reactEditor, block.id, count + 1)}><PlusIcon /></Button>
-          </div>
+          <ColumnsCountControls blockId={block.id} count={count} />
+          <Label htmlFor={dividersId} className={DIVIDERS_CLASS}>
+            <Checkbox
+              {...editorControlProps}
+              id={dividersId}
+              checked={block.props.showDividers !== false}
+              onCheckedChange={(checked) =>
+                reactPanel.blocks.updateBlock(block.id, {
+                  props: { ...block.props, showDividers: checked === true },
+                })
+              }
+            />
+            Show dividers
+          </Label>
         </PopoverContent>
       </Popover>
     </div>
@@ -221,19 +349,21 @@ export function columnsExtension(): ReactEditorExtension {
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
-          metadata: { containment: { childOutline: "fixed" } },
+          defaultProps: { showDividers: true },
+          propSchema: z.object({ showDividers: z.boolean().default(true) }),
         },
         render: Columns,
-        view: columnsView,
+        layout: ColumnsLayout,
+        behavior: columnsBehavior,
       });
       reactEditor.blockTypes.register({
         definition: {
           type: COLUMNS_COLUMN_BLOCK_TYPE,
           title: "Column",
-          metadata: { containment: { childOutline: "free", outlineFloor: true } },
         },
         render: ColumnsColumn,
-        view: columnsColumnView,
+        layout: ColumnsColumnLayout,
+        behavior: columnsColumnBehavior,
       });
       reactEditor.surfaces.registerBlockSlot({
         position: "right",
@@ -245,9 +375,10 @@ export function columnsExtension(): ReactEditorExtension {
         title: "Columns",
         group: "Turn into",
         keywords: ["layout", "split", "grid"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId) && !reactEditor.blocks.hasChildren(blockId),
-        execute: ({ blockId }) => {
-          convertLeafToContainer(reactEditor, blockId, createColumnsBlockInput());
+        isAvailable: ({ blockId, reactPanel }) =>
+          reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
+        execute: ({ blockId, reactPanel }) => {
+          convertLeafToContainer(reactPanel, blockId, createColumnsBlockInput());
         },
       });
     },

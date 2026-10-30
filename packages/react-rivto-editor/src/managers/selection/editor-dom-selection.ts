@@ -1,3 +1,8 @@
+import { BlockDOMSelection } from "@chulane/rivto-page";
+import { isStructuralSelection, type Selection } from "@chulane/rivto";
+import { PageNavigationController } from "../../surfaces/page/page-navigation-controller";
+import type { RestoreDOMSelectionOptions } from "./api";
+
 /**
  * DOM ↔ editor selection bridge for Rivto's multi-contenteditable surfaces.
  *
@@ -48,291 +53,6 @@
  *         └── Text ("hello")   ← Selection often points here
  * ```
  */
-import type {
-  EditorPosition,
-  Selection,
-} from "@chulane/rivto";
-import {
-  isStructuralSelection,
-  createTextSelection,
-  createStructuralSelection,
-} from "@chulane/rivto";
-import {
-  BLOCK_CONTENT_SELECTOR,
-  BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-  BLOCK_ROW_CLASS,
-} from "../../constants";
-import { isElementNode } from "../events/dom-nodes";
-import { resolveSelectionEndpoints } from "./selection-endpoints";
-
-/**
- * One live browser caret/selection endpoint inside a block's editable content.
- *
- * Used while dragging across separate `contenteditable` hosts, where a single
- * native Range is unreliable. Pair two of these and pass them to
- * {@link setNativeSelection}.
- *
- * Mirrors what `Selection.setBaseAndExtent` wants: a Node + offset for each
- * end, plus Rivto's owning content HTMLElement so we know which block host
- * the endpoint belongs to.
- */
-export interface DOMSelectionPoint {
-  /**
-   * Live DOM node the caret sits in (typed as Node, not Element).
-   *
-   * Usually a Text node — character content is a real tree Node, e.g. the
-   * `"hello"` child of `<div>hello</div>`. May be the content Element itself
-   * when the block is empty or hit-testing falls back to the host.
-   */
-  readonly node: Node;
-  /**
-   * Offset inside `node` (meaning depends on what `node` is).
-   *
-   * - Text node → character index (0 … text.length).
-   * - Element → child-index style offset (0 = before first child).
-   */
-  readonly offset: number;
-  /**
-   * Owning editable host (`[data-block-content]`).
-   *
-   * An HTMLElement (HTML tag), not a Text node — this is the contenteditable
-   * container we can `focus()`, query, and map back to a `blockId`.
-   */
-  readonly content: HTMLElement;
-}
-
-/**
- * Reads the stable block ID that owns one editable content element.
- *
- * @param content - A `[data-block-content]` HTMLElement (or a descendant of one).
- * @returns The nearest ancestor's `data-block-id`, or `undefined` if missing.
- */
-function blockIdForContent(content: HTMLElement): string | undefined {
-  return content.closest<HTMLElement>(BLOCK_ID_SELECTOR)?.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
-}
-
-/**
- * Returns every editable content host under `root` in visible DOM order.
- *
- * @param root - EditorView root Element that scopes the query.
- * @returns HTMLElements matching `[data-block-content]` that have a block ID.
- */
-function orderedContents(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)].filter((content) => (
-    Boolean(blockIdForContent(content))
-  ));
-}
-
-/**
- * Creates one inclusive whole-block range in visible order.
- *
- * @param blockIds - Candidate block IDs already in visible document order.
- * @param anchorBlockId - Block where the gesture began.
- * @param focusBlockId - Block where the gesture currently ends.
- * @returns A one-item block selection, or `[]` when either ID is unknown.
- */
-export function createVisibleStructuralSelection(
-  blockIds: readonly string[],
-  anchorBlockId: string,
-  focusBlockId: string,
-): Selection | undefined {
-  const anchorIndex = blockIds.indexOf(anchorBlockId);
-  const focusIndex = blockIds.indexOf(focusBlockId);
-  if (anchorIndex < 0 || focusIndex < 0) return undefined;
-  return createStructuralSelection(
-    blockIds.slice(Math.min(anchorIndex, focusIndex), Math.max(anchorIndex, focusIndex) + 1),
-    anchorBlockId,
-    focusBlockId,
-  );
-}
-
-/**
- * Returns every rendered BlockView ID in visible depth-first DOM order.
- *
- * @param root - EditorView root Element that scopes the query.
- */
-export function orderedBlockIds(root: HTMLElement): string[] {
-  return [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
-    const blockId = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    return blockId ? [blockId] : [];
-  });
-}
-
-/**
- * Maps one browser selection endpoint to a portable `{ blockId, offset }`.
- *
- * Core DOM → editor conversion. The browser gives a live caret as
- * `(Node, offset)`; Rivto stores a stable `(blockId, plain-text offset)` that
- * survives React replacing Text nodes.
- *
- * Logic:
- * 1. `node` is often a Text node (characters are Nodes — see file header).
- *    Text is not an Element, so it has no `closest()`. Climb to an Element
- *    first (`node` itself if it is already an Element, else `parentElement`).
- * 2. From that Element, find the owning `[data-block-content]` HTMLElement and
- *    read its `data-block-id`.
- * 3. Build a Range from the start of that content up to `(node, offset)`.
- *    `range.toString().length` is the UTF-16 plain-text offset — same unit as
- *    `EditorPosition.offset`. The Range endpoint stays typed as Node because
- *    that is what the browser Selection API uses.
- *
- * @param root - EditorView root HTMLElement; endpoints outside it are rejected.
- * @param node - `Selection.anchorNode` / `focusNode`: usually Text, sometimes
- *   Element, or `null` when there is no selection.
- * @param offset - `Selection.anchorOffset` / `focusOffset` inside `node`.
- * @returns Portable position, or `undefined` when the endpoint is outside this
- *   editor, has no block content host, or the Range API rejects a stale node
- *   (common right after React replaces Text nodes).
- */
-function readPosition(root: HTMLElement, node: Node | null, offset: number): EditorPosition | undefined {
-  // node is Node|null. Text ("hello") is a Node but not an Element — only
-  // Elements have closest()/querySelector. Climb to a tag Element first:
-  //   <div contenteditable>          ← Element / HTMLElement
-  //     #text "hello"  ← node here   ← Text (Node, not Element) → use parentElement
-  const element = isElementNode(node) ? node : node?.parentElement;
-  const content = element?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  const blockId = content ? blockIdForContent(content) : undefined;
-  if (!node || !content || !blockId || !root.contains(content)) return;
-
-  // Measure "how many characters from content start to (node, offset)".
-  // setEnd accepts a Node (Text or Element), matching Selection's model.
-  const range = root.ownerDocument.createRange();
-  range.selectNodeContents(content);
-  try {
-    range.setEnd(node, offset);
-  } catch {
-    // React often replaces Text nodes on rerender; Selection may still point
-    // at a detached Node that Range rejects.
-    return;
-  }
-  return { blockId, offset: range.toString().length };
-}
-
-/**
- * Converts one resolved {@link DOMSelectionPoint} to stable editor coordinates.
- *
- * @param root - EditorView root that must own `point.content`.
- * @param point - Live DOM endpoint (node + offset + content host).
- */
-export function readDOMPointPosition(root: HTMLElement, point: DOMSelectionPoint): EditorPosition | undefined {
-  return readPosition(root, point.node, point.offset);
-}
-
-/**
- * Resolves the visible block container directly beneath viewport coordinates.
- *
- * Unlike {@link readDOMSelectionPoint}, this helper does not require editable
- * content. It therefore resolves contentless custom blocks such as Counter,
- * which still participate in structural pointer selection.
- *
- * The closest block is used because nested surfaces render one BlockView inside
- * another. A pointer over a child control must select that child, not its parent.
- *
- * Nested parents also wrap descendant geometry: vertical sibling margins and
- * the indent gutter are still inside the parent BlockView. `elementFromPoint`
- * therefore reports the parent when the pointer is only between nested rows.
- * That hit is valid CSS, but whole-block drags would then promote the parent
- * and cover its entire subtree. Hits outside the parent's own row snap to the
- * nearest nested row instead, so the parent joins the range only when the
- * pointer enters its content or chrome.
- *
- * @param root - Active surface root that scopes valid block containers.
- * @param x - Horizontal viewport coordinate from a pointer event.
- * @param y - Vertical viewport coordinate from a pointer event.
- * @returns Stable block ID under the pointer, or undefined outside a block.
- */
-export function readBlockIdAtPoint(
-  root: HTMLElement,
-  x: number,
-  y: number,
-): string | undefined {
-  const hit = root.ownerDocument.elementFromPoint(x, y);
-  const block = hit instanceof Element ? hit.closest<HTMLElement>(BLOCK_ID_SELECTOR) : null;
-  if (!block || !root.contains(block)) return undefined;
-
-  const ownRow = ownedBlockRow(block);
-  // Keep the closest block when the pointer is in its own row, or when a
-  // custom shell has no row to distinguish wrapping descendants from chrome.
-  const nestedHit = ownRow && !ownRow.contains(hit) ? nearestNestedBlock(block, x, y) : undefined;
-  const target = nestedHit ?? block;
-  return target.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
-}
-
-/**
- * Returns the BlockView row that belongs to `block` itself, not descendants.
- *
- * @param block - BlockView container that may own a `.page-block-row`.
- * @returns The direct row element, or `null` when a custom shell omitted it.
- */
-function ownedBlockRow(block: HTMLElement): HTMLElement | null {
-  return block.querySelector(`:scope > .${BLOCK_ROW_CLASS}`);
-}
-
-/**
- * Finds the nested BlockView whose own row is closest to a wrapping-parent hit.
- *
- * Distances use each descendant's row box, not the full BlockView. Parent
- * BlockViews include nested children in their bounding rect, so measuring the
- * wrapper would keep selecting the same parent we are trying to skip.
- *
- * @param parent - Closest BlockView that wrapped the pointer without owning the hit.
- * @param x - Horizontal viewport coordinate from a pointer event.
- * @param y - Vertical viewport coordinate from a pointer event.
- * @returns Nearest nested BlockView, or `undefined` when none have a row.
- */
-function nearestNestedBlock(parent: HTMLElement, x: number, y: number): HTMLElement | undefined {
-  return [...parent.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)]
-    .map((candidate) => {
-      const row = ownedBlockRow(candidate);
-      return row ? { candidate, distance: distanceToRect(row.getBoundingClientRect(), x, y) } : undefined;
-    })
-    .filter((entry): entry is { candidate: HTMLElement; distance: number } => Boolean(entry))
-    .sort((left, right) => left.distance - right.distance)[0]?.candidate;
-}
-
-/**
- * Builds a portable {@link Selection} from two editor positions, using
- * the surface's current visible block order under `root`.
- *
- * @param root - EditorView root used to discover visible blocks / lengths.
- * @param anchor - Fixed position where the gesture began.
- * @param head - Moving position where the gesture currently ends.
- * @returns Directed text coverage with structural markers for contentless blocks.
- */
-export function createDOMSelection(
-  root: HTMLElement,
-  anchor: EditorPosition,
-  head: EditorPosition,
-): Selection | undefined {
-  // Start from every BlockView, not only editable hosts. Otherwise a
-  // contentless renderer such as Counter disappears from a Shift+Alt range.
-  const rendered = [...root.querySelectorAll<HTMLElement>(BLOCK_ID_SELECTOR)].flatMap((block) => {
-    const id = block.getAttribute(BLOCK_ID_ATTRIBUTE);
-    if (!id) return [];
-    const content = [...block.querySelectorAll<HTMLElement>(BLOCK_CONTENT_SELECTOR)]
-      .find((candidate) => candidate.closest(BLOCK_ID_SELECTOR) === block);
-    return [{ id, content }];
-  });
-  const selection = createTextSelection(
-    rendered.map(({ id, content }) => ({ id, length: content?.textContent?.length ?? 0 })),
-    anchor,
-    head,
-  );
-  if (selection) {
-    const contentless = new Set(rendered.filter(({ content }) => !content).map(({ id }) => id));
-    selection.blocks.forEach((block) => {
-      // Contentless blocks have no native character range, so the live-end
-      // sentinel makes their structural coverage explicit.
-      if (contentless.has(block.id)) {
-        block.start = 0;
-        block.end = -1;
-      }
-    });
-  }
-  return selection;
-}
-
 /**
  * Reads `window.getSelection()` when both endpoints belong to this editor root.
  *
@@ -340,215 +60,21 @@ export function createDOMSelection(
  * A Range normalizes endpoints into document order and would lose the
  * direction of a bottom-to-top selection.
  *
- * @param root - EditorView root; both endpoints must live under it.
+ * @param root - EditorPanel root; both endpoints must live under it.
+ * The root must be an attached block-editor occurrence with a registered host bridge.
+ *
  * @returns Directed selection, or `undefined` when there is no usable
  *   browser selection inside this editor.
  */
 export function readEditorDOMSelection(root: HTMLElement): Selection | undefined {
-  const selection = root.ownerDocument.getSelection();
-  if (!selection?.rangeCount) return;
-  // anchorNode / focusNode are Node|null — typically Text nodes inside a
-  // contenteditable HTMLElement, not the Element itself.
-  const anchor = readPosition(root, selection.anchorNode, selection.anchorOffset);
-  const head = readPosition(root, selection.focusNode, selection.focusOffset);
-  return anchor && head ? createDOMSelection(root, anchor, head) : undefined;
-}
-
-/**
- * Euclidean distance from a viewport point to the nearest point inside `rect`.
- * Zero when `(x, y)` is already inside the rectangle.
- *
- * @param rect - Element bounding box in viewport coordinates.
- * @param x - Client X (e.g. `PointerEvent.clientX`).
- * @param y - Client Y (e.g. `PointerEvent.clientY`).
- */
-function distanceToRect(rect: DOMRect, x: number, y: number): number {
-  const dx = Math.max(rect.left - x, 0, x - rect.right);
-  const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-  return Math.hypot(dx, dy);
-}
-
-/**
- * Finds the editable content under the pointer, or the nearest one in a gap.
- *
- * @param root - EditorView root that scopes ownership.
- * @param x - Client X in viewport pixels.
- * @param y - Client Y in viewport pixels.
- * @returns The hit `[data-block-content]` Element, or the closest one by distance.
- */
-function contentNearPoint(root: HTMLElement, x: number, y: number): HTMLElement | undefined {
-  const hit = root.ownerDocument.elementFromPoint(x, y)?.closest<HTMLElement>(BLOCK_CONTENT_SELECTOR);
-  if (hit && root.contains(hit)) return hit;
-  return orderedContents(root)
-    .map((content) => ({ content, distance: distanceToRect(content.getBoundingClientRect(), x, y) }))
-    .sort((left, right) => left.distance - right.distance)[0]?.content;
-}
-
-/**
- * Brute-force caret lookup inside one content Element when browser hit-testing
- * fails (common when focus is in a different contenteditable).
- *
- * Walks every Text node under `content` (SHOW_TEXT — character Nodes only,
- * not Element tags), measures a collapsed Range rect at each character
- * offset, and picks the closest to `(x, y)`.
- *
- * @param content - Editable block-content HTMLElement to scan.
- * @param x - Client X in viewport pixels.
- * @param y - Client Y in viewport pixels.
- * @returns Best DOM endpoint; falls back to `(content Element, 0)` when empty.
- */
-function nearestTextPoint(content: HTMLElement, x: number, y: number): DOMSelectionPoint {
-  const document = content.ownerDocument;
-  // Walk Text nodes only. Each visited `node` is a Node (#text), not an Element.
-  const walker = document.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-  let best: DOMSelectionPoint | undefined;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const text = node.textContent ?? "";
-    for (let offset = 0; offset <= text.length; offset += 1) {
-      const range = document.createRange();
-      // Caret at character `offset` inside this Text node.
-      range.setStart(node, offset);
-      range.collapse(true);
-      const rect = range.getBoundingClientRect();
-      const distance = Math.hypot(x - rect.left, y - (rect.top + rect.height / 2));
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = { node, offset, content };
-      }
-    }
+  const navigation = PageNavigationController.getForElement(root);
+  if (!navigation) {
+    return undefined;
   }
-  // Empty block: no Text children — use the content HTMLElement as the Node.
-  return best ?? { node: content, offset: 0, content };
-}
-
-/**
- * Resolves the nearest selectable DOM endpoint at viewport coordinates.
- *
- * Prefer the browser's caret hit-test:
- * - Firefox: `document.caretPositionFromPoint` → `{ offsetNode, offset }`
- * - Chromium: `document.caretRangeFromPoint` → Range start container/offset
- *
- * Those APIs return a Node (often Text) plus an offset. When the hit falls
- * outside the target content (or the browser only hit-tests the focused
- * contenteditable), {@link nearestTextPoint} scans text nodes locally.
- *
- * @param root - EditorView root that scopes which content hosts are valid.
- * @param x - Client X in viewport pixels.
- * @param y - Client Y in viewport pixels.
- * @returns Live `{ node, offset, content }`, or `undefined` if no content host exists.
- */
-export function readDOMSelectionPoint(root: HTMLElement, x: number, y: number): DOMSelectionPoint | undefined {
-  const content = contentNearPoint(root, x, y);
-  if (!content) return;
-  const document = root.ownerDocument;
-  const caret = document.caretPositionFromPoint?.(x, y);
-  const fallback = (document as Document & { caretRangeFromPoint?: (left: number, top: number) => Range | null })
-    .caretRangeFromPoint?.(x, y);
-  const node = caret?.offsetNode ?? fallback?.startContainer;
-  const offset = caret?.offset ?? fallback?.startOffset;
-  let point: DOMSelectionPoint;
-  if (node && offset !== undefined && content.contains(node)) {
-    point = { node, offset, content };
-  } else {
-    point = nearestTextPoint(content, x, y);
-  }
-  return point;
-}
-
-/**
- * Displays a directed native selection across separate contenteditable hosts.
- *
- * `Selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset)`
- * preserves upward (bottom→top) selection direction. When a browser rejects
- * cross-host endpoints, a normalized Range still paints something; the
- * portable editor selection list remains the source of truth for direction.
- *
- * @param anchor - Fixed endpoint (where the gesture began).
- * @param head - Moving endpoint (where the gesture currently ends).
- */
-export function setNativeSelection(anchor: DOMSelectionPoint, head: DOMSelectionPoint): void {
-  const selection = anchor.content.ownerDocument.getSelection();
-  if (!selection) return;
-  let restored = false;
-  try {
-    // Ends are Nodes (usually Text), not HTMLElements — same model as getSelection().
-    selection.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset);
-    restored = true;
-  } catch {
-    // Fall through to a normalized Range for detached/browser-rejected points.
-  }
-
-  if (!restored) {
-    // Range requires document order; compareDocumentPosition works on any Node
-    // (Text or Element), which is why endpoints stay typed as Node.
-    const anchorBeforeHead = anchor.node === head.node
-      ? anchor.offset <= head.offset
-      : Boolean(anchor.node.compareDocumentPosition(head.node) & Node.DOCUMENT_POSITION_FOLLOWING);
-    const start = anchorBeforeHead ? anchor : head;
-    const end = anchorBeforeHead ? head : anchor;
-    const range = anchor.content.ownerDocument.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-}
-
-/**
- * Resolves a plain-text character offset back to a live DOM `{ node, offset }`.
- *
- * Inverse of {@link readPosition}:
- * - `readPosition`: live `(Text|Element Node, offset)` → `{ blockId, offset }`
- * - `pointAtOffset`: `{ blockId, offset }` → live `(Text Node, offset)` again
- *
- * Walks Text nodes under `content` in document order and subtracts each
- * node's length until `requestedOffset` lands inside one. That Node is what
- * `Selection.setBaseAndExtent` / `Range.setStart` need — not the parent
- * HTMLElement (unless the block has no text).
- *
- * @param content - Editable `[data-block-content]` HTMLElement to walk.
- * @param requestedOffset - UTF-16 offset from the start of that content's text.
- * @returns A Node (usually Text) plus offset inside it.
- */
-function pointAtOffset(content: HTMLElement, requestedOffset: number): { node: Node; offset: number } {
-  // SHOW_TEXT → only Text nodes ("hello"), skipping Element tags in between.
-  const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-  let remaining = Math.max(0, requestedOffset);
-  let last: Node | undefined;
-  let point: { node: Node; offset: number } | undefined;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    last = node;
-    const length = node.textContent?.length ?? 0;
-    if (remaining <= length) {
-      point = { node, offset: remaining };
-      break;
-    }
-    remaining -= length;
-  }
-  // Past the end → clamp to last Text node; empty content → content Element.
-  if (!point) {
-    point = last
-      ? { node: last, offset: last.textContent?.length ?? 0 }
-      : { node: content, offset: 0 };
-  }
-  return point;
-}
-
-/**
- * Resolves one portable editor position to its current live DOM endpoint.
- *
- * Finds the rendered content Element for `position.blockId`, then maps the
- * plain-text offset onto a live Text (or Element) node via {@link pointAtOffset}.
- *
- * @param root - EditorView root used to find the block's content host.
- * @param position - Stable `{ blockId, offset }` from the editor model.
- * @returns Live {@link DOMSelectionPoint}, or `undefined` if that block is not rendered.
- */
-export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosition): DOMSelectionPoint | undefined {
-  const content = orderedContents(root).find((candidate) => blockIdForContent(candidate) === position.blockId);
-  return content ? { ...pointAtOffset(content, position.offset), content } : undefined;
+  const selection = new BlockDOMSelection(navigation.selection).readEditorDOMSelection(root);
+  return selection
+    ? { ...selection, blocks: selection.blocks.map((block) => ({ ...block })) }
+    : undefined;
 }
 
 /**
@@ -564,30 +90,25 @@ export function resolveDOMSelectionPoint(root: HTMLElement, position: EditorPosi
  * false without changing focus. Missing rendered endpoints also return false;
  * callers can safely retry after a later render.
  *
- * @param root - Active EditorView root containing the rendered block content.
+ * @param root - Active EditorPanel root containing the rendered block content.
  * @param selection - Editor selection captured before the structural command.
+ * @param options - Virtual endpoint mounting and navigation policy.
+ * Unattached occurrences return false without modifying browser selection.
+ *
  * @returns True when a text selection was resolved and restored.
  */
-export function restoreEditorDOMSelection(root: HTMLElement, selection: Selection): boolean {
-  const contents = orderedContents(root);
-  const lengthOf = (id: string): number => {
-    const content = contents.find((candidate) => blockIdForContent(candidate) === id);
-    return content?.textContent?.length ?? 0;
-  };
-  if (isStructuralSelection(selection)) return false;
-  const ends = resolveSelectionEndpoints(selection, lengthOf);
-  if (!ends) return false;
-
-  const anchorContent = contents.find((content) => blockIdForContent(content) === ends.anchor.blockId);
-  const headContent = contents.find((content) => blockIdForContent(content) === ends.head.blockId);
-  if (!anchorContent || !headContent) return false;
-
-  const anchor = pointAtOffset(anchorContent, ends.anchor.offset);
-  const head = pointAtOffset(headContent, ends.head.offset);
-  headContent.focus({ preventScroll: true });
-  setNativeSelection(
-    { ...anchor, content: anchorContent },
-    { ...head, content: headContent },
+export function restoreEditorDOMSelection(
+  root: HTMLElement,
+  selection: Selection,
+  options?: RestoreDOMSelectionOptions,
+): boolean {
+  const navigation = PageNavigationController.getForElement(root);
+  if (!navigation || isStructuralSelection(selection)) {
+    return false;
+  }
+  navigation.mountBlocks(
+    [selection.anchorBlockId, selection.focusBlockId].filter((id): id is string => Boolean(id)),
+    options,
   );
-  return true;
+  return new BlockDOMSelection(navigation.selection).restoreEditorDOMSelection(root, selection);
 }

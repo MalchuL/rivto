@@ -9,8 +9,8 @@ import { DocumentationEditor, type PastedDocumentationImage } from "./Documentat
 import {
   buildDocumentationTree,
   createDocumentationPagePath,
-  type DocumentationPagePlacement,
   type DocumentationNavigationNode,
+  type DocumentationPagePlacement,
 } from "./document-tree";
 import {
   createDocumentationPage,
@@ -47,12 +47,18 @@ export function App(): React.JSX.Element {
   const [getMarkdown, setGetMarkdown] = useState<(() => string) | null>(null);
   const selectedPage = useMemo(
     function findSelectedPage() {
-      return pages.find(function matchesSelectedPath(page) { return page.path === selectedPath; }) ?? null;
+      return (
+        pages.find(function matchesSelectedPath(page) {
+          return page.path === selectedPath;
+        }) ?? null
+      );
     },
     [pages, selectedPath],
   );
   const navigationTree = useMemo(
-    function createNavigationTree() { return buildDocumentationTree(pages); },
+    function createNavigationTree() {
+      return buildDocumentationTree(pages);
+    },
     [pages],
   );
 
@@ -63,11 +69,16 @@ export function App(): React.JSX.Element {
         if (isCurrent) {
           setPages(loadedPages);
           const urlPath = getDocumentationPath(window.location.pathname);
-          const initialPage = loadedPages.find(function matchesUrl(page) { return page.path === urlPath; })
-            ?? loadedPages[0]
-            ?? null;
+          const initialPage =
+            loadedPages.find(function matchesUrl(page) {
+              return page.path === urlPath;
+            }) ??
+            loadedPages[0] ??
+            null;
           setSelectedPath(initialPage?.path ?? null);
-          setSelectedAnchor(initialPage?.path === urlPath ? decodeAnchor(window.location.hash) : "");
+          setSelectedAnchor(
+            initialPage?.path === urlPath ? decodeAnchor(window.location.hash) : "",
+          );
           if (initialPage && initialPage.path !== urlPath) {
             window.history.replaceState(null, "", createDocumentationUrl(initialPage.path));
           }
@@ -84,174 +95,215 @@ export function App(): React.JSX.Element {
     };
   }, []);
 
-  useEffect(function followBrowserHistory() {
-    function handlePopState(): void {
-      const nextPath = getDocumentationPath(window.location.pathname);
-      if (!pages.some(function pageExists(page) { return page.path === nextPath; })) {
-        return;
+  useEffect(
+    function followBrowserHistory() {
+      function handlePopState(): void {
+        const nextPath = getDocumentationPath(window.location.pathname);
+        if (
+          !pages.some(function pageExists(page) {
+            return page.path === nextPath;
+          })
+        ) {
+          return;
+        }
+        if (isDirty && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
+          window.history.pushState(
+            null,
+            "",
+            selectedPath ? createDocumentationUrl(selectedPath, selectedAnchor) : "/",
+          );
+          return;
+        }
+        setSelectedPath(nextPath);
+        setSelectedAnchor(decodeAnchor(window.location.hash));
+        setIsDirty(false);
+        setStatus("Ready");
       }
-      if (isDirty && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
-        window.history.pushState(null, "", selectedPath ? createDocumentationUrl(selectedPath, selectedAnchor) : "/");
-        return;
-      }
-      setSelectedPath(nextPath);
-      setSelectedAnchor(decodeAnchor(window.location.hash));
-      setIsDirty(false);
-      setStatus("Ready");
-    }
-    window.addEventListener("popstate", handlePopState);
-    return function removePopStateListener() {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [isDirty, pages, selectedAnchor, selectedPath]);
+      window.addEventListener("popstate", handlePopState);
+      return function removePopStateListener() {
+        window.removeEventListener("popstate", handlePopState);
+      };
+    },
+    [isDirty, pages, selectedAnchor, selectedPath],
+  );
 
-  useEffect(function warnBeforeClosing() {
-    /** Prevents accidental loss when a dirty browser tab is closed. */
-    function handleBeforeUnload(event: BeforeUnloadEvent): void {
-      if (isDirty) {
-        event.preventDefault();
+  useEffect(
+    function warnBeforeClosing() {
+      /** Prevents accidental loss when a dirty browser tab is closed. */
+      function handleBeforeUnload(event: BeforeUnloadEvent): void {
+        if (isDirty) {
+          event.preventDefault();
+        }
       }
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return function removeBeforeUnloadListener() {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isDirty]);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      return function removeBeforeUnloadListener() {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+      };
+    },
+    [isDirty],
+  );
 
   const handleEditorReady = useCallback(function handleEditorReadyCallback(
     reader: (() => string) | null,
   ): void {
-    setGetMarkdown(function storeReader() { return reader; });
+    setGetMarkdown(function storeReader() {
+      return reader;
+    });
   }, []);
 
-  const handleDirtyChange = useCallback(function handleDirtyChangeCallback(nextDirty: boolean): void {
+  const handleDirtyChange = useCallback(function handleDirtyChangeCallback(
+    nextDirty: boolean,
+  ): void {
     setIsDirty(nextDirty);
   }, []);
 
-  const handleSave = useCallback(async function saveSelectedPage(): Promise<void> {
-    if (!selectedPage || !getMarkdown) {
-      return;
-    }
-    const markdown = getMarkdown();
-    try {
-      if (import.meta.env.DEV) {
-        const savedPage = await saveDocumentationPage(selectedPage, markdown);
-        setPages(function replaceSavedPage(currentPages) {
-          return currentPages.map(function replaceMatchingPage(page) {
-            return page.path === savedPage.path ? savedPage : page;
+  const handleSave = useCallback(
+    async function saveSelectedPage(): Promise<void> {
+      if (!selectedPage || !getMarkdown) {
+        return;
+      }
+      const markdown = getMarkdown();
+      try {
+        if (import.meta.env.DEV) {
+          const savedPage = await saveDocumentationPage(selectedPage, markdown);
+          setPages(function replaceSavedPage(currentPages) {
+            return currentPages.map(function replaceMatchingPage(page) {
+              return page.path === savedPage.path ? savedPage : page;
+            });
           });
+          setStatus(`Saved ${savedPage.path}`);
+        } else {
+          downloadDocumentationPage(selectedPage.path, markdown);
+          setStatus(`Downloaded ${selectedPage.path}`);
+        }
+        setIsDirty(false);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Unable to save document.");
+      }
+    },
+    [getMarkdown, selectedPage],
+  );
+
+  const handleCreate = useCallback(
+    async function createPage(placement: DocumentationPagePlacement): Promise<void> {
+      if (!selectedPage || !import.meta.env.DEV) {
+        setStatus("Page creation is available while running pnpm docs:dev.");
+        return;
+      }
+      if (isDirty && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
+        return;
+      }
+      const title = window
+        .prompt(placement === "child" ? "Nested page title" : "Page title")
+        ?.trim();
+      if (!title) {
+        return;
+      }
+
+      const path = createDocumentationPagePath(pages, selectedPage.path, placement, title);
+      try {
+        const createdPage = await createDocumentationPage(path, title);
+        setPages(function appendCreatedPage(currentPages) {
+          return [...currentPages, createdPage];
         });
-        setStatus(`Saved ${savedPage.path}`);
-      } else {
-        downloadDocumentationPage(selectedPage.path, markdown);
-        setStatus(`Downloaded ${selectedPage.path}`);
+        setSelectedPath(createdPage.path);
+        setSelectedAnchor("");
+        window.history.pushState(null, "", createDocumentationUrl(createdPage.path));
+        setIsDirty(false);
+        setStatus(`Created ${createdPage.path}`);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Unable to create document.");
       }
-      setIsDirty(false);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to save document.");
-    }
-  }, [getMarkdown, selectedPage]);
+    },
+    [isDirty, pages, selectedPage],
+  );
 
-  const handleCreate = useCallback(async function createPage(
-    placement: DocumentationPagePlacement,
-  ): Promise<void> {
-    if (!selectedPage || !import.meta.env.DEV) {
-      setStatus("Page creation is available while running pnpm docs:dev.");
-      return;
-    }
-    if (isDirty && !window.confirm(UNSAVED_CHANGES_MESSAGE)) {
-      return;
-    }
-    const title = window.prompt(placement === "child" ? "Nested page title" : "Page title")?.trim();
-    if (!title) {
-      return;
-    }
-
-    const path = createDocumentationPagePath(pages, selectedPage.path, placement, title);
-    try {
-      const createdPage = await createDocumentationPage(path, title);
-      setPages(function appendCreatedPage(currentPages) { return [...currentPages, createdPage]; });
-      setSelectedPath(createdPage.path);
-      setSelectedAnchor("");
-      window.history.pushState(null, "", createDocumentationUrl(createdPage.path));
-      setIsDirty(false);
-      setStatus(`Created ${createdPage.path}`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to create document.");
-    }
-  }, [isDirty, pages, selectedPage]);
-
-  const handleDelete = useCallback(async function deleteSelectedPage(): Promise<void> {
-    if (!selectedPage || !import.meta.env.DEV) {
-      setStatus("Page deletion is available while running pnpm docs:dev.");
-      return;
-    }
-    const ownedFolderPrefix = selectedPage.path.replace(/\.md$/i, "/");
-    const hasNestedPages = pages.some(function isNestedPage(page) {
-      return page.path.startsWith(ownedFolderPrefix);
-    });
-    const retainedContent = hasNestedPages
-      ? " Nested pages and its image folder will remain."
-      : " Its image folder will remain.";
-    if (!window.confirm(`Delete ${selectedPage.path}? Unsaved edits will be lost.${retainedContent}`)) {
-      return;
-    }
-
-    try {
-      await deleteDocumentationPage(selectedPage);
-      const selectedIndex = pages.findIndex(function findDeletedPage(page) {
-        return page.path === selectedPage.path;
+  const handleDelete = useCallback(
+    async function deleteSelectedPage(): Promise<void> {
+      if (!selectedPage || !import.meta.env.DEV) {
+        setStatus("Page deletion is available while running pnpm docs:dev.");
+        return;
+      }
+      const ownedFolderPrefix = selectedPage.path.replace(/\.md$/i, "/");
+      const hasNestedPages = pages.some(function isNestedPage(page) {
+        return page.path.startsWith(ownedFolderPrefix);
       });
-      const remainingPages = pages.filter(function retainOtherPages(page) {
-        return page.path !== selectedPage.path;
-      });
-      const nextPage = remainingPages[Math.min(selectedIndex, remainingPages.length - 1)] ?? null;
-      setPages(remainingPages);
-      setSelectedPath(nextPage?.path ?? null);
-      setSelectedAnchor("");
-      window.history.replaceState(null, "", nextPage ? createDocumentationUrl(nextPage.path) : "/");
-      setIsDirty(false);
-      setStatus(`Deleted ${selectedPage.path}`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to delete document.");
-    }
-  }, [pages, selectedPage]);
+      const retainedContent = hasNestedPages
+        ? " Nested pages and its image folder will remain."
+        : " Its image folder will remain.";
+      if (
+        !window.confirm(
+          `Delete ${selectedPage.path}? Unsaved edits will be lost.${retainedContent}`,
+        )
+      ) {
+        return;
+      }
 
-  const handlePasteImage = useCallback(async function savePastedImage(
-    image: File,
-  ): Promise<PastedDocumentationImage> {
-    if (!selectedPage || !import.meta.env.DEV) {
-      const message = "Pasted images can be saved while running pnpm docs:dev.";
-      setStatus(message);
-      throw new Error(message);
-    }
-    try {
-      const uploaded = await uploadDocumentationImage(selectedPage, image);
-      setStatus(`Saved image in ${uploaded.markdownSource}`);
-      return {
-        source: resolvePastedImageForEditor(uploaded.markdownSource, selectedPage.path),
-        alt: image.name || "Pasted image",
+      try {
+        await deleteDocumentationPage(selectedPage);
+        const selectedIndex = pages.findIndex(function findDeletedPage(page) {
+          return page.path === selectedPage.path;
+        });
+        const remainingPages = pages.filter(function retainOtherPages(page) {
+          return page.path !== selectedPage.path;
+        });
+        const nextPage = remainingPages[Math.min(selectedIndex, remainingPages.length - 1)] ?? null;
+        setPages(remainingPages);
+        setSelectedPath(nextPage?.path ?? null);
+        setSelectedAnchor("");
+        window.history.replaceState(
+          null,
+          "",
+          nextPage ? createDocumentationUrl(nextPage.path) : "/",
+        );
+        setIsDirty(false);
+        setStatus(`Deleted ${selectedPage.path}`);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Unable to delete document.");
+      }
+    },
+    [pages, selectedPage],
+  );
+
+  const handlePasteImage = useCallback(
+    async function savePastedImage(image: File): Promise<PastedDocumentationImage> {
+      if (!selectedPage || !import.meta.env.DEV) {
+        const message = "Pasted images can be saved while running pnpm docs:dev.";
+        setStatus(message);
+        throw new Error(message);
+      }
+      try {
+        const uploaded = await uploadDocumentationImage(selectedPage, image);
+        setStatus(`Saved image in ${uploaded.markdownSource}`);
+        return {
+          source: resolvePastedImageForEditor(uploaded.markdownSource, selectedPage.path),
+          alt: image.name || "Pasted image",
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to save pasted image.";
+        setStatus(message);
+        throw error;
+      }
+    },
+    [selectedPage],
+  );
+
+  useEffect(
+    function registerSaveShortcut() {
+      /** Saves the active Markdown file for the standard platform shortcut. */
+      function handleSaveShortcut(event: KeyboardEvent): void {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          void handleSave();
+        }
+      }
+      window.addEventListener("keydown", handleSaveShortcut);
+      return function removeSaveShortcut() {
+        window.removeEventListener("keydown", handleSaveShortcut);
       };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to save pasted image.";
-      setStatus(message);
-      throw error;
-    }
-  }, [selectedPage]);
-
-  useEffect(function registerSaveShortcut() {
-    /** Saves the active Markdown file for the standard platform shortcut. */
-    function handleSaveShortcut(event: KeyboardEvent): void {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void handleSave();
-      }
-    }
-    window.addEventListener("keydown", handleSaveShortcut);
-    return function removeSaveShortcut() {
-      window.removeEventListener("keydown", handleSaveShortcut);
-    };
-  }, [handleSave]);
+    },
+    [handleSave],
+  );
 
   /** Selects another page after protecting current unsaved work. */
   function selectPage(nextPath: string, anchor = ""): void {
@@ -270,7 +322,12 @@ export function App(): React.JSX.Element {
       return false;
     }
     const target = resolveDocumentationLink(href, selectedPage.path);
-    if (!target || !pages.some(function targetExists(page) { return page.path === target.path; })) {
+    if (
+      !target ||
+      !pages.some(function targetExists(page) {
+        return page.path === target.path;
+      })
+    ) {
       return false;
     }
     selectPage(target.path, target.anchor);
@@ -281,8 +338,13 @@ export function App(): React.JSX.Element {
     <div data-app-shell>
       <aside data-sidebar>
         <header data-brand>
-          <span data-brand-mark aria-hidden="true">R</span>
-          <div><strong>{DOCUMENTATION_ROOT_TITLE}</strong><small>Documentation</small></div>
+          <span data-brand-mark aria-hidden="true">
+            R
+          </span>
+          <div>
+            <strong>{DOCUMENTATION_ROOT_TITLE}</strong>
+            <small>Documentation</small>
+          </div>
         </header>
         <nav aria-label="Documentation pages">
           <details open data-navigation-root>
@@ -297,24 +359,72 @@ export function App(): React.JSX.Element {
         <header data-document-toolbar>
           <div>
             <small>{selectedPage?.path ?? DOCUMENTATION_ROOT_TITLE}</small>
-            <strong>{selectedPage ? getDocumentationPageTitle(selectedPage) : "Documentation"}</strong>
+            <strong>
+              {selectedPage ? getDocumentationPageTitle(selectedPage) : "Documentation"}
+            </strong>
           </div>
           <div data-document-actions>
-            <button type="button" data-create-button disabled={!selectedPage || !import.meta.env.DEV} title={import.meta.env.DEV ? "Create a page beside the current page" : "Available with pnpm docs:dev"} onClick={function createSibling() { void handleCreate("sibling"); }}>
+            <button
+              type="button"
+              data-create-button
+              disabled={!selectedPage || !import.meta.env.DEV}
+              title={
+                import.meta.env.DEV
+                  ? "Create a page beside the current page"
+                  : "Available with pnpm docs:dev"
+              }
+              onClick={function createSibling() {
+                void handleCreate("sibling");
+              }}
+            >
               New sibling
             </button>
-            <button type="button" data-create-button disabled={!selectedPage || !import.meta.env.DEV} title={import.meta.env.DEV ? "Create a nested page under the current page" : "Available with pnpm docs:dev"} onClick={function createChild() { void handleCreate("child"); }}>
+            <button
+              type="button"
+              data-create-button
+              disabled={!selectedPage || !import.meta.env.DEV}
+              title={
+                import.meta.env.DEV
+                  ? "Create a nested page under the current page"
+                  : "Available with pnpm docs:dev"
+              }
+              onClick={function createChild() {
+                void handleCreate("child");
+              }}
+            >
               New child
             </button>
-            <button type="button" data-delete-button disabled={!selectedPage || !import.meta.env.DEV} title={import.meta.env.DEV ? "Delete only the current Markdown page" : "Available with pnpm docs:dev"} onClick={function deletePage() { void handleDelete(); }}>
+            <button
+              type="button"
+              data-delete-button
+              disabled={!selectedPage || !import.meta.env.DEV}
+              title={
+                import.meta.env.DEV
+                  ? "Delete only the current Markdown page"
+                  : "Available with pnpm docs:dev"
+              }
+              onClick={function deletePage() {
+                void handleDelete();
+              }}
+            >
               Delete
             </button>
-            <button type="button" data-save-button disabled={!selectedPage || !getMarkdown} onClick={function saveFromButton() { void handleSave(); }}>
-              {import.meta.env.DEV ? "Save Markdown" : "Download Markdown"}{isDirty ? " •" : ""}
+            <button
+              type="button"
+              data-save-button
+              disabled={!selectedPage || !getMarkdown}
+              onClick={function saveFromButton() {
+                void handleSave();
+              }}
+            >
+              {import.meta.env.DEV ? "Save Markdown" : "Download Markdown"}
+              {isDirty ? " •" : ""}
             </button>
           </div>
         </header>
-        <div data-status role="status">{status}</div>
+        <div data-status role="status">
+          {status}
+        </div>
         {selectedPage ? (
           <DocumentationEditor
             content={selectedPage.content}
@@ -325,7 +435,9 @@ export function App(): React.JSX.Element {
             onPasteImage={handlePasteImage}
             onNavigateLink={navigateLink}
           />
-        ) : <p data-empty-state>{status}</p>}
+        ) : (
+          <p data-empty-state>{status}</p>
+        )}
       </main>
     </div>
   );
@@ -384,7 +496,9 @@ function renderNavigationNodes(
               {renderNavigationNodes(node.children, selectedPath, onSelect)}
             </ul>
           </details>
-        ) : pageButton}
+        ) : (
+          pageButton
+        )}
       </li>
     );
   });

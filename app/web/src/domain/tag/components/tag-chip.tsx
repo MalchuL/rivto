@@ -33,9 +33,7 @@ export function TagChip({
   const label = formatTagName(tag.name);
   const tip = [
     tag.description,
-    tag.inherited && tag.ownerProjectName
-      ? `From ${tag.ownerProjectName} (read-only)`
-      : null,
+    tag.inherited && tag.ownerProjectName ? `From ${tag.ownerProjectName} (read-only)` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -67,7 +65,9 @@ export function TagChip({
     </span>
   );
 
-  if (!tip) return chip;
+  if (!tip) {
+    return chip;
+  }
 
   return (
     <Tooltip>
@@ -76,13 +76,9 @@ export function TagChip({
         <p className="font-medium" style={{ color: tag.color }}>
           {label}
         </p>
-        {tag.description ? (
-          <p className="mt-0.5 text-background/90">{tag.description}</p>
-        ) : null}
+        {tag.description ? <p className="mt-0.5 text-background/90">{tag.description}</p> : null}
         {tag.inherited && tag.ownerProjectName ? (
-          <p className="mt-0.5 text-[11px] text-background/70">
-            From {tag.ownerProjectName}
-          </p>
+          <p className="mt-0.5 text-[11px] text-background/70">From {tag.ownerProjectName}</p>
         ) : null}
       </TooltipContent>
     </Tooltip>

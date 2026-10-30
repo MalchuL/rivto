@@ -5,7 +5,9 @@
   "main": "./dist/esm/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
-  "files": ["dist/esm"],
+  "files": [
+    "dist/esm"
+  ],
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
@@ -20,7 +22,9 @@
     "test": "../../scripts/run-test.sh",
     "check-types": "tsc --noEmit"
   },
-  "dependencies": { "@chulane/graph-runtime": "workspace:*" },
+  "dependencies": {
+    "@chulane/graph-runtime": "workspace:*"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "jest": "^29.7.0",

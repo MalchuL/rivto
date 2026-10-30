@@ -6,13 +6,18 @@
  * @module
  */
 import {
-  blockExtension,
-  kanbanExtension,
   bentoExtension,
-  tableExtension,
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  BLOCK_TEXT_METADATA_KEY,
+  blockExtension,
   columnsExtension,
+  editorControlProps,
+  kanbanExtension,
   MarkdownContent,
-  useBlockEditing,
+  tableExtension,
+  useBlockNode,
+  useBlockSelectionAnchor,
+  usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import {
@@ -39,6 +44,8 @@ interface CounterProps {
   count: number;
 }
 
+const COUNTER_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+
 export { duplicateBlockInput } from "./block-utils";
 export {
   COUNTER_BLOCK_TYPE,
@@ -58,10 +65,14 @@ export {
  * @returns The markdown body and range control, or null after deletion.
  */
 function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const { block, getProp, setProp } = useBlockEditing<SliderProps>(blockId);
+  const {
+    block,
+    operations: { setProp },
+  } = useBlockNode<SliderProps>(blockId);
+  const panel = usePanel();
   const draggingRef = useRef(false);
   const [draftValue, setDraftValue] = useState<number | null>(null);
-  const committedValue = getProp("value") ?? 50;
+  const committedValue = block?.props.value ?? 50;
   const value = draftValue ?? committedValue;
 
   /**
@@ -70,11 +81,17 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    * @param next - Value shown by the input when the gesture completed.
    * @returns Nothing; the document is updated through `setProp`.
    */
-  const commitValue = useCallback((next: number) => {
-    setDraftValue(null);
-    if (next === (getProp("value") ?? 50)) return;
-    setProp("value", next);
-  }, [getProp, setProp]);
+  const commitValue = useCallback(
+    (next: number) => {
+      setDraftValue(null);
+      const current = panel.blocks.getBlockNode(blockId);
+      if (!current || next === (current.props.value ?? 50)) {
+        return;
+      }
+      setProp("value", next);
+    },
+    [panel, blockId, setProp],
+  );
 
   /**
    * Marks the current pointer gesture as an in-progress drag.
@@ -98,8 +115,11 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const previewOrCommit = (event: ChangeEvent<HTMLInputElement>) => {
     const next = Number(event.currentTarget.value);
-    if (draggingRef.current) setDraftValue(next);
-    else commitValue(next);
+    if (draggingRef.current) {
+      setDraftValue(next);
+    } else {
+      commitValue(next);
+    }
   };
 
   /**
@@ -123,13 +143,16 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
     setDraftValue(null);
   };
 
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   return (
     <div className="custom-slider-block">
       <MarkdownContent blockId={blockId} />
       <label>
         <span>Value: {value}</span>
         <input
+          {...editorControlProps}
           type="range"
           min="0"
           max="100"
@@ -148,19 +171,31 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 
 /** Demo contentless block proving controls can participate in structural selection. */
 function CounterBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
-  if (!editing.block) return null;
-  const count = editing.getProp("count") ?? 0;
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const panel = usePanel();
+  if (!editing.block) {
+    return null;
+  }
+  const count = editing.block.props.count ?? 0;
   const increment = (event: MouseEvent<HTMLButtonElement>) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+    if (!current) {
+      return;
+    }
+    editing.operations.setProp("count", (current.count ?? 0) + 1);
   };
   return (
     // The renderer region fills the block row, making its otherwise empty
     // right-hand side a valid structural-selection anchor. The actual Counter
     // button remains compact and retains its normal click behavior.
-    <div {...editing.attributes} className="custom-counter-selection-region">
+    <div {...attributes} className="custom-counter-selection-region">
       <button
+        {...COUNTER_SELECTION_ATTRIBUTES}
+        {...editorControlProps}
         type="button"
         className="custom-counter-block"
         onClick={increment}
@@ -173,32 +208,47 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
 
 /** Creation-time extensions for the demo's optional and custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
-    kanbanExtension(),
-    bentoExtension(),
-    tableExtension(),
-    columnsExtension(),
-    blockExtension({
-      definition: sliderBlockDefinition,
-      render: SliderBlock,
-      slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
-    }),
-    blockExtension({
-      definition: counterBlockDefinition,
-      render: CounterBlock,
-      slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
-    }),
-    ...hostBlockExtensions,
-    {
-      id: "clipboard.demo-counter",
-      setup: (reactEditor) => {
-        reactEditor.clipboard.registerFormatter({
-          id: "demo.counter",
-          matches: ({ block }) => block.type === COUNTER_BLOCK_TYPE,
-          format: ({ block }) => {
-            const text = `Count: ${block.props.count}`;
-            return { plain: text, markdown: text, html: `<p>${text}</p>` };
-          },
-        });
+  kanbanExtension(),
+  bentoExtension(),
+  tableExtension(),
+  columnsExtension(),
+  blockExtension({
+    definition: { ...sliderBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
+    render: SliderBlock,
+    slashCommand: { title: "Slider", group: "Turn into", keywords: ["range", "value"] },
+  }),
+  blockExtension({
+    definition: counterBlockDefinition,
+    render: CounterBlock,
+    slashCommand: { title: "Counter", group: "Turn into", keywords: ["count", "button"] },
+    clipboard: {
+      format: ({ block }) => {
+        const count = Number(block.props.count);
+        const text = `Count: ${count}`;
+        return {
+          plain: text,
+          markdown: text,
+          html: `<p data-rivto-block="counter" data-count="${count}">${text}</p>`,
+        };
+      },
+      parseHTML: (element) => {
+        if (element.getAttribute("data-rivto-block") !== "counter") {
+          return;
+        }
+        const count = Number(element.getAttribute("data-count"));
+        if (!Number.isInteger(count) || count < 0) {
+          return;
+        }
+        return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count } }] };
+      },
+      parseText: (text) => {
+        const match = /^Count: (\d+)$/.exec(text.trim());
+        if (!match) {
+          return;
+        }
+        return { blocks: [{ type: COUNTER_BLOCK_TYPE, props: { count: Number(match[1]) } }] };
       },
     },
+  }),
+  ...hostBlockExtensions,
 ];

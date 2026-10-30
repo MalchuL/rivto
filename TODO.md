@@ -144,7 +144,7 @@ Work proceeds in the audit fix order. Check an item only after the expected beha
   - Test: uninstall restores writing factories so they no longer produce an unavailable type
   - Status: done
 
-- [x] **#39 `EditorView` has one hard-coded layout bucket**
+- [x] **#39 `EditorPanel` has one hard-coded layout bucket**
   - Owner: react
   - Expected: only two explicit positions — `beforeSurface` and `afterSurface` — on extension mounts or props
   - Test: extension UI can render before and after the surface
@@ -256,7 +256,7 @@ Work proceeds in the audit fix order. Check an item only after the expected beha
   - Test: defer until registrations are shown not to be creation-only
   - Status: deferred — needs profile
 
-- [ ] **#40 Global editor revision invalidates the entire `EditorView`**
+- [ ] **#40 Global editor revision invalidates the entire `EditorPanel`**
   - Owner: react
   - Expected: after measuring typing and collaborative bursts, move block data to selector-level subscriptions or memoized row boundaries; do not add a second state model
   - Test: measure first

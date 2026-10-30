@@ -10,15 +10,17 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     content: "Text",
     props: { value: 42 },
     pluginData: { plugin: { enabled: true } },
-    children: [{
-      id: "child",
-      type: "paragraph",
-      listProps: { collapsed: false, type: "numbered_list", checked: false },
-      content: "Child",
-      props: {},
-      pluginData: {},
-      children: [],
-    }],
+    children: [
+      {
+        id: "child",
+        type: "paragraph",
+        listProps: { collapsed: false, type: "numbered_list", checked: false },
+        content: "Child",
+        props: {},
+        pluginData: {},
+        children: [],
+      },
+    ],
   };
 
   const duplicate = duplicateBlockInput(block);
@@ -30,14 +32,16 @@ test("duplicate input removes every subtree ID and preserves supported data", ()
     content: block.content,
     props: block.props,
     pluginData: block.pluginData,
-    children: [{
-      type: "paragraph",
-      listProps: { collapsed: false, type: "numbered_list", checked: false },
-      content: "Child",
-      props: {},
-      pluginData: {},
-      children: [],
-    }],
+    children: [
+      {
+        type: "paragraph",
+        listProps: { collapsed: false, type: "numbered_list", checked: false },
+        content: "Child",
+        props: {},
+        pluginData: {},
+        children: [],
+      },
+    ],
   });
   assert.notEqual(duplicate.props, block.props);
   assert.notEqual(duplicate.children, block.children);

@@ -38,13 +38,13 @@ rivto.editor.links: CRDTMap<linkId, CRDTMap<LinkStorage>>
 
 ### Гранулярность каждого persisted key link
 
-| Key | Live-тип | Можно изменить | Как изменять | Что получает CRDT update |
-| --- | --- | --- | --- | --- |
-| root `links[linkId]` | `CRDTMap<LinkStorage>` | создать, заменить или удалить record | `createLink`, `removeLink`, snapshot load | public `createLink` заменяет значение root key `linkId` новой record map |
-| `id` | `string` | внутри существующей record — нет | передаётся в `createLink` | атомарное поле новой record |
-| `from` | plain endpoint object | только через replacement link | повторный `createLink` с тем же ID | весь link record заменяется public API; `from.blockId` и `from.port` не редактируются отдельно |
-| `to` | plain endpoint object | только через replacement link | повторный `createLink` | та же replacement semantics |
-| `meta` | plain record | только через replacement link | прочитать link, создать новый `meta`, вызвать `createLink` | весь record заменяется; keys `meta` не являются nested shared keys |
+| Key                  | Live-тип               | Можно изменить                       | Как изменять                                               | Что получает CRDT update                                                                       |
+| -------------------- | ---------------------- | ------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| root `links[linkId]` | `CRDTMap<LinkStorage>` | создать, заменить или удалить record | `createLink`, `removeLink`, snapshot load                  | public `createLink` заменяет значение root key `linkId` новой record map                       |
+| `id`                 | `string`               | внутри существующей record — нет     | передаётся в `createLink`                                  | атомарное поле новой record                                                                    |
+| `from`               | plain endpoint object  | только через replacement link        | повторный `createLink` с тем же ID                         | весь link record заменяется public API; `from.blockId` и `from.port` не редактируются отдельно |
+| `to`                 | plain endpoint object  | только через replacement link        | повторный `createLink`                                     | та же replacement semantics                                                                    |
+| `meta`               | plain record           | только через replacement link        | прочитать link, создать новый `meta`, вызвать `createLink` | весь record заменяется; keys `meta` не являются nested shared keys                             |
 
 Например, metadata обновляется так:
 
@@ -174,12 +174,12 @@ rivto.editor.plugins: CRDTMap<pluginId, CRDTType>
 
 В отличие от block-level `pluginData`, этот manager предоставляет portable field CRUD, не возвращая live shared objects:
 
-| Операция | Что хранится | Гранулярность updates |
-| --- | --- | --- |
-| `set(pluginId, value)` | cloned `BasicType`/plain value под одним root key | весь namespace `pluginId` заменяется атомарно; вложенные свойства plain object не независимы |
-| `setField(pluginId, key, value)` | отдельный internal shared key | property `key` меняется независимо от соседних keys |
-| `deleteField(pluginId, key)` | удаление одного internal shared key | отдельная map operation для key |
-| `get()`/`getAll()` | detached materialized value | mutation результата не создаёт update |
+| Операция                         | Что хранится                                      | Гранулярность updates                                                                        |
+| -------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `set(pluginId, value)`           | cloned `BasicType`/plain value под одним root key | весь namespace `pluginId` заменяется атомарно; вложенные свойства plain object не независимы |
+| `setField(pluginId, key, value)` | отдельный internal shared key                     | property `key` меняется независимо от соседних keys                                          |
+| `deleteField(pluginId, key)`     | удаление одного internal shared key               | отдельная map operation для key                                                              |
+| `get()`/`getAll()`               | detached materialized value                       | mutation результата не создаёт update                                                        |
 
 ### Как изменять отдельные свойства plugin namespace
 

@@ -8,11 +8,11 @@
 
 Union `"block" | "edgeless"`. Mode локален, не сохраняется в CRDT snapshot и может отличаться у двух views одного документа.
 
-### `CreateRivtoEditorOptions`
+### `CreateDocumentEditorOptions`
 
-- **`mode?: EditorMode`:** initial presentation mode; default `"block"`.
+- **`document: DocumentModel`:** required model permanently bound to this core; its lifetime remains caller-owned.
 
-Options целиком optional. Document присоединяется после construction через `setDocument()` и остаётся caller-owned.
+Для нескольких документов `EditorStorageOptions` принимает optional async `openDocument(documentId)` и optional `createEditor(editor)` returning ReactEditor. Первый callback передаёт editor cache владение моделью. Второй получает уже созданный storage-owned core, настраивает его registrations, defaults и property processors и возвращает связанный с ним ReactEditorApi. Presentation выбирает React surface и не входит в constructor options.
 
 ## Selection types
 
@@ -52,6 +52,11 @@ Anchor/focus описывают direction, а не порядок `blocks`.
 - **`width: number`:** positive finite width.
 - **`height: number`:** positive finite height.
 
+### `EditorElementNode<Props>`
+
+Плоский узел с `childIds: string[]`, без материализации дочерних деревьев.
+Используется рендерерами и взаимодействиями через `getElementNode(s)`.
+
 ### `EditorElement<Props>`
 
 - **`id: string`:** stable identity.
@@ -60,11 +65,15 @@ Anchor/focus описывают direction, а не порядок `blocks`.
 - **`zIndex: number`:** finite layer order.
 - **`props: Props`:** opaque extension-owned record.
 
+Содержит рекурсивный `children: EditorElement[]` вместо `childIds`; отдельного поля владения canvas нет.
+`getElement(s)` возвращает кешированные деревья, а snapshot сохраняет плоские узлы.
+
 ### `EditorElementInput<Props>`
 
 - **`id?: string`:** caller ID или generated UUID.
 - **`type: string`:** required non-empty type.
-- **`frame: EditorElementFrame`:** complete geometry.
+- **`frame: EditorElementFrame`:** complete geometry; nonempty groups may omit it to derive bounds at insertion.
+- **`children?: EditorElementInput[]`:** новые дочерние деревья; IDs выделяются моделью, canvas наследуется от корня.
 - **`zIndex: number`:** finite layer.
 - **`props?: Props`:** optional initial record.
 
@@ -99,14 +108,15 @@ Aliases намеренно используют canonical document-model records
 
 ### `EditorSnapshot`
 
-- **`version: 6`:** current schema literal.
+- **`version: 9`:** current schema literal.
 - **`blocks: EditorBlock[]`:** complete block tree.
 - **`links: EditorLink[]`:** complete links.
-- **`elements: EditorElement[]`:** complete canvas elements.
+- **`elements: ElementSnapshot[]`:** complete element records with `childIds`, without derived `canvasId`.
+- **`rootElementIds: string[]`:** ordered document element roots.
 - **`pluginData?: Record<string, unknown>`:** document-level namespaces.
 
 ### `EditorSnapshotUpdate`
 
-Имеет обязательный **`version: 6`** и optional **`blocks`**, **`links`**, **`elements`**, **`pluginData`**. `load()` заменяет только supplied sections. Selection, mode, commands, revision и history не входят ни в один snapshot.
+Имеет обязательный **`version: 9`** и optional **`blocks`**, **`links`**, **`elements`**, **`rootElementIds`**, **`pluginData`**. `load()` заменяет только supplied sections. Selection, mode, commands, revision и history не входят ни в один snapshot.
 
-`version: 6` — compile-time public contract и значение, которое создаёт `dump()`. `DocumentModelImpl.loadSnapshot()` также проверяет это значение на runtime и отклоняет другую версию до mutations.
+`version: 9` — compile-time public contract и значение, которое создаёт `dump()`. `DocumentModelImpl.loadSnapshot()` также проверяет это значение на runtime и отклоняет другую версию до mutations.

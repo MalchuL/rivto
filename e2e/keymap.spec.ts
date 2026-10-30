@@ -3,9 +3,9 @@ import { BLOCK_ID_ATTRIBUTE } from "./dom-markers";
 
 test("edits and restores a live binding without reloading the editor", async ({ page }) => {
   await page.goto("/");
-  const token = await page.evaluate(() => (
-    (window as unknown as { __rivtoDemo?: { token: string } }).__rivtoDemo?.token
-  ));
+  const token = await page.evaluate(
+    () => (window as unknown as { __rivtoDemo?: { token: string } }).__rivtoDemo?.token,
+  );
   expect(token).toBeTruthy();
 
   const panel = page.locator("[data-keyboard-panel]");
@@ -30,12 +30,16 @@ test("edits and restores a live binding without reloading the editor", async ({ 
 
   await secondContent.click();
   await page.keyboard.press("Control+ArrowRight");
-  await expect(second.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`))
-    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId!);
+  await expect(second.locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`)).toHaveAttribute(
+    BLOCK_ID_ATTRIBUTE,
+    firstId!,
+  );
 
   await indentRow.getByRole("button", { name: "Restore" }).click();
   await expect(indentRow).toHaveAttribute("data-binding-status", "default");
-  expect(await page.evaluate(() => (
-    (window as unknown as { __rivtoDemo?: { token: string } }).__rivtoDemo?.token
-  ))).toBe(token);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __rivtoDemo?: { token: string } }).__rivtoDemo?.token,
+    ),
+  ).toBe(token);
 });

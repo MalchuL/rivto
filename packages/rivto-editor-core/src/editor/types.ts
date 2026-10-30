@@ -1,3 +1,4 @@
+import type { ElementRegistry } from "../managers/element-registry";
 /**
  * Editor coordinator contracts. Selection and clipboard types live with their owning managers.
  */
@@ -9,7 +10,6 @@ import type {
   CommandRegistryApi,
   ElementManagerApi,
   HistoryManagerApi,
-  ModeManagerApi,
   SelectionManagerApi,
 } from "../managers";
 import type { DocumentModel } from "@chulane/document-model";
@@ -18,9 +18,9 @@ import type { EditorSnapshot, EditorSnapshotUpdate } from "./model";
 /** Local presentation strategy; never persisted in collaborative state. */
 export type EditorMode = "block" | "edgeless";
 
-export interface CreateRivtoEditorOptions {
-  /** Initial local presentation mode; defaults to block mode. */
-  mode?: EditorMode;
+export interface CreateDocumentEditorOptions {
+  /** Fixed caller-owned model; editor destruction does not destroy it. */
+  document: DocumentModel;
 }
 
 /**
@@ -28,9 +28,11 @@ export interface CreateRivtoEditorOptions {
  *
  * Block and element behavior is intentionally available only through
  * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, selection, history, mode, snapshots, and subscriptions.
+ * commands, selection, history, snapshots, and document subscriptions.
  */
-export interface RivtoEditorApi {
+export interface DocumentEditorAPI {
+  /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
+  readonly elementRegistry: ElementRegistry;
   /** Typed block operations. */
   readonly blocks: BlockManagerApi;
   /** Editor-wide list-property defaults and semantic validation. */
@@ -41,8 +43,6 @@ export interface RivtoEditorApi {
   readonly elements: ElementManagerApi;
   /** Named command registry shared by managers and integrations. */
   readonly commands: CommandRegistryApi;
-  /** Local block/edgeless presentation mode. */
-  readonly mode: ModeManagerApi;
   /** Local ordered text and whole-block selection state. */
   readonly selection: SelectionManagerApi;
   /** Framework-neutral structured clipboard operations. */
@@ -61,36 +61,29 @@ export interface RivtoEditorApi {
   subscribe(listener: () => void): () => void;
 
   /**
-   * @returns The document model currently presented by this editor, or undefined while unbound.
+   * @returns The fixed model used by every read, mutation, and subscription of this editor.
    */
-  getDocument(): DocumentModel | undefined;
+  getDocument(): DocumentModel;
 
   /**
-   * Replaces the active document while preserving editor and manager identity.
-   * @param document - Caller-owned model to present.
-   * @returns No value.
-   */
-  setDocument(document: DocumentModel): void;
-
-  /**
-   * Replaces supplied document sections and clears previous local history.
+   * Replaces supplied sections in the fixed document and clears its previous local history.
    *
-   * @param snapshot - Snapshot-v6 sections to validate and load.
+   * @param snapshot - Snapshot-v7 sections to validate and load.
    * @returns No value.
    */
   load(snapshot: EditorSnapshotUpdate): void;
 
   /**
-   * Materializes the complete portable document state.
+   * Materializes complete portable state from the fixed document.
    *
-   * @returns Detached snapshot-v6 value.
+   * @returns Detached snapshot-v7 value.
    */
   dump(): EditorSnapshot;
 
   /**
    * Releases runtime subscriptions, managers, and registries without destroying the caller-owned document.
    *
-   * @returns A Promise that resolves after runtime, provider, and CRDT cleanup.
+   * @returns A Promise that resolves after runtime cleanup; document consumers and provider connections remain owned by the caller.
    */
   destroy(): Promise<void>;
 }

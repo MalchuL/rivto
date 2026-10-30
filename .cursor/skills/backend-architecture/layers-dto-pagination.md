@@ -13,12 +13,12 @@ HTTP request
   ← controller   (response_model = DTO; FastAPI serializes camelCase)
 ```
 
-| Layer | May do | Must not |
-|-------|--------|----------|
-| Controller | `Depends`, validate query/body, call service, `HTTPException` | SQL, httpx, `session.commit`, build ORM |
-| Service | RBAC, orchestrate repos/clients, map via mapper, `commit`/`rollback` | Raise `HTTPException`, touch `Request` |
-| Repository | Filters, `list_and_count`, eager loads, Core `DELETE` | Commit (default), raise HTTP, return DTOs |
-| Mapper | ORM ↔ DTO, partial update dicts | I/O, sessions, permissions |
+| Layer      | May do                                                               | Must not                                  |
+| ---------- | -------------------------------------------------------------------- | ----------------------------------------- |
+| Controller | `Depends`, validate query/body, call service, `HTTPException`        | SQL, httpx, `session.commit`, build ORM   |
+| Service    | RBAC, orchestrate repos/clients, map via mapper, `commit`/`rollback` | Raise `HTTPException`, touch `Request`    |
+| Repository | Filters, `list_and_count`, eager loads, Core `DELETE`                | Commit (default), raise HTTP, return DTOs |
+| Mapper     | ORM ↔ DTO, partial update dicts                                      | I/O, sessions, permissions                |
 
 ### Controller (handles results / errors)
 
@@ -187,12 +187,12 @@ def model_config() -> ConfigDict:
 
 Effects:
 
-| Side | Convention |
-|------|------------|
-| Python / ORM / mappers | `project_id`, `created_at`, `display_name` |
-| HTTP JSON + OpenAPI | `projectId`, `createdAt`, `displayName` |
-| External clients | **Send camelCase** in bodies |
-| Query params | Use camelCase names or `Query(..., alias="projectId")` |
+| Side                   | Convention                                             |
+| ---------------------- | ------------------------------------------------------ |
+| Python / ORM / mappers | `project_id`, `created_at`, `display_name`             |
+| HTTP JSON + OpenAPI    | `projectId`, `createdAt`, `displayName`                |
+| External clients       | **Send camelCase** in bodies                           |
+| Query params           | Use camelCase names or `Query(..., alias="projectId")` |
 
 FastAPI response models using these DTOs serialize with aliases (same as `model_dump(mode="json", by_alias=True)`).
 
@@ -266,26 +266,26 @@ class ExampleMapper:
 
 `DtoConverter` helpers:
 
-| Method | Use |
-|--------|-----|
-| `dto_to_dict_with_dto_case` | Full dump, snake_case keys |
-| `dto_to_partial_dict_with_dto_case` | `exclude_unset=True` for PATCH |
-| `dto_to_json_dict_with_json_case` | camelCase dict (rare; prefer response_model) |
-| `dict_with_json_case_to_dto` | `model_validate` camelCase or snake_case dict |
+| Method                              | Use                                           |
+| ----------------------------------- | --------------------------------------------- |
+| `dto_to_dict_with_dto_case`         | Full dump, snake_case keys                    |
+| `dto_to_partial_dict_with_dto_case` | `exclude_unset=True` for PATCH                |
+| `dto_to_json_dict_with_json_case`   | camelCase dict (rare; prefer response_model)  |
+| `dict_with_json_case_to_dto`        | `model_validate` camelCase or snake_case dict |
 
 ## Advanced Alchemy (`BaseRepository`)
 
 Wrap `SQLAlchemyAsyncRepository` with **`auto_commit=False`** so services own transactions.
 
-| Method | Behavior |
-|--------|----------|
-| `create` / `add` | `add(..., auto_refresh=True)` |
-| `get_by_id` | `get_one`; map Alchemy `NotFoundError` → `DBNotFoundError` |
-| `update` | load, setattr fields, `repository.update` |
+| Method                                            | Behavior                                                                                                                                            |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create` / `add`                                  | `add(..., auto_refresh=True)`                                                                                                                       |
+| `get_by_id`                                       | `get_one`; map Alchemy `NotFoundError` → `DBNotFoundError`                                                                                          |
+| `update`                                          | load, setattr fields, `repository.update`                                                                                                           |
 | `list(*filters, order_by=, load=, list_options=)` | If `list_options`: append Alchemy `LimitOffset`, call `list_and_count`, build `Page`. If omitted: plain `list`, `total=len(rows)`, `has_next=False` |
-| `delete` | Prefer Core `DELETE FROM … WHERE id = :id` (avoid ORM `session.delete` collisions with `lazy="raise"` graphs) |
-| `expunge` | Detach loaded instance before Core delete when needed |
-| `commit` / `rollback` | Delegate to session; call from **service** |
+| `delete`                                          | Prefer Core `DELETE FROM … WHERE id = :id` (avoid ORM `session.delete` collisions with `lazy="raise"` graphs)                                       |
+| `expunge`                                         | Detach loaded instance before Core delete when needed                                                                                               |
+| `commit` / `rollback`                             | Delegate to session; call from **service**                                                                                                          |
 
 Pass eager loads via `load=` (e.g. `selectinload(...)`) because relationships use `lazy="raise"`.
 

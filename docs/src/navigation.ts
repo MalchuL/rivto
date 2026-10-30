@@ -10,7 +10,10 @@ export function createDocumentationUrl(pagePath: string, anchor = ""): string {
 export function getDocumentationPath(pathname: string): string {
   try {
     const path = pathname.split("/").filter(Boolean).map(decodeURIComponent).join("/");
-    return path ? (path.endsWith(".md") ? path : `${path}.md`) : "";
+    if (!path) {
+      return "";
+    }
+    return path.endsWith(".md") ? path : `${path}.md`;
   } catch {
     return "";
   }

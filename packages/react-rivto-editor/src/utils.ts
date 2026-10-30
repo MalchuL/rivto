@@ -1,27 +1,32 @@
+import type { ReactEditorApi } from "./editor/types";
 /**
- * Identifies the two editor runtimes accepted by React integration helpers.
+ * Distinguishes panel operations from whole-document editor operations.
  * The guards use public capability discriminants and expose no coordinator or
  * document internals.
  */
-import type { RivtoEditorApi } from "@chulane/rivto";
-import type { ReactEditor } from "./types";
+import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactPanelApi } from "./panels/types";
 
 /**
- * Determines whether an editor is the React presentation runtime.
+ * Determines whether an editor belongs to one rendered React occurrence.
  *
- * @param editor - Known React or framework-neutral editor runtime.
- * @returns Whether `editor` exposes React rendering capabilities.
+ * @param editor - Known view editor, shared React runtime, or framework-neutral editor.
+ * @returns Whether `editor` has an explicit occurrence and shared runtime.
  */
-export function isReactEditor(editor: ReactEditor | RivtoEditorApi): editor is ReactEditor {
-  return "renderers" in editor;
+export function isReactPanelApi(
+  editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI,
+): editor is ReactPanelApi {
+  return "editor" in editor;
 }
 
 /**
- * Determines whether an editor is the framework-neutral core runtime.
+ * Determines whether an editor provides the whole-document core contract.
  *
- * @param editor - Known React or framework-neutral editor runtime.
- * @returns Whether `editor` exposes the core block-definition registry.
+ * @param editor - Known view editor, shared React runtime, or framework-neutral editor.
+ * @returns Whether `editor` exposes the core block-definition registry, including a ReactEditorApi.
  */
-export function isRivtoEditor(editor: ReactEditor | RivtoEditorApi): editor is RivtoEditorApi {
+export function isRivtoEditor(
+  editor: ReactPanelApi | ReactEditorApi | DocumentEditorAPI,
+): editor is DocumentEditorAPI {
   return "blockRegistry" in editor;
 }

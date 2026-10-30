@@ -1,5 +1,5 @@
+import type { ReactEditorApi } from "../../../../editor/types";
 /** Runtime registration for backward and forward block boundary merging. */
-import type { ReactEditor } from "../../../../types";
 import { registerBackwardBlockMerge } from "./backward";
 import { registerForwardBlockMerge } from "./forward";
 
@@ -9,7 +9,7 @@ import { registerForwardBlockMerge } from "./forward";
  * @param reactEditor - Runtime receiving the keyboard bindings.
  * @returns No value.
  */
-export function registerBlockMerge(reactEditor: ReactEditor): void {
+export function registerBlockMerge(reactEditor: ReactEditorApi): void {
   registerBackwardBlockMerge(reactEditor);
   registerForwardBlockMerge(reactEditor);
 }

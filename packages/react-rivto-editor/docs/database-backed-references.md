@@ -5,8 +5,8 @@
 Implement database-backed content as a React block extension configured with a
 host-owned `EntityRepository`. Keep `useBlock(id)` local and synchronous.
 
-This fits the existing boundary: `EditorView` rerenders from the core editor's
-revision, `BlockTree` resolves local IDs, and renderers invoke operations on the
+This fits the existing boundary: `EditorPanel` rerenders from the core editor's
+revision, Page resolves local IDs, and renderers invoke operations on the
 same core editor. A foreign block cannot safely enter that path because its
 operations, subscription, selection, and undo belong to another editor.
 
@@ -24,7 +24,7 @@ type ReferenceProps = {
 
 Register it with the existing `blockExtension` mechanism. Capture the
 repository in the extension factory or renderer closure; a new global manager
-on `ReactEditor` is unnecessary while references are the only consumer.
+on `PanelAPI` is unnecessary while references are the only consumer.
 
 ```ts
 const databaseReferenceExtension = (
@@ -70,13 +70,13 @@ references target the same document.
 ## Rendering choices
 
 For the first version, render a read-only preview component from the detached
-target block. Do not reuse the host `BlockTree`: it reads `EditorContext`, so
+target block. Do not reuse the host Page: it reads `ReactPanelContext`, so
 its commands and selection would target the host editor.
 
 Two later options are valid when richer rendering is required:
 
 - create a read-only tree renderer that receives the target editor explicitly;
-- mount a nested target `ReactEditor` boundary with isolated events and
+- mount a nested target `ReactPanelApi` boundary with isolated events and
   selection.
 
 The first is smaller. The second is appropriate only for interactive/editable
@@ -98,7 +98,7 @@ in the set, render a cycle state instead of resolving it again.
 
 - Do not change `useBlock` to return a promise or start a fetch when local
   lookup returns `undefined`.
-- Do not add fetched blocks to the host snapshot merely to make `BlockTree`
+- Do not add fetched blocks to the host snapshot merely to make Page
   render them.
 - Do not ask callers for an owning document ID; the repository discovers
   ownership from the global entity ID.
@@ -115,7 +115,7 @@ useful prototype for loading states, not yet a Rivto entity repository.
 
 Migration should happen in this order:
 
-1. Persist a schema-v6 Rivto snapshot or Yjs update per page/document.
+1. Persist a schema-v9 Rivto snapshot or Yjs update per page/document.
 2. Implement `EntityRepository.resolve(id)` above that service and let it find
    the owning document internally.
 3. Open the primary page through the same repository.

@@ -1,1 +1,1 @@
-export type { WrapBasicTypeToCRDTOptions } from './wrapping-options';
+export type { WrapBasicTypeToCRDTOptions } from "./wrapping-options";

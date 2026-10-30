@@ -14,7 +14,13 @@ const webReact = path.join(appDir, "node_modules/react");
 const webReactDom = path.join(appDir, "node_modules/react-dom");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@chulane/app", "@chulane/crdt-doc", "@chulane/document-model", "@chulane/rivto", "@chulane/rivto-react"],
+  transpilePackages: [
+    "@chulane/app",
+    "@chulane/crdt-doc",
+    "@chulane/document-model",
+    "@chulane/rivto",
+    "@chulane/rivto-react",
+  ],
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   eslint: {
@@ -26,6 +32,10 @@ const nextConfig: NextConfig = {
       // Match demo/vite.config.ts: resolve editor packages to workspace
       // sources so app work does not require a parallel package build.
       "@chulane/rivto-react/styles.css": rivtoReactCss,
+      "@chulane/rivto-react/block-factories": path.join(
+        repoRoot,
+        "packages/react-rivto-editor/src/block-factories.ts",
+      ),
       "@chulane/rivto-react": rivtoReactSrc,
       "@chulane/rivto": rivtoCoreSrc,
       "@chulane/document-model": rivtoDocumentModelSrc,

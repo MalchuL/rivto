@@ -221,7 +221,7 @@ selection.blockIds.push("hacked");
 `set()` также копирует входное значение и вызывает всех listeners.
 
 Менеджер не проверяет существование block ID. Он маленький и отвечает только за
-хранение. Проверка находится в EditorRuntime.
+хранение. Проверка находится в DocumentEditor.
 
 ### clear()
 
@@ -258,7 +258,7 @@ renderer/plugin/application
 CommandRegistry
         │
         ▼
-EditorRuntime.setSelection()
+DocumentEditor.setSelection()
         │ проверка
         ▼
 SelectionManager.set()
@@ -272,7 +272,7 @@ React, plugins и внешнего приложения.
 
 ## 9. Проверка TextSelection
 
-`EditorRuntime.setSelection()` проверяет anchor и head отдельно.
+`DocumentEditor.setSelection()` проверяет anchor и head отдельно.
 
 Для каждой позиции `validatePosition()`:
 
@@ -375,7 +375,7 @@ BlockSelection      focusBlockId
 
 ```text
 types               описывают возможные формы
-EditorRuntime       проверяет IDs, offsets и порядок
+DocumentEditor       проверяет IDs, offsets и порядок
 SelectionManager    хранит detached локальное значение и уведомляет listeners
 ```
 

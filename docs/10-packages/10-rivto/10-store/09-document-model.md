@@ -5,7 +5,7 @@
 ## Архитектурная граница
 
 ```text
-EditorRuntime
+ReactEditor
   -> DocumentModelImpl
     -> DocumentBlockManager
     -> DocumentElementManager
@@ -15,7 +15,7 @@ EditorRuntime
         -> CRDTMap / CRDTArray / CRDTText
 ```
 
-Host создаёт модель и передаёт её в `EditorRuntime`, который предоставляет более высокий API через публичные editor managers. React-пакет вызывает эти операции, но не меняет persisted storage напрямую.
+Host создаёт модель и передаёт её в `ReactEditor`, который предоставляет более высокий API через публичные editor managers. React-пакет вызывает эти операции, но не меняет persisted storage напрямую.
 
 ## Основные обязанности
 
@@ -26,7 +26,7 @@ Host создаёт модель и передаёт её в `EditorRuntime`, к
 - выполнять семантические изменения в CRDT-транзакциях;
 - агрегировать undo scopes и единый локальный origin;
 - проверять входные данные до destructive snapshot replacement;
-- преобразовывать shared storage в detached schema-v6 snapshots;
+- преобразовывать shared storage в detached schema-v9 snapshots;
 - нормализовать дерево после конкурентных изменений.
 
 ## Корневые CRDT-контейнеры
@@ -53,14 +53,14 @@ const introduction = document.blocks.insertBlock({
 const details = document.blocks.insertBlock({
   type: "paragraph",
   content: "Подробности",
-}, introduction);
+}, { parentId: introduction.id });
 
-document.blocks.indentBlock(details);
+document.blocks.updateBlock(details.id, { content: "Подробности раздела" });
 
 const snapshot = document.getSnapshot();
 document.loadSnapshot(snapshot);
 ```
 
-Приложение создаёт `DocumentModelImpl`, присоединяет её через `editor.setDocument(document)` и работает через focused editor managers.
+Приложение создаёт `DocumentStorage` над CRDT registry и передаёт callback `openDocument` в `EditorStorage`. Editor cache владеет открытыми моделями и создаёт отдельный core для каждой; `acquireEditor(documentId)` возвращает acquisition, а `acquisition.editor` предоставляет API этого core вместе с React-возможностями. DocumentModel хранит generic persisted data и hierarchy invariants. Type definitions, defaults, semantic validation и property processors принадлежат single editor.
 
 Вложенные страницы описывают все классы, свойства, методы, аргументы, результаты, исключения, persisted-типы, utilities и реальные consumers модели документа.

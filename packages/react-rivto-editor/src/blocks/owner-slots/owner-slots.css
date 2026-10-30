@@ -3,7 +3,7 @@
  *
  * `.rivto-slot` hosts controls registered through the surface manager. Slots
  * are absolute overlays positioned by `data-slot-position`; the logical
- * `start`/`end` block slots participate in row flow instead. Hosts may
+ * `start`/`end` block slots participate in row flow and `body` sits below it. Hosts may
  * override these public selectors together with their owner layout to make one
  * position flow. Built-in controls reset their legacy self-positioning here so
  * slot ownership supplies the geometry.
@@ -24,30 +24,6 @@
   margin: 0;
   translate: none;
   pointer-events: auto;
-}
-
-/* Logical block slots participate in row layout. Their fixed first-line
-   height keeps controls aligned when the block content spans multiple lines. */
-.rivto-slot[data-slot-owner="block"][data-slot-position="start"],
-.rivto-slot[data-slot-owner="block"][data-slot-position="end"] {
-  position: relative;
-  min-height: var(--rivto-default-block-height);
-  transform: none;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="start"] {
-  flex-direction: row-reverse;
-}
-
-.rivto-slot > .page-drag-handle,
-.rivto-slot > .page-collapse-toggle,
-.rivto-slot > .page-list-marker,
-.rivto-slot > .page-list-checkbox,
-.rivto-slot > .edgeless-drag-handle {
-  position: relative;
-  inset: auto;
-  margin: 0;
-  translate: none;
 }
 
 .rivto-slot[data-slot-position="left"] {
@@ -85,14 +61,6 @@
 .rivto-slot[data-slot-position="left-bottom"] {
   right: 100%;
   flex-direction: row-reverse;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] {
-  gap: 0;
-}
-
-.rivto-slot[data-slot-owner="block"][data-slot-position="left-top"] > .page-collapse-toggle {
-  translate: 4px 0;
 }
 
 .rivto-slot[data-slot-position="top-left"],

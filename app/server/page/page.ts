@@ -122,12 +122,9 @@ export const update = api(
       throw APIError.notFound("page not found");
     }
 
-    const title =
-      req.title !== undefined ? normalizeTitle(req.title) : existing.title;
-    const content =
-      req.content !== undefined ? req.content : existing.content;
-    const parentId =
-      req.parentId !== undefined ? req.parentId : existing.parent_id;
+    const title = req.title !== undefined ? normalizeTitle(req.title) : existing.title;
+    const content = req.content !== undefined ? req.content : existing.content;
+    const parentId = req.parentId !== undefined ? req.parentId : existing.parent_id;
 
     const row = parentId
       ? await db.queryRow<PageRow>`

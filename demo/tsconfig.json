@@ -9,6 +9,14 @@
       "@chulane/crdt-doc": ["../packages/crdt-doc/src/index.ts"],
       "@chulane/document-model": ["../packages/document-model/src/index.ts"],
       "@chulane/rivto": ["../packages/rivto-editor-core/src/index.ts"],
+      "@chulane/rivto-edgeless/browser": ["../packages/rivto-edgeless/src/browser.ts"],
+      "@chulane/rivto-edgeless/react": ["../packages/rivto-edgeless/src/react.ts"],
+      "@chulane/rivto-edgeless": ["../packages/rivto-edgeless/src/index.ts"],
+      "@chulane/rivto-keyboard": ["../packages/rivto-keyboard/src/index.ts"],
+      "@chulane/rivto-page": ["../packages/rivto-page/src/index.ts"],
+      "@chulane/rivto-react/block-factories": [
+        "../packages/react-rivto-editor/src/block-factories.ts"
+      ],
       "@chulane/rivto-react": ["../packages/react-rivto-editor/src/index.ts"]
     },
     "jsx": "react-jsx",

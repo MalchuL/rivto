@@ -22,6 +22,12 @@ export const journalService = {
       .sort((a, b) => b.day.localeCompare(a.day));
   },
 
+  /**
+   * Finds the journal page whose day property matches the requested day.
+   *
+   * @param day - Journal day key to look up.
+   * @returns Matching page, or null when no journal entry exists.
+   */
   async getDay(day: string): Promise<Page | null> {
     const pages = await pageService.list({ kind: "journal" });
     return pages.find((page) => dayOf(page) === day) ?? null;

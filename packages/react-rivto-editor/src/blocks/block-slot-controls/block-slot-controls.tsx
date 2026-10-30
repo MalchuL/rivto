@@ -1,8 +1,10 @@
+import { editorControlProps } from "../../constants";
+import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Built-in list and collapse contributions for the shared block left slot.
  *
  * These controls interpret extension-owned list properties but do not own
- * traversal or persistence. BlockTree remains responsible for descendants,
+ * traversal or persistence. Page remains responsible for descendants,
  * while the editor manager supplies transactional mutations for the current row.
  * The public `.page-list-checkbox`, `.page-list-marker`, and
  * `.page-collapse-toggle` classes remain stable slot-geometry hooks styled in
@@ -11,7 +13,7 @@
  * @module
  */
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import { useBlockNode } from "../../hooks";
+import { useBlockOperations, usePanel } from "../../hooks";
 import type { BlockSlotProps } from "../../managers";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -28,16 +30,19 @@ const COLLAPSE_TOGGLE_CLASS = "page-collapse-toggle";
  * @returns Interactive checkbox, numeric marker, or nothing for ordinary lists.
  */
 export function BlockListSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlockNode(block.id);
+  const operations = useBlockOperations(block.id);
 
   if (block.listProps.type === "checkbox") {
     return (
       <Checkbox
+        {...editorControlProps}
         className={cn(LIST_CHECKBOX_CLASS, "size-[18px] rounded-[5px]")}
         aria-label={`Mark block as ${block.listProps.checked ? "incomplete" : "complete"}: ${block.content || block.type}`}
         checked={block.listProps.checked === true}
         onPointerDown={(event) => event.stopPropagation()}
-        onCheckedChange={(checked) => operations.update({ listProps: { checked: checked === true } })}
+        onCheckedChange={(checked) =>
+          operations.update({ listProps: { checked: checked === true } })
+        }
       />
     );
   }
@@ -53,19 +58,32 @@ export function BlockListSlot({ block }: BlockSlotProps) {
 /**
  * Renders the accessible expand/collapse button for a block with descendants.
  *
+ * Width follows the shared control-size token, including in-flow controls whose
+ * slot grows when a leaf acquires its first child. Removing the final child
+ * removes the toggle and releases its width; collapsing a branch retains it.
+ *
  * @param props - Current block-slot context.
+ * @param props.block - Shallow snapshot supplying direct children and the collapsed flag.
  * @returns Collapse toggle for a branch block, otherwise nothing.
+ * @throws If the panel provider is missing or a delegated update fails.
  */
 export function BlockCollapseSlot({ block }: BlockSlotProps) {
-  const { operations } = useBlockNode(block.id);
-  if (!block.childIds.length) return null;
-  const childrenId = `block-children-${block.id}`;
+  const panel = usePanel();
+  const operations = useBlockOperations(block.id);
+  const childrenId = useBlockChildrenId(block.id);
+  if (!block.childIds.length) {
+    return null;
+  }
   const collapsed = block.listProps.collapsed === true;
   return (
     <Button
+      {...editorControlProps}
       variant="ghost"
       size="icon-xs"
-      className={cn(COLLAPSE_TOGGLE_CLASS, "h-6 w-5 rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground")}
+      className={cn(
+        COLLAPSE_TOGGLE_CLASS,
+        "h-6 w-[var(--rivto-block-control-size,20px)] rounded text-muted-foreground select-none hover:bg-transparent hover:text-foreground",
+      )}
       data-collapse-toggle="true"
       aria-label={`${collapsed ? "Expand" : "Collapse"} block: ${block.content || block.type}`}
       aria-expanded={!collapsed}
@@ -74,7 +92,15 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         event.preventDefault();
         event.stopPropagation();
       }}
-      onClick={() => operations.update({ listProps: { collapsed: !collapsed } })}
+      onClick={() => {
+        const current = panel.blocks.getBlockNode(block.id);
+        if (!current?.childIds.length) {
+          return;
+        }
+        // undefined treats as false
+        const currentCollapsed = current.listProps.collapsed === true;
+        operations.update({ listProps: { collapsed: !currentCollapsed } });
+      }}
     >
       {collapsed ? <ChevronRightIcon aria-hidden="true" /> : <ChevronDownIcon aria-hidden="true" />}
     </Button>

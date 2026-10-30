@@ -19,9 +19,14 @@ const UNKNOWN_BLOCK_CLASS = "page-unknown-block";
  */
 export function UnknownBlock({ blockId }: BlockRendererProps) {
   const { block } = useBlockNode(blockId);
-  if (!block) return null;
+  if (!block) {
+    return null;
+  }
   return (
-    <div className={`${UNKNOWN_BLOCK_CLASS} rounded-md border border-dashed border-input px-2.5 py-2 text-muted-foreground`} role="note">
+    <div
+      className={`${UNKNOWN_BLOCK_CLASS} rounded-md border border-dashed border-input px-2.5 py-2 text-muted-foreground`}
+      role="note"
+    >
       Unsupported block: <strong>{block.type}</strong>
       {block.content && <span> {block.content}</span>}
     </div>

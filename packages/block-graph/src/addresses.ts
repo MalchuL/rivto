@@ -11,8 +11,13 @@ export type BlockPropertyAddress =
 
 /** Builds a stable endpoint ID for a block property address. */
 export function blockPropertyId(address: BlockPropertyAddress): string {
-  const parts = address.field === "content"
-    ? [address.blockId, address.field]
-    : [address.blockId, address.field, address.field === "props" ? address.key : address.namespace];
+  const parts =
+    address.field === "content"
+      ? [address.blockId, address.field]
+      : [
+          address.blockId,
+          address.field,
+          address.field === "props" ? address.key : address.namespace,
+        ];
   return `block:${parts.map(encodeURIComponent).join(":")}`;
 }

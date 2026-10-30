@@ -10,7 +10,7 @@ import {
   KEYBOARD_BINDING_IDS,
   parseShortcut,
   shortcutFromKeyboardEvent,
-  useReactEditor,
+  useReactPanel,
   type KeyboardBindingSnapshot,
 } from "@chulane/rivto-react";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
@@ -42,11 +42,14 @@ interface ShortcutRecorderTarget {
  * @returns Canonical shortcut, or undefined when the event is not a complete chord.
  */
 function recordedShortcut(event: KeyboardEvent): string | undefined {
-  if (MODIFIER_KEYS.has(event.key)) return undefined;
+  if (MODIFIER_KEYS.has(event.key)) {
+    return undefined;
+  }
   const raw = shortcutFromKeyboardEvent(event);
-  const portable = event.key === "+" || raw === "+"
-    ? `${raw.replace(/\++$/, "")}+Plus`.replace(/^\+Plus/, "Plus")
-    : raw;
+  const portable =
+    event.key === "+" || raw === "+"
+      ? `${raw.replace(/\++$/, "")}+Plus`.replace(/^\+Plus/, "Plus")
+      : raw;
   return parseShortcut(portable).source;
 }
 
@@ -57,7 +60,9 @@ function recordedShortcut(event: KeyboardEvent): string | undefined {
  * @returns True for unmodified Enter.
  */
 function isApproveKey(event: KeyboardEvent): boolean {
-  return event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+  return (
+    event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+  );
 }
 
 /**
@@ -67,9 +72,15 @@ function isApproveKey(event: KeyboardEvent): boolean {
  * @returns Stable status token.
  */
 function bindingStatus(binding: KeyboardBindingSnapshot): string {
-  if (!binding.installed) return "uninstalled";
-  if (binding.disabled) return "disabled";
-  if (binding.overridden) return "overridden";
+  if (!binding.installed) {
+    return "uninstalled";
+  }
+  if (binding.disabled) {
+    return "disabled";
+  }
+  if (binding.overridden) {
+    return "overridden";
+  }
   return "default";
 }
 
@@ -90,9 +101,7 @@ function KeyboardShortcutModal({
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const [draft, setDraft] = useState<string | undefined>(
-    target.binding.keys[0],
-  );
+  const [draft, setDraft] = useState<string | undefined>(target.binding.keys[0]);
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
@@ -102,7 +111,9 @@ function KeyboardShortcutModal({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      if (event.repeat) return;
+      if (event.repeat) {
+        return;
+      }
       if (event.key === "Escape") {
         onCancel();
         return;
@@ -117,7 +128,9 @@ function KeyboardShortcutModal({
       }
       try {
         const next = recordedShortcut(event);
-        if (!next) return;
+        if (!next) {
+          return;
+        }
         setDraft(next);
         setError(undefined);
       } catch (caught) {
@@ -133,7 +146,9 @@ function KeyboardShortcutModal({
       className={KEYBOARD_MODAL_BACKDROP_CLASS}
       data-keyboard-recorder=""
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
+        if (event.target === event.currentTarget) {
+          onCancel();
+        }
       }}
     >
       <div
@@ -167,17 +182,17 @@ function KeyboardShortcutModal({
  * @returns Collapsible shortcut table used by the journal demo and keymap e2e.
  */
 export function KeyboardPanel() {
-  const reactEditor = useReactEditor();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.keyboard.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => reactPanel.keyboard.subscribe(listener),
+    [reactPanel],
   );
   const revision = useSyncExternalStore(
     subscribe,
-    () => reactEditor.keyboard.revision,
-    () => reactEditor.keyboard.revision,
+    () => reactPanel.keyboard.revision,
+    () => reactPanel.keyboard.revision,
   );
-  const bindings = reactEditor.keyboard.list();
+  const bindings = reactPanel.keyboard.list();
   const [recorder, setRecorder] = useState<ShortcutRecorderTarget | undefined>();
 
   /**
@@ -186,20 +201,21 @@ export function KeyboardPanel() {
    * @param binding - Inventory row being edited.
    * @param shortcut - Newly recorded portable shortcut.
    */
-  const applyShortcut = (
-    binding: KeyboardBindingSnapshot,
-    shortcut: string,
-  ): void => {
-    reactEditor.keyboard.setKeymapOverride(binding.id, [shortcut]);
+  const applyShortcut = (binding: KeyboardBindingSnapshot, shortcut: string): void => {
+    reactPanel.keyboard.setKeymapOverride(binding.id, [shortcut]);
     setRecorder(undefined);
   };
 
   return (
-    <details className={KEYBOARD_PANEL_CLASS} data-keyboard-panel="" data-keyboard-revision={revision}>
+    <details
+      className={KEYBOARD_PANEL_CLASS}
+      data-keyboard-panel=""
+      data-keyboard-revision={revision}
+    >
       <summary>Keyboard shortcuts</summary>
       <p className="keyboard-panel-help">
-        Click a keybinding to record a replacement. Enter accepts, Escape cancels.
-        Conflicts are warnings only.
+        Click a keybinding to record a replacement. Enter accepts, Escape cancels. Conflicts are
+        warnings only.
       </p>
       <div className="keyboard-panel-table-wrap">
         <table className={KEYBOARD_TABLE_CLASS}>
@@ -251,14 +267,14 @@ export function KeyboardPanel() {
                       <button
                         type="button"
                         data-keyboard-action="disable"
-                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, [])}
+                        onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, [])}
                       >
                         Disable
                       </button>
                       <button
                         type="button"
                         data-keyboard-action="restore"
-                        onClick={() => reactEditor.keyboard.setKeymapOverride(binding.id, undefined)}
+                        onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, undefined)}
                       >
                         Restore
                       </button>
@@ -270,7 +286,10 @@ export function KeyboardPanel() {
           </tbody>
         </table>
       </div>
-      <p className="keyboard-panel-indent-hint" data-indent-binding={KEYBOARD_BINDING_IDS.blockIndent}>
+      <p
+        className="keyboard-panel-indent-hint"
+        data-indent-binding={KEYBOARD_BINDING_IDS.blockIndent}
+      >
         Indent defaults to Tab.
       </p>
       {recorder && (

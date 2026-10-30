@@ -28,20 +28,14 @@ function Breadcrumbs({ page }: { page: Page }) {
   return (
     <span className="flex min-w-0 items-center gap-1 truncate">
       {project ? (
-        <Link
-          href={FRONTEND_ROUTES.project(project.id)}
-          className="shrink-0 hover:text-foreground"
-        >
+        <Link href={FRONTEND_ROUTES.project(project.id)} className="shrink-0 hover:text-foreground">
           {project.name}
         </Link>
       ) : null}
       {parents.map((parent) => (
         <span key={parent.id} className="flex min-w-0 items-center gap-1">
           <span className="text-border">/</span>
-          <Link
-            href={FRONTEND_ROUTES.page(parent.id)}
-            className="truncate hover:text-foreground"
-          >
+          <Link href={FRONTEND_ROUTES.page(parent.id)} className="truncate hover:text-foreground">
             {parent.title}
           </Link>
         </span>
@@ -65,7 +59,9 @@ export function PageView({ pageId }: { pageId: string }) {
   });
 
   useEffect(() => {
-    if (page) addRecentPage(page.id);
+    if (page) {
+      addRecentPage(page.id);
+    }
   }, [page?.id, addRecentPage, page]);
 
   if (isLoading) {

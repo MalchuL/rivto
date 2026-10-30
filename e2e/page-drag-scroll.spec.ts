@@ -1,3 +1,4 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 /**
  * Pointer drops must follow the visible cursor, never the scroll offset.
  *
@@ -22,22 +23,23 @@ const today = (page: Page): Locator => page.locator('[data-journal-document="tod
 
 /** @returns Root block IDs of one editor in document order. */
 function rootIds(editor: Locator): Promise<string[]> {
-  return editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`)
+  return editor
+    .locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.blockId ?? ""));
 }
 
 /**
  * Reads the block currently showing drag feedback, whichever form it takes.
  *
- * A gap insertion renders a line and a body insertion sets an attribute, and
- * both decorate the row owned by the resolved block.
+ * Both gap and body feedback mark the selected anchor. The separate line
+ * supplies geometry; the anchor marker identifies its owning block.
  *
  * @param page - Page running the active gesture.
  * @returns Block ID owning the indicator, or null while feedback is absent.
  */
 function dropFeedbackOwner(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const decorated = document.querySelector(".page-drop-indicator") ?? document.querySelector("[data-drop-inside]");
+    const decorated = document.querySelector("[data-block-drop-active]");
     const block = decorated?.closest<HTMLElement>("[data-block-id]");
     return block?.dataset.blockId ?? null;
   });
@@ -56,7 +58,8 @@ function dropFeedbackOwner(page: Page): Promise<string | null> {
  */
 function blockUnderCursor(page: Page, point: { x: number; y: number }): Promise<string | null> {
   return page.evaluate(({ x, y }) => {
-    const block = document.elementsFromPoint(x, y)
+    const block = document
+      .elementsFromPoint(x, y)
       .map((element) => element.closest<HTMLElement>("[data-block-id]"))
       .find((element) => element?.closest(".page-surface"));
     return block?.dataset.blockId ?? null;
@@ -76,8 +79,8 @@ function blockUnderCursor(page: Page, point: { x: number; y: number }): Promise<
  * @returns Viewport coordinates the cursor now rests at.
  */
 async function holdDragMidViewport(page: Page, block: Locator): Promise<{ x: number; y: number }> {
-  const row = block.locator(":scope > .page-block-row");
-  const handle = block.locator(":scope > .page-block-row .page-drag-handle");
+  const row = block.locator(":scope > .rivto-block-row");
+  const handle = block.locator(":scope > .rivto-block-row .block-handle");
   await block.hover();
   await handle.hover();
   await expect(handle).toHaveAttribute("aria-roledescription", "draggable");
@@ -89,7 +92,7 @@ async function holdDragMidViewport(page: Page, block: Locator): Promise<{ x: num
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(cursor.x, cursor.y, { steps: 5 });
-  await expect(page.locator(".page-drag-overlay")).toBeVisible();
+  await expect(page.locator(".rivto-block-drag-preview")).toBeVisible();
   return cursor;
 }
 
@@ -109,6 +112,18 @@ async function scrollRowToCursor(page: Page, row: Locator, cursorY: number): Pro
   expect(scrollBy).toBeGreaterThan(200);
   await page.mouse.wheel(0, scrollBy);
   await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(200);
+  // A large wheel event need not consume its entire delta. Align the actual row,
+  // rather than assuming the browser moved it by the requested pixel count.
+  await expect
+    .poll(async () => {
+      const box = (await row.boundingBox())!;
+      const remaining = Math.round(box.y + box.height / 2 - cursorY);
+      if (Math.abs(remaining) > 1) {
+        await page.mouse.wheel(0, remaining);
+      }
+      return Math.abs(remaining);
+    })
+    .toBeLessThanOrEqual(1);
 }
 
 test.describe("page drag with a scrolling window", () => {
@@ -118,20 +133,28 @@ test.describe("page drag with a scrolling window", () => {
 
   test("drops onto the row under the cursor after scrolling mid-drag", async ({ page }) => {
     const editor = today(page);
-    const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
+    const source = editor.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
     const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-    const target = editor.locator("[data-block-content]")
+    const target = editor
+      .locator("[data-block-content]")
       .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
       .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
-    const targetRow = target.locator(":scope > .page-block-row");
+    const targetRow = target.locator(":scope > .rivto-block-row");
 
     const cursor = await holdDragMidViewport(page, source);
     await scrollRowToCursor(page, targetRow, cursor.y);
 
     const afterScroll = (await targetRow.boundingBox())!;
-    await page.mouse.move(afterScroll.x + afterScroll.width / 2, afterScroll.y + afterScroll.height / 2, { steps: 5 });
-    await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
-    await expect(page.locator("[data-drop-inside]")).toHaveCount(1);
+    await page.mouse.move(
+      afterScroll.x + afterScroll.width / 2,
+      afterScroll.y + afterScroll.height / 2,
+      { steps: 5 },
+    );
+    await expect(targetRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
+    await expect(page.locator("[data-block-drop-active]")).toHaveCount(1);
 
     await page.mouse.up();
     await expect(target.locator(blockIdSelector(sourceId))).toHaveCount(1);
@@ -139,13 +162,14 @@ test.describe("page drag with a scrolling window", () => {
 
   test("retargets and commits for a row scrolled under a stationary cursor", async ({ page }) => {
     const editor = today(page);
-    const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
+    const source = editor.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
     const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-    const target = editor.locator("[data-block-content]")
+    const target = editor
+      .locator("[data-block-content]")
       .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
       .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
     const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-    const targetRow = target.locator(":scope > .page-block-row");
+    const targetRow = target.locator(":scope > .rivto-block-row");
 
     const cursor = await holdDragMidViewport(page, source);
     expect(await dropFeedbackOwner(page)).not.toBe(targetId);
@@ -153,8 +177,11 @@ test.describe("page drag with a scrolling window", () => {
     // The cursor never moves again. Only the content slides beneath it, so
     // scroll alone has to retarget the drop and the release has to honour it.
     await scrollRowToCursor(page, targetRow, cursor.y);
-    await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
-    await expect(page.locator("[data-drop-inside]")).toHaveCount(1);
+    await expect(targetRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
+    await expect(page.locator("[data-block-drop-active]")).toHaveCount(1);
 
     await page.mouse.up();
     await expect(target.locator(blockIdSelector(sourceId))).toHaveCount(1);
@@ -162,7 +189,7 @@ test.describe("page drag with a scrolling window", () => {
 
   test("keeps the target aligned while dnd-kit auto-scrolls at the edge", async ({ page }) => {
     const editor = today(page);
-    const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
+    const source = editor.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
     const viewport = page.viewportSize()!;
     const cursor = await holdDragMidViewport(page, source);
 
@@ -177,7 +204,16 @@ test.describe("page drag with a scrolling window", () => {
     const settled = await page.evaluate(() => window.scrollY);
     const expected = await blockUnderCursor(page, cursor);
     expect(expected).not.toBeNull();
-    await expect.poll(() => dropFeedbackOwner(page)).toBe(expected);
+    const indicator = page.locator(".rivto-block-drop-line:visible");
+    const outline = page.locator('[data-block-drop-active="true"]');
+    await expect(indicator.or(outline)).toHaveCount(1);
+    if (await outline.count()) {
+      await expect.poll(() => dropFeedbackOwner(page)).toBe(expected);
+    } else {
+      // A line may belong to the preceding subtree at the selected depth.
+      const line = (await indicator.boundingBox())!;
+      expect(Math.abs(line.y + line.height / 2 - cursor.y)).toBeLessThanOrEqual(CHILD_DROP_INDENT);
+    }
     expect(await page.evaluate(() => window.scrollY)).toBe(settled);
     await page.mouse.up();
   });
@@ -185,15 +221,18 @@ test.describe("page drag with a scrolling window", () => {
   // The gap under a leaf row spans every depth its cursor distance allows, so
   // a drifting cursor would corrupt the chosen level as well as the chosen row.
   for (const depth of [0, 1] as const) {
-    test(`resolves gap depth ${depth} from the cursor after scrolling mid-drag`, async ({ page }) => {
+    test(`resolves gap depth ${depth} from the cursor after scrolling mid-drag`, async ({
+      page,
+    }) => {
       const editor = today(page);
-      const source = editor.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).first();
+      const source = editor.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
       const sourceId = (await source.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-      const target = editor.locator("[data-block-content]")
+      const target = editor
+        .locator("[data-block-content]")
         .filter({ hasText: new RegExp(`^${TARGET_CONTENT}$`) })
         .locator(`xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`);
       const targetId = (await target.getAttribute(BLOCK_ID_ATTRIBUTE))!;
-      const targetRow = target.locator(":scope > .page-block-row");
+      const targetRow = target.locator(":scope > .rivto-block-row");
 
       const cursor = await holdDragMidViewport(page, source);
       await scrollRowToCursor(page, targetRow, cursor.y);
@@ -207,17 +246,21 @@ test.describe("page drag with a scrolling window", () => {
         { steps: 5 },
       );
 
-      const line = page.locator(".page-drop-indicator[data-kind='between']");
+      const line = page.locator(".rivto-block-drop-line:visible");
       await expect(line).toBeVisible();
-      await expect(line).toHaveCSS("left", `${depth * CHILD_DROP_INDENT}px`);
+      expect((await line.boundingBox())!.x).toBeCloseTo(
+        afterScroll.x + depth * CHILD_DROP_INDENT,
+        1,
+      );
 
       await page.mouse.up();
       if (depth === 0) {
         const ids = await rootIds(editor);
         expect(ids[ids.indexOf(targetId) + 1]).toBe(sourceId);
       } else {
-        await expect(target.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`).first())
-          .toHaveAttribute(BLOCK_ID_ATTRIBUTE, sourceId);
+        await expect(
+          target.locator(`:scope > .rivto-block-children > ${BLOCK_ID_SELECTOR}`).first(),
+        ).toHaveAttribute(BLOCK_ID_ATTRIBUTE, sourceId);
       }
     });
   }
@@ -231,23 +274,35 @@ test.describe("cross-document drag with a scrolling window", () => {
     await page.goto("/?editors=2");
     const left = page.locator('[data-multi-editor="left"]');
     const right = page.locator('[data-multi-editor="right"]');
-    const scrollable = await page.evaluate(() => (
-      document.documentElement.scrollHeight - document.documentElement.clientHeight
-    ));
+    await expect(right.locator('[data-block-id="right-nested"]')).toBeVisible();
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    );
     expect(scrollable).toBeGreaterThan(100);
 
-    const targetRow = right.locator(`${blockIdSelector("right-nested")} > .page-block-row`);
+    const targetRow = right.locator(`${blockIdSelector("right-nested")} > .rivto-block-row`);
     await holdDragMidViewport(page, left.locator(blockIdSelector("left-counter")));
 
     await page.evaluate((top) => window.scrollTo({ top }), scrollable);
     await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollable);
 
+    // Keep the destination away from auto-scroll edges while checking scroll retargeting.
+    await targetRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const afterScroll = (await targetRow.boundingBox())!;
-    await page.mouse.move(afterScroll.x + afterScroll.width / 2, afterScroll.y + afterScroll.height / 2, { steps: 5 });
-    await expect(targetRow).toHaveAttribute("data-drop-inside", "true");
+    await page.mouse.move(
+      afterScroll.x + afterScroll.width / 2,
+      afterScroll.y + afterScroll.height / 2,
+      { steps: 5 },
+    );
+    await expect(targetRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
 
     await page.mouse.up();
-    await expect(right.locator(`${blockIdSelector("right-nested")} ${blockIdSelector("left-counter")}`)).toHaveCount(1);
+    await expect(
+      right.locator(`${blockIdSelector("right-nested")} ${blockIdSelector("left-counter")}`),
+    ).toHaveCount(1);
     await expect(left.locator(blockIdSelector("left-counter"))).toHaveCount(0);
   });
 });

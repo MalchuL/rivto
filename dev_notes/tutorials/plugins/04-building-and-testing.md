@@ -71,7 +71,7 @@ const demoPlugin: RivtoPlugin = {
 При создании runtime:
 
 ```ts
-const editor = createRivtoEditor({
+const editor = createDocumentEditor({
   plugins: [
     createSlashMenuPlugin(defaultSlashItems),
     demoPlugin,

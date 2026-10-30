@@ -1,0 +1,13 @@
+/* Windowing preserves vertical flow; geometry uses the same public root gap. */
+.rivto-virtual-tree {
+  min-width: 0;
+  overflow-anchor: none;
+}
+.rivto-virtual-root {
+  display: flow-root;
+  padding-bottom: var(--rivto-block-gap, 4px);
+}
+
+.rivto-virtual-root[data-virtual-last] {
+  padding-bottom: 0;
+}

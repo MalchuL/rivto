@@ -1,19 +1,54 @@
-import { createTestCoreEditor as createEditor } from "../../test-utils";
 import type { ComponentType } from "react";
-import { createReactEditor } from "../../react-editor";
+import {
+  createTestCoreEditor as createEditor,
+  createTestReactEditor as createReactEditor,
+} from "../../test-utils";
 
 const renderer: ComponentType<{ blockId: string }> = () => null;
 const fallback: ComponentType<{ blockId: string }> = () => null;
 
 describe("RendererManager", () => {
-  test("registers exact renderers and falls back without exposing mutable state", () => {
-    const editor = createEditor();
-    const reactEditor = createReactEditor({
+  test("removes the owned layout and preserves a replacement against stale disposal", async () => {
+    const editor = await createEditor();
+    const panel = createReactEditor({ editor });
+    const manager = panel.editor.renderers;
+    const dispose = manager.register("layout-card", renderer, fallback);
+    expect(panel.page.renderers.get("layout-card")?.layout).toBe(fallback);
+    manager.delete("layout-card");
+    expect(panel.page.renderers.get("layout-card")?.layout).toBeUndefined();
+    const replacement = manager.register("layout-card", fallback, renderer);
+    dispose();
+    expect(panel.page.renderers.get("layout-card")?.layout).toBe(renderer);
+    replacement();
+    expect(panel.page.renderers.get("layout-card")?.layout).toBeUndefined();
+    panel.editor.destroy();
+    editor.destroy();
+  });
+
+  test("rolls back content and layout when publication fails", async () => {
+    const editor = await createEditor();
+    const panel = createReactEditor({ editor });
+    const manager = panel.editor.renderers;
+    const unsubscribe = manager.subscribe(() => {
+      throw new Error("observer failed");
+    });
+    expect(() => manager.register("layout-card", renderer, fallback)).toThrow(AggregateError);
+    expect(manager.has("layout-card")).toBe(false);
+    expect(panel.page.renderers.get("layout-card")?.layout).toBeUndefined();
+    unsubscribe();
+    manager.register("layout-card", renderer, fallback);
+    panel.editor.destroy();
+    editor.destroy();
+  });
+
+  test("registers exact renderers and falls back without exposing mutable state", async () => {
+    const editor = await createEditor();
+    const reactPanel = createReactEditor({
       editor,
       unknownBlockRenderer: fallback,
     });
-    const manager = reactEditor.renderers;
-    const revision = reactEditor.renderers.revision;
+    const manager = reactPanel.editor.renderers;
+    const revision = reactPanel.editor.renderers.revision;
     const dispose = manager.register("card", renderer);
 
     expect(manager.get("card")).toBe(renderer);
@@ -25,8 +60,8 @@ describe("RendererManager", () => {
     expect(manager.delete("card")).toBe(false);
     dispose();
     expect(manager.get("card")).toBe(fallback);
-    expect(reactEditor.renderers.revision).toBe(revision + 2);
-    reactEditor.destroy();
+    expect(reactPanel.editor.renderers.revision).toBe(revision + 2);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 });

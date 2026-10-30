@@ -62,13 +62,13 @@ and ordering in the task collection.
 
 ## Requirements
 
-| Use | Requirements |
-| --- | --- |
-| React integration | React and React DOM **18 or 19**, Yjs **13**, and a bundler that supports ES modules and CSS imports. |
-| Browser | A modern browser with DOM selection, Clipboard APIs, and `crypto.randomUUID()`. Serve through HTTPS or localhost for secure-context APIs. |
-| Core only | No React dependency; use the document model and CRDT adapter directly. |
-| Repository development | Use **Node.js 24** and **pnpm 11.8.0** (the pnpm version is pinned in the root `package.json`). The demo uses Vite 7 and TypeScript 5.8. |
-| Browser tests | Playwright Chromium and Firefox; install them with `pnpm exec playwright install chromium firefox`. |
+| Use                    | Requirements                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| React integration      | React and React DOM **18 or 19**, Yjs **13**, and a bundler that supports ES modules and CSS imports.                                     |
+| Browser                | A modern browser with DOM selection, Clipboard APIs, and `crypto.randomUUID()`. Serve through HTTPS or localhost for secure-context APIs. |
+| Core only              | No React dependency; use the document model and CRDT adapter directly.                                                                    |
+| Repository development | Use **Node.js 24** and **pnpm 11.8.0** (the pnpm version is pinned in the root `package.json`). The demo uses Vite 7 and TypeScript 5.8.  |
+| Browser tests          | Playwright Chromium and Firefox; install them with `pnpm exec playwright install chromium firefox`.                                       |
 
 Import the editor stylesheet once. Published styles are precompiled; a consuming
 project does not need to configure Tailwind. The source demo compiles styles
@@ -88,64 +88,35 @@ The package directories and public names differ; see the package map below.
 ### Create a React editor
 
 ```tsx
-import { useEffect, useState } from "react";
-import { YjsDoc } from "@chulane/crdt-doc";
-import { DocumentModelImpl } from "@chulane/document-model";
-import { createRivtoEditor } from "@chulane/rivto";
-import {
-  createReactEditor,
-  EditorView,
-  standardPreset,
-  type ReactEditor,
-} from "@chulane/rivto-react";
+import type { DocumentModel } from "@chulane/document-model";
+import { EditorPanel, PageSurface, standardPreset, useReactEditor } from "@chulane/rivto-react";
 import "@chulane/rivto-react/styles.css";
 
-export function DocumentEditor() {
-  const [view, setView] = useState<ReactEditor | null>(null);
-
-  useEffect(() => {
-    const document = new DocumentModelImpl(new YjsDoc(crypto.randomUUID()));
-    const editor = createRivtoEditor();
-    editor.setDocument(document);
-    const reactEditor = createReactEditor({
-      editor,
-      extensions: [standardPreset()],
-    });
-    editor.blocks.insertBlock({ type: "paragraph", content: "Hello **Rivto**!" });
-    setView(reactEditor);
-
-    return () => {
-      reactEditor.destroy();
-      void editor.destroy().finally(() => document.destroy());
-    };
-  }, []);
-
-  return view ? <EditorView reactEditor={view} /> : null;
+export function DocumentEditor({ document }: { document: DocumentModel }) {
+  const state = useReactEditor({ document, extensions: [standardPreset()] });
+  if (state.status === "loading") return <p>Loading…</p>;
+  if (state.status === "error") return <p>Editor setup failed</p>;
+  return <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>;
 }
 ```
 
-The core starts unbound: attach a `DocumentModelImpl` with `setDocument` before
-editing. Mutate content through managers such as `editor.blocks` and
-`editor.elements`. The host owns the document and destroys it after its views
-and editor sessions are finished using it.
+The host supplies and owns the DocumentModel. `useReactEditor` creates core and React
+resources after commit and disposes them on unmount or document replacement without
+destroying that model. Share one hook result across several editor panels. Extensions
+and keymap are creation settings; remount the owner to replace them.
 
-To enable the demo's optional features, import `pageDragExtension`,
-`edgelessPreset`, `edgelessVisualsExtension`, and `todoItemExtension` from
-`@chulane/rivto-react` and use:
+`ReactEditorApi` extends DocumentEditorAPI and exposes its document managers directly. Components use
+`usePanel()` for bounded core blocks/elements, and `useReactPanel()` for selection,
+clipboard, local mode and typed `edgeless` actions. `EditorPanel` displays children; `EditorEmbed` includes and protects
+its root. Both support independent element roots. Custom blocks and extensions remain
+explicit through `blockExtension`, `standardPreset`, and surface selection.
 
-```ts
-extensions: [
-  standardPreset(),
-  pageDragExtension(),
-  ...edgelessPreset(),
-  edgelessVisualsExtension(),
-  todoItemExtension(),
-]
-```
-
-Switch the view with `reactEditor.mode.set("edgeless")` or
-`reactEditor.mode.set("block")`. See [the demo setup](demo/src/App.tsx) for
-container creation, a mode toolbar, custom blocks, and synchronization.
+For cached/loading documents, `EditorStorage.acquireEditor(id)` returns
+`{ editor, document, release }`. The owner retains this acquisition until dependent
+views unmount. EditorPanel borrows the editor and creates no hidden storage acquisition.
+Embedding source loading uses EditorStorageContext. See the
+[developer guide](packages/react-rivto-editor/docs/developer-guide.md) for low-level
+construction, storage ownership, extension registration and panel destinations.
 
 ## Run the demo
 
@@ -169,11 +140,11 @@ before starting it. Source changes hot-reload.
 
 Additional demo routes:
 
-| URL | What it demonstrates |
-| --- | --- |
+| URL                     | What it demonstrates                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/?sync=1&room=my-room` | Two editors synchronized through BroadcastChannel. Open the same URL in another tab on the same browser/origin to join; no server is needed. |
-| `/?editors=2` | Independent documents for cross-document dragging and selection. |
-| `/?repeat=10` | Additional seeded document content for exploration. |
+| `/?editors=2`           | Independent documents for cross-document dragging and selection.                                                                             |
+| `/?repeat=10`           | Additional seeded document content for exploration.                                                                                          |
 
 The default demo creates fresh in-memory documents on reload. BroadcastChannel
 shows local synchronization; it does not connect users on different computers.
@@ -196,14 +167,14 @@ The main dependency chain is:
 React and browser UI   Editor behavior   Persisted document       CRDT adapter
 ```
 
-| Directory | Package | Responsibility |
-| --- | --- | --- |
-| `packages/crdt-doc/` | `@chulane/crdt-doc` | Adapter-neutral CRDT contracts, Yjs adapter, shared values, and synchronization providers. Native Yjs imports stay here. |
-| `packages/document-model/` | `@chulane/document-model` | Canonical blocks, hierarchy, canvas elements, plugin data, transactions, and snapshots. |
-| `packages/rivto-editor-core/` | `@chulane/rivto` | Framework-neutral commands, selection, clipboard, editor modes, and undo managers. |
-| `packages/react-rivto-editor/` | `@chulane/rivto-react` | React renderers and hooks, page/canvas surfaces, DOM selection and events, keyboard handling, slash commands, and extensions. |
-| `packages/graph-runtime/` | `@chulane/graph-runtime` | Optional headless graph execution, endpoint registration, value propagation, and slot flows. |
-| `packages/block-graph/` | `@chulane/block-graph` | Optional block-oriented bindings on top of the graph runtime. |
+| Directory                      | Package                   | Responsibility                                                                                                                |
+| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/crdt-doc/`           | `@chulane/crdt-doc`       | Adapter-neutral CRDT contracts, Yjs adapter, shared values, and synchronization providers. Native Yjs imports stay here.      |
+| `packages/document-model/`     | `@chulane/document-model` | Canonical blocks, hierarchy, canvas elements, plugin data, transactions, and snapshots.                                       |
+| `packages/rivto-editor-core/`  | `@chulane/rivto`          | Framework-neutral document mediation, commands, selection, clipboard, and undo managers.                                      |
+| `packages/react-rivto-editor/` | `@chulane/rivto-react`    | React renderers and hooks, page/canvas surfaces, DOM selection and events, keyboard handling, slash commands, and extensions. |
+| `packages/graph-runtime/`      | `@chulane/graph-runtime`  | Optional headless graph execution, endpoint registration, value propagation, and slot flows.                                  |
+| `packages/block-graph/`        | `@chulane/block-graph`    | Optional block-oriented bindings on top of the graph runtime.                                                                 |
 
 The graph packages are separate from the normal editor setup. `demo/` is the
 interactive integration playground, `e2e/` contains browser tests, and `docs/`
@@ -216,13 +187,25 @@ Run from the repository root:
 ```sh
 pnpm demo:check                         # Demo TypeScript check
 pnpm check-types                        # Workspace TypeScript checks
-pnpm lint                               # Editor package lint
+pnpm lint                              # Repository JavaScript/TypeScript lint
+pnpm lint:fix                          # Apply ESLint fixes
+pnpm format:check                      # Check formatting
+pnpm format                            # Apply Prettier formatting
 pnpm test                               # CRDT, model, graph, and core tests
 pnpm --filter @chulane/rivto-react test   # React tests
 pnpm exec playwright install chromium firefox
 pnpm test:e2e                           # Builds demo, then tests both browsers
 pnpm build                              # Package outputs and documentation site
 ```
+
+ESLint checks packages, apps, demo, docs, browser tests, and tooling. It rejects
+nested ternaries, requires JSDoc for every method, and requires private class
+methods to appear after other members. Functions over 50 lines produce warnings
+only, counting blank lines and comments; lint warnings do not fail CI. The ordering rule uses
+[typescript-eslint member ordering](https://typescript-eslint.io/rules/member-ordering/).
+Prettier checks supported source, configuration, and documentation files; generated
+output and lockfiles are excluded. CI runs both lint and formatting checks.
+Run the fix commands explicitly when ready to resolve existing violations.
 
 ## Further reading
 

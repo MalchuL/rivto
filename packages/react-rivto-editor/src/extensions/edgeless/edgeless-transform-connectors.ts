@@ -7,7 +7,7 @@
  * object is moving and both ends stay attached — selecting the stroke alone
  * does not drag its anchors.
  */
-import type { ConnectorEndpoint } from "./visuals/types";
+import type { ConnectorEndpoint } from "../../elements/visuals/types";
 
 /** How a live preview should follow a transforming selection. */
 export type ConnectorPreviewKind = "translate" | "path";
@@ -68,22 +68,29 @@ export function attachedConnectorsForTransform(
 ): ConnectorPreviewTarget[] {
   const attached: ConnectorPreviewTarget[] = [];
   for (const element of elements) {
-    if (element.type !== "connector") continue;
+    if (element.type !== "connector") {
+      continue;
+    }
     const source = element.props.source;
     const target = element.props.target;
-    if (!isConnectorEndpoint(source) || !isConnectorEndpoint(target)) continue;
+    if (!isConnectorEndpoint(source) || !isConnectorEndpoint(target)) {
+      continue;
+    }
     const sourceMoves = Boolean(source.elementId && movingIds.has(source.elementId));
     const targetMoves = Boolean(target.elementId && movingIds.has(target.elementId));
     const connectorMoves = movingIds.has(element.id) || selectedIds.has(element.id);
-    if (!sourceMoves && !targetMoves && !connectorMoves) continue;
+    if (!sourceMoves && !targetMoves && !connectorMoves) {
+      continue;
+    }
     // Attached at both ends and neither anchor object is moving: the stroke
     // stays put even if the connector id is in the selection.
-    if (!sourceMoves && !targetMoves && source.elementId && target.elementId) continue;
+    if (!sourceMoves && !targetMoves && source.elementId && target.elementId) {
+      continue;
+    }
     const sourceTranslates = sourceMoves || Boolean(connectorMoves && !source.elementId);
     const targetTranslates = targetMoves || Boolean(connectorMoves && !target.elementId);
-    const kind: ConnectorPreviewKind = transformKind === "move" && sourceTranslates && targetTranslates
-      ? "translate"
-      : "path";
+    const kind: ConnectorPreviewKind =
+      transformKind === "move" && sourceTranslates && targetTranslates ? "translate" : "path";
     attached.push({
       id: element.id,
       kind,

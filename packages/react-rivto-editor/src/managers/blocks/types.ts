@@ -1,40 +1,30 @@
-/**
- * Shared contracts for React block registration and containment metadata.
- */
-import type {
-  BlockDefinition,
-} from "@chulane/rivto";
+import type { BlockLayout } from "@chulane/rivto-page";
+import { BLOCK_TEXT_METADATA_KEY } from "../selection/block-text-metadata";
+import type { BlockDefinition } from "@chulane/rivto";
 import type { SlashCommandContext } from "../slash";
 import type { BlockRenderer } from "./renderer-types";
-import type { BlockViewBehavior } from "../../views/types";
-
-/** React-owned outline policy stored as opaque core definition metadata. */
-export interface BlockContainment {
-  /** Whether direct children may change depth through outline interactions. */
-  readonly childOutline?: "free" | "fixed";
-  /** Whether descendants may be lifted past this block through outline interactions. */
-  readonly outlineFloor?: boolean;
-}
-
-/** Known React annotations plus metadata owned by other integrations. */
-export type ReactBlockDefinitionMetadata = Readonly<{
-  containment?: BlockContainment;
-} & Record<string, unknown>>;
-
-/** Core definition refined with metadata understood by the React runtime. */
-export interface ReactBlockDefinition extends BlockDefinition {
-  /** Optional React annotations; unrelated extension metadata is preserved. */
-  readonly metadata?: ReactBlockDefinitionMetadata;
-}
+import type { BlockBehavior } from "../../block-behaviors/types";
+import type { BlockClipboardConverter } from "../clipboard/types";
 
 /**
- * Reads React containment from an otherwise opaque core definition.
+ * Runtime annotations interpreted only by their owning integrations.
  *
- * @param definition - Registered definition, possibly supplied outside React.
- * @returns React outline policy, or `undefined` when none was declared.
+ * The current text namespace uses its extension option type. Other namespaces
+ * retain their own contracts and accept opaque values through the record
+ * intersection. These annotations
+ * do not install their owning extensions or add runtime validation.
  */
-export function getBlockContainment(definition: BlockDefinition | undefined): BlockContainment | undefined {
-  return definition?.metadata?.containment as BlockContainment | undefined;
+export type ReactBlockDefinitionMetadata = Readonly<
+  {
+    /** Whether this renderer exposes persisted content as a selectable text range, including empty text. */
+    [BLOCK_TEXT_METADATA_KEY]?: boolean;
+  } & Record<string, unknown>
+>;
+
+/** Complete core definition, including annotations supplied by its owning React registration. */
+export interface ReactBlockDefinition extends BlockDefinition {
+  /** Runtime annotations, conventionally keyed by the owning extension's stable ID. */
+  readonly metadata?: ReactBlockDefinitionMetadata;
 }
 
 /** Optional slash conversion installed with a React block registration. */
@@ -53,14 +43,25 @@ export interface ReactBlockSlashCommand {
 
 /** Atomic model, renderer, and conversion registration for one block type. */
 export interface ReactBlockRegistration {
-  /** Framework-neutral definition registered with the core block registry. */
+  /** Clipboard data conversion and portable formats installed with this type. */
+  readonly clipboard?: BlockClipboardConverter;
+  /** Complete framework-neutral definition; its native type must be absent from the core registry. */
   readonly definition: ReactBlockDefinition;
   /** React content renderer selected by all registered surfaces. */
   readonly render: BlockRenderer;
+  /** Optional Page layout composing shared primitives; content renderers never traverse descendants. */
+  readonly layout?: BlockLayout;
   /**
-   * Optional interaction view registered with the type.
+   * Editing and movement integration owned together with this block definition.
+   *
+   * The same instance is reused for every block selected by isAvailable(context).
+   * BlockTypeManager registers it with runtime.blockBehaviors and removes it with
+   * this registration. The instance must select its own native types; registration
+   * does not add an implicit definition.type guard. Omit it to let other applicable
+   * registrations, including DefaultBlockBehavior, handle operations. Methods returning
+   * "unhandled" continue to later applicable instances through the behavior dispatcher.
    */
-  readonly view?: BlockViewBehavior;
+  readonly behavior?: BlockBehavior;
   /** Optional in-place conversion entry added to the shared slash manager. */
   readonly slashCommand?: ReactBlockSlashCommand;
   /** Whether root blocks of this type partition React's edgeless block elements. */

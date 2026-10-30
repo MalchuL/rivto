@@ -1,0 +1,10 @@
+/* Shared canvas controls override vendored primitive defaults. */
+.edgeless-tool-button,
+.edgeless-tool-button[data-slot] {
+  @apply size-9 min-w-9 shrink-0 rounded-lg p-0 text-xs font-semibold text-secondary-foreground hover:bg-accent hover:text-accent-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-40 [&_svg:not([class*='size-'])]:size-[22px] [&_img]:size-[22px] [&_img]:rounded-sm [&_img]:object-contain;
+}
+
+.edgeless-tool-bar-divider,
+.edgeless-tool-bar-divider[data-slot] {
+  @apply mx-0.5 self-center data-[orientation=vertical]:h-[22px];
+}

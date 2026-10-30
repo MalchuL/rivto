@@ -1,0 +1,12 @@
+:where([data-rivto-page-ui], [data-rivto-page-ui] *) {
+  @apply page:box-border page:m-0 page:p-0 page:border-0 page:border-solid page:border-border;
+}
+:where([data-rivto-page-ui]):is(button, input, select, textarea) {
+  @apply page:bg-transparent page:font-[inherit] page:text-[inherit];
+}
+:where([data-rivto-page-ui]):is(button, select) {
+  @apply page:cursor-pointer;
+}
+:where([data-rivto-page-ui]) svg {
+  @apply page:block;
+}

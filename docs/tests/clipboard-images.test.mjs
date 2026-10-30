@@ -9,8 +9,18 @@ test("extracts file items even when the clipboard files list is empty", function
   const data = {
     files: [],
     items: [
-      { kind: "string", getAsFile: function noFile() { return null; } },
-      { kind: "file", getAsFile: function imageFile() { return image; } },
+      {
+        kind: "string",
+        getAsFile: function noFile() {
+          return null;
+        },
+      },
+      {
+        kind: "file",
+        getAsFile: function imageFile() {
+          return image;
+        },
+      },
     ],
   };
 
@@ -22,7 +32,14 @@ test("deduplicates images exposed through items and files", function deduplicate
   const text = { type: "text/plain", name: "notes.txt" };
   const data = {
     files: [image, text],
-    items: [{ kind: "file", getAsFile: function imageFile() { return image; } }],
+    items: [
+      {
+        kind: "file",
+        getAsFile: function imageFile() {
+          return image;
+        },
+      },
+    ],
   };
 
   assert.deepEqual(extractClipboardImages(data), [image]);
