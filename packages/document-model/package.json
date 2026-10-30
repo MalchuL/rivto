@@ -36,6 +36,7 @@
     "yjs": "^13.0.0"
   },
   "dependencies": {
-    "@chulane/crdt-doc": "workspace:*"
+    "@chulane/crdt-doc": "workspace:*",
+    "@chulane/rivto-utils": "workspace:*"
   }
 }
