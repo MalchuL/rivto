@@ -863,6 +863,31 @@ test("resizes visuals on one axis and rotates them with Shift snapping", async (
 });
 
 for (const repeat of [1, 200]) {
+  test(`resizes rotated visuals without snapping (repeat=${repeat})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/?repeat=${repeat}`);
+    await switchMode(page, "edgeless");
+    const rectangle = await createVisual(page, "Rectangle");
+    const rotate = page.locator("[data-edgeless-controls-for] [data-edgeless-rotation-handle]");
+    await rotate.focus();
+    await page.keyboard.press("ArrowRight");
+    const before = await visualFrame(rectangle);
+    const handle = page.locator('[data-edgeless-controls-for] [data-edgeless-resize-handle="e"]');
+    const box = (await handle.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (const delta of [4, 7, 11]) {
+      await page.mouse.move(x + delta, y);
+      const preview = await visualFrame(rectangle);
+      expect(preview.width - before.width).toBeCloseTo(delta, 0);
+    }
+    await page.mouse.up();
+    const after = await visualFrame(rectangle);
+    expect(after.width - before.width).toBeCloseTo(11, 0);
+  });
+
   test(`disables grid snapping for rotated visuals (repeat=${repeat})`, async ({ page }) => {
     await page.goto(`/?test_features=1&repeat=${repeat}`);
     await switchMode(page, "edgeless");
