@@ -1,9 +1,4 @@
-import type {
-  CRDTType,
-  CRDTArray,
-  CRDTMap,
-  CRDTText,
-} from "@chulane/crdt-doc";
+import type { CRDTType, CRDTArray, CRDTMap, CRDTText } from "@chulane/crdt-doc";
 import type { BlockListProps, ElementFrame } from "./document";
 
 /** Collaborative geometry stored inside each first-class element record. */
@@ -36,10 +31,10 @@ export interface BlockStorage {
 
 /** Exact shared fields stored for one generic canvas element. */
 export interface ElementStorage {
+  childIds: CRDTArray<IDElement>;
   id: IDElement;
   type: string;
   frame: CRDTMap<ElementFrameStorage>;
   zIndex: number;
   props: CRDTMap<Record<IDProp, CRDTType>>;
 }
-

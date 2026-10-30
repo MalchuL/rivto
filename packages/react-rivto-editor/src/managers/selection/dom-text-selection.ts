@@ -51,8 +51,7 @@
  * makes TypeScript require callers to handle exactly one valid case.
  */
 type SavedPoint =
-  | { readonly textOffset: number }
-  | { readonly node: Node; readonly offset: number };
+  { readonly textOffset: number } | { readonly node: Node; readonly offset: number };
 
 /**
  * Anchor and focus points for a directed browser selection.
@@ -81,7 +80,9 @@ export interface SavedDOMSelection {
  */
 function savePoint(root: HTMLElement, node: Node, offset: number): SavedPoint {
   // Outside root → keep the Node (often a Text node in another block).
-  if (!root.contains(node)) return { node, offset };
+  if (!root.contains(node)) {
+    return { node, offset };
+  }
 
   // Inside root → do not store the Text Node; it dies when textContent is set.
   // Range endpoint is typed as Node because that is what Selection uses.
@@ -106,7 +107,9 @@ function savePoint(root: HTMLElement, node: Node, offset: number): SavedPoint {
  */
 function restorePoint(root: HTMLElement, point: SavedPoint): [Node, number] {
   let restored: [Node, number];
-  if ("node" in point) return [point.node, point.offset];
+  if ("node" in point) {
+    return [point.node, point.offset];
+  }
 
   // Walk Text nodes only — character Nodes under root, not Element tags.
   const walker = root.ownerDocument.createTreeWalker(root, 4); // NodeFilter.SHOW_TEXT
@@ -142,8 +145,12 @@ function restorePoint(root: HTMLElement, point: SavedPoint): [Node, number] {
 export function saveDOMSelection(root: HTMLElement): SavedDOMSelection | null {
   const selection = root.ownerDocument.getSelection();
   // anchorNode / focusNode are Node|null — typically Text inside contenteditable.
-  if (!selection?.anchorNode || !selection.focusNode) return null;
-  if (!root.contains(selection.anchorNode) && !root.contains(selection.focusNode)) return null;
+  if (!selection?.anchorNode || !selection.focusNode) {
+    return null;
+  }
+  if (!root.contains(selection.anchorNode) && !root.contains(selection.focusNode)) {
+    return null;
+  }
 
   return {
     anchor: savePoint(root, selection.anchorNode, selection.anchorOffset),
@@ -164,10 +171,14 @@ export function saveDOMSelection(root: HTMLElement): SavedDOMSelection | null {
  * @param saved - Selection previously returned by {@link saveDOMSelection}.
  */
 export function restoreDOMSelection(root: HTMLElement, saved: SavedDOMSelection | null): void {
-  if (!saved) return;
+  if (!saved) {
+    return;
+  }
 
   const selection = root.ownerDocument.getSelection();
-  if (!selection) return;
+  if (!selection) {
+    return;
+  }
 
   // Each end is [Node, offset] — Node is usually Text after restorePoint.
   const [anchorNode, anchorOffset] = restorePoint(root, saved.anchor);

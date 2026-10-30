@@ -20,12 +20,18 @@ function createEditor({ roots, parents = {}, elements = [] }) {
   roots.forEach(collect);
   return {
     blocks: {
+      hasBlock: (id) => blocks.has(id),
       getRootIds: () => roots.map(({ id }) => id),
       getParentId: (id) => parents[id] ?? null,
       getBlock: (id) => structuredClone(blocks.get(id)),
+      getBlockNode: (id) => {
+        const block = blocks.get(id);
+        return block && { ...structuredClone(block), childIds: block.children.map(({ id }) => id) };
+      },
     },
     elements: {
-      getElements: () => structuredClone(elements),
+      getElementNodes: () =>
+        structuredClone(elements.map((element) => ({ childIds: [], ...element }))),
     },
   };
 }
@@ -38,40 +44,58 @@ test("Review factories start empty and strict window schemas reject invalid valu
     snapshot: null,
     savedAt: null,
   });
-  assert.deepEqual(createReviewElementInput({
-    frame: { x: 0, y: 0, width: 100, height: 100 },
-    zIndex: 0,
-  }).props, {
-    problem: "",
-    elementsAbove: 2,
-    elementsBelow: 2,
-    snapshot: null,
-    savedAt: null,
-  });
-  assert.throws(() => reviewBlockPropsSchema.parse({
-    blocksAbove: -1,
-    blocksBelow: 2,
-    includeReportBlock: false,
-    snapshot: null,
-    savedAt: null,
-  }));
-  assert.throws(() => reviewElementPropsSchema.parse({
-    problem: "x",
-    elementsAbove: 1.5,
-    elementsBelow: 2,
-    snapshot: null,
-    savedAt: null,
-  }));
-  assert.equal(reviewBlockPropsSchema.parse({
-    blocksAbove: 4,
-    blocksBelow: 4,
-    snapshot: null,
-    savedAt: null,
-  }).includeReportBlock, false);
+  assert.deepEqual(
+    createReviewElementInput({
+      frame: { x: 0, y: 0, width: 100, height: 100 },
+      zIndex: 0,
+    }).props,
+    {
+      problem: "",
+      elementsAbove: 2,
+      elementsBelow: 2,
+      snapshot: null,
+      savedAt: null,
+    },
+  );
+  assert.throws(() =>
+    reviewBlockPropsSchema.parse({
+      blocksAbove: -1,
+      blocksBelow: 2,
+      includeReportBlock: false,
+      snapshot: null,
+      savedAt: null,
+    }),
+  );
+  assert.throws(() =>
+    reviewElementPropsSchema.parse({
+      problem: "x",
+      elementsAbove: 1.5,
+      elementsBelow: 2,
+      snapshot: null,
+      savedAt: null,
+    }),
+  );
+  assert.equal(
+    reviewBlockPropsSchema.parse({
+      blocksAbove: 4,
+      blocksBelow: 4,
+      snapshot: null,
+      savedAt: null,
+    }).includeReportBlock,
+    false,
+  );
 });
 
 test("nested block Review captures an exact root slice and strips recursive reports", () => {
-  const leaf = (id, content) => ({ id, type: "paragraph", content, props: {}, pluginData: {}, listProps: {}, children: [] });
+  const leaf = (id, content) => ({
+    id,
+    type: "paragraph",
+    content,
+    props: {},
+    pluginData: {},
+    listProps: {},
+    children: [],
+  });
   const review = {
     ...leaf("review", "Nested problem"),
     ...createReviewBlockInput("Nested problem"),
@@ -83,27 +107,38 @@ test("nested block Review captures an exact root slice and strips recursive repo
       blocksAbove: 1,
       blocksBelow: 1,
       includeReportBlock: true,
-      snapshot: { version: 6, blocks: [], elements: [], pluginData: {} },
+      snapshot: { version: 9, blocks: [], elements: [], rootElementIds: [], pluginData: {} },
       savedAt: "2026-09-15T12:00:00.000Z",
     },
   };
   const editor = createEditor({
-    roots: [leaf("a", "A"), {
-      ...leaf("container", "Container"),
-      children: [leaf("before-review", "Before"), review, leaf("after-review", "After")],
-    }, leaf("c", "C"), leaf("d", "D")],
+    roots: [
+      leaf("a", "A"),
+      {
+        ...leaf("container", "Container"),
+        children: [leaf("before-review", "Before"), review, leaf("after-review", "After")],
+      },
+      leaf("c", "C"),
+      leaf("d", "D"),
+    ],
     parents: { review: "container", "before-review": "container", "after-review": "container" },
-    elements: [{
-      id: "wide-card",
-      type: "block",
-      frame: { x: 0, y: 0, width: 100, height: 100 },
-      zIndex: 0,
-      props: { startBlockId: "a", endBlockId: "d" },
-    }],
+    elements: [
+      {
+        childIds: [],
+        id: "wide-card",
+        type: "block",
+        frame: { x: 0, y: 0, width: 100, height: 100 },
+        zIndex: 0,
+        props: { startBlockId: "a", endBlockId: "d" },
+      },
+    ],
   });
 
   const { snapshot, ...placement } = captureBlockReview(editor, "review", 1, 1, true);
-  assert.deepEqual(snapshot.blocks.map(({ id }) => id), ["a", "container", "c"]);
+  assert.deepEqual(
+    snapshot.blocks.map(({ id }) => id),
+    ["a", "container", "c"],
+  );
   const nested = snapshot.blocks[1].children[1];
   assert.equal(nested.type, REVIEW_REPORT_TYPE);
   assert.equal(nested.props.snapshot, null);
@@ -112,7 +147,13 @@ test("nested block Review captures an exact root slice and strips recursive repo
     startBlockId: "a",
     endBlockId: "c",
   });
-  assert.deepEqual(Object.keys(snapshot), ["version", "blocks", "elements", "pluginData"]);
+  assert.deepEqual(Object.keys(snapshot), [
+    "version",
+    "blocks",
+    "elements",
+    "rootElementIds",
+    "pluginData",
+  ]);
   assert.deepEqual(placement, {
     previousReportSiblingId: "before-review",
     nextReportSiblingId: "after-review",
@@ -124,7 +165,13 @@ test("nested block Review captures an exact root slice and strips recursive repo
     withoutReport.blocks[1].children.map(({ id }) => id),
     ["before-review", "after-review"],
   );
-  assert.deepEqual(Object.keys(withoutReport), ["version", "blocks", "elements", "pluginData"]);
+  assert.deepEqual(Object.keys(withoutReport), [
+    "version",
+    "blocks",
+    "elements",
+    "rootElementIds",
+    "pluginData",
+  ]);
 });
 
 test("root Review placement uses null boundaries and can omit its root", () => {
@@ -144,23 +191,21 @@ test("root Review placement uses null boundaries and can omit its root", () => {
     listProps: {},
     children: [],
   };
-  const capture = captureBlockReview(
-    createEditor({ roots: [review, next] }),
-    "review",
-    0,
-    0,
-  );
+  const capture = captureBlockReview(createEditor({ roots: [review, next] }), "review", 0, 0);
 
   assert.deepEqual(capture.snapshot.blocks, []);
-  assert.deepEqual({
-    previousReportSiblingId: capture.previousReportSiblingId,
-    nextReportSiblingId: capture.nextReportSiblingId,
-    parentReportId: capture.parentReportId,
-  }, {
-    previousReportSiblingId: null,
-    nextReportSiblingId: "next",
-    parentReportId: null,
-  });
+  assert.deepEqual(
+    {
+      previousReportSiblingId: capture.previousReportSiblingId,
+      nextReportSiblingId: capture.nextReportSiblingId,
+      parentReportId: capture.parentReportId,
+    },
+    {
+      previousReportSiblingId: null,
+      nextReportSiblingId: "next",
+      parentReportId: null,
+    },
+  );
 });
 
 test("element Review uses z-order, closes groups, and detaches connectors", () => {
@@ -172,43 +217,72 @@ test("element Review uses z-order, closes groups, and detaches connectors", () =
     elementsAbove: 2,
     elementsBelow: 0,
   });
-  const elements = [{
-    id: "connector",
-    type: "connector",
-    frame: { x: 0, y: 0, width: 100, height: 20 },
-    zIndex: 1,
-    props: {
-      source: { elementId: "outside", anchor: { x: 0, y: 0 }, position: { x: 1, y: 2 } },
-      target: { elementId: "review", anchor: { x: 1, y: 1 }, position: { x: 3, y: 4 } },
+  const elements = [
+    {
+      childIds: [],
+      id: "connector",
+      type: "connector",
+      frame: { x: 0, y: 0, width: 100, height: 20 },
+      zIndex: 1,
+      props: {
+        source: { elementId: "outside", anchor: { x: 0, y: 0 }, position: { x: 1, y: 2 } },
+        target: { elementId: "review", anchor: { x: 1, y: 1 }, position: { x: 3, y: 4 } },
+      },
     },
-  }, {
-    id: "group",
-    type: "group",
-    frame: { x: 0, y: 0, width: 100, height: 100 },
-    zIndex: 2,
-    props: { children: ["child"] },
-  }, { ...elementInput, id: elementInput.id }, {
-    id: "outside",
-    type: "rectangle",
-    frame: { x: 300, y: 0, width: 100, height: 100 },
-    zIndex: 4,
+    {
+      childIds: ["child"],
+      id: "group",
+      type: "group",
+      frame: { x: 0, y: 0, width: 100, height: 100 },
+      zIndex: 2,
+      props: {},
+    },
+    { ...elementInput, id: elementInput.id },
+    {
+      childIds: [],
+      id: "outside",
+      type: "rectangle",
+      frame: { x: 300, y: 0, width: 100, height: 100 },
+      zIndex: 4,
+      props: {},
+    },
+    {
+      childIds: [],
+      id: "child",
+      type: "block",
+      frame: { x: 0, y: 120, width: 100, height: 100 },
+      zIndex: 99,
+      props: { startBlockId: "root-a", endBlockId: "root-b" },
+    },
+  ];
+  const leaf = (id, content) => ({
+    id,
+    type: "paragraph",
+    content,
     props: {},
-  }, {
-    id: "child",
-    type: "block",
-    frame: { x: 0, y: 120, width: 100, height: 100 },
-    zIndex: 99,
-    props: { startBlockId: "root-a", endBlockId: "root-b" },
-  }];
-  const leaf = (id, content) => ({ id, type: "paragraph", content, props: {}, pluginData: {}, listProps: {}, children: [] });
+    pluginData: {},
+    listProps: {},
+    children: [],
+  });
   const editor = createEditor({ roots: [leaf("root-a", "A"), leaf("root-b", "B")], elements });
 
   const snapshot = captureElementReviewSnapshot(editor, "review", 2, 0);
-  assert.deepEqual(snapshot.elements.map(({ id }) => id), ["connector", "group", "review", "child"]);
-  assert.equal(snapshot.elements.find(({ id }) => id === "connector").props.source.elementId, undefined);
-  assert.equal(snapshot.elements.find(({ id }) => id === "connector").props.target.elementId, "review");
-  assert.deepEqual(snapshot.elements.find(({ id }) => id === "group").props.children, ["child"]);
+  assert.deepEqual(
+    snapshot.elements.map(({ id }) => id),
+    ["connector", "group", "review", "child"],
+  );
+  assert.equal(
+    snapshot.elements.find(({ id }) => id === "connector").props.source.elementId,
+    undefined,
+  );
+  assert.equal(
+    snapshot.elements.find(({ id }) => id === "connector").props.target.elementId,
+    "review",
+  );
+  assert.deepEqual(snapshot.elements.find(({ id }) => id === "group").childIds, ["child"]);
   assert.equal(snapshot.elements.find(({ id }) => id === "review").props.snapshot, null);
-  assert.deepEqual(snapshot.blocks.map(({ id }) => id), ["root-a", "root-b"]);
-
+  assert.deepEqual(
+    snapshot.blocks.map(({ id }) => id),
+    ["root-a", "root-b"],
+  );
 });

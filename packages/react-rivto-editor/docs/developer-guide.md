@@ -1,22 +1,87 @@
 # `@chulane/rivto-react` developer guide
 
-Rivto has two deliberately separate layers:
+Rivto separates persisted data, document commands, and React presentation:
 
-| Package | Owns |
-| --- | --- |
-| `@chulane/rivto` | Yjs document storage, root/children tree model, commands, history, portable selection |
-| `@chulane/rivto-react` | React rendering, browser events, DOM selection, surfaces, and extensions |
+| API                                                   | Owns                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `DocumentModel`                                       | Persisted blocks, elements, hierarchy and CRDT transactions                                                               |
+| `DocumentEditorAPI`                                   | Document-wide commands, validation, history, portable selection and clipboard                                             |
+| `ReactEditorApi` (`ReactEditor`)                      | Shared renderers, extensions, surfaces and browser infrastructure                                                         |
+| `PanelAPI` (`ChildrenPanel` / `EmbeddingPanel`, core) | Bounded blocks/elements and independent subtree roots                                                                     |
+| `ReactPanelApi` (`ReactPanel`, React)                 | Bounded `blocks`/`elements`, shared `editor`, local mode, DOM selection, events, keyboard, clipboard and edgeless actions |
 
-The React package never owns or duplicates document data. It presents a core
-`RivtoEditorApi` and translates browser interactions into editor operations.
+## Shared editor and panels
+
+`createReactEditor({ editor: documentApi, extensions })` installs shared infrastructure once.
+Use `panel` for a core `PanelAPI` and `reactPanel` for a `ReactPanelApi`; the latter extends the core contract and exposes `reactPanel.blocks` and `reactPanel.elements` directly. Events, behavior contexts, clipboard contexts and element render/property props expose the React occurrence as `reactPanel`.
+
+Pass it as `<EditorPanel editor={editor}>`. `usePanel()` returns the bounded core panel;
+`useReactPanel()` and event payloads return its browser API. Document-wide operations
+are explicit through `usePanel().document` or `reactEditor`; rendering
+registrations are on `useReactPanel().editor`, and canvas actions on its `edgeless`.
+
+`EditorPanel` displays the children of `rootBlockId`, or document roots for null.
+`EditorEmbed` displays its required block root and descendants, protecting the root
+from removal, moving, cutting and merge removal. Its text and properties remain editable,
+and it can be copied. Both implementations independently restrict elements using
+`rootElementId`; the container itself is excluded. There is no public scope object.
+
+`panel.blocks` and `panel.elements` expose bounded reads and editing operations. `panel.subscribe(listener)` forwards the document-editor change stream, including changes outside the panel and block-definition updates. It does not emit on registration or selection changes; the returned function unsubscribes. Use the focused block and element subscriptions when a component observes only specific data. `panel.batchUpdates(callback)` groups synchronous changes into one shared document undo step; `panel.batchUpdatesWithoutHistory(callback)` runs maintenance changes without an undo entry. Both return the callback result and propagate errors without rolling back earlier writes. Nested transactions retain the outer capture policy. For components that only read or edit content, use `usePanel()`; use `useReactPanel()` for DOM interaction, selection, events, mode or presentation registrations. Read `panel.blocks.getBlockNode(id)` or `panel.elements.getElementNode(id)` inside deferred handlers to obtain current values and check that the entity still belongs to the panel before writing. Rendered hook snapshots are for rendering, not later read-modify-write operations.
+Top-level parents are null relative to the panel; DocumentEditorAPI returns actual parents.
+Outside destinations and targets are rejected before batch writes. Panel insertion uses
+`{ root: true, beforeId? }` or `{ parentId, beforeId? }`; document insertion uses actual
+`{ parentId: string | null, beforeId? }`. Omitted destinations append to the corresponding roots.
+
+Each React panel owns its mode; pass a `ModeManager` explicitly to retain or share mode.
+The shared editor and core have no mode. An extension's `setup(editor)` installs shared
+behavior; handlers receive `event.reactPanel` or `context.reactPanel` for local actions.
+A global toolbar chooses an existing panel through `editor.panels` before executing
+DOM-dependent actions. Closing a panel releases only local subscriptions and registrations.
+
+## React-owned lifetime
+
+```tsx
+function CustomEditor({ document }: { document: DocumentModel }) {
+  const state = useReactEditor({ document, extensions: [standardPreset()] });
+  if (state.status === "loading") return <p>Loading…</p>;
+  if (state.status === "error") return <p>Could not create editor</p>;
+  return <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>;
+}
+```
+
+Import `DocumentModel` from `@chulane/document-model` and the hook, preset, view and
+surface from `@chulane/rivto-react`. The hook creates core and ReactEditor after commit,
+cleans both up on document replacement or unmount, and keeps the borrowed model alive.
+StrictMode setup/cleanup is supported. One hook result can serve several editor panels.
+Extensions and keymap are creation settings; remount the owner with a new key to replace
+them. `onError` receives setup/cleanup failures. No preset or surface is installed implicitly.
+
+For loaded/cached documents use `await storage.acquireEditor(id)`: it returns
+`{ editor, document, release }`. Keep the acquisition until all dependent panels unmount.
+Each call owns one idempotent release; the last release closes editor, core and model.
+EditorPanel never acquires an additional reference from context. EditorStorageContext is
+used by embeddings to acquire their source documents. `openCoreEditor` and
+`releaseCoreEditor` are removed; use the acquisition's `editor` for core operations.
+
+React components must obtain ReactEditor through `useReactEditor` and panels
+through `EditorPanel`/`EditorEmbed`; do not construct either instance manually,
+including in render, `useMemo`, or a `useState` initializer. `useReactPanel` reads
+an existing panel from context. Panel construction and subscription setup happen
+in the owning effect, whose cleanup calls `destroy()`. StrictMode replay creates
+a new instance, and the first render and SSR show loading. Low-level factories
+remain for managed storage infrastructure and internal tests.
 
 ## Normal setup
 
+The host loads and owns the document model; the React hook owns both editor layers.
+
 ```tsx
-import { createRivtoEditor, DocumentModelImpl, YjsDoc } from "@chulane/rivto";
+import { DocumentStorage, type DocumentModel } from "@chulane/document-model";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import {
-  createReactEditor,
-  EditorView,
+  useReactEditor,
+  EditorPanel,
+  PageSurface,
 } from "@chulane/rivto-react";
 import {
   blockExtension,
@@ -25,40 +90,67 @@ import {
   standardPreset,
 } from "@chulane/rivto-react/extensions";
 
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
-const reactEditor = createReactEditor({
-  editor,
-  extensions: [
-    standardPreset({
-      writing: {
-        slashCommand: { group: "Formatting" },
-      },
-    }),
-    pageDragExtension(),
-    ...edgelessPreset(),
-    blockExtension({
-      definition: cardDefinition,
-      render: CardContent,
-      slashCommand: { title: "Card" },
-    }),
-  ],
-});
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+storage.registerDocument("document-id");
+const document = await storage.openDocument("document-id");
+function DocumentView({ document }: { document: DocumentModel }) {
+  const state = useReactEditor({
+    document,
+    extensions: [
+      standardPreset({
+        writing: {
+          slashCommand: { group: "Formatting" },
+        },
+      }),
+      pageDragExtension(),
+      ...edgelessPreset(),
+      blockExtension({
+        definition: cardDefinition,
+        render: CardContent,
+        slashCommand: { title: "Card" },
+      }),
+    ],
+  });
 
-root.render(<EditorView reactEditor={reactEditor} />);
+  if (state.status !== "ready") return <p>{state.status}</p>;
+  return <EditorPanel editor={state.editor}><PageSurface /></EditorPanel>;
+}
+
+root.render(<DocumentView document={document} />);
 
 // Host teardown:
-reactEditor.destroy();
-editor.destroy();
+root.unmount();
+await document.destroy();
+await storage.destroy();
 ```
 
 `standardPreset({ writing })` installs the default writing block (paragraph +
 Markdown renderer + slash conversion) and can override that command's `id`,
 `title`, `group`, keywords, or availability while omitted fields retain their
 defaults. Hosts that skip `standardPreset` must install
-`defaultWritingBlockExtension` (or call `installDefaultWriting`) before
+`defaultWritingBlockExtension` (or call `installDefaultWriting` with a `BlockFactory`) before
 keyboard/clipboard paths that create writing blocks.
+
+`writing.factory` accepts a `BlockFactory` with `createEmptyBlock()`, `isBlock(block)`,
+and `isEmptyBlock(block)`. Access the installed object through
+`reactEditor.defaultWritingBlockFactory`. The default emptiness policy checks the configured
+native type and empty text; properties, plugin data, and children do not change that
+policy. Clipboard creation and reset conversion retain their type-only use of the
+writing factory, while ordinary insertion uses the complete returned input.
+
+Custom reset keeps its empty-text eligibility check and the installed writing
+predicate. Specialized blocks may refuse reset through the existing `onResetEmpty()`
+behavior; general block registrations have no factory field or factory lookup.
+Separator registrations retain `separatesBlockElements: true` metadata. Automatic
+card insertion reads the first registered separator type and uses a type-matching
+factory to create its input; factories are not stored with block types. Separator
+commands still reuse any empty leaf, while keyboard caret fallback still checks
+text length independently of semantic block emptiness.
+
+For seed construction without a React runtime, import `paragraphBlockFactory`,
+`separatorBlockFactory`, or `createBlockFactory(type)` from
+`@chulane/rivto-react/block-factories`. Each creation returns a fresh detached input;
+insertion or snapshot builders remain responsible for IDs and placement.
 
 `standardPreset()` installs page editing: the page surface, selection bridges,
 history, clipboard, slash commands, navigation, indent/outdent,
@@ -71,7 +163,7 @@ paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
-Canvas visuals are opt-in through `edgelessVisualsExtension()`. Its categorized
+`edgelessPreset()` includes `edgelessVisualsExtension()` and its registered built-in element types. Its categorized
 picker creates shapes, text, styled stickies, brush drawings, and attached
 connectors. Exact-type multi-selections share one property panel, groups use
 progressive child entry, and canvas transforms expose snapping guides. See
@@ -90,8 +182,8 @@ appear on the edgeless canvas.
 ```text
 Yjs transaction
   → DocumentModel publishes a document update
-  → RivtoEditorApi increments its global revision
-  → EditorView rerenders the active React tree
+  → DocumentEditorAPI increments its global revision
+  → EditorPanel rerenders the active React tree
   → hooks resolve fresh detached values through document getters
   → renderer calls editor operations for the next mutation
 ```
@@ -147,26 +239,30 @@ editor.getParentId(id);
 ```
 
 Never walk `editor.getBlocks()` to find one ID and never mutate a snapshot.
-Use `editor.history.batchUpdates(() => { ... })` when several editor operations must
+Use `panel.batchUpdates(() => { ... })` when several panel operations must
 produce one collaborative update and one undo step.
 
 ## Rendering and subscriptions
 
-`EditorView` provides a stable React runtime. Block hooks subscribe to their
+`EditorPanel` provides a stable React runtime. Block hooks subscribe to their
 focused document snapshots, while the view subscribes to surface, extension,
 and mode changes. A block edit therefore does not invalidate the whole tree.
 
 Hooks resolve current values through public getters:
 
-| Hook | Value |
-| --- | --- |
-| `useBlock(id)` | One detached recursive block snapshot |
-| `useBlockNode(id)` | One detached node with direct `childIds` |
-| `useRootBlockIds()` | Ordered root IDs |
-| `useReactEditor()` | Focused React runtime managers |
-| `useEditorMode()` | Mode manager |
-| `useEditorSelection()` / selection hooks | Detached selection |
-| slash hooks | Slash-command manager |
+| Hook                                     | Value                                                         |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| `useBlock(id)`                           | One detached recursive block snapshot                         |
+| `useBlockNode(id)`                       | One detached node with direct `childIds` and bound operations |
+| `useBlockOperations(id)`                 | Bound commands without a document subscription                |
+| `useBlockTextEditing(id, content)`       | Plain-text DOM binding without another subscription           |
+| `useBlockSelectionAnchor(id)`            | Structural selection marker and pending focus restoration     |
+| `useRootBlockIds()`                      | Ordered root IDs                                              |
+| `usePanel()`                             | Bounded core operations for the nearest panel                 |
+| `useReactPanel()`                        | Browser operations for the nearest rendered occurrence        |
+| `useContext(SurfaceContext)`             | Current surface kind                                          |
+| `useEditorSelection()` / selection hooks | Detached selection                                            |
+| slash hooks                              | Slash-command manager                                         |
 
 Renderer, surface, and extension registries keep independent ownership and
 lifecycle state.
@@ -176,16 +272,16 @@ The shared block render stack is:
 ```text
 PageSurface or EdgelessBlockElement
   → ordered root block IDs
-  → BlockTree(blockIds)
+  → Page BlockNode(blockId) for each displayed root
     → useBlockNode(blockId)
     → renderer for block.type
     → ordered BlockWrapper decorators
-    → one BlockView DOM boundary
+    → one Page block DOM boundary
     → recursive child blocks
 ```
 
-`BlockView` owns stable `data-block-*` DOM markers. A block renderer owns only
-its content. `BlockTree` owns traversal and block layout while each surface owns
+`BlockNode` owns stable `data-block-*` DOM markers. A block renderer owns only
+its content. Page owns traversal and block layout while each surface owns
 only its outer page or canvas geometry. A wrapper decorates the shared shell and
 must render its children exactly once.
 
@@ -215,7 +311,7 @@ Extensions receive public capabilities:
 - `events`: delegated native DOM registrations
 - `keyboard`: semantic bindings and runtime keymap overrides
 - `surfaces`: surfaces and ordered block/editor wrappers
-- `selection`: DOM selection conversion/highlighting
+- `selection`: document model selection; DOM conversion belongs to the occurrence editor
 - `slashCommands`: shared typed slash registry
 - `renderers`: lower-level renderer lookup/registration
 - `extensions`: mounted visual components
@@ -223,7 +319,8 @@ Extensions receive public capabilities:
 Concrete manager classes and lifecycle bookkeeping are internal package
 implementation. Registrations are owned automatically during extension setup,
 return idempotent disposers, roll back on setup failure, and unwind in reverse
-order during `ReactEditor.destroy()`.
+order during `ReactEditor.destroy()`. Closing a view cancels its DOM work and
+local registrations while the shared runtime stays available to other views.
 
 Use `blockExtension()` for a normal custom block. It prevents half-installed
 types by registering the core definition, React renderer, and slash conversion
@@ -252,7 +349,7 @@ There are two selection representations:
 
 The text-selection extension keeps them aligned. Page and edgeless extensions
 add their mode-specific whole-block gestures. Selection code should use
-`reactEditor.selection` for DOM conversion and `editor.selection` for portable
+`reactPanel.selection` for DOM conversion and `editor.selection` for portable
 state.
 
 ## Source map
@@ -274,17 +371,20 @@ src/
   surfaces/
     page/
     edgeless/
-  capabilities.ts         public capability interfaces
-  react-editor.tsx        small runtime coordinator
-  editor-view.tsx         stable provider + active surface
+  capabilities.ts         public contract re-exports
+  editor/                 shared runtime, storage and creation options
+  panels/                 concrete panels, bounded block/element operations and contracts
+  components/editor-panel/ document/subtree component, props and shared contexts
+  components/editor-embed/ protected embedding component and its props
+  hooks/editor/           public editor hooks and internal context readers
 ```
 
 Recommended reading order:
 
 1. `demo/src/App.tsx`
-2. `src/react-editor.tsx`
+2. `src/editor/react-editor.ts` and `src/panels/types.ts`
 3. `src/extensions/built-ins/built-ins.ts`
-4. `src/editor-view.tsx`
+4. `src/components/editor-panel/editor-panel.tsx`
 5. `src/hooks/blocks/use-block.ts`
 6. `src/surfaces/page/page-block.tsx`
 7. `src/managers/events/event-manager.ts`
@@ -293,15 +393,15 @@ Recommended reading order:
 
 ## Adding behavior
 
-| Goal | Correct boundary |
-| --- | --- |
-| New persisted field or tree operation | Core `DocumentModel` + `RivtoEditorApi` method |
-| Custom block | `blockExtension({ definition, render, slashCommand })` |
-| Keyboard/pointer action | Extension `setup` + `events.register` |
-| Block chrome | `surfaces.registerBlockWrapper` |
-| Modal, popup, overlay | `extensions.mount` |
-| New root layout | `surfaces.register` |
-| React hook | Resolve from the stable editor context/global revision |
+| Goal                                  | Correct boundary                                       |
+| ------------------------------------- | ------------------------------------------------------ |
+| New persisted field or tree operation | Core `DocumentModel` + `DocumentEditorAPI` method      |
+| Custom block                          | `blockExtension({ definition, render, slashCommand })` |
+| Keyboard/pointer action               | Extension `setup` + `events.register`                  |
+| Block chrome                          | `surfaces.registerBlockWrapper`                        |
+| Modal, popup, overlay                 | `extensions.mount`                                     |
+| New root layout                       | `surfaces.register`                                    |
+| React hook                            | Resolve from the stable editor context/global revision |
 
 Before adding another manager or state container, check whether a core
 operation or existing capability already owns the concern.
@@ -326,3 +426,64 @@ The minimum regression coverage for subscription work is:
 - lazy paths repair after local, remote, and history changes;
 - registry changes update consumers of that registry;
 - extension setup rollback and Strict Mode teardown leave no registrations.
+
+## Shared document operations
+
+Use `ReactEditor` for operations on shared document managers and registrations.
+A rendered occurrence supplies it explicitly as `reactPanel.editor`; the view
+itself no longer repeats the document API. The broad SharedEditorApi alias is
+removed. Cross-document transfer retains one local Pick of blocks, history, and
+getDocument because that algorithm also accepts a framework-neutral core editor.
+Use `ReactPanelApi` for occurrence-specific browser interaction, `PanelAPI` for bounded core editing, `ReactEditor` for
+runtime ownership, or an existing manager contract when only that manager is needed.
+
+## Block behavior and manager contracts
+
+A rendered `EditorPanel` is different from the behavior of a block type.
+Use `runtime.blockBehaviors` to register or resolve `BlockBehavior` implementations;
+`DefaultBlockBehavior` supplies ordinary outline actions and
+`ContainerBlockBehavior` supplies the shared container behavior. A complete block
+registration uses `behavior`, alongside `definition` and `render`.
+The `BlockNode` React component still renders the block shell.
+Several behaviors can be registered with
+`runtime.blockBehaviors.register(behavior, priority = 0)`. Each implements
+`isAvailable({ editor, block })` using current detached block fields. Every method
+uses the same availability context without a discriminator or operation name.
+During movement, the registry tests source blocks and the receiving parent and
+calls each matching registration's canMove method once. Only canMove receives
+sources, destination, editor, and the resolved parent as its BlockMoveContext.
+The called method owns any operation-specific eligibility. Higher priorities run first,
+with stable registration order at ties. Native behaviors use `0`, list/collapse
+use `-100`, and `DefaultBlockBehavior` is an ordinary registration at `-1000`.
+Container behaviors implement their own native-type predicates and do not inherit
+generic outline actions. Inherited methods receive no special dispatch treatment.
+Use `dispatch()` for actions, `resolveAll(context)` for applicable instances, and
+`canMove({ sources, destination })` for semantic movement permissions. The move
+query is independent of dragging; all applicable hooks must allow it. Geometry
+belongs to the registered Page layout: `BlockChildren` declares its drop axis and
+`BlockDropTarget` declares explicit canonical destinations consumed by the optional drag extension. Universal handle
+hover uses Page’s layout-bounded row feedback independently of dragging. Custom
+`BlockChildren` hosts bound hover by default; ordinary outlines inherit the enclosing
+area with `hoverBoundary={false}`. Native row/control targets take precedence, and
+parent feedback belongs to headers or exposed gutters rather than the complete body. React registration
+owns the complete definition and passes its metadata directly to the existing core
+registry; core API stays unchanged. Registering an already defined native type is
+a conflict. Cleanup removes the owned definition together with its presentation.
+`blockTypes.subscribe()` observes creation and removal of definitions, including their
+metadata, and disconnects automatically when its React runtime is destroyed. Parent
+`onChildIndent`/`onChildOutdent` chains run before child outline handlers; all use
+shallow `BlockOutlineContext`, and handled/rejected stop the complete operation. Availability is not cached by native type. List split inheritance and Enter transitions belong to separate
+checkbox, numbered-list, and ordinary-list behaviors; property defaults and
+validation remain in `blockListProps`.
+
+Public manager contracts use the `Api` suffix and live next to their owning
+manager: for example, `BlocksApi`, `BlockBehaviorsApi`, `PanelEventsApi`,
+`PanelSelectionApi`, and `PanelClipboardApi`. They remain available from the main
+package entry point. Internal code imports them directly from their owner;
+`capabilities.ts` only collects type re-exports.
+
+The agreed sequence and implementation status are recorded in
+[`react-api-architecture-ru.md`](../../../dev_notes/react-api-architecture-ru.md).
+Core panel classes now own bounded editing; ReactPanel owns browser lifecycle.
+Element registrations live on `ReactEditor.elementTypes`, while canvas actions live
+in the edgeless representation through `useEdgelessOperations()`. Extensions install behavior and no longer return a visual controller facade.

@@ -1,11 +1,7 @@
 "use client";
 
 import type { Page } from "@chulane/app";
-import {
-  usePagesQuery,
-  useProjectsQuery,
-  useSearchPagesQuery,
-} from "@chulane/app/client";
+import { usePagesQuery, useProjectsQuery, useSearchPagesQuery } from "@chulane/app/client";
 import { CalendarDays, FileText, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -44,9 +40,7 @@ export function SearchView() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-8 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">
-        {trimmed ? "Search" : "Pages"}
-      </h1>
+      <h1 className="text-3xl font-bold tracking-tight">{trimmed ? "Search" : "Pages"}</h1>
 
       <div className="relative mt-6">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

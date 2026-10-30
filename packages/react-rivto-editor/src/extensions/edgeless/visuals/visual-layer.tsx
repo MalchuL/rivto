@@ -1,90 +1,96 @@
+import { useCanvasViewportLayers } from "@chulane/rivto-edgeless/react";
+import { useCanvasCamera, useCanvasVisible } from "@chulane/rivto-edgeless/react";
+import { useEdgelessCanvas } from "../../../surfaces/edgeless/edgeless-tools-context";
+import { ElementProperties } from "./components/element-properties";
+import { ConnectorInteractionContext } from "../../../elements/visuals/connector-endpoints";
+import type { EdgelessVisualsOptions } from "./types";
+import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../managers/keyboard";
+import { useEdgelessOperations } from "../../../hooks/elements/use-edgeless-operations";
+import { useContext } from "react";
+import { useEdgelessElementStyle } from "../../../hooks/elements/use-edgeless-element-style";
+import { SurfaceContext } from "../../../surfaces/surface";
 /**
- * Edgeless visual plane: persisted visuals, group chrome, tools, and previews.
+ * Edgeless visual plane: persisted visuals, group hit areas, tools, and previews.
  *
  *
  * The layer itself does not subscribe to canvas selection. Each visual and
- * group outline observes its own selected bit, and toolbar/properties live in
+ * group hit area follows the current selection, and toolbar/properties live in
  * a child that is the only full-list subscriber so marquee growth cannot
  * re-render every shape.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useEditorMode, useEditorRoot } from "../../../hooks";
-import { useEdgelessSelected, useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
-import { ElementSlots } from "../../../blocks";
-import { DrawingCapture } from "./components/drawing-capture";
+import { useEditorRoot, useReactPanel } from "../../../hooks";
+import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
+import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
-import { VisualElement } from "./components/visual-element";
-import { VisualProperties } from "./components/visual-properties";
-import type { EdgelessVisualController } from "./controller";
-import { useDrawingGesture, type ConnectorHover } from "./hooks/use-drawing-gesture";
+import { VisualElement } from "../../../elements/visuals/visual-element";
+import { VisualFontContext } from "../../../elements/visuals/properties";
+import type { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
+import { useToolGesture } from "./hooks/use-tool-gesture";
+import { ConnectorTargets, type ConnectorHover } from "./tools/connector-targets";
+import { ConnectorGesturePreview } from "./tools/connector-preview";
+import { useEdgelessTools } from "../../../surfaces/edgeless/edgeless-tools-context";
+import type { EdgelessTool } from "../../../managers/edgeless-tools/edgeless-tool";
 import { usePresetDrag } from "./hooks/use-preset-drag";
-import { useVisualTool } from "./hooks/use-visual-tool";
-import { DEFAULT_FONTS, DEFAULT_STICKERS } from "./presets";
-import type {
-  ConnectorEndpoint,
-  EdgelessFontOption,
-  EdgelessVisual,
-  EdgelessVisualsOptions,
-} from "./types";
-import { canvasPoint } from "./utils/canvas-point";
+import { useVisualTool } from "../../../hooks/elements/use-visual-tool";
+import { DEFAULT_FONTS } from "../../../elements/visuals/presets";
+import type { ConnectorEndpoint } from "../../../elements/visuals/types";
+import { canvasPoint } from "../../../elements/visuals/utils/canvas-point";
 
 const VISUAL_LAYER_CLASS = "edgeless-visual-layer";
 const GROUP_HIT_CLASS = "edgeless-group-hit";
-const GROUP_BOUND_CLASS = "edgeless-group-bound";
 
 /**
- * Hit plate and outline for one group, mounted only while that group is selected.
- * 
- * "Chrome" is UI jargon for overlay decoration (outlines, hit plates, toolbar),
- * not the Google Chrome browser.
+ * Provides an invisible hit area between the children of a selected group.
  *
- * @param props - Group ID and the controller that supplies derived bounds.
- * @returns Group chrome, or null when the group is unselected or has no bounds.
+ * It stays behind the children so clicks can still select or edit them. Moveable
+ * renders the visible boundary and controls; this area has no outline or drag
+ * handle of its own. Preview geometry survives React updates during a gesture.
+ *
+ * @param props - Group ID and the edgeless operations that supply derived bounds.
+ * @returns Hit area, or null when the group has no visible bounds.
  */
-function GroupSelectionChrome({
+function GroupHitArea({
   groupId,
-  controller,
+  edgelessOperation,
 }: {
   readonly groupId: string;
-  readonly controller: EdgelessVisualController;
+  readonly edgelessOperation: EdgelessOperations;
 }) {
-  const selected = useEdgelessSelected(groupId);
-  const bounds = controller.getBounds(groupId);
-  if (!selected || !bounds) return null;
-  const element = controller.reactEditor.elements.getElement(groupId);
-  const geometry = {
-    left: bounds.x,
-    top: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-  };
+  const bounds = edgelessOperation.getFrame(groupId);
+  const element = edgelessOperation.elements.getElementNode(groupId);
+  const preview = element && bounds ? { ...element, frame: bounds } : undefined;
+  const hit = useEdgelessElementStyle<HTMLDivElement>(preview);
+  if (!bounds) {
+    return null;
+  }
   return (
-    <>
-      {/*
-        Hit plate under children: empty bbox / gaps select & drag the group.
-        Outline stays on top with pointer-events: none so child drill-in still works.
-      */}
-      <div
-        className={GROUP_HIT_CLASS}
-        data-edgeless-group-hit={groupId}
-        data-edgeless-group-bound-id={groupId}
-        data-edgeless-object-kind="group"
-        data-edgeless-object-id={groupId}
-        style={{ ...geometry, zIndex: controller.getGroupHitZIndex(groupId) }}
-      />
-      <div
-        className={GROUP_BOUND_CLASS}
-        data-edgeless-group-bound-id={groupId}
-        data-edgeless-object-kind="group"
-        data-edgeless-object-id={groupId}
-        style={geometry}
-      >
-        {element && <ElementSlots element={element} selected />}
-      </div>
-    </>
+    <div
+      ref={hit.ref}
+      className={GROUP_HIT_CLASS}
+      data-edgeless-group-hit={groupId}
+      data-edgeless-object-kind="group"
+      data-edgeless-object-id={groupId}
+      style={{ ...hit.style, zIndex: edgelessOperation.getGroupHitZIndex(groupId) }}
+    />
+  );
+}
+
+/**
+ * Mounts hit areas only for selected groups, without subscribing the visual
+ * plane to selection changes or walking every unselected group's descendants.
+ * @param props - Controller used to read the selected group nodes and bounds.
+ * @returns Invisible hit areas between the currently selected groups' children.
+ */
+function SelectedGroups({ edgelessOperation }: { edgelessOperation: EdgelessOperations }) {
+  const selection = useEdgelessSelection();
+  return selection.items.map((id) =>
+    edgelessOperation.elements.getElementNode(id)?.type === "group" ? (
+      <GroupHitArea key={id} groupId={id} edgelessOperation={edgelessOperation} />
+    ) : null,
   );
 }
 
@@ -93,44 +99,42 @@ function GroupSelectionChrome({
  *
  * Isolated so marquee membership changes do not re-render the visual plane.
  *
- * @param props - Controller, current visuals, and font options for the panel.
+ * @param props - Shared canvas operations; registered types supply property contents and titles.
  * @returns Toolbar and property editors for the current selection, or nothing.
  */
 function EdgelessSelectionChrome({
-  controller,
-  visuals,
-  fonts,
+  edgelessOperation,
 }: {
-  readonly controller: EdgelessVisualController;
-  readonly visuals: readonly EdgelessVisual[];
-  readonly fonts: readonly EdgelessFontOption[];
+  readonly edgelessOperation: EdgelessOperations;
 }) {
   const selection = useEdgelessSelection();
-  if (!selection.items.length) return null;
-  const sameType = selection.items
-    .map((id) => visuals.find((visual) => visual.id === id))
-    .filter(Boolean) as EdgelessVisual[];
-  const propertyVisuals = sameType.length
-    && sameType.length === selection.items.length
-    && sameType.every((visual) => visual.kind === sameType[0]!.kind)
-    ? sameType
-    : [];
+  const reactPanel = useReactPanel();
+  const selected = selection.items.flatMap((id) => reactPanel.elements.getElementNode(id) ?? []);
+  const sameType =
+    selected.length > 0 && selected.every((element) => element.type === selected[0]!.type);
+  const Properties = sameType
+    ? reactPanel.editor.elementTypes.get(selected[0]!.type)?.properties
+    : undefined;
+  if (!selection.items.length) {
+    return null;
+  }
   const propertyBlocks = selection.items.flatMap((id) => {
-    const element = controller.reactEditor.elements.getElement(id);
+    const element = edgelessOperation.elements.getElementNode(id);
     return element?.type === "block" ? [element] : [];
   });
   return (
     <>
-      <SelectionToolbar controller={controller} items={selection.items} />
-      {propertyVisuals.length > 0 && (
-        <VisualProperties
-          visuals={propertyVisuals}
-          fonts={fonts}
-          controller={controller}
+      <SelectionToolbar edgelessOperation={edgelessOperation} items={selection.items} />
+      {Properties && (
+        <ElementProperties
+          ids={selection.items}
+          title={reactPanel.editor.elementTypes.get(selected[0]!.type)?.title ?? selected[0]!.type}
+          component={Properties}
+          operations={edgelessOperation}
         />
       )}
       {propertyBlocks.length === selection.items.length && propertyBlocks.length > 0 && (
-        <BlockProperties elements={propertyBlocks} controller={controller} />
+        <BlockProperties elements={propertyBlocks} edgelessOperation={edgelessOperation} />
       )}
     </>
   );
@@ -139,81 +143,151 @@ function EdgelessSelectionChrome({
 /**
  * Renders first-class visual elements, the bottom tool bar, and gesture previews.
  *
- * @param props - Installed visuals controller and host options.
+ * @param props - Installed edgeless operations and host options.
  * @returns Portaled visual plane and tool chrome, or null outside edgeless mode.
  */
-export function EdgelessVisualLayer({
-  controller,
-  options,
-}: {
-  readonly controller: EdgelessVisualController;
-  readonly options: EdgelessVisualsOptions;
-}) {
-  const { mode } = useEditorMode();
-  const { element: root } = useEditorRoot();
-  const tool = useVisualTool(controller);
-  useSyncExternalStore(
-    (listener) => controller.subscribe(listener),
-    () => controller.getRevision(),
-    () => controller.getRevision(),
+export function EdgelessVisualLayer({ options }: { readonly options: EdgelessVisualsOptions }) {
+  const mode = useContext(SurfaceContext);
+  return mode === "edgeless" ? <EdgelessCanvasVisuals options={options} /> : null;
+}
+
+/**
+ * Connects surface-owned tools, previews and document subscriptions while edgeless is displayed.
+ *
+ * @param props - Installed visual chrome and font options.
+ * @param props.options - Host presentation options; tool state belongs to the surface context.
+ * @returns Canvas content and interaction chrome portaled into the receiving surface.
+ */
+function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsOptions }) {
+  const tools = useEdgelessTools();
+  const canvas = useEdgelessCanvas()!;
+  const camera = useCanvasCamera(canvas);
+  const visible = useCanvasVisible(canvas);
+  const edgelessOperation = useEdgelessOperations();
+  const reactPanel = useReactPanel();
+  useEffect(
+    () =>
+      reactPanel.keyboard.register(
+        {
+          id: KEYBOARD_BINDING_IDS.edgelessToolSelect,
+          keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
+          mode: "edgeless",
+          priority: 20,
+          when: ({ root }) => !root.dataset.transforming && tools.canReset,
+        },
+        () => {
+          tools.reset();
+          return true;
+        },
+      ),
+    [tools, reactPanel],
   );
-  const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
-  const zoom = Number(root?.dataset.edgelessZoom) || 1;
-  const visuals = controller.getVisuals();
-  const groups = controller.getGroups();
+
+  const { element: root } = useEditorRoot();
+  const tool = useVisualTool(tools);
+  const revision = useSyncExternalStore(
+    (listener) => edgelessOperation.subscribe(listener),
+    () => edgelessOperation.getRevision(),
+    () => edgelessOperation.getRevision(),
+  );
+  const plane = useCanvasViewportLayers()?.plane ?? null;
+  const zoom = camera.zoom;
+  const elements = useMemo(
+    () =>
+      visible.flatMap((id) => {
+        const element = edgelessOperation.getRenderedElement(id);
+        return element && element.type !== "block" && element.type !== "group" ? [element] : [];
+      }),
+    [visible, revision, edgelessOperation],
+  );
   const fontOptions = useMemo(
-    () => [...new Map([...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font])).values()],
+    () => [
+      ...new Map(
+        [...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font]),
+      ).values(),
+    ],
     [options.fonts],
   );
-  const stickerOptions = useMemo(
-    () => [...new Map([...DEFAULT_STICKERS, ...(options.stickers ?? [])].map((sticker) => [sticker.id, sticker])).values()],
-    [options.stickers],
+  const presetDrag = usePresetDrag({ tools, root, plane, zoom });
+  const gesture = useToolGesture({ tools, root, zoom, tool });
+  const targets = useMemo(
+    () => new ConnectorTargets(edgelessOperation, zoom),
+    [edgelessOperation, zoom],
   );
-  const presetDrag = usePresetDrag({ controller, root, plane, zoom });
-  const drawing = useDrawingGesture({ controller, root, zoom, tool });
-  const drawingRef = useRef(drawing);
-  drawingRef.current = drawing;
   const [reconnectHover, setReconnectHover] = useState<ConnectorHover | null>(null);
 
-  const resolveEndpoint = useCallback((event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
-    const point = canvasPoint(event, root, zoom);
-    const targetId = drawingRef.current.objectAt(point);
-    return targetId
-      ? drawingRef.current.endpoint(targetId, point)
-      : { elementId: undefined, anchor: { x: .5, y: .5 }, position: point };
-  }, [root, zoom]);
+  /**
+   * Resolves a reconnect pointer to an eligible attachment or a free canvas endpoint.
+   *
+   * @param event - Pointer position in viewport pixels.
+   * @returns Current attachment geometry, or a free endpoint when no target is hit.
+   */
+  const resolveEndpoint = useCallback(
+    (event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
+      const point = canvasPoint(event, root, zoom);
+      const targetId = targets.objectAt(point);
+      return targetId
+        ? targets.endpoint(targetId, point)
+        : { elementId: undefined, anchor: { x: 0.5, y: 0.5 }, position: point };
+    },
+    [root, zoom, targets],
+  );
 
-  const onReconnectHover = useCallback((event: Pick<PointerEvent, "clientX" | "clientY"> | null) => {
-    if (!event) {
-      setReconnectHover(null);
+  /**
+   * Shows the eligible reconnect target's bounds and anchors, or clears feedback on completion.
+   *
+   * @param event - Pointer position in viewport pixels; null clears feedback.
+   * @returns Updates panel-local attachment feedback without document writes.
+   */
+  const onReconnectHover = useCallback(
+    (event: Pick<PointerEvent, "clientX" | "clientY"> | null) => {
+      if (!event) {
+        setReconnectHover(null);
+        return;
+      }
+      const point = canvasPoint(event, root, zoom);
+      setReconnectHover(targets.hoverFor(point));
+    },
+    [root, zoom, targets],
+  );
+
+  useEffect(() => {
+    if (!root) {
       return;
     }
-    const point = canvasPoint(event, root, zoom);
-    setReconnectHover(drawingRef.current.hoverFor(point));
-  }, [root, zoom]);
+    root.dataset.edgelessTool = tool?.id ?? "";
+    root.dataset.edgelessPanTool = String(tool?.pansViewport ?? false);
+    root.dataset.edgelessCaptureTool = String(tool?.capturesPointer ?? false);
+  }, [root, tool]);
 
   useEffect(() => {
-    if (!root) return;
-    root.dataset.edgelessTool = tool.tool;
-  }, [root, tool.tool]);
-
-  useEffect(() => {
-    if (!root) return;
-    const creationTools = new Set(["place", "drawing", "eraser", "connector"]);
+    if (!root) {
+      return;
+    }
     const onContextMenu = (event: MouseEvent) => {
-      if (!creationTools.has(controller.getTool().tool)) return;
+      if (!tools.active?.capturesPointer) {
+        return;
+      }
       const target = event.target;
-      if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
+      if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) {
+        return;
+      }
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      tools.reset();
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 2) return;
-      if (!creationTools.has(controller.getTool().tool)) return;
+      if (event.button !== 2) {
+        return;
+      }
+      if (!tools.active?.capturesPointer) {
+        return;
+      }
       const target = event.target;
-      if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) return;
+      if (!(target instanceof Element) || target.closest("[data-edgeless-ui]")) {
+        return;
+      }
       event.preventDefault();
-      controller.reactEditor.commands.execute("edgeless.tool.set", "select");
+      tools.reset();
     };
     root.addEventListener("contextmenu", onContextMenu);
     root.addEventListener("pointerdown", onPointerDown, true);
@@ -221,100 +295,84 @@ export function EdgelessVisualLayer({
       root.removeEventListener("contextmenu", onContextMenu);
       root.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [controller, root]);
+  }, [tools, root]);
 
-  if (mode !== "edgeless" || !root || !plane) return null;
+  if (!root || !plane) {
+    return null;
+  }
 
-  const defaults = controller.getDefaults();
-  const connectorHover = drawing.connectorHover ?? reconnectHover;
-
-  return <>
-    {createPortal(
-      <div className={VISUAL_LAYER_CLASS}>
-        {visuals.map((visual) => (
-          <VisualElement
-            key={visual.id}
-            visual={visual}
-            controller={controller}
-            zoom={zoom}
-            resolveEndpoint={resolveEndpoint}
-            onReconnectHover={onReconnectHover}
-            onReconnect={(key, endpoint) => {
-              if (visual.kind !== "connector") return;
-              controller.update({ id: visual.id, patch: { [key]: endpoint } as never });
-            }}
+  return (
+    <>
+      {createPortal(
+        <div className={VISUAL_LAYER_CLASS}>
+          <ConnectorInteractionContext.Provider value={{ resolveEndpoint, onReconnectHover }}>
+            {elements.map((element) => (
+              <VisualElement
+                key={element.id}
+                element={element}
+                edgelessOperation={edgelessOperation}
+                zoom={zoom}
+              />
+            ))}
+          </ConnectorInteractionContext.Provider>
+          <SelectedGroups edgelessOperation={edgelessOperation} />
+        </div>,
+        plane,
+      )}
+      {createPortal(
+        <>
+          <DrawingCapture
+            active={tool?.capturesPointer}
+            onPointerDown={gesture.pointerDown}
+            onPointerMove={gesture.pointerMove}
+            onPointerUp={gesture.pointerUp}
+            onPointerCancel={gesture.pointerCancel}
+            onPointerLeave={gesture.pointerLeave}
           />
-        ))}
-        {groups.map((group) => (
-          <GroupSelectionChrome
-            key={group.id}
-            groupId={group.id}
-            controller={controller}
-          />
-        ))}
-      </div>,
-      plane,
-    )}
-    {createPortal(
-      <DrawingCapture
-        tool={tool}
-        zoom={zoom}
-        preview={drawing.preview}
-        placePreview={drawing.placePreview}
-        placeStyle={{
-          shape: {
-            fill: defaults.shape.fill,
-            stroke: defaults.shape.stroke,
-            strokeWidth: defaults.shape.strokeWidth,
-            filled: defaults.shape.filled,
-            stroked: defaults.shape.stroked,
-          },
-          text: {
-            color: defaults.text.color,
-            fontFamily: defaults.text.fontFamily,
-            fontSize: defaults.text.fontSize,
-          },
-          sticker: {
-            fill: defaults.sticker.fill,
-            color: defaults.sticker.color,
-            fontFamily: defaults.sticker.fontFamily,
-            fontSize: defaults.sticker.fontSize,
-          },
-        }}
-        connectorPreview={drawing.connectorPreview}
-        connectorHover={connectorHover}
-        drawingStroke={defaults.drawing.stroke}
-        drawingStrokeWidth={defaults.drawing.strokeWidth}
-        drawingOpacity={defaults.drawing.opacity}
-        connectorStroke={defaults.connector.stroke}
-        connectorStrokeWidth={defaults.connector.strokeWidth}
-        connectorLineStyle={defaults.connector.lineStyle}
-        connectorStartStyle={defaults.connector.startStyle}
-        connectorEndStyle={defaults.connector.endStyle}
-        onPointerDown={drawing.pointerDown}
-        onPointerMove={drawing.pointerMove}
-        onPointerUp={drawing.pointerEnd}
-      />,
-      plane,
-    )}
-    {options.toolbar !== false && createPortal(
-      <>
-        <ToolBar
-          controller={controller}
-          tool={tool}
-          fonts={fontOptions}
-          stickers={stickerOptions}
-          startPresetDrag={presetDrag.startPresetDrag}
-          movePresetDrag={presetDrag.movePresetDrag}
-          endPresetDrag={presetDrag.endPresetDrag}
-        />
-        <EdgelessSelectionChrome
-          controller={controller}
-          visuals={visuals}
-          fonts={fontOptions}
-        />
-      </>,
-      root,
-    )}
-  </>;
+          {tool && <ToolPreview tool={tool} zoom={zoom} />}
+          {reconnectHover && (
+            <ConnectorGesturePreview zoom={zoom} connectorHover={reconnectHover} />
+          )}
+        </>,
+        plane,
+      )}
+      {presetDrag.preview}
+      {options.toolbar !== false &&
+        createPortal(
+          <>
+            <ToolBar
+              edgelessOperation={edgelessOperation}
+              tools={tools}
+              startPresetDrag={presetDrag.startPresetDrag}
+              movePresetDrag={presetDrag.movePresetDrag}
+              endPresetDrag={presetDrag.endPresetDrag}
+            />
+          </>,
+          root,
+        )}
+      {createPortal(
+        <VisualFontContext.Provider value={fontOptions}>
+          <EdgelessSelectionChrome edgelessOperation={edgelessOperation} />
+        </VisualFontContext.Provider>,
+        root,
+      )}
+    </>
+  );
+}
+
+/**
+ * Subscribes only the active preview to pointer samples.
+ *
+ * @param props - Active instance and canvas scale.
+ * @returns Registered preview override or the instance's own preview component.
+ */
+function ToolPreview({ tool, zoom }: { readonly tool: EdgelessTool; readonly zoom: number }) {
+  useSyncExternalStore(
+    (listener) => tool.subscribe(listener),
+    () => tool.revision,
+    () => tool.revision,
+  );
+  const panel = useReactPanel();
+  const Preview = panel.editor.edgelessToolbar.getTool(tool.id)?.preview;
+  return Preview ? <Preview tool={tool} zoom={zoom} /> : tool.renderPreview(zoom);
 }

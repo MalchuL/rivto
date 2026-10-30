@@ -1,0 +1,152 @@
+import type { BlockEditorNodeSnapshot, BlockListType } from "../../../adapter/types";
+import { useBlockRegion } from "./use-block-region";
+import type { BlockEditorTheme } from "../../block-editor-theme";
+import {
+  BlockChildPlacementContext,
+  BlockItemIdentityContext,
+  BlockItemControlsContext,
+  BlockChildrenControlsContext,
+} from "./block-item-context";
+import { useBlockNode } from "../../hooks/use-block-node";
+import { forwardRef, useContext, useMemo, type ReactNode, type HTMLAttributes } from "react";
+
+/** Native placement styles and controls around one already-rendered child block. */
+export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
+  /** Native styles and the existing shared geometry/theme tokens. */
+  readonly style?: BlockEditorTheme;
+  /** Borrowed own-node snapshot for a decorator; omission observes the enclosing child placement. */
+  readonly block?: BlockEditorNodeSnapshot;
+  /** Places this block's left-top controls in row flow or outside it; omission inherits the child layout, or outside at the editor root. Descendants keep their own placement. */
+  readonly controlsPlacement?: "inside" | "outside";
+  /** JSX contents arranged by the owning layout; no recursive traversal is performed here. */
+  readonly children?: ReactNode;
+}
+
+/**
+ * Provides optional item geometry without introducing another block identity.
+ *
+ * Host layouts supply widths through style; resize controls may share this wrapper.
+ * The item's own border box includes in-flow content and padding, not overflow
+ * from absolute slots. Native slot hits remain reachable outside that box.
+ * Item chrome reveals the owning row's handle; native nested rows retain priority.
+ * The nested BlockNode remains the sole owner of its data-block-id and content.
+ * A decorator supplies its existing block snapshot without adding a subscription.
+ * Placement items without that snapshot observe their own node's list decoration.
+ * Supplying a snapshot does not invent a document parent or canonical neighbors. Nested
+ * items representing the same block retain the outer item as the sole counter owner.
+ *
+ * @param props - Native attributes, sizing parameters, and composed child/control JSX.
+ * @param props.block - Current borrowed snapshot; omission subscribes to the child placement ID.
+ * @param props.controlsPlacement - Inside reserves row width for the left-top slot; outside keeps perimeter positioning. Omission inherits the child layout, or outside at the editor root. Applies only to this item's block.
+ * @param props.className - Additional classes appended to the package item hook.
+ * @param props.children - The already-rendered child and optional host controls.
+ * @param ref - Optional reference for item measurement or control positioning.
+ * @returns A package-styled placement wrapper, not a second block shell.
+ * @throws If outside BlockEditor, neither a block snapshot nor a BlockChildren
+ * placement exists, or delegated node reads/subscriptions fail. Snapshot-backed
+ * decorators also require the editor to register their mounted placement region.
+ */
+export const BlockItem = forwardRef<HTMLDivElement, BlockItemProps>(function BlockItem(
+  { block, className, children, ...attributes },
+  ref,
+) {
+  const placement = useContext(BlockChildPlacementContext);
+  if (block) {
+    return (
+      <BlockItemFrame
+        {...attributes}
+        className={className}
+        ref={ref}
+        blockId={block.id}
+        listType={block.listType}
+      >
+        {children}
+      </BlockItemFrame>
+    );
+  }
+  if (!placement) {
+    throw new Error("BlockItem requires block or a BlockChildren item component");
+  }
+  return (
+    <BlockItemContent {...attributes} className={className} ref={ref} blockId={placement.blockId}>
+      {children}
+    </BlockItemContent>
+  );
+});
+
+/** Native item geometry bound to the child supplying its list decoration. */
+interface BlockItemContentProps extends Omit<BlockItemProps, "block"> {
+  readonly blockId: string;
+}
+
+/**
+ * Keeps list counters on the optional outer item without creating a second block identity.
+ *
+ * @param props - Child identity and native placement attributes.
+ * @param props.blockId - Actual child whose list type is reflected on the placement wrapper.
+ * @param ref - Optional item measurement ref.
+ * @returns A placement wrapper with the supplied child; only the outermost item
+ * for this node owns its sibling counter.
+ * @throws If outside BlockEditor or delegated node reads/subscriptions fail.
+ */
+const BlockItemContent = forwardRef<HTMLDivElement, BlockItemContentProps>(
+  function BlockItemContent({ blockId, className, children, ...attributes }, ref) {
+    const node = useBlockNode(blockId);
+    const snapshot = node.getSnapshot();
+    return (
+      <BlockItemFrame
+        {...attributes}
+        className={className}
+        ref={ref}
+        blockId={blockId}
+        listType={snapshot?.listType}
+      >
+        {children}
+      </BlockItemFrame>
+    );
+  },
+);
+
+/** Identity and list decoration already supplied by a snapshot owner. */
+interface BlockItemFrameProps extends BlockItemContentProps {
+  readonly listType?: BlockListType;
+}
+
+/**
+ * Places a supplied child and marks only its outermost item as the counter owner.
+ *
+ * @param props - Native attributes and captured identity/list decoration.
+ * @param props.blockId - Stable ID used to distinguish nested wrappers for the same block.
+ * @param props.listType - Current list decoration, or undefined for an undecorated/missing node.
+ * @param props.controlsPlacement - Row placement for this block only; omission inherits the child layout, or outside at the editor root.
+ * @param props.className - Host classes appended to the package placement class.
+ * @param props.children - Already-rendered node or next decorator, rendered once.
+ * @param ref - Optional reference to this item's own element.
+ * @returns One placement div without reading or subscribing to document data.
+ */
+const BlockItemFrame = forwardRef<HTMLDivElement, BlockItemFrameProps>(function BlockItemFrame(
+  { blockId, listType, className, children, controlsPlacement, ...attributes },
+  ref,
+) {
+  const outerItem = useContext(BlockItemIdentityContext);
+  const itemRef = useBlockRegion(blockId, "item", ref);
+  const inheritedControls = useContext(BlockChildrenControlsContext);
+  const placement = controlsPlacement ?? inheritedControls;
+  const controls = useMemo(() => ({ blockId, placement }), [blockId, placement]);
+  return (
+    <BlockItemIdentityContext.Provider value={blockId}>
+      <div
+        {...attributes}
+        ref={itemRef}
+        data-block-item-id={blockId}
+        data-block-in-item={outerItem === blockId || undefined}
+        data-block-list-type={listType}
+        className={["rivto-block-item", className].filter(Boolean).join(" ")}
+      >
+        <BlockItemControlsContext.Provider value={controls}>
+          {children}
+        </BlockItemControlsContext.Provider>
+      </div>
+    </BlockItemIdentityContext.Provider>
+  );
+});

@@ -37,12 +37,16 @@ export class DocumentHistoryManager implements DocumentHistoryManagerApi {
    * @returns Value returned by the operation.
    */
   batchUpdates<Result>(operation: () => Result): Result {
-    if (this.batchDepth > 0) return operation();
+    if (this.batchDepth > 0) {
+      return operation();
+    }
     this.manager.stopCapturing();
     this.batchDepth += 1;
     let result!: Result;
     try {
-      this.crdt.transact(() => { result = operation(); });
+      this.crdt.transact(() => {
+        result = operation();
+      });
       return result;
     } finally {
       this.batchDepth -= 1;
@@ -58,7 +62,9 @@ export class DocumentHistoryManager implements DocumentHistoryManagerApi {
    */
   batchUpdatesWithoutHistory<Result>(operation: () => Result): Result {
     let result!: Result;
-    this.crdt.transact(() => { result = operation(); }, this.withoutHistoryOrigin);
+    this.crdt.transact(() => {
+      result = operation();
+    }, this.withoutHistoryOrigin);
     return result;
   }
 

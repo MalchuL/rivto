@@ -17,15 +17,12 @@ const report = {
   previousReportSiblingId: "before",
   nextReportSiblingId: null,
   parentReportId: "parent",
-  snapshot: { version: 6, blocks: [], elements: [], pluginData: {} },
+  snapshot: { version: 9, blocks: [], elements: [], rootElementIds: [], pluginData: {} },
 };
 
 test("Review filenames transliterate, timestamp, fall back, and respect NAME_MAX", () => {
   assert.equal(reviewReportSlug(report.problem), "oshibka-struktury");
-  assert.equal(
-    reviewReportFileName(report),
-    "20260915-123456789-oshibka-struktury.json",
-  );
+  assert.equal(reviewReportFileName(report), "20260915-123456789-oshibka-struktury.json");
   assert.match(
     reviewReportFileName({ ...report, problem: "", reportId: "Отчёт 7" }),
     /-review-otchyot-7\.json$/,
@@ -59,7 +56,7 @@ test("Review writer stores the complete reusable JSON envelope", async () => {
       parentReportId: "parent",
     });
     assert.deepEqual(stored.snapshot, report.snapshot);
-    assert.equal(stored.snapshot.version, 6);
+    assert.equal(stored.snapshot.version, 9);
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }

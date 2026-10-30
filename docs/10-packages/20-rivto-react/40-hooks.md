@@ -1,22 +1,40 @@
 # Public React hooks
 
-Все hooks требуют ancestor `<EditorView>`. Вне provider они выбрасывают context error.
+Контекстные hooks требуют ancestor `<EditorPanel>`. Вне provider они выбрасывают context error.
+`useReactEditor()` создаёт общий ReactEditor и вызывается вне EditorPanel; его loading/ready/error lifecycle описан в разделе Runtime and lifecycle.
 
 ## Runtime hooks
 
-### `useReactEditor()`
+### `usePanel()`
+
+Возвращает core `PanelAPI`: `document`, `documentId`, независимые `rootBlockId` и `rootElementId`, ограниченные `blocks` и `elements`. API фиксирован на исходном документе и не следует за фокусом. Тип не открывает DOM, инструменты или локальное выделение; сам объект совпадает с результатом useReactPanel(). Вне `EditorPanel`/`EditorEmbed` выбрасывает ошибку контекста.
+
+### `useReactPanel()`
+
+`useReactPanel() === usePanel()`. React API предоставляет `editor`, `mode`, `events`, `keyboard`, `selection`, `clipboard`, `slashCommands` и `edgeless`. Через `edgeless` выполняются действия над текущим canvas-выделением; обычные чтения и изменения выполняются через core-панель.
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** stable `ReactEditor`.
+- **Возвращает:** stable `ReactPanelApi`.
 - **Исключения:** та же provider error.
+
+### `useContext(SurfaceContext)`
+
+- **Аргументы:** exported `SurfaceContext`.
+- **Возвращает:** `"block" | "edgeless"`, kind ближайшего explicit surface; default `"block"`.
+- **Исключения:** отсутствуют.
+
+Context immutable; он описывает ближайший rendered surface, включая page embedding внутри canvas.
+Переключение основного surface выполняет host через panel mode manager и JSX.
 
 ### `useEditorMode()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** `{ mode; setMode(mode): void }`.
-- **Исключения:** provider или mode manager errors.
+- **Возвращает:** `{ mode, setMode }`, текущее значение `reactPanel.mode` и stable setter.
+- **Исключения:** та же provider error.
 
-Mode локален и не входит в snapshot.
+Hook подписывается непосредственно на mode manager. Mode локален для панели; host может явно передать общий ModeManager нескольким панелям.
+Режим не синхронизируется через CRDT. Повторный `setMode()` активного
+значения — no-op; конкретный rendered surface выбирается приложением через JSX.
 
 ### `useEditorSelection()`
 
@@ -28,7 +46,7 @@ Mode локален и не входит в snapshot.
 
 - **Аргументы:** отсутствуют.
 - **Возвращает:** `{ element: HTMLElement | null; ref }`.
-- **Исключения:** `Editor root hooks must be used inside EditorView`.
+- **Исключения:** `Editor root hooks must be used inside EditorPanel`.
 
 Нужен прежде всего custom surface: container назначает `ref` и становится DOM scope.
 
@@ -67,13 +85,24 @@ Detached `block` обновляется по подписке на его subtre
 
 Text selection намеренно возвращает `null`.
 
-### `useBlockEditing(blockId, options?)`
+### `useBlockEditing(blockId)`
 
-- **Аргументы:** `blockId`; optional `{ textEdit?: boolean }`, default `true`.
-- **Возвращает:** block/operations, `getProps`, `getProp`, `setProps`, `setProp`, `attributes`, `preventTextEditingAttributes`.
+- **Аргументы:** `blockId`; хук предназначен для текстового блока.
+- **Возвращает:** block/operations, `attributes`, `preventTextEditingAttributes`. Методы `setProps` и типизированный `setProp` находятся в `operations`.
 - **Исключения:** provider error; setters передают schema/store errors.
 
-Imperative getters читают latest state и безопасны в event closures. `setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+В рендере читайте `block.props`, а внутри event closures — актуальный `reactPanel.blocks.getBlockNode(blockId)`. `operations.setProp(key, undefined)` удаляет property, если schema разрешает. `preventTextEditingAttributes` назначается nested interactive editor, который не должен активировать raw block editing.
+
+### Отдельные команды и DOM
+
+`useBlockOperations<Props>(blockId)` возвращает стабильные команды без подписки.
+`useBlockNode<Props>(blockId)` добавляет реактивный snapshot; generic описывает
+схему props, но не проверяет её при чтении. Записи валидируются менеджером.
+
+`useBlockTextEditing(blockId, block?.content)` возвращает текстовые attributes без
+второй подписки. `useBlockSelectionAnchor(blockId)` возвращает структурный anchor
+и восстанавливает ожидающий фокус. `usePreventTextEditing()` независимо обслуживает
+вложенные контролы и снимает временные pointer listeners при unmount.
 
 ## Interaction hooks
 

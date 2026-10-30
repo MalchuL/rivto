@@ -5,7 +5,7 @@
 
 Главы:
 
-1. [Граница React и EditorRuntime](./tutorials/react-editor/00-boundary-and-data-flow.md)
+1. [Граница React и DocumentEditor](./tutorials/react-editor/00-boundary-and-data-flow.md)
 2. [Subscriptions и lifecycle](./tutorials/react-editor/01-subscriptions-and-lifecycle.md)
 3. [Как работает EditableText](./tutorials/react-editor/02-editable-block.md)
 4. [Block renderer, canvas и interactions](./tutorials/react-editor/03-renderers-and-interactions.md)
@@ -27,4 +27,3 @@
 Для подробного алгоритма курсора, cross-block selection и clipboard после главы
 02 перейдите к отдельному
 [курсу selection и clipboard](./tutorials/selection-and-clipboard/README.md).
-

@@ -1,3 +1,4 @@
+import { blockHandleExtension } from "./block-handle/extension";
 /**
  * Public built-in extension catalog.
  *
@@ -6,44 +7,34 @@
  *
  * @module
  */
-import {
-  type EditorBlock as Block,
-  type EditorBlockInput as BlockInput,
-  createStructuralSelection,
-} from "@chulane/rivto";
-import type { BlockListType } from "./page/list";
+import { createStructuralSelection } from "@chulane/rivto";
+import { createElement } from "react";
+import { blockIdsOf, insertBlockElementSeparator } from "../../elements/block-element-projection";
+import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
+import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
-import { registerTextSelection } from "./selection/text-selection";
+import { registerBlockCreation } from "./page/block-creation";
+import { registerBlockMerge } from "./page/block-merge";
+import { registerBlockOutdent } from "./page/block-outdent";
+import { registerCollapse } from "./page/collapse";
+import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
+import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
+import { registerEmptyBlockReset } from "./page/empty-block-reset";
+import { registerIndent, type IndentExtensionOptions } from "./page/indent";
+import { registerListShortcuts } from "./page/list";
 import {
   registerBlockSelectionNavigation,
   registerCaretNavigation,
   registerKeyboardBlockMove,
 } from "./page/navigation";
-import { registerBlockMerge } from "./page/block-merge";
-import { registerBlockOutdent } from "./page/block-outdent";
-import { registerEmptyBlockReset } from "./page/empty-block-reset";
-import { registerBlockSelection } from "./selection/block-selection";
-import { registerCollapse } from "./page/collapse";
-import { registerBlockCreation } from "./page/block-creation";
-import { SlashMenu } from "./slash/slash-menu";
-import { registerSelectionDeletion } from "./selection/selection-deletion";
 import { registerTrailingBlock } from "./page/trailing-block";
-import { registerIndent, type IndentExtensionOptions } from "./page/indent";
-import { registerListShortcuts } from "./page/list";
+import { registerBlockSelection } from "./selection/block-selection";
+import { registerSelectionDeletion } from "./selection/selection-deletion";
+import { registerTextSelection } from "./selection/text-selection";
 import { separatorBlockExtension } from "./separator/separator-block";
-import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
-import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
-import {
-  blockIdsOf,
-  insertBlockElementSeparator,
-} from "../../elements/block-element-projection";
-import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
-import { PageSurface } from "../../surfaces/page";
-import {
-  type ReactBlockRegistration,
-  type ReactEditorExtension,
-} from "../../managers";
+import { SlashMenu, type SlashMenuPositionOptions } from "./slash/slash-menu";
+export type { SlashMenuPositionOptions } from "./slash/slash-menu";
 
 /**
  * Registers the host writing block, its renderer, and shared writing policy.
@@ -59,14 +50,6 @@ export function defaultWritingBlockExtension(
     setup: (reactEditor) => registerDefaultWritingBlock(reactEditor, options),
   };
 }
-
-/** @returns The built-in recursive outline surface for block mode. */
-export const pageSurfaceExtension = (): ReactEditorExtension => ({
-  id: "surface.page",
-  setup: (reactEditor) => {
-    reactEditor.surfaces.register("block", PageSurface);
-  },
-});
 
 /**
  * Installs CRDT-backed undo/redo and native contenteditable history suppression.
@@ -90,7 +73,9 @@ export const textSelectionExtension = (): ReactEditorExtension => ({
  * @param options - Clipboard serialization and paste behavior.
  * @returns A mode-independent clipboard extension.
  */
-export const clipboardExtension = (options: ClipboardExtensionOptions = {}): ReactEditorExtension => {
+export const clipboardExtension = (
+  options: ClipboardExtensionOptions = {},
+): ReactEditorExtension => {
   return { id: "clipboard", setup: (reactEditor) => registerClipboard(reactEditor, options) };
 };
 
@@ -101,16 +86,22 @@ export const blockSelectionExtension = (): ReactEditorExtension => ({
 });
 
 /** @returns Visual-line and cross-block caret navigation (card-scoped in edgeless). */
-export const caretNavigationExtension = (): ReactEditorExtension =>
-  ({ id: "navigation.caret", setup: registerCaretNavigation });
+export const caretNavigationExtension = (): ReactEditorExtension => ({
+  id: "navigation.caret",
+  setup: registerCaretNavigation,
+});
 
 /** @returns Keyboard growth, shrink, and movement of block selections (card-scoped in edgeless). */
-export const blockSelectionNavigationExtension = (): ReactEditorExtension =>
-  ({ id: "navigation.block-selection", setup: registerBlockSelectionNavigation });
+export const blockSelectionNavigationExtension = (): ReactEditorExtension => ({
+  id: "navigation.block-selection",
+  setup: registerBlockSelectionNavigation,
+});
 
 /** @returns Alt+Shift structural movement for eligible blocks (card-scoped in edgeless). */
-export const keyboardBlockMoveExtension = (): ReactEditorExtension =>
-  ({ id: "block.keyboard-move", setup: registerKeyboardBlockMove });
+export const keyboardBlockMoveExtension = (): ReactEditorExtension => ({
+  id: "block.keyboard-move",
+  setup: registerKeyboardBlockMove,
+});
 
 /** @returns Enter-driven block splitting and creation in editable content. */
 export const blockCreationExtension = (): ReactEditorExtension => ({
@@ -131,8 +122,10 @@ export const blockMergeExtension = (): ReactEditorExtension => {
 };
 
 /** @returns Backspace/Delete removal for expanded structural selections. */
-export const selectionDeletionExtension = (): ReactEditorExtension =>
-  ({ id: "selection.delete", setup: registerSelectionDeletion });
+export const selectionDeletionExtension = (): ReactEditorExtension => ({
+  id: "selection.delete",
+  setup: registerSelectionDeletion,
+});
 
 /**
  * Adds accessible page-end controls that append one or more paragraphs.
@@ -151,12 +144,16 @@ export const trailingBlockExtension = (count: number): ReactEditorExtension => {
 };
 
 /** @returns Backspace-at-start outdent behavior for nested blocks. */
-export const blockOutdentExtension = (): ReactEditorExtension =>
-  ({ id: "block.outdent-at-start", setup: registerBlockOutdent });
+export const blockOutdentExtension = (): ReactEditorExtension => ({
+  id: "block.outdent-at-start",
+  setup: registerBlockOutdent,
+});
 
 /** @returns Reset of the first empty custom block to the default paragraph. */
-export const emptyBlockResetExtension = (): ReactEditorExtension =>
-  ({ id: "block.reset-empty", setup: registerEmptyBlockReset });
+export const emptyBlockResetExtension = (): ReactEditorExtension => ({
+  id: "block.reset-empty",
+  setup: registerEmptyBlockReset,
+});
 
 /** @returns Markdown-style whole-content shortcuts for built-in list modes. */
 export const listShortcutsExtension = (): ReactEditorExtension => ({
@@ -195,60 +192,95 @@ export const collapseExtension = (): ReactEditorExtension => ({
  * Block-type conversion entries are registered separately by `registerBlock`.
  * This extension owns only actions valid for arbitrary registered types.
  *
+ * @param options - Optional menu width, height, caret gap, and viewport padding.
  * @returns A mode-independent slash popup and its core command registrations.
  */
-export const slashCommandExtension = (): ReactEditorExtension => ({
+export const slashCommandExtension = (
+  options: SlashMenuPositionOptions = {},
+): ReactEditorExtension => ({
   id: "slash.commands",
   setup: (reactEditor) => {
-    reactEditor.extensions.mount(SlashMenu);
-    const listCommands: readonly { type: BlockListType; title: string }[] = [
-      { type: "list", title: "List" },
-      { type: "checkbox", title: "Checkbox" },
-      { type: "numbered_list", title: "Numbered list" },
-      { type: "start_numbered_list", title: "Start numbered list" },
-      { type: "continue_numbered_list", title: "Continue numbered list" },
-    ];
+    reactEditor.extensions.mount(() => createElement(SlashMenu, { options }));
     const disposers = [
-      ...listCommands.map(({ type, title }) => reactEditor.slashCommands.register({
-        id: `list.${type}`,
-        title,
-        group: "Lists",
-        isAvailable: ({ blockId }) => reactEditor.blockListProps.has("list") &&
-          reactEditor.blocks.getBlockNode(blockId)?.listProps.type !== type,
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
-      })),
-      // Clone the complete subtree while leaving persisted IDs for the store to generate.
+      // Copy the complete detached subtree through its type converters. Import assigns
+      // fresh identities and retains type, content, list state, props, plugin data
+      // and descendants without sharing mutable payloads with the source tree.
       reactEditor.slashCommands.register({
         id: "block.duplicate",
         title: "Duplicate block",
         group: "Actions",
         keywords: ["copy", "clone"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlock(blockId);
-          if (!block) return;
-          const input = duplicateBlockInput(block);
-          const isEdgelessRoot = reactEditor.mode.get() === "edgeless" && reactEditor.blocks.isRootBlock(blockId);
+        isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId),
+        execute: ({ blockId, reactPanel }) => {
+          const block = reactPanel.blocks.getBlock(blockId);
+          if (!block) {
+            return;
+          }
+          const bundle = reactEditor.clipboard.copy(
+            createStructuralSelection([blockId]),
+            reactPanel,
+            "duplicate",
+          );
+          if (!bundle) {
+            return;
+          }
+          // Use the receiving view: a page embedding can share an edgeless core.
+          // Duplicating there should insert a sibling, not create a canvas card.
+          const isEdgelessRoot =
+            reactPanel.getSurfaceType() === "edgeless" &&
+            reactPanel.blocks.getRootIds().includes(blockId);
           const sourceElement = isEdgelessRoot
-            ? reactEditor.elements.getElements().find((element) => element.type === "block" && blockIdsOf(element, reactEditor.blocks.getRootIds()).includes(blockId))
+            ? reactPanel.elements
+                .getElementNodes()
+                .find(
+                  (element) =>
+                    element.type === "block" &&
+                    blockIdsOf(element, reactPanel.blocks.getRootIds()).includes(blockId),
+                )
             : undefined;
           let duplicateId = "";
-          reactEditor.history.batchUpdates(() => {
-            const afterId = isEdgelessRoot
-              ? insertBlockElementSeparator(reactEditor, reactEditor.blocks.getRootIds().at(-1)!).id
-              : block.id;
-            duplicateId = reactEditor.blocks.insertBlock(input, afterId).id;
-            if (isEdgelessRoot) reactEditor.elements.insertElement({
-              id: duplicateId,
-              type: "block",
-              frame: sourceElement
-                ? { ...sourceElement.frame, x: sourceElement.frame.x + 24, y: sourceElement.frame.y + 24 }
-                : { x: 84, y: 84, width: 320, height: 120 },
-              zIndex: Math.max(0, ...reactEditor.elements.getElements().map((element) => element.zIndex)) + 1,
-              props: { startBlockId: duplicateId, endBlockId: duplicateId },
-            });
+          reactPanel.batchUpdates(() => {
+            const afterId = isEdgelessRoot ? reactPanel.blocks.getRootIds().at(-1)! : block.id;
+            reactEditor.clipboard.paste(
+              {
+                bundle,
+                textTarget: createStructuralSelection([]),
+                placement: { afterId, mergeText: false },
+              },
+              reactPanel,
+              "duplicate",
+            );
+            duplicateId = reactPanel.selection.get()?.blocks[0]?.id ?? "";
+            if (!duplicateId) {
+              return;
+            }
+            if (isEdgelessRoot) {
+              insertBlockElementSeparator(reactPanel.editor, afterId);
+            }
+            if (isEdgelessRoot) {
+              reactPanel.elements.insertElement({
+                type: "block",
+                frame: sourceElement
+                  ? {
+                      ...sourceElement.frame,
+                      x: sourceElement.frame.x + 24,
+                      y: sourceElement.frame.y + 24,
+                    }
+                  : { x: 84, y: 84, width: 320, height: 120 },
+                zIndex:
+                  Math.max(
+                    0,
+                    ...reactPanel.elements.getElementNodes().map((element) => element.zIndex),
+                  ) + 1,
+                props: {
+                  ...sourceElement?.props,
+                  startBlockId: duplicateId,
+                  endBlockId: duplicateId,
+                },
+              });
+            }
           });
-          reactEditor.selection.set(createStructuralSelection([duplicateId]));
+          reactPanel.selection.set(createStructuralSelection([duplicateId]));
         },
       }),
       // Route deletion through structural selection so descendants are atomic.
@@ -257,35 +289,11 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
         title: "Delete block",
         group: "Actions",
         keywords: ["remove"],
-        isAvailable: ({ blockId }) => reactEditor.blocks.hasBlock(blockId),
-        execute: ({ blockId }) => {
-          reactEditor.selection.set(createStructuralSelection([blockId]));
-          reactEditor.selection.delete();
+        isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId),
+        execute: ({ blockId, reactPanel }) => {
+          reactPanel.selection.set(createStructuralSelection([blockId]));
+          reactPanel.selection.delete();
         },
-      }),
-      reactEditor.slashCommands.register({
-        id: "block.collapse",
-        title: "Collapse block",
-        group: "Actions",
-        keywords: ["fold", "hide"],
-        isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlockNode(blockId);
-          return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.childIds.length && block.listProps.collapsed !== true);
-        },
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: true } }),
-      }),
-      reactEditor.slashCommands.register({
-        id: "block.expand",
-        title: "Expand block",
-        group: "Actions",
-        keywords: ["unfold", "show"],
-        isAvailable: ({ blockId }) => {
-          const block = reactEditor.blocks.getBlockNode(blockId);
-          return reactEditor.blockListProps.has("collapse") &&
-            Boolean(block?.childIds.length && block.listProps.collapsed === true);
-        },
-        execute: ({ blockId }) => reactEditor.blocks.updateBlock(blockId, { listProps: { collapsed: false } }),
       }),
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.
@@ -293,30 +301,8 @@ export const slashCommandExtension = (): ReactEditorExtension => ({
   },
 });
 
-/**
- * Converts a detached block snapshot into recursive insertion input.
- *
- * IDs are intentionally omitted so the core store assigns fresh identity.
- * Mutable payloads are cloned to
- * prevent the new subtree from sharing application-owned object references.
- *
- * @param block - Root snapshot of the subtree to duplicate.
- * @returns Recursive, ID-free input preserving type, list state, content,
- * props, extension data, and descendants.
- */
-const duplicateBlockInput = (block: Block): BlockInput => ({
-  type: block.type,
-  listProps: structuredClone(block.listProps),
-  content: block.content,
-  props: structuredClone(block.props),
-  pluginData: structuredClone(block.pluginData),
-  children: block.children.map(duplicateBlockInput),
-});
-
 /** Creates one atomic model, renderer, and optional slash-command extension. */
-export const blockExtension = (
-  registration: ReactBlockRegistration,
-): ReactEditorExtension => ({
+export const blockExtension = (registration: ReactBlockRegistration): ReactEditorExtension => ({
   id: `block.${registration.definition.type}`,
   setup: (reactEditor) => {
     reactEditor.blockTypes.register(registration);
@@ -329,6 +315,8 @@ export interface StandardPresetOptions {
   readonly trailingBlockCount?: number;
   /** Host overrides for the default writing block extension. */
   readonly writing?: DefaultWritingBlockOptions;
+  /** Floating slash-menu dimensions and caret spacing. */
+  readonly slashMenu?: SlashMenuPositionOptions;
 }
 
 /**
@@ -337,21 +325,19 @@ export interface StandardPresetOptions {
  * Installs `defaultWritingBlockExtension` first so writing factories exist
  * before separator, clipboard, Enter, and related paths run.
  *
- * @param options - Trailing-block count and optional writing overrides.
+ * @param options - Trailing-block count, writing overrides, and slash-menu placement.
  * @returns The standard page extension preset without optional drag or canvas features.
  */
-export const standardPreset = (
-  options: StandardPresetOptions = {},
-): ReactEditorExtension => {
+export const standardPreset = (options: StandardPresetOptions = {}): ReactEditorExtension => {
   const trailingBlockCount = options.trailingBlockCount ?? 3;
   const extensions = [
     defaultWritingBlockExtension(options.writing),
+    blockHandleExtension(),
     errorBlockExtension(),
     separatorBlockExtension(),
-    pageSurfaceExtension(),
     historyExtension(),
     textSelectionExtension(),
-    slashCommandExtension(),
+    slashCommandExtension(options.slashMenu),
     listShortcutsExtension(),
     clipboardExtension({ onPrepareError: createErrorBlockInput }),
     blockSelectionExtension(),
@@ -374,29 +360,41 @@ export const standardPreset = (
       try {
         for (const extension of extensions) {
           const cleanup = extension.setup(reactEditor);
-          if (cleanup) cleanups.push(cleanup);
+          if (cleanup) {
+            cleanups.push(cleanup);
+          }
         }
       } catch (error) {
-        cleanups.slice().reverse().forEach((cleanup) => {
-          try {
-            cleanup();
-          } catch {
-            // Rollback is best-effort so the original setup error is preserved.
-          }
-        });
+        cleanups
+          .slice()
+          .reverse()
+          .forEach((cleanup) => {
+            try {
+              cleanup();
+            } catch {
+              // Rollback is best-effort so the original setup error is preserved.
+            }
+          });
         throw error;
       }
       return () => {
         const errors: unknown[] = [];
-        cleanups.slice().reverse().forEach((cleanup) => {
-          try {
-            cleanup();
-          } catch (cleanupError) {
-            errors.push(cleanupError);
-          }
-        });
-        if (errors.length === 1) throw errors[0];
-        if (errors.length > 1) throw new AggregateError(errors, "Standard preset cleanup failed");
+        cleanups
+          .slice()
+          .reverse()
+          .forEach((cleanup) => {
+            try {
+              cleanup();
+            } catch (cleanupError) {
+              errors.push(cleanupError);
+            }
+          });
+        if (errors.length === 1) {
+          throw errors[0];
+        }
+        if (errors.length > 1) {
+          throw new AggregateError(errors, "Standard preset cleanup failed");
+        }
       };
     },
   };

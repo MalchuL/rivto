@@ -1,0 +1,174 @@
+.block-handle {
+  position: absolute;
+  top: 0;
+  left: -24px;
+  /* Fit the shared 24px indent without overlapping the parent handle, and
+     reach the block edge so pointer travel from the row keeps it visible. */
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--rivto-muted-foreground);
+  background: transparent;
+  cursor: grab;
+  opacity: 0;
+  /* Window activation can deliver a press before movement restores row hover. */
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* In-flow handles share the control size used to reserve stable row width. */
+.rivto-block-row[data-controls-placement="inside"] > .rivto-block-slot > .block-handle {
+  width: var(--rivto-block-control-size, 20px);
+}
+
+/* Children live outside their parent's row, so only the line under the cursor
+   or owning the caret reveals its handle. */
+:root:not([data-block-drag-active])
+  .rivto-block-row[data-block-row-hover]
+  > .rivto-block-slot
+  > .block-handle,
+.rivto-block-row:focus-within > .rivto-block-slot > .block-handle,
+:root:not([data-block-drag-active]) .block-handle:hover,
+.block-handle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Scope editing feedback to this row, excluding controls and descendant blocks. */
+.rivto-block-row:has([contenteditable]:not([contenteditable="false"]):focus)
+  > .rivto-block-slot
+  > .block-handle {
+  color: var(--rivto-accent);
+}
+
+.block-handle:active {
+  cursor: grabbing;
+}
+
+.block-handle {
+  gap: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.block-handle[data-draggable] {
+  cursor: grab;
+}
+.block-handle[data-collapsed],
+.block-handle[aria-expanded="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.block-handle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.block-handle-icon * {
+  pointer-events: none;
+}
+.block-handle-grip {
+  width: 16px;
+  height: 16px;
+}
+:root:not([data-block-drag-active]) .block-handle:hover .block-handle-icon,
+.block-handle:focus-visible .block-handle-icon {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.block-handle[data-collapsed] .block-handle-icon,
+.rivto-block-row:has([contenteditable]:not([contenteditable="false"]):focus)
+  > .rivto-block-slot
+  > .block-handle
+  > .block-handle-icon {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 8%, transparent);
+}
+.block-handle:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 1px;
+}
+.block-context-menu {
+  min-width: 248px;
+  z-index: 1000;
+}
+.block-context-menu-item {
+  min-height: 32px;
+}
+.block-color-swatches {
+  display: flex;
+  gap: 5px;
+  padding: 3px 8px 10px;
+}
+.block-color-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 50%;
+  background: var(--block-background);
+  cursor: pointer;
+}
+.block-color-swatch[data-highlighted] {
+  background: var(--block-background);
+  color: inherit;
+}
+.block-color-swatch[aria-pressed="true"],
+.block-color-swatch:focus-visible {
+  box-shadow:
+    0 0 0 1px var(--rivto-background),
+    0 0 0 3px var(--rivto-accent);
+}
+
+:root {
+  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
+  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
+  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
+  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
+  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
+  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
+  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
+}
+[data-block-id][data-block-background] {
+  border-radius: 8px;
+}
+[data-block-background="gray"] {
+  background-color: var(--rivto-block-gray);
+}
+[data-block-background="red"] {
+  background-color: var(--rivto-block-red);
+}
+[data-block-background="orange"] {
+  background-color: var(--rivto-block-orange);
+}
+[data-block-background="yellow"] {
+  background-color: var(--rivto-block-yellow);
+}
+[data-block-background="green"] {
+  background-color: var(--rivto-block-green);
+}
+[data-block-background="blue"] {
+  background-color: var(--rivto-block-blue);
+}
+[data-block-background="purple"] {
+  background-color: var(--rivto-block-purple);
+}
+
+/* Native pointer ownership is resolved by Page within each layout's bounds.
+ * No viewport-wide pseudo-element participates in hit testing or scroll geometry.
+ * Content remains above block-local decoration without changing handle geometry. */
+:is(.page-surface, .edgeless-card) .rivto-block-row > .rivto-block-content {
+  position: relative;
+  z-index: 1;
+}

@@ -143,7 +143,7 @@ Endpoint может находиться в text node внутри `<strong>`. R
 6. Каждый endpoint проходит через `readPosition()`.
 7. Получается `TextSelection` с `blockId + offset`.
 8. React вызывает команду `selection.set`.
-9. EditorRuntime проверяет позиции.
+9. DocumentEditor проверяет позиции.
 10. SelectionManager сохраняет detached value.
 11. Subscribers вызывают React update.
 12. Layout effect проецирует runtime value обратно в DOM.

@@ -4,22 +4,55 @@ import {
   GraphRuntime,
   type PropagationContext,
   type ValueBinding,
-} from "./index";
+} from ".";
 
 /** Creates a live value binding whose writes synchronously notify subscribers. */
-function memoryValue(initial: unknown): ValueBinding & { value: unknown; notify(value: unknown, context?: PropagationContext): void } {
+function memoryValue(initial: unknown): ValueBinding & {
+  value: unknown; /**
+   * Updates the fixture value and notifies subscribers with optional propagation metadata.
+   *
+   * @param value - Value to store or publish through this operation.
+   * @param context - Propagation run ID and visited-node ancestry accompanying the value.
+   */
+  notify(value: unknown, context?: PropagationContext): void;
+} {
   const listeners = new Set<(value: unknown, context?: PropagationContext) => void>();
   return {
     value: initial,
-    get() { return this.value; },
+    /**
+     * Reads the fixture's in-memory endpoint value.
+     *
+     * @returns Current value.
+     */
+    get() {
+      return this.value;
+    },
+    /**
+     * Stores the fixture value and synchronously notifies every listener.
+     *
+     * @param value - Value to store or publish through this operation.
+     * @param context - Propagation run ID and visited-node ancestry accompanying the value.
+     */
     set(value, context) {
       this.value = value;
       listeners.forEach((listener) => listener(value, context));
     },
+    /**
+     * Registers a listener on the in-memory endpoint fixture.
+     *
+     * @param listener - Callback invoked when the observed state changes.
+     * @returns A function that removes the listener.
+     */
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    /**
+     * Updates the fixture value and notifies subscribers with optional propagation metadata.
+     *
+     * @param value - Value to store or publish through this operation.
+     * @param context - Propagation run ID and visited-node ancestry accompanying the value.
+     */
     notify(value, context) {
       this.value = value;
       listeners.forEach((listener) => listener(value, context));
@@ -28,7 +61,12 @@ function memoryValue(initial: unknown): ValueBinding & { value: unknown; notify(
 }
 
 /** Registers a memory value using its endpoint ID as the node ID by default. */
-function addValue(runtime: GraphRuntime, id: string, value: ReturnType<typeof memoryValue>, nodeId = id): void {
+function addValue(
+  runtime: GraphRuntime,
+  id: string,
+  value: ReturnType<typeof memoryValue>,
+  nodeId = id,
+): void {
   runtime.registerValue({ id, nodeId }, value);
 }
 
@@ -99,7 +137,9 @@ describe("GraphRuntime values", () => {
     const first = memoryValue(0);
     const second = memoryValue(0);
     const target = memoryValue(0);
-    [source, first, second, target].forEach((binding, index) => addValue(runtime, ["source", "first", "second", "target"][index]!, binding));
+    [source, first, second, target].forEach((binding, index) =>
+      addValue(runtime, ["source", "first", "second", "target"][index]!, binding),
+    );
     runtime.connect({ id: "1", kind: "directed-value", from: "source", to: "first" });
     runtime.connect({ id: "2", kind: "directed-value", from: "source", to: "second" });
     runtime.connect({ id: "3", kind: "directed-value", from: "first", to: "target" });
@@ -140,10 +180,15 @@ describe("GraphRuntime values", () => {
     const source = memoryValue(1);
     let writes = 0;
     addValue(runtime, "source", source);
-    runtime.registerValue({ id: "target", nodeId: "target" }, {
-      get: () => 1,
-      set: () => { writes += 1; },
-    });
+    runtime.registerValue(
+      { id: "target", nodeId: "target" },
+      {
+        get: () => 1,
+        set: () => {
+          writes += 1;
+        },
+      },
+    );
     runtime.connect({ id: "flow", kind: "directed-value", from: "source", to: "target" });
     runtime.enable();
 
@@ -175,10 +220,24 @@ describe("GraphRuntime slots", () => {
       context.emit("named", `${payload}:named`);
       return `${payload}:result`;
     });
-    runtime.registerSlot({ id: "named", nodeId: "named" }, (payload) => calls.push(String(payload)));
-    runtime.registerSlot({ id: "result", nodeId: "result" }, (payload) => calls.push(String(payload)));
-    runtime.connect({ id: "1", kind: "slot-flow", from: { slotId: "start", output: "named" }, to: "named" });
-    runtime.connect({ id: "2", kind: "slot-flow", from: { slotId: "start", output: "result" }, to: "result" });
+    runtime.registerSlot({ id: "named", nodeId: "named" }, (payload) =>
+      calls.push(String(payload)),
+    );
+    runtime.registerSlot({ id: "result", nodeId: "result" }, (payload) =>
+      calls.push(String(payload)),
+    );
+    runtime.connect({
+      id: "1",
+      kind: "slot-flow",
+      from: { slotId: "start", output: "named" },
+      to: "named",
+    });
+    runtime.connect({
+      id: "2",
+      kind: "slot-flow",
+      from: { slotId: "start", output: "result" },
+      to: "result",
+    });
     runtime.enable();
 
     await runtime.invokeSlot("start", "x");
@@ -192,9 +251,15 @@ describe("GraphRuntime slots", () => {
     const value = memoryValue(0);
     const calls: unknown[] = [];
     addValue(runtime, "value", value, "value-block");
-    runtime.registerSlot({ id: "writer", nodeId: "writer-block" }, async (payload, context) => context.writeValue("value", payload));
-    runtime.registerSlot({ id: "unused", nodeId: "unused-block" }, (payload) => calls.push(payload));
-    expect(() => runtime.connect({ id: "bad", kind: "directed-value", from: "value", to: "unused" })).toThrow("value endpoint");
+    runtime.registerSlot({ id: "writer", nodeId: "writer-block" }, async (payload, context) =>
+      context.writeValue("value", payload),
+    );
+    runtime.registerSlot({ id: "unused", nodeId: "unused-block" }, (payload) =>
+      calls.push(payload),
+    );
+    expect(() =>
+      runtime.connect({ id: "bad", kind: "directed-value", from: "value", to: "unused" }),
+    ).toThrow("value endpoint");
     runtime.enable();
 
     await runtime.invokeSlot("writer", 4);
@@ -210,10 +275,25 @@ describe("GraphRuntime slots", () => {
     const calls: string[] = [];
     const errors: string[] = [];
     runtime.registerSlot({ id: "a", nodeId: "a" }, () => "a");
-    runtime.registerSlot({ id: "b", nodeId: "b" }, () => { calls.push("b"); return "b"; });
-    runtime.registerSlot({ id: "bad", nodeId: "bad" }, () => { throw new Error("boom"); });
-    runtime.connect({ id: "ab", kind: "slot-flow", from: { slotId: "a", output: "result" }, to: "b" });
-    runtime.connect({ id: "ba", kind: "slot-flow", from: { slotId: "b", output: "result" }, to: "a" });
+    runtime.registerSlot({ id: "b", nodeId: "b" }, () => {
+      calls.push("b");
+      return "b";
+    });
+    runtime.registerSlot({ id: "bad", nodeId: "bad" }, () => {
+      throw new Error("boom");
+    });
+    runtime.connect({
+      id: "ab",
+      kind: "slot-flow",
+      from: { slotId: "a", output: "result" },
+      to: "b",
+    });
+    runtime.connect({
+      id: "ba",
+      kind: "slot-flow",
+      from: { slotId: "b", output: "result" },
+      to: "a",
+    });
     runtime.subscribeErrors((error) => errors.push(error.message));
     runtime.enable();
 
@@ -230,13 +310,24 @@ describe("GraphRuntime slots", () => {
     const calls: unknown[] = [];
     let release!: () => void;
     let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => { markStarted = resolve; });
-    runtime.registerSlot({ id: "slow", nodeId: "slow" }, () => new Promise((resolve) => {
-      release = () => resolve("late");
-      markStarted();
-    }));
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    runtime.registerSlot(
+      { id: "slow", nodeId: "slow" },
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve("late");
+          markStarted();
+        }),
+    );
     runtime.registerSlot({ id: "next", nodeId: "next" }, (payload) => calls.push(payload));
-    runtime.connect({ id: "flow", kind: "slot-flow", from: { slotId: "slow", output: "result" }, to: "next" });
+    runtime.connect({
+      id: "flow",
+      kind: "slot-flow",
+      from: { slotId: "slow", output: "result" },
+      to: "next",
+    });
     runtime.enable();
     const running = runtime.invokeSlot("slow", null);
     await started;
@@ -271,22 +362,26 @@ describe("GraphRuntime snapshots", () => {
     const runtime = new GraphRuntime();
     addValue(runtime, "value", memoryValue(0));
     const before = runtime.getSnapshot();
-    expect(() => runtime.loadSnapshot({
-      version: 1,
-      endpoints: [
-        { id: "same", nodeId: "a", kind: "value" },
-        { id: "same", nodeId: "b", kind: "slot" },
-      ],
-      connections: [],
-    })).toThrow("Duplicate endpoint");
-    expect(() => runtime.loadSnapshot({
-      version: 1,
-      endpoints: [
-        { id: "value", nodeId: "a", kind: "value" },
-        { id: "slot", nodeId: "b", kind: "slot" },
-      ],
-      connections: [{ id: "bad", kind: "directed-value", from: "value", to: "slot" }],
-    })).toThrow("value endpoint");
+    expect(() =>
+      runtime.loadSnapshot({
+        version: 1,
+        endpoints: [
+          { id: "same", nodeId: "a", kind: "value" },
+          { id: "same", nodeId: "b", kind: "slot" },
+        ],
+        connections: [],
+      }),
+    ).toThrow("Duplicate endpoint");
+    expect(() =>
+      runtime.loadSnapshot({
+        version: 1,
+        endpoints: [
+          { id: "value", nodeId: "a", kind: "value" },
+          { id: "slot", nodeId: "b", kind: "slot" },
+        ],
+        connections: [{ id: "bad", kind: "directed-value", from: "value", to: "slot" }],
+      }),
+    ).toThrow("value endpoint");
     expect(runtime.getSnapshot()).toEqual(before);
   });
 });

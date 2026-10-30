@@ -25,7 +25,9 @@ export function ResizeHandle({
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={(event) => {
-        if (dragging.current) onDrag(event.clientX);
+        if (dragging.current) {
+          onDrag(event.clientX);
+        }
       }}
       onPointerUp={(event) => {
         dragging.current = false;

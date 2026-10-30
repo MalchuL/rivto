@@ -39,36 +39,25 @@ The first registered wrapper is outermost. A wrapper must render `children`
 exactly once. Extension cleanup removes its exact registration and preserves the
 relative order of remaining wrappers.
 
-`BlockTree` owns the single `BlockView`, content renderer, controls, and recursive
-descendants for every surface. Wrappers must not create another `BlockView` with
+Page owns the single `BlockNode`, content renderer, controls, and recursive
+descendants for every surface. Wrappers must not create another `BlockNode` with
 the same block ID.
 
 Selection presentation belongs to the shared shell, so decorators do not
 receive an `isSelected` prop. A decorator that truly needs current selection
 behavior can resolve it explicitly with `useBlockSelection(block.id)`.
 
-## Observing the BlockView element
+## Block controls and geometry
 
-A decorator that needs the real block element can contribute a ref without
-adding layout DOM:
+Controls that belong to a block use `surfaces.registerBlockSlot`. Page supplies
+one occurrence-local slot and its canonical block context; the component does
+not need a ref provider or a second structural shell. Registered layouts use
+`BlockRow`, `BlockContent`, `BlockBody`, and `BlockChildren` to place that content.
+The same registrations render inside writing pages and Edgeless block cards.
 
-```tsx
-function MeasurementWrapper({ children }: BlockWrapperProps) {
-  const [element, setElement] = useState<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    if (element) measure(element);
-  }, [element]);
-
-  return (
-    <BlockElementRefProvider elementRef={setElement}>
-      {children}
-    </BlockElementRefProvider>
-  );
-}
-```
-
-Multiple ref providers compose. BlockTree recursion resets the ref scope, so a
-parent wrapper observes only its own `BlockView`, never nested child elements.
-The page drag extension uses this contract to attach dnd-kit to the existing row
-and portal its handle without replacing the shared shell.
+A component that must measure its own rendered control can retain a normal React
+ref and release its observer when unmounted. Structural hit testing belongs to
+Page's attached controller, which resolves the block DOM through its occurrence
+root. Nested editors have separate roots, so their blocks cannot enter the outer
+editor's input chain. The pointer drag extension uses that shared attachment and
+Page's handle marker; it does not attach a second drag sensor to every row.

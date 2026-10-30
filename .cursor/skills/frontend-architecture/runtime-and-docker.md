@@ -54,10 +54,10 @@ web:
     - "${WEB_PORT:-3000}:3000"
 ```
 
-| Env | Typical Compose value | Who uses it |
-|-----|----------------------|-------------|
-| `PUBLIC_API_BASE_URL` | Host-reachable or public HTTPS API origin | Browser axios (`getPublicApiBaseUrl`) |
-| `SERVER_API_BASE_URL` | `http://backend:8000` (Compose DNS) | Next Route Handlers (`getServerApiBaseUrl`) |
+| Env                   | Typical Compose value                     | Who uses it                                 |
+| --------------------- | ----------------------------------------- | ------------------------------------------- |
+| `PUBLIC_API_BASE_URL` | Host-reachable or public HTTPS API origin | Browser axios (`getPublicApiBaseUrl`)       |
+| `SERVER_API_BASE_URL` | `http://backend:8000` (Compose DNS)       | Next Route Handlers (`getServerApiBaseUrl`) |
 
 When using a custom hostname, set backend CORS allowlists to the **UI** origin. After changing only `PUBLIC_API_BASE_URL`:
 
@@ -69,12 +69,12 @@ No image rebuild required.
 
 ## Code touchpoints
 
-| File | Role |
-|------|------|
-| `src/lib/runtime-config.ts` | Public URL resolve + HTML injection script |
-| `src/lib/env.ts` | Zod env; `getServerApiBaseUrl()` |
-| `src/app/layout.tsx` | Injects config script; `force-dynamic` |
-| `src/lib/api/clients/axios-client.ts` | Browser client `baseURL` |
-| `src/app/api/**/route.ts` | Server proxy with `getServerApiBaseUrl()` |
+| File                                  | Role                                       |
+| ------------------------------------- | ------------------------------------------ |
+| `src/lib/runtime-config.ts`           | Public URL resolve + HTML injection script |
+| `src/lib/env.ts`                      | Zod env; `getServerApiBaseUrl()`           |
+| `src/app/layout.tsx`                  | Injects config script; `force-dynamic`     |
+| `src/lib/api/clients/axios-client.ts` | Browser client `baseURL`                   |
+| `src/app/api/**/route.ts`             | Server proxy with `getServerApiBaseUrl()`  |
 
 Never put secrets or internal-only URLs into the runtime config object injected for the browser.

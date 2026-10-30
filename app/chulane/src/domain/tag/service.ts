@@ -1,10 +1,5 @@
 import { getMockDb } from "../../lib/mock/db";
-import type {
-  AvailableTag,
-  CreateTagInput,
-  Tag,
-  UpdateTagInput,
-} from "./types";
+import type { AvailableTag, CreateTagInput, Tag, UpdateTagInput } from "./types";
 import { normalizeTagColor, normalizeTagName } from "./types";
 
 function nowIso(): string {
@@ -17,7 +12,9 @@ function ancestorProjectIds(projectId: string): string[] {
   let current = db.projects.get(projectId);
   const seen = new Set<string>();
   while (current?.parentProjectId) {
-    if (seen.has(current.parentProjectId)) break;
+    if (seen.has(current.parentProjectId)) {
+      break;
+    }
     seen.add(current.parentProjectId);
     ids.push(current.parentProjectId);
     current = db.projects.get(current.parentProjectId);
@@ -26,10 +23,18 @@ function ancestorProjectIds(projectId: string): string[] {
 }
 
 export const tagService = {
+  /**
+   * Collects project and ancestor tags, sorting local tags first and names alphabetically.
+   *
+   * @param projectId - Project whose local and inherited tags are requested.
+   * @returns Available tags with inheritance metadata, or an empty list for unknown projects.
+   */
   async listForProject(projectId: string): Promise<AvailableTag[]> {
     const db = getMockDb();
     const project = db.projects.get(projectId);
-    if (!project) return [];
+    if (!project) {
+      return [];
+    }
 
     const ancestorIds = ancestorProjectIds(projectId);
     const result: AvailableTag[] = [];
@@ -48,15 +53,30 @@ export const tagService = {
     }
 
     return result.sort((a, b) => {
-      if (a.inherited !== b.inherited) return a.inherited ? 1 : -1;
+      if (a.inherited !== b.inherited) {
+        return a.inherited ? 1 : -1;
+      }
       return a.name.localeCompare(b.name);
     });
   },
 
+  /**
+   * Looks up a tag in the mock database.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Stored tag, or null when the ID is unknown.
+   */
   async get(id: string): Promise<Tag | null> {
     return getMockDb().tags.get(id) ?? null;
   },
 
+  /**
+   * Creates a project tag after normalizing its name and color and checking project-local uniqueness.
+   *
+   * @param input - Creation or update fields for this operation.
+   * @returns Stored tag with a new ID and timestamps.
+   * @throws If the project is unknown or the name is blank, contains #, or duplicates a project tag.
+   */
   async create(input: CreateTagInput): Promise<Tag> {
     const db = getMockDb();
     if (!db.projects.has(input.projectId)) {
@@ -70,9 +90,7 @@ export const tagService = {
       throw new Error("Tag name cannot contain #");
     }
     const duplicate = [...db.tags.values()].some(
-      (tag) =>
-        tag.projectId === input.projectId &&
-        tag.name.toLowerCase() === name.toLowerCase(),
+      (tag) => tag.projectId === input.projectId && tag.name.toLowerCase() === name.toLowerCase(),
     );
     if (duplicate) {
       throw new Error(`Tag #${name} already exists in this project`);
@@ -91,6 +109,13 @@ export const tagService = {
     return tag;
   },
 
+  /**
+   * Updates supplied tag fields, validating a changed name and refreshing the timestamp.
+   *
+   * @param input - Creation or update fields for this operation.
+   * @returns Updated tag.
+   * @throws If the tag is unknown or its new name is blank, contains #, or duplicates a project tag.
+   */
   async update(input: UpdateTagInput): Promise<Tag> {
     const db = getMockDb();
     const existing = db.tags.get(input.id);
@@ -100,8 +125,12 @@ export const tagService = {
     let name = existing.name;
     if (input.name !== undefined) {
       name = normalizeTagName(input.name);
-      if (!name) throw new Error("Tag name is required");
-      if (name.includes("#")) throw new Error("Tag name cannot contain #");
+      if (!name) {
+        throw new Error("Tag name is required");
+      }
+      if (name.includes("#")) {
+        throw new Error("Tag name cannot contain #");
+      }
       const duplicate = [...db.tags.values()].some(
         (tag) =>
           tag.id !== existing.id &&
@@ -125,9 +154,16 @@ export const tagService = {
     return updated;
   },
 
+  /**
+   * Deletes a tag and removes its ID from every page; missing tags are ignored.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   */
   async delete(id: string): Promise<void> {
     const db = getMockDb();
-    if (!db.tags.has(id)) return;
+    if (!db.tags.has(id)) {
+      return;
+    }
     db.tags.delete(id);
     for (const page of db.pages.values()) {
       if (page.tagIds.includes(id)) {

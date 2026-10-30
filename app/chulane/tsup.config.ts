@@ -16,6 +16,11 @@ export default defineConfig({
     "@chulane/rivto-react",
     "yjs",
   ],
+  /**
+   * Enables esbuild's automatic JSX transform by mutating the build options.
+   *
+   * @param options - Mutable esbuild options whose JSX transform is set to automatic.
+   */
   esbuildOptions(options) {
     options.jsx = "automatic";
   },

@@ -33,13 +33,17 @@ export function PageEditorBlock({
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
     };
   }, []);
 
   const scheduleSave = (next: { title?: string; content?: string }) => {
     setSaveState("dirty");
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
     saveTimer.current = setTimeout(async () => {
       setSaveState("saving");
       await updatePage.mutateAsync({ id: page.id, ...next });

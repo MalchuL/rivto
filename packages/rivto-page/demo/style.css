@@ -1,0 +1,144 @@
+/* Demo chrome and example forms only; package geometry is compiled independently. */
+@reference "../src/presentation/styles.css";
+
+:root {
+  @apply page:font-sans page:text-slate-800 page:bg-slate-100;
+}
+body {
+  @apply page:m-0;
+}
+.demo-page {
+  @apply page:mx-auto page:my-10 page:max-w-[1180px] page:px-5 page:pb-12;
+}
+.demo-heading {
+  @apply page:mb-7;
+}
+.demo-eyebrow {
+  @apply page:text-xs page:font-semibold page:tracking-widest page:uppercase page:text-indigo-600;
+}
+.demo-heading h1 {
+  @apply page:mt-4 page:mb-3 page:text-4xl page:font-semibold page:tracking-tight page:sm:text-5xl;
+}
+.demo-heading h1 span {
+  @apply page:mt-1 page:block page:text-slate-400;
+}
+.demo-heading > p {
+  @apply page:m-0 page:text-sm page:leading-relaxed page:text-slate-600;
+}
+.demo-scope {
+  @apply page:mt-3 page:max-w-2xl page:text-xs page:leading-relaxed page:text-slate-600;
+}
+.demo-scope summary {
+  @apply page:w-fit page:cursor-pointer page:font-medium;
+}
+.demo-scope p {
+  @apply page:mb-0;
+}
+nav[aria-label="Demo controls"] {
+  @apply page:flex page:flex-wrap page:items-center page:gap-3;
+}
+nav[aria-label="Demo controls"] {
+  @apply page:mb-3 page:rounded-xl page:border page:border-solid page:border-slate-200 page:bg-white page:p-4 page:shadow-xs;
+}
+:is(nav[aria-label="Demo controls"], .demo-node, .demo-inspector) label,
+.demo-density {
+  @apply page:inline-flex page:cursor-pointer page:items-center page:gap-2 page:text-xs page:font-medium page:text-slate-600;
+}
+.demo-examples {
+  @apply page:flex page:basis-full page:flex-wrap page:items-center page:gap-2 page:border-0 page:border-t page:border-solid page:border-slate-100 page:pt-3;
+}
+.demo-examples > span {
+  @apply page:mr-2 page:text-[10px] page:font-semibold page:tracking-wider page:uppercase page:text-slate-500;
+}
+.demo-examples a {
+  @apply page:rounded-md page:bg-slate-100 page:px-3 page:py-2 page:text-xs page:font-medium page:text-slate-700 page:no-underline page:hover:bg-indigo-50 page:hover:text-indigo-700 page:focus-visible:outline-2 page:focus-visible:outline-indigo-600;
+}
+section[aria-label="Statistics"],
+.demo-inspector {
+  @apply page:my-2 page:flex page:flex-wrap page:items-center page:gap-2 page:rounded-lg page:border page:border-solid page:border-slate-200 page:bg-white page:px-3 page:py-2 page:text-xs page:text-slate-600;
+}
+section[aria-label="Statistics"] details {
+  @apply page:ml-auto;
+}
+section[aria-label="Statistics"] summary {
+  @apply page:cursor-pointer page:font-medium;
+}
+section[aria-label="Statistics"] pre {
+  @apply page:overflow-x-auto page:rounded-md page:bg-slate-50 page:p-3 page:text-xs;
+}
+.demo-inspector output {
+  @apply page:min-w-0 page:font-mono page:text-[10px] page:wrap-anywhere page:text-slate-500;
+}
+.demo-density {
+  @apply page:mt-2 page:mb-4;
+}
+.demo-node header {
+  @apply page:flex page:items-center page:justify-between page:gap-3;
+}
+.demo-node-heading {
+  @apply page:min-w-0;
+}
+.demo-node-heading span {
+  @apply page:mb-1 page:block page:text-[10px] page:font-semibold page:tracking-widest page:uppercase page:text-slate-500;
+}
+.demo-node-heading strong {
+  @apply page:block page:font-mono page:text-xs page:font-medium page:wrap-anywhere page:text-slate-700;
+}
+.demo-node header button {
+  @apply page:h-7 page:shrink-0 page:border-slate-200 page:px-2 page:text-[11px] page:text-slate-600 page:shadow-none;
+}
+.demo-node textarea {
+  @apply page:my-3 page:box-border page:min-h-20 page:w-full page:resize-y page:border-slate-200 page:bg-white/70 page:text-sm page:leading-relaxed page:shadow-none;
+}
+.demo-controls {
+  @apply page:grid page:grid-cols-2 page:gap-x-3 page:gap-y-2;
+}
+.demo-controls label:has(select) {
+  @apply page:min-w-0 page:flex-col page:items-start page:gap-1 page:text-[10px] page:text-slate-500;
+}
+.demo-controls [data-slot="native-select-wrapper"] {
+  @apply page:w-full page:min-w-0;
+}
+.demo-controls select {
+  @apply page:h-8 page:border-slate-200 page:bg-white/70 page:pl-2 page:text-xs page:text-slate-700 page:shadow-none;
+}
+.demo-controls label:has(button) {
+  @apply page:py-1 page:text-[11px];
+}
+.demo-node output {
+  @apply page:mt-3 page:block page:rounded-md page:bg-slate-100/70 page:p-2 page:font-mono page:text-[10px] page:leading-relaxed page:wrap-anywhere page:text-slate-600;
+}
+.demo-node small {
+  @apply page:mt-2 page:block page:text-[10px] page:text-slate-500;
+}
+.demo-node small::before {
+  @apply page:mr-1.5 page:inline-block page:size-1.5 page:rounded-full page:bg-amber-500;
+  content: "";
+}
+.demo-node small[data-node-identity="stable"]::before {
+  @apply page:bg-emerald-500;
+}
+.demo-container-title {
+  @apply page:flex page:items-center page:gap-2 page:text-sm page:tracking-tight;
+}
+.demo-custom {
+  @apply page:rounded-lg page:bg-indigo-50 page:p-3;
+}
+.demo-custom > strong {
+  @apply page:mb-3 page:block page:text-xs page:font-semibold page:text-indigo-700;
+}
+
+.demo-selection-snapshot {
+  block-size: 12rem;
+  overflow: auto;
+}
+
+/* Concrete editable geometry belongs to this demo renderer, not the Page shell. */
+.demo-node [data-block-content] {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-height: 2rem;
+  padding: 0.5rem;
+  outline-offset: 2px;
+}

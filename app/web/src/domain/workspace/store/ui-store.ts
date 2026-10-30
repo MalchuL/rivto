@@ -72,10 +72,8 @@ export const useUiStore = create<UiState>()(
 
         toggleSidebarCollapsed: () =>
           set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-        setSidebarWidth: (width) =>
-          set({ sidebarWidth: Math.max(200, Math.min(width, 420)) }),
-        toggleRightSidebar: () =>
-          set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
+        setSidebarWidth: (width) => set({ sidebarWidth: Math.max(200, Math.min(width, 420)) }),
+        toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
         setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
         setRightSidebarWidth: (width) =>
           set({ rightSidebarWidth: Math.max(260, Math.min(width, 480)) }),
@@ -95,10 +93,10 @@ export const useUiStore = create<UiState>()(
         togglePinnedPage,
         addRecentPage: (id) =>
           set((state) => ({
-            recentPageIds: [
-              id,
-              ...state.recentPageIds.filter((it) => it !== id),
-            ].slice(0, RECENT_LIMIT),
+            recentPageIds: [id, ...state.recentPageIds.filter((it) => it !== id)].slice(
+              0,
+              RECENT_LIMIT,
+            ),
           })),
         removeFromRecentAndPinned: (id) =>
           set((state) => ({
@@ -153,8 +151,6 @@ export function useExpandedProjectIds(): string[] {
 
 export function useProjectViewModes(): Record<string, CollectionViewMode> {
   return useUiStore((state) =>
-    Object.keys(state.projectViewModes).length
-      ? state.projectViewModes
-      : EMPTY_PROJECT_VIEW_MODES,
+    Object.keys(state.projectViewModes).length ? state.projectViewModes : EMPTY_PROJECT_VIEW_MODES,
   );
 }

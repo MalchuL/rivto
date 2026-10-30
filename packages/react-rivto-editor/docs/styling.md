@@ -1,8 +1,8 @@
 # Styling, Tailwind, and shadcn/ui
 
-`@chulane/rivto-react` styles its chrome with Tailwind CSS v4 utilities and
-shadcn/ui primitives, and keeps the rules Tailwind cannot express in one small
-CSS file per feature. This document explains the stylesheet entry, the design
+`@chulane/rivto-react` uses shadcn/ui primitives and colocated feature CSS.
+Tailwind CSS v4 supplies theme tokens and compiles utilities, including `@apply`
+in feature stylesheets. Static appearance belongs outside behavior and JSX. This document explains the stylesheet entry, the design
 tokens hosts can override, when to write utilities versus CSS, and how to add
 or refresh shadcn primitives.
 
@@ -23,11 +23,11 @@ their user-agent defaults.
 Workspace apps that already run Tailwind compile the source entry directly, so
 class edits hot-reload without a package build:
 
-| Consumer | Integration | Alias for `@chulane/rivto-react/styles.css` |
-| --- | --- | --- |
-| `demo/` | `@tailwindcss/vite` | `packages/react-rivto-editor/src/styles/index.css` |
-| `app/web` | `@tailwindcss/postcss` | same source entry via `next.config.ts` |
-| `app/rivto-editor` | `@tailwindcss/vite` | same source entry via `vite.config.ts` |
+| Consumer           | Integration            | Alias for `@chulane/rivto-react/styles.css`        |
+| ------------------ | ---------------------- | -------------------------------------------------- |
+| `demo/`            | `@tailwindcss/vite`    | `packages/react-rivto-editor/src/styles/index.css` |
+| `app/web`          | `@tailwindcss/postcss` | same source entry via `next.config.ts`             |
+| `app/rivto-editor` | `@tailwindcss/vite`    | same source entry via `vite.config.ts`             |
 
 ## Stylesheet layout
 
@@ -41,9 +41,31 @@ src/**/<feature>.css   colocated structural rules, one per feature
 `index.css` declares the cascade order `theme, base, components, utilities`,
 imports `tailwindcss/theme.css` and `tailwindcss/utilities.css` into their
 layers, scans the package source with `@source "../"`, and imports each
-feature stylesheet into `layer(components)`. Because everything the package
+structural feature stylesheet into `layer(components)`. Edgeless `controls.css`
+shares `layer(utilities)` with shadcn defaults; selectors with `[data-slot]`
+let feature controls override the primitives without editing vendored files.
+Because everything the package
 emits is layered, unlayered host CSS loaded after the bundle still wins over
 every rule and can retheme any token.
+
+## Whole-block selection backgrounds
+
+Page owns the selected block marker and the outline around its complete subtree.
+The host supplies `--rivto-block-selection-background` (`#e5dfff` by default).
+While selected, Page exposes that value as the inherited
+`--rivto-block-selection-fill`. Layout surfaces with opaque backgrounds consume
+this value before their ordinary background, for example:
+
+```css
+.rivto-bento-tiles {
+  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
+}
+```
+
+Read this fill in container and card backgrounds; do not set it on individual
+children or blend a layer over their text. Removing selection restores each
+background through its fallback. Controls can retain their semantic foregrounds
+and status colors. Nested selected blocks do not draw additional outlines.
 
 ## Design tokens
 
@@ -60,20 +82,40 @@ by redefining a handful of variables on any ancestor:
 
 Token groups:
 
-| Group | Purpose |
-| --- | --- |
+| Group                                                                                                                                                                                                                                                                        | Purpose                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--rivto-accent`, `--rivto-background`, `--rivto-foreground`, `--rivto-card*`, `--rivto-popover*`, `--rivto-primary*`, `--rivto-secondary*`, `--rivto-muted*`, `--rivto-subtle*`, `--rivto-destructive`, `--rivto-border`, `--rivto-input`, `--rivto-ring`, `--rivto-radius` | Semantic palette. `@theme inline` maps these onto Tailwind's `bg-background`, `text-muted-foreground`, `ring-ring`, `rounded-lg`, ... so shadcn primitives and package utilities share one theme, including chrome rendered in portals. |
-| `--rivto-default-block-height`, `--rivto-block-surface-padding` | Block geometry shared by page and edgeless trees. |
-| `--rivto-drop-*` | Drag and drop indicator feedback. |
-| `--rivto-code-*`, `--rivto-link-color` | Markdown code blocks and links. |
-| `--rivto-kanban-*`, `--rivto-bento-background` | Layout containers. |
-| `--rivto-todo-*` | TODO item and storage. |
-| `--rivto-edgeless-*` | Canvas background, grid dots, snap guides, floating chrome shadows and panel dividers. |
+| `--rivto-default-block-height`, `--rivto-block-surface-padding`                                                                                                                                                                                                              | Block geometry shared by page and edgeless trees.                                                                                                                                                                                       |
+| `--rivto-drop-*`                                                                                                                                                                                                                                                             | Drag and drop indicator feedback.                                                                                                                                                                                                       |
+| `--rivto-code-*`, `--rivto-link-color`                                                                                                                                                                                                                                       | Markdown code blocks and links.                                                                                                                                                                                                         |
+| `--rivto-kanban-*`, `--rivto-bento-background`                                                                                                                                                                                                                               | Layout containers.                                                                                                                                                                                                                      |
+| `--rivto-todo-*`                                                                                                                                                                                                                                                             | TODO item and storage.                                                                                                                                                                                                                  |
+| `--rivto-edgeless-*`                                                                                                                                                                                                                                                         | Canvas background, grid dots, snap guides, floating chrome shadows and panel dividers.                                                                                                                                                  |
 
 Add a token when a feature introduces a color or dimension a host should be
 able to change; reference it from utilities with the Tailwind variable
 shorthand (`text-(--rivto-todo-accent)`, `shadow-(--rivto-edgeless-chrome-shadow)`,
 `bg-(image:--rivto-edgeless-panel-header)`).
+
+## Container padding
+
+Container child areas share `--rivto-container-padding`, defaulting to `16px` on
+all four edges. Set one nonnegative CSS length on an ancestor or a particular
+container; multi-value padding shorthands are not supported:
+
+```css
+.my-app {
+  --rivto-container-padding: 24px;
+}
+```
+
+Columns applies it around lanes and their writing lists, Kanban around lanes,
+Bento around tiles, TODO storage around tasks, and Table inside cells
+without separating row/cell borders. Columns writing lists and TODO storage add
+their existing `24px` inline-start control reservation. Headers, card interiors
+and gaps between siblings retain their own styling. Kanban card lists retain
+zero padding inside the lane's existing chrome. This is presentation space,
+independent of `--rivto-drop-target-size` and `dropGutterSize` interaction geometry.
 
 ## Scoped reset
 
@@ -92,24 +134,29 @@ lists, and paragraphs inside documents keep user-agent margins.
 
 ## Utilities or CSS?
 
-Prefer Tailwind utilities on the owning element, colocated with the component
-as a named class constant (`const PANEL_CLASS = "..."`). Keep the stable
-`rivto-*`, `page-*`, or `edgeless-*` hook as the first token in the constant so
-hosts, tests, and the feature stylesheet can still target it.
+Keep static appearance in the owning feature's colocated `.css` file. TSX
+uses short named class constants with stable `rivto-*`, `page-*`, or
+`edgeless-*` hooks. Preserve existing hooks used by hosts and tests.
 
-Write a rule in the feature's colocated `.css` file only when utilities on the
-element cannot express it:
+Use ordinary CSS declarations or `@apply` for existing theme utilities. Keep
+state in selectors (`data-*`, `aria-*`, focus and hover), and dynamic geometry
+such as pointer coordinates, zoom, and live preview dimensions in inline styles.
+A React component and its controller must not both write the same geometry.
 
-- recursive block-tree geometry (`.page-block-children` nesting, hover hit
-  regions drawn with `::before`);
-- structural `:has()` selectors across siblings or ancestors;
-- native pseudo-classes and pseudo-elements Tailwind cannot reach, such as the
-  block modal's `:modal` and `::backdrop`;
-- CSS counters, SVG presentation attributes, keyframes, and layered gradients;
-- elements created imperatively outside React (drag ghosts, snap guides).
+Feature CSS also owns recursive block-tree geometry, sibling `:has()` rules,
+modal backdrops, CSS counters, SVG presentation, keyframes, gradients, and
+imperatively created drag or connector previews. Each stylesheet starts with
+a comment describing its scope and is imported from `src/styles/index.css`.
 
-Each feature stylesheet starts with a comment explaining which of these it
-covers and is imported from `src/styles/index.css` into `layer(components)`.
+Structural rules belong to `layer(components)`. Control appearance that
+customizes shadcn defaults belongs to `layer(utilities)`, using the control's
+class and `[data-slot]` where primitive defaults must be overridden. Host CSS
+can override these classes without `!important`; do not edit generated
+primitives for editor-specific appearance or interaction markers.
+
+Existing utility-based components can migrate when their owning feature is
+refactored. New control code should follow the feature CSS convention rather
+than introducing another long utility string into TSX.
 
 ## Icons
 

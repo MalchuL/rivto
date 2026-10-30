@@ -1,15 +1,26 @@
 # React managers
 
-Managers — public extension boundary `ReactEditor`. Они не дублируют document state: каждый владеет только одной React/browser responsibility.
+Менеджеры регистрации принадлежат `ReactEditor`; операции одного отображения доступны через `ReactPanelApi`. Они не дублируют document state: каждый владеет только одной React/browser responsibility.
 
 ```text
 ReactEditor
-  ├─ blockTypes + renderers   model/presentation registration
+  ├─ blockTypes + renderers   block model/presentation registration
+  ├─ elementTypes            element definition, renderer and editing contributions
   ├─ extensions + surfaces   lifecycle/composition
   ├─ events + keyboard       browser input
-  ├─ selection               DOM bridge
-  ├─ clipboard               portable external formats
-  └─ slashCommands           contextual UI actions
+  ├─ selection               portable document selection
+  ├─ clipboardFormats        portable external formats
+  ├─ pasteStrategies         shared paste algorithms
+  └─ slashCommands           command definitions
+
+ReactPanelApi (implemented by ReactPanel)
+  ├─ editor                  shared ReactEditorApi
+  ├─ blocks + elements       bounded core operations, inherited from PanelAPI
+  ├─ edgeless                typed canvas actions for this occurrence
+  ├─ events + keyboard       local registrations
+  ├─ selection               local DOM bridge
+  ├─ clipboard               copy/cut/paste in this view
+  └─ slashCommands           availability and execution in this view
 ```
 
 ## Общие правила

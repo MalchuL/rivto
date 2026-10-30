@@ -29,33 +29,6 @@ export class BroadcastChannelProvider implements Provider {
   private channel: BroadcastChannel | null = null;
   private ydoc: Y.Doc | null = null;
 
-  private readonly handleDocUpdate = (update: Uint8Array, origin: unknown): void => {
-    if (origin === this || this.channel === null) return;
-    this.channel.postMessage({ type: "update", update } satisfies BroadcastMessage);
-  };
-
-  private readonly handleChannelMessage = (event: MessageEvent<BroadcastMessage>): void => {
-    if (this.ydoc === null || this.channel === null) return;
-    const message = event.data;
-    if (!message || typeof message !== "object" || !("type" in message)) return;
-
-    if (message.type === "sync-step1") {
-      const update = Y.encodeStateAsUpdate(this.ydoc, new Uint8Array(message.stateVector));
-      if (update.byteLength > 0) {
-        this.channel.postMessage({ type: "sync-step2", update } satisfies BroadcastMessage);
-      }
-      if (message.expectReply) {
-        this.channel.postMessage({
-          type: "sync-step1",
-          stateVector: Y.encodeStateVector(this.ydoc),
-          expectReply: false,
-        } satisfies BroadcastMessage);
-      }
-    } else if (message.type === "sync-step2" || message.type === "update") {
-      Y.applyUpdate(this.ydoc, new Uint8Array(message.update), this);
-    }
-  };
-
   /**
    * Creates a local same-origin sync provider.
    *
@@ -111,4 +84,48 @@ export class BroadcastChannelProvider implements Provider {
     this.channel = null;
     this.ydoc = null;
   }
+
+  /**
+   * Broadcasts local Yjs updates while suppressing updates originating from this provider.
+   *
+   * @param update - Encoded local Yjs update to broadcast.
+   * @param origin - Transaction origin used to suppress this provider's own updates.
+   */
+  private readonly handleDocUpdate = (update: Uint8Array, origin: unknown): void => {
+    if (origin === this || this.channel === null) {
+      return;
+    }
+    this.channel.postMessage({ type: "update", update } satisfies BroadcastMessage);
+  };
+
+  /**
+   * Responds to broadcast synchronization messages and applies remote updates using this provider as origin.
+   *
+   * @param event - Broadcast channel message carrying synchronization or update data.
+   */
+  private readonly handleChannelMessage = (event: MessageEvent<BroadcastMessage>): void => {
+    if (this.ydoc === null || this.channel === null) {
+      return;
+    }
+    const message = event.data;
+    if (!message || typeof message !== "object" || !("type" in message)) {
+      return;
+    }
+
+    if (message.type === "sync-step1") {
+      const update = Y.encodeStateAsUpdate(this.ydoc, new Uint8Array(message.stateVector));
+      if (update.byteLength > 0) {
+        this.channel.postMessage({ type: "sync-step2", update } satisfies BroadcastMessage);
+      }
+      if (message.expectReply) {
+        this.channel.postMessage({
+          type: "sync-step1",
+          stateVector: Y.encodeStateVector(this.ydoc),
+          expectReply: false,
+        } satisfies BroadcastMessage);
+      }
+    } else if (message.type === "sync-step2" || message.type === "update") {
+      Y.applyUpdate(this.ydoc, new Uint8Array(message.update), this);
+    }
+  };
 }

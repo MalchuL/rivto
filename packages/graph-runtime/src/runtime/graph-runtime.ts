@@ -38,23 +38,32 @@ export class GraphRuntime {
     isCurrent: (state) => this.isCurrent(state),
     report: (error) => this.report(error),
   });
-  private readonly slotFlow = new SlotFlowExecutor(this.declarations, this.connections, this.valueFlow, {
-    isCurrent: (state) => this.isCurrent(state),
-    report: (error) => this.report(error),
-    signal: () => this.controller.signal,
-  });
+  private readonly slotFlow = new SlotFlowExecutor(
+    this.declarations,
+    this.connections,
+    this.valueFlow,
+    {
+      isCurrent: (state) => this.isCurrent(state),
+      report: (error) => this.report(error),
+      signal: () => this.controller.signal,
+    },
+  );
 
   /** Enables processing for the designated graph runner. */
   enable(): void {
     this.assertAlive();
-    if (this.enabled) return;
+    if (this.enabled) {
+      return;
+    }
     this.enabled = true;
     this.controller = new AbortController();
   }
 
   /** Aborts active work and causes already-scheduled work to be ignored. */
   disable(): void {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      return;
+    }
     this.enabled = false;
     this.generation += 1;
     this.controller.abort();
@@ -62,7 +71,9 @@ export class GraphRuntime {
 
   /** Releases bindings, subscriptions, listeners, and active work. */
   dispose(): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      return;
+    }
     this.disable();
     this.disposed = true;
     this.valueFlow.dispose();
@@ -74,7 +85,11 @@ export class GraphRuntime {
   registerValue(declaration: Omit<EndpointDeclaration, "kind">, binding: ValueBinding): () => void {
     this.assertAlive();
     const endpoint = this.registerDeclaration({ ...declaration, kind: "value" });
-    this.valueFlow.register(endpoint.id, binding, (value, context) => void this.publishValue(endpoint.id, value, context));
+    this.valueFlow.register(
+      endpoint.id,
+      binding,
+      (value, context) => void this.publishValue(endpoint.id, value, context),
+    );
     return () => this.valueFlow.unregister(endpoint.id, binding);
   }
 
@@ -93,7 +108,9 @@ export class GraphRuntime {
     this.valueFlow.unregister(endpointId);
     this.slotFlow.unregister(endpointId);
     for (const [id, connection] of this.connections) {
-      if (referencesEndpoint(connection, endpointId)) this.connections.delete(id);
+      if (referencesEndpoint(connection, endpointId)) {
+        this.connections.delete(id);
+      }
     }
     return existed;
   }
@@ -102,7 +119,9 @@ export class GraphRuntime {
   connect(connection: GraphConnection): void {
     this.assertAlive();
     validateConnection(connection, this.declarations);
-    if (this.connections.has(connection.id)) throw new Error(`Connection ${connection.id} already exists`);
+    if (this.connections.has(connection.id)) {
+      throw new Error(`Connection ${connection.id} already exists`);
+    }
     this.connections.set(connection.id, cloneConnection(connection));
   }
 
@@ -115,7 +134,9 @@ export class GraphRuntime {
   /** Publishes a host-observed change and waits until prior scheduled work finishes. */
   publishValue(endpointId: string, value: unknown, inherited?: PropagationContext): Promise<void> {
     this.requireKind(endpointId, "value");
-    if (!this.valueFlow.observe(endpointId, value)) return Promise.resolve();
+    if (!this.valueFlow.observe(endpointId, value)) {
+      return Promise.resolve();
+    }
     return this.schedule((state) => {
       state.queue.push({
         kind: "value",
@@ -134,10 +155,21 @@ export class GraphRuntime {
     return this.schedule((state) => {
       const binding = this.valueFlow.getBinding(endpointId);
       if (!binding) {
-        this.report({ phase: "value", endpointId, message: `Value endpoint ${endpointId} is unavailable` });
+        this.report({
+          phase: "value",
+          endpointId,
+          message: `Value endpoint ${endpointId} is unavailable`,
+        });
         return;
       }
-      state.queue.push({ kind: "value", endpointId, value: binding.get(), visitedNodeIds: new Set(), force: true, writeStart: false });
+      state.queue.push({
+        kind: "value",
+        endpointId,
+        value: binding.get(),
+        visitedNodeIds: new Set(),
+        force: true,
+        writeStart: false,
+      });
     });
   }
 
@@ -160,7 +192,9 @@ export class GraphRuntime {
     return {
       version: GRAPH_SNAPSHOT_VERSION,
       endpoints: [...this.declarations.values()].sort(compareById).map((item) => ({ ...item })),
-      connections: [...this.connections.values()].sort(compareById).map((item) => cloneConnection(item)),
+      connections: [...this.connections.values()]
+        .sort(compareById)
+        .map((item) => cloneConnection(item)),
     };
   }
 
@@ -179,24 +213,35 @@ export class GraphRuntime {
   /** Returns whether every endpoint required by a connection is live. */
   isConnectionActive(connectionId: string): boolean {
     const connection = this.connections.get(connectionId);
-    if (!connection) return false;
-    if (connection.kind === "slot-flow") return this.slotFlow.has(connection.from.slotId) && this.slotFlow.has(connection.to);
-    const ids = connection.kind === "directed-value" ? [connection.from, connection.to] : connection.endpoints;
+    if (!connection) {
+      return false;
+    }
+    if (connection.kind === "slot-flow") {
+      return this.slotFlow.has(connection.from.slotId) && this.slotFlow.has(connection.to);
+    }
+    const ids =
+      connection.kind === "directed-value"
+        ? [connection.from, connection.to]
+        : connection.endpoints;
     return ids.every((id) => this.valueFlow.has(id));
   }
 
   /** Serializes public work so independent runs preserve call order. */
   private schedule(operation: (state: RunState) => void | Promise<void>): Promise<void> {
-    if (!this.enabled || this.disposed) return Promise.resolve();
+    if (!this.enabled || this.disposed) {
+      return Promise.resolve();
+    }
     const generation = this.generation;
     const state: RunState = {
       generation,
       runId: this.nextRunId++,
       queue: [],
     };
-    const run = this.tail.then(() => generation === this.generation && this.enabled
-      ? Promise.resolve(operation(state)).then(() => this.drain(state))
-      : undefined);
+    const run = this.tail.then(() =>
+      generation === this.generation && this.enabled
+        ? Promise.resolve(operation(state)).then(() => this.drain(state))
+        : undefined,
+    );
     this.tail = run.catch(() => undefined);
     return run;
   }
@@ -205,8 +250,11 @@ export class GraphRuntime {
   private async drain(state: RunState): Promise<void> {
     while (state.queue.length && this.isCurrent(state)) {
       const delivery = state.queue.shift()!;
-      if (delivery.kind === "value") await this.valueFlow.deliver(delivery, state);
-      else await this.slotFlow.deliver(delivery, state);
+      if (delivery.kind === "value") {
+        await this.valueFlow.deliver(delivery, state);
+      } else {
+        await this.slotFlow.deliver(delivery, state);
+      }
     }
   }
 
@@ -217,7 +265,9 @@ export class GraphRuntime {
     if (current && (current.kind !== endpoint.kind || current.nodeId !== endpoint.nodeId)) {
       throw new Error(`Endpoint ${endpoint.id} does not match its persisted declaration`);
     }
-    if (!current) this.declarations.set(endpoint.id, endpoint);
+    if (!current) {
+      this.declarations.set(endpoint.id, endpoint);
+    }
     return current ?? endpoint;
   }
 
@@ -234,12 +284,18 @@ export class GraphRuntime {
 
   /** Reports whether an operation belongs to the active runner generation. */
   private isCurrent(state: RunState): boolean {
-    return this.enabled && !this.disposed && state.generation === this.generation && !this.controller.signal.aborted;
+    return (
+      this.enabled &&
+      !this.disposed &&
+      state.generation === this.generation &&
+      !this.controller.signal.aborted
+    );
   }
 
   /** Fails operations attempted after disposal. */
   private assertAlive(): void {
-    if (this.disposed) throw new Error("Graph runtime is disposed");
+    if (this.disposed) {
+      throw new Error("Graph runtime is disposed");
+    }
   }
-
 }

@@ -1,0 +1,22 @@
+/* Background belongs to the structural block, not to a concrete content renderer. */
+/* BlockView sets backgroundColor with the node color and theme fallbacks in one place. */
+.rivto-block {
+  @apply page:relative page:min-w-0 page:box-border;
+  border: var(--rivto-block-border, none);
+  @apply page:rounded-[var(--rivto-block-radius,10px)];
+}
+
+/* Selection belongs to the single block shell, including layouts without a row. */
+/* Layout surfaces consume this inherited fill while a subtree is selected.
+ * Painting backgrounds directly preserves the exact theme color and leaves text,
+ * icons and native controls unchanged. Removing the selected marker restores
+ * each surface's own background without persisting presentation state. */
+.rivto-block[data-block-selected="true"] {
+  --rivto-block-selection-fill: var(--rivto-block-selection-background);
+  @apply page:outline-2 page:outline-solid page:outline-[color:var(--rivto-block-selection,#4868d8)];
+}
+
+/* A selected ancestor already outlines the complete subtree. */
+.rivto-block[data-block-selected="true"] .rivto-block[data-block-selected="true"] {
+  outline: none;
+}

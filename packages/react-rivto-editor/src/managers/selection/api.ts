@@ -1,0 +1,70 @@
+import type { Selection } from "@chulane/rivto";
+
+/** Selection commands and DOM synchronization for one EditorPanel.
+ * The model selection is shared by the document. Reads expose it only in the active
+ * panel (or the default panel before activation) and within that panel's subtree,
+ * except isBlockSelected, which exposes shared whole-block coverage for rendering. */
+export interface PanelSelectionApi {
+  /** @returns A detached selection, or undefined when empty or owned by another panel. */
+  get(): Selection | undefined;
+  /**
+   * Writes the document's shared selection without activating or focusing this panel.
+   * @param selection - Selection to publish. A block outside this panel's subtree clears it instead.
+   */
+  set(selection: Selection): void;
+  /** Clears the document's shared selection, including selection last set by another panel. */
+  clear(): void;
+  /**
+   * Subscribes to changes of the document's shared model selection.
+   * @param listener - Called after effective selection changes, including changes in other panels.
+   * @returns Function that removes the subscription.
+   */
+  subscribe(listener: () => void): () => void;
+  /** Deletes the selected content through core when this panel owns the selection; otherwise does nothing. */
+  delete(): void;
+  /** Returns the shared immutable selection snapshot, retaining identity until selection changes.
+   * Returns undefined when empty, outside this subtree, or owned by another panel.
+   * Use get() when a detached copy is needed; do not mutate this snapshot. */
+  snapshot(): Selection | undefined;
+  /**
+   * Reads whole-block coverage shared by all panels of this document.
+   *
+   * Coverage does not depend on the active panel or containment of the complete
+   * selection; it does not grant ownership for commands or DOM restoration.
+   *
+   * @param id - Document-local block identifier.
+   * @returns Whether the shared structural selection covers the block. Carets
+   * and text ranges return false.
+   */
+  isBlockSelected(id: string): boolean;
+  /** @param id - Element identifier. @returns Whether the element is selected. */
+  isElementSelected(id: string): boolean;
+  /** Reads text endpoints inside this panel's root; returns undefined without a root or valid DOM selection. */
+  readDOM(): Selection | undefined;
+  /**
+   * Restores browser text selection inside this panel after rendering.
+   * @param selection - Selection to restore; omitted to read this panel's current model selection.
+   * @param options - Controls scrolling when mounting virtualized text endpoints.
+   * @returns Whether the text endpoints were restored; false without a root or usable selection.
+   */
+  restoreDOM(selection?: Selection, options?: RestoreDOMSelectionOptions): boolean;
+  /**
+   * Runs the callback next frame only if the model selection has not changed since scheduling.
+   * Reserve callbacks for caret, DOM selection, and associated editing focus;
+   * each call replaces previous pending work for the same DOM root even if
+   * selection is unchanged. Other panels keep their own pending DOM requests.
+   * Keep document mutations and independent UI operations outside this scheduler.
+   * @param callback - Work to perform next frame while the scheduled selection remains current.
+   * @param onCancel - Optional cleanup when newer state or teardown supersedes the work.
+   * @returns Idempotent cancellation for the pending callback.
+   */
+  scheduleIfSelectionUnchanged(callback: () => void, onCancel?: () => void): () => void;
+  /** Whether the current selection has a pending, still-valid callback in the next frame. */
+  readonly hasPendingSelectionCallback: boolean;
+}
+
+/** Options for rebuilding a portable selection in the live browser DOM. */
+export interface RestoreDOMSelectionOptions {
+  /** False mounts virtual endpoints without navigating the viewport to them. */
+  readonly scroll?: boolean;
+}

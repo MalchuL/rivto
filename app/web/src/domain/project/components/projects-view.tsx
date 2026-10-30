@@ -30,7 +30,9 @@ export function ProjectsView() {
   const childrenByParent = useMemo(() => {
     const map = new Map<string, typeof projects>();
     for (const project of projects) {
-      if (project.system || !project.parentProjectId) continue;
+      if (project.system || !project.parentProjectId) {
+        continue;
+      }
       const list = map.get(project.parentProjectId) ?? [];
       list.push(project);
       map.set(project.parentProjectId, list);
@@ -40,7 +42,9 @@ export function ProjectsView() {
   const pageCount = useMemo(() => {
     const counts = new Map<string, number>();
     for (const page of pages) {
-      if (page.kind === "journal") continue;
+      if (page.kind === "journal") {
+        continue;
+      }
       counts.set(page.projectId, (counts.get(page.projectId) ?? 0) + 1);
     }
     return counts;
@@ -75,9 +79,7 @@ export function ProjectsView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{project.name}</span>
-                      {project.status ? (
-                        <Badge variant="secondary">{project.status}</Badge>
-                      ) : null}
+                      {project.status ? <Badge variant="secondary">{project.status}</Badge> : null}
                     </div>
                     {project.description ? (
                       <p className="mt-0.5 truncate text-sm text-muted-foreground">

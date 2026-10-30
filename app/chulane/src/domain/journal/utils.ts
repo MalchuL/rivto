@@ -25,8 +25,12 @@ export function formatDayLabel(dayKey: string): string {
   const today = todayKey();
   const yesterday = toDayKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
   const dayMonth = date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
-  if (dayKey === today) return `Today, ${dayMonth}`;
-  if (dayKey === yesterday) return `Yesterday, ${dayMonth}`;
+  if (dayKey === today) {
+    return `Today, ${dayMonth}`;
+  }
+  if (dayKey === yesterday) {
+    return `Yesterday, ${dayMonth}`;
+  }
   const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
   return `${weekday}, ${dayMonth}`;
 }

@@ -42,7 +42,9 @@ import { cn } from "@/lib/utils";
 function collectDescendantIds(rootId: string, pages: Page[]): Set<string> {
   const byParent = new Map<string, string[]>();
   for (const p of pages) {
-    if (!p.parentPageId) continue;
+    if (!p.parentPageId) {
+      continue;
+    }
     const list = byParent.get(p.parentPageId) ?? [];
     list.push(p.id);
     byParent.set(p.parentPageId, list);
@@ -86,30 +88,35 @@ export function PageDocument({
   const toggleRightSidebar = useUiStore((state) => state.toggleRightSidebar);
   const pinnedPageIds = useUiStore((state) => state.pinnedPageIds);
   const togglePinnedPage = useUiStore((state) => state.togglePinnedPage);
-  const removeFromRecentAndPinned = useUiStore(
-    (state) => state.removeFromRecentAndPinned,
-  );
+  const removeFromRecentAndPinned = useUiStore((state) => state.removeFromRecentAndPinned);
 
   const [title, setTitle] = useState(page.title);
   const [content, setContent] = useState(page.content);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Hydrate on navigation; query updates must not overwrite unsaved edits.
+  const latestPage = useRef(page);
+  latestPage.current = page;
 
   useEffect(() => {
-    setTitle(page.title);
-    setContent(page.content);
+    setTitle(latestPage.current.title);
+    setContent(latestPage.current.content);
     setSaveState("saved");
   }, [page.id]);
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
     };
   }, []);
 
   const scheduleSave = (next: { title?: string; content?: string }) => {
     setSaveState("dirty");
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
     saveTimer.current = setTimeout(async () => {
       setSaveState("saving");
       await updatePage.mutateAsync({ id: page.id, ...next });
@@ -119,8 +126,7 @@ export function PageDocument({
 
   const isPinned = pinnedPageIds.includes(page.id);
   const moveTargets = projects.filter(
-    (project) =>
-      project.id !== page.projectId && (!project.system || project.system === "inbox"),
+    (project) => project.id !== page.projectId && (!project.system || project.system === "inbox"),
   );
   const nestTargets = useMemo(() => {
     const blocked = collectDescendantIds(page.id, projectPages);
@@ -189,9 +195,7 @@ export function PageDocument({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onSelect={() => void newPage(page.projectId, page.id)}
-                  >
+                  <DropdownMenuItem onSelect={() => void newPage(page.projectId, page.id)}>
                     <FilePlus />
                     Add subpage
                   </DropdownMenuItem>
@@ -284,11 +288,7 @@ export function PageDocument({
 
         {allowManage ? (
           <div className="mt-2">
-            <PageTagPicker
-              pageId={page.id}
-              projectId={page.projectId}
-              tagIds={page.tagIds}
-            />
+            <PageTagPicker pageId={page.id} projectId={page.projectId} tagIds={page.tagIds} />
           </div>
         ) : null}
       </DocumentEditor>

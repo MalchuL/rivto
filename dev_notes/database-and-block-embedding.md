@@ -145,19 +145,19 @@ editor.dump()
 
 The conversion is expected to be one-to-one:
 
-| Database value | Snapshot value |
-| --- | --- |
-| `blocks.id` | `Block.id` |
-| `blocks.type` | `Block.type` |
-| `blocks.content` | `Block.content` |
-| `blocks.collapsed` | `Block.collapsed` |
-| `blocks.list_props_json` | `Block.listProps` |
-| `blocks.props_json` | `Block.props` |
-| `blocks.plugin_data_json` | `Block.pluginData` |
-| `document_tree` | `Block.children` ordering |
-| `links` | `Snapshot.links` |
-| `elements` | `Snapshot.elements` |
-| `documents.metadata_json` | `Snapshot.pluginData` |
+| Database value            | Snapshot value            |
+| ------------------------- | ------------------------- |
+| `blocks.id`               | `Block.id`                |
+| `blocks.type`             | `Block.type`              |
+| `blocks.content`          | `Block.content`           |
+| `blocks.collapsed`        | `Block.collapsed`         |
+| `blocks.list_props_json`  | `Block.listProps`         |
+| `blocks.props_json`       | `Block.props`             |
+| `blocks.plugin_data_json` | `Block.pluginData`        |
+| `document_tree`           | `Block.children` ordering |
+| `links`                   | `Snapshot.links`          |
+| `elements`                | `Snapshot.elements`       |
+| `documents.metadata_json` | `Snapshot.pluginData`     |
 
 Conversion code belongs in the application persistence layer, not in
 `DocumentModel`.

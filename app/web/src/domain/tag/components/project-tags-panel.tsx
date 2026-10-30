@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  DEFAULT_TAG_COLOR,
-  TAG_COLOR_PRESETS,
-  type AvailableTag,
-} from "@chulane/app";
+import { DEFAULT_TAG_COLOR, TAG_COLOR_PRESETS, type AvailableTag } from "@chulane/app";
 import {
   useCreateTagMutation,
   useDeleteTagMutation,
@@ -205,7 +201,9 @@ export function ProjectTagsPanel({ projectId }: { projectId: string }) {
       <TagFormDialog
         open={Boolean(editing)}
         onOpenChange={(open) => {
-          if (!open) setEditing(null);
+          if (!open) {
+            setEditing(null);
+          }
         }}
         title="Edit tag"
         initialName={editing?.name ?? ""}
@@ -213,7 +211,9 @@ export function ProjectTagsPanel({ projectId }: { projectId: string }) {
         initialColor={editing?.color ?? DEFAULT_TAG_COLOR}
         submitting={updateTag.isPending}
         onSubmit={async (name, description, color) => {
-          if (!editing) return;
+          if (!editing) {
+            return;
+          }
           await updateTag.mutateAsync({ id: editing.id, name, description, color });
           setEditing(null);
         }}

@@ -23,4 +23,3 @@
 
 Не начинайте с native `Y.UndoManager`. Сначала прочитайте главы 00 и 01:
 Rivto специально прячет adapter details за маленьким `CRDTUndoManager` contract.
-

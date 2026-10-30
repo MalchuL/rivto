@@ -53,7 +53,7 @@ export function useDeletePageMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => pageService.delete(id),
-    onSuccess: async (_void, id) => {
+    onSuccess: async (result, id) => {
       queryClient.removeQueries({ queryKey: QUERY_KEYS.page(id) });
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.pages });
     },

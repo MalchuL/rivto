@@ -1,4 +1,3 @@
-/** Shared contracts for page outline navigation, selection, and movement. */
 import type { EditorBlock as Block, Selection } from "@chulane/rivto";
 
 /** One block's location in the visible outline. */

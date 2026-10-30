@@ -43,8 +43,8 @@ React лишь подписывается на manager и показывает �
 Это сохраняет boundary:
 
 ```text
-EditorRuntime не импортирует React
-React adapter импортирует EditorRuntime
+DocumentEditor не импортирует React
+React adapter импортирует DocumentEditor
 ```
 
 ## 3. useSyncExternalStore
@@ -82,7 +82,7 @@ effect. Само selection читается свежим через `editor.sele
 
 ## 4. Общий runtime revision
 
-EditorRuntime также подписан на SelectionManager и увеличивает `revision`.
+DocumentEditor также подписан на SelectionManager и увеличивает `revision`.
 
 Этот revision нужен не только основному renderer:
 

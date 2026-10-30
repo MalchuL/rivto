@@ -279,4 +279,3 @@ length = Math.abs(head.offset - anchor.offset)
 ### Игнорировать IME
 
 Редактор станет непригоден для части языков.
-

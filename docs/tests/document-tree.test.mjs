@@ -2,10 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  buildDocumentationTree,
-  createDocumentationPagePath,
-} from "../src/document-tree.ts";
+import { buildDocumentationTree, createDocumentationPagePath } from "../src/document-tree.ts";
 
 /**
  * Creates a minimal canonical page for navigation tests.

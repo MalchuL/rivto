@@ -290,7 +290,7 @@ editor.subscribe(() => setTick(...));
 CRDT document update ────┼─ mode manager update
 plugin/definition update ┘
              ↓
-     EditorRuntime.changed()
+     DocumentEditor.changed()
              ↓
        revision increments
              ↓

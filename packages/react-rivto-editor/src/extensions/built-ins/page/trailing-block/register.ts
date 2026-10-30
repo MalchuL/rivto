@@ -1,6 +1,6 @@
+import type { ReactEditorApi } from "../../../../editor/types";
 /** Runtime registration for the trailing page insertion control. */
 import { createElement } from "react";
-import type { ReactEditor } from "../../../../types";
 import { TrailingBlock } from "./component";
 
 /**
@@ -10,6 +10,6 @@ import { TrailingBlock } from "./component";
  * @param count - Number of insertion targets to render.
  * @returns No value.
  */
-export function registerTrailingBlock(reactEditor: ReactEditor, count: number): void {
+export function registerTrailingBlock(reactEditor: ReactEditorApi, count: number): void {
   reactEditor.extensions.mount(() => createElement(TrailingBlock, { count }));
 }

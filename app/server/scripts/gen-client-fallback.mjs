@@ -3,10 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const out = join(
-  root,
-  "../chulane/src/infrastructure/api/encore-client.gen.ts",
-);
+const out = join(root, "../chulane/src/infrastructure/api/encore-client.gen.ts");
 
 const contents = `/**
  * Fallback stub when \`encore gen client\` is unavailable.

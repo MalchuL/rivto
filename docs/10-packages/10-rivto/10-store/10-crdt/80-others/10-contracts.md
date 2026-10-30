@@ -168,7 +168,7 @@ document.history;
 - **Возвращает:** `Promise<void>` после отключения providers и уничтожения внутренних ресурсов.
 - **Исключения:** ошибки provider disconnect или adapter cleanup.
 
-Освобождает providers, ресурсы и listeners документа. `EditorRuntime.destroy()` вызывает и ожидает этот метод автоматически.
+Освобождает providers, ресурсы и listeners документа. `ReactEditor.destroy()` вызывает и ожидает этот метод автоматически.
 
 ## `CRDTArray<T>`
 

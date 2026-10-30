@@ -2,7 +2,7 @@
 
 ## Page mode
 
-`pageSurfaceExtension()` регистрирует `PageSurface` для mode `"block"`. Surface выводит `<main class="page-surface">`, назначает его active editor root и передаёт root IDs в `BlockTree`.
+`pageSurfaceExtension()` регистрирует `PageSurface` для mode `"block"`. Surface выводит `<main class="page-surface">`, назначает его active editor root и передаёт root IDs в Page.
 
 Page behavior из `standardPreset()` включает:
 
@@ -18,6 +18,18 @@ Page behavior из `standardPreset()` включает:
 - slash menu.
 
 Hierarchy остаётся core state. Surface только рекурсивно показывает её и не хранит отдельное React tree.
+
+По умолчанию виртуализация выключена. `virtualizePageThreshold={true}` включает её для любого числа root blocks, `false` выключает, а число включает её при достижении заданного порога. `virtualizePageOverscan` задаёт одинаковый буфер сверху и снизу viewport; по умолчанию это 8 roots с каждой стороны.
+
+```tsx
+<EditorPanel
+  editor={reactEditor}
+  virtualizePageThreshold={1_000}
+  virtualizePageOverscan={8}
+/>
+```
+
+Буфер считается в root blocks; вложенные дети mounted root остаются в DOM.
 
 ## Markdown writing block
 
@@ -73,4 +85,4 @@ List/collapse metadata хранится в canonical `block.listProps`. `listSho
 
 ## Custom page chrome
 
-Toolbar, breadcrumbs и document title лучше рендерить children `EditorView`, а не persisted blocks, если они не являются частью документа. Именно так demo держит journal date и mode toolbar вне CRDT state.
+Toolbar, breadcrumbs и document title лучше рендерить children `EditorPanel`, а не persisted blocks, если они не являются частью документа. Именно так demo держит journal date и mode toolbar вне CRDT state.

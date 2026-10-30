@@ -1,0 +1,36 @@
+/* Moveable injects unlayered CSS. Keep its editor theme unlayered as well,
+   so library defaults cannot override it regardless of stylesheet load order. */
+/* Selection controls share the editor's accent and surface colors. */
+.edgeless-viewport .moveable-control-box {
+  --moveable-color: var(--rivto-accent);
+  z-index: 2147483638;
+}
+
+/* Creation shares Moveable's color; the library owns its solid and dashed line widths. */
+.edgeless-snap-guide {
+  background: var(--rivto-edgeless-snap-guide);
+  pointer-events: none;
+}
+
+.edgeless-viewport .moveable-control-box .moveable-control {
+  border: 1px solid var(--rivto-accent);
+  background: var(--rivto-subtle);
+}
+
+.edgeless-viewport .moveable-control-box .moveable-control:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 2px;
+}
+
+/* The four library-owned edges replace the former dashed group outline. */
+.edgeless-viewport .moveable-line.moveable-direction:not(.moveable-edge) {
+  box-sizing: border-box;
+  height: 2px;
+  border-top: 2px dashed var(--rivto-accent);
+  background: none;
+}
+
+/* Alignment guides keep their blue color and library-owned line widths. */
+.edgeless-viewport .moveable-guideline {
+  --moveable-color: var(--rivto-edgeless-snap-guide);
+}

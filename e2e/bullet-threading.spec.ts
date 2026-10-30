@@ -1,0 +1,206 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
+import { expect, test } from "@playwright/test";
+
+test("draws one continuous top-level line to the focused root", async ({ page }) => {
+  await page.goto("/");
+  const roots = page.locator(
+    `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}`,
+  );
+  const focused = page
+    .locator(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )
+    .first();
+  await focused.locator(":scope > .rivto-block-row [data-block-content]").click();
+  const path = page.locator("[data-bullet-threading] path:not([d=''])");
+  await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* V .* Q .* H .*$/);
+  const d = (await path.getAttribute("d"))!;
+  expect(await roots.count()).toBeGreaterThan(2);
+  expect((d.match(/\bM /g) ?? []).length).toBe(1);
+  const endpointX = await focused
+    .locator(":scope > .rivto-block-row .block-handle")
+    .evaluate((control) => {
+      const rect = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return rect.x + rect.width / 2 - overlay.x;
+    });
+  const trunkX = Number(/^M ([\d.]+)/.exec(d)![1]);
+  expect(trunkX).toBeLessThan(endpointX);
+  expect(endpointX - trunkX).toBeCloseTo(12, 1);
+  expect(Number(d.split(" H ").at(-1))).toBeCloseTo(endpointX, 1);
+  await focused.locator(":scope > .rivto-block-row .block-handle").evaluate((control) => {
+    (control as HTMLElement).style.display = "none";
+    window.dispatchEvent(new Event("resize"));
+  });
+  const fallbackX = await focused
+    .locator(":scope > .rivto-block-row .page-collapse-toggle")
+    .evaluate((control) => {
+      const rect = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return rect.x + rect.width / 2 - overlay.x;
+    });
+  await expect
+    .poll(async () => Number((await path.getAttribute("d"))?.split(" H ").at(-1)))
+    .toBeCloseTo(fallbackX, 1);
+});
+
+test("threads only the focused page ancestry and follows its controls", async ({ page }) => {
+  await page.goto("/");
+  const parent = page
+    .locator(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )
+    .first();
+  const child = parent.locator(":scope > .rivto-block-children > .rivto-block").first();
+  const content = child.locator(":scope > .rivto-block-row [data-block-content]");
+  const path = page.locator("[data-bullet-threading] path:not([d=''])");
+
+  await content.click();
+  await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* Q .* H .*$/);
+  const positions = await page.evaluate((ROOT_BLOCK_SELECTOR) => {
+    const parent = document.querySelector(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )!;
+    const child = parent.querySelector(":scope > .rivto-block-children > .rivto-block")!;
+    const toggle = parent
+      .querySelector(":scope > .rivto-block-row .block-handle")!
+      .getBoundingClientRect();
+    const childToggle = child
+      .querySelector(":scope > .rivto-block-row .block-handle")!
+      .getBoundingClientRect();
+    const overlay = document
+      .querySelector("[data-bullet-threading] path:not([d=''])")!
+      .closest("svg")!
+      .getBoundingClientRect();
+    return {
+      from: toggle.x + toggle.width / 2 - overlay.x,
+      to: childToggle.x + childToggle.width / 2 - overlay.x,
+    };
+  }, ROOT_BLOCK_SELECTOR);
+  const d = await path.getAttribute("d");
+  const curves = [...(d ?? "").matchAll(/ Q (-?[\d.]+)/g)];
+  expect(curves).toHaveLength(2);
+  expect(Number(curves.at(-1)![1])).toBeCloseTo(positions.from, 1);
+  expect(Number(d?.split(" H ").at(-1))).toBeCloseTo(positions.to, 1);
+  expect((d?.match(/\bM /g) ?? []).length).toBe(1);
+
+  const leaf = child.locator(".rivto-block:not(:has(> .rivto-block-children))").first();
+  await leaf.locator(":scope > .rivto-block-row [data-block-content]").click();
+  const leafDragX = await leaf
+    .locator(":scope > .rivto-block-row .block-handle")
+    .evaluate((control) => {
+      const rect = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return rect.x + rect.width / 2 - overlay.x;
+    });
+  await expect
+    .poll(async () => Number((await path.getAttribute("d"))?.split(" H ").at(-1)))
+    .toBeCloseTo(leafDragX, 1);
+
+  const pathBeforeScroll = await path.getAttribute("d");
+  await page.evaluate(async () => {
+    window.scrollBy(0, 150);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  expect(await path.getAttribute("d")).toBe(pathBeforeScroll);
+  const alignedAfterScroll = await leaf
+    .locator(":scope > .rivto-block-row .block-handle")
+    .evaluate((control) => {
+      const anchor = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return (
+        overlay.x +
+        Number(
+          document
+            .querySelector("[data-bullet-threading] path:not([d=''])")!
+            .getAttribute("d")!
+            .split(" H ")
+            .at(-1),
+        ) -
+        (anchor.x + anchor.width / 2)
+      );
+    });
+  expect(Math.abs(alignedAfterScroll)).toBeLessThan(0.1);
+
+  await parent.locator(":scope > .rivto-block-row .page-collapse-toggle").click();
+  await expect(path).toHaveCount(0);
+  await page.getByRole("button", { name: "Edgeless" }).click();
+  await expect(page.locator("[data-bullet-threading] path:not([d=''])")).toHaveCount(0);
+});
+
+test("repositions the path for a nested scroll container", async ({ page }) => {
+  await page.goto("/");
+  const leaf = page
+    .locator(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )
+    .first()
+    .locator(".rivto-block:not(:has(> .rivto-block-children))")
+    .first();
+  await leaf.locator("[data-block-content]").click();
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".journal-stack")!;
+    scroller.style.height = "400px";
+    scroller.style.overflowY = "auto";
+  });
+  const path = page.locator("[data-bullet-threading] path:not([d=''])");
+  const before = await path.getAttribute("d");
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>(".journal-stack")!.scrollTop = 120;
+  });
+  await expect.poll(() => path.getAttribute("d")).not.toBe(before);
+  const endpointY = Number(
+    /Q [\d.-]+ ([\d.-]+) [\d.-]+ [\d.-]+ H [\d.-]+$/.exec((await path.getAttribute("d"))!)![1],
+  );
+  const anchorY = await leaf
+    .locator(":scope > .rivto-block-row .block-handle")
+    .evaluate((control) => {
+      const rect = control.getBoundingClientRect();
+      const overlay = document
+        .querySelector("[data-bullet-threading] path:not([d=''])")!
+        .closest("svg")!
+        .getBoundingClientRect();
+      return rect.y + rect.height / 2 - overlay.y;
+    });
+  expect(endpointY).toBeCloseTo(anchorY, 1);
+});
+
+test("wrapped and direct container roots keep the root line but stop before descendants", async ({
+  page,
+}) => {
+  for (const type of ["table", "kanban", "columns", "bento", "todo-storage"]) {
+    await page.goto("/");
+    const container = page.locator(`.page-surface .rivto-block[data-block-type="${type}"]`).first();
+    await container.locator("[data-block-content]").first().click();
+    const path = page.locator("[data-bullet-threading] path:not([d=''])");
+    await expect.poll(() => path.getAttribute("d")).toMatch(/^M .* V .* Q .* H [\d.]+$/);
+    const d = (await path.getAttribute("d"))!;
+    expect((d.match(/\bM /g) ?? []).length).toBe(1);
+    const anchor = await container
+      .locator(":scope > .rivto-block-row .block-handle")
+      .evaluate((control) => {
+        const rect = control.getBoundingClientRect();
+        const overlay = document
+          .querySelector("[data-bullet-threading] path:not([d=''])")!
+          .closest("svg")!
+          .getBoundingClientRect();
+        return { x: rect.x + rect.width / 2 - overlay.x, y: rect.y + rect.height / 2 - overlay.y };
+      });
+    expect(Number(d.split(" H ").at(-1))).toBeCloseTo(anchor.x, 1);
+    expect(Number(/^M [-\d.]+ ([-\d.]+)/.exec(d)![1])).toBeLessThan(anchor.y - 100);
+  }
+});

@@ -37,15 +37,15 @@ Imports are top-level from `src/` (`api.main`, `domain.*`, `lib.*`). Use **uv** 
 
 One folder per bounded context. Create only the slices you need:
 
-| File | Role |
-|------|------|
-| `controller.py` | FastAPI `APIRouter`; thin HTTP; map domain errors → `HTTPException` |
-| `service.py` | Use-cases; RBAC; `commit`/`rollback`; orchestrate repos + clients |
-| `repository.py` | Persistence; extends shared `BaseRepository[Model]` |
-| `dto.py` | Pydantic request/response models |
-| `mapper.py` | ORM ↔ DTO (keep ORM out of response models) |
-| `error.py` | Domain exception hierarchy (plain `Exception` subclasses) |
-| `protocol.py` / `noop_service.py` | Optional: swappable satellite-backed implementations |
+| File                              | Role                                                                |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `controller.py`                   | FastAPI `APIRouter`; thin HTTP; map domain errors → `HTTPException` |
+| `service.py`                      | Use-cases; RBAC; `commit`/`rollback`; orchestrate repos + clients   |
+| `repository.py`                   | Persistence; extends shared `BaseRepository[Model]`                 |
+| `dto.py`                          | Pydantic request/response models                                    |
+| `mapper.py`                       | ORM ↔ DTO (keep ORM out of response models)                         |
+| `error.py`                        | Domain exception hierarchy (plain `Exception` subclasses)           |
+| `protocol.py` / `noop_service.py` | Optional: swappable satellite-backed implementations                |
 
 **Variants**
 
@@ -70,12 +70,12 @@ Controller  →  Service  →  Repository (Advanced Alchemy)
  / response_model
 ```
 
-| Layer | Responsibility |
-|-------|----------------|
+| Layer          | Responsibility                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Controller** | Auth `Depends`, parse Query/Body, call service, translate domain errors → `HTTPException`, declare `response_model` |
-| **Service** | RBAC, use-case flow, call repository/clients, use mapper, `commit`/`rollback` |
-| **Repository** | Filters, ordering, eager loads, pagination via `ListOptions` → Alchemy `LimitOffset` |
-| **Mapper** | Explicit ORM → DTO, CreateDTO → ORM, UpdateDTO → partial snake_case dict |
+| **Service**    | RBAC, use-case flow, call repository/clients, use mapper, `commit`/`rollback`                                       |
+| **Repository** | Filters, ordering, eager loads, pagination via `ListOptions` → Alchemy `LimitOffset`                                |
+| **Mapper**     | Explicit ORM → DTO, CreateDTO → ORM, UpdateDTO → partial snake_case dict                                            |
 
 Controllers return **DTOs** (or `PaginatedResponse`), never ORM instances. Services raise domain errors; only controllers map them to HTTP.
 
@@ -126,10 +126,10 @@ def model_config() -> ConfigDict:
 ```
 
 | In code (Python) | On the wire (JSON / OpenAPI) |
-|------------------|------------------------------|
-| `project_id` | `projectId` |
-| `created_at` | `createdAt` |
-| `display_name` | `displayName` |
+| ---------------- | ---------------------------- |
+| `project_id`     | `projectId`                  |
+| `created_at`     | `createdAt`                  |
+| `display_name`   | `displayName`                |
 
 - Declare fields in **snake_case**; clients send/receive **camelCase**.
 - `populate_by_name=True` lets in-process code still validate with snake_case keys.
@@ -152,11 +152,11 @@ Never return SQLAlchemy models from controllers. See [layers-dto-pagination.md](
 
 ## Pagination (required pattern)
 
-| Type | Layer | Role |
-|------|-------|------|
+| Type                         | Layer                       | Role                                                        |
+| ---------------------------- | --------------------------- | ----------------------------------------------------------- |
 | `ListOptions(limit, offset)` | controller → service → repo | Cap `limit` (e.g. max 100); never pass Alchemy types upward |
-| `Page[T]` | repository → service | ORM rows + `has_next` + `total`; `.map(to_dto)` |
-| `PaginatedResponse[T]` | service → HTTP | `{ data, hasNext, size, total }` via `model_config()` |
+| `Page[T]`                    | repository → service        | ORM rows + `has_next` + `total`; `.map(to_dto)`             |
+| `PaginatedResponse[T]`       | service → HTTP              | `{ data, hasNext, size, total }` via `model_config()`       |
 
 **Flow**
 
@@ -213,12 +213,12 @@ Global handlers (`api/error_logging.py`): log + JSON for `HTTPException`, valida
 
 One package per outbound service under `src/clients/<name>/`:
 
-| File | Role |
-|------|------|
-| `client.py` | httpx (or similar); `ENDPOINTS` map; `_request` + DTO validate |
-| `dto.py` | Wire models for that service |
-| `protocol.py` | `Typing.Protocol` for DI/tests |
-| NoOp impl | Empty/success-shaped responses when URL unset |
+| File          | Role                                                           |
+| ------------- | -------------------------------------------------------------- |
+| `client.py`   | httpx (or similar); `ENDPOINTS` map; `_request` + DTO validate |
+| `dto.py`      | Wire models for that service                                   |
+| `protocol.py` | `Typing.Protocol` for DI/tests                                 |
+| NoOp impl     | Empty/success-shaped responses when URL unset                  |
 
 Domain **facade** services add authz and orchestration; they depend on the protocol, not a concrete client.
 

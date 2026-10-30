@@ -1,3 +1,4 @@
+import type { ReactEditorApi } from "../../../../../editor/types";
 /**
  * Forward Delete dispatch at editable block boundaries.
  *
@@ -6,7 +7,7 @@
  *
  * @module
  */
-import type { ReactEditor } from "../../../../../types";
+import { createBlockBehaviorContext } from "../../../../../block-behaviors";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -15,7 +16,6 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../../managers";
-import { createBlockViewContext, dispatchViewAction } from "../../../../../views";
 
 /**
  * Registers forward merging at a collapsed block-end caret.
@@ -23,25 +23,35 @@ import { createBlockViewContext, dispatchViewAction } from "../../../../../views
  * @param reactEditor - Runtime receiving the keyboard binding.
  * @returns No value.
  */
-export function registerForwardBlockMerge(reactEditor: ReactEditor): void {
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockMergeForward,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
-    when: ({ raw: event, blockId }) =>
-      isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
-    const block = target?.collapsed ? reactEditor.blocks.getBlockNode(target.blockId) : undefined;
-    if (!target?.collapsed || !block || target.offset !== block.content.length) return false;
-    const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
-    if (!context) return false;
-    return dispatchViewAction(
-      reactEditor.views.resolve(context.block.id),
-      reactEditor.views.fallback,
-      "onMergeForward",
-      context,
-      target,
-    );
-  });
+export function registerForwardBlockMerge(reactEditor: ReactEditorApi): void {
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockMergeForward,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeForward],
+      when: ({ reactPanel, raw: event, blockId }) =>
+        isEditableKeyboardEvent(event) &&
+        !shouldDeleteSelection(
+          readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+        ),
+    },
+    ({ reactPanel, root, blockId }) => {
+      const target = firstKeyboardTarget(
+        readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+      );
+      const block = target?.collapsed ? reactPanel.blocks.getBlockNode(target.blockId) : undefined;
+      if (!target?.collapsed || !block || target.offset !== block.content.length) {
+        return false;
+      }
+      const context = createBlockBehaviorContext(
+        reactPanel,
+        target.blockId,
+        root,
+        reactPanel.selection.get(),
+      );
+      if (!context) {
+        return false;
+      }
+      return reactPanel.editor.blockBehaviors.dispatch("onMergeForward", context, target);
+    },
+  );
 }

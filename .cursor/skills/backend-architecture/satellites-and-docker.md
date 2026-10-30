@@ -55,12 +55,12 @@ When deleting a primary resource, optional satellite cleanup should often use a 
 
 ## Settings relevant to satellites
 
-| Setting | Purpose |
-|---------|---------|
-| `*_SERVICE_URL` | Base URL for outbound client; empty → NoOp |
-| `ALLOWED_ORIGINS` | CORS for browser clients of **this** API |
-| `DATABASE_URL` | Primary relational store |
-| `ADMIN_PANEL_KEY` | Separate ops channel header |
+| Setting           | Purpose                                    |
+| ----------------- | ------------------------------------------ |
+| `*_SERVICE_URL`   | Base URL for outbound client; empty → NoOp |
+| `ALLOWED_ORIGINS` | CORS for browser clients of **this** API   |
+| `DATABASE_URL`    | Primary relational store                   |
+| `ADMIN_PANEL_KEY` | Separate ops channel header                |
 
 Local template: package `.env.example`. Compose overrides hosts to Docker DNS (`http://scalars:8001/api`, etc.).
 

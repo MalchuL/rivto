@@ -5,9 +5,12 @@ module.exports = {
   testMatch: ["**/?(*.)+(spec|test).ts"],
   moduleNameMapper: { "^(\\.{1,2}/.*)\\.js$": "$1" },
   transform: {
-    "^.+\\.ts$": ["<rootDir>/../crdt-doc/jest-transformer.cjs", {
-      tsconfig: { module: "commonjs" },
-    }],
+    "^.+\\.ts$": [
+      "<rootDir>/../crdt-doc/jest-transformer.cjs",
+      {
+        tsconfig: { module: "commonjs" },
+      },
+    ],
   },
   transformIgnorePatterns: [],
 };

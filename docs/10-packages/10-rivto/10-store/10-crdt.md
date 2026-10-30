@@ -7,8 +7,8 @@
 ## Место в архитектуре
 
 ```text
-createRivtoEditor
-  -> EditorRuntime
+createDocumentEditor
+  -> ReactEditor
     -> DocumentModelImpl
       -> контракт CRDTDoc
         -> YjsDoc

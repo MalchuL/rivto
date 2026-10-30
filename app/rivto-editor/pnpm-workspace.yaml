@@ -5,5 +5,6 @@ packages:
 storeDir: ../../.pnpm-store
 
 allowBuilds:
+  "@parcel/watcher": false
   electron: true
   esbuild: true

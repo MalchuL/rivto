@@ -27,7 +27,7 @@ Level 6. App Shell
   Роутинг, layout приложения, side panels, document switcher, auth, settings.
 ```
 
-Главный ответ: **следующим после `DocumentModel` должен быть `EditorRuntime`**.
+Главный ответ: **следующим после `DocumentModel` должен быть `ReactEditor`**.
 
 ---
 
@@ -65,28 +65,28 @@ document.getLayout(...)
 
 Но он не должен решать:
 
-* какой блок сейчас выбран;
-* открыт ли slash menu;
-* какой drag сейчас активен;
-* что делает `Enter`;
-* какие actions показывать в toolbar;
-* как переключиться между Block Mode и Edgeless Mode;
-* как обработать paste;
-* как применить AI patch;
-* какой renderer использовать.
+- какой блок сейчас выбран;
+- открыт ли slash menu;
+- какой drag сейчас активен;
+- что делает `Enter`;
+- какие actions показывать в toolbar;
+- как переключиться между Block Mode и Edgeless Mode;
+- как обработать paste;
+- как применить AI patch;
+- какой renderer использовать.
 
 Это уже не ответственность `DocumentModel`.
 
 ---
 
-# 2. Следующий уровень: `EditorRuntime`
+# 2. Следующий уровень: `ReactEditor`
 
-`EditorRuntime` — это объект сессии редактирования.
+`ReactEditor` — это объект сессии редактирования.
 
 Он живёт поверх `DocumentModel`.
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModel
 
   blocks: BlockRegistry
@@ -106,12 +106,12 @@ type EditorRuntime = {
 
 ```txt
 DocumentModel хранит состояние документа.
-EditorRuntime хранит состояние редактора.
+ReactEditor хранит состояние редактора.
 ```
 
 ---
 
-# 3. Что должно быть внутри EditorRuntime
+# 3. Что должно быть внутри ReactEditor
 
 ## 3.1 `BlockRegistry`
 
@@ -189,14 +189,14 @@ button.onClick = () => {
 
 Почему это важно:
 
-* undo/redo;
-* plugins;
-* AI;
-* analytics;
-* validation;
-* selection update;
-* collaboration в будущем;
-* одинаковая логика для toolbar, slash, hotkeys, drag-n-drop.
+- undo/redo;
+- plugins;
+- AI;
+- analytics;
+- validation;
+- selection update;
+- collaboration в будущем;
+- одинаковая логика для toolbar, slash, hotkeys, drag-n-drop.
 
 ---
 
@@ -242,12 +242,12 @@ editor.mode.get()
 
 Mode влияет на:
 
-* какие blocks доступны;
-* какие renderers используются;
-* какие plugins активны;
-* как работает selection;
-* как работает drag-n-drop;
-* какие toolbar actions видны.
+- какие blocks доступны;
+- какие renderers используются;
+- какие plugins активны;
+- как работает selection;
+- как работает drag-n-drop;
+- какие toolbar actions видны.
 
 ---
 
@@ -307,7 +307,7 @@ keydown Enter
 DocumentModel:
   "Что хранится в документе?"
 
-EditorRuntime:
+ReactEditor:
   "Что сейчас происходит в редакторе?"
 
 Renderer:
@@ -371,7 +371,7 @@ AI returns DocumentPatch
 
 # 5. Где находится `defineBlock`
 
-`defineBlock` я бы поставил между `DocumentModel` и `EditorRuntime`.
+`defineBlock` я бы поставил между `DocumentModel` и `ReactEditor`.
 
 Формально это часть **Editor Runtime definition layer**.
 
@@ -382,7 +382,7 @@ DocumentModel
 BlockRegistry / defineBlock
   объясняет runtime, что такое "callout"
 
-EditorRuntime
+ReactEditor
   использует registry для commands/plugins/rendering
 ```
 
@@ -409,10 +409,10 @@ BlockRegistry:
 
 # 6. Минимальный следующий слой
 
-Я бы начал не со всех plugins, а с вот такого минимального `EditorRuntime`:
+Я бы начал не со всех plugins, а с вот такого минимального `ReactEditor`:
 
 ```ts
-type EditorRuntime = {
+type ReactEditor = {
   document: DocumentModel
 
   blocks: BlockRegistry
@@ -492,4 +492,4 @@ type EditorRuntime = {
 
 Если совсем коротко:
 
-**Следующий уровень после `DocumentModel` — `EditorRuntime`, но перед полноценным runtime тебе нужен `BlockRegistry/defineBlock` как semantic layer, который объясняет редактору, что означают типы блоков из DocumentModel.**
+**Следующий уровень после `DocumentModel` — `ReactEditor`, но перед полноценным runtime тебе нужен `BlockRegistry/defineBlock` как semantic layer, который объясняет редактору, что означают типы блоков из DocumentModel.**

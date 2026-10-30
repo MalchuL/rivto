@@ -16,14 +16,21 @@ describe("DocumentPluginDataManager", () => {
     const exposesCrdt: "crdt" extends keyof typeof document ? true : false = false;
     const exposesOrigin: "origin" extends keyof typeof document ? true : false = false;
     const exposesUndoScopes: "undoScopes" extends keyof typeof document ? true : false = false;
-    const blocksExposeUndoScopes: "undoScopes" extends keyof typeof document.blocks ? true : false = false;
-    const elementsExposeUndoScopes: "undoScopes" extends keyof typeof document.elements ? true : false = false;
-    const pluginsExposeUndoScopes: "undoScopes" extends keyof typeof document.pluginData ? true : false = false;
+    const blocksExposeUndoScopes: "undoScopes" extends keyof typeof document.blocks ? true : false =
+      false;
+    const elementsExposeUndoScopes: "undoScopes" extends keyof typeof document.elements
+      ? true
+      : false = false;
+    const pluginsExposeUndoScopes: "undoScopes" extends keyof typeof document.pluginData
+      ? true
+      : false = false;
     const blocksExposePipe: "pipe" extends keyof typeof document.blocks ? true : false = false;
     const elementsExposePipe: "pipe" extends keyof typeof document.elements ? true : false = false;
-    const exposesUndoFactory: "createUndoManager" extends keyof typeof document ? true : false = false;
+    const exposesUndoFactory: "createUndoManager" extends keyof typeof document ? true : false =
+      false;
     const exposesTransaction: "transact" extends keyof typeof document ? true : false = false;
-    const exposesPluginMap: "getMap" extends keyof typeof document.pluginData ? true : false = false;
+    const exposesPluginMap: "getMap" extends keyof typeof document.pluginData ? true : false =
+      false;
     type RemovedBatching = Extract<
       "batchUpdates" | "batchUpdatesWithoutHistory",
       keyof typeof document
@@ -61,10 +68,13 @@ describe("DocumentPluginDataManager", () => {
       visual: { one: { x: 1 } },
     });
 
-    document.loadSnapshot({ version: 6, pluginData: {
-      neighbor: { retained: false },
-      visual: { two: { x: 2 } },
-    } });
+    document.loadSnapshot({
+      version: 9,
+      pluginData: {
+        neighbor: { retained: false },
+        visual: { two: { x: 2 } },
+      },
+    });
     expect(document.pluginData.get("visual")).toEqual({ two: { x: 2 } });
     expect(document.pluginData.get("neighbor")).toEqual({ retained: false });
   });

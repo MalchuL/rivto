@@ -6,6 +6,11 @@
 
 interface ClipboardFileItem {
   readonly kind: string;
+  /**
+   * Reads this clipboard item's file representation.
+   *
+   * @returns File contents, or null when the item does not provide a file.
+   */
   getAsFile(): File | null;
 }
 

@@ -1,5 +1,4 @@
-/** Configuration and empty-block contracts for the default writing block. */
-import type { EditorBlockInput } from "@chulane/rivto";
+import type { BlockFactory } from "../../../../block-factories";
 import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
 import type { MarkdownLinkClick } from "../../../../types";
 
@@ -12,9 +11,6 @@ export interface EmptyBlockCandidate {
 /** Host or built-in predicate for empty writing-block keyboard behavior. */
 export type IsEmptyBlock = (block: EmptyBlockCandidate) => boolean;
 
-/** Creates a detachable writing-block insert payload. */
-export type CreateDefaultBlock = () => EditorBlockInput;
-
 /** Configuration for the default writing block installed by React hosts. */
 export interface DefaultWritingBlockOptions {
   /** Persisted native type. Defaults to the built-in paragraph type. */
@@ -25,10 +21,10 @@ export interface DefaultWritingBlockOptions {
   readonly render?: BlockRenderer;
   /** Overrides fields of the built-in slash “turn into” conversion. */
   readonly slashCommand?: Partial<ReactBlockSlashCommand>;
-  /** Factory used by Enter, trailing insert, separator follow-up, etc. */
-  readonly createDefaultBlock?: CreateDefaultBlock;
-  /** Predicate for empty-block keyboard behavior. */
-  readonly isEmptyBlock?: IsEmptyBlock | null;
+  /** Factory used by Enter, trailing insert, separator follow-up, etc., including
+   * recognition and the predicate for empty-block keyboard behavior. Defaults to
+   * a type-matching factory that considers empty text an empty block. */
+  readonly factory?: BlockFactory;
   /** Observes Markdown links and may prevent browser navigation for local routing. */
   readonly onMarkdownLinkClick?: (context: MarkdownLinkClick) => void;
 }

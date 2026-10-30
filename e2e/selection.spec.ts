@@ -1,18 +1,40 @@
+import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+  PREVENT_TEXT_EDITING_ATTRIBUTE,
+} from "../packages/react-rivto-editor/src/constants";
+import {
+  BLOCK_ROW_SELECTOR,
   BLOCK_ID_ATTRIBUTE,
-  BLOCK_ID_SELECTOR,
-  blockIdSelector,
+  HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
+  hostBlockIdSelector as blockIdSelector,
   blockTypeSelector,
 } from "./dom-markers";
+import type { ReactEditor } from "@chulane/rivto-react";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
-const textContents = (page: Page): Locator => page.locator("[data-block-content]:not(:empty)");
+// Keep text endpoints in today's document occurrence, excluding editable
+// source rows rendered by nested views of embedding blocks.
+const textContents = (page: Page): Locator =>
+  page.locator(
+    '[data-journal-document="today"] [data-block-content]:not(:empty):not([data-rivto-panel] [data-rivto-panel] [data-block-content])',
+  );
+
+// These three consecutive writing blocks have no contentless references
+// between them, so partial-text checks exercise native text endpoints.
+const selectionTextContents = (page: Page): Locator =>
+  textContents(page).filter({
+    hasText: /^(Start a selection in|This complete|Nested branch one owns)/,
+  });
 
 async function textPoint(content: Locator, offset: number): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
     const node = element.firstChild;
-    if (!node) throw new Error("Expected editable text");
+    if (!node) {
+      throw new Error("Expected editable text");
+    }
     const length = node.textContent?.length ?? 0;
     const safeOffset = Math.max(0, Math.min(requestedOffset, length));
     const range = document.createRange();
@@ -24,7 +46,13 @@ async function textPoint(content: Locator, offset: number): Promise<{ x: number;
   }, offset);
 }
 
-async function dragText(page: Page, start: Locator, startOffset: number, end: Locator, endOffset: number): Promise<void> {
+async function dragText(
+  page: Page,
+  start: Locator,
+  startOffset: number,
+  end: Locator,
+  endOffset: number,
+): Promise<void> {
   const from = await textPoint(start, startOffset);
   const to = await textPoint(end, endOffset);
   await page.mouse.move(from.x, from.y);
@@ -34,7 +62,9 @@ async function dragText(page: Page, start: Locator, startOffset: number, end: Lo
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/");
+  await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
 });
 
 test("switches cross-block drag to blocks and restores text on return", async ({ page }) => {
@@ -60,24 +90,30 @@ test("switches cross-block drag to blocks and restores text on return", async ({
   await page.mouse.move(across.x, across.y, { steps: 6 });
   await page.mouse.move(back.x, back.y, { steps: 6 });
   await page.mouse.up();
-  const readSelection = () => page.evaluate(({ attribute, selector }) => {
-    const selection = getSelection();
-    const endpoint = (node: Node | null, offset: number | undefined) => {
-      const element = node instanceof Element ? node : node?.parentElement;
-      const content = element?.closest<HTMLElement>("[data-block-content]");
-      const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
-      if (!content || !node || offset === undefined) return { blockId };
-      const range = document.createRange();
-      range.selectNodeContents(content);
-      range.setEnd(node, offset);
-      return { blockId, offset: range.toString().length };
-    };
-    return {
-      anchor: endpoint(selection?.anchorNode ?? null, selection?.anchorOffset),
-      focus: endpoint(selection?.focusNode ?? null, selection?.focusOffset),
-      text: selection?.toString(),
-    };
-  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR });
+  const readSelection = () =>
+    page.evaluate(
+      ({ attribute, selector }) => {
+        const selection = getSelection();
+        const endpoint = (node: Node | null, offset: number | undefined) => {
+          const element = node instanceof Element ? node : node?.parentElement;
+          const content = element?.closest<HTMLElement>("[data-block-content]");
+          const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
+          if (!content || !node || offset === undefined) {
+            return { blockId };
+          }
+          const range = document.createRange();
+          range.selectNodeContents(content);
+          range.setEnd(node, offset);
+          return { blockId, offset: range.toString().length };
+        };
+        return {
+          anchor: endpoint(selection?.anchorNode ?? null, selection?.anchorOffset),
+          focus: endpoint(selection?.focusNode ?? null, selection?.focusOffset),
+          text: selection?.toString(),
+        };
+      },
+      { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR },
+    );
   const blockId = await start.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
   const expected = {
     anchor: { blockId, offset: 2 },
@@ -93,15 +129,21 @@ test("switches cross-block drag to blocks and restores text on return", async ({
 });
 
 test("Shift+Alt drag keeps partial text across blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   await page.keyboard.down("Shift");
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(2), 8);
   await page.keyboard.up("Alt");
   await page.keyboard.up("Shift");
   await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
-  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
 test("Alt drag selects complete blocks", async ({ page }) => {
@@ -109,29 +151,42 @@ test("Alt drag selects complete blocks", async ({ page }) => {
   await page.keyboard.down("Alt");
   await dragText(page, contents.nth(0), 2, contents.nth(1), 8);
   await page.keyboard.up("Alt");
-  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
-  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
-test("dragging from the adjacent writing block onto Counter selects both blocks", async ({ page }) => {
+test("dragging from the adjacent writing block onto Counter selects both blocks", async ({
+  page,
+}) => {
   // The immediately neighboring writing block is the regression: caret
   // hit-testing snaps back to that origin, so Counter used to be skipped
   // until the pointer reached another editable host.
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
-  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][1]");
+  const nextContent = counter.locator(
+    "xpath=following::*[@data-block-content and normalize-space(.) != ''][1]",
+  );
   await nextContent.scrollIntoViewIfNeeded();
   const from = await textPoint(nextContent, 5);
   const counterBox = await counter.boundingBox();
-  if (!counterBox) throw new Error("Expected Counter geometry");
+  if (!counterBox) {
+    throw new Error("Expected Counter geometry");
+  }
 
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, {
+    steps: 8,
+  });
   await page.mouse.move(
-    counterBox.x + counterBox.width / 2,
+    counterBox.x + counterBox.width / 2 + 1,
     counterBox.y + counterBox.height / 2,
-    { steps: 8 },
   );
-  await page.mouse.move(counterBox.x + counterBox.width / 2 + 1, counterBox.y + counterBox.height / 2);
 
   await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(
@@ -146,23 +201,30 @@ test("dragging from the adjacent writing block onto Counter selects both blocks"
   );
 });
 
-test("dragging onto a contentless Counter immediately extends block selection", async ({ page }) => {
+test("dragging onto a contentless Counter immediately extends block selection", async ({
+  page,
+}) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
-  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][2]");
+  const nextContent = counter.locator(
+    "xpath=following::*[@data-block-content and normalize-space(.) != ''][2]",
+  );
   await nextContent.scrollIntoViewIfNeeded();
   const from = await textPoint(nextContent, 5);
   const counterBox = await counter.boundingBox();
-  if (!counterBox) throw new Error("Expected Counter geometry");
+  if (!counterBox) {
+    throw new Error("Expected Counter geometry");
+  }
 
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(
-    counterBox.x + counterBox.width / 2,
-    counterBox.y + counterBox.height / 2,
-    { steps: 8 },
-  );
+  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, {
+    steps: 8,
+  });
   // Chromium may coalesce the final interpolated move at the target center.
-  await page.mouse.move(counterBox.x + counterBox.width / 2 + 1, counterBox.y + counterBox.height / 2);
+  await page.mouse.move(
+    counterBox.x + counterBox.width / 2 + 1,
+    counterBox.y + counterBox.height / 2,
+  );
 
   // Assert while the pointer is still down. Previously Counter was skipped
   // until the cursor reached another block containing editable text.
@@ -179,49 +241,68 @@ test("dragging onto a contentless Counter immediately extends block selection", 
   );
 });
 
-test("Shift+Alt drag includes a contentless Counter without converting text to blocks", async ({ page }) => {
+test("Shift+Alt drag includes a contentless Counter without converting text to blocks", async ({
+  page,
+}) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
-  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][2]");
+  const nextContent = counter.locator(
+    "xpath=following::*[@data-block-content and normalize-space(.) != ''][2]",
+  );
   await nextContent.scrollIntoViewIfNeeded();
   const from = await textPoint(nextContent, 5);
   const counterBox = await counter.boundingBox();
-  if (!counterBox) throw new Error("Expected Counter geometry");
+  if (!counterBox) {
+    throw new Error("Expected Counter geometry");
+  }
 
   await page.keyboard.down("Shift");
   await page.keyboard.down("Alt");
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, { steps: 8 });
-  const selected = await page.evaluate(() => (
-    window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").RivtoEditorApi } }
-  ).__rivtoDemo.editor.selection.get()?.blocks);
-  expect(selected).toContainEqual(expect.objectContaining({
-    id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
-    start: 0,
-    end: -1,
-  }));
+  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2, {
+    steps: 8,
+  });
+  const selected = await page.evaluate(
+    () =>
+      (
+        window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+      ).__rivtoDemo.editor.selection.get()?.blocks,
+  );
+  expect(selected).toContainEqual(
+    expect.objectContaining({
+      id: await counter.getAttribute(BLOCK_ID_ATTRIBUTE),
+      start: 0,
+      end: -1,
+    }),
+  );
   await expect(counter).toHaveAttribute("data-block-selected", "true");
   await page.mouse.up();
   await page.keyboard.up("Alt");
   await page.keyboard.up("Shift");
 
   await expect(counter).toHaveAttribute("data-block-selected", "true");
-  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(nextContent.locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
-test("dragging from a contentless Counter anchors selection without incrementing it", async ({ page }) => {
+test("dragging from a contentless Counter anchors selection without incrementing it", async ({
+  page,
+}) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const button = counter.locator(".custom-counter-block");
-  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][1]");
+  const nextContent = counter.locator(
+    "xpath=following::*[@data-block-content and normalize-space(.) != ''][1]",
+  );
   await nextContent.scrollIntoViewIfNeeded();
   const counterBox = await button.boundingBox();
   const to = await textPoint(nextContent, 5);
-  if (!counterBox) throw new Error("Expected Counter geometry");
+  if (!counterBox) {
+    throw new Error("Expected Counter geometry");
+  }
 
-  await page.mouse.move(
-    counterBox.x + counterBox.width / 2,
-    counterBox.y + counterBox.height / 2,
-  );
+  await page.mouse.move(counterBox.x + counterBox.width / 2, counterBox.y + counterBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await expect(counter).toHaveAttribute("data-block-selected", "true");
@@ -239,33 +320,101 @@ test("dragging from a contentless Counter anchors selection without incrementing
   await expect(button).toHaveText("Count: 2");
 });
 
-test("dragging within a contentless Counter selects only that block", async ({ page }) => {
-  const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
-  const button = counter.locator(".custom-counter-block");
-  await button.scrollIntoViewIfNeeded();
-  const box = await button.boundingBox();
-  if (!box) throw new Error("Expected Counter geometry");
+for (const canvas of [false, true]) {
+  test(`dragging within a contentless Counter selects only that block in ${canvas ? "edgeless" : "page"}`, async ({
+    page,
+  }) => {
+    if (canvas) {
+      await page
+        .locator('[data-journal-document="today"]')
+        .getByRole("button", { name: "Edgeless", exact: true })
+        .click();
+    }
+    const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+    const button = counter.locator(".custom-counter-block");
+    await expect(button).toHaveAttribute(BLOCK_SELECTION_ANCHOR_ATTRIBUTE, "");
+    await button.scrollIntoViewIfNeeded();
+    const box = await button.boundingBox();
+    if (!box) {
+      throw new Error("Expected Counter geometry");
+    }
 
-  await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
-  await page.mouse.up();
+    await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
 
-  await expect(counter).toHaveAttribute("data-block-selected", "true");
-  await expect(page.locator("[data-block-selected]")).toHaveCount(1);
-  await expect(button).toHaveText("Count: 2");
-});
+    await expect(counter).toHaveAttribute("data-block-selected", "true");
+    await expect(page.locator("[data-block-selected]")).toHaveCount(1);
+    await expect(button).toHaveText("Count: 2");
+  });
+}
 
-test("dragging from the empty right side of Counter starts structural selection", async ({ page }) => {
+for (const [canvas, preventSelection] of [
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true],
+] as const) {
+  test(`a ${preventSelection ? "protected" : "unmarked"} Counter button keeps its pointer gesture in ${canvas ? "edgeless" : "page"}`, async ({
+    page,
+  }) => {
+    if (canvas) {
+      await page
+        .locator('[data-journal-document="today"]')
+        .getByRole("button", { name: "Edgeless", exact: true })
+        .click();
+    }
+    const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
+    const button = counter.locator(".custom-counter-block");
+    // Removing the control's opt-in or explicitly opting out must leave its
+    // native gesture alone even though the surrounding renderer has an anchor.
+    await button.evaluate(
+      (element, attributes) => {
+        if (attributes.preventSelection) {
+          element.setAttribute(attributes.prevent, "");
+        } else {
+          element.removeAttribute(attributes.anchor);
+        }
+      },
+      {
+        preventSelection,
+        prevent: PREVENT_TEXT_EDITING_ATTRIBUTE,
+        anchor: BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
+      },
+    );
+    await button.scrollIntoViewIfNeeded();
+    const box = await button.boundingBox();
+    if (!box) {
+      throw new Error("Expected Counter geometry");
+    }
+    await page.mouse.move(box.x + box.width / 2 - 6, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect(counter).not.toHaveAttribute("data-block-selected", "true");
+    const count = Number((await button.textContent())!.replace("Count: ", ""));
+    await button.click();
+    await expect(button).toHaveText(`Count: ${count + 1}`);
+  });
+}
+
+test("dragging from the empty right side of Counter starts structural selection", async ({
+  page,
+}) => {
   const counter = page.locator(`${BLOCK_ID_SELECTOR}${blockTypeSelector("demo.counter")}`);
   const region = counter.locator(".custom-counter-selection-region");
   const button = counter.locator(".custom-counter-block");
-  const nextContent = counter.locator("xpath=following::*[@data-block-content and normalize-space(.) != ''][1]");
+  const nextContent = counter.locator(
+    "xpath=following::*[@data-block-content and normalize-space(.) != ''][1]",
+  );
   await nextContent.scrollIntoViewIfNeeded();
   const regionBox = await region.boundingBox();
   const buttonBox = await button.boundingBox();
   const to = await textPoint(nextContent, 5);
-  if (!regionBox || !buttonBox) throw new Error("Expected Counter geometry");
+  if (!regionBox || !buttonBox) {
+    throw new Error("Expected Counter geometry");
+  }
   expect(regionBox.x + regionBox.width).toBeGreaterThan(buttonBox.x + buttonBox.width + 20);
 
   await page.mouse.move(regionBox.x + regionBox.width - 8, regionBox.y + regionBox.height / 2);
@@ -281,7 +430,9 @@ test("dragging from the empty right side of Counter starts structural selection"
   await expect(button).toHaveText("Count: 2");
 });
 
-test("plain clicks select structural regions without activating their controls", async ({ page }) => {
+test("plain clicks select structural regions without activating their controls", async ({
+  page,
+}) => {
   const separator = page.locator('[data-separator-block="true"]').first();
   const separatorBlock = separator.locator(BLOCK_ANCESTOR_XPATH);
   await separator.click();
@@ -292,7 +443,9 @@ test("plain clicks select structural regions without activating their controls",
   const region = counter.locator(".custom-counter-selection-region");
   const button = counter.locator(".custom-counter-block");
   const regionBox = await region.boundingBox();
-  if (!regionBox) throw new Error("Expected Counter selection-region geometry");
+  if (!regionBox) {
+    throw new Error("Expected Counter selection-region geometry");
+  }
   await region.click({ position: { x: regionBox.width - 8, y: regionBox.height / 2 } });
   await expect(counter).toHaveAttribute("data-block-selected", "true");
   await expect(separatorBlock).not.toHaveAttribute("data-block-selected", "true");
@@ -303,14 +456,14 @@ test("plain clicks select structural regions without activating their controls",
 });
 
 test("Shift click ranges complete blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   await contents.nth(0).click();
   await contents.nth(2).click({ modifiers: ["Shift"] });
-  await expect(page.locator("[data-block-selected]")).toHaveCount(3);
+  await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(3);
 });
 
 test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   const start = await textPoint(contents.nth(0), 2);
   const end = await textPoint(contents.nth(2), 8);
   await page.mouse.click(start.x, start.y);
@@ -320,12 +473,18 @@ test("Shift+Alt click keeps partial text across blocks", async ({ page }) => {
   await page.keyboard.up("Alt");
   await page.keyboard.up("Shift");
   await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
-  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(0).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
+  await expect(contents.nth(2).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
 test("bottom-up Shift+Alt drag preserves the directed native text range", async ({ page }) => {
-  const contents = textContents(page);
+  const contents = selectionTextContents(page);
   const upper = contents.nth(0);
   const lower = contents.nth(2);
   const upperId = await upper.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -338,26 +497,35 @@ test("bottom-up Shift+Alt drag preserves the directed native text range", async 
   await page.keyboard.up("Shift");
 
   await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-  await expect.poll(() => page.evaluate(({ attribute, selector }) => {
-    const selection = getSelection();
-    const position = (node: Node | null, offset: number) => {
-      const element = node instanceof Element ? node : node?.parentElement;
-      const content = element?.closest<HTMLElement>("[data-block-content]");
-      const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
-      if (!node || !content) return { blockId };
-      const range = document.createRange();
-      range.selectNodeContents(content);
-      range.setEnd(node, offset);
-      return { blockId, offset: range.toString().length };
-    };
-    return {
-      anchor: position(selection?.anchorNode ?? null, selection?.anchorOffset ?? 0),
-      focus: position(selection?.focusNode ?? null, selection?.focusOffset ?? 0),
-    };
-  }, { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR })).toEqual({
-    anchor: { blockId: lowerId, offset: 8 },
-    focus: { blockId: upperId, offset: 2 },
-  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ attribute, selector }) => {
+          const selection = getSelection();
+          const position = (node: Node | null, offset: number) => {
+            const element = node instanceof Element ? node : node?.parentElement;
+            const content = element?.closest<HTMLElement>("[data-block-content]");
+            const blockId = element?.closest<HTMLElement>(selector)?.getAttribute(attribute);
+            if (!node || !content) {
+              return { blockId };
+            }
+            const range = document.createRange();
+            range.selectNodeContents(content);
+            range.setEnd(node, offset);
+            return { blockId, offset: range.toString().length };
+          };
+          return {
+            anchor: position(selection?.anchorNode ?? null, selection?.anchorOffset ?? 0),
+            focus: position(selection?.focusNode ?? null, selection?.focusOffset ?? 0),
+          };
+        },
+        { attribute: BLOCK_ID_ATTRIBUTE, selector: BLOCK_ID_SELECTOR },
+      ),
+    )
+    .toEqual({
+      anchor: { blockId: lowerId, offset: 8 },
+      focus: { blockId: upperId, offset: 2 },
+    });
 });
 
 test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
@@ -369,10 +537,16 @@ test("Ctrl click toggles blocks with a pointer cursor", async ({ page }) => {
   await expect(contents.nth(1)).toHaveCSS("cursor", "pointer");
   await page.keyboard.up("Control");
   await contents.nth(1).click({ modifiers: ["Control"] });
-  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute("data-block-selected", "true");
+  await expect(contents.nth(1).locator(BLOCK_ANCESTOR_XPATH)).not.toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
-test("keeps Ctrl-click block selection after returning from another tab", async ({ context, page }) => {
+test("keeps Ctrl-click block selection after returning from another tab", async ({
+  context,
+  page,
+}) => {
   const other = await context.newPage();
   await other.bringToFront();
   await page.bringToFront();
@@ -391,13 +565,18 @@ test("keeps Ctrl-click block selection after returning from another tab", async 
   await other.close();
 });
 
-test("bottom-up nested drag does not select a parent from the gap between children", async ({ page }) => {
-  const parent = page.locator("[data-block-content]")
+test("bottom-up nested drag does not select a parent from the gap between children", async ({
+  page,
+}) => {
+  const parent = page
+    .locator("[data-block-content]")
     .filter({ hasText: "Second branch level 2 child." })
     .locator(BLOCK_ANCESTOR_XPATH);
-  const upper = page.locator("[data-block-content]")
+  const upper = page
+    .locator("[data-block-content]")
     .filter({ hasText: "Second branch level 3 descendant." });
-  const lower = page.locator("[data-block-content]")
+  const lower = page
+    .locator("[data-block-content]")
     .filter({ hasText: "Second branch level 2 sibling." });
   const upperBlock = upper.locator(BLOCK_ANCESTOR_XPATH);
   const lowerBlock = lower.locator(BLOCK_ANCESTOR_XPATH);
@@ -408,7 +587,9 @@ test("bottom-up nested drag does not select a parent from the gap between childr
   const toUpper = await textPoint(upper, 4);
   const upperBox = await upperBlock.boundingBox();
   const lowerBox = await lowerBlock.boundingBox();
-  if (!upperBox || !lowerBox) throw new Error("Expected nested sibling geometry");
+  if (!upperBox || !lowerBox) {
+    throw new Error("Expected nested sibling geometry");
+  }
 
   // Sibling BlockViews use vertical margin, so the gap between rows is the
   // parent container. After the drag has already crossed into another nested
@@ -428,23 +609,89 @@ test("bottom-up nested drag does not select a parent from the gap between childr
 });
 
 test("selecting a parent draws one selection rectangle around its subtree", async ({ page }) => {
-  const parent = page.locator(".page-block:has(> .page-block-children)").first();
-  const child = parent.locator(`.page-block-children ${BLOCK_ID_SELECTOR}`).last();
-  await parent.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  const parent = page
+    .locator(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )
+    .first();
+  const child = parent.locator(`.rivto-block-children ${BLOCK_ID_SELECTOR}`).last();
+  await parent
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
+    .click({ modifiers: ["Control"] });
 
   await expect(parent).toHaveAttribute("data-block-selected", "true");
-  await expect(parent).toHaveCSS("background-color", "rgb(229, 223, 255)");
+  await expect
+    .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(229, 223, 255)");
   const parentBox = await parent.boundingBox();
   const childBox = await child.boundingBox();
-  if (!parentBox || !childBox) throw new Error("Expected selected subtree geometry");
+  if (!parentBox || !childBox) {
+    throw new Error("Expected selected subtree geometry");
+  }
   expect(parentBox.y).toBeLessThanOrEqual(childBox.y);
   expect(parentBox.y + parentBox.height).toBeGreaterThanOrEqual(childBox.y + childBox.height);
 });
 
+for (const mode of ["block", "edgeless"] as const) {
+  test(`nested structural selections share one subtree decoration in ${mode}`, async ({ page }) => {
+    await page.evaluate((mode) => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+      editor.blocks.insertBlock({
+        id: "selected-parent",
+        type: "paragraph",
+        content: "Selected parent",
+        children: [
+          { id: "selected-child", type: "paragraph", content: "Selected child" },
+          { id: "unselected-child", type: "paragraph", content: "Unselected child" },
+        ],
+      });
+      if (mode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 600, height: 240 },
+          props: { startBlockId: "selected-parent", endBlockId: "selected-parent" },
+        });
+      }
+    }, mode);
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const parent = page.locator(blockIdSelector("selected-parent"));
+    const child = page.locator(blockIdSelector("selected-child"));
+    const parentContent = parent.locator(":scope > .rivto-block-row [data-block-content]");
+    await child.locator("[data-block-content]").click({ modifiers: ["Control"] });
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await parentContent.click({ modifiers: ["Control"] });
+    await expect(parent).toHaveAttribute("data-block-selected", "true");
+    await expect(child).toHaveAttribute("data-block-selected", "true");
+    await expect
+      .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
+      .toBe("rgb(229, 223, 255)");
+    await expect(parent).toHaveCSS("outline-style", "solid");
+    await expect(child).toHaveCSS("outline-style", "none");
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(page.locator(blockIdSelector("unselected-child"))).toHaveCSS(
+      "background-color",
+      "rgb(229, 223, 255)",
+    );
+    const parentBox = (await parent.boundingBox())!;
+    const childBox = (await child.boundingBox())!;
+    expect(parentBox.y + parentBox.height).toBeGreaterThanOrEqual(childBox.y + childBox.height);
+    await parentContent.click({ modifiers: ["Control"] });
+    await expect(parent).not.toHaveAttribute("data-block-selected", "true");
+    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(child).toHaveCSS("outline-style", "solid");
+  });
+}
+
 test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) => {
   const contents = textContents(page);
   const firstText = await contents.nth(0).textContent();
-  const firstId = await contents.nth(0).locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+  const firstId = await contents
+    .nth(0)
+    .locator(BLOCK_ANCESTOR_XPATH)
+    .getAttribute(BLOCK_ID_ATTRIBUTE);
   expect(firstId).toBeTruthy();
   await contents.nth(0).click();
   await page.keyboard.press("Alt+ArrowDown");
@@ -454,10 +701,13 @@ test("Alt selects block ranges and Alt+Shift moves a block", async ({ page }) =>
   await page.keyboard.press("Alt+ArrowUp");
   await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("Alt+Shift+ArrowDown");
-  await expect(page.locator(`.page-surface > ${BLOCK_ID_SELECTOR}`).nth(1))
-    .toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId!);
-  await expect(page.locator(blockIdSelector(firstId!)).locator("[data-block-content]"))
-    .toHaveText(firstText ?? "");
+  await expect(page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).nth(1)).toHaveAttribute(
+    BLOCK_ID_ATTRIBUTE,
+    firstId!,
+  );
+  await expect(page.locator(blockIdSelector(firstId!)).locator("[data-block-content]")).toHaveText(
+    firstText ?? "",
+  );
 });
 
 test("Left and Right enter a caret at offset 0 from a block selection", async ({ page }) => {
@@ -468,35 +718,47 @@ test("Left and Right enter a caret at offset 0 from a block selection", async ({
 
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-  await expect.poll(async () => contents.nth(0).evaluate((element) => {
-    const selection = element.ownerDocument.getSelection();
-    if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
-      return -1;
-    }
-    const range = selection.getRangeAt(0);
-    if (!range.collapsed) return -1;
-    const prefix = range.cloneRange();
-    prefix.selectNodeContents(element);
-    prefix.setEnd(range.endContainer, range.endOffset);
-    return prefix.toString().length;
-  })).toBe(0);
+  await expect
+    .poll(async () =>
+      contents.nth(0).evaluate((element) => {
+        const selection = element.ownerDocument.getSelection();
+        if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
+          return -1;
+        }
+        const range = selection.getRangeAt(0);
+        if (!range.collapsed) {
+          return -1;
+        }
+        const prefix = range.cloneRange();
+        prefix.selectNodeContents(element);
+        prefix.setEnd(range.endContainer, range.endOffset);
+        return prefix.toString().length;
+      }),
+    )
+    .toBe(0);
 
   await page.keyboard.press("Alt+ArrowDown");
   await expect(page.locator("[data-block-selected]")).toHaveCount(1);
   await page.keyboard.press("ArrowLeft");
   await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-  await expect.poll(async () => contents.nth(0).evaluate((element) => {
-    const selection = element.ownerDocument.getSelection();
-    if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
-      return -1;
-    }
-    const range = selection.getRangeAt(0);
-    if (!range.collapsed) return -1;
-    const prefix = range.cloneRange();
-    prefix.selectNodeContents(element);
-    prefix.setEnd(range.endContainer, range.endOffset);
-    return prefix.toString().length;
-  })).toBe(0);
+  await expect
+    .poll(async () =>
+      contents.nth(0).evaluate((element) => {
+        const selection = element.ownerDocument.getSelection();
+        if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode)) {
+          return -1;
+        }
+        const range = selection.getRangeAt(0);
+        if (!range.collapsed) {
+          return -1;
+        }
+        const prefix = range.cloneRange();
+        prefix.selectNodeContents(element);
+        prefix.setEnd(range.endContainer, range.endOffset);
+        return prefix.toString().length;
+      }),
+    )
+    .toBe(0);
 });
 
 test("Left and Right preserve native caret movement inside text", async ({ page }) => {
@@ -506,7 +768,9 @@ test("Left and Right preserve native caret movement inside text", async ({ page 
   // movement instead of invoking Rivto's cross-block navigation.
   await content.evaluate((element) => {
     const text = element.firstChild;
-    if (!text) throw new Error("Expected editable text");
+    if (!text) {
+      throw new Error("Expected editable text");
+    }
     const range = document.createRange();
     range.setStart(text, 4);
     range.collapse(true);
@@ -516,29 +780,152 @@ test("Left and Right preserve native caret movement inside text", async ({ page 
   });
 
   await page.keyboard.press("ArrowRight");
-  await expect.poll(() => content.evaluate((element) => {
-    const selection = getSelection();
-    if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    return range.toString().length;
-  })).toBe(5);
+  await expect
+    .poll(() =>
+      content.evaluate((element) => {
+        const selection = getSelection();
+        if (!selection?.focusNode || !element.contains(selection.focusNode)) {
+          return -1;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return range.toString().length;
+      }),
+    )
+    .toBe(5);
 
   await page.keyboard.press("ArrowLeft");
-  await expect.poll(() => content.evaluate((element) => {
-    const selection = getSelection();
-    if (!selection?.focusNode || !element.contains(selection.focusNode)) return -1;
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.setEnd(selection.focusNode, selection.focusOffset);
-    return range.toString().length;
-  })).toBe(4);
+  await expect
+    .poll(() =>
+      content.evaluate((element) => {
+        const selection = getSelection();
+        if (!selection?.focusNode || !element.contains(selection.focusNode)) {
+          return -1;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return range.toString().length;
+      }),
+    )
+    .toBe(4);
 });
 
+for (const change of ["indent", "select", "clear", "select-and-return"] as const) {
+  test(`preserves a newer ${change} before deferred indent restoration`, async ({ page }) => {
+    const restored = await page.evaluate(async (change) => {
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI };
+        }
+      ).__rivtoDemo.editor;
+      const root = document.querySelector<HTMLElement>(
+        "[data-journal-document='today'] > [data-rivto-page-editor-root]",
+      )!;
+      const ids = editor.blocks.getRootIds().slice(1, 3);
+      root.focus();
+      for (const [index, id] of ids.entries()) {
+        editor.selection.set({
+          type: "selection",
+          blocks: [{ id, start: 0, end: -1 }],
+          anchorBlockId: id,
+          focusBlockId: id,
+        });
+        if (index === 0 || change === "indent") {
+          root.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+          );
+        }
+      }
+      if (change === "clear") {
+        editor.selection.clear();
+      }
+      if (change === "select-and-return") {
+        editor.selection.set({
+          type: "selection",
+          blocks: [{ id: ids[0]!, start: 0, end: -1 }],
+          anchorBlockId: ids[0]!,
+          focusBlockId: ids[0]!,
+        });
+      }
+      const expected = editor.selection.get()?.focusBlockId;
+      const selections: Array<string | undefined> = [];
+      const unsubscribe = editor.selection.subscribe(() =>
+        selections.push(editor.selection.get()?.focusBlockId),
+      );
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      unsubscribe();
+      return {
+        stale: selections.some((id) => id !== expected),
+        focus: editor.selection.get()?.focusBlockId,
+        expected,
+      };
+    }, change);
+    expect(restored.stale).toBe(false);
+    expect(restored.focus).toBe(restored.expected);
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`restores a caret after a transient empty native selection on ${mode}`, async ({ page }) => {
+    if (mode === "edgeless") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
+    const result = await page.evaluate(async () => {
+      const { editor, reactEditor } = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
+        }
+      ).__rivtoDemo;
+      const id = editor.blocks.getRootIds()[1]!;
+      editor.selection.set({
+        type: "selection",
+        blocks: [{ id, start: 1, end: 1 }],
+        anchorBlockId: id,
+        focusBlockId: id,
+      });
+      const view = reactEditor.panels.getActive() ?? reactEditor.panels.getDefault();
+      if (!view) {
+        throw new Error("Expected mounted editor view");
+      }
+      view.selection.restoreDOM();
+      const content = document.querySelector<HTMLElement>(
+        `[data-block-id="${id}"] [contenteditable]`,
+      )!;
+      content.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+      );
+      document.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event("selectionchange"));
+      const retained = editor.selection.get()?.focusBlockId === id;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      return {
+        retained,
+        focus: editor.selection.get()?.focusBlockId,
+        id,
+        offset: document.getSelection()?.focusOffset,
+        parent: editor.blocks.getParentId(id),
+      };
+    });
+    expect(result.retained).toBe(true);
+    expect(result.focus).toBe(result.id);
+    expect(result.offset).toBe(1);
+    expect(result.parent).not.toBeNull();
+  });
+}
+
 test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => {
-  const parent = page.locator(".page-block:has(> .page-block-children)").first();
-  const siblings = parent.locator(`:scope > .page-block-children > ${BLOCK_ID_SELECTOR}`);
+  const parent = page
+    .locator(
+      `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
+    )
+    .first();
+  const siblings = parent.locator(`:scope > .rivto-block-children > ${BLOCK_ID_SELECTOR}`);
   const first = siblings.first();
   const second = siblings.last();
   const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
@@ -549,23 +936,36 @@ test("Shift+Tab outdents multiple selected sibling blocks", async ({ page }) => 
   expect(parentId).toBeTruthy();
   await expect(second.locator(BLOCK_ANCESTOR_XPATH)).toHaveAttribute(BLOCK_ID_ATTRIBUTE, parentId!);
 
-  await first.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
-  await second.locator(":scope > .page-block-row [data-block-content]").click({ modifiers: ["Control"] });
+  await first
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
+    .click({ modifiers: ["Control"] });
+  await second
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`)
+    .click({ modifiers: ["Control"] });
   await page.keyboard.press("Shift+Tab");
 
-  await expect(page.locator(blockIdSelector(firstId!)).locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
-  await expect(page.locator(blockIdSelector(secondId!)).locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(0);
+  await expect(page.locator(blockIdSelector(firstId!)).locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(
+    0,
+  );
+  await expect(page.locator(blockIdSelector(secondId!)).locator(BLOCK_ANCESTOR_XPATH)).toHaveCount(
+    0,
+  );
   await expect(page.locator("[data-block-selected]")).toHaveCount(2);
 });
 
 test("Down follows wrapped visual lines at approximately the same x", async ({ page }) => {
-  await page.locator('[data-journal-document="today"] .page-surface')
-    .evaluate((element) => { element.style.width = "300px"; });
+  await page.locator('[data-journal-document="today"] > .page-surface').evaluate((element) => {
+    element.style.width = "300px";
+  });
   const content = textContents(page).nth(1);
   const point = await textPoint(content, 8);
   await page.mouse.click(point.x, point.y);
-  const before = await page.evaluate(() => getSelection()?.getRangeAt(0).getBoundingClientRect().left ?? 0);
+  const before = await page.evaluate(
+    () => getSelection()?.getRangeAt(0).getBoundingClientRect().left ?? 0,
+  );
   await page.keyboard.press("ArrowDown");
-  const after = await page.evaluate(() => getSelection()?.getRangeAt(0).getBoundingClientRect().left ?? 0);
+  const after = await page.evaluate(
+    () => getSelection()?.getRangeAt(0).getBoundingClientRect().left ?? 0,
+  );
   expect(Math.abs(after - before)).toBeLessThan(40);
 });

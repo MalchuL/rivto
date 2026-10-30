@@ -1,26 +1,37 @@
 import { getMockDb } from "../../lib/mock/db";
-import type {
-  CreateProjectInput,
-  Project,
-  UpdateProjectInput,
-} from "./types";
+import type { CreateProjectInput, Project, UpdateProjectInput } from "./types";
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
 export const projectService = {
+  /**
+   * Lists mock projects in ascending creation order.
+   *
+   * @returns All stored projects.
+   */
   async list(): Promise<Project[]> {
     const db = getMockDb();
-    return [...db.projects.values()].sort((a, b) =>
-      a.createdAt.localeCompare(b.createdAt),
-    );
+    return [...db.projects.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   },
 
+  /**
+   * Looks up a project in the mock database.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @returns Stored project, or null when the ID is unknown.
+   */
   async get(id: string): Promise<Project | null> {
     return getMockDb().projects.get(id) ?? null;
   },
 
+  /**
+   * Creates a mock project with a new ID, timestamps, and defaults for omitted fields.
+   *
+   * @param input - Creation or update fields for this operation.
+   * @returns The project stored in the mock database.
+   */
   async create(input: CreateProjectInput = {}): Promise<Project> {
     const db = getMockDb();
     const created = nowIso();
@@ -40,6 +51,13 @@ export const projectService = {
     return project;
   },
 
+  /**
+   * Applies supplied project fields and refreshes the update timestamp.
+   *
+   * @param input - Creation or update fields for this operation.
+   * @returns Updated project.
+   * @throws If the project ID is unknown.
+   */
   async update(input: UpdateProjectInput): Promise<Project> {
     const db = getMockDb();
     const existing = db.projects.get(input.id);
@@ -52,9 +70,7 @@ export const projectService = {
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.icon !== undefined ? { icon: input.icon } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.parentProjectId !== undefined
-        ? { parentProjectId: input.parentProjectId }
-        : {}),
+      ...(input.parentProjectId !== undefined ? { parentProjectId: input.parentProjectId } : {}),
       ...(input.properties !== undefined ? { properties: input.properties } : {}),
       updatedAt: nowIso(),
     };
@@ -62,10 +78,18 @@ export const projectService = {
     return updated;
   },
 
+  /**
+   * Deletes a project, its pages and tags, and reparents child projects to its parent; missing IDs are ignored.
+   *
+   * @param id - Stable ID of the record or registration to access.
+   * @throws If the project is a system container.
+   */
   async delete(id: string): Promise<void> {
     const db = getMockDb();
     const project = db.projects.get(id);
-    if (!project) return;
+    if (!project) {
+      return;
+    }
     if (project.system) {
       throw new Error("System containers cannot be deleted");
     }

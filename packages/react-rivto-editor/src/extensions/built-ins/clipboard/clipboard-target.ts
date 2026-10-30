@@ -1,12 +1,14 @@
 /**
- * Detects clipboard events that belong to a non-block contenteditable host.
+ * Detects clipboard events that belong to a marked text input or non-block contenteditable host.
  *
  * Edgeless visual labels (text, stickers, shapes, connectors) are plain-text
  * `contentEditable` hosts without `data-block-content`. Structured copy/paste
  * must not claim those events: paste would follow the previous block selection,
  * and copy would serialize the selected visual as a new element.
+ * Marked text inputs also retain their native clipboard behavior. Toolbar buttons
+ * remain eligible for canvas clipboard commands when they hold focus.
  */
-import { BLOCK_CONTENT_SELECTOR } from "../../../constants";
+import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../../constants";
 
 /** Matches boolean and plaintext-only contenteditable hosts. */
 const CONTENT_EDITABLE_SELECTOR = "[contenteditable=true], [contenteditable=plaintext-only]";
@@ -16,10 +18,10 @@ const CONTENT_EDITABLE_SELECTOR = "[contenteditable=true], [contenteditable=plai
  * structured block or visual clipboard handling.
  *
  * Checks both `event.target` and `document.activeElement` because Firefox can
- * dispatch copy/paste to `document.body` while a label still holds focus.
+ * dispatch copy/paste to `document.body` while a label or control still holds focus.
  *
  * @param event - Native copy, cut, or paste event.
- * @returns True when the focused host is an editable visual label.
+ * @returns True when the target or focused host belongs to a marked text input or editable visual label.
  */
 export function isNonBlockEditableClipboardEvent(event: Event): boolean {
   const target = eventElement(event);
@@ -28,12 +30,16 @@ export function isNonBlockEditableClipboardEvent(event: Event): boolean {
 }
 
 /**
- * True when `origin` is inside a contenteditable that is not block text.
+ * True when `origin` belongs to a marked text input or a contenteditable that is not block text.
  *
  * @param origin - Event target or `document.activeElement`.
- * @returns True for visual label editors; false for page blocks and controls.
+ * @returns True for marked text inputs and visual label editors; false for ordinary page blocks.
  */
 function isNonBlockEditableHost(origin: { closest: Element["closest"] }): boolean {
+  // Input/textarea expose selectionStart; buttons share the pointer marker but not text editing.
+  if (origin.closest(EDITOR_CONTROL_SELECTOR) && "selectionStart" in origin) {
+    return true;
+  }
   const editable = origin.closest<HTMLElement>(CONTENT_EDITABLE_SELECTOR);
   return Boolean(editable?.isContentEditable && !editable.closest(BLOCK_CONTENT_SELECTOR));
 }
@@ -46,8 +52,12 @@ function isNonBlockEditableHost(origin: { closest: Element["closest"] }): boolea
  */
 function eventElement(event: Event): { closest: Element["closest"] } | null {
   const target = event.target;
-  if (isClosestHost(target)) return target;
-  if (isNodeHost(target) && isClosestHost(target.parentElement)) return target.parentElement;
+  if (isClosestHost(target)) {
+    return target;
+  }
+  if (isNodeHost(target) && isClosestHost(target.parentElement)) {
+    return target.parentElement;
+  }
   return null;
 }
 

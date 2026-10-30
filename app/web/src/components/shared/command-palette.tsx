@@ -103,9 +103,7 @@ export function CommandPalette() {
               <CommandItem
                 key={project.id}
                 value={`project ${project.name}`}
-                onSelect={() =>
-                  run(() => router.push(FRONTEND_ROUTES.project(project.id)))
-                }
+                onSelect={() => run(() => router.push(FRONTEND_ROUTES.project(project.id)))}
               >
                 <FolderKanban />
                 {project.name}

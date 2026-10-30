@@ -1,7 +1,4 @@
-import type {
-  EditorBlock as Block,
-  EditorBlockInput as BlockInput,
-} from "@chulane/rivto";
+import type { EditorBlock as Block, EditorBlockInput as BlockInput } from "@chulane/rivto";
 
 /** Converts a detached subtree into creation input with every persisted ID removed. */
 export function duplicateBlockInput(block: Block): BlockInput {

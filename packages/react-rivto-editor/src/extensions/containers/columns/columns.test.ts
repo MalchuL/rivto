@@ -1,3 +1,4 @@
+import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Checks that Columns uses the ordinary block hierarchy: nested identities
  * survive moves, shrinking the board relocates rather than deletes children,
@@ -6,30 +7,30 @@
  */
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
-import { createReactEditor } from "../../../react-editor";
+
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
+  COLUMNS_BLOCK_TYPE,
+  COLUMNS_COLUMN_BLOCK_TYPE,
   columnsExtension,
   createColumnsBlockInput,
   relocateColumnContents,
   setColumnsCount,
-  COLUMNS_BLOCK_TYPE,
-  COLUMNS_COLUMN_BLOCK_TYPE,
 } from "./columns";
 
-function createColumnsRuntime() {
-  const editor = createTestCoreEditor();
-  const reactEditor = createReactEditor({
+async function createColumnsRuntime() {
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
+  const reactPanel = createReactEditor({
     editor,
     extensions: [defaultWritingBlockExtension(), columnsExtension()],
   });
-  return { editor, reactEditor };
+  return { editor, reactPanel };
 }
 
-test("slash insert creates empty columns", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("slash insert creates empty columns", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
   const before = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-  reactEditor.slashCommands.execute("block.columns.insert", { blockId: before });
+  reactPanel.slashCommands.execute("block.columns.insert", { blockId: before });
   const board = editor.blocks.getBlock(before)!;
   expect(board.id).toBe(before);
   expect(board.type).toBe(COLUMNS_BLOCK_TYPE);
@@ -37,12 +38,12 @@ test("slash insert creates empty columns", () => {
   expect(board.children).toHaveLength(2);
   expect(board.children.every((child) => child.type === COLUMNS_COLUMN_BLOCK_TYPE)).toBe(true);
   expect(board.children.every((column) => column.children.length === 0)).toBe(true);
-  reactEditor.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });
 
-test("inserts equally sized columns and relocates nested blocks when a column is removed", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("inserts equally sized columns and relocates nested blocks when a column is removed", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
   const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const board = editor.blocks.getBlock(boardId)!;
   expect(board.children).toHaveLength(2);
@@ -61,17 +62,23 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   const original = editor.blocks.getBlock(moving);
 
   editor.history.clear();
-  expect(setColumnsCount(reactEditor, board.id, 1)).toBe(true);
+  expect(setColumnsCount(reactPanel, board.id, 1)).toBe(true);
   expect(editor.blocks.getBlock(board.id)?.children).toHaveLength(1);
-  expect(editor.blocks.getBlock(left.id)?.children.map((child) => child.id)).toEqual([keep, moving]);
+  expect(editor.blocks.getBlock(left.id)?.children.map((child) => child.id)).toEqual([
+    keep,
+    moving,
+  ]);
   expect(editor.blocks.getBlock(moving)).toEqual(original);
   expect(editor.blocks.hasBlock(right.id)).toBe(false);
 
   editor.history.undo();
-  expect(editor.blocks.getBlock(board.id)?.children.map((child) => child.id)).toEqual([left.id, right.id]);
+  expect(editor.blocks.getBlock(board.id)?.children.map((child) => child.id)).toEqual([
+    left.id,
+    right.id,
+  ]);
   expect(editor.blocks.getBlock(right.id)?.children.map((child) => child.id)).toEqual([moving]);
 
-  expect(setColumnsCount(reactEditor, board.id, 3)).toBe(true);
+  expect(setColumnsCount(reactPanel, board.id, 3)).toBe(true);
   expect(editor.blocks.getBlock(board.id)?.children).toHaveLength(3);
   expect(editor.blocks.getBlock(board.id)?.children[2]?.children).toHaveLength(0);
 
@@ -81,12 +88,12 @@ test("inserts equally sized columns and relocates nested blocks when a column is
   const copied = editor.clipboard.copy(createStructuralSelection([board.id]));
   expect(copied?.blocks[0]?.children).toHaveLength(3);
 
-  reactEditor.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });
 
-test("structural column deletion moves nested blocks instead of removing them", () => {
-  const { editor, reactEditor } = createColumnsRuntime();
+test("structural column deletion moves nested blocks instead of removing them", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
   const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
   const [left, right] = editor.blocks.getBlock(boardId)!.children;
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" }).id;
@@ -97,7 +104,7 @@ test("structural column deletion moves nested blocks instead of removing them", 
   expect(editor.blocks.getBlock(left!.id)?.children.map((child) => child.id)).toEqual([nested]);
   expect(editor.blocks.getBlockNode(nested)?.content).toBe("Survive");
 
-  reactEditor.destroy();
+  reactPanel.editor.destroy();
   editor.destroy();
 });
 
@@ -105,4 +112,31 @@ test("validates requested column counts", () => {
   expect(() => createColumnsBlockInput(0)).toThrow("Columns count must be an integer from 1 to 6");
   expect(() => createColumnsBlockInput(7)).toThrow("Columns count must be an integer from 1 to 6");
   expect(createColumnsBlockInput(3).children).toHaveLength(3);
+});
+
+test("validates and preserves divider visibility through history, snapshots, and clipboard", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
+  const id = editor.blocks.insertBlock(createColumnsBlockInput()).id;
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(true);
+  expect(() => editor.blocks.updateBlock(id, { props: { showDividers: "no" } })).toThrow();
+
+  editor.history.clear();
+  editor.blocks.updateBlock(id, { props: { showDividers: false, custom: "preserved" } });
+  editor.history.undo();
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(true);
+  editor.history.redo();
+  expect(editor.blocks.getBlockNode(id)?.props.showDividers).toBe(false);
+
+  const snapshot = editor.dump();
+  editor.load(snapshot);
+  expect(editor.blocks.getBlockNode(id)?.props).toEqual({
+    showDividers: false,
+    custom: "preserved",
+  });
+  const copied = editor.clipboard.copy(createStructuralSelection([id]));
+  expect(copied?.blocks[0]?.props.showDividers).toBe(false);
+  expect(copied?.blocks[0]?.children).toHaveLength(2);
+
+  reactPanel.editor.destroy();
+  editor.destroy();
 });

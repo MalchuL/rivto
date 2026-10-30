@@ -26,10 +26,7 @@ export {
   useUpdateTagMutation,
 } from "./domain/tag/hooks";
 
-export {
-  useJournalDayQuery,
-  useJournalDaysQuery,
-} from "./domain/journal/hooks";
+export { useJournalDayQuery, useJournalDaysQuery } from "./domain/journal/hooks";
 
 export { DocumentEditor, RivtoEditor } from "./editor/RivtoEditor";
 export { EditorModeToggle } from "./editor/editor-mode-toggle";

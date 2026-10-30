@@ -15,7 +15,7 @@
 
 - почему `DocumentModelImpl` не возвращает React components;
 - как CRDT maps, arrays и texts превращаются в обычный detached `Block[]`;
-- зачем между model и React находится `EditorRuntime`;
+- зачем между model и React находится `DocumentEditor`;
 - почему `revision` является сигналом invalidation, а не самим document state;
 - как `useSyncExternalStore` узнаёт о local и remote updates;
 - как `BlockRegistry` соединяет persisted `block.type` с renderer;
@@ -25,4 +25,3 @@
 
 Это лучший стартовый курс, если общая архитектура пока выглядит как набор
 manager-классов без очевидной связи.
-

@@ -64,7 +64,7 @@ function rewriteAliasImports() {
     }
     const filePath = join(uiRoot, entry);
     const source = readFileSync(filePath, "utf8");
-    const rewritten = source.replace(aliasImportPattern, (_match, prefix, aliasTarget, suffix) => {
+    const rewritten = source.replace(aliasImportPattern, (match, prefix, aliasTarget, suffix) => {
       return `${prefix}${toRelativeSpecifier(filePath, aliasTarget)}${suffix}`;
     });
     if (rewritten !== source) {

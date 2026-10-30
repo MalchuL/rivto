@@ -24,6 +24,7 @@ test("round trips nested relative image paths through the browser mirror", funct
 });
 
 test("leaves remote and data image sources unchanged", function preservesExternalImages() {
-  const markdown = "![Remote](https://example.com/image.png)\n\n![Inline](data:image/png;base64,abc)";
+  const markdown =
+    "![Remote](https://example.com/image.png)\n\n![Inline](data:image/png;base64,abc)";
   assert.equal(resolveImagesForEditor(markdown, "10-page.md"), markdown);
 });

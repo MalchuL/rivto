@@ -33,16 +33,16 @@ One folder per bounded context (e.g. `auth`, `users`, `teams`, feature areas of 
 
 Typical slices (create only what you need):
 
-| Slice | Role |
-|-------|------|
-| `types/` | Domain models and DTOs used by UI + services |
-| `schemas/` | Zod forms / validation (`satisfies z.ZodType<…>`) |
-| `services/` | Axios HTTP calls to the backend (or BFF) |
-| `hooks/` | TanStack Query wrappers + domain providers |
-| `store/` | Zustand for **client** UI/session state only |
-| `components/` | Domain-specific React UI |
-| `utils/` / `lib/` | Pure helpers for that domain |
-| `index.ts` | Re-exports for clean imports |
+| Slice             | Role                                              |
+| ----------------- | ------------------------------------------------- |
+| `types/`          | Domain models and DTOs used by UI + services      |
+| `schemas/`        | Zod forms / validation (`satisfies z.ZodType<…>`) |
+| `services/`       | Axios HTTP calls to the backend (or BFF)          |
+| `hooks/`          | TanStack Query wrappers + domain providers        |
+| `store/`          | Zustand for **client** UI/session state only      |
+| `components/`     | Domain-specific React UI                          |
+| `utils/` / `lib/` | Pure helpers for that domain                      |
+| `index.ts`        | Re-exports for clean imports                      |
 
 Nested subdomains are OK when a parent context grows large (`domain/<parent>/<child>/`).
 
@@ -54,10 +54,10 @@ Nested subdomains are OK when a parent context grows large (`domain/<parent>/<ch
 
 ## Components
 
-| Location | Use for |
-|----------|---------|
-| `components/ui/*` | Design-system primitives (Button, Dialog…). Avoid business logic. |
-| `components/shared/*` | Reused across domains (app shell, page header, generic upload). |
+| Location                    | Use for                                                           |
+| --------------------------- | ----------------------------------------------------------------- |
+| `components/ui/*`           | Design-system primitives (Button, Dialog…). Avoid business logic. |
+| `components/shared/*`       | Reused across domains (app shell, page header, generic upload).   |
 | `domain/<ctx>/components/*` | Feature UI tied to that context (tables, charts, settings forms). |
 
 Prefer `"use client"` only where hooks/state/browser APIs are required. Keep server Components for layouts that only wrap children when possible.
@@ -66,24 +66,24 @@ Prefer `"use client"` only where hooks/state/browser APIs are required. Keep ser
 
 Use **route groups** for layout, not URL segments:
 
-| Group / path | Purpose |
-|--------------|---------|
-| `(auth)/…` | Unauthenticated pages (login, register) |
-| `(core)/…` | Logged-in app chrome |
-| `(core)/(workspace)/…` | Shared workspace shell (lists, docs, top-level nav) |
-| `(core)/<resource>/[id]/…` | Resource-scoped feature pages |
-| `admin/` (optional) | Ops UI with a **separate** auth channel (not end-user JWT) |
-| `api/**` | BFF Route Handlers → backend with `getServerApiBaseUrl()` |
+| Group / path               | Purpose                                                    |
+| -------------------------- | ---------------------------------------------------------- |
+| `(auth)/…`                 | Unauthenticated pages (login, register)                    |
+| `(core)/…`                 | Logged-in app chrome                                       |
+| `(core)/(workspace)/…`     | Shared workspace shell (lists, docs, top-level nav)        |
+| `(core)/<resource>/[id]/…` | Resource-scoped feature pages                              |
+| `admin/` (optional)        | Ops UI with a **separate** auth channel (not end-user JWT) |
+| `api/**`                   | BFF Route Handlers → backend with `getServerApiBaseUrl()`  |
 
 ### `FRONTEND_ROUTES` vs `API_ROUTES`
 
 Centralize in `src/lib/constants/`:
 
-| Constant | Use for |
-|----------|---------|
+| Constant          | Use for                                                        |
+| ----------------- | -------------------------------------------------------------- |
 | `FRONTEND_ROUTES` | In-app navigation / `href` builders / guard public-path checks |
-| `API_ROUTES` | Backend paths for axios (never mix into `Link`/`router.push`) |
-| `QUERY_KEYS` | TanStack Query cache keys |
+| `API_ROUTES`      | Backend paths for axios (never mix into `Link`/`router.push`)  |
+| `QUERY_KEYS`      | TanStack Query cache keys                                      |
 
 Keep `isPublicFrontendPath(pathname)` next to `FRONTEND_ROUTES` for the auth guard (login/register/admin bootstrap, etc.).
 
@@ -161,10 +161,10 @@ Shared client (`@/lib/api/clients/axios-client`):
 
 Support both modes from one infinite hook when a domain needs it:
 
-| Mode | Behavior |
-|------|----------|
-| `auto` | `useEffect` keeps `fetchNextPage` until `hasNext` is false (full dataset for charts/aggregations) |
-| `scroll` | IntersectionObserver / “load more” for large tables |
+| Mode     | Behavior                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| `auto`   | `useEffect` keeps `fetchNextPage` until `hasNext` is false (full dataset for charts/aggregations) |
+| `scroll` | IntersectionObserver / “load more” for large tables                                               |
 
 `getNextPageParam` should use cumulative offset + `hasNext` from the shared pagination contract.
 
@@ -213,11 +213,11 @@ For multi-select (or id lists) in the query string:
 
 **Do not** put deploy-specific API base URLs in `NEXT_PUBLIC_*` if operators must change them without rebuilding. Those values are inlined at `next build`.
 
-| Variable | Where read | Purpose |
-|----------|------------|---------|
-| `PUBLIC_API_BASE_URL` | Server at request time → injected for browser | Browser-reachable backend origin |
-| `SERVER_API_BASE_URL` | Server only (`env.ts`) | BFF → API (e.g. `http://backend:8000`) |
-| `NEXT_PUBLIC_API_PREFIX` | Optional build-time public non-secret | Path prefix hints (default `/api`) |
+| Variable                 | Where read                                    | Purpose                                |
+| ------------------------ | --------------------------------------------- | -------------------------------------- |
+| `PUBLIC_API_BASE_URL`    | Server at request time → injected for browser | Browser-reachable backend origin       |
+| `SERVER_API_BASE_URL`    | Server only (`env.ts`)                        | BFF → API (e.g. `http://backend:8000`) |
+| `NEXT_PUBLIC_API_PREFIX` | Optional build-time public non-secret         | Path prefix hints (default `/api`)     |
 
 Mechanism:
 
