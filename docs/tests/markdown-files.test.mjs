@@ -23,11 +23,12 @@ test("discovers Markdown recursively in numeric prefix order", async function di
   await writeFile(join(root, "ignored.txt"), "not documentation\n");
 
   const documents = await readMarkdownDocuments(root);
-  assert.deepEqual(documents.map(function readPath(document) { return document.path; }), [
-    "10-rivto.md",
-    "20-editor/10-intro.md",
-    "100-zeta.md",
-  ]);
+  assert.deepEqual(
+    documents.map(function readPath(document) {
+      return document.path;
+    }),
+    ["10-rivto.md", "20-editor/10-intro.md", "100-zeta.md"],
+  );
 });
 
 test("rejects paths outside the documentation root", function rejectsTraversal() {
@@ -79,7 +80,10 @@ test("deletes only the selected page and preserves nested pages", async function
 
   await deleteMarkdownDocument(root, parent.path, parent.modifiedAt);
   await assert.rejects(readFile(join(root, "10-guide.md")), /ENOENT/);
-  assert.equal(await readFile(join(root, "10-guide", "10-introduction.md"), "utf8"), "# Introduction\n");
+  assert.equal(
+    await readFile(join(root, "10-guide", "10-introduction.md"), "utf8"),
+    "# Introduction\n",
+  );
 });
 
 test("stores a valid pasted image under its owning page folder", async function storesImage() {
@@ -99,12 +103,23 @@ test("stores a valid pasted image under its owning page folder", async function 
 test("generates package and application links for llms.txt", function generatesLlmsIndex() {
   const documents = [
     { path: "00-rivto.md", content: "# Rivto\n\nWorkspace overview.\n", modifiedAt: 1 },
-    { path: "10-packages/10-core.md", content: "# Core package\n\nFramework-neutral behavior.\n", modifiedAt: 1 },
-    { path: "20-apps/10-demo.md", content: "# Demo app\n\nBrowser integration host.\n", modifiedAt: 1 },
+    {
+      path: "10-packages/10-core.md",
+      content: "# Core package\n\nFramework-neutral behavior.\n",
+      modifiedAt: 1,
+    },
+    {
+      path: "20-apps/10-demo.md",
+      content: "# Demo app\n\nBrowser integration host.\n",
+      modifiedAt: 1,
+    },
   ];
 
   const llmsText = generateLlmsText(documents);
   assert.match(llmsText, /^# Rivto\n\n>/);
-  assert.match(llmsText, /## Packages\n\n- \[Core package\]\(\/markdown\/10-packages\/10-core\.md\)/);
+  assert.match(
+    llmsText,
+    /## Packages\n\n- \[Core package\]\(\/markdown\/10-packages\/10-core\.md\)/,
+  );
   assert.match(llmsText, /## Applications\n\n- \[Demo app\]\(\/markdown\/20-apps\/10-demo\.md\)/);
 });

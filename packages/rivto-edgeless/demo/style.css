@@ -1,0 +1,23 @@
+body {
+  margin: 16px;
+  font-family: system-ui, sans-serif;
+  color: #18283e;
+  background: #eef2f7;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  padding: 5px 10px;
+}
+fieldset {
+  display: inline-flex;
+  gap: 12px;
+  margin: 0 12px 12px 0;
+  border: 1px solid #b9c6d6;
+}
+output {
+  font-variant-numeric: tabular-nums;
+}

@@ -36,7 +36,9 @@ export class ModeManager implements ModeManagerApi {
    * @param mode - Next local presentation mode.
    */
   set(mode: EditorMode): void {
-    if (mode === this.value) return;
+    if (mode === this.value) {
+      return;
+    }
     this.value = mode;
     this.notify();
   }

@@ -1,3 +1,5 @@
+import { edgelessVisualsExtension } from "./visuals/extension";
+import type { EdgelessVisualsOptions } from "./visuals/types";
 /**
  * Optional edgeless surface and interaction extension catalog.
  *
@@ -9,14 +11,13 @@
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
-import type { EdgelessSurfaceOptions } from "./surface";
+import type { EdgelessSurfaceOptions } from "../../surfaces/edgeless";
 import { registerEdgelessDeletion } from "./edgeless-deletion";
-import { EdgelessElementDragSlot } from "./edgeless-drag-handle";
 import { registerEdgelessMovement } from "./edgeless-movement";
 import { installEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
 import { registerEdgelessTransform } from "./edgeless-transform";
-import { registerEdgelessSurface } from "./register";
+import { EdgelessSurfaceRegistration } from "../../surfaces/edgeless/register";
 
 /** @returns The built-in positioned-card surface. */
 export function edgelessSurfaceExtension(
@@ -24,7 +25,7 @@ export function edgelessSurfaceExtension(
 ): ReactEditorExtension {
   return {
     id: "surface.edgeless",
-    setup: (reactEditor) => registerEdgelessSurface(reactEditor, options),
+    setup: (reactEditor) => new EdgelessSurfaceRegistration(reactEditor, options).dispose,
   };
 }
 
@@ -50,25 +51,22 @@ export function edgelessMovementExtension(): ReactEditorExtension {
   return { id: "movement.edgeless", setup: registerEdgelessMovement };
 }
 
-/** @returns Pointer drag and resize interactions for edgeless root cards. */
+/**
+ * Installs Moveable dragging, snapping, resize, and rotation for selected HTML elements.
+ * Handles are mounted per view; the editor retains selection, connector previews, and undo.
+ * @returns The optional edgeless transform extension.
+ */
 export function edgelessTransformExtension(): ReactEditorExtension {
   return {
     id: "transform.edgeless",
-    setup: (reactEditor) => {
-      reactEditor.surfaces.registerElementSlot({
-        position: "left-top",
-        priority: 100,
-        component: EdgelessElementDragSlot,
-        mode: "edgeless",
-        when: ({ element, selected }) => selected && element.type !== "connector",
-      });
-      return registerEdgelessTransform(reactEditor);
-    },
+    setup: (reactEditor) => registerEdgelessTransform(reactEditor),
   };
 }
 
 /** Options for the complete opt-in edgeless interaction preset. */
 export interface EdgelessPresetOptions {
+  /** Built-in figures and standard creation/property UI; toolbar can be disabled here. */
+  readonly visuals?: EdgelessVisualsOptions;
   /** Host-owned edgeless viewport settings. */
   readonly surface?: EdgelessSurfaceOptions;
 }
@@ -76,19 +74,25 @@ export interface EdgelessPresetOptions {
 /**
  * Creates the complete edgeless surface and block-interaction preset.
  *
- * Visual objects remain separately optional through `edgelessVisualsExtension`.
+ * Visual objects and their standard UI are installed by this preset. Individual
+ * interaction extensions remain available for hosts composing a custom editor.
  *
  * @param options - Optional surface configuration.
  * @returns Edgeless extensions in their required registration order.
  */
-export function edgelessPreset(options: EdgelessPresetOptions = {}): readonly ReactEditorExtension[] {
+export function edgelessPreset(
+  options: EdgelessPresetOptions = {},
+): readonly ReactEditorExtension[] {
   return [
     edgelessSurfaceExtension(options.surface),
     edgelessSelectionExtension(),
     edgelessTransformExtension(),
     edgelessDeletionExtension(),
     edgelessMovementExtension(),
+    edgelessVisualsExtension(options.visuals),
   ];
 }
 
 export * from "./visuals";
+
+export { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";

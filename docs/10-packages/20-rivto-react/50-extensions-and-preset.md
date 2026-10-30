@@ -5,7 +5,7 @@
 ```ts
 interface ReactEditorExtension {
   readonly id: string;
-  setup(reactEditor: ReactEditor): void | (() => void);
+  setup(reactEditor: ReactEditorApi): void | (() => void);
 }
 ```
 
@@ -17,7 +17,7 @@ interface ReactEditorExtension {
 Manager registrations автоматически принадлежат active extension lifecycle. Не нужно вручную сохранять disposer, если registration создана внутри `setup()`.
 
 ```ts
-const analyticsExtension = (editor: RivtoEditorApi): ReactEditorExtension => ({
+const analyticsExtension = (editor: DocumentEditorAPI): ReactEditorExtension => ({
   id: "app.analytics",
   setup(reactEditor) {
     return reactEditor.subscribe(() => report(editor.dump()));
@@ -35,11 +35,11 @@ const analyticsExtension = (editor: RivtoEditorApi): ReactEditorExtension => ({
 
 - **`trailingBlockCount?: number`:** количество page-end add buttons; default `3`, positive integer.
 - **`writing?: DefaultWritingBlockOptions`:** custom default writing type/renderer/factory/link handler.
-Preset устанавливает writing/error/separator blocks, page surface, history, text/block selection, slash/list/clipboard, navigation, indent/outdent, Enter/merge/delete, collapse и trailing controls.
+  Preset устанавливает writing/error/separator blocks, page surface, history, text/block selection, slash/list/clipboard, navigation, indent/outdent, Enter/merge/delete, collapse и trailing controls.
 
 Drag подключается через `pageDragExtension()`. Canvas surface и interactions подключаются через `...edgelessPreset({ surface })`.
 
-`edgelessVisualsExtension()` намеренно не входит в preset: visual shapes — opt-in product feature.
+`edgelessPreset({ surface, visuals })` включает `edgelessVisualsExtension()` с регистрацией встроенных элементов и UI. Не добавляйте visuals повторно рядом с preset. Для ручной сборки остаются отдельные extension factories.
 
 ## `defaultWritingBlockExtension(options?)`
 
@@ -53,8 +53,10 @@ Properties options:
 - `title` default `"Paragraph"`;
 - `render` default `MarkdownContent`;
 - `slashCommand` partial override;
-- `createDefaultBlock` для Enter/trailing/separator/clipboard;
-- `isEmptyBlock` для reset/outdent behavior;
+- `factory: BlockFactory` объединяет создание и распознавание writing blocks;
+- `factory.createEmptyBlock()` используется для Enter/trailing/separator, а clipboard сохраняет прежнее использование только типа;
+- `factory.isEmptyBlock()` используется для reset/outdent behavior;
+- `factory.isBlock()` распознаёт native type независимо от пустоты;
 - `onMarkdownLinkClick({ blockId, href, event })` для host routing.
 
 ## Individual built-ins
@@ -69,25 +71,25 @@ import {
 } from "@chulane/rivto-react/extensions";
 ```
 
-| Группа | Extensions |
-| --- | --- |
-| Surfaces | `pageSurfaceExtension`, `edgelessSurfaceExtension` |
-| History/clipboard | `historyExtension`, `clipboardExtension` |
-| Selection | `textSelectionExtension`, `blockSelectionExtension`, `selectionDeletionExtension` |
-| Navigation | `caretNavigationExtension`, `blockSelectionNavigationExtension`, `keyboardBlockMoveExtension` |
-| Writing | `blockCreationExtension`, `blockMergeExtension`, `blockOutdentExtension`, `emptyBlockResetExtension`, `indentExtension` |
-| Page UI | `trailingBlockExtension`, `collapseExtension`, `listShortcutsExtension`, `slashCommandExtension` |
-| Optional drag | `pageDragExtension` |
-| Edgeless | `edgelessSelectionExtension`, `edgelessTransformExtension`, `edgelessDeletionExtension`, `edgelessMovementExtension` |
+| Группа            | Extensions                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Surfaces          | `pageSurfaceExtension`, `edgelessSurfaceExtension`                                                                      |
+| History/clipboard | `historyExtension`, `clipboardExtension`                                                                                |
+| Selection         | `textSelectionExtension`, `blockSelectionExtension`, `selectionDeletionExtension`                                       |
+| Navigation        | `caretNavigationExtension`, `blockSelectionNavigationExtension`, `keyboardBlockMoveExtension`                           |
+| Writing           | `blockCreationExtension`, `blockMergeExtension`, `blockOutdentExtension`, `emptyBlockResetExtension`, `indentExtension` |
+| Page UI           | `trailingBlockExtension`, `collapseExtension`, `listShortcutsExtension`, `slashCommandExtension`                        |
+| Optional drag     | `pageDragExtension`                                                                                                     |
+| Edgeless          | `edgelessSelectionExtension`, `edgelessTransformExtension`, `edgelessDeletionExtension`, `edgelessMovementExtension`    |
 
 ## Extension ordering
 
-Setup идёт слева направо, cleanup — справа налево. Dependencies ставьте раньше consumers. Например, custom behavior, использующий `createDefaultBlock`, должен идти после `defaultWritingBlockExtension`; в preset этот порядок уже соблюдён.
+Setup идёт слева направо, cleanup — справа налево. Dependencies ставьте раньше consumers. Например, custom behavior, использующий `defaultWritingBlockFactory.createEmptyBlock()`, должен идти после `defaultWritingBlockExtension`; в preset этот порядок уже соблюдён.
 
 ## Mounted UI и wrappers
 
 - `reactEditor.extensions.mount(Component)` добавляет headless/visual component рядом с surface.
-- `surfaces.registerEditorWrapper(Wrapper, mode?)` оборачивает всё содержимое `EditorView`.
+- `surfaces.registerEditorWrapper(Wrapper, mode?)` оборачивает всё содержимое `EditorPanel`.
 - `surfaces.registerBlockWrapper(mode, Wrapper)` оборачивает каждый recursive block.
 
-Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useEditorMode()`.
+Mounted component присутствует во всех modes. Mode-specific behavior ограничивайте через event definition или `useContext(SurfaceContext)`.

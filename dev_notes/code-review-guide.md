@@ -87,12 +87,12 @@ if the proposed change also alters persisted data or a core operation.
 
 For every value that can change, ask who owns it:
 
-| Kind of state | Expected owner |
-| --- | --- |
-| Document, block tree, history, portable selection, mode | Core editor |
-| Renderer, surface, event, and extension registrations | React runtime manager |
+| Kind of state                                            | Expected owner            |
+| -------------------------------------------------------- | ------------------------- |
+| Document, block tree, history, portable selection, mode  | Core editor               |
+| Renderer, surface, event, and extension registrations    | React runtime manager     |
 | Open popup, hover, drag preview, temporary gesture state | React component/extension |
-| Editable text and painted caret during native editing | Browser DOM |
+| Editable text and painted caret during native editing    | Browser DOM               |
 
 Flag duplicated state unless there is a synchronization rule explaining why it
 must exist. In particular:

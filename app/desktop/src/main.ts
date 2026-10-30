@@ -1,9 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  shell,
-  type BrowserWindowConstructorOptions,
-} from "electron";
+import { app, BrowserWindow, shell, type BrowserWindowConstructorOptions } from "electron";
 import { createServer } from "node:http";
 
 const DEV_URL = process.env.RIVTO_WEB_URL ?? "http://127.0.0.1:3000";
@@ -81,14 +76,18 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow) {
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
     mainWindow.focus();
   });
 
   app.whenReady().then(async () => {
     // Tiny local probe so packaged health checks can detect the shell process.
-    createServer((_req, res) => {
+    createServer((request, res) => {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("rivto-desktop");
     }).listen(0);

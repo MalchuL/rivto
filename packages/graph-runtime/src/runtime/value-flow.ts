@@ -4,13 +4,29 @@
  * directed descendants while preserving per-branch node ancestry.
  */
 import type { GraphConnection } from "../connections";
-import type { EndpointDeclaration, GraphExecutionError, PropagationContext, ValueBinding } from "../endpoints";
+import type {
+  EndpointDeclaration,
+  GraphExecutionError,
+  PropagationContext,
+  ValueBinding,
+} from "../endpoints";
 import { connectionsOfKind, requireDeclaredKind, valueComponent } from "../topology";
 import type { RunState, ValueDelivery } from "./delivery";
 
 /** Runtime callbacks required by value delivery. */
 export interface ValueFlowCallbacks {
+  /**
+   * Checks whether a value propagation run is still active.
+   *
+   * @param state - Current editor or propagation state to inspect.
+   * @returns Whether the run can continue.
+   */
   isCurrent(state: RunState): boolean;
+  /**
+   * Reports a value propagation failure to the owning runtime.
+   *
+   * @param error - Graph execution failure to report.
+   */
   report(error: GraphExecutionError): void;
 }
 
@@ -34,20 +50,29 @@ export class ValueFlowExecutor {
     binding: ValueBinding,
     publish: (value: unknown, context?: PropagationContext) => void,
   ): void {
-    if (this.values.has(endpointId)) throw new Error(`Value endpoint ${endpointId} is already registered`);
+    if (this.values.has(endpointId)) {
+      throw new Error(`Value endpoint ${endpointId} is already registered`);
+    }
     this.values.set(endpointId, binding);
     this.lastValues.set(endpointId, binding.get());
     if (binding.subscribe) {
-      this.subscriptions.set(endpointId, binding.subscribe((value, context) => {
-        if (context && this.internalContexts.has(context as object)) return;
-        publish(value, context);
-      }));
+      this.subscriptions.set(
+        endpointId,
+        binding.subscribe((value, context) => {
+          if (context && this.internalContexts.has(context as object)) {
+            return;
+          }
+          publish(value, context);
+        }),
+      );
     }
   }
 
   /** Detaches one binding while preserving persisted topology. */
   unregister(endpointId: string, expected?: ValueBinding): void {
-    if (expected && this.values.get(endpointId) !== expected) return;
+    if (expected && this.values.get(endpointId) !== expected) {
+      return;
+    }
     this.subscriptions.get(endpointId)?.();
     this.subscriptions.delete(endpointId);
     this.values.delete(endpointId);
@@ -69,7 +94,11 @@ export class ValueFlowExecutor {
 
   /** Detaches bindings that no longer match loaded value declarations. */
   reconcile(): void {
-    for (const id of this.values.keys()) if (this.declarations.get(id)?.kind !== "value") this.unregister(id);
+    for (const id of this.values.keys()) {
+      if (this.declarations.get(id)?.kind !== "value") {
+        this.unregister(id);
+      }
+    }
   }
 
   /** Returns one binding for explicit synchronization. */
@@ -81,7 +110,9 @@ export class ValueFlowExecutor {
   read(endpointId: string): unknown {
     requireDeclaredKind(endpointId, "value", this.declarations);
     const binding = this.values.get(endpointId);
-    if (!binding) throw new Error(`Value endpoint ${endpointId} is unavailable`);
+    if (!binding) {
+      throw new Error(`Value endpoint ${endpointId} is unavailable`);
+    }
     return binding.get();
   }
 
@@ -89,7 +120,9 @@ export class ValueFlowExecutor {
   observe(endpointId: string, value: unknown): boolean {
     const binding = this.values.get(endpointId);
     const equals = binding?.equals ?? Object.is;
-    if (this.lastValues.has(endpointId) && equals(this.lastValues.get(endpointId), value)) return false;
+    if (this.lastValues.has(endpointId) && equals(this.lastValues.get(endpointId), value)) {
+      return false;
+    }
     this.lastValues.set(endpointId, value);
     return true;
   }
@@ -97,41 +130,68 @@ export class ValueFlowExecutor {
   /** Synchronizes one value component and enqueues outgoing directed edges. */
   async deliver(delivery: ValueDelivery, state: RunState): Promise<void> {
     requireDeclaredKind(delivery.endpointId, "value", this.declarations);
-    if (!this.callbacks.isCurrent(state)) return;
+    if (!this.callbacks.isCurrent(state)) {
+      return;
+    }
     const component = valueComponent(delivery.endpointId, this.connections.values());
-    const eligible = component.filter((id) => id === delivery.endpointId || !delivery.visitedNodeIds.has(this.declarations.get(id)!.nodeId));
+    const eligible = component.filter(
+      (id) =>
+        id === delivery.endpointId ||
+        !delivery.visitedNodeIds.has(this.declarations.get(id)!.nodeId),
+    );
     const visited = new Set(delivery.visitedNodeIds);
     eligible.forEach((id) => visited.add(this.declarations.get(id)!.nodeId));
     const context: PropagationContext = { runId: state.runId, visitedNodeIds: visited };
     const changed: string[] = [];
     for (const id of eligible) {
-      if (!this.callbacks.isCurrent(state)) return;
+      if (!this.callbacks.isCurrent(state)) {
+        return;
+      }
       if (id === delivery.endpointId && !delivery.writeStart) {
         changed.push(id);
         continue;
       }
       const binding = this.values.get(id);
       if (!binding) {
-        this.callbacks.report({ phase: "value", endpointId: id, connectionId: delivery.connectionId, message: `Value endpoint ${id} is unavailable` });
+        this.callbacks.report({
+          phase: "value",
+          endpointId: id,
+          connectionId: delivery.connectionId,
+          message: `Value endpoint ${id} is unavailable`,
+        });
         continue;
       }
       const equals = binding.equals ?? Object.is;
-      if (!delivery.force && equals(binding.get(), delivery.value)) continue;
+      if (!delivery.force && equals(binding.get(), delivery.value)) {
+        continue;
+      }
       try {
         this.internalContexts.add(context);
         const accepted = await binding.set(delivery.value, context);
-        if (accepted === false || !equals(binding.get(), delivery.value)) throw new Error("Host rejected or transformed the assigned value");
+        if (accepted === false || !equals(binding.get(), delivery.value)) {
+          throw new Error("Host rejected or transformed the assigned value");
+        }
         this.lastValues.set(id, delivery.value);
         changed.push(id);
       } catch (cause) {
-        this.callbacks.report({ phase: "value", endpointId: id, connectionId: delivery.connectionId, message: `Could not assign value endpoint ${id}`, cause });
+        this.callbacks.report({
+          phase: "value",
+          endpointId: id,
+          connectionId: delivery.connectionId,
+          message: `Could not assign value endpoint ${id}`,
+          cause,
+        });
       }
     }
     for (const source of changed) {
-      const outgoing = connectionsOfKind(this.connections.values(), "directed-value").filter((item) => item.from === source);
+      const outgoing = connectionsOfKind(this.connections.values(), "directed-value").filter(
+        (item) => item.from === source,
+      );
       for (const connection of outgoing) {
         const target = this.declarations.get(connection.to)!;
-        if (visited.has(target.nodeId)) continue;
+        if (visited.has(target.nodeId)) {
+          continue;
+        }
         state.queue.push({
           kind: "value",
           endpointId: connection.to,

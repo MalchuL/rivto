@@ -15,23 +15,21 @@ const MARKDOWN_MIRROR_PREFIX = "/markdown/";
  * @returns Editor Markdown whose local image sources point at the browser mirror.
  */
 export function resolveImagesForEditor(markdown: string, pagePath: string): string {
-  return markdown.replace(IMAGE_DESTINATION_PATTERN, function replaceImagePath(
-    _match,
-    opening: string,
-    rawSource: string,
-    closing: string,
-  ) {
-    const source = unwrapAngleBrackets(rawSource);
-    if (isExternalSource(source)) {
-      return `${opening}${rawSource}${closing}`;
-    }
-    const assetPath = resolveRelativePath(getParentPath(pagePath), source);
-    if (!assetPath) {
-      return `${opening}${rawSource}${closing}`;
-    }
-    const browserSource = `${MARKDOWN_MIRROR_PREFIX}${assetPath.split("/").map(encodeURIComponent).join("/")}`;
-    return `${opening}${browserSource}${closing}`;
-  });
+  return markdown.replace(
+    IMAGE_DESTINATION_PATTERN,
+    function replaceImagePath(match, opening: string, rawSource: string, closing: string) {
+      const source = unwrapAngleBrackets(rawSource);
+      if (isExternalSource(source)) {
+        return `${opening}${rawSource}${closing}`;
+      }
+      const assetPath = resolveRelativePath(getParentPath(pagePath), source);
+      if (!assetPath) {
+        return `${opening}${rawSource}${closing}`;
+      }
+      const browserSource = `${MARKDOWN_MIRROR_PREFIX}${assetPath.split("/").map(encodeURIComponent).join("/")}`;
+      return `${opening}${browserSource}${closing}`;
+    },
+  );
 }
 
 /**
@@ -42,23 +40,21 @@ export function resolveImagesForEditor(markdown: string, pagePath: string): stri
  * @returns Portable file Markdown suitable for persistence.
  */
 export function restoreImagesForFile(markdown: string, pagePath: string): string {
-  return markdown.replace(IMAGE_DESTINATION_PATTERN, function restoreImagePath(
-    _match,
-    opening: string,
-    rawSource: string,
-    closing: string,
-  ) {
-    const source = unwrapAngleBrackets(rawSource);
-    if (!source.startsWith(MARKDOWN_MIRROR_PREFIX)) {
-      return `${opening}${rawSource}${closing}`;
-    }
-    const assetPath = source
-      .slice(MARKDOWN_MIRROR_PREFIX.length)
-      .split("/")
-      .map(decodeURIComponent)
-      .join("/");
-    return `${opening}${makeRelativePath(getParentPath(pagePath), assetPath)}${closing}`;
-  });
+  return markdown.replace(
+    IMAGE_DESTINATION_PATTERN,
+    function restoreImagePath(match, opening: string, rawSource: string, closing: string) {
+      const source = unwrapAngleBrackets(rawSource);
+      if (!source.startsWith(MARKDOWN_MIRROR_PREFIX)) {
+        return `${opening}${rawSource}${closing}`;
+      }
+      const assetPath = source
+        .slice(MARKDOWN_MIRROR_PREFIX.length)
+        .split("/")
+        .map(decodeURIComponent)
+        .join("/");
+      return `${opening}${makeRelativePath(getParentPath(pagePath), assetPath)}${closing}`;
+    },
+  );
 }
 
 /**
@@ -127,7 +123,9 @@ function makeRelativePath(fromDirectory: string, targetPath: string): string {
     commonLength += 1;
   }
   return [
-    ...fromSegments.slice(commonLength).map(function parentSegment() { return ".."; }),
+    ...fromSegments.slice(commonLength).map(function parentSegment() {
+      return "..";
+    }),
     ...targetSegments.slice(commonLength),
   ].join("/");
 }

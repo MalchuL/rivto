@@ -1,10 +1,13 @@
-# `EditorRuntime` и `RivtoEditorApi`
+# `DocumentEditor` и `DocumentEditorAPI`
 
-`RivtoEditorApi` — public coordinator contract. `EditorRuntime` является его реализацией и владеет cross-cutting behavior; block/link/element operations остаются в focused managers.
+`DocumentEditorAPI` — public coordinator contract. `DocumentEditor` является его реализацией и владеет cross-cutting behavior; block/link/element operations остаются в focused managers.
 
-Исходники: `editor/types.ts` и `editor/rivto-editor.ts`.
+Исходники: `editor/types.ts` и `editor/document-editor.ts`.
 
 ## Публичные свойства
+
+Presentation mode принадлежит `PanelAPI` в React. У DocumentEditorAPI нет mode или
+корней отображения; операции выполняются над всем документом.
 
 ### `blocks`
 
@@ -44,12 +47,6 @@
 - **Значение:** named runtime command handlers.
 - **Исключения при чтении:** отсутствуют.
 
-### `mode`
-
-- **Тип:** `ModeManager`, публичное `readonly`.
-- **Значение:** local `block`/`edgeless` presentation state.
-- **Исключения при чтении:** отсутствуют.
-
 ### `selection`
 
 - **Тип:** `SelectionManager`, публичное `readonly`.
@@ -85,7 +82,7 @@
 ### `unsubscribeFns`
 
 - **Тип:** `Array<() => void>`, приватное `readonly`.
-- **Значение:** cleanup callbacks block registry, manager subscriptions и mode subscriptions. Active document subscription хранится отдельно для replacement.
+- **Значение:** cleanup callbacks block registry, fixed document subscription, hierarchy subscription и element membership subscription. Они принадлежат single core и удаляются при его destroy; caller или editor cache отдельно уничтожает модель.
 - **Исключения при чтении:** отсутствуют.
 
 ### `currentRevision`
@@ -98,17 +95,17 @@
 
 ### `constructor(options)`
 
-- **Аргументы:** optional `CreateRivtoEditorOptions` с `mode`.
-- **Создаёт:** полностью связанный `EditorRuntime`.
+- **Аргументы:** required `CreateDocumentEditorOptions` с единственной `document`.
+- **Создаёт:** полностью связанный `ReactEditor`.
 - **Исключения:** передаёт ошибки managers, duplicate built-in commands и subscriptions.
 
-Default mode — `"block"`. Constructor создаёт unbound managers, устанавливает block props validator и регистрирует runtime/clipboard commands. `setDocument()` позже подключает model subscriptions.
+Constructor создаёт managers, постоянно связанные с supplied document, и подписывается на её изменения, hierarchy и element membership. Definitions, defaults и processors принадлежат core managers. Constructor не открывает другие документы и не хранит presentation mode.
 
 ## Публичные методы
 
-### `getDocument()` / `setDocument(document)`
+### `getDocument()` и `acquireEditor(documentId)`
 
-`getDocument()` возвращает active `DocumentModel` либо `undefined`, пока runtime unbound. `setDocument()` атомарно переключает history и document subscriptions, сохраняя stable managers и editor-owned processors, очищает selection и публикует один global revision. Старый caller-owned document не уничтожается; updates от него больше не доходят до runtime. Повторная установка active instance ничего не делает.
+`getDocument()` всегда возвращает единственную модель, переданную в `createDocumentEditor({ document })`. Managers, retained callbacks, subscriptions, clipboard и history постоянно связаны с ней; смены document context нет. Single editor освобождает свои registrations и subscriptions, но не уничтожает caller-owned модель. Для нескольких документов `EditorStorage` принимает async `openDocument(documentId)` и optional `createEditor(editor)` returning ReactEditor; по умолчанию создаёт пустой Yjs-backed документ. `acquireEditor(documentId)` возвращает `{ editor, document, release }`: каждый acquisition удерживает отдельную ссылку до вызова своего release. Loader передаёт EditorStorage владение моделью, а storage создаёт core перед вызовом React-фабрики: последний acquisition или shutdown закрывает сначала ReactEditor, затем core и модель. Views одного документа делят core, разные документы имеют собственные selection, clipboard policy и undo history.
 
 ### `subscribe(listener)`
 
@@ -118,7 +115,7 @@ Default mode — `"block"`. Constructor создаёт unbound managers, уст�
 
 Метод подписывает на единственный runtime event `editorChanged`; payload не передаётся, поэтому после callback consumer читает `revision` и нужные managers. Разрешено любое число distinct listeners, и новая подписка не заменяет предыдущую. Внутренний `Listeners` хранит callbacks в `Set`: повторная регистрация той же function reference создаёт одну effective subscription, а разные functions вызываются независимо.
 
-Возвращённый disposer удаляет этот callback и является idempotent. Подписка не вызывается сразу. Один document update, selection/mode change или block-registry change сначала увеличивает `revision`, затем вызывает snapshot текущих listeners. Вызов disposer во время notification безопасен, но iteration уже использует snapshot текущего списка.
+Возвращённый disposer удаляет этот callback и является idempotent. Подписка не вызывается сразу. Один document update или block-registry change сначала увеличивает `revision`, затем вызывает snapshot текущих listeners. Selection имеет собственный stream, а presentation mode хранится отдельно в React-панели. Вызов disposer во время notification безопасен, но iteration уже использует snapshot текущего списка.
 
 ### `blockRegistry.subscribe(listener)`
 
@@ -136,13 +133,13 @@ Default mode — `"block"`. Constructor создаёт unbound managers, уст�
 - **Возвращает:** idempotent unsubscribe.
 - **Не уведомляет:** failed/unknown command, register или remove command.
 
-### `mode.subscribe(listener)`
+### Presentation state
 
-- **События:** один stream `modeChanged` после effective смены `block`/`edgeless`.
-- **Количество подписчиков:** несколько distinct callbacks без replacement.
-- **Повтор той же функции:** deduplicate-ится.
-- **Возвращает:** idempotent unsubscribe.
-- **Не уведомляет:** `set()` с уже активным mode; immediate initial callback отсутствует.
+Каждая React-панель хранит mode в `reactPanel.mode`; при необходимости host передаёт общий
+ModeManager нескольким панелям. Начальное значение — block, state не персистится.
+`useEditorMode()` подписывается на manager ближайшей панели. Surface задаётся JSX,
+DOM surface определяет локальный event.mode. Document subscriptions, clipboard,
+portable selection и history постоянно привязаны к single DocumentEditorAPI.
 
 ### `selection.subscribe(listener)`
 
@@ -162,18 +159,18 @@ Outermost batch вызывает `stopCapturing()` до и после и вып�
 
 ### `load(snapshot)`
 
-- **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 6.
+- **Аргументы:** `snapshot: EditorSnapshotUpdate` schema version 9.
 - **Возвращает:** `void`.
 - **Исключения:** document-model validation и CRDT write errors.
 
 Передаёт snapshot напрямую в document-model без block/element processors, затем очищает history и делает загруженное состояние новым baseline. Migration, remapping и repair выполняются явно до `load()`.
 
-Статический и runtime-контракты требуют literal `version: 6`. Любое другое значение отклоняется до записи supplied sections.
+Статический и runtime-контракты требуют literal `version: 9`. Любое другое значение отклоняется до записи supplied sections.
 
 ### `dump()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** complete detached `EditorSnapshot` schema version 6.
+- **Возвращает:** complete detached `EditorSnapshot` schema version 9.
 - **Исключения:** document materialization/validation/conversion errors.
 
 ### `destroy()`
@@ -186,10 +183,61 @@ Outermost batch вызывает `stopCapturing()` до и после и вып�
 
 ## Factory
 
-### `createRivtoEditor(options)`
+### `createDocumentEditor(options)`
 
-- **Аргументы:** optional `CreateRivtoEditorOptions`.
-- **Возвращает:** новый `EditorRuntime`.
+- **Аргументы:** optional `CreateDocumentEditorOptions`.
+- **Возвращает:** новый `ReactEditor`.
 - **Исключения:** те же, что у constructor.
 
 Caller владеет runtime lifecycle.
+
+## Несколько документов
+
+Каждый core принимает одну модель: `createDocumentEditor({ document })`.
+Для embedding, нескольких tabs и пользователей React-пакет предоставляет
+`EditorStorage`. Он кеширует отдельный ReactEditorApi и core для каждого документа;
+обычные команды по-прежнему выполняются напрямую в соответствующем core.
+Definitions, defaults, processors, selection, clipboard и undo остаются в нём.
+
+```ts
+import { EditorStorage, createReactEditor, standardPreset } from "@chulane/rivto-react";
+const editors = new EditorStorage({
+  openDocument: (id) => storage.openDocument(id),
+  createEditor: (editor) => createReactEditor({
+    editor,
+    extensions: [standardPreset()],
+  }),
+  lookupDocumentIds: (id, options) => storage.findDocumentIdsWithBlock(id, options),
+});
+const sourceLease = await editors.acquireEditor("source");
+const source = sourceLease.editor;
+source.blocks.updateBlock("existing-block", { content: "Changed" });
+const destinationLease = await editors.acquireEditor("destination");
+const destination = destinationLease.editor;
+destination.blocks.insertBlock({ type: "paragraph" });
+await sourceLease.release();
+await destinationLease.release();
+await editors.destroy();
+```
+
+Каждый `acquireEditor(id)` удерживает одну ссылку до своего `release()`.
+Владелец удерживает её до размонтирования всех views; concurrent opens делят
+pending promise, отмена одного consumer не отменяет другого. Последний release
+закрывает React registrations, core, затем модель. `getEditor(id)` и
+`getDocument(id)` читают уже открытые instances без загрузки.
+`findDocumentWithBlock(id)` возвращает первую открытую модель по сортировке ID.
+Embedding хранит `targetDocumentId` и `targetBlockId`; `resolveBlock({ documentId, blockId })`
+проверяет указанный документ первым, затем ищет кандидатов через application/database lookup.
+Стандартный resolver показывает первый найденный документ и сообщает неоднозначность.
+Callback `resolveBlock` в настройках кеша заменяет эту политику; props ссылки не меняются.
+
+Clipboard использует policy своего core и получает ID mapping от model manager.
+Application subclass проверяет занятые ID в документе назначения, включая его
+удалённые записи. Другие документы имеют отдельные пространства ID. Clipboard
+сохраняет sourceDocumentId и обновляет внутренние embedding-ссылки по ID mapping;
+внешние ссылки сохраняют исходную пару document/block ID.
+`crossDocumentBlockTransfer(source, destination, ids, placement)` явно проверяет
+назначение до удаления источника и сохраняет ID. Истории остаются независимыми:
+undo одного документа может восстановить блок в двух документах одновременно.
+Распределённой transaction и общего selection manager нет; view ограничивает
+DOM selection показанным subtree и активным occurrence.

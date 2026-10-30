@@ -18,12 +18,7 @@ export type {
 } from "./domain/page/types";
 export { pageService } from "./domain/page/service";
 
-export type {
-  AvailableTag,
-  CreateTagInput,
-  Tag,
-  UpdateTagInput,
-} from "./domain/tag/types";
+export type { AvailableTag, CreateTagInput, Tag, UpdateTagInput } from "./domain/tag/types";
 export {
   DEFAULT_TAG_COLOR,
   TAG_COLOR_PRESETS,

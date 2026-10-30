@@ -18,7 +18,8 @@
  * @returns Normalized plain text with `\n` line breaks.
  */
 export function readEditablePlainText(element: HTMLElement): string {
-  const rendered = typeof element.innerText === "string" ? element.innerText : (element.textContent ?? "");
+  const rendered =
+    typeof element.innerText === "string" ? element.innerText : (element.textContent ?? "");
   return rendered.replace(/\r\n?/g, "\n");
 }
 
@@ -33,12 +34,18 @@ export function readEditablePlainText(element: HTMLElement): string {
  * @returns No value.
  */
 export function insertEditablePlainText(element: HTMLElement, text: string): void {
-  if (!text) return;
+  if (!text) {
+    return;
+  }
   const document = element.ownerDocument;
-  if (document.execCommand("insertText", false, text)) return;
+  if (document.execCommand("insertText", false, text)) {
+    return;
+  }
 
   const selection = document.getSelection();
-  if (!selection) return;
+  if (!selection) {
+    return;
+  }
   selection.deleteFromDocument();
   if (selection.rangeCount === 0) {
     const seed = document.createRange();

@@ -71,7 +71,9 @@ function Tab({
 
   const close = () => {
     const nextHref = closeTab(tab.id);
-    if (nextHref) router.push(nextHref);
+    if (nextHref) {
+      router.push(nextHref);
+    }
   };
 
   return (
@@ -97,7 +99,9 @@ function Tab({
           }}
           onClick={open}
           onAuxClick={(event) => {
-            if (event.button === 1) close();
+            if (event.button === 1) {
+              close();
+            }
           }}
           className={cn(
             "group flex h-full min-w-0 cursor-default select-none items-center gap-1.5 border-r border-border/60 px-3 text-sm transition-colors",
@@ -184,9 +188,7 @@ function OpenTabsMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {tabs.length === 0 ? (
-          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-            No open tabs
-          </div>
+          <div className="px-2 py-3 text-center text-xs text-muted-foreground">No open tabs</div>
         ) : (
           tabs.map((tab) => {
             const Icon = TAB_ICONS[tab.kind];

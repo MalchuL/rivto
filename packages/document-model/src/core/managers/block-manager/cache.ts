@@ -45,35 +45,53 @@ export class BlockCache {
   ) {}
 
   /** @param id - Block identity. @returns Last known tree path, if any. */
-  getPath(id: IDBlock): readonly number[] | undefined { return this.paths.get(id); }
+  getPath(id: IDBlock): readonly number[] | undefined {
+    return this.paths.get(id);
+  }
 
   /** @param id - Block identity. @param path - Validated path. @returns No value. */
-  setPath(id: IDBlock, path: readonly number[]): void { this.paths.set(id, path); }
+  setPath(id: IDBlock, path: readonly number[]): void {
+    this.paths.set(id, path);
+  }
 
   /** @param id - Block identity. @returns No value after dropping its path. */
-  deletePath(id: IDBlock): void { this.paths.delete(id); }
+  deletePath(id: IDBlock): void {
+    this.paths.delete(id);
+  }
 
   /** @returns No value after dropping all path hints. */
-  clearPaths(): void { this.paths.clear(); }
+  clearPaths(): void {
+    this.paths.clear();
+  }
 
   /**
    * Reads only the immediate parent; it does not walk toward the root.
    * @param id - Block identity to look up.
    * @returns Parent ID, null for a root, or undefined when unplaced.
    */
-  getParentId(id: IDBlock): ParentId | undefined { return this.parents.get(id); }
+  getParentId(id: IDBlock): ParentId | undefined {
+    return this.parents.get(id);
+  }
 
   /** @param id - Block identity. @returns Whether the block is indexed as placed. */
-  hasParent(id: IDBlock): boolean { return this.parents.has(id); }
+  hasParent(id: IDBlock): boolean {
+    return this.parents.has(id);
+  }
 
   /** @param parentId - Array owner, or null for roots. @returns Last indexed direct children. */
-  getIndexedChildren(parentId: ParentId): readonly IDBlock[] { return this.indexedChildren.get(parentId) ?? []; }
+  getIndexedChildren(parentId: ParentId): readonly IDBlock[] {
+    return this.indexedChildren.get(parentId) ?? [];
+  }
 
   /** @returns Whether tree order can change the first parent of a duplicate placement. */
-  hasDuplicatePlacements(): boolean { return this.hasDuplicates; }
+  hasDuplicatePlacements(): boolean {
+    return this.hasDuplicates;
+  }
 
   /** @returns A stable copy of parent links before an observed hierarchy change. */
-  snapshotParents(): ReadonlyMap<IDBlock, ParentId> { return new Map(this.parents); }
+  snapshotParents(): ReadonlyMap<IDBlock, ParentId> {
+    return new Map(this.parents);
+  }
 
   /**
    * Walks each indexed parent chain to the root. Unlike `getParentId`, this
@@ -104,12 +122,13 @@ export class BlockCache {
    * @param transaction - Adapter transaction identity for rebuild deduplication.
    * @returns No value.
    */
-  refreshParents(
-    changedParents?: ReadonlySet<ParentId>,
-    transaction?: unknown,
-  ): void {
-    if (transaction !== undefined && this.lastParentTransaction === transaction) return;
-    if (changedParents && this.refreshChangedParents(changedParents)) return;
+  refreshParents(changedParents?: ReadonlySet<ParentId>, transaction?: unknown): void {
+    if (transaction !== undefined && this.lastParentTransaction === transaction) {
+      return;
+    }
+    if (changedParents && this.refreshChangedParents(changedParents)) {
+      return;
+    }
 
     this.lastParentTransaction = transaction;
     this.parents.clear();
@@ -132,94 +151,13 @@ export class BlockCache {
         }
         this.parents.set(id, parentId);
         const descendants = this.readChildren(id);
-        if (descendants) visit(descendants, id);
+        if (descendants) {
+          visit(descendants, id);
+        }
       });
       this.indexedChildren.set(parentId, children);
     };
     visit(this.readChildren(null) ?? [], null);
-  }
-
-  /**
-   * Reconciles changed sibling arrays and newly attached subtrees. Ambiguous
-   * placements request a full tree walk from `refreshParents`.
-   * @param changedParents - Root or block IDs owning changed arrays.
-   * @returns True when the index was updated without a full traversal.
-   */
-  private refreshChangedParents(changedParents: ReadonlySet<ParentId>): boolean {
-    if (this.hasDuplicates) return false;
-    const current = new Map<ParentId, readonly IDBlock[]>();
-    const nextParents = new Map<IDBlock, ParentId>();
-    const previousChildren = new Set<IDBlock>();
-    let currentCount = 0;
-    for (const parentId of changedParents) {
-      const ids = this.readChildren(parentId);
-      if (!ids || (parentId !== null && !this.parents.has(parentId))) return false;
-      ids.forEach((id) => {
-        nextParents.set(id, parentId);
-        currentCount += 1;
-      });
-      current.set(parentId, ids);
-      this.getIndexedChildren(parentId).forEach((id) => previousChildren.add(id));
-    }
-    // Duplicate references, an unchanged source array, or a detached ID
-    // placed elsewhere cannot be resolved from only the named arrays.
-    if (currentCount !== nextParents.size) return false;
-    const reparented: IDBlock[] = [];
-    for (const [id, parentId] of nextParents) {
-      const oldParent = this.parents.get(id);
-      if (oldParent !== undefined && !changedParents.has(oldParent)) return false;
-      if (oldParent !== parentId) reparented.push(id);
-    }
-    for (const id of previousChildren) {
-      if (!nextParents.has(id) && this.hasRecord(id)) return false;
-    }
-
-    /**
-     * Drops an indexed subtree removed from the named arrays.
-     * @param id - Root ID of the removed subtree.
-     * @returns No value.
-     */
-    const drop = (id: IDBlock): void => {
-      for (const childId of this.getIndexedChildren(id)) {
-        if (!nextParents.has(childId)) drop(childId);
-      }
-      this.indexedChildren.delete(id);
-      this.parents.delete(id);
-    };
-    for (const id of previousChildren) {
-      if (!nextParents.has(id)) drop(id);
-    }
-    current.forEach((ids, parentId) => this.indexedChildren.set(parentId, ids));
-    const added = [...nextParents.keys()].filter((id) => !this.parents.has(id));
-    nextParents.forEach((parentId, id) => this.parents.set(id, parentId));
-
-    /**
-     * Indexes descendants of a newly placed subtree without visiting others.
-     * @param id - Newly placed subtree root.
-     * @returns False when a duplicate or cycle requires a full rebuild.
-     */
-    const addDescendants = (id: IDBlock): boolean => {
-      const children = this.readChildren(id);
-      if (!children) return true;
-      this.indexedChildren.set(id, children);
-      for (const childId of children) {
-        if (this.parents.has(childId)) return false;
-        this.parents.set(childId, id);
-        if (!addDescendants(childId)) return false;
-      }
-      return true;
-    };
-    for (const id of added) if (!addDescendants(id)) return false;
-    for (const id of reparented) {
-      const seen = new Set<IDBlock>();
-      let currentId: IDBlock | null | undefined = id;
-      while (currentId != null) {
-        if (seen.has(currentId)) return false;
-        seen.add(currentId);
-        currentId = this.parents.get(currentId);
-      }
-    }
-    return true;
   }
 
   /**
@@ -229,7 +167,10 @@ export class BlockCache {
    */
   invalidateChangedParents(previousParents: ReadonlyMap<IDBlock, ParentId>): Set<IDBlock> {
     const affected = new Set<IDBlock>();
-    const addAncestors = (start: IDBlock | null | undefined, parents: ReadonlyMap<IDBlock, ParentId>): void => {
+    const addAncestors = (
+      start: IDBlock | null | undefined,
+      parents: ReadonlyMap<IDBlock, ParentId>,
+    ): void => {
       let current = start;
       while (current != null && !affected.has(current)) {
         affected.add(current);
@@ -240,7 +181,9 @@ export class BlockCache {
     ids.forEach((id) => {
       const previous = previousParents.get(id);
       const next = this.parents.get(id);
-      if (previous === next) return;
+      if (previous === next) {
+        return;
+      }
       addAncestors(previous, previousParents);
       addAncestors(next, this.parents);
     });
@@ -257,9 +200,13 @@ export class BlockCache {
    */
   readBlock(id: IDBlock, isTransacting: boolean, create: () => Block): Block {
     const cached = isTransacting ? undefined : this.blocks.get(id);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const block = create();
-    if (!isTransacting) this.blocks.set(id, block);
+    if (!isTransacting) {
+      this.blocks.set(id, block);
+    }
     return block;
   }
 
@@ -272,9 +219,13 @@ export class BlockCache {
    */
   readNode(id: IDBlock, isTransacting: boolean, create: () => BlockNode): BlockNode {
     const cached = isTransacting ? undefined : this.nodes.get(id);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const node = create();
-    if (!isTransacting) this.nodes.set(id, this.freeze(node));
+    if (!isTransacting) {
+      this.nodes.set(id, this.freeze(node));
+    }
     return node;
   }
 
@@ -287,9 +238,13 @@ export class BlockCache {
    */
   readChildIds(id: IDBlock, isTransacting: boolean, create: () => string[]): string[] {
     const cached = isTransacting ? undefined : this.childIds.get(id);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const ids = create();
-    if (!isTransacting) this.childIds.set(id, this.freeze(ids));
+    if (!isTransacting) {
+      this.childIds.set(id, this.freeze(ids));
+    }
     return ids;
   }
 
@@ -300,7 +255,9 @@ export class BlockCache {
    * @returns Root IDs in stored order.
    */
   readRoots(isTransacting: boolean, create: () => string[]): string[] {
-    if (isTransacting) return create();
+    if (isTransacting) {
+      return create();
+    }
     this.rootIds ??= this.freeze(create());
     return this.rootIds;
   }
@@ -328,6 +285,117 @@ export class BlockCache {
       this.nodes.delete(id);
       this.childIds.delete(id);
     });
+  }
+
+  /**
+   * Reconciles changed sibling arrays and newly attached subtrees. Ambiguous
+   * placements request a full tree walk from `refreshParents`.
+   * @param changedParents - Root or block IDs owning changed arrays.
+   * @returns True when the index was updated without a full traversal.
+   */
+  private refreshChangedParents(changedParents: ReadonlySet<ParentId>): boolean {
+    if (this.hasDuplicates) {
+      return false;
+    }
+    const current = new Map<ParentId, readonly IDBlock[]>();
+    const nextParents = new Map<IDBlock, ParentId>();
+    const previousChildren = new Set<IDBlock>();
+    let currentCount = 0;
+    for (const parentId of changedParents) {
+      const ids = this.readChildren(parentId);
+      if (!ids || (parentId !== null && !this.parents.has(parentId))) {
+        return false;
+      }
+      ids.forEach((id) => {
+        nextParents.set(id, parentId);
+        currentCount += 1;
+      });
+      current.set(parentId, ids);
+      this.getIndexedChildren(parentId).forEach((id) => previousChildren.add(id));
+    }
+    // Duplicate references, an unchanged source array, or a detached ID
+    // placed elsewhere cannot be resolved from only the named arrays.
+    if (currentCount !== nextParents.size) {
+      return false;
+    }
+    const reparented: IDBlock[] = [];
+    for (const [id, parentId] of nextParents) {
+      const oldParent = this.parents.get(id);
+      if (oldParent !== undefined && !changedParents.has(oldParent)) {
+        return false;
+      }
+      if (oldParent !== parentId) {
+        reparented.push(id);
+      }
+    }
+    for (const id of previousChildren) {
+      if (!nextParents.has(id) && this.hasRecord(id)) {
+        return false;
+      }
+    }
+
+    /**
+     * Drops an indexed subtree removed from the named arrays.
+     * @param id - Root ID of the removed subtree.
+     * @returns No value.
+     */
+    const drop = (id: IDBlock): void => {
+      for (const childId of this.getIndexedChildren(id)) {
+        if (!nextParents.has(childId)) {
+          drop(childId);
+        }
+      }
+      this.indexedChildren.delete(id);
+      this.parents.delete(id);
+    };
+    for (const id of previousChildren) {
+      if (!nextParents.has(id)) {
+        drop(id);
+      }
+    }
+    current.forEach((ids, parentId) => this.indexedChildren.set(parentId, ids));
+    const added = [...nextParents.keys()].filter((id) => !this.parents.has(id));
+    nextParents.forEach((parentId, id) => this.parents.set(id, parentId));
+
+    /**
+     * Indexes descendants of a newly placed subtree without visiting others.
+     * @param id - Newly placed subtree root.
+     * @returns False when a duplicate or cycle requires a full rebuild.
+     */
+    const addDescendants = (id: IDBlock): boolean => {
+      const children = this.readChildren(id);
+      if (!children) {
+        return true;
+      }
+      this.indexedChildren.set(id, children);
+      for (const childId of children) {
+        if (this.parents.has(childId)) {
+          return false;
+        }
+        this.parents.set(childId, id);
+        if (!addDescendants(childId)) {
+          return false;
+        }
+      }
+      return true;
+    };
+    for (const id of added) {
+      if (!addDescendants(id)) {
+        return false;
+      }
+    }
+    for (const id of reparented) {
+      const seen = new Set<IDBlock>();
+      let currentId: IDBlock | null | undefined = id;
+      while (currentId != null) {
+        if (seen.has(currentId)) {
+          return false;
+        }
+        seen.add(currentId);
+        currentId = this.parents.get(currentId);
+      }
+    }
+    return true;
   }
 
   /**

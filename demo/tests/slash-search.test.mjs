@@ -8,7 +8,15 @@ import {
   slashSearchDistance,
 } from "../../packages/react-rivto-editor/src/extensions/built-ins/slash/slash-search.ts";
 
-const command = (id, title, keywords = []) => ({ id, title, keywords, execute() {} });
+const command = (id, title, keywords = []) => ({
+  id,
+  title,
+  keywords,
+  /**
+   * Provides a no-op command because this fixture tests search matching only.
+   */
+  execute() {},
+});
 
 test("normalizes Unicode and applies adaptive typo thresholds", () => {
   assert.equal(normalizeSlashText("ＭＡＲＫDOWN"), "markdown");
@@ -29,7 +37,10 @@ test("ranks prefixes before substrings and fuzzy matches with stable ties", () =
     rankSlashCommands(commands, "mark").map(({ command: item }) => item.id),
     ["prefix-one", "prefix-two", "keyword", "substring"],
   );
-  assert.deepEqual(rankSlashCommands(commands, "sloder").map(({ command: item }) => item.id), ["fuzzy"]);
+  assert.deepEqual(
+    rankSlashCommands(commands, "sloder").map(({ command: item }) => item.id),
+    ["fuzzy"],
+  );
 });
 
 test("keeps two unmatched characters after the latest successful query", () => {

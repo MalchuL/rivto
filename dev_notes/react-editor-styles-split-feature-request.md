@@ -69,19 +69,19 @@ packages/react-rivto-editor/
 
 Ownership should follow the React package structure:
 
-| File | Responsibility |
-| --- | --- |
-| `tokens.css` | Public `--rivto-*` defaults shared across features. |
-| `page.css` | Page surface, recursive block rows and children, slots, lists, selection, and page drag UI. |
-| `markdown.css` | Markdown editor/preview, code blocks, highlight tokens, and unknown-block fallback. |
-| `slash.css` | Slash-menu overlay, groups, items, states, and empty result. |
-| `separator.css` | Built-in separator block. |
-| `edgeless.css` | Viewport, plane, block cards, zoom UI, block selection, movement, and resizing. |
+| File                   | Responsibility                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `tokens.css`           | Public `--rivto-*` defaults shared across features.                                           |
+| `page.css`             | Page surface, recursive block rows and children, slots, lists, selection, and page drag UI.   |
+| `markdown.css`         | Markdown editor/preview, code blocks, highlight tokens, and unknown-block fallback.           |
+| `slash.css`            | Slash-menu overlay, groups, items, states, and empty result.                                  |
+| `separator.css`        | Built-in separator block.                                                                     |
+| `edgeless.css`         | Viewport, plane, block cards, zoom UI, block selection, movement, and resizing.               |
 | `edgeless-visuals.css` | Drawings, connectors, stickers, shapes, labels, toolbars, property controls, and snap guides. |
-| `columns.css` | Columns container, lanes, empty state, and settings panel. |
-| `table.css` | Table rows/cells, add controls, column width, and resize affordances. |
-| `kanban.css` | Board, lanes, cards, summary, dialog, and add controls. |
-| `bento.css` | Bento container, tiles, summary, and resize handles. |
+| `columns.css`          | Columns container, lanes, empty state, and settings panel.                                    |
+| `table.css`            | Table rows/cells, add controls, column width, and resize affordances.                         |
+| `kanban.css`           | Board, lanes, cards, summary, dialog, and add controls.                                       |
+| `bento.css`            | Bento container, tiles, summary, and resize handles.                                          |
 
 The exact boundary between `edgeless.css` and `edgeless-visuals.css` should be
 chosen by following the owning components. Shared rules stay in

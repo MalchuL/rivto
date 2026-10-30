@@ -9,14 +9,14 @@ names, classes, or block types to shared selection and drag code.
 
 A block feature has four owners:
 
-| Concern | Owner |
-| --- | --- |
-| Persisted type, content, props, children, and parent restrictions | Core block definition |
-| Content markup and local controls | User renderer |
+| Concern                                                            | Owner                 |
+| ------------------------------------------------------------------ | --------------------- |
+| Persisted type, content, props, children, and parent restrictions  | Core block definition |
+| Content markup and local controls                                  | User renderer         |
 | Selection, native range repair, clipboard, and structural commands | Shared editor runtime |
-| Tree shell, descendants, slots, drag handle, and drop feedback | `BlockTree` and extensions |
+| Tree shell, descendants, slots, drag handle, and drop feedback     | Page and extensions   |
 
-A renderer returns only its content. It must not recreate `BlockView`, render
+A renderer returns only its content. It must not recreate `BlockNode`, render
 its children, install another block-reordering system, or store document state
 in React state.
 
@@ -24,12 +24,12 @@ The shared shell remains:
 
 ```text
 .page-block[data-block-id][data-block-type]
-├── .page-block-row
+├── .rivto-block-row
 │   ├── extension slots, including the optional page drag handle
 │   └── .rivto-block-content-flow
 │       └── user renderer
-└── .page-block-children
-    └── BlockTree renders persisted children
+└── .rivto-block-children
+    └── Page renders persisted children
 ```
 
 This shell is why the same renderer works inside the page, an edgeless card, a
@@ -75,11 +75,11 @@ runtime should execute that role. It should not infer the role from the HTML tag
 
 Use four roles:
 
-| Role | Meaning |
-| --- | --- |
-| `text` | Native caret and text-range gestures owned by one persisted block content field |
-| `structural` | Empty or non-interactive renderer space may start whole-block selection |
-| `control` | The component owns the full gesture; block selection does not start here |
+| Role                  | Meaning                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| `text`                | Native caret and text-range gestures owned by one persisted block content field             |
+| `structural`          | Empty or non-interactive renderer space may start whole-block selection                     |
+| `control`             | The component owns the full gesture; block selection does not start here                    |
 | `selection-activator` | Click remains native, but movement beyond the shared threshold becomes structural selection |
 
 The nearest declared role to the event target wins. This gives nested
@@ -87,12 +87,14 @@ components normal DOM scoping: a `control` inside a `structural` region owns its
 gesture, while a deliberate `selection-activator` inside that control can opt
 back into block selection.
 
-Conceptually, `useBlockEditing` should expose attribute bags like these:
+Structural selection uses its own hook. Additional interaction-role attributes
+on block controls remain proposed below:
 
 ```ts
-const editing = useBlockEditing<Props>(blockId, { textEdit: false });
+const editing = useBlockNode<Props>(blockId);
+const attributes = useBlockSelectionAnchor(blockId);
 
-editing.attributes;                    // structural owner for this block
+attributes;                            // structural owner for this block
 editing.controlAttributes;             // nested component owns the gesture
 editing.selectionActivatorAttributes;  // click or structural drag, by threshold
 ```
@@ -156,21 +158,24 @@ permits a drag to become structural selection.
 
 ```tsx
 function Counter({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<CounterProps>(blockId, { textEdit: false });
+  const editing = useBlockNode<CounterProps>(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const panel = usePanel();
   if (!editing.block) return null;
 
   return (
-    <div {...editing.attributes} className={COUNTER_REGION_CLASS}>
+    <div {...attributes} className={COUNTER_REGION_CLASS}>
       <button
         {...editing.selectionActivatorAttributes}
         type="button"
         className={COUNTER_BUTTON_CLASS}
         onClick={(event) => {
           if (event.defaultPrevented) return;
-          editing.setProp("count", (editing.getProp("count") ?? 0) + 1);
+          const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
+          editing.operations.setProp("count", (current?.count ?? 0) + 1);
         }}
       >
-        Count: {editing.getProp("count") ?? 0}
+        Count: {editing.block?.props.count ?? 0}
       </button>
     </div>
   );
@@ -187,7 +192,7 @@ selection.
 
 ```tsx
 function Slider({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<SliderProps>(blockId);
+  const editing = useBlockNode<SliderProps>(blockId);
   if (!editing.block) return null;
 
   return (
@@ -196,8 +201,8 @@ function Slider({ blockId }: { readonly blockId: string }) {
       <input
         {...editing.controlAttributes}
         type="range"
-        value={editing.getProp("value") ?? 50}
-        onChange={(event) => editing.setProp("value", Number(event.currentTarget.value))}
+        value={editing.block?.props.value ?? 50}
+        onChange={(event) => editing.operations.setProp("value", Number(event.currentTarget.value))}
       />
     </div>
   );
@@ -222,19 +227,79 @@ buttons, sortable rows, menus, checkboxes, or a third-party widget.
 
 ### Container block
 
-A container still renders only its own content region. `BlockTree` renders its
+A container still renders only its own content region. Page renders its
 persisted children.
 
 ```tsx
-const editing = useBlockEditing(blockId, { textEdit: false });
-return <div {...editing.attributes} className={BOARD_BODY_CLASS} />;
+const editing = useBlockNode(blockId);
+const attributes = useBlockSelectionAnchor(blockId);
+return <div {...attributes} className={BOARD_BODY_CLASS} />;
 ```
 
-Container behavior is declared separately with `ContainerBlockView`:
+Container behavior is declared separately by extending the abstract `ContainerBlockBehavior`.
+Implement `isAvailable(context)` to select the intended native type; registration
+no longer supplies an implicit type restriction. The base provides container
+Enter handling, without inheriting generic outline actions. Movement restrictions
+belong to the optional `canMove(context)` method. Applicability always receives
+`{ editor, block }`, with current detached fields and no discriminator or method
+name. A native behavior selects its type directly through `block.type`. The
+registry considers moved sources followed by the receiving parent using this same
+contract; the first matching candidate selects a registration, whose canMove runs once. Movement
+arguments stay in `BlockMoveContext`: sources, destination, editor, and the parent
+resolved once by the registry, including null at the document root. Foreign source
+fields are used directly rather than resolving their IDs in the destination document.
+Every applicable permission must allow the move; an omitted hook adds no restriction.
 
-- `dropAxis` describes direct-child layout;
-- `acceptsDropContainer` describes body drops;
-- containment metadata describes fixed or free outline behavior;
+Register extension annotations in `blockTypes.register({ definition, render, behavior })`,
+inside `definition.metadata`. Core API does not change: React registers the complete
+definition object directly, including its metadata, without copying or merging records.
+Each native type has one registration owner; an already defined type is a conflict.
+Disposal removes the owned definition together with its presentation. Subscribe
+through `blockTypes.subscribe()` for creation and removal of complete definitions;
+these notifications also update annotation readers. Subscriptions disconnect when
+their React runtime is destroyed; direct metadata mutation does not notify readers.
+
+Import `BlockChildren` and `BlockDropTarget` from `@chulane/rivto-page` for layout
+geometry. Shared Page row-hover feedback determines handle presentation inside the
+layout, independently of whether dragging is installed. Layout geometry is view-owned
+and does not add persisted metadata.
+
+- `BlockChildren.dropAxis` describes direct-child layout;
+- `BlockChildren.emptyDropTarget` retains an empty receiving region;
+- `BlockDropTarget` describes explicit inside or between destinations with canonical IDs;
+- `--rivto-block-indent` sets outline depth and `--rivto-drop-target-size` sets inset hit thickness independently of layout;
+- linear lists declare insertion bands; grid items compose `BlockDropWrapper`;
+- unregistered headers, padding and text do not choose nearby destinations;
+- the host's `canMove` policy controls permissions independently of measured geometry;
+- `BlockChildren.hoverBoundary` bounds row hover to its local layout by default;
+  ordinary outlines use `hoverBoundary={false}` to inherit their enclosing area.
+  Native row/control hits remain authoritative, adjacent items retain their own
+  bounds, and parent handles belong to headers or exposed gutters;
+- `onChildIndent` and `onChildOutdent` intercept outline operations on a parent's
+  children before their own `onIndent` or `onOutdent` chain. Each receives the full
+  requested group and the parent's shallow `BlockOutlineContext`. `unhandled`
+  continues, while `handled` or `rejected` stops the complete operation;
+- `behavior.canMove({ sources, destination, parent, editor })` checks semantic
+  placement for keyboard moves and dragging. Destination uses core `parentId` and
+  optional `beforeId`, with omitted beforeId meaning append. It has no drop role
+  or geometry; returning false vetoes movement regardless of priority.
+
+The shared drag resolver walks the measured hierarchy. Each sibling gap carries its
+parent and both neighbors; body regions carry their accepting parent. Layout axes
+never imply type acceptance. Kanban and Columns background outside lanes rejects
+ordinary content, while lane interiors accept it. Container boundaries select
+sibling gaps at every nesting level. Feedback and commit convert the resolved gap
+to the same core destination for canMove. Drag separately retains adjacency and depth
+for indicator geometry; a destination invalidated before release cancels the move.
+
+For example, a Kanban layout renders `<BlockChildren dropAxis="horizontal" />`. Its
+behavior allows only kanban-column sources when receiving children. The column
+behavior permits a moved column only when the receiving parent is kanban. These
+are React interaction policies, not persisted schema constraints; core commands
+still validate document hierarchy. Custom behaviors see the actual destination
+parent even when a pointer approached a neighboring child's edge. Keyboard moves
+and Tab/Shift+Tab use the same permission query; outdent validates both the lifted
+roots and the following siblings it adopts before applying any mutation.
 
 Do not map `block.children`, create a parallel child store, or register a second
 drag system in the renderer.
@@ -258,7 +323,7 @@ blockExtension({
 
 Use one stable type constant. Put creation defaults and validation in the core
 definition. Read current property values again inside callbacks. Mutate through
-`editing.setProp`, `editing.setProps`, or `reactEditor.blocks`; never mutate the
+`editing.operations.setProp`, `editing.operations.setProps`, or `panel.blocks`; never mutate the
 detached render snapshot.
 
 Use a dedicated extension only when the feature also owns formatters, wrappers,
@@ -275,7 +340,7 @@ the optional page drag gutter. A renderer should:
 - avoid page-width assumptions;
 - keep component overflow on the component that owns it;
 - use named constants for every class referenced from JSX or selectors;
-- leave descendants to `BlockTree`.
+- leave descendants to Page.
 
 These rules make the same component usable inside narrow columns, table cells,
 bento tiles, and edgeless cards.
@@ -321,15 +386,15 @@ the heuristics in the same change.
 
 The contract is complete when these behaviors pass in real browser tests:
 
-| Component | Click | Drag |
-| --- | --- | --- |
-| Editable text | caret/edit | native or cross-block text selection |
-| Structural blank space | select block | structural range selection |
-| Counter activator | increment | select block without incrementing |
-| Slider/input control | native action | native control gesture only |
-| TODO status sorter | native activation | sorter reorder only |
-| Page drag handle | no content action | reorder selected block roots |
-| Empty container control | insert/focus child | component-declared behavior only |
+| Component               | Click              | Drag                                 |
+| ----------------------- | ------------------ | ------------------------------------ |
+| Editable text           | caret/edit         | native or cross-block text selection |
+| Structural blank space  | select block       | structural range selection           |
+| Counter activator       | increment          | select block without incrementing    |
+| Slider/input control    | native action      | native control gesture only          |
+| TODO status sorter      | native activation  | sorter reorder only                  |
+| Page drag handle        | no content action  | reorder selected block roots         |
+| Empty container control | insert/focus child | component-declared behavior only     |
 
 Also verify keyboard activation, `defaultPrevented` handling, page and edgeless
 surfaces, narrow container layout, and one-step undo for compound mutations.

@@ -64,7 +64,7 @@ the Yjs adapter implements it with Y.UndoManager.
 Native CRDT implementations are adapter details. The dependency direction is:
 
 ```text
-React EditorView
+React EditorPanel
   -> replaceable Renderer and focused runtime managers
   -> EditorCore
   -> BlockRegistry
@@ -107,7 +107,7 @@ unsandboxed in v1.
 ## Public API target
 
 ```ts
-const editor = createRivtoEditor(options);
+const editor = createDocumentEditor(options);
 
 editor.defineBlock(myBlock);
 editor.use(myPlugin);

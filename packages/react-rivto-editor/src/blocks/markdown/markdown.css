@@ -21,9 +21,31 @@
   --rivto-link-color: #5b4bd8;
 }
 
+/* Shared text geometry belongs to the Markdown renderer, independently of its Page shell. */
+.page-block-content {
+  min-height: var(--rivto-default-block-height);
+  line-height: 1.5;
+  outline: none;
+  white-space: pre-wrap;
+}
+
 .markdown-content {
   position: relative;
   min-height: var(--rivto-default-block-height);
+  /* Keep the editor and preview in one stacking context so links and code
+     controls remain clickable above the transparent editing layer. */
+  isolation: isolate;
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--rivto-default-block-height);
+}
+
+/* Safari workaround: with content-visibility: auto, Markdown text can stop
+   repainting after Enter until the block is clicked.
+   Keep the active Markdown editor out of deferred painting while its text changes. */
+.markdown-content:focus-within {
+  content-visibility: visible;
+  /* Keep Chrome's text rasterization aligned at fractional page positions. */
+  contain: paint;
 }
 
 .markdown-preview {
@@ -45,6 +67,11 @@
   border-radius: 4px;
   background: var(--rivto-muted);
   font-family: ui-monospace, monospace;
+}
+
+/* Inline monospace font metrics must not enlarge the surrounding text line. */
+.markdown-preview :not(pre) > code {
+  line-height: 0;
 }
 
 .markdown-preview a {
@@ -74,7 +101,9 @@
   padding: 0 10px;
   border-bottom: 1px solid var(--rivto-code-border);
   color: var(--rivto-code-label-color);
-  font: 0.78rem/1.2 ui-monospace, monospace;
+  font:
+    0.78rem/1.2 ui-monospace,
+    monospace;
 }
 
 .markdown-code-language {

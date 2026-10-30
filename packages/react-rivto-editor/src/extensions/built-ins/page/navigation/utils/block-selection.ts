@@ -53,22 +53,34 @@ export function toggleBlockSelection(
   includeCollapsedDescendants = false,
   isCollapsed: IsCollapsedBlock = neverCollapsed,
 ): Selection | undefined {
-  if (current) assertBlockRangeEndpoints(current);
-  const visible = pageEntries(blocks, null, includeCollapsedDescendants, isCollapsed).map(({ block }) => block.id);
+  if (current) {
+    assertBlockRangeEndpoints(current);
+  }
+  const visible = pageEntries(blocks, null, includeCollapsedDescendants, isCollapsed).map(
+    ({ block }) => block.id,
+  );
   const previous = new Map(current?.blocks.map((block) => [block.id, block]) ?? []);
   const selected = new Set(previous.keys());
   const removing = selected.has(blockId);
-  if (removing) selected.delete(blockId);
-  else selected.add(blockId);
+  if (removing) {
+    selected.delete(blockId);
+  } else {
+    selected.add(blockId);
+  }
   const ids = visible.filter((id) => selected.has(id));
-  if (!ids.length) return;
+  if (!ids.length) {
+    return;
+  }
+  let focusBlockId = blockId;
+  if (removing) {
+    focusBlockId =
+      current && selected.has(current.focusBlockId) ? current.focusBlockId : ids.at(-1)!;
+  }
   return {
     type: "selection",
     blocks: ids.map((id) => previous.get(id) ?? { id, start: 0, end: -1 }),
     anchorBlockId: current && selected.has(current.anchorBlockId) ? current.anchorBlockId : ids[0]!,
-    focusBlockId: removing && current && selected.has(current.focusBlockId)
-      ? current.focusBlockId
-      : removing ? ids.at(-1)! : blockId,
+    focusBlockId,
   };
 }
 
@@ -91,7 +103,9 @@ export function extendBlockSelection(
   const ids = pageEntries(blocks, null, false, isCollapsed).map(({ block }) => block.id);
   const anchor = ids.indexOf(current.anchorBlockId);
   const focus = ids.indexOf(current.focusBlockId);
-  if (anchor < 0 || focus < 0) return current;
+  if (anchor < 0 || focus < 0) {
+    return current;
+  }
   const delta = direction === "up" ? -1 : 1;
   const next = Math.max(0, Math.min(ids.length - 1, focus + delta));
   return blockSelection(blocks, current.anchorBlockId, ids[next]!, isCollapsed);

@@ -1,9 +1,4 @@
-export type PageKind =
-  | "page"
-  | "journal"
-  | "project-home"
-  | "database"
-  | "canvas";
+export type PageKind = "page" | "journal" | "project-home" | "database" | "canvas";
 
 export interface Page {
   id: string;

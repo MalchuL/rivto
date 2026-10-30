@@ -18,15 +18,15 @@
 
 Читайте главы по порядку. Каждая следующая глава использует понятия предыдущей.
 
-| Глава | Что изучаем | Главные файлы после прочтения |
-| --- | --- | --- |
-| [00](./00-browser-basics.md) | DOM, `contenteditable`, курсор, `Selection`, `Range`, события | пока не читаем код Rivto |
-| [01](./01-runtime-model.md) | три типа selection и путь через команды | `types.ts`, `selection-manager.ts`, `rivto-editor.ts` |
-| [02](./02-text-selection.md) | обычное и cross-block выделение текста | `react/selection.ts`, `react/renderers.tsx` |
-| [03](./03-block-and-edgeless-selection.md) | целые блоки, рамка, canvas | `react/renderers.tsx` |
-| [04](./04-react-synchronization.md) | подписки, ререндер, восстановление курсора | `react/rivto-editor.tsx` |
-| [05](./05-clipboard.md) | Copy, Cut, Paste и нормализация диапазона | `clipboard-bundle.ts`, `clipboard-manager.ts` |
-| [06](./06-contributing-and-debugging.md) | изменение кода, диагностика и тесты | unit и E2E tests |
+| Глава                                      | Что изучаем                                                   | Главные файлы после прочтения                         |
+| ------------------------------------------ | ------------------------------------------------------------- | ----------------------------------------------------- |
+| [00](./00-browser-basics.md)               | DOM, `contenteditable`, курсор, `Selection`, `Range`, события | пока не читаем код Rivto                              |
+| [01](./01-runtime-model.md)                | три типа selection и путь через команды                       | `types.ts`, `selection-manager.ts`, `rivto-editor.ts` |
+| [02](./02-text-selection.md)               | обычное и cross-block выделение текста                        | `react/selection.ts`, `react/renderers.tsx`           |
+| [03](./03-block-and-edgeless-selection.md) | целые блоки, рамка, canvas                                    | `react/renderers.tsx`                                 |
+| [04](./04-react-synchronization.md)        | подписки, ререндер, восстановление курсора                    | `react/rivto-editor.tsx`                              |
+| [05](./05-clipboard.md)                    | Copy, Cut, Paste и нормализация диапазона                     | `clipboard-bundle.ts`, `clipboard-manager.ts`         |
+| [06](./06-contributing-and-debugging.md)   | изменение кода, диагностика и тесты                           | unit и E2E tests                                      |
 
 Не переходите к clipboard до того, как поймёте направленное текстовое
 выделение. Почти вся сложность Cut/Paste связана с тем, что пользователь может

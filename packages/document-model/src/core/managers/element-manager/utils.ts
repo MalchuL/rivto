@@ -13,8 +13,13 @@ import { assertPortableRecord, requireNonemptyId } from "../../utils/portable";
  * @returns A detached frame with finite coordinates and positive size.
  * @throws {Error} When any coordinate is non-finite or a dimension is not positive.
  */
-export function normalizeElementFrame(value: ElementFrame): ElementFrame {
-  if (!value || ![value.x, value.y, value.width, value.height].every(Number.isFinite) || value.width <= 0 || value.height <= 0) {
+export function normalizeElementFrame(value: ElementFrame | undefined): ElementFrame {
+  if (
+    !value ||
+    ![value.x, value.y, value.width, value.height].every(Number.isFinite) ||
+    value.width <= 0 ||
+    value.height <= 0
+  ) {
     throw new Error("Element frame requires finite coordinates and positive dimensions");
   }
   return { x: value.x, y: value.y, width: value.width, height: value.height };
@@ -28,7 +33,9 @@ export function normalizeElementFrame(value: ElementFrame): ElementFrame {
  * @throws {Error} When the value is not a finite number.
  */
 export function normalizeElementZIndex(value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("Element z-index must be finite");
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error("Element z-index must be finite");
+  }
   return value;
 }
 
@@ -52,28 +59,65 @@ export function normalizeElementProps(value: unknown): Record<string, unknown> {
  * Validates a portable element collection before a destructive write or paste.
  *
  * Unique nonempty IDs and nonempty types are always required. Geometry, layer,
- * and props are checked by document-owned normalizers.
+ * and props are checked by document-owned normalizers. Every record supplies a
+ * child list; children must exist in this collection and have at most one parent.
+ * Cycles are rejected. Document roots are validated separately for full snapshots.
  *
  * @param elements - Candidate element records.
  * @returns Collected IDs after a successful preflight.
  * @throws {Error} When any element is malformed or duplicated.
  */
-export function validateElementCollection(
-  elements: readonly ElementInput[],
-): Set<string> {
-  if (!Array.isArray(elements)) throw new Error("Snapshot elements must be an array");
+export function validateElementCollection(elements: readonly ElementInput[]): Set<string> {
+  if (!Array.isArray(elements)) {
+    throw new Error("Snapshot elements must be an array");
+  }
   const ids = new Set<string>();
   elements.forEach((element) => {
     if (!element || typeof element !== "object" || Array.isArray(element)) {
       throw new Error("Element record is invalid");
     }
-    if (!element.type) throw new Error("Element type is required");
+    if (!element.type) {
+      throw new Error("Element type is required");
+    }
     const id = requireNonemptyId(element.id, "Element");
-    if (ids.has(id)) throw new Error(`Duplicate element ${id}`);
+    if (ids.has(id)) {
+      throw new Error(`Duplicate element ${id}`);
+    }
     ids.add(id);
     normalizeElementFrame(element.frame);
     normalizeElementZIndex(element.zIndex);
     normalizeElementProps(element.props);
   });
+  const parents = new Set<string>();
+  const children = new Map(elements.map((element) => [element.id!, element.childIds ?? []]));
+  for (const element of elements) {
+    if (!Array.isArray(element.childIds)) {
+      throw new Error("Element children must be an array");
+    }
+    for (const id of element.childIds ?? []) {
+      if (!ids.has(id)) {
+        throw new Error(`Unknown child element ${id}`);
+      }
+      if (parents.has(id)) {
+        throw new Error(`Element ${id} has multiple parents`);
+      }
+      parents.add(id);
+    }
+  }
+  const complete = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (id: string): void => {
+    if (complete.has(id)) {
+      return;
+    }
+    if (visiting.has(id)) {
+      throw new Error(`Cyclic element hierarchy at ${id}`);
+    }
+    visiting.add(id);
+    children.get(id)!.forEach(visit);
+    visiting.delete(id);
+    complete.add(id);
+  };
+  ids.forEach(visit);
   return ids;
 }

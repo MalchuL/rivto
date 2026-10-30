@@ -56,7 +56,7 @@ CRDT document, transaction origin и history scopes являются прива�
 - **Возвращает:** обычный cleanup callback `() => void`.
 - **Исключения:** передаёт ошибки `crdt.on("update", listener)`; исключения listener возникают при доставке события.
 
-Подписывается на общий CRDT update. `EditorRuntime` использует сигнал для reconciliation selection и увеличения revision после локальных и remote mutations.
+Подписывается на общий CRDT update. `ReactEditor` использует сигнал для reconciliation selection и увеличения revision после локальных и remote mutations.
 
 Listener не получает snapshot или описание patch: это общий invalidation signal. Если consumer-у нужны новые данные, он повторно читает focused manager после вызова. Возвращённый `Unsubscribe` нужно вызвать при teardown, иначе callback останется зарегистрированным до уничтожения CRDT document. Метод не фильтрует updates по `origin`, поэтому listener видит и локальные, и provider-delivered изменения.
 
@@ -72,7 +72,7 @@ Listener не получает snapshot или описание patch: это о
 ### `getSnapshot()`
 
 - **Аргументы:** отсутствуют.
-- **Возвращает:** detached `Snapshot` с `version: 6`.
+- **Возвращает:** detached `Snapshot` с `version: 9`.
 - **Исключения:** передаёт ошибки materialization manager-ов, malformed shared fields и cloning.
 
 Собирает blocks, links, elements и plugin data. Snapshot не содержит selection, mode, undo history или provider state.
@@ -83,17 +83,17 @@ Listener не получает snapshot или описание patch: это о
 
 - **Аргументы:** `snapshot: SnapshotUpdate`.
 - **Возвращает:** `void`.
-- **Исключения:** `Error("Unsupported Rivto document snapshot version: <version>")`, если `version !== 6`; `Error("Unsupported Rivto document snapshot")`, если переданные `blocks` или `elements` не являются массивами; также validation errors каждого manager.
+- **Исключения:** `Error("Unsupported Rivto document snapshot version: <version>")`, если `version !== 9`; `Error("Unsupported Rivto document snapshot")`, если переданные `blocks` или `elements` не являются массивами; также validation errors каждого manager.
 
 Проверяет supplied sections до первой записи и заменяет только присутствующие секции в одной модели-транзакции. Однако CRDT transaction не является rollback boundary: поэтому каждый manager должен валидировать destructive replacement заранее.
 
-Порядок применения фиксирован: blocks, links, elements, затем document plugin data. Links загружаются после blocks, чтобы endpoint validation проверяла уже новое block storage. Проверка presence основана на truthy значении секции; пустые arrays truthy и корректно очищают соответствующую коллекцию. Отсутствующее поле оставляет live root без изменений, а supplied `pluginData: {}` очищает namespaces через recursive merge.
+Порядок применения фиксирован: rootElementIds, blocks, elements, затем document plugin data. Перед записью модель проверяет итоговые корни элементов и дочерние ссылки элементов, включая секции, сохраняемые без изменений. Проверка presence основана на truthy значении секции; пустые arrays truthy и корректно очищают соответствующую коллекцию. Отсутствующее поле оставляет live root без изменений, а supplied `pluginData: {}` очищает namespaces через recursive merge.
 
 **Примечание об assignment:** `loadSnapshot()` является верхним транзитивным caller-ом `assignMap()` и `assignText()` через `blocks.loadBlocks()`/recursive `insertInto()`, а также `assignMap()` через `elements.loadElements()`/`insertElement()`. Каждый block/element получает новые CRDT containers, но значения внутри `listProps`, `props` и block-level `pluginData` сохраняются как cloned plain values под top-level shared keys. Вложенные поля этих plain objects не становятся самостоятельными CRDT objects. `assignArray()` этот путь не использует.
 
 ```ts
 document.loadSnapshot({
-  version: 6,
+  version: 9,
   pluginData: { comments: { enabled: true } },
 });
 ```
@@ -105,9 +105,9 @@ document.loadSnapshot({
 Host создаёт модель и передаёт её в editor так:
 
 ```ts
-const document = new DocumentModelImpl(new YjsDoc("document-id"));
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const storage = new DocumentStorage({ registry: new YjsDocumentRegistry("workspace-id") });
+const document = await storage.create("document-id");
+const editor = createDocumentEditor({ document });
 ```
 
-Затем public editor managers делегируют focused operations в document managers. `EditorRuntime` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.
+Затем public editor managers делегируют focused operations в document managers. `ReactEditor` повторно использует `document.history`, а persistence API вызывает `getSnapshot()` и `loadSnapshot()`.

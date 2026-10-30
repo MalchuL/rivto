@@ -109,9 +109,7 @@ function PageLink({
     <div
       className={cn(
         "group flex items-center gap-0.5 rounded-md text-sm text-sidebar-foreground transition-colors",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "hover:bg-sidebar-accent/70",
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/70",
       )}
       style={{ paddingLeft: `${8 + depth * 14}px` }}
     >
@@ -250,11 +248,7 @@ function ProjectRow({
           className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent"
           aria-label={expanded ? "Collapse project" : "Expand project"}
         >
-          {expanded ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
+          {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
         <Link
           href={FRONTEND_ROUTES.project(project.id)}
@@ -298,18 +292,23 @@ function ProjectRow({
               />
             </div>
           ))}
-          {tree.length === 0 && childProjects.length === 0 ? (
-            <div className="px-7 py-1 text-xs text-muted-foreground">No pages yet</div>
-          ) : tree.length > 0 ? (
-            <PageTreeList
-              nodes={tree}
-              depth={1}
-              pathname={pathname}
-              pinnedPageIds={pinnedPageIds}
-              onTogglePinPage={onTogglePinPage}
-              onAddSubpage={onAddSubpage}
-            />
-          ) : null}
+          {
+            <>
+              {tree.length === 0 && childProjects.length === 0 && (
+                <div className="px-7 py-1 text-xs text-muted-foreground">No pages yet</div>
+              )}
+              {tree.length > 0 && (
+                <PageTreeList
+                  nodes={tree}
+                  depth={1}
+                  pathname={pathname}
+                  pinnedPageIds={pinnedPageIds}
+                  onTogglePinPage={onTogglePinPage}
+                  onAddSubpage={onAddSubpage}
+                />
+              )}
+            </>
+          }
         </div>
       ) : null}
     </div>
@@ -418,7 +417,9 @@ export function LeftSidebar() {
   const childrenByParent = useMemo(() => {
     const map = new Map<string, Project[]>();
     for (const project of projects) {
-      if (project.system || !project.parentProjectId) continue;
+      if (project.system || !project.parentProjectId) {
+        continue;
+      }
       const list = map.get(project.parentProjectId) ?? [];
       list.push(project);
       map.set(project.parentProjectId, list);
@@ -427,9 +428,7 @@ export function LeftSidebar() {
   }, [projects]);
 
   const userProjects = useMemo(() => {
-    const visible = projects.filter(
-      (project) => !project.system && !project.parentProjectId,
-    );
+    const visible = projects.filter((project) => !project.system && !project.parentProjectId);
     const pinned = visible.filter((project) => pinnedProjectIds.includes(project.id));
     const rest = visible.filter((project) => !pinnedProjectIds.includes(project.id));
     return [...pinned, ...rest];
@@ -446,10 +445,7 @@ export function LeftSidebar() {
 
   if (sidebarCollapsed) {
     return (
-      <CollapsedRail
-        onExpand={toggleSidebarCollapsed}
-        onOpenPalette={() => setPaletteOpen(true)}
-      />
+      <CollapsedRail onExpand={toggleSidebarCollapsed} onOpenPalette={() => setPaletteOpen(true)} />
     );
   }
 
@@ -472,11 +468,7 @@ export function LeftSidebar() {
         </div>
 
         <div className="flex flex-col gap-0.5 px-2">
-          <NavRow
-            icon={Search}
-            label="Search"
-            onClick={() => setPaletteOpen(true)}
-          />
+          <NavRow icon={Search} label="Search" onClick={() => setPaletteOpen(true)} />
           <CreateMenu>
             <button
               type="button"
@@ -593,12 +585,7 @@ export function LeftSidebar() {
             ].map((item) => (
               <Tooltip key={item.label}>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled
-                    aria-label={item.label}
-                  >
+                  <Button variant="ghost" size="icon-sm" disabled aria-label={item.label}>
                     <item.icon />
                   </Button>
                 </TooltipTrigger>

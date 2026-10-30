@@ -5,7 +5,6 @@ import { isDeepPlainRecord } from "./plain-check";
 import { YjsConvertError } from "./error";
 import { ConvertCRDTTypeToBasicOptions } from "../../../types/utils/wrapping-options";
 
-
 /**
  * Converts a BasicType to a YJS type.
  * - number and boolean -> number or boolean
@@ -23,12 +22,15 @@ import { ConvertCRDTTypeToBasicOptions } from "../../../types/utils/wrapping-opt
  * - object2crdtmap - If true, the object will be converted to a Y.Map (to support collaborative object editing).
  * @returns The YJS value with nested YJS types (Includes Y.Text, Y.Array, Y.Map).
  */
-export function convertBasicTypeToYJS(value: BasicType, options?: WrapBasicTypeToCRDTOptions): YJSType {
+export function convertBasicTypeToYJS(
+  value: BasicType,
+  options?: WrapBasicTypeToCRDTOptions,
+): YJSType {
   const string2ytext = options?.string2crdttext ?? true;
   const array2yarray = options?.array2crdtarray ?? true;
   const map2ymap = options?.map2crdtmap ?? true;
   const object2ymap = options?.object2crdtmap ?? true;
-  
+
   // Options for nested objects if they are not converted to YJS types.
   const falseOptions: WrapBasicTypeToCRDTOptions = {
     string2crdttext: false,
@@ -57,30 +59,43 @@ export function convertBasicTypeToYJS(value: BasicType, options?: WrapBasicTypeT
   if (Array.isArray(value)) {
     if (array2yarray) {
       const yArray = new Y.Array<any>();
-      const convertedValue: YJSType[] = value.map(item => convertBasicTypeToYJS(item, options));
+      const convertedValue: YJSType[] = value.map((item) => convertBasicTypeToYJS(item, options));
       yArray.insert(0, convertedValue);
       return yArray;
     }
-    return value.map(item => convertBasicTypeToYJS(item, falseOptions));
+    return value.map((item) => convertBasicTypeToYJS(item, falseOptions));
   }
   // map -> Y.Map or Map<string, BasicType>
   if (value instanceof Map) {
     if (map2ymap) {
-      const entries: [string, YJSType][] = Array.from(value.entries()).map(
-        ([key, val]) => [key, convertBasicTypeToYJS(val, options) as YJSType]
-      );
+      const entries: [string, YJSType][] = Array.from(value.entries()).map(([key, val]) => [
+        key,
+        convertBasicTypeToYJS(val, options) as YJSType,
+      ]);
       return new Y.Map(entries);
     }
     // Converts the map to a object.
-    return Object.fromEntries(Array.from(value.entries()).map(([key, val]) => [key, convertBasicTypeToYJS(val, falseOptions)])) as YJSType;
+    return Object.fromEntries(
+      Array.from(value.entries()).map(([key, val]) => [
+        key,
+        convertBasicTypeToYJS(val, falseOptions),
+      ]),
+    ) as YJSType;
   }
   // object -> Y.Map or object
   if (type === "object") {
     if (object2ymap) {
-      return new Y.Map(Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, options)]));
+      return new Y.Map(
+        Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, options)]),
+      );
     }
     // Converts the object to a object.
-    return Object.fromEntries(Object.entries(value).map(([key, value]) => [key, convertBasicTypeToYJS(value, falseOptions)])) as YJSType;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, value]) => [
+        key,
+        convertBasicTypeToYJS(value, falseOptions),
+      ]),
+    ) as YJSType;
   }
   throw new YjsConvertError(`Unsupported property type: ${type}`);
 }
@@ -97,7 +112,10 @@ export function convertBasicTypeToYJS(value: BasicType, options?: WrapBasicTypeT
  * Importatant Note. If some object converts to plain object, whole nested objects will be converted to plain objects.
  * @returns The BasicType.
  */
-export function convertYJSTypeToBasic(value: YJSType, options?: ConvertCRDTTypeToBasicOptions): BasicType {
+export function convertYJSTypeToBasic(
+  value: YJSType,
+  options?: ConvertCRDTTypeToBasicOptions,
+): BasicType {
   const crdtmap2map = options?.crdtmap2map ?? false;
   const type: string = typeof value;
   // Primitive types are converted to themselves.
@@ -115,7 +133,7 @@ export function convertYJSTypeToBasic(value: YJSType, options?: ConvertCRDTTypeT
   }
   // Y.Array -> BasicType[]
   if (value instanceof Y.Array) {
-    return value.toArray().map(item => convertYJSTypeToBasic(item as YJSType, options));
+    return value.toArray().map((item) => convertYJSTypeToBasic(item as YJSType, options));
   }
   // Y.Map -> Map<string, BasicType> or object
   if (value instanceof Y.Map) {
@@ -137,5 +155,7 @@ export function convertYJSTypeToBasic(value: YJSType, options?: ConvertCRDTTypeT
   if (isDeepPlainRecord(value)) {
     return value as BasicType;
   }
-  throw new YjsConvertError(`Unsupported document property type: ${type}, value: ${JSON.stringify(value)}${value && value.constructor && value.constructor.name ? `, class: ${value.constructor.name}` : ''}`);
+  throw new YjsConvertError(
+    `Unsupported document property type: ${type}, value: ${JSON.stringify(value)}${value && value.constructor && value.constructor.name ? `, class: ${value.constructor.name}` : ""}`,
+  );
 }

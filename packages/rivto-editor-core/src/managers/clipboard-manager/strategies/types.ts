@@ -19,7 +19,7 @@ export interface PasteContext {
   readonly selection?: Selection;
   /** Optional one-shot replacement for a block rejected during import preparation. */
   readonly onPrepareError?: BlockPrepareErrorHandler;
-  /** Block identities produced by an earlier strategy in this paste pipeline. */
+  /** Destination block identities allocated by the host or produced by an earlier paste strategy. */
   readonly blockIdMap?: ReadonlyMap<string, string>;
   /** Element identities produced by an earlier strategy in this paste pipeline. */
   readonly elementIdMap?: ReadonlyMap<string, string>;

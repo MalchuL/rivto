@@ -3,13 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type TabKind =
-  | "page"
-  | "journal"
-  | "journal-day"
-  | "project"
-  | "projects"
-  | "search";
+export type TabKind = "page" | "journal" | "journal-day" | "project" | "projects" | "search";
 
 export type WorkspaceTab = {
   /** Route-derived, e.g. "page:<id>", "journal:2026-08-03", "journal". */
@@ -52,9 +46,7 @@ export const useTabsStore = create<TabsState>()(
           const existing = state.tabs.find((tab) => tab.id === input.id);
           if (existing) {
             return {
-              tabs: state.tabs.map((tab) =>
-                tab.id === input.id ? { ...tab, ...input } : tab,
-              ),
+              tabs: state.tabs.map((tab) => (tab.id === input.id ? { ...tab, ...input } : tab)),
               activeTabId: input.id,
             };
           }
@@ -68,7 +60,9 @@ export const useTabsStore = create<TabsState>()(
       closeTab: (id) => {
         const { tabs, activeTabId } = get();
         const index = tabs.findIndex((tab) => tab.id === id);
-        if (index === -1) return null;
+        if (index === -1) {
+          return null;
+        }
         const nextTabs = tabs.filter((tab) => tab.id !== id);
         if (activeTabId !== id) {
           set({ tabs: nextTabs });
@@ -82,9 +76,7 @@ export const useTabsStore = create<TabsState>()(
       togglePin: (id) => {
         set((state) => ({
           tabs: sortPinnedFirst(
-            state.tabs.map((tab) =>
-              tab.id === id ? { ...tab, pinned: !tab.pinned } : tab,
-            ),
+            state.tabs.map((tab) => (tab.id === id ? { ...tab, pinned: !tab.pinned } : tab)),
           ),
         }));
       },
@@ -92,7 +84,9 @@ export const useTabsStore = create<TabsState>()(
       moveTab: (id, toIndex) => {
         set((state) => {
           const from = state.tabs.findIndex((tab) => tab.id === id);
-          if (from === -1) return state;
+          if (from === -1) {
+            return state;
+          }
           const tabs = [...state.tabs];
           const [moved] = tabs.splice(from, 1);
           tabs.splice(Math.max(0, Math.min(toIndex, tabs.length)), 0, moved);
@@ -121,7 +115,5 @@ export function useWorkspaceTabs(): WorkspaceTab[] {
 }
 
 export function useActiveTab(): WorkspaceTab | null {
-  return useTabsStore(
-    (state) => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null,
-  );
+  return useTabsStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null);
 }

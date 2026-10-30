@@ -17,9 +17,10 @@
 
 `DocumentElementManager` выбрасывает `Error("Element frame requires finite coordinates and positive dimensions")` при записи некорректной geometry.
 
-### `DocumentElement<Props>`
+### `ElementNode<Props>`
 
 - **`id: string`:** стабильная collaborative identity.
+- **`childIds: string[]`:** упорядоченные ID непосредственных детей.
 - **`type: string`:** renderer-defined discriminator.
 - **`frame: ElementFrame`:** detached geometry.
 - **`zIndex: number`:** конечный stacking order.
@@ -27,11 +28,22 @@
 
 Все поля обязательны. Чтение detached-объекта не выбрасывает исключений.
 
+### `DocumentElement<Props>`
+
+Те же поля, что у `ElementNode`, но вместо `childIds` содержит
+`children: DocumentElement[]`. `getElement()` возвращает полное дерево;
+`getElementNode()` читает только узел. Оба результата кешируются, при изменении
+потомка обновляются рекурсивные snapshots его предков. `getElements()` возвращает
+кешированный массив корневых деревьев, `getElementNodes()` — плоский реестр.
+
 ### `ElementInput<Props>`
 
 - **`id?: string`:** необязательный caller ID; без него используется `crypto.randomUUID()`.
+- **Назначение вставки:** второй аргумент `insertElement` задаёт `parentId` и необязательный `beforeId`; по умолчанию добавление в корни документа.
+- **`children?: ElementInput[]`:** новые вложенные элементы; при отсутствии создаётся лист.
+- **`childIds?: readonly string[]`:** существующие элементы для перемещения под нового родителя; не совмещаются с `children`.
 - **`type: string`:** обязательный непустой type.
-- **`frame: ElementFrame`:** обязательная полная geometry.
+- **`frame: ElementFrame`:** полная geometry; для непустой группы можно опустить, тогда при вставке вычисляется объединение границ детей.
 - **`zIndex: number`:** обязательное конечное число.
 - **`props?: Props`:** optional record; по умолчанию `{}`.
 
@@ -101,15 +113,16 @@ Alias `Record<string, unknown>` для opaque outline/page presentation. Пер�
 
 ### `Snapshot`
 
-- **`version: 6`:** обязательный literal.
+- **`version: 9`:** обязательный literal.
 - **`blocks: Block[]`:** полное block tree.
 - **`links: Link[]`:** полный link set.
-- **`elements: DocumentElement[]`:** полный element set.
+- **`elements: ElementSnapshot[]`:** полный набор элементов с `childIds`, без вычисляемого `canvasId`.
+- **`rootElementIds: string[]`:** упорядоченные корневые ID элементов документа.
 - **`pluginData?: Record<string, unknown>`:** document namespaces.
 
 ### `SnapshotUpdate`
 
-Содержит обязательный **`version: 6`** и optional **`blocks`**, **`links`**, **`elements`**, **`pluginData`** тех же типов. Присутствующая секция заменяется полностью; отсутствующая остаётся без изменений.
+Содержит обязательный **`version: 9`** и optional **`blocks`**, **`links`**, **`elements`**, **`rootElementIds`**, **`pluginData`** тех же типов. Присутствующая секция заменяется полностью; отсутствующая остаётся без изменений.
 
 ## Validator type
 
@@ -119,7 +132,7 @@ Alias `Record<string, unknown>` для opaque outline/page presentation. Пер�
 - **Возвращает:** validated/normalized `Record<string, unknown>`.
 - **Исключения:** validator может отклонить props исключением; block manager передаёт его caller-у до shared write, где это возможно.
 
-По умолчанию manager возвращает props без изменений. `EditorRuntime` устанавливает validator из `BlockRegistryManager`.
+По умолчанию manager возвращает props без изменений. `ReactEditor` устанавливает validator из `BlockRegistryManager`.
 
 ## Persisted CRDT types
 
@@ -140,6 +153,7 @@ Children хранят IDs, а не вложенные block maps. Перемещ
 ### `ElementStorage`
 
 - **`id: string`:** атомарный ID.
+- **`childIds: CRDTArray<IDElement>`:** упорядоченные ID непосредственных детей.
 - **`type: string`:** атомарный discriminator.
 - **`frame: CRDTMap<ElementFrameStorage>`:** independently editable geometry fields.
 - **`zIndex: number`:** атомарный layer.
@@ -172,3 +186,20 @@ Outer link record является `CRDTMap`, но manager не использу
 - **`path: readonly number[]`:** индексы от roots до блока.
 
 Объект используется только алгоритмами `DocumentBlockManager` и не экспортируется.
+
+### Canvas в snapshot v8
+
+Полный snapshot содержит `rootElementIds: string[]` и плоский список элементов
+с `childIds`. Каждый элемент встречается в дереве один раз. Родитель вычисляется
+из структуры; Canvas и canvasId отсутствуют. Группы — обычные элементы с детьми.
+
+Panel хранится приложением и указывает rootBlockId и rootElementId. Null выбирает
+корни соответствующего дерева. Явный rootElementId выбирает потомков контейнера.
+`PanelAPI.elements` в React ограничивает операции выбранным поддеревом;
+DocumentEditorAPI.elements работает со всем документом. Модель и core принимают
+явный destination в insertElement и moveElements. Метода forRoot в core нет.
+
+Partial snapshot может заменить rootElementIds. Ссылки проверяются относительно
+итоговых элементов, включая неизменённые секции, до первой записи. Недостижимые,
+повторные и циклические ссылки отклоняются. Перенос и группировка сохраняют ID и
+координаты; нормализация внешних CRDT-изменений сохраняет осиротевшие записи в корнях.

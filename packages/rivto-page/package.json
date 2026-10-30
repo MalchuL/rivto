@@ -1,0 +1,64 @@
+{
+  "type": "module",
+  "name": "@chulane/rivto-page",
+  "version": "0.1.0",
+  "description": "Rivto block editor and page surface",
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm && pnpm build:styles",
+    "dev": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm --watch src --onSuccess \"pnpm build:styles\"",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src demo",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "test": "../../scripts/run-test.sh --runInBand",
+    "demo": "vite demo --host 127.0.0.1 --port 5184 --strictPort",
+    "demo:build": "tsc --project demo/tsconfig.json --noEmit && vite build demo",
+    "demo:preview": "vite preview demo --host 127.0.0.1 --port 5184 --strictPort",
+    "demo:check": "tsc --project demo/tsconfig.json --noEmit",
+    "demo:test": "playwright test --config demo/playwright.config.ts --grep-invert @performance --workers=12",
+    "demo:performance": "playwright test --config demo/playwright.config.ts --grep @performance --workers=1 --trace off",
+    "build:styles": "tailwindcss -i src/presentation/styles.css -o dist/esm/styles.css --minify",
+    "dev:styles": "tailwindcss -i src/presentation/styles.css -o dist/esm/styles.css --watch"
+  },
+  "files": [
+    "dist/esm"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "default": "./dist/esm/index.js"
+    },
+    "./styles.css": "./dist/esm/styles.css"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.3",
+    "ts-jest": "^29.4.11",
+    "tsup": "^8.5.1",
+    "typescript": "5.8.3",
+    "vite": "^7.3.6"
+  },
+  "peerDependencies": {
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20"
+  },
+  "dependencies": {
+    "@chulane/rivto-keyboard": "workspace:*",
+    "@tanstack/react-virtual": "^3.14.13",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.3.0",
+    "lucide-react": "^1.28.0",
+    "radix-ui": "^1.6.7"
+  }
+}

@@ -1,80 +1,79 @@
-/*
- * Structural rules for the equal-width Columns container.
- *
- * Column shells and their nested blocks are rendered by the shared block tree,
- * so lane layout, dividers between sibling lanes, and hover-slab adjustments
- * must be expressed through generated structure (`[data-block-type]`,
- * `.page-block-children`, `.page-block-row`, `.rivto-slot`). The settings
- * control the extension renders itself uses shadcn primitives and Tailwind
- * utilities in `columns.tsx`.
- */
-[data-block-type="columns"] {
-  min-width: 0;
-  max-width: 100%;
+/* Columns owns equal-width lane placement, its management rows and gap dividers.
+ * Page owns each lane and writing subtree. Dividers never overlap the text,
+ * selection rectangle or insertion target of either neighboring lane. */
+.rivto-columns-header {
+  padding: 0 12px;
 }
-
-[data-block-type="columns-column"] {
-  min-width: 0;
-  max-width: 100%;
-  /* Internal lanes are layout shells rather than indented writing blocks. */
-  padding-left: 0;
-  padding-right: 0;
+.rivto-columns-header[data-collapsed="true"] {
+  padding-block: 8px;
 }
-
-/* The collapsed summary hosts the board's contentless selection region. */
-.rivto-columns:not(:empty) {
-  min-height: var(--rivto-default-block-height);
-}
-
-[data-block-type="columns"] > .page-block-children {
+.rivto-columns {
   display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  width: 100%;
+  align-items: center;
+  gap: 10px;
+}
+.rivto-columns:not(:empty) {
+  min-height: 24px;
+}
+.rivto-columns-count-label {
+  font-size: 12px;
+  color: var(--rivto-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rivto-columns-children {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0;
+  padding: var(--rivto-container-padding);
   min-width: 0;
   max-width: 100%;
-  margin: 0;
 }
-
-[data-block-type="columns"] > .page-block-children > .page-block {
-  position: relative;
+.rivto-columns-children > .rivto-block-item {
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
-  overflow: visible;
 }
-
-/* A hairline divider sits in the gap before every lane but the first. */
-[data-block-type="columns"] > .page-block-children > .page-block + .page-block::before {
+/* Each existing lane bounds its divider to the stretched layout height.
+ * The divider occupies the physical layout gap and never creates a drop element. */
+.rivto-columns-children > .rivto-block-item {
+  position: relative;
+}
+.rivto-columns-children[data-show-dividers="true"] > .rivto-block-item + .rivto-block-item::after {
   content: "";
   position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: -12px;
+  inset-block: 12px;
+  inset-inline-start: -2px;
   width: 1px;
   background: var(--rivto-border);
   pointer-events: none;
 }
-
-[data-block-type="columns"] > .page-block-children .page-block-row::before {
-  /* Cover the handle gutter and block padding without entering another lane. */
-  inset: 0 -8px 0 -28px;
-  width: auto;
+.rivto-columns-lane-header {
+  min-height: 24px;
+  padding: 2px 8px;
 }
-
-[data-block-type="columns-column"] > .page-block-children {
+.rivto-columns-column {
+  min-height: 20px;
+}
+.rivto-columns-column[role="button"] {
+  min-height: 120px;
+  cursor: text;
+  border-radius: 6px;
+}
+.rivto-columns-column[role="button"]:focus-visible {
+  outline: 2px solid var(--rivto-ring);
+  outline-offset: 2px;
+}
+.rivto-columns-content {
   margin: 0;
-  padding: 0 0 0 24px;
-  box-sizing: border-box;
+  padding: var(--rivto-container-padding);
+  padding-inline-start: calc(var(--rivto-container-padding) + 24px);
+  gap: 4px;
 }
-
-/* A lane with content hides its own empty click-to-write row. */
-[data-block-type="columns-column"]:has(> .page-block-children) > .page-block-row {
-  display: none;
-}
-
-[data-block-type="columns"] > .page-block-row .rivto-slot[data-slot-position="right"] {
-  left: auto;
-  right: 0;
-  transform: translateY(-50%);
+.rivto-columns-dividers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
 }

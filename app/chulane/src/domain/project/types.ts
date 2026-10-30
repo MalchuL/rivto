@@ -1,9 +1,4 @@
-export type SystemContainer =
-  | "inbox"
-  | "journal"
-  | "templates"
-  | "archive"
-  | "trash";
+export type SystemContainer = "inbox" | "journal" | "templates" | "archive" | "trash";
 
 export type ProjectStatus = "active" | "paused" | "done" | "archived";
 

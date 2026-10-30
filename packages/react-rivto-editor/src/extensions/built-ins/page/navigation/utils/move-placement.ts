@@ -30,16 +30,24 @@ export function keyboardMovePlacement(
   const roots = entries.filter(({ block }) => moved.has(block.id));
   const first = roots[0];
   const last = roots.at(-1);
-  if (!first || !last || first.parentId !== last.parentId) return;
+  if (!first || !last || first.parentId !== last.parentId) {
+    return;
+  }
   const siblings = first.siblings;
   const firstIndex = siblings.findIndex((block) => block.id === first.block.id);
   const lastIndex = siblings.findIndex((block) => block.id === last.block.id);
 
   let placement: KeyboardMovePlacement | undefined;
   if (direction === "up") {
-    const previous = siblings.slice(0, firstIndex).reverse().find((block) => !moved.has(block.id));
-    if (previous) placement = { targetId: previous.id, position: "before" };
-    else if (first.parentId) placement = { targetId: first.parentId, position: "before" };
+    const previous = siblings
+      .slice(0, firstIndex)
+      .reverse()
+      .find((block) => !moved.has(block.id));
+    if (previous) {
+      placement = { targetId: previous.id, position: "before" };
+    } else if (first.parentId) {
+      placement = { targetId: first.parentId, position: "before" };
+    }
   } else {
     const next = siblings.slice(lastIndex + 1).find((block) => !moved.has(block.id));
     if (next) {

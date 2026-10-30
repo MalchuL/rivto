@@ -1,0 +1,5 @@
+@layer components {
+  [data-rivto-block-editor] [data-block-selection-anchor][data-block-selecting] {
+    cursor: var(--rivto-selection-cursor, pointer);
+  }
+}

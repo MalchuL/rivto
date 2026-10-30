@@ -29,7 +29,7 @@ export type DocumentEditorProps = {
   /** Presentation mode applied when the runtime is created. */
   initialMode?: EditorMode;
   /**
-   * Host chrome rendered inside `EditorView` (above the surface).
+   * Host chrome rendered inside `EditorPanel` (above the surface).
    * Use this to place {@link EditorModeToggle} in page headers.
    */
   children?: ReactNode;

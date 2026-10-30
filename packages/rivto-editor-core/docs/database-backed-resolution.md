@@ -59,7 +59,7 @@ discriminated result:
 
 ```ts
 interface DocumentSession {
-  readonly editor: RivtoEditorApi;
+  readonly editor: DocumentEditorAPI;
   release(): void;
 }
 

@@ -1,341 +1,371 @@
-import { CRDTType, BasicType, CRDTArray, CRDTDoc, CRDTMap, CRDTText, CRDTUndoManager, CRDTUndoScope, Unsubscribe, Provider, ProviderCleanup, WrapBasicTypeToCRDTOptions } from "../types";
+import {
+  CRDTType,
+  BasicType,
+  CRDTArray,
+  CRDTDoc,
+  CRDTMap,
+  CRDTText,
+  CRDTUndoManager,
+  CRDTUndoScope,
+  Unsubscribe,
+  Provider,
+  ProviderCleanup,
+  WrapBasicTypeToCRDTOptions,
+} from "../types";
 import * as utils from "./structures/utils";
-import * as Y from 'yjs';
+import * as Y from "yjs";
 import { Storage } from "../utils";
 import { YjsArray, YjsMap, YjsText } from "./structures";
+import type { YJSType } from "./structures/utils/types";
 
 export class YjsDoc implements CRDTDoc {
-    public readonly doc: Y.Doc;
-    private transactionDepth = 0;
-    private readonly localOrigin = Symbol("yjs-doc-local");
-    /**
-     * The storage of the providers.
-     */
-    private providersStorage: Storage<Provider> = new Storage<Provider>();
-    /**
-     * Creates a new YjsDoc.
-     * @param id - The id of the YjsDoc.
-     * @param doc - The Y.Doc to wrap.
-     */
-    constructor(private readonly _id: string, doc?: Y.Doc) {
-        this.doc = doc || new Y.Doc();
-    }
+  public readonly doc: Y.Doc;
+  private transactionDepth = 0;
+  private readonly localOrigin = Symbol("yjs-doc-local");
+  /**
+   * The storage of the providers.
+   */
+  private providersStorage: Storage<Provider> = new Storage<Provider>();
+  /**
+   * Creates a new YjsDoc.
+   * @param id - The id of the YjsDoc.
+   * @param doc - The Y.Doc to wrap.
+   */
+  constructor(
+    private readonly _id: string,
+    doc?: Y.Doc,
+  ) {
+    this.doc = doc || new Y.Doc();
+  }
 
-    /**
-     * Whether this adapter is currently executing or publishing a CRDT transaction.
-     *
-     * True from the start of `transact()` until it returns, including nested
-     * transacts and while observers/`update` events fire. Storage readers skip
-     * snapshot caches and read live CRDT state in this window because the tree
-     * can still be half-written.
-     *
-     * This is the CRDT write window, not an undo-grouping flag. Direct
-     * document-model mutations transact without opening a history batch.
-     *
-     * @returns True while adapter code is inside `transact()`.
-     */
-    get isTransacting(): boolean {
-        return this.transactionDepth > 0;
-    }
+  /**
+   * Whether this adapter is currently executing or publishing a CRDT transaction.
+   *
+   * True from the start of `transact()` until it returns, including nested
+   * transacts and while observers/`update` events fire. Storage readers skip
+   * snapshot caches and read live CRDT state in this window because the tree
+   * can still be half-written.
+   *
+   * This is the CRDT write window, not an undo-grouping flag. Direct
+   * document-model mutations transact without opening a history batch.
+   *
+   * @returns True while adapter code is inside `transact()`.
+   */
+  get isTransacting(): boolean {
+    return this.transactionDepth > 0;
+  }
 
-    /**
-     * Reports whether an observed transaction used this adapter's private local tag.
-     * @param origin - Origin received from a Yjs update event.
-     * @returns Whether the origin represents a default local transaction.
-     */
-    isLocalOrigin(origin: unknown): boolean {
-        return origin === this.localOrigin;
-    }
+  /**
+   * Reports whether an observed transaction used this adapter's private local tag.
+   * @param origin - Origin received from a Yjs update event.
+   * @returns Whether the origin represents a default local transaction.
+   */
+  isLocalOrigin(origin: unknown): boolean {
+    return origin === this.localOrigin;
+  }
 
-    /**
-     * Creates a detached Yjs array for insertion into an attached CRDT container.
-     *
-     * This does not create a named root. Attach the result to a parent obtained
-     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
-     * Most reads throw until attachment.
-     *
-     * @returns A detached array compatible with this Yjs document.
-     */
-    createDetachedArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item> {
-        return new YjsArray<Item>();
-    }
+  /**
+   * Creates a detached Yjs array for insertion into an attached CRDT container.
+   *
+   * This does not create a named root. Attach the result to a parent obtained
+   * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+   * Most reads throw until attachment.
+   *
+   * @returns A detached array compatible with this Yjs document.
+   */
+  createDetachedArray<Item extends CRDTType = CRDTType>(): CRDTArray<Item> {
+    return new YjsArray<Item>();
+  }
 
-    /**
-     * Creates a detached Yjs map for insertion into an attached CRDT container.
-     *
-     * This does not create a named root. Attach the result to a parent obtained
-     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
-     * Most reads throw until attachment.
-     *
-     * @returns A detached map compatible with this Yjs document.
-     */
-    createDetachedMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema> {
-        return new YjsMap<Schema>();
-    }
+  /**
+   * Creates a detached Yjs map for insertion into an attached CRDT container.
+   *
+   * This does not create a named root. Attach the result to a parent obtained
+   * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+   * Most reads throw until attachment.
+   *
+   * @returns A detached map compatible with this Yjs document.
+   */
+  createDetachedMap<Schema extends object = Record<string, CRDTType>>(): CRDTMap<Schema> {
+    return new YjsMap<Schema>();
+  }
 
-    /**
-     * Creates detached Yjs text for insertion into an attached CRDT container.
-     *
-     * This does not create a named root. Attach the result to a parent obtained
-     * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
-     * Reads throw until attachment.
-     *
-     * @returns Detached text compatible with this Yjs document.
-     */
-    createDetachedText(): CRDTText {
-        return new YjsText();
-    }
+  /**
+   * Creates detached Yjs text for insertion into an attached CRDT container.
+   *
+   * This does not create a named root. Attach the result to a parent obtained
+   * with `getMap()` or `getArray()` using `set()`, `push()`, or `insert()`.
+   * Reads throw until attachment.
+   *
+   * @returns Detached text compatible with this Yjs document.
+   */
+  createDetachedText(): CRDTText {
+    return new YjsText();
+  }
 
-    /**
-     * Attaches a provider to the YjsDoc.
-     * @param provider - The provider to attach.
-    * @returns Cleanup that disconnects this exact provider attachment.
-     */
-    async attachProvider(provider: Provider): Promise<ProviderCleanup> {
-        const id = provider.id;
-        if (this.providersStorage.hasItem(id)) {
-            throw new Error(`Provider with id ${id} is already attached`);
-        }
-        this.providersStorage.setItem(id, provider);
-        try {
-            await provider.connect(this);
-        } catch (error) {
-            this.providersStorage.removeItem(id);
-            throw error;
-        }
-        return async () => {
-            if (this.providersStorage.hasItem(id)) {
-                await this.detachProvider(id);
-            }
-        };
+  /**
+   * Attaches a provider to the YjsDoc.
+   * @param provider - The provider to attach.
+   * @returns Cleanup that disconnects this exact provider attachment.
+   */
+  async attachProvider(provider: Provider): Promise<ProviderCleanup> {
+    const id = provider.id;
+    if (this.providersStorage.hasItem(id)) {
+      throw new Error(`Provider with id ${id} is already attached`);
     }
+    this.providersStorage.setItem(id, provider);
+    try {
+      await provider.connect(this);
+    } catch (error) {
+      this.providersStorage.removeItem(id);
+      throw error;
+    }
+    return async () => {
+      if (this.providersStorage.hasItem(id)) {
+        await this.detachProvider(id);
+      }
+    };
+  }
 
-    /**
-     * Detaches a provider from the YjsDoc.
-     * @param id - Optional provider ID, required when multiple providers are attached.
-     * @returns A Promise that resolves when the provider is detached.
-     */
-    async detachProvider(id?: string): Promise<void> {
-        const provider = id === undefined
-            ? this.providersStorage.getOne()
-            : this.providersStorage.getItem(id);
-        await provider.disconnect(this);
-        this.providersStorage.removeItem(provider.id);
-    }
+  /**
+   * Detaches a provider from the YjsDoc.
+   * @param id - Optional provider ID, required when multiple providers are attached.
+   * @returns A Promise that resolves when the provider is detached.
+   */
+  async detachProvider(id?: string): Promise<void> {
+    const provider =
+      id === undefined ? this.providersStorage.getOne() : this.providersStorage.getItem(id);
+    await provider.disconnect(this);
+    this.providersStorage.removeItem(provider.id);
+  }
 
-    /**
-     * Executes a transaction on the YjsDoc.
-     * @param fn - The function to execute within the transaction.
-     * @param origin - Optional explicit origin; defaults to this adapter's private local origin.
-     * @returns No value.
-     */
-    transact(fn: () => void, origin?: unknown): void {
-        this.transactionDepth += 1;
-        try {
-            this.doc.transact(fn, origin === undefined ? this.localOrigin : origin);
-        } finally {
-            this.transactionDepth -= 1;
-        }
+  /**
+   * Executes a transaction on the YjsDoc.
+   * @param fn - The function to execute within the transaction.
+   * @param origin - Optional explicit origin; defaults to this adapter's private local origin.
+   * @returns No value.
+   */
+  transact(fn: () => void, origin?: unknown): void {
+    this.transactionDepth += 1;
+    try {
+      this.doc.transact(fn, origin === undefined ? this.localOrigin : origin);
+    } finally {
+      this.transactionDepth -= 1;
     }
+  }
 
-    /**
-     * Creates an undo/redo manager for the provided CRDT scopes using Yjs UndoManager.
-     *
-     * The method unwraps the CRDT scopes into native Yjs types and creates a `Y.UndoManager`
-     * that tracks changes only within those scopes. Changes are filtered by `trackedOrigins`:
-     * only transactions whose origin is included in the provided set will be recorded in the
-     * undo/redo history.
-     *
-     * @param scopes The list of CRDT scopes to track for undo/redo operations.
-     * @param trackedOrigins Optional origin objects to track instead of the private local origin.
-     * @returns A `CRDTUndoManager` instance with `undo`, `redo`, `clear`, `stopCapturing`, and `destroy` methods.
-     */
-    createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager {
-        const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
-        const manager = new Y.UndoManager(nativeScopes, {
-            trackedOrigins: new Set(trackedOrigins ?? [this.localOrigin]),
-        });
-        return {
-            undo: () => manager.undo(),
-            redo: () => manager.redo(),
-            clear: () => manager.clear(),
-            stopCapturing: () => manager.stopCapturing(),
-            destroy: () => manager.destroy(),
-        };
-    }
+  /**
+   * Creates an undo/redo manager for the provided CRDT scopes using Yjs UndoManager.
+   *
+   * The method unwraps the CRDT scopes into native Yjs types and creates a `Y.UndoManager`
+   * that tracks changes only within those scopes. Changes are filtered by `trackedOrigins`:
+   * only transactions whose origin is included in the provided set will be recorded in the
+   * undo/redo history.
+   *
+   * @param scopes The list of CRDT scopes to track for undo/redo operations.
+   * @param trackedOrigins Optional origin objects to track instead of the private local origin.
+   * @returns A `CRDTUndoManager` instance with `undo`, `redo`, `clear`, `stopCapturing`, and `destroy` methods.
+   */
+  createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager {
+    const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
+    const manager = new Y.UndoManager(nativeScopes, {
+      trackedOrigins: new Set(trackedOrigins ?? [this.localOrigin]),
+    });
+    return {
+      undo: () => manager.undo(),
+      redo: () => manager.redo(),
+      clear: () => manager.clear(),
+      stopCapturing: () => manager.stopCapturing(),
+      destroy: () => manager.destroy(),
+    };
+  }
 
-    /**
-     * Gets (and creates if not exists) an array from the YjsDoc.
-     * @param path - The path to the array.
-     * @returns The array.
-     */
-    getArray<Item extends CRDTType = CRDTType>(path: string): CRDTArray<Item> {
-        return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray<Item>;
-    }
+  /**
+   * Gets (and creates if not exists) an array from the YjsDoc.
+   * @param path - The path to the array.
+   * @returns The array.
+   */
+  getArray<Item extends CRDTType = CRDTType>(path: string): CRDTArray<Item> {
+    return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray<Item>;
+  }
 
-    /**
-     * Gets (and creates if not exists) a map from the YjsDoc.
-     * @param path - The path to the map.
-     * @returns The map.
-     */
-    getMap<Schema extends object = Record<string, CRDTType>>(path: string): CRDTMap<Schema> {
-        return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap<Schema>;
-    }
+  /**
+   * Gets (and creates if not exists) a map from the YjsDoc.
+   * @param path - The path to the map.
+   * @returns The map.
+   */
+  getMap<Schema extends object = Record<string, CRDTType>>(path: string): CRDTMap<Schema> {
+    return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap<Schema>;
+  }
 
-    /**
-     * Gets (and creates if not exists) a text from the YjsDoc.
-     * @param path - The path to the text.
-     * @returns The text.
-     */
-    getText(path: string): CRDTText {
-        return utils.wrapYJStoCRDT(this.doc.getText(path)) as CRDTText;
-    }
+  /**
+   * Gets (and creates if not exists) a text from the YjsDoc.
+   * @param path - The path to the text.
+   * @returns The text.
+   */
+  getText(path: string): CRDTText {
+    return utils.wrapYJStoCRDT(this.doc.getText(path)) as CRDTText;
+  }
 
-    /**
-     * Subscribes to a document event.
-     * @param event - The event to subscribe to.
-     * @param handler - The function to execute when the event is triggered.
-     * @returns A function to unsubscribe from the event.
-     */
-    on(event: "update" | "sync", handler: (event: any) => void): Unsubscribe {
-        this.doc.on(event, handler);
-        return () => { this.doc.off(event, handler); }
-    }
+  /**
+   * Subscribes to a document event.
+   * @param event - The event to subscribe to.
+   * @param handler - The function to execute when the event is triggered.
+   * @returns A function to unsubscribe from the event.
+   */
+  on(event: "update" | "sync", handler: (event: any) => void): Unsubscribe {
+    this.doc.on(event, handler);
+    return () => {
+      this.doc.off(event, handler);
+    };
+  }
 
-    /**
-     * Gets a snapshot of the YjsDoc.
-     * @returns The snapshot.
-     */
-    getSnapshot(): any {
-        return Y.encodeStateAsUpdate(this.doc);
-    }
-      
-    /**
-     * Applies a snapshot to the YjsDoc.
-     * @param snapshot - The snapshot to apply.
-     */
-    applySnapshot(snapshot: any): void {
-        Y.applyUpdate(this.doc, new Uint8Array(snapshot));
-    }
+  /**
+   * Gets a snapshot of the YjsDoc.
+   * @returns The snapshot.
+   */
+  getSnapshot(): any {
+    return Y.encodeStateAsUpdate(this.doc);
+  }
 
-    /**
-     * Disconnects every attached provider before destroying the Yjs document.
-     * @returns A Promise that resolves after all lifecycle cleanup completes.
-     */
-    destroy(): Promise<void> {
-        const providers = this.providersStorage.values();
-        this.providersStorage.clear();
-        if (providers.length === 0) {
-            this.doc.destroy();
-            return Promise.resolve();
-        }
-        return Promise.allSettled(providers.map((provider) => Promise.resolve().then(() => provider.disconnect(this)))).then((results) => {
-            this.doc.destroy();
-            const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
-            if (failure) throw failure.reason;
-        });
-    }
+  /**
+   * Applies a snapshot to the YjsDoc.
+   * @param snapshot - The snapshot to apply.
+   */
+  applySnapshot(snapshot: any): void {
+    Y.applyUpdate(this.doc, new Uint8Array(snapshot));
+  }
 
-    /**
-     * Converts the YjsDoc to a JSON representation.
-     * @returns The BasicType.
-     */
-    toJSON(): BasicType {
-        const snapshot: Record<string, BasicType> = {};
-
-        this.doc.share.forEach((_, key) => {
-            const value = this.doc.get(key)
-            // If the value is an AbstractType (might be in synced docs), we need to convert it to a JSON object.
-            if (value.constructor.name === 'AbstractType') {
-               throw new Error(`YjsDoc.toJSON: AbstractType found in synced docs. To fix this call "doc.getMap(${key}) or doc.getText(${key}) or doc.getArray(${key})" to get the value.`);
-            }
-            // We call toJSON to convert the type to a JSON object. 
-            // This is necessary because utils.convertYJSTypeToBasic can't convert object that wasn't get via getMap or other getters.
-            // In such case it returns Y.AbstractType
-            snapshot[key] = utils.convertYJSTypeToBasic(value as import("./structures/utils/types").YJSType)
-        });
-        return snapshot;
+  /**
+   * Disconnects every attached provider before destroying the Yjs document.
+   * @returns A Promise that resolves after all lifecycle cleanup completes.
+   */
+  destroy(): Promise<void> {
+    const providers = this.providersStorage.values();
+    this.providersStorage.clear();
+    if (providers.length === 0) {
+      this.doc.destroy();
+      return Promise.resolve();
     }
-    
-    /**
-     * Converts the YjsDoc from a JSON representation.
-     * @param json - The JSON representation.
-     * @param options - The options to convert the BasicType to a YJS type.
-     */
-    fromJSON(json: BasicType, options?: WrapBasicTypeToCRDTOptions): void {
-        if (json === null || typeof json !== 'object') {
-            throw new Error('Invalid JSON provided to YjsDoc.fromJSON');
-        }
-        if (Array.isArray(json)) {
-            throw new Error('Invalid JSON provided to YjsDoc.fromJSON, expected an object');
-        }
-        const entries = json instanceof Map
-            ? Array.from(json.entries())
-            : Object.entries(json as Record<string, BasicType>);
-        entries.forEach(([key, value]) => {
-            if (
-                !(value instanceof Map)
-                && !Array.isArray(value)
-                && typeof value !== "string"
-                && (value === null || typeof value !== "object")
-            ) {
-                throw new Error(`Unsupported root type for key "${key}" 
-                        (got ${typeof value}, value: ${JSON.stringify(value)}, 
-                        data: ${JSON.stringify(value)}) 
+    return Promise.allSettled(
+      providers.map((provider) => Promise.resolve().then(() => provider.disconnect(this))),
+    ).then((results) => {
+      this.doc.destroy();
+      const failure = results.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failure) {
+        throw failure.reason;
+      }
+    });
+  }
+
+  /**
+   * Converts the YjsDoc to a JSON representation.
+   * @returns The BasicType.
+   */
+  toJSON(): BasicType {
+    const snapshot: Record<string, BasicType> = {};
+
+    this.doc.share.forEach((rootType, key) => {
+      const value = this.doc.get(key);
+      // If the value is an AbstractType (might be in synced docs), we need to convert it to a JSON object.
+      if (value.constructor.name === "AbstractType") {
+        throw new Error(
+          `YjsDoc.toJSON: AbstractType found in synced docs. To fix this call "doc.getMap(${key}) or doc.getText(${key}) or doc.getArray(${key})" to get the value.`,
+        );
+      }
+      // We call toJSON to convert the type to a JSON object.
+      // This is necessary because utils.convertYJSTypeToBasic can't convert object that wasn't get via getMap or other getters.
+      // In such case it returns Y.AbstractType
+      snapshot[key] = utils.convertYJSTypeToBasic(value as YJSType);
+    });
+    return snapshot;
+  }
+
+  /**
+   * Converts the YjsDoc from a JSON representation.
+   * @param json - The JSON representation.
+   * @param options - The options to convert the BasicType to a YJS type.
+   */
+  fromJSON(json: BasicType, options?: WrapBasicTypeToCRDTOptions): void {
+    if (json === null || typeof json !== "object") {
+      throw new Error("Invalid JSON provided to YjsDoc.fromJSON");
+    }
+    if (Array.isArray(json)) {
+      throw new Error("Invalid JSON provided to YjsDoc.fromJSON, expected an object");
+    }
+    const entries =
+      json instanceof Map
+        ? Array.from(json.entries())
+        : Object.entries(json as Record<string, BasicType>);
+    entries.forEach(([key, value]) => {
+      if (
+        !(value instanceof Map) &&
+        !Array.isArray(value) &&
+        typeof value !== "string" &&
+        (value === null || typeof value !== "object")
+      ) {
+        throw new Error(`Unsupported root type for key "${key}"
+                        (got ${typeof value}, value: ${JSON.stringify(value)},
+                        data: ${JSON.stringify(value)})
                         when restoring YjsDoc. Entries: ${JSON.stringify(entries)}`);
-            }
-        });
+      }
+    });
 
-        this.doc.transact(() => {
-            // Clear collaborative contents of known typed roots. Deleting
-            // `doc.share` is not a CRDT operation and is invisible to peers.
-            this.doc.share.forEach((_, key) => this.clearTypedRoot(key));
-            entries.forEach(([key, value]) => {
-                if (value instanceof Map) {
-                    const map = this.getMap(key);
-                    value.forEach((v, k) => {
-                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
-                        map.set(k, basic);
-                    });
-                } else if (Array.isArray(value)) {
-                    const array = this.getArray(key);
-                    value.forEach((v, i) => {
-                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
-                        array.insert(i, basic);
-                    });
-                } else if (typeof value === 'string') {
-                    const text = this.getText(key);
-                    text.insert(0, value);
-                } else if (typeof value === 'object') {
-                    const map = this.getMap(key);
-                    Object.entries(value as Record<string, BasicType>).forEach(([k, v]) => {
-                        const basic = utils.wrapBasicTypeToCRDTType(v, options);
-                        map.set(k, basic);
-                    });
-                }
-            });
-        });
+    this.doc.transact(() => {
+      // Clear collaborative contents of known typed roots. Deleting
+      // `doc.share` is not a CRDT operation and is invisible to peers.
+      this.doc.share.forEach((rootType, key) => this.clearTypedRoot(key));
+      entries.forEach(([key, value]) => {
+        if (value instanceof Map) {
+          const map = this.getMap(key);
+          value.forEach((v, k) => {
+            const basic = utils.wrapBasicTypeToCRDTType(v, options);
+            map.set(k, basic);
+          });
+        } else if (Array.isArray(value)) {
+          const array = this.getArray(key);
+          value.forEach((v, i) => {
+            const basic = utils.wrapBasicTypeToCRDTType(v, options);
+            array.insert(i, basic);
+          });
+        } else if (typeof value === "string") {
+          const text = this.getText(key);
+          text.insert(0, value);
+        } else if (typeof value === "object") {
+          const map = this.getMap(key);
+          Object.entries(value as Record<string, BasicType>).forEach(([k, v]) => {
+            const basic = utils.wrapBasicTypeToCRDTType(v, options);
+            map.set(k, basic);
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * Gets the id of the YjsDoc.
+   * @returns The id of the YjsDoc.
+   */
+  get id(): string {
+    return this._id;
+  }
+
+  /**
+   * Empties one existing typed root without deleting it from the share registry.
+   *
+   * @param key - Shared root name to clear.
+   * @returns No value.
+   */
+  private clearTypedRoot(key: string): void {
+    const current = this.doc.get(key);
+    if (current instanceof Y.Map) {
+      current.clear();
+    } else if (current instanceof Y.Array && current.length) {
+      current.delete(0, current.length);
+    } else if (current instanceof Y.Text && current.length) {
+      current.delete(0, current.length);
     }
-
-    /**
-     * Empties one existing typed root without deleting it from the share registry.
-     *
-     * @param key - Shared root name to clear.
-     * @returns No value.
-     */
-    private clearTypedRoot(key: string): void {
-        const current = this.doc.get(key);
-        if (current instanceof Y.Map) current.clear();
-        else if (current instanceof Y.Array && current.length) current.delete(0, current.length);
-        else if (current instanceof Y.Text && current.length) current.delete(0, current.length);
-    }
-
-    /**
-     * Gets the id of the YjsDoc.
-     * @returns The id of the YjsDoc.
-     */
-    get id(): string {
-        return this._id;
-    }
-
+  }
 }

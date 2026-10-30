@@ -30,7 +30,7 @@
 - `yjs-doc/yjs-doc.ts` — document operations и создание detached wrapper.
 - `yjs-doc/error.ts` — ошибки уровня Yjs-документа.
 
-`EditorRuntime` выбирает `YjsDoc` по умолчанию. Провайдерам также нужен его публичный `doc`.
+`ReactEditor` выбирает `YjsDoc` по умолчанию. Провайдерам также нужен его публичный `doc`.
 
 ## Shared-структуры
 

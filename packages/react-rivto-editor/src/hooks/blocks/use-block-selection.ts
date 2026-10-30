@@ -5,31 +5,32 @@
  * re-render already-selected neighbors. `useBlockSelection` reads the full
  * list and is for chrome that inspects the containing block payload.
  */
-import { useCallback, useSyncExternalStore } from "react";
 import { hasBlockRanges, type Selection } from "@chulane/rivto";
-import { useEditorContext } from "../../editor-context";
+import { useCallback, useSyncExternalStore } from "react";
+import { useReactPanel } from "../editor/use-react-panel";
 import { useEditorSelection } from "../editor/use-editor-selection";
 
 /**
- * Returns whether a block is in an active whole-block selection.
+ * Returns whether a block is in the document's shared whole-block selection.
  *
  * Text selections return false even when an endpoint is inside this block, so
- * a caret or text range does not paint the complete block as selected.
+ * a caret or text range does not paint the complete block as selected. All mounted
+ * occurrences share this coverage, including inactive panels and embeddings.
  *
  * @param blockId - Stable ID whose whole-block membership is queried.
  * @returns True only while a structural selection contains `blockId`.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelected(blockId: string): boolean {
-  const { reactEditor } = useEditorContext();
+  const reactPanel = useReactPanel();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.selection.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => reactPanel.selection.subscribe(listener),
+    [reactPanel],
   );
   return useSyncExternalStore(
     subscribe,
-    () => reactEditor.selection.isBlockSelected(blockId),
-    () => reactEditor.selection.isBlockSelected(blockId),
+    () => reactPanel.selection.isBlockSelected(blockId),
+    () => reactPanel.selection.isBlockSelected(blockId),
   );
 }
 
@@ -43,11 +44,13 @@ export function useBlockSelected(blockId: string): boolean {
  *
  * @param blockId - Stable ID whose whole-block selection membership is queried.
  * @returns The containing block selection, or null when not selected.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useBlockSelection(blockId: string): Selection | null {
   const selection = useEditorSelection();
-  return selection && hasBlockRanges(selection)
-    && selection.blocks.some((block) => block.id === blockId && block.start === 0 && block.end === -1)
-    ? selection : null;
+  return selection &&
+    hasBlockRanges(selection) &&
+    selection.blocks.some((block) => block.id === blockId && block.start === 0 && block.end === -1)
+    ? selection
+    : null;
 }

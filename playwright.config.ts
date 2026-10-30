@@ -14,10 +14,12 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
   ],
-  webServer: externalBaseURL ? undefined : {
-    command: "pnpm --dir demo exec vite preview --host 127.0.0.1 --port 5173",
-    url: "http://127.0.0.1:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: externalBaseURL
+    ? undefined
+    : {
+        command: "pnpm --dir demo exec vite preview --host 127.0.0.1 --port 5173",
+        url: "http://127.0.0.1:5173",
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 });

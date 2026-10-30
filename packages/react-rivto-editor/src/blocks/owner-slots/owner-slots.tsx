@@ -1,20 +1,27 @@
+import { useContext } from "react";
+import { SurfaceContext } from "../../surfaces/surface";
 /**
  * Shared ordered slot hosts for block rows and first-class canvas elements.
  *
- * The hosts add only absolutely positioned presentation containers. Extension
+ * The hosts add perimeter overlays or in-flow row and body containers. Extension
  * registrations remain in SurfaceManager so their lifecycle, mode filtering,
  * and invalidation match the surfaces that render them.
  *
+ * Slot filtering uses SurfaceContext rather than useEditorMode: an embedding
+ * can render a PageSurface while its document editor is in edgeless mode.
+ * Here `mode` describes the surface displaying the owner, so page slots remain
+ * active inside that embedding instead of inheriting the editor's canvas slots.
+ *
  * @module
  */
-import type { EditorBlockNode, EditorElement } from "@chulane/rivto";
-import { Fragment, type ComponentType, type ReactNode } from "react";
-import { useEditorMode, useReactEditor } from "../../hooks";
+import type { EditorElementNode } from "@chulane/rivto";
+import { Fragment } from "react";
+import { useReactPanel } from "../../hooks";
 import {
   SLOT_POSITIONS,
   type BlockSlotPosition,
-  type BlockSlotProps,
   type ElementSlotProps,
+  type ResolvedSlot,
 } from "../../managers";
 
 const SLOT_CLASS = "rivto-slot";
@@ -28,67 +35,21 @@ function SlotHost<Props extends object>({
 }: {
   readonly owner: "block" | "element";
   readonly position: BlockSlotPosition;
-  readonly components: readonly ComponentType<Props>[];
+  readonly components: readonly ResolvedSlot<Props>[];
   readonly props: Props;
 }) {
-  if (!components.length) return null;
+  if (!components.length) {
+    return null;
+  }
   return (
-    <div
-      className={SLOT_CLASS}
-      data-slot-owner={owner}
-      data-slot-position={position}
-    >
-      {components.map((Component, index) => (
-        <Fragment key={`${(Component.displayName ?? Component.name) || "slot"}-${index}`}>
+    <div className={SLOT_CLASS} data-slot-owner={owner} data-slot-position={position}>
+      {components.map(({ id, component: Component }) => (
+        <Fragment key={id}>
           <Component {...props} />
         </Fragment>
       ))}
     </div>
   );
-}
-
-/**
- * Renders one block's content between its logical slots plus perimeter hosts.
- *
- * @param props - Current block snapshot, selection presentation, and renderer output.
- * @returns Ordered row content and every populated block-slot host.
- */
-export function BlockSlots({
-  block,
-  selected,
-  children,
-}: {
-  readonly block: EditorBlockNode;
-  readonly selected: boolean;
-  readonly children: ReactNode;
-}) {
-  const reactEditor = useReactEditor();
-  const { mode } = useEditorMode();
-  const slotProps: BlockSlotProps = { block, mode, selected };
-  return <>
-    <SlotHost
-      owner="block"
-      position="start"
-      components={reactEditor.surfaces.getBlockSlots("start", slotProps)}
-      props={slotProps}
-    />
-    {children}
-    <SlotHost
-      owner="block"
-      position="end"
-      components={reactEditor.surfaces.getBlockSlots("end", slotProps)}
-      props={slotProps}
-    />
-    {SLOT_POSITIONS.map((position) => (
-      <SlotHost
-        key={position}
-        owner="block"
-        position={position}
-        components={reactEditor.surfaces.getBlockSlots(position, slotProps)}
-        props={slotProps}
-      />
-    ))}
-  </>;
 }
 
 /**
@@ -101,19 +62,23 @@ export function ElementSlots({
   element,
   selected,
 }: {
-  readonly element: EditorElement;
+  readonly element: EditorElementNode;
   readonly selected: boolean;
 }) {
-  const reactEditor = useReactEditor();
-  const { mode } = useEditorMode();
+  const reactPanel = useReactPanel();
+  const mode = useContext(SurfaceContext);
   const slotProps: ElementSlotProps = { element, mode, selected };
-  return <>{SLOT_POSITIONS.map((position) => (
-    <SlotHost
-      key={position}
-      owner="element"
-      position={position}
-      components={reactEditor.surfaces.getElementSlots(position, slotProps)}
-      props={slotProps}
-    />
-  ))}</>;
+  return (
+    <>
+      {SLOT_POSITIONS.map((position) => (
+        <SlotHost
+          key={position}
+          owner="element"
+          position={position}
+          components={reactPanel.editor.surfaces.getElementSlotEntries(position, slotProps)}
+          props={slotProps}
+        />
+      ))}
+    </>
+  );
 }

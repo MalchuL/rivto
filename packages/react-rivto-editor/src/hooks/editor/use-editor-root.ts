@@ -1,5 +1,5 @@
 import type { RefCallback } from "react";
-import { useEditorRootContext } from "../../editor-root-context";
+import { useEditorRootContext } from "./use-editor-root-context";
 
 /** Surface root state returned by useEditorRoot. */
 export interface UseEditorRootResult {
@@ -15,10 +15,10 @@ export interface UseEditorRootResult {
  * A surface assigns `ref` to its own container, preserving ownership of the
  * element, semantics, layout, and styling. Plugins read `element` indirectly
  * through `useDOMEvent` or directly for scoped queries, focus restoration,
- * geometry, and overlays. EditorView stores only the local DOM reference and
+ * geometry, and overlays. EditorPanel stores only the local DOM reference and
  * still renders no wrapper element.
  *
- * Only one active surface root should register inside an EditorView. React sets
+ * Only one active surface root should register inside an EditorPanel. React sets
  * the value to null automatically when that surface unmounts.
  *
  * @example
@@ -30,7 +30,7 @@ export interface UseEditorRootResult {
  * ```
  *
  * @returns Current surface root and its stable registration ref.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useEditorRoot(): UseEditorRootResult {
   return useEditorRootContext();

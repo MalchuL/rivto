@@ -32,7 +32,7 @@ const wrapped = new YjsDoc("imported-document", existingYDoc);
 - **Значение:** приватное поле `_id` из конструктора.
 - **Исключения при чтении:** отсутствуют.
 
-Возвращает логический ID из конструктора. Если пользователь не передал документ, `EditorRuntime` создаёт ID с префиксом `rivto-`.
+Возвращает логический ID из конструктора. Если пользователь не передал документ, `ReactEditor` создаёт ID с префиксом `rivto-`.
 
 ### `createDetachedArray()`, `createDetachedMap()`, `createDetachedText()`
 
@@ -257,8 +257,7 @@ const cleanupProvider = await crdt.attachProvider(
 );
 
 const document = new DocumentModelImpl(crdt);
-const editor = createRivtoEditor();
-editor.setDocument(document);
+const editor = createDocumentEditor({ document });
 
 // При завершении жизненного цикла:
 await cleanupProvider();

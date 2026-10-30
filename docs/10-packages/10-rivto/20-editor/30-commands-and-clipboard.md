@@ -26,8 +26,8 @@ Outermost batch создаёт одну CRDT transaction и закрывает u
 ```ts
 editor.history.batchUpdates(() => {
   const first = editor.blocks.insertBlock({ type: "paragraph" });
-  const second = editor.blocks.insertBlock({ type: "paragraph" }, first);
-  editor.blocks.indentBlock(second);
+  const second = editor.blocks.insertBlock({ type: "paragraph" }, { parentId: first.id });
+  editor.blocks.updateBlock(second.id, { content: "Child" });
 });
 
 editor.history.undo(); // Отменяет весь batch одним шагом.

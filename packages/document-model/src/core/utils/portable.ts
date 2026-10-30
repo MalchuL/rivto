@@ -17,12 +17,7 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  * excluded because they do not survive collaborative storage unchanged.
  */
 export type PortableValue =
-  | number
-  | string
-  | boolean
-  | null
-  | PortableValue[]
-  | { readonly [key: string]: PortableValue };
+  number | string | boolean | null | PortableValue[] | { readonly [key: string]: PortableValue };
 
 /**
  * Rejects empty and whitespace-only identifiers at create/load boundaries.
@@ -53,7 +48,9 @@ export function requireNonemptyId(id: unknown, kind: string): string {
  * @returns True when the value is a plain record, not an array or instance.
  */
 export function isPlainRecord(value: object): boolean {
-  if (Array.isArray(value)) return false;
+  if (Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value) as object | null;
   return prototype === null || Object.getPrototypeOf(prototype) === null;
 }
@@ -92,7 +89,10 @@ export function isPortableValue(value: unknown): value is PortableValue {
  * @throws {TypeError} When the value is non-portable, cyclic, or uses a
  * dangerous own key.
  */
-export function assertPortableValue(value: unknown, label = "value"): asserts value is PortableValue {
+export function assertPortableValue(
+  value: unknown,
+  label = "value",
+): asserts value is PortableValue {
   const seen = new Set<object>();
   const visit = (candidate: unknown, path: string): void => {
     if (candidate === null || typeof candidate === "string" || typeof candidate === "boolean") {

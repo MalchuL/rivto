@@ -13,7 +13,7 @@
 1. [DocumentModel и render](./document-model-to-render/README.md) — полный
    круг данных от CRDT storage до DOM и обратно.
 2. [React editor](./react-editor/README.md) — общая граница между React, DOM и
-   `EditorRuntime`.
+   `DocumentEditor`.
 3. [Selection и clipboard](./selection-and-clipboard/README.md) — курсор,
    выделение, Copy, Cut и Paste.
 4. [Undo и redo](./undo-history/README.md) — транзакции, origin и локальная
@@ -37,7 +37,7 @@ DOM-событие в React renderer
     ↓
 EventRouter или CommandRegistry
     ↓
-EditorRuntime
+DocumentEditor
     ↓
 DocumentModelImpl
     ↓
@@ -51,7 +51,7 @@ Yjs adapter
 ```text
 изменился CRDT document
     ↓
-EditorRuntime увеличил revision
+DocumentEditor увеличил revision
     ↓
 useSyncExternalStore запросил новый snapshot
     ↓

@@ -15,7 +15,9 @@ import type { ZodType } from "zod";
  * @returns `true` when the value is a mergeable plain record.
  */
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
   const prototype = Object.getPrototypeOf(value) as object | null;
   // Checking the prototype chain, rather than identity with this realm's
   // Object.prototype, also recognizes records cloned across test/worker realms.
@@ -32,12 +34,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
  * @param input - Caller properties that override or extend the defaults.
  * @returns A detached recursively merged property record.
  */
-const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unknown>): Record<string, unknown> => {
+const mergeProps = (
+  defaults: Record<string, unknown>,
+  input: Record<string, unknown>,
+): Record<string, unknown> => {
   const result: Record<string, unknown> = structuredClone(defaults);
   for (const [key, value] of Object.entries(input)) {
-    result[key] = isRecord(result[key]) && isRecord(value)
-      ? mergeProps(result[key], value)
-      : value;
+    result[key] = isRecord(result[key]) && isRecord(value) ? mergeProps(result[key], value) : value;
   }
   return result;
 };
@@ -49,9 +52,10 @@ const mergeProps = (defaults: Record<string, unknown>, input: Record<string, unk
  * @returns Defaults evaluated exactly once for the current operation.
  */
 const resolveDefaultProps = (definition: BlockDefinition): Record<string, unknown> => {
-  const defaults = typeof definition.defaultProps === "function"
-    ? definition.defaultProps()
-    : definition.defaultProps;
+  const defaults =
+    typeof definition.defaultProps === "function"
+      ? definition.defaultProps()
+      : definition.defaultProps;
   return defaults ?? {};
 };
 
@@ -71,9 +75,11 @@ const validateProps = (
   definition: BlockDefinition | undefined,
   props: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const schema = definition?.propSchema as (ZodType<Record<string, unknown>> & {
-    loose?: () => ZodType<Record<string, unknown>>;
-  }) | undefined;
+  const schema = definition?.propSchema as
+    | (ZodType<Record<string, unknown>> & {
+        loose?: () => ZodType<Record<string, unknown>>;
+      })
+    | undefined;
   return schema ? (schema.loose?.() ?? schema).parse(props) : props;
 };
 
@@ -99,31 +105,63 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
   /**
    * Defines one native block type until the returned disposer is called.
    *
+   * The exact supplied definition is published, including opaque metadata. If
+   * an initial lifecycle observer throws, the definition is unregistered before
+   * the error escapes. A failing rollback notification is reported alongside
+   * the initial failure after the owned registry entry has been released.
+   *
    * @param definition - Definition for a unique, non-empty native type.
    * @returns Idempotent function that unregisters this exact definition.
-   * @throws If the type is empty or already registered.
+   * @throws If the type is empty, already registered, or an initial observer throws.
+   * Initial and rollback observer failures are combined in an AggregateError.
    */
   defineBlock(definition: BlockDefinition): () => void {
-    if (!definition.type) throw new Error("Block definition type is required");
-    if (this.definitions.has(definition.type)) throw new Error(`Block type ${definition.type} is already registered`);
+    if (!definition.type) {
+      throw new Error("Block definition type is required");
+    }
+    if (this.definitions.has(definition.type)) {
+      throw new Error(`Block type ${definition.type} is already registered`);
+    }
     this.definitions.set(definition.type, definition);
     let active = true;
     const dispose = (): void => {
-      if (!active) return;
+      if (!active) {
+        return;
+      }
       active = false;
-      if (this.definitions.get(definition.type) === definition) this.definitions.delete(definition.type);
+      if (this.definitions.get(definition.type) === definition) {
+        this.definitions.delete(definition.type);
+      }
       this.removeDefinitions.delete(dispose);
       this.notify();
     };
     this.removeDefinitions.add(dispose);
-    this.notify();
+    try {
+      // The definition is already visible; a synchronous listener can throw
+      // before the caller receives its disposer.
+      this.notify();
+    } catch (error) {
+      // The caller will not receive a disposer after this failure, so undo
+      // the registry entry. Listener side effects are outside this rollback.
+      try {
+        // Removal also notifies readers that the definition is gone. dispose()
+        // releases the entry and retained cleanup before this second notify.
+        dispose();
+      } catch (rollbackError) {
+        // A rollback listener can fail too; report both errors so it cannot
+        // replace the original registration failure.
+        throw new AggregateError([error, rollbackError], "Block definition registration failed");
+      }
+      throw error;
+    }
     return dispose;
   }
 
   /**
    * Subscribes to block-definition lifecycle changes.
    *
-   * The listener runs after a definition is successfully added or removed.
+   * The listener runs after a definition has been added or removed. If an initial
+   * observer throws, registration rolls back and publishes the removal as well.
    * Calling the returned function repeatedly is safe.
    *
    * @param listener - Callback invoked after the registry changes.
@@ -242,7 +280,9 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
    */
   private require(type: string): BlockDefinition {
     const definition = this.get(type);
-    if (!definition) throw new Error(`Unknown block type ${type}`);
+    if (!definition) {
+      throw new Error(`Unknown block type ${type}`);
+    }
     return definition;
   }
 }

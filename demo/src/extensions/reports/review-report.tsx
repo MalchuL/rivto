@@ -7,22 +7,17 @@
  *
  * @module
  */
+import type { EditorElementNode } from "@chulane/rivto";
 import {
-  ElementSlots,
+  BLOCK_TEXT_METADATA_KEY,
   blockExtension,
+  editorControlProps,
   useBlockEditing,
-  useEditorMode,
-  useEditorRoot,
   useEditorSelection,
-  useElements,
+  usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
-import type { EditorElement, RivtoEditorApi } from "@chulane/rivto";
-import { createPortal } from "react-dom";
-import {
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useState, type ChangeEvent } from "react";
 import {
   REVIEW_REPORT_TYPE,
   captureBlockReview,
@@ -38,7 +33,6 @@ import "./review-report.css";
 
 const REVIEW_BLOCK_CLASS = "review-report-block";
 const REVIEW_ELEMENT_CLASS = "review-report-element";
-const REVIEW_ELEMENT_LAYER_CLASS = "review-report-element-layer";
 const REVIEW_PROBLEM_CLASS = "review-report-problem";
 const REVIEW_CONTROLS_CLASS = "review-report-controls";
 const REVIEW_STATUS_CLASS = "review-report-status";
@@ -53,10 +47,31 @@ interface ReviewControlsProps {
   saving: boolean;
   error: string | null;
   includeReportBlock?: boolean;
+  /**
+   * Updates the number of preceding blocks included in the review snapshot.
+   *
+   * @param value - Number of blocks to include above the report.
+   */
   onAboveChange(value: number): void;
+  /**
+   * Updates the number of following blocks included in the review snapshot.
+   *
+   * @param value - Number of blocks to include below the report.
+   */
   onBelowChange(value: number): void;
+  /**
+   * Updates whether the report block itself is included in the snapshot.
+   *
+   * @param value - Whether the snapshot includes the report block.
+   */
   onIncludeReportBlockChange?(value: boolean): void;
+  /**
+   * Requests saving the current review report and its snapshot.
+   */
   onSave(): void;
+  /**
+   * Requests restoring the review snapshot into the demo.
+   */
   onRestore(): void;
 }
 
@@ -73,11 +88,13 @@ function ReviewControls(props: ReviewControlsProps) {
     update: (value: number) => void,
   ): void => {
     const value = Number(event.currentTarget.value);
-    if (Number.isInteger(value) && value >= 0) update(value);
+    if (Number.isInteger(value) && value >= 0) {
+      update(value);
+    }
   };
 
   return (
-    <div className={REVIEW_CONTROLS_CLASS}>
+    <div {...editorControlProps} className={REVIEW_CONTROLS_CLASS}>
       <label>
         Above
         <input
@@ -142,31 +159,36 @@ function ReviewControls(props: ReviewControlsProps) {
  * @returns Editable problem statement and report controls, or null after deletion.
  */
 function ReviewBlock({
-  editor,
   blockId,
   saveReport,
 }: {
-  readonly editor: RivtoEditorApi;
   readonly blockId: string;
   readonly saveReport: SaveReviewReport;
 }) {
+  const panel = usePanel();
   const editing = useBlockEditing<ReviewBlockProps>(blockId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   const props = reviewBlockPropsSchema.parse(editing.block.props);
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const live = editor.blocks.getBlockNode(blockId);
-      if (!live) throw new Error("Review block no longer exists");
+      const live = panel.blocks.getBlockNode(blockId);
+      if (!live) {
+        throw new Error("Review block no longer exists");
+      }
       const liveProps = reviewBlockPropsSchema.parse(live.props);
       const capture = captureBlockReview(
-        editor,
+        panel.document,
         blockId,
         liveProps.blocksAbove,
         liveProps.blocksBelow,
@@ -180,7 +202,7 @@ function ReviewBlock({
         savedAt,
         ...capture,
       });
-      editor.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
+      panel.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {
@@ -207,13 +229,13 @@ function ReviewBlock({
           saving={saving}
           error={error}
           includeReportBlock={props.includeReportBlock}
-          onAboveChange={(blocksAbove) => editing.setProp("blocksAbove", blocksAbove)}
-          onBelowChange={(blocksBelow) => editing.setProp("blocksBelow", blocksBelow)}
-          onIncludeReportBlockChange={(includeReportBlock) => (
-            editing.setProp("includeReportBlock", includeReportBlock)
-          )}
+          onAboveChange={(blocksAbove) => editing.operations.setProp("blocksAbove", blocksAbove)}
+          onBelowChange={(blocksBelow) => editing.operations.setProp("blocksBelow", blocksBelow)}
+          onIncludeReportBlockChange={(includeReportBlock) =>
+            editing.operations.setProp("includeReportBlock", includeReportBlock)
+          }
           onSave={() => void save()}
-          onRestore={() => editor.load(props.snapshot!)}
+          onRestore={() => panel.document.load(props.snapshot!)}
         />
       </div>
     </section>
@@ -224,39 +246,42 @@ function ReviewBlock({
  * Renders one first-class Review element in the edgeless plane.
  *
  * @param props - Persisted element and injected report writer.
- * @returns Positioned canvas frame with the same Save UX as the block.
+ * @returns Review content with the same Save UX as the block; the registered element host owns positioning and selection slots.
  */
 function ReviewElement({
-  editor,
   element,
-  selected,
   saveReport,
 }: {
-  readonly editor: RivtoEditorApi;
-  readonly element: EditorElement;
-  readonly selected: boolean;
+  readonly element: EditorElementNode;
   readonly saveReport: SaveReviewReport;
 }) {
+  const panel = usePanel();
+  const selection = useEditorSelection();
+  const selected = selection?.elements?.includes(element.id) ?? false;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
 
   /** Applies one validated persisted property patch to this element. */
   const update = (patch: Partial<ReviewElementProps>): void => {
-    editor.elements.updateElement(element.id, { props: patch });
+    panel.elements.updateElement(element.id, { props: patch });
   };
 
   /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const live = editor.elements.getElement(element.id);
-      if (!live) throw new Error("Review element no longer exists");
+      const live = panel.elements.getElementNode(element.id);
+      if (!live) {
+        throw new Error("Review element no longer exists");
+      }
       const liveProps = reviewElementPropsSchema.parse(live.props);
       const snapshot = captureElementReviewSnapshot(
-        editor,
+        panel.document,
         element.id,
         liveProps.elementsAbove,
         liveProps.elementsBelow,
@@ -269,7 +294,7 @@ function ReviewElement({
         savedAt,
         snapshot,
       });
-      editor.elements.updateElement(element.id, { props: { snapshot, savedAt } });
+      panel.elements.updateElement(element.id, { props: { snapshot, savedAt } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {
@@ -280,19 +305,11 @@ function ReviewElement({
   return (
     <section
       className={REVIEW_ELEMENT_CLASS}
-      data-edgeless-object-kind="review"
-      data-edgeless-object-id={element.id}
       data-review-report={element.id}
       data-selected={selected || undefined}
-      style={{
-        left: element.frame.x,
-        top: element.frame.y,
-        width: element.frame.width,
-        height: element.frame.height,
-        zIndex: element.zIndex,
-      }}
     >
       <textarea
+        {...editorControlProps}
         className={REVIEW_PROBLEM_CLASS}
         aria-label="Review problem"
         placeholder="Describe the problem"
@@ -309,43 +326,9 @@ function ReviewElement({
         onAboveChange={(elementsAbove) => update({ elementsAbove })}
         onBelowChange={(elementsBelow) => update({ elementsBelow })}
         onSave={() => void save()}
-        onRestore={() => editor.load(props.snapshot!)}
+        onRestore={() => panel.document.load(props.snapshot!)}
       />
-      <ElementSlots element={element} selected={selected} />
     </section>
-  );
-}
-
-/**
- * Portals Review elements into the existing edgeless plane.
- *
- * @param props - Host persistence callback shared by every rendered report.
- * @returns Portal contents in edgeless mode, otherwise null.
- */
-function ReviewElementLayer({ editor, saveReport }: {
-  readonly editor: RivtoEditorApi;
-  readonly saveReport: SaveReviewReport;
-}) {
-  const { mode } = useEditorMode();
-  const { element: root } = useEditorRoot();
-  const elements = useElements();
-  const selection = useEditorSelection();
-  const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
-  if (mode !== "edgeless" || !plane) return null;
-  const selected = new Set(selection?.elements ?? []);
-  return createPortal(
-    <div className={REVIEW_ELEMENT_LAYER_CLASS}>
-      {elements.filter(({ type }) => type === REVIEW_REPORT_TYPE).map((element) => (
-        <ReviewElement
-          key={element.id}
-          editor={editor}
-          element={element}
-          selected={selected.has(element.id)}
-          saveReport={saveReport}
-        />
-      ))}
-    </div>,
-    plane,
   );
 }
 
@@ -356,15 +339,15 @@ function ReviewElementLayer({ editor, saveReport }: {
  * @returns Separate block and canvas extensions sharing one host callback.
  */
 export function reviewReportExtensions(options: {
-  readonly editor: RivtoEditorApi;
   readonly saveReport: SaveReviewReport;
 }): readonly ReactEditorExtension[] {
   return [
     blockExtension({
-      definition: reviewBlockDefinition,
-      render: ({ blockId }) => (
-        <ReviewBlock editor={options.editor} blockId={blockId} saveReport={options.saveReport} />
-      ),
+      definition: {
+        ...reviewBlockDefinition,
+        metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
+      },
+      render: ({ blockId }) => <ReviewBlock blockId={blockId} saveReport={options.saveReport} />,
       slashCommand: {
         title: "Review report",
         group: "Turn into",
@@ -374,15 +357,14 @@ export function reviewReportExtensions(options: {
     {
       id: "demo.review-report.elements",
       setup: (reactEditor) => {
-        reactEditor.extensions.mount(() => (
-          <ReviewElementLayer editor={options.editor} saveReport={options.saveReport} />
-        ));
-        return reactEditor.elements.registerProcessor({
-          id: "demo.review-report.props",
-          priority: 0,
-          processor: (element) => element.type === REVIEW_REPORT_TYPE
-            ? { ...element, props: reviewElementPropsSchema.parse(element.props) }
-            : element,
+        return reactEditor.elementTypes.register({
+          definition: {
+            type: REVIEW_REPORT_TYPE,
+            validate: (props) => reviewElementPropsSchema.parse(props),
+          },
+          render: ({ element }) => (
+            <ReviewElement element={element} saveReport={options.saveReport} />
+          ),
         });
       },
     },

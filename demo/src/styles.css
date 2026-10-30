@@ -11,7 +11,9 @@ html {
   overflow-y: scroll;
 }
 
-body { margin: 0; }
+body {
+  margin: 0;
+}
 
 .demo-header {
   display: flex;
@@ -22,11 +24,15 @@ body { margin: 0; }
   font-size: 14px;
 }
 
-.demo-mode-switch { display: flex; gap: 4px; }
+.demo-mode-switch {
+  display: flex;
+  gap: 4px;
+}
 
 .demo-toolbar-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -39,6 +45,10 @@ body { margin: 0; }
 
 .demo-block-id-toggle input {
   accent-color: var(--rivto-accent);
+}
+
+.demo-block-id-toggle input[type="number"] {
+  width: 72px;
 }
 
 .demo-toolbar-controls button {
@@ -67,6 +77,20 @@ body { margin: 0; }
   --rivto-block-surface-padding: 12px 64px 56px;
 }
 
+/* An opened panel replaces the dated stack until navigation returns to the document. */
+.journal-stack[data-open-panel] > [data-journal-document="yesterday"] {
+  display: none;
+}
+
+.demo-panel-breadcrumb {
+  padding: 16px 64px 0;
+}
+
+.demo-panel-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .journal-date {
   margin: 0;
   padding: 20px 64px 4px;
@@ -75,11 +99,21 @@ body { margin: 0; }
 
 .journal-document .page-surface {
   width: 100%;
-  min-height: 160px;
   margin: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* Full document pages keep writing space; embedded subtrees fit their content. */
+.journal-document > .page-surface {
+  min-height: 160px;
+}
+
+/* Embedded views share the journal theme but need compact padding inside a card.
+   Leave a left gutter for the native collapse toggle and drag handle. */
+.journal-document .rivto-embedded-surface {
+  --rivto-block-surface-padding: 12px 12px 12px 48px;
 }
 
 .journal-document:first-child .demo-header {
@@ -89,7 +123,7 @@ body { margin: 0; }
 
 /* Canvas gestures need the viewport, not the journal paper, as their clipping
    boundary. Page mode returns to the seamless dated stack automatically. */
-.journal-stack:has(.edgeless-viewport) {
+.journal-stack[data-edgeless] {
   width: 100%;
   margin: 0;
   overflow: visible;
@@ -98,7 +132,7 @@ body { margin: 0; }
   box-shadow: none;
 }
 
-.journal-document:has(.edgeless-viewport) .journal-date {
+.journal-document[data-edgeless] .journal-date[data-document-title] {
   display: none;
 }
 
@@ -145,12 +179,17 @@ body { margin: 0; }
   padding: 10px 12px;
 }
 
-.multi-editor-pane .demo-toolbar-controls { gap: 6px; }
-.multi-editor-pane .demo-block-id-toggle { display: none; }
-.multi-editor-pane .page-surface { min-height: 360px; }
+.multi-editor-pane .demo-toolbar-controls {
+  gap: 6px;
+}
+.multi-editor-pane > .page-surface {
+  min-height: 360px;
+}
 
 @media (max-width: 900px) {
-  .multi-editor-page { grid-template-columns: 1fr; }
+  .multi-editor-page {
+    grid-template-columns: 1fr;
+  }
 }
 
 .demo-mode-switch button[aria-pressed="true"] {
@@ -159,21 +198,56 @@ body { margin: 0; }
   background: var(--rivto-accent);
 }
 
-.rivto-slot > .demo-block-id {
-  padding-left: 12px;
+/* The left slot sits against its row. Each nested row starts one Page indent further right:
+   24px from .rivto-block-outline, with the same row padding at each depth. Shift the
+   label back by that amount so every number shares the page gutter. */
+.page-surface .rivto-block-slot[data-slot-position="left"]:has(> .demo-block-number) {
+  top: 0;
+  left: 0;
+  height: var(--rivto-default-block-height);
+  transform: translate(-100%, 0);
+}
+
+.rivto-block-slot > .demo-block-number {
+  padding-right: 6px;
+  transform: translateX(calc(-1 * var(--demo-block-depth, 0) * var(--rivto-block-indent, 24px)));
   color: #999;
-  background: linear-gradient(to right, transparent, white 12px);
-  font: 11px/1 ui-monospace, monospace;
+  font:
+    11px/var(--rivto-default-block-height) ui-monospace,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   pointer-events: none;
   user-select: none;
 }
 
-.edgeless-card .rivto-slot > .demo-block-id {
-  background: linear-gradient(to right, transparent, var(--rivto-edgeless-card-background, white) 12px);
+.rivto-block-slot > .demo-block-id {
+  padding-left: 12px;
+  color: #999;
+  background: linear-gradient(to right, transparent, white 12px);
+  font:
+    11px/1 ui-monospace,
+    monospace;
+  pointer-events: none;
+  user-select: none;
 }
 
-.custom-slider-block { display: grid; gap: 6px; }
-.custom-slider-block input { width: min(320px, 100%); accent-color: var(--rivto-accent); }
+.edgeless-card .rivto-block-slot > .demo-block-id {
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--rivto-edgeless-card-background, white) 12px
+  );
+}
+
+.custom-slider-block {
+  display: grid;
+  gap: 6px;
+}
+.custom-slider-block input {
+  width: min(320px, 100%);
+  accent-color: var(--rivto-accent);
+}
 
 .custom-counter-selection-region {
   width: 100%;

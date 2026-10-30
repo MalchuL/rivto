@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import { useCallback, useSyncExternalStore } from "react";
-import { useEditorContext } from "../../editor-context";
+import { useReactPanelContext } from "./use-react-panel-context";
 
 /**
  * Value and mutation API returned by {@link useEditorMode}.
@@ -24,26 +24,29 @@ export interface UseEditorModeResult {
 /**
  * Returns the editor's active presentation mode and a stable mode setter.
  *
- * Mode is view-local runtime state and is never persisted in the collaborative
- * document. This hook subscribes directly to ModeManager.
+ * Mode is local presentation state, never persisted in the collaborative document.
+ * Each panel owns a ModeManager by default. A host can supply a manager to share
+ * mode between panels or retain it across navigation. This hook
+ * subscribes directly to the manager of the surrounding view.
  *
  * The returned `setMode` function keeps the same identity while the surrounding
  * component rerenders. Calling it with the active mode is a no-op.
  *
  * @returns The current mode and the operation used to change it.
- * @throws If called outside an EditorView subtree.
+ * @throws If called outside an EditorPanel or EditorEmbed subtree.
  */
 export function useEditorMode(): UseEditorModeResult {
-  const { reactEditor } = useEditorContext();
+  const { reactPanel } = useReactPanelContext();
   const subscribe = useCallback(
-    (listener: () => void) => reactEditor.mode.subscribe(listener),
-    [reactEditor],
+    (listener: () => void) => reactPanel.mode.subscribe(listener),
+    [reactPanel],
   );
-  const mode = useSyncExternalStore(subscribe, () => reactEditor.mode.get(), () => reactEditor.mode.get());
-  const setMode = useCallback(
-    (mode: EditorMode) => reactEditor.mode.set(mode),
-    [reactEditor],
+  const mode = useSyncExternalStore(
+    subscribe,
+    () => reactPanel.mode.get(),
+    () => reactPanel.mode.get(),
   );
+  const setMode = useCallback((mode: EditorMode) => reactPanel.mode.set(mode), [reactPanel]);
 
   return {
     mode,

@@ -256,13 +256,12 @@ Slash plugin:
 
 ## 11. Contribution ownership table
 
-| Contribution | Где хранится | Кто использует | Как удаляется |
-| --- | --- | --- | --- |
-| blocks | `BlockRegistry` | runtime и renderers | registry disposer |
-| commands | `CommandRegistry` | UI/plugins/host | command handle dispose |
-| events | `EventRouter` | renderer dispatch | router disposer |
-| blockEvents | `EventRouter` by block type | router dispatch | router disposer |
-| slashItems | installed plugin metadata | slash plugin query | plugin record removal |
-| ui | `UIRegistry` | renderer | registry disposer |
-| setup resource | внешний owner | plugin-specific | returned cleanup |
-
+| Contribution   | Где хранится                | Кто использует      | Как удаляется          |
+| -------------- | --------------------------- | ------------------- | ---------------------- |
+| blocks         | `BlockRegistry`             | runtime и renderers | registry disposer      |
+| commands       | `CommandRegistry`           | UI/plugins/host     | command handle dispose |
+| events         | `EventRouter`               | renderer dispatch   | router disposer        |
+| blockEvents    | `EventRouter` by block type | router dispatch     | router disposer        |
+| slashItems     | installed plugin metadata   | slash plugin query  | plugin record removal  |
+| ui             | `UIRegistry`                | renderer            | registry disposer      |
+| setup resource | внешний owner               | plugin-specific     | returned cleanup       |

@@ -1,4 +1,6 @@
+import type { ReactEditorApi } from "../../../../../editor/types";
 /** Keyboard registration for backward block merging at a content boundary. */
+import { createBlockBehaviorContext } from "../../../../../block-behaviors/utils/context";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -7,9 +9,6 @@ import {
   readKeyboardSelection,
   shouldDeleteSelection,
 } from "../../../../../managers";
-import type { ReactEditor } from "../../../../../types";
-import { createBlockViewContext } from "../../../../../views/context";
-import { dispatchViewAction } from "../../../../../views/dispatch";
 
 /**
  * Registers backward merge behavior for Backspace at offset zero.
@@ -17,24 +16,34 @@ import { dispatchViewAction } from "../../../../../views/dispatch";
  * @param reactEditor - Runtime receiving the keyboard binding.
  * @returns No value.
  */
-export function registerBackwardBlockMerge(reactEditor: ReactEditor): void {
-  reactEditor.keyboard.register({
-    id: KEYBOARD_BINDING_IDS.blockMergeBackward,
-    keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
-    when: ({ raw: event, blockId }) =>
-      isEditableKeyboardEvent(event) &&
-      !shouldDeleteSelection(readKeyboardSelection(reactEditor.selection, reactEditor, blockId)),
-  }, ({ root, blockId }) => {
-    const target = firstKeyboardTarget(readKeyboardSelection(reactEditor.selection, reactEditor, blockId));
-    if (!target?.collapsed || target.offset !== 0) return false;
-    const context = createBlockViewContext(reactEditor, target.blockId, root, reactEditor.selection.get());
-    if (!context) return false;
-    return dispatchViewAction(
-      reactEditor.views.resolve(context.block.id),
-      reactEditor.views.fallback,
-      "onMergeBackward",
-      context,
-      target,
-    );
-  });
+export function registerBackwardBlockMerge(reactEditor: ReactEditorApi): void {
+  reactEditor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockMergeBackward,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockMergeBackward],
+      when: ({ reactPanel, raw: event, blockId }) =>
+        isEditableKeyboardEvent(event) &&
+        !shouldDeleteSelection(
+          readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+        ),
+    },
+    ({ reactPanel, root, blockId }) => {
+      const target = firstKeyboardTarget(
+        readKeyboardSelection(reactPanel.selection, reactPanel.blocks, blockId),
+      );
+      if (!target?.collapsed || target.offset !== 0) {
+        return false;
+      }
+      const context = createBlockBehaviorContext(
+        reactPanel,
+        target.blockId,
+        root,
+        reactPanel.selection.get(),
+      );
+      if (!context) {
+        return false;
+      }
+      return reactPanel.editor.blockBehaviors.dispatch("onMergeBackward", context, target);
+    },
+  );
 }

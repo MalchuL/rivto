@@ -11,7 +11,7 @@ state, но пока не видит, как collaborative document вообще
 ```text
 CRDT storage
   → DocumentModelImpl
-  → EditorRuntime
+  → DocumentEditor
   → React binding
   → renderer
   → DOM
@@ -23,13 +23,13 @@ CRDT storage
 
 ## Порядок чтения
 
-| Глава | Что изучаем | Главные файлы |
-| --- | --- | --- |
-| [00](./00-two-directions.md) | Архитектурные слои и два data flows | общая карта проекта |
-| [01](./01-materializing-document.md) | CRDT containers → detached `Block[]` | `document-model.ts`, document types |
-| [02](./02-subscription-pipeline.md) | CRDT update → runtime revision → React render | `rivto-editor.ts`, React binding |
-| [03](./03-render-resolution.md) | block type → definition → mode renderer → DOM | `block-registry.ts`, `renderers.tsx` |
-| [04](./04-mutation-round-trip.md) | DOM event → command → transaction и debugging | runtime commands и renderers |
+| Глава                                | Что изучаем                                   | Главные файлы                        |
+| ------------------------------------ | --------------------------------------------- | ------------------------------------ |
+| [00](./00-two-directions.md)         | Архитектурные слои и два data flows           | общая карта проекта                  |
+| [01](./01-materializing-document.md) | CRDT containers → detached `Block[]`          | `document-model.ts`, document types  |
+| [02](./02-subscription-pipeline.md)  | CRDT update → runtime revision → React render | `rivto-editor.ts`, React binding     |
+| [03](./03-render-resolution.md)      | block type → definition → mode renderer → DOM | `block-registry.ts`, `renderers.tsx` |
+| [04](./04-mutation-round-trip.md)    | DOM event → command → transaction и debugging | runtime commands и renderers         |
 
 ## Одна мысль заранее
 
@@ -64,7 +64,7 @@ src/store/
     └── types/document.ts             Block, Link, Snapshot
 
 src/editor/
-├── editor/rivto-editor.ts            commands и invalidation stream
+├── editor/document-editor.ts            commands и invalidation stream
 ├── blocks/
 │   ├── block-definition.ts           presentation contract
 │   └── block-registry.ts             type → definition/renderer

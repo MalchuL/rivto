@@ -2,11 +2,11 @@
 
 ## `EventManager`
 
-`reactEditor.events` держит один delegated transport на active surface realm вместо listener на каждом block.
+`runtime.events` владеет общим delegated transport и маршрутизирует события к зарегистрированным отображениям. `reactPanel.events` — локальный PanelEventManager: он использует root и cleanup своего отображения.
 
 ### Properties
 
-Public properties отсутствуют. Private state: ordered registrations, connected native listener groups, current `root` и claimed native events.
+Public properties отсутствуют. Private state: ordered registrations и claimed native events. DOMEventListeners группирует и подключает native listeners; runtime.panels хранит корни, active/default отображения и начало pointer-жеста.
 
 ### `register(definition, listener)`
 
@@ -16,18 +16,21 @@ Public properties отсутствуют. Private state: ordered registrations, 
 
 Definition задаёт `id`, `type`, optional `target`, `scope`, `mode`, `capture`, `passive`, `when`. Default target — `surface`.
 
-Handler получает `EditorEvent` со properties `raw`, `editor`, `root`, `mode`, `selection`, `eventTarget`, `insideRoot`, `blockElement`, `blockId`, `contentElement`. Return `true` claims event, прекращает дальнейший Rivto dispatch и вызывает `preventDefault()` для cancelable native event.
+Handler получает `EditorEvent` со properties `raw`, `panel`, `root`, `mode`, `selection`, `eventTarget`, `insideRoot`, `blockElement`, `blockId`, `contentElement`. Return `true` claims event, прекращает дальнейший Rivto dispatch и вызывает `preventDefault()` для cancelable native event.
 
 ### Остальные methods
 
 - `delete(id)` принимает registration ID, возвращает `boolean`, не throws для missing ID.
-- `setRoot(root)` принимает `HTMLElement | null`, возвращает `void`, disconnects old realm и reconnects surface/document/window listeners; throws после destroy, кроме final `null` cleanup.
-- `getRoot()` возвращает current element или `null`.
-- `destroy()` возвращает `void`, повторно безопасен.
+- `ReactPanel.setRoot(root)` принимает `HTMLElement | null` и обновляет root конкретного отображения через его контроллер; общие surface/document/window listeners переподключаются через реестр. Этот lifecycle method остаётся у контроллера панели и не входит в `ReactPanelApi`; ref поверхности получает его от владельца панели.
+- `reactPanel.getRoot()` возвращает root этого отображения или `null`.
+- `runtime.panels.getActive()` возвращает последнее активированное отображение либо undefined до первого взаимодействия.
+- `runtime.panels.getDefault()` выбирает full-document view, затем первое subtree. Fallback явно записывается вызывающим кодом: `getActive() ?? getDefault()`.
+- `reactPanel.getSurfaceType()` возвращает mode отображаемой поверхности, а без root — mode панели.
+- `EventManager.destroy()` возвращает `void`, повторно безопасен; shared runtime вызывает его при cleanup. Consumer API `runtime.events` предоставляет только `register` и `delete`.
 
 ### Modes
 
-Registration без `mode` работает в обеих surfaces. `mode: "block"`, `"edgeless"` или array фильтруется на dispatch по актуальному core mode. При switch root заменяется, поэтому window/document listeners также переходят в realm нового surface document.
+Registration без `mode` работает в обеих surfaces. `mode: "block"`, `"edgeless"` или array фильтруется на dispatch по поверхности отображения, получившего событие. При switch root заменяется, поэтому window/document listeners также переходят в realm нового surface document.
 
 Scope означает:
 
