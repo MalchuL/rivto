@@ -221,6 +221,34 @@ test("clipboard remaps destination collisions, while transfer and independent un
   await f.destroy();
 });
 
+test("persists a large inserted subtree without scanning its placement once per block", async () => {
+  const f = await fixture();
+  const model = f.a.getDocument();
+  const readNode = jestApi.spyOn(model.blocks, "getBlockNode");
+  f.a.blocks.insertBlock({
+    id: "bulk-parent",
+    type: "paragraph",
+    children: Array.from({ length: 70 }, (_, index) => ({
+      id: `bulk-child-${index}`,
+      type: "paragraph",
+      content: `child ${index}`,
+    })),
+  });
+  expect(readNode).not.toHaveBeenCalled();
+  expect(f.database.blocks.get("bulk-parent")?.get("A")?.childIds).toHaveLength(70);
+  expect(f.database.blocks.get("bulk-child-69")?.get("A")?.content).toBe("child 69");
+  f.a.history.clear();
+  readNode.mockClear();
+  f.a.blocks.removeBlock("bulk-parent");
+  expect(readNode).not.toHaveBeenCalled();
+  expect(f.database.blocks.get("bulk-parent")?.get("A")).toBeUndefined();
+  expect(f.database.blocks.get("bulk-child-69")?.get("A")).toBeUndefined();
+  f.a.history.undo();
+  expect(f.database.blocks.get("bulk-parent")?.get("A")?.childIds).toHaveLength(70);
+  expect(f.database.blocks.get("bulk-child-69")?.get("A")?.content).toBe("child 69");
+  await f.destroy();
+});
+
 test.each([10, 2000])(
   "persists one edited row without forest reads or lookup notifications for %i blocks",
   async (count) => {

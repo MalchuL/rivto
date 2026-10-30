@@ -4,11 +4,15 @@ import {
   DocumentBlockManager,
   DocumentElementManager,
   DocumentModelImpl,
+  type Block,
   type BlockInput,
   type BlockNode,
   type ElementNode,
   type ElementInput,
 } from "@chulane/document-model";
+
+/** Batch size at which one tree read replaces repeated block placement scans. */
+const BULK_BLOCK_PERSISTENCE_THRESHOLD = 64;
 
 type EntityKind = "block" | "element";
 interface IndexedRecord {
@@ -256,11 +260,35 @@ class DBBlockManager extends DocumentBlockManager {
     ids.forEach((id) => this.changedIds.add(id));
     return ids;
   }
-  /** @returns Nothing after persisting changed rows once all hierarchy observers have finished. */
+  /**
+   * Persists changed rows once all hierarchy observers have finished.
+   *
+   * Large batches traverse the placed tree once; smaller batches read only their
+   * changed nodes. Missing or unplaced records remove their database rows.
+   *
+   * @returns Changed block rows and lookup membership reflect the transaction.
+   */
   flushChanges(): void {
     const ids = [...this.changedIds];
     this.changedIds.clear();
-    ids.forEach((id) => this.getDatabase().saveBlock(this.documentId, id, this.getBlockNode(id)));
+    if (ids.length < BULK_BLOCK_PERSISTENCE_THRESHOLD) {
+      ids.forEach((id) => this.getDatabase().saveBlock(this.documentId, id, this.getBlockNode(id)));
+      return;
+    }
+    const changed = new Set(ids);
+    const nodes = new Map<string, BlockNode>();
+    const pending: Block[] = this.getBlocks();
+    while (pending.length) {
+      const block = pending.pop()!;
+      for (const child of block.children) {
+        pending.push(child);
+      }
+      if (changed.has(block.id)) {
+        const { children, ...fields } = block;
+        nodes.set(block.id, { ...fields, childIds: children.map((child) => child.id) });
+      }
+    }
+    ids.forEach((id) => this.getDatabase().saveBlock(this.documentId, id, nodes.get(id)));
   }
 }
 
