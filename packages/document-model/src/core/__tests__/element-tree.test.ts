@@ -94,6 +94,37 @@ it("invalidates only the changed recursive branch and observes both parents afte
   await model.destroy();
 });
 
+it("isolates element notification kinds when IDs resemble channel names", async () => {
+  const model = new DocumentModelImpl(new YjsDoc("element-listener-keys"));
+  model.elements.insertElement({ ...shape, id: "membership" });
+  model.elements.insertElement({ ...shape, id: "node:membership" });
+  const treeChanged = jest.fn();
+  const nodeChanged = jest.fn();
+  const other = jest.fn();
+  const membership = jest.fn();
+  const structure = jest.fn();
+  const changed = jest.fn();
+  const release = model.elements.subscribeElement("membership", treeChanged);
+  model.elements.subscribeElementNode("membership", nodeChanged);
+  model.elements.subscribeElement("node:membership", other);
+  model.elements.subscribeMembership(membership);
+  model.elements.subscribeStructure(structure);
+  model.elements.subscribe(changed);
+
+  model.elements.updateElement("membership", { props: { text: "changed" } });
+  expect(treeChanged).toHaveBeenCalledTimes(1);
+  expect(nodeChanged).toHaveBeenCalledTimes(1);
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(other).not.toHaveBeenCalled();
+  expect(membership).not.toHaveBeenCalled();
+  expect(structure).not.toHaveBeenCalled();
+  release();
+  model.elements.updateElement("membership", { props: { text: "again" } });
+  expect(treeChanged).toHaveBeenCalledTimes(1);
+  expect(nodeChanged).toHaveBeenCalledTimes(2);
+  await model.destroy();
+});
+
 it("refreshes cached ancestors after remote edits and subtree removal", async () => {
   const a = new YjsDoc("tree-peers");
   const b = new YjsDoc("tree-peers");
