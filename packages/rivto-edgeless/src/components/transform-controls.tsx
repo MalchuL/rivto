@@ -70,6 +70,7 @@ function useTransformControls({ canvas, plane, adapter }: CanvasTransformControl
   const measurementIds = useRef(new WeakMap<Element, string>());
   const moveable = useRef<Moveable>(null);
   const [targets, setTargets] = useState<HTMLElement[]>([]);
+  const [resizing, setResizing] = useState(false);
   const selectedId = selection.length === 1 ? selection[0] : undefined;
   const capabilities = getControlCapabilities(canvas);
   const interactive =
@@ -88,15 +89,64 @@ function useTransformControls({ canvas, plane, adapter }: CanvasTransformControl
     [canvas, adapter],
   );
   useControlTargets(canvas, plane, adapter, moveable, measurements, measurementIds, setTargets);
-  useControlHandle(adapter, moveable, setTargets, modifiers.setAlt, modifiers.setShift);
+  useControlHandle(
+    adapter,
+    moveable,
+    setTargets,
+    modifiers.setAlt,
+    modifiers.setShift,
+    setResizing,
+  );
   useControlAccessibility(moveable, targets, selectedId, capabilities, adapter);
   const snapping = useControlSnapping(canvas, adapter, plane, moveable, groupAngle, modifiers);
   const events = new CanvasControlEvents(canvas, adapter, targets, moveable, geometry, groupAngle);
+  const bindings = events.getBindings();
   return {
     moveable,
     options: {
       ...snapping,
-      ...events.getBindings(),
+      ...bindings,
+      snappable: snapping.snappable && !(resizing && groupAngle !== 0),
+      /**
+       * Applies the resize snapping policy before a single target begins resizing.
+       *
+       * @param event - Moveable's resize start event.
+       * @returns The adapter begins the resize gesture.
+       */
+      onResizeStart: (event: Parameters<typeof bindings.onResizeStart>[0]) => {
+        flushSync(() => setResizing(true));
+        bindings.onResizeStart(event);
+      },
+      /**
+       * Restores snapping after a single-target resize ends.
+       *
+       * @param event - Moveable's resize end event.
+       * @returns The adapter completes the resize gesture.
+       */
+      onResizeEnd: (event: Parameters<typeof bindings.onResizeEnd>[0]) => {
+        bindings.onResizeEnd(event);
+        setResizing(false);
+      },
+      /**
+       * Applies the resize snapping policy before a group begins resizing.
+       *
+       * @param event - Moveable's group resize start event.
+       * @returns The adapter begins the group resize gesture.
+       */
+      onResizeGroupStart: (event: Parameters<typeof bindings.onResizeGroupStart>[0]) => {
+        flushSync(() => setResizing(true));
+        bindings.onResizeGroupStart(event);
+      },
+      /**
+       * Restores snapping after a group resize ends.
+       *
+       * @param event - Moveable's group resize end event.
+       * @returns The adapter completes the group resize gesture.
+       */
+      onResizeGroupEnd: (event: Parameters<typeof bindings.onResizeGroupEnd>[0]) => {
+        bindings.onResizeGroupEnd(event);
+        setResizing(false);
+      },
       persistData: targets.length ? groupData : undefined,
       defaultGroupRotate: groupAngle,
       useDefaultGroupRotate: isGroup,
@@ -316,6 +366,7 @@ function createControlKeyboardHandler(moveable: RefObject<Moveable | null>) {
  * @param setTargets - Paints concrete targets before synchronous measurement.
  * @param setAlt - Updates snapping bypass for the admitted input sample.
  * @param setShift - Updates aspect and angle constraints for the admitted input sample.
+ * @param setResizing - Clears resize state when the host cancels a gesture.
  * @returns The adapter retains the imperative handle until effect cleanup.
  */
 function useControlHandle(
@@ -324,6 +375,7 @@ function useControlHandle(
   setTargets: Dispatch<SetStateAction<HTMLElement[]>>,
   setAlt: Dispatch<SetStateAction<boolean>>,
   setShift: Dispatch<SetStateAction<boolean>>,
+  setResizing: Dispatch<SetStateAction<boolean>>,
 ) {
   useLayoutEffect(
     () =>
@@ -355,6 +407,7 @@ function useControlHandle(
          */
         stop() {
           moveable.current?.stopDrag();
+          setResizing(false);
           moveable.current?.updateRect();
         },
       }),
