@@ -3,8 +3,7 @@ import "@chulane/rivto-page/styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import "@chulane/rivto-react/styles.css";
-import "./styles.css";
+import "./app.css";
 
 const root = document.getElementById("root");
 
