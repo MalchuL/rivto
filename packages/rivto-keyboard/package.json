@@ -29,5 +29,8 @@
   },
   "files": [
     "dist/esm"
-  ]
+  ],
+  "dependencies": {
+    "@chulane/rivto-utils": "workspace:*"
+  }
 }

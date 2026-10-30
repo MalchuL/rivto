@@ -3,6 +3,7 @@ module.exports = {
   extensionsToTreatAsEsm: [".ts", ".tsx"],
   testEnvironment: "node",
   moduleNameMapper: {
+    "^@chulane/rivto-utils$": "<rootDir>/../rivto-utils/src/index.ts",
     "^@chulane/rivto-page$": "<rootDir>/../rivto-page/src/index.ts",
     "^@chulane/rivto-edgeless/react$": "<rootDir>/../rivto-edgeless/src/react.ts",
     "^@chulane/rivto-edgeless/browser$": "<rootDir>/../rivto-edgeless/src/browser.ts",

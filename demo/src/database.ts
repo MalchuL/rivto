@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { CRDTDoc, CRDTMap, CRDTObserveEvent } from "@chulane/crdt-doc";
 import {
   DocumentBlockManager,
@@ -28,7 +29,7 @@ export class DemoDatabase {
   readonly blocks = new Map<string, Map<string, BlockNode>>();
   readonly elements = new Map<string, Map<string, ElementNode>>();
   private readonly identities = new Map<string, EntityKind>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
   private readonly index?: CRDTMap<Record<string, IndexedRecord>>;
 
   /**
@@ -37,7 +38,7 @@ export class DemoDatabase {
    */
   constructor(private readonly registry?: CRDTDoc) {
     this.index = registry?.getMap("demo.database.identities");
-    this.index?.observe(() => this.listeners.forEach((listener) => listener()));
+    this.index?.observe(() => this.listeners.emit("changed"));
   }
 
   /** @param documentId - Allocating document. @returns A locally unused candidate ID; creation reserves it before CRDT writes. */
@@ -102,10 +103,7 @@ export class DemoDatabase {
 
   /** @param listener - Block membership observer; text edits do not notify it. @returns Unsubscribe callback. */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -195,7 +193,7 @@ export class DemoDatabase {
         this.index!.set(key, { ...indexed, present: Boolean(value) });
       }
       if (!this.index) {
-        this.listeners.forEach((listener) => listener());
+        this.listeners.emit("changed");
       }
     }
   }

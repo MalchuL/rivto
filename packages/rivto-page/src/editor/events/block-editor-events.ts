@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { BlockFocusObserver } from "./block-focus-observer";
 import { BlockInputDispatcher } from "./block-input-dispatcher";
 import type {
@@ -78,7 +79,7 @@ export interface BlockEditorEventsApi {
 
 /** Observes DOM focus transitions without subscribing to document or registry changes. */
 export class BlockEditorEvents implements BlockEditorEventsApi {
-  private readonly detachListeners = new Set<() => void>();
+  private readonly detachListeners = new Listeners<{ detach: void }>();
   private readonly input: BlockInputDispatcher;
   private readonly focus: BlockFocusObserver;
   private attachment: object | undefined;
@@ -101,10 +102,7 @@ export class BlockEditorEvents implements BlockEditorEventsApi {
    */
   onDetach(listener: () => void): () => void {
     this.owner.assertActive();
-    this.detachListeners.add(listener);
-    return this.owner.registerCleanup(() => {
-      this.detachListeners.delete(listener);
-    });
+    return this.owner.registerCleanup(this.detachListeners.subscribe("detach", listener));
   }
 
   /**
@@ -197,7 +195,11 @@ export class BlockEditorEvents implements BlockEditorEventsApi {
       }
       this.attachment = undefined;
       const errors: unknown[] = [];
-      for (const release of [...this.detachListeners, detachInput, detachFocus]) {
+      for (const release of [
+        ...this.detachListeners.snapshot("detach"),
+        detachInput,
+        detachFocus,
+      ]) {
         try {
           release();
         } catch (error) {

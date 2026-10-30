@@ -1271,7 +1271,8 @@ test("edits visual properties immediately and enters text editing on double-clic
   await content.dblclick();
   await expect(content).toHaveAttribute("contenteditable", "true");
   await expect(content).toBeFocused();
-  await expect(content).toHaveText("");
+  await expect(content).toHaveText("Text");
+  await page.keyboard.press("Control+a");
   await page.keyboard.type("Draft");
   await page.keyboard.press("Control+a");
   await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe("Draft");

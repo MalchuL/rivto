@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { BlockDropFeedback } from "./block-drop-feedback";
 import type { DropSurface, DropSurfaceRegistry } from "./drop-surface-registry";
 import type { ResolvedBlockDropTarget } from "./types";
@@ -5,7 +6,7 @@ import type { ResolvedBlockDropTarget } from "./types";
 /** Owns one receiving registration, feedback, and cancellation subscriptions. */
 export class BlockDropReceiver<T extends DropSurface> {
   private readonly feedback: BlockDropFeedback;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ detach: void }>();
   private readonly unregister: () => void;
   private disposed = false;
 
@@ -41,10 +42,7 @@ export class BlockDropReceiver<T extends DropSurface> {
       listener();
       return () => {};
     }
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("detach", listener);
   }
 
   /**
@@ -71,7 +69,7 @@ export class BlockDropReceiver<T extends DropSurface> {
       return;
     }
     this.disposed = true;
-    const listeners = [...this.listeners];
+    const listeners = this.listeners.snapshot("detach");
     this.listeners.clear();
     const errors: unknown[] = [];
     for (const release of [this.unregister, () => this.feedback.clear(), ...listeners]) {

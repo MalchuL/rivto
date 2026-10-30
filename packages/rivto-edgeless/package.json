@@ -35,7 +35,8 @@
     "demo:test": "playwright test --config demo/playwright.config.ts --workers=12"
   },
   "dependencies": {
-    "react-moveable": "^0.56.0"
+    "react-moveable": "^0.56.0",
+    "@chulane/rivto-utils": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18 <20",

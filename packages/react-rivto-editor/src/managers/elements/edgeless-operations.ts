@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { EdgelessCreationDefaults } from "./edgeless-creation-defaults";
 import type { CreationDefaultsScope, ElementCreationDefaults } from "./creation-defaults-types";
 import { ChildrenPanel } from "@chulane/rivto";
@@ -49,7 +50,7 @@ export class EdgelessOperations {
   }
 
   private readonly selection;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
   private unsubscribeDocument?: () => void;
   private unsubscribeTypes?: () => void;
   private revision = 0;
@@ -342,8 +343,7 @@ export class EdgelessOperations {
    * @returns Subscription disposer; destroy also releases this listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -930,7 +930,7 @@ export class EdgelessOperations {
    */
   private emit(): void {
     this.revision += 1;
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("changed");
   }
 
   /**

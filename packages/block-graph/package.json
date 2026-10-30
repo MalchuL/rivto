@@ -23,7 +23,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@chulane/graph-runtime": "workspace:*"
+    "@chulane/graph-runtime": "workspace:*",
+    "@chulane/rivto-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

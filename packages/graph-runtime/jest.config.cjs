@@ -3,7 +3,10 @@ module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   testMatch: ["**/?(*.)+(spec|test).ts"],
-  moduleNameMapper: { "^(\\.{1,2}/.*)\\.js$": "$1" },
+  moduleNameMapper: {
+    "^@chulane/rivto-utils$": "<rootDir>/../rivto-utils/src/index.ts",
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
   transform: {
     "^.+\\.ts$": [
       "<rootDir>/../crdt-doc/jest-transformer.cjs",
