@@ -41,6 +41,8 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "reports/**",
+      ".agents/skills/hallmark/**",
+      ".hallmark/**",
       "**/encore.gen/**",
       "**/encore.gen.ts",
       "**/next-env.d.ts",

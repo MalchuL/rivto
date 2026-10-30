@@ -10,6 +10,8 @@
 playwright-report/
 test-results/
 /reports/
+/.agents/skills/hallmark/
+/.hallmark/
 **/pnpm-lock.yaml
 **/encore.gen/
 **/encore.gen.ts

@@ -142,6 +142,7 @@ for (const mode of ["block", "edgeless"] as const) {
       await page.locator('[data-editor-mode="edgeless"]').click();
       await page.getByRole("button", { name: "Zoom out", exact: true }).click();
       await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+      await page.evaluate(() => window.scrollTo(0, 0));
     }
     const first = page.locator(`[data-block-id="${ids.siblings[0]}"]`).first();
     const second = page.locator(`[data-block-id="${ids.siblings[1]}"]`).first();

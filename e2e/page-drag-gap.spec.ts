@@ -214,6 +214,7 @@ test("drops a block after the last root container", async ({ page }) => {
   const betaId = await beta.getAttribute("data-block-id");
   const boardId = await board.getAttribute("data-block-id");
   await holdDragAt(page, alpha, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const boardBox = (await board.boundingBox())!;
     return { x: boardBox.x + CHILD_DROP_INDENT / 2, y: boardBox.y + boardBox.height + 12 };
   });
@@ -298,6 +299,7 @@ test("drops a block before the first root container", async ({ page }) => {
     { alphaId, betaId, boardId },
   );
   await holdDragAt(page, beta, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const current = (await board.boundingBox())!;
     return { x: current.x + CHILD_DROP_INDENT / 2, y: current.y - 12 };
   });
@@ -695,9 +697,8 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     const parent = page.locator(`[data-block-id="${scenario.parentId}"]`).first();
     const source = page.locator(`[data-block-id="${scenario.sourceId}"]`).first();
     await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
-    const parentRow = parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await holdDragAt(page, source, async () => {
-      await parentRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
       const box = (await parent.boundingBox())!;
       return { x: box.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
     });
@@ -891,8 +892,11 @@ test("does not add an ordinary block directly to an empty kanban", async ({ page
     .first();
   const alphaId = await alpha.getAttribute("data-block-id");
   const board = page.locator(`[data-block-id="${boardId}"]`).first();
-  const box = (await board.boundingBox())!;
-  await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
+  await holdDragAt(page, alpha, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    const box = (await board.boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height * 0.7 };
+  });
   await expect(board).not.toHaveAttribute("data-block-drop-active", "true");
   await expect(board.locator('[data-block-drop-active="true"]')).toHaveCount(0);
   await page.mouse.up();

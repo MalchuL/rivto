@@ -596,7 +596,11 @@ async function measurePanelMarquee(page: Page, canvas: Locator) {
       { once: true },
     );
   });
-  await page.mouse.move(bounds.x + bounds.width - 10, bounds.y + Math.min(bounds.height - 10, 500));
+  const viewport = page.viewportSize()!;
+  await page.mouse.move(
+    Math.min(bounds.x + bounds.width - 10, viewport.width - 10),
+    Math.min(bounds.y + bounds.height - 10, bounds.y + 500, viewport.height - 10),
+  );
   await page.mouse.up();
   await expect
     .poll(() =>
