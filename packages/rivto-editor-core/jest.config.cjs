@@ -5,6 +5,7 @@ module.exports = {
   testMatch: ["**/__tests__/**/*.+(ts|tsx|js)", "**/?(*.)+(spec|test).+(ts|tsx|js)"],
   testPathIgnorePatterns: ["<rootDir>/src/.stuff/"],
   moduleNameMapper: {
+    "^@chulane/rivto-utils$": "<rootDir>/../rivto-utils/src/index.ts",
     "^@chulane/crdt-doc$": "<rootDir>/../crdt-doc/src/index.ts",
     "^@chulane/document-model$": "<rootDir>/../document-model/src/index.ts",
     "^@/(.*)$": "<rootDir>/src/$1",

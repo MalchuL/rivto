@@ -1,0 +1,26 @@
+{
+  "name": "@chulane/rivto-utils",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist/esm"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --out-dir dist/esm",
+    "check-types": "tsc --noEmit",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "dev": "tsup src/index.ts --format esm --dts --sourcemap --out-dir dist/esm --watch"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "5.8.3"
+  }
+}

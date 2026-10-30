@@ -1,3 +1,5 @@
+import { Listeners } from "@chulane/rivto-utils";
+
 import {
   matchesShortcut,
   parseShortcut,
@@ -51,7 +53,7 @@ export class HeldKeys {
     altKey: false,
     shiftKey: false,
   };
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
 
   /**
    * Updates physical state before shortcut dispatch.
@@ -67,9 +69,7 @@ export class HeldKeys {
       this.keys.set(id, event);
     }
     this.reconcile(event);
-    for (const listener of [...this.listeners]) {
-      listener();
-    }
+    this.listeners.emit("changed");
   }
 
   /**
@@ -94,9 +94,7 @@ export class HeldKeys {
       altKey: modifiers.altKey,
       shiftKey: modifiers.shiftKey,
     };
-    for (const listener of [...this.listeners]) {
-      listener();
-    }
+    this.listeners.emit("changed");
   }
 
   /**
@@ -106,9 +104,7 @@ export class HeldKeys {
    */
   reset(): void {
     this.keys.clear();
-    for (const listener of [...this.listeners]) {
-      listener();
-    }
+    this.listeners.emit("changed");
     this.reconcile({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false });
   }
 
@@ -119,10 +115,7 @@ export class HeldKeys {
    * @returns Disposer removing this observer.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**

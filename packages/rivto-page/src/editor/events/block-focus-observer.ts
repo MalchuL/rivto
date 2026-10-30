@@ -1,10 +1,11 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { BlockEditorResourceOwner } from "../extensions/block-editor-resource-owner";
 import type { BlockEditorEventType } from "./block-editor-events";
 import { BlockInputListeners } from "./block-input-listeners";
 
 /** Observes occurrence focus boundaries and reconciles focus acquired before attachment. */
 export class BlockFocusObserver {
-  private readonly listeners = new Map<BlockEditorEventType, Set<(event: FocusEvent) => void>>();
+  private readonly listeners = new Listeners<Record<BlockEditorEventType, FocusEvent>>();
   private readonly native = new BlockInputListeners();
 
   /**
@@ -37,19 +38,8 @@ export class BlockFocusObserver {
    */
   on(type: BlockEditorEventType, listener: (event: FocusEvent) => void): () => void {
     this.owner.assertActive();
-    let listeners = this.listeners.get(type);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(type, listeners);
-    }
     const callback = (event: FocusEvent) => listener(event);
-    listeners.add(callback);
-    return this.owner.registerCleanup(() => {
-      listeners.delete(callback);
-      if (listeners.size === 0) {
-        this.listeners.delete(type);
-      }
-    });
+    return this.owner.registerCleanup(this.listeners.subscribe(type, callback));
   }
 
   /**
@@ -98,17 +88,7 @@ export class BlockFocusObserver {
     if ((event.target && !this.owns(root, event.target)) || this.owns(root, event.relatedTarget)) {
       return;
     }
-    const errors: unknown[] = [];
-    for (const listener of [...(this.listeners.get(type) ?? [])]) {
-      try {
-        listener(event);
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "Block editor event notification failed");
-    }
+    this.listeners.emitAndCollectErrors(type, "Block editor event notification failed", event);
   }
 
   /**

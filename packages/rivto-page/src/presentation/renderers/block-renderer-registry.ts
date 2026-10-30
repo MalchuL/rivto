@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { BlockEditorResourceOwner } from "../../editor/extensions/block-editor-resource-owner";
 import type { BlockRenderer, BlockRendererRegistration } from "./types";
 
@@ -5,7 +6,7 @@ import type { BlockRenderer, BlockRendererRegistration } from "./types";
 export class BlockRendererRegistry {
   private readonly components = new Map<string, BlockRendererRegistration>();
   private fallback: BlockRendererRegistration | undefined;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
 
   /**
    * Binds registrations and subscriptions to the editor's resource lifecycle.
@@ -81,10 +82,7 @@ export class BlockRendererRegistry {
   subscribe(listener: () => void): () => void {
     this.owner.assertActive();
     const callback = () => listener();
-    this.listeners.add(callback);
-    return this.owner.registerCleanup(() => {
-      this.listeners.delete(callback);
-    });
+    return this.owner.registerCleanup(this.listeners.subscribe("changed", callback));
   }
 
   /**
@@ -94,16 +92,6 @@ export class BlockRendererRegistry {
    * @throws AggregateError containing listener failures after all notifications.
    */
   private notify(): void {
-    const errors: unknown[] = [];
-    for (const listener of [...this.listeners]) {
-      try {
-        listener();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "Block renderer notification failed");
-    }
+    this.listeners.emitAndCollectErrors("changed", "Block renderer notification failed");
   }
 }

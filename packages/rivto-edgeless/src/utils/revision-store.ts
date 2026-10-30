@@ -1,6 +1,8 @@
+import { Listeners } from "@chulane/rivto-utils";
+
 /** Small observable revision used by presentation registries. */
 export class RevisionStore {
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
   private value = 0;
 
   /**
@@ -19,8 +21,7 @@ export class RevisionStore {
    * @returns A function that removes the listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -30,7 +31,7 @@ export class RevisionStore {
    */
   changed(): void {
     this.value += 1;
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("changed");
   }
 
   /**

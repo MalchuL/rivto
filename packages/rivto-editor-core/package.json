@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@chulane/document-model": "workspace:*",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "@chulane/rivto-utils": "workspace:*"
   }
 }

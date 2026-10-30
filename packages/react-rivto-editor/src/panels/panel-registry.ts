@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { RegistrationOwner } from "../managers/extensions/types";
 import type { DocumentModel } from "@chulane/document-model";
 import type { EditorMode, SelectionManagerApi } from "@chulane/rivto";
@@ -44,13 +45,10 @@ export class PanelRegistry {
     private readonly selection: Pick<SelectionManagerApi, "clear">,
     private readonly extensions: Pick<RegistrationOwner, "assertActive">,
   ) {}
-  private readonly rootListeners = new Set<() => void>();
+  private readonly rootListeners = new Listeners<{ changed: void }>();
   /** Observes root registration changes without observing document edits. */
   subscribeRoots(listener: () => void): () => void {
-    this.rootListeners.add(listener);
-    return () => {
-      this.rootListeners.delete(listener);
-    };
+    return this.rootListeners.subscribe("changed", listener);
   }
   /**
    * Returns the API of the last activated panel registered with this document editor.
@@ -340,6 +338,6 @@ export class PanelRegistry {
    * Notifies subscribers that the set of mounted panel roots changed.
    */
   private notifyRootsChanged(): void {
-    this.rootListeners.forEach((listener) => listener());
+    this.rootListeners.emit("changed");
   }
 }

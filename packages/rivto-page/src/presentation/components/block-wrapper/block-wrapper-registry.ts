@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { BlockEditorResourceOwner } from "../../../editor/extensions/block-editor-resource-owner";
 import type { BlockWrapperRegistration, BlockWrapperEntry, BlockWrapperRegistryApi } from "./types";
 
@@ -8,7 +9,7 @@ export class BlockWrapperRegistry implements BlockWrapperRegistryApi {
   /** Distinct keys keep repeated component registrations independently removable. */
   private nextId = 0;
   /** Independent subscriber closures, including duplicate caller callbacks. */
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
 
   /**
    * Binds registrations and subscriptions to their editor's resource owner.
@@ -82,10 +83,7 @@ export class BlockWrapperRegistry implements BlockWrapperRegistryApi {
   subscribe(listener: () => void): () => void {
     this.owner.assertActive();
     const callback = () => listener();
-    this.listeners.add(callback);
-    return this.owner.registerCleanup(() => {
-      this.listeners.delete(callback);
-    });
+    return this.owner.registerCleanup(this.listeners.subscribe("changed", callback));
   }
 
   /**
@@ -95,16 +93,6 @@ export class BlockWrapperRegistry implements BlockWrapperRegistryApi {
    * @throws AggregateError containing listener failures after all notifications.
    */
   private notify(): void {
-    const errors: unknown[] = [];
-    for (const listener of [...this.listeners]) {
-      try {
-        listener();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "Block wrapper notification failed");
-    }
+    this.listeners.emitAndCollectErrors("changed", "Block wrapper notification failed");
   }
 }

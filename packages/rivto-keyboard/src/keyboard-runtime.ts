@@ -1,3 +1,5 @@
+import { Listeners } from "@chulane/rivto-utils";
+
 import { matchesShortcut, parseShortcut, type ParsedShortcut } from "./shortcut";
 import type {
   KeyboardInput,
@@ -37,7 +39,7 @@ export class KeyboardRuntime<
   private keymap: KeymapOverrides;
   private snapshot: readonly S[] = [];
   private value = 0;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
   private destroyed = false;
 
   /**
@@ -157,10 +159,7 @@ export class KeyboardRuntime<
    * @returns Function that removes the subscription.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -317,9 +316,7 @@ export class KeyboardRuntime<
         .map((other) => other.id),
     }));
     this.value += 1;
-    for (const listener of [...this.listeners]) {
-      listener();
-    }
+    this.listeners.emit("changed");
   }
 
   /**

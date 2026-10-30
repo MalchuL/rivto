@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extension";
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
 import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
@@ -79,8 +80,8 @@ export class ReactPanel implements ReactPanelApi {
   private root: HTMLElement | null = null;
   private enabled = true;
   private snapshot: PanelSnapshot = { status: "loading" };
-  private readonly listeners = new Set<() => void>();
-  private readonly deactivationListeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
+  private readonly deactivationListeners = new Listeners<{ changed: void }>();
   private readonly registrations = new Set<() => void>();
   private unregisterRoot: (() => void) | undefined;
   private unsubscribeBlock: (() => void) | undefined;
@@ -234,10 +235,7 @@ export class ReactPanel implements ReactPanelApi {
 
   /** Observes availability changes. @param listener - Loading-state observer. @returns Unsubscribe callback. */
   readonly subscribeAvailability = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("changed", listener);
   };
 
   /**
@@ -271,10 +269,7 @@ export class ReactPanel implements ReactPanelApi {
 
   /** @param listener - Closes transient UI when another panel becomes active. @returns Unsubscribe callback. */
   readonly subscribeDeactivation = (listener: () => void): (() => void) => {
-    this.deactivationListeners.add(listener);
-    return () => {
-      this.deactivationListeners.delete(listener);
-    };
+    return this.deactivationListeners.subscribe("changed", listener);
   };
 
   /**
@@ -388,7 +383,7 @@ export class ReactPanel implements ReactPanelApi {
 
   /** @returns Nothing after notifying local transient UI that this panel lost focus. */
   private readonly deactivate = (): void => {
-    this.deactivationListeners.forEach((listener) => listener());
+    this.deactivationListeners.emit("changed");
   };
 
   /**
@@ -468,6 +463,6 @@ export class ReactPanel implements ReactPanelApi {
    */
   private readonly publishSnapshot = (nextSnapshot: PanelSnapshot): void => {
     this.snapshot = nextSnapshot;
-    this.listeners.forEach((listener) => listener());
+    this.listeners.emit("changed");
   };
 }

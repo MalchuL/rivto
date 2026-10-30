@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { BlockDropDestination } from "../src";
 import { BlockSelectionRanges } from "../src/editor/selection/block-selection-ranges";
 import type { BlockSelectionSnapshot } from "../src/editor/selection/types";
@@ -23,7 +24,8 @@ export interface DemoMetrics {
 /** In-memory example host; its snapshots outlive view remounts. */
 export class DemoAdapter implements BlockEditorAdapter {
   private readonly nodes = new Map<string, DemoNodeSnapshot>();
-  private readonly listeners = new Map<string, Set<() => void>>();
+  /** Keys identify block nodes, selected block IDs, or the block-ids and selection-snapshot channels. */
+  private readonly listeners = new Listeners<Record<string, void>>();
   private blockIds: readonly string[] = [];
   private selectionSnapshot: BlockSelectionSnapshot | undefined;
   private parentIds: ReadonlyMap<string, string> | undefined;
@@ -272,10 +274,7 @@ export class DemoAdapter implements BlockEditorAdapter {
    * @returns Current read/notification counts, active subscriptions, and last synchronous command ms.
    */
   getMetrics(): DemoMetrics {
-    let subscriptions = 0;
-    for (const listeners of this.listeners.values()) {
-      subscriptions += listeners.size;
-    }
+    const subscriptions = this.listeners.listenerCount;
     return {
       nodeReads: this.nodeReads,
       blockIdsReads: this.blockIdsReads,
@@ -649,19 +648,8 @@ export class DemoAdapter implements BlockEditorAdapter {
    * @returns Idempotent disposer releasing the callback and empty source entry.
    */
   private subscribe(key: string, listener: () => void): () => void {
-    let listeners = this.listeners.get(key);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(key, listeners);
-    }
     const callback = () => listener();
-    listeners.add(callback);
-    return () => {
-      listeners.delete(callback);
-      if (!listeners.size) {
-        this.listeners.delete(key);
-      }
-    };
+    return this.listeners.subscribe(key, callback);
   }
 
   /**
@@ -671,10 +659,7 @@ export class DemoAdapter implements BlockEditorAdapter {
    * @returns All captured callbacks have run; failures propagate to the caller.
    */
   private emit(key: string): void {
-    for (const listener of [...(this.listeners.get(key) ?? [])]) {
-      this.notifications += 1;
-      listener();
-    }
+    this.listeners.emit(key);
   }
   /**
    * Stores host selection and notifies only changed membership booleans.

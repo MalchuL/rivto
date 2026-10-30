@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { createContext, useMemo, type ReactNode } from "react";
 import type { BlockEditorBlocks } from "../../adapter/types";
 import type { BlockChildPlacement } from "../components/block-layout/block-item-context";
@@ -6,7 +7,8 @@ import { useBlockEditorController } from "../hooks/use-block-editor-controller";
 /** Occurrence-local canonical neighbors with stable identity for unchanged roots. */
 class BlockRootPlacementStore {
   private placements = new Map<string, BlockChildPlacement>();
-  private readonly listeners = new Map<string, Set<() => void>>();
+  /** Placement subscribers keyed by canonical root block ID. */
+  private readonly listeners = new Listeners<Record<string, void>>();
   private release: (() => void) | undefined;
 
   /**
@@ -43,18 +45,13 @@ class BlockRootPlacementStore {
    * @returns Disposer releasing that listener and the unused shared model subscription.
    */
   subscribe = (blockId: string, listener: () => void): (() => void) => {
-    const listeners = this.listeners.get(blockId) ?? new Set<() => void>();
-    listeners.add(listener);
-    this.listeners.set(blockId, listeners);
+    const unsubscribe = this.listeners.subscribe(blockId, listener);
     if (!this.release) {
       this.release = this.blocks.subscribeBlockIds(() => this.refresh());
       this.refresh();
     }
     return () => {
-      listeners.delete(listener);
-      if (!listeners.size) {
-        this.listeners.delete(blockId);
-      }
+      unsubscribe();
       if (!this.listeners.size) {
         this.release?.();
         this.release = undefined;
@@ -86,9 +83,9 @@ class BlockRootPlacementStore {
     });
     const previous = this.placements;
     this.placements = placements;
-    for (const [blockId, listeners] of this.listeners) {
+    for (const blockId of this.listeners.keys()) {
       if (previous.get(blockId) !== placements.get(blockId)) {
-        listeners.forEach((listener) => listener());
+        this.listeners.emit(blockId);
       }
     }
   }

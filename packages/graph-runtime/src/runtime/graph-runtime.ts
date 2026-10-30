@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 /**
  * Coordinates live endpoint registration and deterministic graph execution.
  * Public contracts and pure topology logic live in neighboring modules.
@@ -27,7 +28,7 @@ import { ValueFlowExecutor } from "./value-flow";
 export class GraphRuntime {
   private readonly declarations = new Map<string, EndpointDeclaration>();
   private readonly connections = new Map<string, GraphConnection>();
-  private errorListeners = new Set<(error: GraphExecutionError) => void>();
+  private readonly errorListeners = new Listeners<{ error: GraphExecutionError }>();
   private tail: Promise<void> = Promise.resolve();
   private controller = new AbortController();
   private enabled = false;
@@ -183,8 +184,7 @@ export class GraphRuntime {
 
   /** Subscribes to delivery failures. */
   subscribeErrors(listener: (error: GraphExecutionError) => void): () => void {
-    this.errorListeners.add(listener);
-    return () => this.errorListeners.delete(listener);
+    return this.errorListeners.subscribe("error", listener);
   }
 
   /** Returns a detached, deterministically ordered topology snapshot. */
@@ -279,7 +279,7 @@ export class GraphRuntime {
 
   /** Reports a branch failure to every current listener. */
   private report(error: GraphExecutionError): void {
-    this.errorListeners.forEach((listener) => listener(error));
+    this.errorListeners.emit("error", error);
   }
 
   /** Reports whether an operation belongs to the active runner generation. */
