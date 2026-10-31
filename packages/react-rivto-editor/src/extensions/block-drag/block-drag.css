@@ -10,9 +10,9 @@
  * to native and host-defined types through the same canonical placement data.
  */
 :root {
-  --rivto-drop-indicator-thickness: 4px;
+  --rivto-drop-indicator-thickness: 2px;
   --rivto-drop-indicator-color: var(--rivto-accent);
-  --rivto-drop-indicator-radius: 2px;
+  --rivto-drop-indicator-radius: var(--rivto-radius);
   --rivto-drop-inside-background: color-mix(
     in srgb,
     var(--rivto-drop-indicator-color) 4%,

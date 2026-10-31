@@ -202,6 +202,13 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     if (edge === "inside") {
       await expect(target).toHaveAttribute("data-block-drop-active", "true");
       await expect(line).toHaveCount(0);
+      await expect(target).toHaveCSS("outline-style", "none");
+      const overlay = await target.evaluate((element) => {
+        const style = getComputedStyle(element, "::after");
+        return { radius: style.borderRadius, shadow: style.boxShadow };
+      });
+      expect(overlay.radius).toBe("12px");
+      expect(overlay.shadow).not.toBe("none");
     } else {
       await expect(line).toBeVisible();
       const lineBox = (await line.boundingBox())!;

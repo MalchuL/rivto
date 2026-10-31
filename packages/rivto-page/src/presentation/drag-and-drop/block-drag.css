@@ -26,22 +26,25 @@
   will-change: transform;
 }
 [data-block-drop-active]:not([data-block-drop-active="between"]) {
-  outline: var(--rivto-drop-indicator-thickness, 4px) solid
-    var(--rivto-drop-indicator-color, Highlight);
-  outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness, 4px));
-  border-radius: var(--rivto-drop-indicator-radius, 4px);
   background: var(--rivto-drop-inside-background, color-mix(in srgb, Highlight 8%, transparent));
 }
 
-/* Positioned opaque content can cover the shell's inset outline. Paint the same
- * frame above descendants without changing their layout or native hit testing. */
+[data-block-drop-active]:not([data-block-drop-active="between"]):not(.rivto-block) {
+  outline: var(--rivto-drop-indicator-thickness, 4px) solid
+    var(--rivto-drop-indicator-color, Highlight);
+  outline-offset: calc(-1 * var(--rivto-drop-indicator-thickness, 4px));
+  border-radius: var(--rivto-drop-indicator-radius, 0px);
+}
+
+/* Positioned opaque content can cover the shell's outline. Paint the frame above
+ * descendants without changing their layout or native hit testing. */
 .rivto-block[data-block-drop-active="true"]::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1000;
   pointer-events: none;
-  border-radius: var(--rivto-drop-indicator-radius, 4px);
+  border-radius: var(--rivto-drop-indicator-radius, 0px);
   box-shadow: inset 0 0 0 var(--rivto-drop-indicator-thickness, 4px)
     var(--rivto-drop-indicator-color, Highlight);
 }
@@ -53,7 +56,7 @@
   pointer-events: none;
   z-index: 1000;
   background: var(--rivto-drop-indicator-color, Highlight);
-  border-radius: var(--rivto-drop-indicator-radius, 4px);
+  border-radius: 0;
 }
 
 .rivto-block-drag-preview-row {

@@ -669,6 +669,7 @@ for (const mode of ["block", "edgeless"] as const) {
       .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
       .toBe("rgb(222, 217, 247)");
     await expect(parent).toHaveCSS("outline-style", "solid");
+    await expect(parent).toHaveCSS("border-radius", "12px");
     await expect(child).toHaveCSS("outline-style", "none");
     await expect(child).toHaveCSS("background-color", "rgb(222, 217, 247)");
     await expect(page.locator(blockIdSelector("unselected-child"))).toHaveCSS(

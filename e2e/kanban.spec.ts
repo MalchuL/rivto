@@ -47,7 +47,7 @@ async function move(
     const line = (await indicator.boundingBox())!;
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
-    expect(line.width).toBe(4);
+    expect(line.width).toBe(2);
     expect(line.x + line.width / 2).toBeCloseTo(
       position === "after" ? column.x + column.width : column.x,
       0,
