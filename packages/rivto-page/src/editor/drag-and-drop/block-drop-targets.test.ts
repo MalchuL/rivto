@@ -2,6 +2,7 @@ import { BlockEditorController } from "../block-editor-controller";
 import { TestBlockEditorAdapter } from "../../test-utils/test-block-editor-adapter";
 import type { BlockDropRegion, BlockDropTargetRegistration } from "./types";
 import { sameOutlineBoundary } from "./block-drop-layout-geometry";
+import { dropEdgeRect, readDropGeometry } from "./block-drop-region-geometry";
 
 let adapter: TestBlockEditorAdapter;
 let editor: BlockEditorController;
@@ -190,6 +191,65 @@ it("partitions terminal depth explicitly and honors RTL", () => {
     parentId: "a",
   });
 });
+
+it("retains a negative configured indentation when calculating an edge", () => {
+  item.style.setProperty("--rivto-block-indent", "-10px");
+  const bounds = dropEdgeRect(
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 1, destinations: [destination] },
+    },
+    readDropGeometry(item),
+  );
+  expect(bounds.left).toBe(10);
+  expect(bounds.width).toBe(190);
+});
+
+it.each(["", "Infinity", "-Infinity"])(
+  "uses the default for non-finite indentation %s",
+  (value) => {
+    item.style.setProperty("--rivto-block-indent", value);
+    const bounds = dropEdgeRect(
+      {
+        kind: "edge",
+        side: "block-end",
+        destination,
+        depth: { ancestors: 1, destinations: [destination] },
+      },
+      readDropGeometry(item),
+    );
+    expect(bounds.left).toBe(-28);
+    expect(bounds.width).toBe(228);
+  },
+);
+
+it.each(["ltr", "rtl"] as const)(
+  "respects zero indentation and child offset in %s",
+  (direction) => {
+    item.style.setProperty("--rivto-block-indent", "0px");
+    item.style.setProperty("--rivto-block-drop-child-offset", "16px");
+    item.style.direction = direction;
+    const inside = { kind: "inside", parentId: "a" } as const;
+    register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        destination,
+        depth: { ancestors: 0, destinations: [destination, inside] },
+      },
+    ]);
+    adapter.setNode("a");
+    const point = (offset: number) => (direction === "rtl" ? 200 - offset : offset);
+    expect(editor.dropTargets.resolve(point(15), 99, undefined, item)?.destination).toEqual(
+      destination,
+    );
+    expect(editor.dropTargets.resolve(point(16), 99, undefined, item)?.destination).toEqual(inside);
+    item.style.setProperty("--rivto-block-drop-child-offset", "0px");
+    expect(editor.dropTargets.resolve(point(1), 99, undefined, item)?.destination).toEqual(inside);
+  },
+);
 
 it.each(["ltr", "rtl"] as const)(
   "uses the child offset to extend the sibling placement band in %s",

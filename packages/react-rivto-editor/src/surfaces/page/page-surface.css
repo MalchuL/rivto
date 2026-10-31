@@ -21,11 +21,14 @@
   /* Drop calculation: adds pointer distance before a gap selects a child, expanding
    * the sibling band. Set to 0 to select a child at --rivto-block-indent from the
    * drop region's start; positive values are added to that distance. Highlight: none;
-   * the child line stays at its indentation level. */
-  --rivto-block-drop-child-offset: 0px;
+   * the child line stays at its indentation level. Setting this to the same value
+   * as --rivto-block-drop-line-inset aligns the child-placement threshold with the
+   * start of the child insertion line when the gap offers child placement. */
+  --rivto-block-drop-child-offset: 12px;
   /* --rivto-drop-target-size defaults to 12px when omitted. Drop calculation:
    * sets edge target thickness, bounded by the block's size and content area.
    * Highlight: none; line thickness uses --rivto-drop-indicator-thickness. */
+  --rivto-drop-target-size: 12px;
 }
 
 .page-surface {
