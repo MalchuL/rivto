@@ -6,6 +6,30 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Container = "outline" | "columns" | "kanban" | "bento" | "table" | "todo-storage";
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`zero indentation uses the configured child threshold in ${mode}`, async ({ page }) => {
+    await load(page, "outline", mode);
+    const target = page.locator('[data-block-id="first"]');
+    await target.evaluate((element) => {
+      const surface = element.closest<HTMLElement>(".page-surface, .edgeless-viewport")!;
+      surface.style.setProperty("--rivto-block-indent", "0px");
+      surface.style.setProperty("--rivto-drop-target-size", "12px");
+      surface.style.setProperty("--rivto-block-drop-child-offset", "16px");
+      surface.style.setProperty("--rivto-block-drop-line-inset", "0px");
+    });
+    const first = (await target.boundingBox())!;
+    const last = (await page.locator('[data-block-id="last"]').boundingBox())!;
+    const y = (first.y + first.height + last.y) / 2;
+    await startDrag(page);
+    await page.mouse.move(first.x + 8, y);
+    const siblingLine = await expectBoundaryLine(page);
+    await page.mouse.move(first.x + 18, y);
+    const childLine = await expectBoundaryLine(page);
+    expect(siblingLine.x).toBeCloseTo(first.x, 1);
+    expect(childLine.x).toBeCloseTo(first.x, 1);
+    await page.mouse.up();
+    await expect.poll(() => readChildIds(page, "first")).toEqual(["source"]);
+  });
+
   for (const type of ["root", "outline", "columns", "kanban", "todo-storage"] as const) {
     test(`terminal nesting keeps its depth above and below the line in ${type}, ${mode}`, async ({
       page,
@@ -639,7 +663,7 @@ for (const mode of ["block", "edgeless"] as const) {
       (element) =>
         parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")) || 28,
     );
-    const x = first.x + indent + 2;
+    const x = first.x + indent + 14;
     for (let y = first.y + first.height - 2; y <= last.y + 2; y += 0.25) {
       await page.mouse.move(x, y);
       const line = await expectBoundaryLine(page);
@@ -654,7 +678,7 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.mouse.move(first.x + dx, middle);
         const line = await expectBoundaryLine(page);
         expect(line.y + line.height / 2).toBeCloseTo(middle, 1);
-        const child = dx >= indent;
+        const child = dx >= indent + 12;
         expect(line.x).toBeCloseTo(first.x + 12 + (child ? indent : 0), 1);
         depths.push(child ? 1 : 0);
       }
@@ -990,8 +1014,8 @@ for (const padding of [12, 56]) {
       await expect(line, `offset=${offset}`).toHaveCount(1);
       const box = (await line.boundingBox())!;
       expect(box.y + box.height / 2).toBeCloseTo(first.y, 1);
-      expect(box.x).toBeCloseTo(first.x, 1);
-      expect(box.width).toBeCloseTo(first.width, 1);
+      expect(box.x).toBeCloseTo(first.x + 12, 1);
+      expect(box.width).toBeCloseTo(first.width - 12, 1);
     }
     expect(await surface.boundingBox()).toEqual(before);
     await page.mouse.up();
@@ -1301,8 +1325,8 @@ for (const mode of ["block", "edgeless"] as const) {
           const line = page.locator(".rivto-block-drop-line:visible");
           await expect(line).toHaveCount(1);
           const indicator = (await line.boundingBox())!;
-          expect(indicator.x).toBeCloseTo(bounds.x, 1);
-          expect(indicator.width).toBeCloseTo(bounds.width, 1);
+          expect(indicator.x).toBeCloseTo(bounds.x + 12, 1);
+          expect(indicator.width).toBeCloseTo(bounds.width - 12, 1);
         }
         await page.mouse.up();
         await expect
@@ -1549,7 +1573,7 @@ for (const mode of ["block", "edgeless"] as const) {
         const indent = await block.evaluate((element) =>
           parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
         );
-        const point = { x: box.x + indent + 2, y: box.y + box.height - 1 };
+        const point = { x: box.x + indent + 14, y: box.y + box.height - 1 };
         if (location === "gap") {
           point.y += 6;
         } else if (location === "gutter") {
@@ -1602,8 +1626,8 @@ async function sweepBoundaryDepth(
   indent: number,
   contentInset: number,
 ) {
-  for (const offset of [2, indent + 2, indent + 66, indent + 100, 2]) {
-    const depth = offset < indent ? 0 : 1;
+  for (const offset of [2, indent + 2, indent + 11, indent + 12, indent + 66, 2]) {
+    const depth = offset < indent + 12 ? 0 : 1;
     for (const y of ys) {
       await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, y);
       const line = page.locator(".rivto-block-drop-line:visible");
@@ -1631,7 +1655,7 @@ async function expectPaintedBoundary(page: Page, outlineId?: string) {
   const box = (await line.boundingBox())!;
   const expected = await line.evaluate((element, outline) => {
     const style = getComputedStyle(element);
-    const color = outline ? style.outlineColor : style.backgroundColor;
+    const color = outline ? getComputedStyle(element, "::after").boxShadow : style.backgroundColor;
     return color.match(/\d+/g)!.map(Number);
   }, Boolean(outlineId));
   const png = await page.screenshot({ scale: "css", animations: "disabled" });
@@ -1649,7 +1673,7 @@ async function expectPaintedBoundary(page: Page, outlineId?: string) {
     },
     {
       source: `data:image/png;base64,${png.toString("base64")}`,
-      x: Math.floor(box.x + (outlineId ? 2 : box.width / 2)),
+      x: Math.floor(box.x + (outlineId ? 1 : box.width / 2)),
       y: Math.floor(box.y + box.height / 2),
     },
   );
@@ -1737,7 +1761,7 @@ for (const mode of ["block", "edgeless"] as const) {
           );
           await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2);
           await expectInsideOutline(page, "first");
-          const offset = child ? indent + 2 : 2;
+          const offset = child ? indent + 14 : 2;
           await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, middle);
           await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
           await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
@@ -1913,7 +1937,7 @@ for (const mode of ["block", "edgeless"] as const) {
             box.x + box.width / 2,
             initialHost.x + initialHost.width - 1,
           ]) {
-            let expectedLine = box;
+            let expectedLine = { ...box, x: box.x + 12, width: box.width - 12 };
             if (end && offset <= 8) {
               await page.mouse.move(x, edge - 1);
               expectedLine = await expectBoundaryLine(page);
@@ -2009,8 +2033,8 @@ for (const mode of ["block", "edgeless"] as const) {
           await expectBoundaryLine(page);
           const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
           expect(line.y + line.height / 2).toBeCloseTo((a.y + a.height + b.y) / 2, 1);
-          expect(line.x).toBeCloseTo(a.x, 1);
-          expect(line.width).toBeCloseTo(a.width, 1);
+          expect(line.x).toBeCloseTo(a.x + 12, 1);
+          expect(line.width).toBeCloseTo(a.width - 12, 1);
         }
       }
       await page.mouse.up();

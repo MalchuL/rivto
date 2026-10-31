@@ -211,7 +211,7 @@ for (const [wrapped, rtl] of [
       expect(
         wrapped ? indicator.y + indicator.height / 2 : indicator.x + indicator.width / 2,
       ).toBeCloseTo(center, 0);
-      expect(wrapped ? indicator.height : indicator.width).toBe(4);
+      expect(wrapped ? indicator.height : indicator.width).toBe(2);
     }
     await page.mouse.move(wrapped ? b.x + 12 : center, wrapped ? center : b.y + b.height / 2, {
       steps: 6,

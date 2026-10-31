@@ -100,7 +100,7 @@ for (const container of [null, "bento", "kanban", "todo-storage"]) {
     const bottom = await preceding.evaluate((element) => element.getBoundingClientRect().bottom);
     const x = await preceding.evaluate((element) => element.getBoundingClientRect().left + 3);
     const line = page.locator(".rivto-block-drop-line:visible");
-    for (const indent of [0, 24]) {
+    for (const indent of [0, 24, 36]) {
       await verifyBoundary(page, line, x + indent, bottom);
     }
     await page.mouse.move(x, bottom + 2);

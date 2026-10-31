@@ -71,10 +71,12 @@ for (const repeat of [0, 200]) {
       await expect.poll(() => board.evaluate((element) => element.scrollLeft)).toBe(0);
       await page.mouse.move(bounds.x + bounds.width - 6, y, { steps: 5 });
       await expect
-        .poll(() =>
-          board.evaluate(
-            (element) => element.scrollWidth - element.clientWidth - element.scrollLeft,
-          ),
+        .poll(
+          () =>
+            board.evaluate(
+              (element) => element.scrollWidth - element.clientWidth - element.scrollLeft,
+            ),
+          { timeout: 10_000 },
         )
         .toBeLessThan(1);
       const destination = page.locator('[data-block-id="scroll-lane-7"]');

@@ -775,7 +775,9 @@ for (const [repeat, canvas] of [
     expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
       false,
     );
-    expect(Math.abs((await line.boundingBox())!.x - rect.x)).toBeLessThan(2);
+    expect(Math.abs((await line.boundingBox())!.x - (rect.x + (canvas ? 8.4 : 12)))).toBeLessThan(
+      2,
+    );
     // The reference's top edge sorts it; its row center may accept children.
     await page.mouse.move(x, rect.y + 1);
     await expect(line).toHaveCount(1);
@@ -907,10 +909,10 @@ for (const [repeat, canvas] of [
       for (const y of [box.y + box.height - 1, (box.y + box.height + after.y) / 2, after.y + 1]) {
         await page.mouse.move(box.x + 12 * scale, y, { steps: 10 });
         await expect(line).toHaveCount(1);
-        expect(Math.abs((await line.boundingBox())!.x - box.x)).toBeLessThan(2);
-        await page.mouse.move(box.x + 36 * scale, y);
+        expect(Math.abs((await line.boundingBox())!.x - (box.x + 12 * scale))).toBeLessThan(2);
+        await page.mouse.move(box.x + 38 * scale, y);
         await expect(line).toHaveCount(1);
-        expect(Math.abs((await line.boundingBox())!.x - (box.x + 24 * scale))).toBeLessThan(2);
+        expect(Math.abs((await line.boundingBox())!.x - (box.x + 36 * scale))).toBeLessThan(2);
         await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
           "data-block-drop-active",
           "true",

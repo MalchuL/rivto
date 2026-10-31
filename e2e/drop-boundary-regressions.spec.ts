@@ -97,7 +97,7 @@ for (const mode of ["block", "edgeless"] as const) {
     const line = page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
     await expect(line).toHaveCSS("background-color", "rgb(80, 56, 179)");
-    await expect(line).toHaveCSS("height", "4px");
+    await expect(line).toHaveCSS("height", "2px");
     const upper = (await line.boundingBox())!;
     await page.mouse.move(child.x + 2, child.y + 1);
     await expect.poll(async () => (await line.boundingBox())?.y).toBe(upper.y);
@@ -159,7 +159,7 @@ for (const mode of ["block", "edgeless"] as const) {
         .locator('[data-block-id="child"] > .rivto-block-row')
         .boundingBox())!;
       const tail = (await page.locator('[data-block-id="tail"] > .rivto-block-row').boundingBox())!;
-      const x = (nested ? child.x : parent.x) + 2;
+      const x = nested ? child.x + 14 : parent.x + 2;
       await page.mouse.move(x, child.y + child.height - 1);
       const line = page.locator(".rivto-block-drop-line:visible");
       await expect(line).toBeVisible();
