@@ -129,6 +129,46 @@ interface NearbyBlock {
 /** Maps native DOM ranges to host-owned portable block selection. */
 export class BlockDOMSelection {
   /**
+   * Resolves a plain-text character offset back to a live DOM `{ node, offset }`.
+   *
+   * Inverse of {@link readPosition}:
+   * - `readPosition`: live `(Text|Element Node, offset)` → `{ blockId, offset }`
+   * - `pointAtOffset`: `{ blockId, offset }` → live `(Text Node, offset)` again
+   *
+   * Walks Text nodes under `content` in document order and subtracts each
+   * node's length until `requestedOffset` lands inside one. That Node is what
+   * `Selection.setBaseAndExtent` / `Range.setStart` need — not the parent
+   * HTMLElement (unless the block has no text).
+   *
+   * @param content - Editable `[data-block-content]` HTMLElement to walk.
+   * @param requestedOffset - UTF-16 offset from the start of that content's text.
+   * @returns A Node (usually Text) plus offset inside it.
+   */
+  static pointAtOffset(content: HTMLElement, requestedOffset: number): DOMPoint {
+    // SHOW_TEXT → only Text nodes ("hello"), skipping Element tags in between.
+    const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
+    let remaining = Math.max(0, requestedOffset);
+    let last: Node | undefined;
+    let point: DOMPoint | undefined;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      last = node;
+      const length = node.textContent?.length ?? 0;
+      if (remaining <= length) {
+        point = { node, offset: remaining };
+        break;
+      }
+      remaining -= length;
+    }
+    // Past the end → clamp to last Text node; empty content → content Element.
+    if (!point) {
+      point = last
+        ? { node: last, offset: last.textContent?.length ?? 0 }
+        : { node: content, offset: 0 };
+    }
+    return point;
+  }
+
+  /**
    * Binds DOM conversion to host-owned ordering and text lengths.
    *
    * @param selection - Borrowed selection data capability.
@@ -720,46 +760,6 @@ export class BlockDOMSelection {
     }
     // Empty block: no Text children — use the content HTMLElement as the Node.
     return best ?? { node: content, offset: 0, content };
-  }
-
-  /**
-   * Resolves a plain-text character offset back to a live DOM `{ node, offset }`.
-   *
-   * Inverse of {@link readPosition}:
-   * - `readPosition`: live `(Text|Element Node, offset)` → `{ blockId, offset }`
-   * - `pointAtOffset`: `{ blockId, offset }` → live `(Text Node, offset)` again
-   *
-   * Walks Text nodes under `content` in document order and subtracts each
-   * node's length until `requestedOffset` lands inside one. That Node is what
-   * `Selection.setBaseAndExtent` / `Range.setStart` need — not the parent
-   * HTMLElement (unless the block has no text).
-   *
-   * @param content - Editable `[data-block-content]` HTMLElement to walk.
-   * @param requestedOffset - UTF-16 offset from the start of that content's text.
-   * @returns A Node (usually Text) plus offset inside it.
-   */
-  private static pointAtOffset(content: HTMLElement, requestedOffset: number): DOMPoint {
-    // SHOW_TEXT → only Text nodes ("hello"), skipping Element tags in between.
-    const walker = content.ownerDocument.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
-    let remaining = Math.max(0, requestedOffset);
-    let last: Node | undefined;
-    let point: DOMPoint | undefined;
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      last = node;
-      const length = node.textContent?.length ?? 0;
-      if (remaining <= length) {
-        point = { node, offset: remaining };
-        break;
-      }
-      remaining -= length;
-    }
-    // Past the end → clamp to last Text node; empty content → content Element.
-    if (!point) {
-      point = last
-        ? { node: last, offset: last.textContent?.length ?? 0 }
-        : { node: content, offset: 0 };
-    }
-    return point;
   }
 
   /**

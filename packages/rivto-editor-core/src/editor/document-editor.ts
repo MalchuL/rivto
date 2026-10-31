@@ -7,6 +7,7 @@ import {
   BlockManager,
   BlockRegistryManager,
   ClipboardManager,
+  CollaborationManager,
   CommandRegistry,
   ElementManager,
   HistoryManager,
@@ -44,6 +45,8 @@ export class DocumentEditor implements DocumentEditorAPI {
   readonly history: HistoryManager;
   /** Framework-neutral structured and plain-text clipboard operations. */
   readonly clipboard: ClipboardManager;
+  /** Headless transient participants belonging to this editor. */
+  readonly collaboration: CollaborationManager;
   /** Named subscribers notified whenever public runtime state changes. */
   private readonly listeners = new Listeners<{ editorChanged: void }>();
   /** Owned subscription cleanup callbacks called during `destroy()`. */
@@ -71,6 +74,7 @@ export class DocumentEditor implements DocumentEditorAPI {
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);
+    this.collaboration = new CollaborationManager(this.document);
     this.unsubscribeFns.push(
       this.blockRegistry.subscribe(() => this.notifyChanges()),
       this.document.subscribe(() => this.notifyChanges()),
@@ -156,6 +160,7 @@ export class DocumentEditor implements DocumentEditorAPI {
       }
     };
     this.unsubscribeFns.splice(0).forEach((unsubscribe) => run(unsubscribe));
+    run(() => this.collaboration.destroy());
     run(() => this.elements.destroy());
     run(() => this.elementRegistry.destroy());
     run(() => this.blocks.destroy());

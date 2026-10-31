@@ -10,3 +10,5 @@ export * from "./block-registry-manager";
 export * from "./element-manager";
 export * from "./mode-manager";
 export * from "./element-registry";
+
+export * from "./collaboration";

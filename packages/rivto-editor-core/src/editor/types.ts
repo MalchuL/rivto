@@ -7,6 +7,7 @@ import type {
   BlockListPropsManagerApi,
   BlockRegistryManagerApi,
   ClipboardManagerApi,
+  CollaborationManagerApi,
   CommandRegistryApi,
   ElementManagerApi,
   HistoryManagerApi,
@@ -31,6 +32,8 @@ export interface CreateDocumentEditorOptions {
  * commands, selection, history, snapshots, and document subscriptions.
  */
 export interface DocumentEditorAPI {
+  /** Headless participants published independently from local editor selection and focus. */
+  readonly collaboration: CollaborationManagerApi;
   /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
   readonly elementRegistry: ElementRegistry;
   /** Typed block operations. */

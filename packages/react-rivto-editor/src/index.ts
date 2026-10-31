@@ -304,3 +304,7 @@ export { useEdgelessTools } from "./surfaces/edgeless/edgeless-tools-context";
 
 export { RegisteredSurface } from "./surfaces/registered-surface";
 export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
+export {
+  collaborationExtension,
+  type CollaborationUser,
+} from "./extensions/collaboration/extension";
