@@ -30,6 +30,18 @@ const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 // Single-line text in this alphabet cannot form Markdown syntax or GFM links.
 const PLAIN_TEXT_SOURCE = /^[\p{L}\p{N}][\p{L}\p{N} -]*$/u;
 
+/** Reuses one configured highlighter across independent synchronous Markdown renders. */
+const highlightCode = rehypeHighlight({ detect: true, plainText: ["text", "txt", "plaintext"] });
+
+/**
+ * Supplies the shared syntax-highlighting transformer to a Markdown processor.
+ *
+ * @returns The configured transformer for the current processor.
+ */
+function rehypeSharedHighlight() {
+  return highlightCode;
+}
+
 /**
  * Renders ordinary text directly and parses Markdown when syntax is possible.
  *
@@ -53,16 +65,7 @@ const MarkdownPreview = memo(function MarkdownPreview({
       components={components}
       urlTransform={transformUrl}
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[
-        rehypeCodeFenceMetadata,
-        [
-          rehypeHighlight,
-          {
-            detect: true,
-            plainText: ["text", "txt", "plaintext"],
-          },
-        ],
-      ]}
+      rehypePlugins={[rehypeCodeFenceMetadata, rehypeSharedHighlight]}
       skipHtml
     >
       {source}

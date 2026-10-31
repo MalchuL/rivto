@@ -43,6 +43,37 @@ describe("document reactivity", () => {
     },
   );
 
+  test.each([10, 2000])(
+    "checks insertion collisions without enumerating %i existing block IDs",
+    async (count) => {
+      const doc = new YjsDoc("insertion-collision-cost");
+      const model = new DocumentModelImpl(doc);
+      model.loadSnapshot({
+        version: 9,
+        blocks: Array.from({ length: count }, (_, index) => ({
+          id: `existing-${index}`,
+          type: "paragraph",
+          content: "",
+          props: {},
+          listProps: {},
+          pluginData: {},
+          children: [],
+        })),
+        elements: [],
+        pluginData: {},
+      });
+      const keys = jest.spyOn(doc.doc.getMap("rivto.editor.blocks"), "keys");
+      model.blocks.insertBlock({ id: "new", type: "paragraph" });
+      expect(model.blocks.getBlockNode("new")?.id).toBe("new");
+      expect(() => model.blocks.insertBlock({ id: "existing-0", type: "paragraph" })).toThrow(
+        "already exists",
+      );
+      expect(keys).not.toHaveBeenCalled();
+      keys.mockRestore();
+      await model.destroy();
+    },
+  );
+
   test("checks child presence for placed blocks", () => {
     const doc = new YjsDoc("has-children-reactivity");
     const model = new DocumentModelImpl(doc);
