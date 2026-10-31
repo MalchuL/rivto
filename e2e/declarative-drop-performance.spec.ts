@@ -132,6 +132,9 @@ for (const placement of [
       const box = (await region.boundingBox())!;
       let x = box.x + (intoBlock ? box.width / 2 : Math.min(12, box.width / 2));
       let y = intoBlock ? box.y + box.height / 2 : box.y - 2;
+      if (placement === "between") {
+        x = box.x + Math.min(4, box.width / 2);
+      }
       if (placement === "column") {
         x = box.x + box.width / 2;
       }

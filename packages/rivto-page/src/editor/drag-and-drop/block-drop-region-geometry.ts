@@ -10,6 +10,9 @@ import type {
   ResolvedBlockDropTarget,
 } from "./types";
 
+/** Outline indentation in local CSS pixels when the configured value is not finite. */
+const DEFAULT_BLOCK_INDENT = 28;
+
 /** Viewport bounds used without constructing browser-only DOMRect objects. */
 export interface BlockDropBounds {
   readonly left: number;
@@ -48,6 +51,17 @@ export interface BlockDropGeometry {
   readonly style: CSSStyleDeclaration;
   readonly scaleX: number;
   readonly scaleY: number;
+}
+
+/**
+ * Reads the outline indentation, preserving an explicitly configured zero.
+ *
+ * @param style - Computed style of the current drop anchor.
+ * @returns Local indentation in CSS pixels, defaulting to 28 when unset or not finite.
+ */
+function dropIndent(style: CSSStyleDeclaration): number {
+  const value = Number.parseFloat(style.getPropertyValue("--rivto-block-indent"));
+  return Number.isFinite(value) ? value : DEFAULT_BLOCK_INDENT;
 }
 
 /**
@@ -203,7 +217,7 @@ export function dropEdgeRect(
   const end = region.side.endsWith("end");
   const rtl = style.direction === "rtl";
   if (block) {
-    const indent = (parseFloat(style.getPropertyValue("--rivto-block-indent")) || 28) * scaleX;
+    const indent = dropIndent(style) * scaleX;
     const extra = (region.depth?.ancestors ?? 0) * indent;
     return dropBounds(
       rect.left - (rtl ? 0 : extra),
@@ -247,8 +261,7 @@ export function dropRegionTarget(
     Math.max(0, parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-line-inset")) || 0) *
     geometry.scaleX;
   if (region.depth?.destinations.length) {
-    const indent =
-      (parseFloat(geometry.style.getPropertyValue("--rivto-block-indent")) || 28) * geometry.scaleX;
+    const indent = dropIndent(geometry.style) * geometry.scaleX;
     const rtl = geometry.style.direction === "rtl";
     const offset = rtl ? rect.right - point.x : point.x - rect.left;
     const childOffset =
@@ -258,9 +271,10 @@ export function dropRegionTarget(
       ) * geometry.scaleX;
     const level = dropOutlineLevel(
       region.depth.destinations,
-      offset / indent,
+      offset,
+      indent,
       geometry.continuesOutline,
-      childOffset / indent,
+      childOffset,
     );
     destination = region.depth.destinations[level]!;
     width = Math.max(0, rect.width - level * indent);
@@ -296,14 +310,16 @@ export function dropRegionTarget(
  * bypass this calculation and continue accepting inside drops independently.
  *
  * @param destinations - Nonempty ordered outline bands from the edge declaration.
- * @param offset - Pointer displacement in indentation units, already accounting for scale and RTL.
+ * @param offset - Pointer displacement in viewport CSS pixels, accounting for RTL.
+ * @param indent - Viewport-scaled indentation, which may be zero.
  * @param continuesOutline - False for a local child layout; omission defaults to outline continuation.
- * @param childInset - Extra pointer distance in indentation units for the terminal child band.
+ * @param childInset - Extra pointer distance in viewport CSS pixels for the terminal child band.
  * @returns The selected nonnegative index within the eligible destination bands.
  */
 function dropOutlineLevel(
   destinations: readonly BlockDropDestination[],
   offset: number,
+  indent: number,
   continuesOutline = true,
   childInset = 0,
 ): number {
@@ -311,10 +327,22 @@ function dropOutlineLevel(
   if (!continuesOutline && last > 0 && destinations[last]?.kind === "inside") {
     last -= 1;
   }
-  if (last > 0 && destinations[last]?.kind === "inside" && offset < last + childInset) {
-    return Math.min(last - 1, Math.max(0, Math.floor(offset)));
+  // Zero indentation collapses the depth bands; only the child inset can separate the last two.
+  if (indent === 0) {
+    return last > 0 && destinations[last]?.kind === "inside" && offset < childInset
+      ? last - 1
+      : last;
   }
-  return Math.min(last, Math.max(0, Math.floor(offset)));
+  const depthOffset = offset / indent;
+  // Keep the preceding level until the pointer reaches the child band's start plus its inset.
+  if (
+    last > 0 &&
+    destinations[last]?.kind === "inside" &&
+    depthOffset < last + childInset / indent
+  ) {
+    return Math.min(last - 1, Math.max(0, Math.floor(depthOffset)));
+  }
+  return Math.min(last, Math.max(0, Math.floor(depthOffset)));
 }
 
 /**
