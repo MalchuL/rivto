@@ -1014,8 +1014,8 @@ for (const padding of [12, 56]) {
       await expect(line, `offset=${offset}`).toHaveCount(1);
       const box = (await line.boundingBox())!;
       expect(box.y + box.height / 2).toBeCloseTo(first.y, 1);
-      expect(box.x).toBeCloseTo(first.x, 1);
-      expect(box.width).toBeCloseTo(first.width, 1);
+      expect(box.x).toBeCloseTo(first.x + 12, 1);
+      expect(box.width).toBeCloseTo(first.width - 12, 1);
     }
     expect(await surface.boundingBox()).toEqual(before);
     await page.mouse.up();
@@ -1325,8 +1325,8 @@ for (const mode of ["block", "edgeless"] as const) {
           const line = page.locator(".rivto-block-drop-line:visible");
           await expect(line).toHaveCount(1);
           const indicator = (await line.boundingBox())!;
-          expect(indicator.x).toBeCloseTo(bounds.x, 1);
-          expect(indicator.width).toBeCloseTo(bounds.width, 1);
+          expect(indicator.x).toBeCloseTo(bounds.x + 12, 1);
+          expect(indicator.width).toBeCloseTo(bounds.width - 12, 1);
         }
         await page.mouse.up();
         await expect
@@ -1655,7 +1655,7 @@ async function expectPaintedBoundary(page: Page, outlineId?: string) {
   const box = (await line.boundingBox())!;
   const expected = await line.evaluate((element, outline) => {
     const style = getComputedStyle(element);
-    const color = outline ? style.outlineColor : style.backgroundColor;
+    const color = outline ? getComputedStyle(element, "::after").boxShadow : style.backgroundColor;
     return color.match(/\d+/g)!.map(Number);
   }, Boolean(outlineId));
   const png = await page.screenshot({ scale: "css", animations: "disabled" });
@@ -1673,7 +1673,7 @@ async function expectPaintedBoundary(page: Page, outlineId?: string) {
     },
     {
       source: `data:image/png;base64,${png.toString("base64")}`,
-      x: Math.floor(box.x + (outlineId ? 2 : box.width / 2)),
+      x: Math.floor(box.x + (outlineId ? 1 : box.width / 2)),
       y: Math.floor(box.y + box.height / 2),
     },
   );
@@ -1937,7 +1937,7 @@ for (const mode of ["block", "edgeless"] as const) {
             box.x + box.width / 2,
             initialHost.x + initialHost.width - 1,
           ]) {
-            let expectedLine = box;
+            let expectedLine = { ...box, x: box.x + 12, width: box.width - 12 };
             if (end && offset <= 8) {
               await page.mouse.move(x, edge - 1);
               expectedLine = await expectBoundaryLine(page);
@@ -2033,8 +2033,8 @@ for (const mode of ["block", "edgeless"] as const) {
           await expectBoundaryLine(page);
           const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
           expect(line.y + line.height / 2).toBeCloseTo((a.y + a.height + b.y) / 2, 1);
-          expect(line.x).toBeCloseTo(a.x, 1);
-          expect(line.width).toBeCloseTo(a.width, 1);
+          expect(line.x).toBeCloseTo(a.x + 12, 1);
+          expect(line.width).toBeCloseTo(a.width - 12, 1);
         }
       }
       await page.mouse.up();

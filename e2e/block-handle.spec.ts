@@ -77,7 +77,10 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
   await expect(page.getByRole("menu").getByRole("separator")).toHaveCount(4);
   await page.getByRole("menuitem", { name: "blue", exact: true }).click();
   for (const id of [ids.parent, ids.other]) {
-    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveCSS("border-radius", "4px");
+    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveCSS(
+      "border-radius",
+      "12px",
+    );
     await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveAttribute(
       "data-block-background",
       "var(--rivto-block-blue)",

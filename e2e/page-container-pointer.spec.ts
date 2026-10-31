@@ -70,7 +70,7 @@ class ContainerPointerFixture {
       const edgeY = before ? item.y : item.y + item.height;
       expect(box.x + box.width / 2).toBeCloseTo(vertical ? edgeX : item.x + item.width / 2, 0);
       expect(box.y + box.height / 2).toBeCloseTo(vertical ? item.y + item.height / 2 : edgeY, 0);
-      expect(vertical ? box.width : box.height).toBe(4);
+      expect(vertical ? box.width : box.height).toBe(2);
     } else {
       await expect(line).not.toBeVisible();
     }

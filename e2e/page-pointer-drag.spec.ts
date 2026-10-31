@@ -109,12 +109,14 @@ for (const depth of [0, 1, 2]) {
     const region = (await anchor.boundingBox())!;
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
-    await page.mouse.move(region.x + 3, region.y + region.height - 3, { steps: 10 });
+    await page.mouse.move(region.x + (depth < 2 ? 15 : 3), region.y + region.height - 3, {
+      steps: 10,
+    });
     await expect(surface.locator(".rivto-block-drag-preview")).toBeVisible();
     const line = surface.locator(".rivto-block-drop-line");
     await expect(line).toBeVisible();
     const indicator = (await line.boundingBox())!;
-    expect(indicator.x).toBeCloseTo(region.x, 0);
+    expect(indicator.x).toBeCloseTo(region.x + 12, 0);
     let boundaryY = region.y + region.height;
     if (depth >= 1) {
       const following = (await surface.locator('[data-block-id="following"]').boundingBox())!;
@@ -122,7 +124,7 @@ for (const depth of [0, 1, 2]) {
       boundaryY = (boundaryY + following.y) / 2;
     }
     expect(indicator.y + indicator.height / 2).toBeCloseTo(boundaryY, 0);
-    expect(indicator.height).toBe(4);
+    expect(indicator.height).toBe(2);
     await page.mouse.up();
     const parent = await page.evaluate(() =>
       (

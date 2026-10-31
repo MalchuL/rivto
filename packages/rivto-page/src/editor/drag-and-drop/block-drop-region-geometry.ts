@@ -273,6 +273,9 @@ export function dropRegionTarget(
       region.depth.destinations,
       offset,
       indent,
+      region.depth.ancestors,
+      !geometry.contentRect ||
+        (point.y >= geometry.contentRect.top && point.y <= geometry.contentRect.bottom),
       geometry.continuesOutline,
       childOffset,
     );
@@ -312,14 +315,18 @@ export function dropRegionTarget(
  * @param destinations - Nonempty ordered outline bands from the edge declaration.
  * @param offset - Pointer displacement in viewport CSS pixels, accounting for RTL.
  * @param indent - Viewport-scaled indentation, which may be zero.
+ * @param ancestors - Number of outer depth bands before the anchor's own siblings.
+ * @param inOwnContent - Whether the pointer is alongside the anchor's own content rather than its descendants.
  * @param continuesOutline - False for a local child layout; omission defaults to outline continuation.
- * @param childInset - Extra pointer distance in viewport CSS pixels for the terminal child band.
+ * @param childInset - Extra pointer distance in viewport CSS pixels before advancing to a deeper band.
  * @returns The selected nonnegative index within the eligible destination bands.
  */
 function dropOutlineLevel(
   destinations: readonly BlockDropDestination[],
   offset: number,
   indent: number,
+  ancestors: number,
+  inOwnContent: boolean,
   continuesOutline = true,
   childInset = 0,
 ): number {
@@ -333,16 +340,14 @@ function dropOutlineLevel(
       ? last - 1
       : last;
   }
-  const depthOffset = offset / indent;
-  // Keep the preceding level until the pointer reaches the child band's start plus its inset.
-  if (
-    last > 0 &&
-    destinations[last]?.kind === "inside" &&
-    depthOffset < last + childInset / indent
-  ) {
-    return Math.min(last - 1, Math.max(0, Math.floor(depthOffset)));
+  // Apply the same inset to every nested band so ancestor and descendant edges agree.
+  const depthOffset = (offset - childInset) / indent;
+  const level = Math.min(last, Math.max(0, Math.floor(depthOffset)));
+  // The anchor's own row keeps its sibling band; descendants retain ancestor outdents.
+  if (inOwnContent && indent > 0 && offset >= ancestors * indent) {
+    return Math.max(level, Math.min(last, ancestors));
   }
-  return Math.min(last, Math.max(0, Math.floor(depthOffset)));
+  return level;
 }
 
 /**

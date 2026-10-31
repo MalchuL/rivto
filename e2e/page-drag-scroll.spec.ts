@@ -249,7 +249,7 @@ test.describe("page drag with a scrolling window", () => {
       const line = page.locator(".rivto-block-drop-line:visible");
       await expect(line).toBeVisible();
       expect((await line.boundingBox())!.x).toBeCloseTo(
-        afterScroll.x + depth * CHILD_DROP_INDENT,
+        afterScroll.x + 12 + depth * CHILD_DROP_INDENT,
         1,
       );
 

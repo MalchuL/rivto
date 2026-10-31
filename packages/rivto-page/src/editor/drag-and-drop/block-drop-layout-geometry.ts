@@ -439,8 +439,26 @@ function resolvePair(
   ) {
     return;
   }
+  let result = merged ?? target;
+  if (
+    edge?.indicator &&
+    merged?.indicator &&
+    edge.region?.kind === "edge" &&
+    edge.region.side.endsWith("end") &&
+    previous.element !== edge.element &&
+    previous.element.contains(edge.element) &&
+    !sameOutlineBoundary(edge.destination, merged.destination)
+  ) {
+    // A declared terminal append keeps its destination while sharing the parent's seam.
+    result = {
+      ...edge,
+      indicator: horizontal
+        ? { ...edge.indicator, left: merged.indicator.left }
+        : { ...edge.indicator, top: merged.indicator.top },
+    };
+  }
   return {
-    ...(merged ?? target),
+    ...result,
     region: { kind: "gap", previous, next, axis: horizontal ? "horizontal" : "vertical" },
   };
 }
@@ -1088,7 +1106,8 @@ function gutterTarget(
  * A descendant outline edge may belong to an ancestor placement when the merged
  * destination describes the same insertion, including terminal child append.
  * Comparing after depth selection prevents an ancestor's inside choice from
- * borrowing feedback for an unrelated sibling destination.
+ * borrowing feedback for an unrelated sibling destination. A terminal child
+ * append can also match an explicitly declared inside depth of its parent.
  *
  * @param edge - Selected anchor and original declaration.
  * @param previous - Mounted preceding sibling registration.
@@ -1117,7 +1136,20 @@ function isPairEdge(
   if (owner.element === edge.element) {
     return owner.getRegions().includes(region);
   }
-  return owner.element.contains(edge.element) && sameOutlineBoundary(destination, edge.destination);
+  return (
+    owner.element.contains(edge.element) &&
+    (sameOutlineBoundary(destination, edge.destination) ||
+      owner
+        .getRegions()
+        .some(
+          (candidate) =>
+            candidate.kind === "edge" &&
+            candidate.side === region.side &&
+            candidate.depth?.destinations.some((depth) =>
+              sameOutlineBoundary(depth, edge.destination),
+            ),
+        ))
+  );
 }
 
 /**

@@ -85,7 +85,7 @@ class ContainerOutlineFixture {
     );
     const line = this.page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
-    expect((await line.boundingBox())!.x).toBeCloseTo(upper.x + (nested ? 24 : 0), 0);
+    expect((await line.boundingBox())!.x).toBeCloseTo(upper.x + 12 + (nested ? 24 : 0), 0);
     await this.page.mouse.up();
     await expect
       .poll(() =>

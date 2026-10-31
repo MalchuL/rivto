@@ -2333,6 +2333,67 @@ it("normalizes terminal child append feedback through the parent's shared siblin
   }
 });
 
+it("keeps biased depth choices consistent across nested and parent edges", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  adapter.setNode("child");
+  item.style.setProperty("--rivto-block-indent", "28px");
+  item.style.setProperty("--rivto-block-drop-child-offset", "12px");
+  const children = document.createElement("div");
+  const child = document.createElement("div");
+  child.dataset.blockId = "child";
+  child.style.setProperty("--rivto-block-indent", "28px");
+  child.style.setProperty("--rivto-block-drop-child-offset", "12px");
+  item.append(children);
+  children.append(child);
+  rect(children, 28, 40, 172, 60);
+  rect(child, 28, 40, 172, 60);
+  const next = document.createElement("div");
+  next.dataset.blockId = "b";
+  host.append(next);
+  rect(next, 0, 104);
+  const append = { kind: "between", parentId: "a", previousId: "child", nextId: null } as const;
+  const parent = register(item, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination,
+      depth: { ancestors: 0, destinations: [destination, { kind: "inside", parentId: "a" }] },
+    },
+  ]);
+  const following = register(next, [{ kind: "edge", side: "block-start", destination }]);
+  const entry = register(child, [
+    {
+      kind: "edge",
+      side: "block-end",
+      destination: append,
+      depth: {
+        ancestors: 1,
+        destinations: [destination, append, { kind: "inside", parentId: "child" }],
+      },
+    },
+  ]);
+  editor.dropTargets.registerLayout({
+    element: children,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [entry],
+  });
+  editor.dropTargets.registerLayout({
+    element: host,
+    axis: "vertical",
+    gaps: true,
+    getItems: () => [parent, following],
+  });
+  for (const [x, expected] of [
+    [30, append],
+    [42, append],
+  ] as const) {
+    const target = editor.dropTargets.resolve(x, 97, undefined, child);
+    expect(target && sameOutlineBoundary(target.destination, expected)).toBe(true);
+    expect(target?.indicator?.top).toBe(101);
+  }
+});
+
 it.each(["merged", "separate"] as const)(
   "normalizes an outdent gutter before the ancestor inset starts, boundaries=%s",
   (boundaries) => {

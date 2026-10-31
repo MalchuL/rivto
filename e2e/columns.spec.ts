@@ -266,7 +266,11 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
 
   const receivingColumn = columns.first();
   await expect(receivingColumn).toHaveAttribute("data-block-drop-active", "true");
-  await expect(receivingColumn).toHaveCSS("outline-style", "solid");
+  const shadow = await receivingColumn.evaluate(
+    (element) => getComputedStyle(element, "::after").boxShadow,
+  );
+  expect(shadow).toContain("inset");
+  expect(shadow).toContain("2px");
   const highlightBox = (await page.locator('[data-block-drop-active="true"]').boundingBox())!;
   expect(highlightBox).toEqual(await receivingColumn.boundingBox());
   await page.mouse.up();
