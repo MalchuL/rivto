@@ -1232,7 +1232,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @throws {Error} When any descendant is malformed or collides with storage.
    */
   private validateInsertedForest(blocks: readonly BlockInput[]): void {
-    validateBlockForest(blocks, { existingIds: new Set([...this.storage.keys()]) });
+    validateBlockForest(blocks, { existingIds: this.storage });
   }
 
   /**

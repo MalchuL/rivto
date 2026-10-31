@@ -17,7 +17,7 @@ export interface ValidateBlockForestOptions {
   /** When true, every block must carry id, type, content, children, and records. */
   readonly requireComplete?: boolean;
   /** IDs already present in storage that incoming supplied IDs must not collide with. */
-  readonly existingIds?: ReadonlySet<string>;
+  readonly existingIds?: Pick<ReadonlySet<string>, "has">;
 }
 
 /**
