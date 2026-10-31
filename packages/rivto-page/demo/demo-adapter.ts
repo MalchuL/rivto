@@ -648,7 +648,10 @@ export class DemoAdapter implements BlockEditorAdapter {
    * @returns Idempotent disposer releasing the callback and empty source entry.
    */
   private subscribe(key: string, listener: () => void): () => void {
-    const callback = () => listener();
+    const callback = () => {
+      this.notifications += 1;
+      listener();
+    };
     return this.listeners.subscribe(key, callback);
   }
 
