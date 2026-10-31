@@ -1,0 +1,286 @@
+{
+ "v": 1,
+ "at": "2026-10-28T19:33:26.691Z",
+ "scope": "app",
+ "summary": {
+  "fails": 77,
+  "reflex": 45,
+  "warns": 8
+ },
+ "files": {
+  "demo/src/App.tsx": {
+   "handlers": [
+    "onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}",
+    "onChange={(event) => onShowBlockNumbersChange(event.currentTarget.checked)}",
+    "onChange={(event) => onVirtualizePageOverscanChange( Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)), ) }",
+    "onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)}",
+    "onChange={(event) => void restoreReport(event)}",
+    "onChange={changeVirtualizationThreshold}",
+    "onClick={() => editor.history.undo()}",
+    "onClick={() => editor.selection.delete()}",
+    "onClick={() => switchMode(\"block\")}",
+    "onClick={() => switchMode(\"edgeless\")}",
+    "onPresentationChange={onPresentationChange}",
+    "onShowBlockIdsChange={setShowBlockIds}",
+    "onShowBlockNumbersChange={setShowBlockNumbers}",
+    "onVirtualizePageOverscanChange={setVirtualizePageOverscan}",
+    "onVirtualizePageThresholdChange={setVirtualizePageThreshold}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/CustomGestureTool.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/DocumentsDemo.tsx": {
+   "handlers": [
+    "onClick={() => close(pane)}",
+    "onClick={() => open(id)}",
+    "onClick={() => pane.mode.set(pane.mode.get() === \"block\" ? \"edgeless\" : \"block\")}",
+    "onClick={() => setActiveTab(pane.instanceId)}",
+    "onReady={() => { const seed = runtime.seeded.get(pane.id); if (seed) { runtime.seeded.delete(pane.id); void seed.release().catch(console.error); } }}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/EditorLifecycleTest.tsx": {
+   "handlers": [
+    "onClick={() => setAbandon((value) => !value)}",
+    "onClick={() => setFail((value) => !value)}",
+    "onClick={() => setIndex((value) => 1 - value)}",
+    "onClick={() => setMounted((value) => !value)}",
+    "onClick={() => setSuspendPanels((value) => !value)}",
+    "onClick={() => { counts.failCleanup = true; }}",
+    "onClick={inspect}",
+    "onError={() => { counts.errors++; }}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/ElementRegistrationTest.tsx": {
+   "handlers": [
+    "onChange={(event) => preview({ title: event.target.value })}",
+    "onClick={() => reactPanel.editor.commands.execute(\"edgeless.visual.duplicate\", { reactPanel, payload: undefined, }) }",
+    "onClick={() => registerGroup.current?.()}",
+    "onClick={() => setMounted((value) => !value)}",
+    "onClick={() => state.editor.history.redo()}",
+    "onClick={() => state.editor.history.undo()}",
+    "onClick={() => unregister.current?.()}",
+    "onClick={() => unregisterGroup.current?.()}",
+    "onClick={() => unregisterTool.current?.()}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/KeyboardPanel.tsx": {
+   "handlers": [
+    "onApprove={(shortcut) => applyShortcut(recorder.binding, shortcut)}",
+    "onCancel={() => setRecorder(undefined)}",
+    "onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, [])}",
+    "onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, undefined)}",
+    "onClick={() => setRecorder({ binding })}",
+    "onMouseDown={(event) => { if (event.target === event.currentTarget) { onCancel(); } }}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/RevisionsPanel.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/editor-panels.tsx": {
+   "handlers": [
+    "onClick={() => openBlock(id)}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/editor-surface.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/main.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/blocks/custom-blocks.tsx": {
+   "handlers": [
+    "onBlur={finishDrag}",
+    "onChange={previewOrCommit}",
+    "onClick={increment}",
+    "onPointerCancel={discardDrag}",
+    "onPointerDown={beginDrag}",
+    "onPointerUp={finishDrag}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/extensions/block-id.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/extensions/block-number.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/extensions/mindmap/mindmap.tsx": {
+   "handlers": [
+    "onChange={(event) => change( (current) => current.map((item) => item.id === node.id ? { ...item, label: event.target.value } : item, ), false, ) }",
+    "onChange={(event) => preview({ color: event.target.value })}",
+    "onClick={(event) => { event.stopPropagation(); change( (current) => [ ...current, { id: crypto.randomUUID(), parentId: node.id, label: \"Branch\" }, ], true, ); }}",
+    "onDoubleClick={(event) => event.stopPropagation()}",
+    "onPointerDown={(event) => { event.stopPropagation(); select(); }}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "demo/src/extensions/reports/review-report.tsx": {
+   "handlers": [
+    "onAboveChange={(blocksAbove) => editing.operations.setProp(\"blocksAbove\", blocksAbove)}",
+    "onAboveChange={(elementsAbove) => update({ elementsAbove })}",
+    "onBelowChange={(blocksBelow) => editing.operations.setProp(\"blocksBelow\", blocksBelow)}",
+    "onBelowChange={(elementsBelow) => update({ elementsBelow })}",
+    "onChange={(event) => props.onIncludeReportBlockChange?.(event.currentTarget.checked)}",
+    "onChange={(event) => update({ problem: event.currentTarget.value })}",
+    "onChange={(event) => updateNumber(event, props.onAboveChange)}",
+    "onChange={(event) => updateNumber(event, props.onBelowChange)}",
+    "onClick={props.onRestore}",
+    "onClick={props.onSave}",
+    "onIncludeReportBlockChange={(includeReportBlock) => editing.operations.setProp(\"includeReportBlock\", includeReportBlock) }",
+    "onRestore={() => panel.document.load(props.snapshot!)}",
+    "onSave={() => void save()}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  }
+ },
+ "wiring": {
+  "handlers": [
+   "onAboveChange={(blocksAbove) => editing.operations.setProp(\"blocksAbove\", blocksAbove)}",
+   "onAboveChange={(elementsAbove) => update({ elementsAbove })}",
+   "onApprove={(shortcut) => applyShortcut(recorder.binding, shortcut)}",
+   "onBelowChange={(blocksBelow) => editing.operations.setProp(\"blocksBelow\", blocksBelow)}",
+   "onBelowChange={(elementsBelow) => update({ elementsBelow })}",
+   "onBlur={finishDrag}",
+   "onCancel={() => setRecorder(undefined)}",
+   "onChange={(event) => change( (current) => current.map((item) => item.id === node.id ? { ...item, label: event.target.value } : item, ), false, ) }",
+   "onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}",
+   "onChange={(event) => onShowBlockNumbersChange(event.currentTarget.checked)}",
+   "onChange={(event) => onVirtualizePageOverscanChange( Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)), ) }",
+   "onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)}",
+   "onChange={(event) => preview({ color: event.target.value })}",
+   "onChange={(event) => preview({ title: event.target.value })}",
+   "onChange={(event) => props.onIncludeReportBlockChange?.(event.currentTarget.checked)}",
+   "onChange={(event) => update({ problem: event.currentTarget.value })}",
+   "onChange={(event) => updateNumber(event, props.onAboveChange)}",
+   "onChange={(event) => updateNumber(event, props.onBelowChange)}",
+   "onChange={(event) => void restoreReport(event)}",
+   "onChange={changeVirtualizationThreshold}",
+   "onChange={previewOrCommit}",
+   "onClick={() => close(pane)}",
+   "onClick={() => editor.history.undo()}",
+   "onClick={() => editor.selection.delete()}",
+   "onClick={() => open(id)}",
+   "onClick={() => openBlock(id)}",
+   "onClick={() => pane.mode.set(pane.mode.get() === \"block\" ? \"edgeless\" : \"block\")}",
+   "onClick={() => reactPanel.editor.commands.execute(\"edgeless.visual.duplicate\", { reactPanel, payload: undefined, }) }",
+   "onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, [])}",
+   "onClick={() => reactPanel.keyboard.setKeymapOverride(binding.id, undefined)}",
+   "onClick={() => registerGroup.current?.()}",
+   "onClick={() => setAbandon((value) => !value)}",
+   "onClick={() => setActiveTab(pane.instanceId)}",
+   "onClick={() => setFail((value) => !value)}",
+   "onClick={() => setIndex((value) => 1 - value)}",
+   "onClick={() => setMounted((value) => !value)}",
+   "onClick={() => setRecorder({ binding })}",
+   "onClick={() => setSuspendPanels((value) => !value)}",
+   "onClick={() => state.editor.history.redo()}",
+   "onClick={() => state.editor.history.undo()}",
+   "onClick={() => switchMode(\"block\")}",
+   "onClick={() => switchMode(\"edgeless\")}",
+   "onClick={() => unregister.current?.()}",
+   "onClick={() => unregisterGroup.current?.()}",
+   "onClick={() => unregisterTool.current?.()}",
+   "onClick={() => { counts.failCleanup = true; }}",
+   "onClick={(event) => { event.stopPropagation(); change( (current) => [ ...current, { id: crypto.randomUUID(), parentId: node.id, label: \"Branch\" }, ], true, ); }}",
+   "onClick={increment}",
+   "onClick={inspect}",
+   "onClick={props.onRestore}",
+   "onClick={props.onSave}",
+   "onDoubleClick={(event) => event.stopPropagation()}",
+   "onError={() => { counts.errors++; }}",
+   "onIncludeReportBlockChange={(includeReportBlock) => editing.operations.setProp(\"includeReportBlock\", includeReportBlock) }",
+   "onMouseDown={(event) => { if (event.target === event.currentTarget) { onCancel(); } }}",
+   "onPointerCancel={discardDrag}",
+   "onPointerDown={(event) => { event.stopPropagation(); select(); }}",
+   "onPointerDown={beginDrag}",
+   "onPointerUp={finishDrag}",
+   "onPresentationChange={onPresentationChange}",
+   "onReady={() => { const seed = runtime.seeded.get(pane.id); if (seed) { runtime.seeded.delete(pane.id); void seed.release().catch(console.error); } }}",
+   "onRestore={() => panel.document.load(props.snapshot!)}",
+   "onSave={() => void save()}",
+   "onShowBlockIdsChange={setShowBlockIds}",
+   "onShowBlockNumbersChange={setShowBlockNumbers}",
+   "onVirtualizePageOverscanChange={setVirtualizePageOverscan}",
+   "onVirtualizePageThresholdChange={setVirtualizePageThreshold}"
+  ],
+  "links": [],
+  "fields": [],
+  "hooks": [],
+  "ids": []
+ },
+ "scripts": {},
+ "pages": {}
+}

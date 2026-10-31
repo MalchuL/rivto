@@ -1,0 +1,130 @@
+FAIL 33 demo/src/extensions/mindmap/mindmap.tsx:66 <svg> without aria-hidden or aria-label | fix: Add aria-hidden or an aria-label
+FAIL 34 demo/src/styles.css:445 width: min(420px, calc(100vw - 32p… on .keyboard-shortcut-modal (scrollbar overflow) | fix: width: 100% with container padding
+FAIL 34 packages/react-rivto-editor/src/extensions/bullet-threading/bullet-threading.css:5 width: 100vw on .rivto-bullet-threading (scrollbar overflow) | fix: width: 100% with container padding
+FAIL 34 packages/react-rivto-editor/src/surfaces/edgeless/edgeless.css:146 width: 100vw on .edgeless-card .rivto-block-row::before (scrollbar overflow) | fix: width: 100% with container padding
+FAIL 39a demo/src/extensions/reports/review-report.css:125 focus state via border on .review-report-controls input[type="number"]:focus | fix: Focus ring via outline, not border
+FAIL 39a demo/src/extensions/reports/review-report.css:177 disabled via opacity alone on .review-report-controls button:disabled | fix: Three disabled channels: fill, ink and cursor, plus the disabled attribute
+FAIL 48 demo/src/ElementRegistrationTest.tsx:89 inline-style colour literal #c7d2fe | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/mindmap/mindmap.tsx:118 inline-style colour literal #222 | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:10 colour literal #6d4aff outside tokens (--review-accent on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:11 colour literal #4f2bd4 outside tokens (--review-accent-deep on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:12 colour literal #ddd6fe outside tokens (--review-border on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:13 colour literal #241b45 outside tokens (--review-ink on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:14 colour literal #71678b outside tokens (--review-muted on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:21 colour literal rgb(109 74 255 / 10%) outside tokens (background on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:21 colour literal #fff outside tokens (background on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:21 colour literal #faf8ff outside tokens (background on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:24 colour literal rgb(46 28 105 / 9%) outside tokens (box-shadow on .review-report-block, .review…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:33 colour literal rgb(109 74 255 / 18%) outside tokens (border on .review-report-block::before,…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:35 colour literal rgb(109 74 255 / 9%) outside tokens (background on .review-report-block::before,…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:55 colour literal rgb(109 74 255 / 18%) outside tokens (box-shadow on .review-report-element[data-s…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:55 colour literal rgb(46 28 105 / 18%) outside tokens (box-shadow on .review-report-element[data-s…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:64 colour literal #e6e1f2 outside tokens (border on .review-report-problem) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:67 colour literal rgb(255 255 255 / 82%) outside tokens (background on .review-report-problem) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:79 colour literal #fff outside tokens (background on .review-report-problem:hover) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:84 colour literal #fff outside tokens (background on .review-report-problem:focus) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:85 colour literal rgb(109 74 255 / 12%) outside tokens (box-shadow on .review-report-problem:focus) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:89 colour literal #978daa outside tokens (color on .review-report-problem:empty:…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:117 colour literal #ddd6e9 outside tokens (border on .review-report-controls input…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:120 colour literal #fff outside tokens (background on .review-report-controls input…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:127 colour literal rgb(109 74 255 / 12%) outside tokens (box-shadow on .review-report-controls input…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:133 colour literal rgb(109 74 255 / 7%) outside tokens (background on .review-report-include) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:144 colour literal #d5ccef outside tokens (border on .review-report-controls button) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:146 colour literal #fff outside tokens (background on .review-report-controls button) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:162 colour literal rgb(79 43 212 / 22%) outside tokens (box-shadow on .review-report-controls butto…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:163 colour literal #fff outside tokens (color on .review-report-controls butto…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:168 colour literal rgb(79 43 212 / 16%) outside tokens (box-shadow on .review-report-controls butto…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:173 colour literal rgb(109 74 255 / 22%) outside tokens (outline on .review-report-controls butto…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:184 colour literal #b42318 outside tokens (color on .review-report-controls [role…) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:191 colour literal #eef9f2 outside tokens (background on .review-report-status) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:192 colour literal #247a48 outside tokens (color on .review-report-status) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:200 colour literal #e4deef outside tokens (border on .review-report-preview) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:202 colour literal rgb(255 255 255 / 64%) outside tokens (background on .review-report-preview) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:218 colour literal #221d30 outside tokens (background on .review-report-preview pre) | fix: Lift the value into the token block
+FAIL 48 demo/src/extensions/reports/review-report.css:219 colour literal #f4f0ff outside tokens (color on .review-report-preview pre) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:26 colour literal #70645f outside tokens (color on .demo-header) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:95 colour literal rgb(55 39 31 / 8%) outside tokens (box-shadow on .demo-toolbar-main button) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:95 colour literal rgb(255 255 255 / 80%) outside tokens (box-shadow on .demo-toolbar-main button) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:134 colour literal rgb(55 39 31 / 6%) outside tokens (box-shadow on .journal-stack) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:134 colour literal rgb(55 39 31 / 22%) outside tokens (box-shadow on .journal-stack) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:221 colour literal #555 outside tokens (color on .sync-editor-banner) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:228 colour literal #f1f3f5 outside tokens (background on .sync-editor-banner code) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:268 colour literal rgb(98 64 111 / 25%) outside tokens (box-shadow on .demo-mode-switch button[aria…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:268 colour literal rgb(255 255 255 / 28%) outside tokens (box-shadow on .demo-mode-switch button[aria…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:286 colour literal #999 outside tokens (color on .rivto-block-slot > .demo-blo…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:298 colour literal #999 outside tokens (color on .rivto-block-slot > .demo-blo…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:334 colour literal rgb(55 39 31 / 8%) outside tokens (box-shadow on .custom-counter-block) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:334 colour literal rgb(255 255 255 / 80%) outside tokens (box-shadow on .custom-counter-block) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:390 colour literal #70645f outside tokens (color on .keyboard-panel-table thead t…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:423 colour literal #9a3412 outside tokens (color on .keyboard-panel-conflict) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:431 colour literal #70645f outside tokens (color on .keyboard-panel-help, .keyboa…) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:441 colour literal rgb(20 20 20 / 35%) outside tokens (background on .keyboard-shortcut-backdrop) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:449 colour literal rgb(0 0 0 / 18%) outside tokens (box-shadow on .keyboard-shortcut-modal) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:461 colour literal #cfcfcf outside tokens (border on .keyboard-shortcut-preview) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:473 colour literal #70645f outside tokens (color on .keyboard-shortcut-hint) | fix: Lift the value into the token block
+FAIL 48 demo/src/styles.css:477 colour literal #9a3412 outside tokens (color on .keyboard-shortcut-error) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/blocks/block-modal/block-modal.css:46 colour literal rgb(9 30 66 / 30%) outside tokens (box-shadow on .rivto-block-modal-content[da…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/containers/bento/bento.css:47 colour literal rgb(9 30 66 / 8%) outside tokens (box-shadow on .rivto-bento-tile > .rivto-bl…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:49 colour literal rgb(9 30 66 / 16%) outside tokens (box-shadow on .rivto-kanban-columns > .rivt…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:82 colour literal rgb(9 30 66 / 12%) outside tokens (box-shadow on .rivto-kanban-card) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:111 colour literal rgb(255 255 255 / 45%) outside tokens (background on .rivto-kanban-add-column[data…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/edgeless/visuals/visuals.css:82 colour literal #d0ccd8 outside tokens (background on .edgeless-color-swatch[data-m…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/extensions/edgeless/visuals/visuals.css:82 colour literal #f4f2f7 outside tokens (background on .edgeless-color-swatch[data-m…) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/surfaces/edgeless/edgeless.css:111 colour literal rgb(42 34 72 / 9%) outside tokens (box-shadow on .edgeless-card) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/surfaces/edgeless/edgeless.css:167 colour literal rgb(108 92 231 / 12%) outside tokens (background on .edgeless-selection-rectangle) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/surfaces/page/page-surface.css:28 colour literal rgb(55 39 31 / 6%) outside tokens (box-shadow on .page-surface) | fix: Lift the value into the token block
+FAIL 48 packages/react-rivto-editor/src/surfaces/page/page-surface.css:28 colour literal rgb(55 39 31 / 22%) outside tokens (box-shadow on .page-surface) | fix: Lift the value into the token block
+FAIL 67 demo/src/extensions/reports/review-report.css:29 .review-report-block::before, .review-report-element::before: uppercase tracked 0.08em at 10px in a label role | fix: Labels, captions, table heads, nav links and meta are the body face (or the theme's label face), a step smaller, sentence case, untracked
+REFLEX 24b demo/src/extensions/reports/review-report.css:18 padding: 14px (off the 4px scale) on .review-report-block, .review-report-element | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:63 padding: 11px 12px (off the 4px scale) on .review-report-problem | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:107 gap: 6px (off the 4px scale) on .review-report-controls label | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:116 padding: 6px 7px (off the 4px scale) on .review-report-controls input[type="number"] | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:131 padding: 6px 8px (off the 4px scale) on .review-report-include | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:143 padding: 7px 11px (off the 4px scale) on .review-report-controls button | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:189 padding: 5px 8px (off the 4px scale) on .review-report-status | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:206 padding: 8px 10px (off the 4px scale) on .review-report-preview summary | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/extensions/reports/review-report.css:217 padding: 11px (off the 4px scale) on .review-report-preview pre | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:55 padding: 3px (off the 4px scale) on .demo-mode-switch | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:64 gap: 10px 16px (off the 4px scale) on .demo-toolbar-controls | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:65 padding-top: 14px (off the 4px scale) on .demo-toolbar-controls | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:73 gap: 6px (off the 4px scale) on .demo-block-id-toggle | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:90 padding: 6px 12px (off the 4px scale) on .demo-toolbar-main button | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:111 padding: 4px 6px (off the 4px scale) on .demo-toolbar-controls input[type="number"] | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:119 padding: 5px 9px (off the 4px scale) on .demo-toolbar-controls input[type="file"]::file-selector-button | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:226 padding: 2px 6px (off the 4px scale) on .sync-editor-banner code | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:249 padding: 10px 12px (off the 4px scale) on .multi-editor-pane .demo-header | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:253 gap: 6px (off the 4px scale) on .multi-editor-pane .demo-toolbar-controls | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:284 padding-right: 6px (off the 4px scale) on .rivto-block-slot > .demo-block-number | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:317 gap: 6px (off the 4px scale) on .custom-slider-block | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:329 padding: 6px 12px (off the 4px scale) on .custom-counter-block | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:379 padding: 6px 8px (off the 4px scale) on .keyboard-panel-table th, .keyboard-panel-table td, .revision-panel-table th, .… | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:402 gap: 6px (off the 4px scale) on .keyboard-panel-actions | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:408 padding: 3px 8px (off the 4px scale) on .keyboard-panel-key, .keyboard-panel-actions button | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:446 padding: 20px 22px (off the 4px scale) on .keyboard-shortcut-modal | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:460 padding: 10px 12px (off the 4px scale) on .keyboard-shortcut-preview | fix: Use the 4px spacing scale
+REFLEX 24b demo/src/styles.css:469 margin: 10px 0 0 (off the 4px scale) on .keyboard-shortcut-hint, .keyboard-shortcut-error | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/blocks/markdown/markdown.css:101 padding: 0 10px (off the 4px scale) on .markdown-code-header | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/blocks/markdown/markdown.css:117 padding: 10px 12px (off the 4px scale) on .markdown-code-block pre | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/components/block-handle/block-handle.css:108 gap: 5px (off the 4px scale) on .block-color-swatches | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/components/block-handle/block-handle.css:109 padding: 3px 8px 10px (off the 4px scale) on .block-color-swatches | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/elements/visuals/visuals.css:66 padding: 18px (off the 4px scale) on .edgeless-sticker-text | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/elements/visuals/visuals.css:171 padding: 2px 6px (off the 4px scale) on .edgeless-connector-label | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/bento/bento.css:9 padding: 10px 12px (off the 4px scale) on .rivto-bento-header | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/bento/bento.css:14 gap: 10px (off the 4px scale) on .rivto-bento-summary | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/columns/columns.css:13 gap: 10px (off the 4px scale) on .rivto-columns | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:14 padding: 10px 12px (off the 4px scale) on .rivto-kanban-board-header | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:19 gap: 10px (off the 4px scale) on .rivto-kanban-summary | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:32 gap: 10px (off the 4px scale) on .rivto-kanban-columns | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:52 padding: 0 0 10px (off the 4px scale) on .rivto-kanban-lane-header | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:73 gap: 10px (off the 4px scale) on .rivto-kanban-cards | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/containers/kanban/kanban.css:87 padding: 12px 10px (off the 4px scale) on .rivto-kanban-card > .rivto-block | fix: Use the 4px spacing scale
+REFLEX 24b packages/react-rivto-editor/src/extensions/todo-item/todo-item.css:58 padding: 8px 7px (off the 4px scale) on .rivto-todo-storage-header | fix: Use the 4px spacing scale
+REFLEX 26b demo/src/styles.css:1 no :active styling anywhere | fix: All eight states; guard: not a form control, no aria-disabled anywhere
+WARN 74 packages/react-rivto-editor/src/components/block-handle/block-handle.css:135 default Tailwind palette #64748b on --rivto-block-gray | fix: Mix the colour for this page in OKLCH; a stock swatch is the AI look
+WARN 74 packages/react-rivto-editor/src/components/block-handle/block-handle.css:140 default Tailwind palette #3b82f6 on --rivto-block-blue | fix: Mix the colour for this page in OKLCH; a stock swatch is the AI look
+WARN F3 demo/src/styles.css:452 no text-wrap: balance on any display head (1 head rule(s), e.g. .keyboard-shortcut-modal h2) | fix: Add text-wrap: balance to h1/h2-level heads
+WARN F3 packages/react-rivto-editor/src/styles/base.css:49 no text-wrap: balance on any display head (1 head rule(s), e.g. .rivto-ui :is(h1, h2, h3, h4, h…) | fix: Add text-wrap: balance to h1/h2-level heads
+WARN F7 packages/react-rivto-editor/src/styles/base.css:28 same container recipe on 7 selectors (.rivto-ui (button, input, select, textarea...) | fix: Vary weight, radius, or fill by role; not every box is the same box
+WARN F16 packages/react-rivto-editor/src/styles/base.css:1 browser surfaces unthemed: ::selection | fix: Theme the parts you did not draw from the palette
+WARN F24 demo/src/extensions/reports/review-report.css:24 a hairline border under a wide soft shadow on .review-report-block, .review-report-element | fix: Commit to one: a defined edge, or elevation by shadow
+WARN F24 packages/react-rivto-editor/src/surfaces/edgeless/edgeless.css:111 a hairline border under a wide soft shadow on .edgeless-card | fix: Commit to one: a defined edge, or elevation by shadow
