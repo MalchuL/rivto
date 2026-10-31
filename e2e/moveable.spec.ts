@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 async function openShape(page: Page) {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const today = page.locator('[data-journal-document="today"]');
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();

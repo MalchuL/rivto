@@ -52,7 +52,7 @@ function installRegistrationTrace(root: Element): void {
 test("registration changes preserve pending native delivery and defer new handlers", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await expect(surface).toBeVisible();
   await surface.evaluate(installRegistrationTrace);

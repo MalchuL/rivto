@@ -92,7 +92,7 @@ async function selectionPixel(page: Page, board: Locator, sample: Locator): Prom
  */
 async function loadContainer(page: Page, type: ContainerType, mode: "block" | "edgeless") {
   await page.setViewportSize({ width: 1400, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
     ({ input, mode }) => {
@@ -138,11 +138,11 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
           ? board.locator(".rivto-kanban-add-card").first()
           : child.locator(":scope > .rivto-block-row");
       const pixel = await selectionPixel(page, board, sample);
-      expect(pixel).toEqual([229, 223, 255, 255]);
-      expect(await selectionPixel(page, board, colored)).toEqual([229, 223, 255, 255]);
+      expect(pixel).toEqual([222, 217, 247, 255]);
+      expect(await selectionPixel(page, board, colored)).toEqual([222, 217, 247, 255]);
       if (type === "todo-storage") {
         expect(await selectionPixel(page, board, board.locator(".rivto-todo-item"))).toEqual([
-          229, 223, 255, 255,
+          222, 217, 247, 255,
         ]);
       }
       await expect(content).toHaveCSS("color", foreground);

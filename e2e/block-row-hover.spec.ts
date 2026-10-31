@@ -21,7 +21,7 @@ class HoverLayoutFixture {
    */
   async load(layout: Layout, mode: "block" | "edgeless"): Promise<void> {
     await this.page.setViewportSize({ width: 1400, height: 1000 });
-    await this.page.goto("/");
+    await this.page.goto("/?test_features=1");
     await this.page.locator('[data-journal-document="today"] > .page-surface').waitFor();
     await this.page.evaluate(
       ({ input, mode }) => {

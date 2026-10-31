@@ -1,9 +1,10 @@
+/* waive 24b: Existing spacing preserves container layout and drop geometry. */
 /* Bento owns only board regions and tile placement. Each tile's visual center
  * matches the existing block's bounds; Page owns its outline and subtree selection.
  * The resize controller owns temporary dimensions during a gesture, then restores
  * them before committing the preferred width through the ordinary block command. */
 :root {
-  --rivto-bento-background: #f4f5f7;
+  --rivto-bento-background: #eceef6;
 }
 .rivto-bento-header {
   padding: 10px 12px;
@@ -28,7 +29,7 @@
   padding: var(--rivto-container-padding);
   margin: 0;
   min-height: 96px;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
 }
 /* The declared width includes Page's insertion strips, so adjacent strips alone
@@ -43,10 +44,8 @@
 .rivto-bento-tile > .rivto-block-drop-wrapper-content {
   min-width: 0;
   background: var(--rivto-block-selection-fill, var(--rivto-background));
-  border-radius: 10px;
-  box-shadow:
-    0 0 0 1px var(--rivto-border),
-    0 2px 5px rgb(9 30 66 / 8%);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--rivto-border);
 }
 .rivto-bento-tile > .rivto-block-drop-wrapper-content > .rivto-block {
   padding: 12px;

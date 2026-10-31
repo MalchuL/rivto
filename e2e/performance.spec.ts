@@ -59,7 +59,7 @@ class PageOutlineViewport {
  * @returns Completion after the last block is visible.
  */
 async function seedLargeDocument(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await expect(
     page.locator('[data-journal-document="today"] [data-block-content]').first(),
   ).toBeVisible();
@@ -94,7 +94,7 @@ async function seedLargeDocument(page: Page): Promise<void> {
  * @returns IDs of six adjacent children or roots for drag and edit samples.
  */
 async function seedOutlineDocument(page: Page, branches: number): Promise<string[]> {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.getByRole("checkbox", { name: "Virtualize page" }).check();
   await page.getByRole("spinbutton", { name: "Virtualize after roots count" }).fill("1000");
   const siblings = await page.evaluate((count) => {

@@ -12,7 +12,7 @@ type Demo = { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor
  * @returns IDs for a nested parent/child pair and a separate sibling target.
  */
 async function seed(page: Page, repeat = 0) {
-  await page.goto(`/?repeat=${repeat}`);
+  await page.goto(`/?test_features=1&repeat=${repeat}`);
   await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
   return page.evaluate(() => {
     const { editor } = (window as unknown as Demo).__rivtoDemo;
@@ -267,7 +267,7 @@ for (const [repeat, edgeless] of [
     await child.locator("[data-block-content]").first().click();
     await page.mouse.move(5, 5);
     await expect(handle).toHaveCSS("opacity", "1");
-    await expect(handle.locator(".block-handle-grip")).toHaveCSS("color", "rgb(108, 92, 231)");
+    await expect(handle.locator(".block-handle-grip")).toHaveCSS("color", "rgb(80, 56, 179)");
     const icon = handle.locator(".block-handle-icon");
     await expect(icon).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(icon).not.toHaveCSS("box-shadow", "none");
@@ -277,7 +277,7 @@ for (const [repeat, edgeless] of [
     );
     await expect(parentHandle).toHaveCSS("opacity", "0");
     await handle.focus();
-    await expect(handle).toHaveCSS("color", "rgb(107, 100, 120)");
+    await expect(handle).toHaveCSS("color", "rgb(85, 85, 105)");
     await expect(icon).toHaveCSS("box-shadow", "none");
     await page.locator(`[data-block-id="${ids.other}"] [data-block-content]`).first().click();
     await page.mouse.move(5, 5);

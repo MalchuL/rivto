@@ -7,7 +7,7 @@ for (const repeat of [0, 200]) {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
     await toolbar.getByRole("button", { name: "Diagrams", exact: true }).click();
@@ -126,7 +126,7 @@ for (const repeat of [0, 200]) {
 test("built-in placement previews use the same renderer and creation defaults", async ({
   page,
 }) => {
-  await page.goto("/?repeat=0");
+  await page.goto("/?test_features=1&repeat=0");
   await page.locator('[data-editor-mode="edgeless"]').click();
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   for (const [group, label, type, content] of [
@@ -162,7 +162,7 @@ test("built-in placement previews use the same renderer and creation defaults", 
 });
 
 test("toolbar drag renders the real ellipse and Escape discards the draft", async ({ page }) => {
-  await page.goto("/?repeat=0");
+  await page.goto("/?test_features=1&repeat=0");
   await page.locator('[data-editor-mode="edgeless"]').click();
   const toolbar = page.getByRole("toolbar", { name: "Visual objects" });
   await toolbar.getByRole("button", { name: "Shapes", exact: true }).click();

@@ -12,7 +12,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const mode of ["block", "edgeless"] as const) {
   test(`nested kanban-in-bento and columns-in-kanban stay floored in ${mode}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.evaluate((nextMode) => {
       const runtime = (
         window as unknown as {

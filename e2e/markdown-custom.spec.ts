@@ -22,7 +22,7 @@ const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
 const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {
@@ -47,7 +47,7 @@ for (const mode of ["block", "edgeless"]) {
     test(`inline code keeps paragraph height while editing (${mode}, repeat=${repeat})`, async ({
       page,
     }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       await page.locator(`[data-editor-mode="${mode}"]`).click();
       const preview = page
         .locator(".markdown-content")
@@ -81,7 +81,7 @@ for (const width of [1280, 1281]) {
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const editor = page
         .locator(".markdown-editor")
         .filter({ hasText: "Nested branch one owns several Markdown children." })

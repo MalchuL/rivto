@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 async function openDrawing(page: Page, repeat = 0) {
-  await page.goto(`/?repeat=${repeat}`);
+  await page.goto(`/?test_features=1&repeat=${repeat}`);
   const today = page.locator('[data-journal-document="today"]');
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();

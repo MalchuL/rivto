@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 for (const type of ["bento", "kanban"]) {
   test(`${type} modal drag keeps background scroll stable`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const board = page.locator(`[data-block-type="${type}"]`).first();
     await board.scrollIntoViewIfNeeded();
     await board

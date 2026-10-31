@@ -4,7 +4,7 @@ for (const repeat of [0, 200]) {
   test(`Diagrams highlights its active tool and keeps its menu during placement, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const bar = page.getByRole("toolbar", { name: "Visual objects" });
     const group = bar.getByRole("button", { name: "Diagrams", exact: true });

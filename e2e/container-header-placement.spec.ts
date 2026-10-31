@@ -111,7 +111,7 @@ for (const type of ["bento", "kanban", "todo-storage"]) {
   for (const mode of ["block", "edgeless"] as const) {
     test(`declared inside insertion from ${type} receiving header in ${mode}`, async ({ page }) => {
       await page.setViewportSize({ width: 1400, height: 1200 });
-      await page.goto("/");
+      await page.goto("/?test_features=1");
       await page.locator(".page-surface").first().waitFor();
       const { block, parent } = receivingContainer(type);
       await page.evaluate(

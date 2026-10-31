@@ -11,14 +11,14 @@
  * are Tailwind-styled in their components under `visuals/components/`.
  */
 :root {
-  --rivto-edgeless-background: #f7f6fa;
-  --rivto-edgeless-grid-dot: #c8c3d3;
-  --rivto-edgeless-grid-dot-strong: #81798f;
+  --rivto-edgeless-background: #e4e8f0;
+  --rivto-edgeless-grid-dot: #adb4c4;
+  --rivto-edgeless-grid-dot-strong: #66718b;
   --rivto-edgeless-snap-guide: #4af;
   --rivto-edgeless-chrome-shadow: 0 8px 24px rgb(42 34 72 / 12%);
   --rivto-edgeless-panel-shadow: 0 12px 32px rgb(42 34 72 / 14%);
-  --rivto-edgeless-panel-divider: #ece8f2;
-  --rivto-edgeless-panel-header: linear-gradient(180deg, #faf8ff 0%, #ffffff 100%);
+  --rivto-edgeless-panel-divider: #d9dce7;
+  --rivto-edgeless-panel-header: #f4f5fa;
   --rivto-edgeless-sticker-shadow: 0 6px 14px rgb(35 30 20 / 14%);
 }
 
@@ -108,7 +108,6 @@
   border: 1px solid var(--rivto-input);
   border-radius: 12px;
   background: var(--rivto-background);
-  box-shadow: 0 8px 24px rgb(42 34 72 / 9%);
   outline: none;
 }
 
@@ -119,7 +118,7 @@
   flex: 1 1 auto;
   min-height: 0;
   box-sizing: border-box;
-  padding: var(--rivto-block-surface-padding);
+  padding: var(--rivto-edgeless-card-padding);
   /* clip, not hidden: hidden still accepts programmatic scrollLeft. */
   overflow-x: clip;
   overflow-y: auto;

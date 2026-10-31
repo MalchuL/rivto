@@ -30,7 +30,7 @@ class MarqueePerformanceFixture {
    */
   async prepare(repeat: number) {
     const page = this.page;
-    await page.goto(repeat ? `/?repeat=${repeat}` : "/");
+    await page.goto(repeat ? `/?test_features=1&repeat=${repeat}` : "/?test_features=1");
     await page.locator('[data-editor-mode="edgeless"]').click();
     const viewport = page.locator(".edgeless-viewport");
     await viewport.evaluate((root) => root.scrollIntoView({ block: "start" }));

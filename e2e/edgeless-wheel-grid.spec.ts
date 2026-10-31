@@ -22,7 +22,7 @@ for (const repeat of [0, 200]) {
       page,
     }) => {
       await page.clock.install({ time: new Date("2026-10-23T10:00:00Z") });
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const journal = page.locator('[data-journal-document="today"]');
       await journal.locator('[data-editor-mode="edgeless"]').click();
       const canvas = journal.locator(".edgeless-viewport");
@@ -58,7 +58,7 @@ for (const repeat of [0, 200]) {
   test(`fractional diagonal trackpad input moves content and visible dots together, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const journal = page.locator('[data-journal-document="today"]');
     await journal.locator('[data-editor-mode="edgeless"]').click();
     const canvas = journal.locator(".edgeless-viewport");

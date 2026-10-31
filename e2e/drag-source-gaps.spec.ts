@@ -12,7 +12,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  */
 async function load(page: Page, mode: "block" | "edgeless", nested: boolean) {
   await page.setViewportSize({ width: 1400, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
     ({ mode, nested }) => {

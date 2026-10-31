@@ -1,14 +1,16 @@
+/* waive 24b: Existing spacing preserves container layout and drop geometry. */
 /* Kanban owns board, lane and card appearance through its explicit layout regions.
  * Page owns the single block shell, selection background, child traversal and gaps.
  * No recursive row styling or imperative footer placement is needed. */
 :root {
-  --rivto-kanban-board-background: linear-gradient(125deg, #e9eefc, #e8f4f5);
-  --rivto-kanban-lane-background: #f1f2f4;
-  --rivto-kanban-card-foreground: #172b4d;
-  --rivto-kanban-card-hover-border: #85b8ff;
-  --rivto-kanban-drag-background: #dce6f5;
-  --rivto-kanban-muted-foreground: #626f86;
-  --rivto-kanban-accent: #0c66e4;
+  --rivto-kanban-board-background: #eceef6;
+  --rivto-kanban-lane-background: #f8f9fd;
+  --rivto-kanban-card-foreground: #151522;
+  --rivto-kanban-card-hover-border: #a89be5;
+  --rivto-kanban-drag-background: #edeafa;
+  --rivto-kanban-muted-foreground: #555569;
+  --rivto-kanban-accent: var(--rivto-accent);
+  --rivto-kanban-add-column-background: rgb(255 255 255 / 45%);
 }
 .rivto-kanban-board-header {
   padding: 10px 12px;
@@ -35,7 +37,7 @@
   min-width: 0;
   min-height: 192px;
   overflow-x: auto;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--rivto-block-selection-fill, var(--rivto-kanban-board-background));
   scrollbar-width: thin;
 }
@@ -45,8 +47,8 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgb(9 30 66 / 16%);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--rivto-border);
 }
 .rivto-kanban-lane-header {
   padding: 0 0 10px;
@@ -78,10 +80,8 @@
 .rivto-kanban-card {
   min-width: 0;
   background: var(--rivto-block-selection-fill, var(--rivto-background));
-  border-radius: 8px;
-  box-shadow:
-    0 0 0 1px var(--rivto-border),
-    0 1px 2px rgb(9 30 66 / 12%);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--rivto-border);
 }
 .rivto-kanban-card > .rivto-block {
   padding: 12px 10px;
@@ -95,20 +95,20 @@
   flex-shrink: 0;
   height: auto;
   color: var(--rivto-kanban-muted-foreground);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .rivto-kanban-add-card[data-slot] {
   min-height: 36px;
   width: 100%;
   margin-top: auto;
   background: var(--rivto-block-selection-fill, var(--rivto-background));
-  border: 1px dashed var(--rivto-border);
+  border: 1px solid var(--rivto-border);
 }
 .rivto-kanban-add-column[data-slot] {
   flex: 0 0 200px;
   min-height: 160px;
-  border: 2px dashed var(--rivto-kanban-card-hover-border);
-  background: var(--rivto-block-selection-fill, rgb(255 255 255 / 45%));
+  border: 2px solid var(--rivto-kanban-card-hover-border);
+  background: var(--rivto-block-selection-fill, var(--rivto-kanban-add-column-background));
 }
 .rivto-kanban-add-column > svg {
   width: 28px;

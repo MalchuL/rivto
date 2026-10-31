@@ -15,6 +15,7 @@ import {
 import {
   DEFAULT_WRITING_BLOCK_TYPE,
   BENTO_BLOCK_TYPE,
+  BlockHandleContext,
   bulletThreadingExtension,
   COLUMNS_BLOCK_TYPE,
   createBentoBlockInput,
@@ -41,7 +42,16 @@ import {
   type ReactEditorApi,
   type MarkdownLinkClick,
 } from "@chulane/rivto-react";
-import { useCallback, useEffect, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ChangeEvent,
+} from "react";
+import { Trash2Icon, Undo2Icon } from "lucide-react";
 import {
   COUNTER_BLOCK_TYPE,
   customBlockExtensions,
@@ -50,6 +60,7 @@ import {
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
+import { seedJournalDemo } from "./journal-content";
 import { blockIdExtension, BlockIdsVisibleProvider } from "./extensions/block-id";
 import { blockNumberExtension, BlockNumbersVisibleProvider } from "./extensions/block-number";
 import {
@@ -61,6 +72,20 @@ import { KeyboardPanel } from "./KeyboardPanel";
 import { RevisionsPanel } from "./RevisionsPanel";
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
+/** Demo-wide setting for persistent block handle visibility. */
+interface DemoHandleVisibility {
+  /** Whether handles stay visible without hover or focus. */
+  readonly visible: boolean;
+  /**
+   * Updates the checked state of the demo's handle visibility option.
+   *
+   * @param visible - Whether handles remain visible without hover or focus.
+   * @returns Schedules the updated visibility setting.
+   */
+  readonly setVisible: (visible: boolean) => void;
+}
+/** Shares the demo control state with toolbar instances. */
+const DemoHandleVisibilityContext = createContext<DemoHandleVisibility | null>(null);
 const DEMO_BLOCK_IDS_TOOLTIP =
   "Shows a shortened block id at the end of each row. Hover that label to see the full id.";
 const DEMO_VIRTUALIZE_PAGE_TOOLTIP =
@@ -161,14 +186,43 @@ function demoThreadAnchor(block: Element): Element | null {
   return null;
 }
 
+/** Borrowed command operation used to seed the canvas showcase. */
+interface DemoCanvasSeedEditor {
+  /** Executes registered edgeless creation and selection commands. */
+  readonly commands: Pick<DocumentEditorAPI["commands"], "execute">;
+}
+
+/** Borrowed document operations used by the feature showcase. */
+interface FeatureSeedEditor extends DemoCanvasSeedEditor {
+  /** Creates, nests, moves and reads showcase blocks. */
+  readonly blocks: Pick<
+    DocumentEditorAPI["blocks"],
+    | "getBlock"
+    | "getInsertionDestinationAfter"
+    | "getRootIds"
+    | "importForest"
+    | "indentBlock"
+    | "insertBlock"
+    | "moveBlocks"
+  >;
+  /** Creates canvas elements and reads their stacking order. */
+  readonly elements: Pick<DocumentEditorAPI["elements"], "getElementNodes" | "insertElement">;
+  /** Groups repeated showcase insertions into one history batch. */
+  readonly history: Pick<DocumentEditorAPI["history"], "batchUpdates">;
+}
+
 /**
  * Seeds canvas visuals that exercise edgeless features in the journal demo.
  *
  * Needed so a fresh demo load already has shapes, text, sticky, drawing,
  * connectors, nested groups, and spare siblings for align / distribute /
  * layer-order practice — without the visitor having to create them first.
+ *
+ * @param editor - Borrowed command registry used to create and select showcase elements.
+ * @returns Showcase elements have been inserted and their selection cleared.
+ * @throws If a registered canvas command fails.
  */
-function seedEdgelessShowcase(editor: DocumentEditorAPI): void {
+function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
   // Cards grow with their content, including embeddings. Keep the heading
   // above their initial frames so collapsing an outline cannot put it over a row.
   editor.commands.execute("edgeless.visual.create", {
@@ -357,14 +411,14 @@ async function destroyDemoEditor(runtime: {
 }
 
 /**
- * Builds today's journal editor with rich seed content.
+ * Builds today's journal editor with notebook or feature-showcase content.
  *
- * Needed as the main playground document: Markdown, nested lists, checkboxes,
- * numbered lists, custom blocks, separators, block elements, embeddings, and edgeless
- * showcase — so selection, slash commands, and extensions are immediately
- * testable. Optional `?keymap=alternate` remaps indent for keymap demos.
- * Optional `?repeat=N` clones the second edgeless card N extra times, each
- * preceded by a separator so reconciliation mounts N additional cards.
+ * The default notebook is written for the demo. `?test_features=1` selects the
+ * original playground with Markdown, nested lists, checkboxes, numbered lists,
+ * custom blocks, separators, block elements, embeddings, and the edgeless showcase
+ * so selection, slash commands, and extensions remain testable.
+ * `?keymap=alternate` remaps indent; `?repeat=N` adds N separated copies of a
+ * section for large-document exploration.
  *
  * @returns Seeded journal resources and editor cache after initialization and history reset.
  * The caller owns their cleanup through destroyDemoEditor.
@@ -432,6 +486,28 @@ async function createDemoEditor() {
   Object.assign(window, {
     __rivtoDemo: { token: demoToken, editor, reactEditor },
   });
+  if (new URLSearchParams(window.location.search).get("test_features") === "1") {
+    seedFeatureDemo(editor, resources.document.id);
+  } else {
+    seedJournalDemo(editor, demoRepeatCount());
+  }
+  editor.history.clear();
+
+  return { ...resources, editor, reactEditor, editorStorage };
+}
+
+/**
+ * Populates the feature showcase used by browser regression tests and manual exploration.
+ *
+ * This preserves the original seeded structure, including optional repeated cards and
+ * canvas examples. The caller owns the editor and resets its history after seeding.
+ *
+ * @param editor - Initialized editor whose document receives the showcase blocks and elements.
+ * @param documentId - Identity used by the self-referencing embedded block.
+ * @returns The feature showcase has been inserted into the document.
+ * @throws If a delegated block or element operation fails.
+ */
+function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
   const introId = editor.blocks.insertBlock({
     ...paragraphBlockFactory.createEmptyBlock(),
     content: "**Rivto editor**",
@@ -775,13 +851,10 @@ async function createDemoEditor() {
   editor.blocks.insertBlock(
     {
       type: EMBEDDING_BLOCK_TYPE,
-      props: { targetDocumentId: editor.getDocument().id, targetBlockId: listId },
+      props: { targetDocumentId: documentId, targetBlockId: listId },
     },
     editor.blocks.getInsertionDestinationAfter(paragraphId),
   );
-  editor.history.clear();
-
-  return { ...resources, editor, reactEditor, editorStorage };
 }
 
 /**
@@ -884,6 +957,7 @@ function DemoToolbar({
   readonly onVirtualizePageOverscanChange?: (count: number) => void;
 }) {
   const { mode, setMode } = useEditorMode();
+  const handleVisibility = useContext(DemoHandleVisibilityContext);
   const [reportError, setReportError] = useState<string | null>(null);
   let thresholdInputValue: number | "" = "";
   if (typeof virtualizePageThreshold === "number") {
@@ -933,6 +1007,48 @@ function DemoToolbar({
 
   return (
     <header className="demo-header">
+      <div className="demo-toolbar-main">
+        <span className="demo-wordmark">
+          Rivto <span>editor</span>
+        </span>
+        <div className="demo-mode-switch" role="group" aria-label="Editor mode">
+          {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
+          <button
+            type="button"
+            data-editor-mode="block"
+            aria-pressed={mode === "block"}
+            onClick={() => switchMode("block")}
+          >
+            Page
+          </button>
+          <button
+            type="button"
+            data-editor-mode="edgeless"
+            aria-pressed={mode === "edgeless"}
+            onClick={() => switchMode("edgeless")}
+          >
+            Edgeless
+          </button>
+        </div>
+        <button
+          type="button"
+          data-editor-action="delete"
+          aria-label="Delete"
+          title="Delete"
+          onClick={() => editor.selection.delete()}
+        >
+          <Trash2Icon size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          data-editor-action="undo"
+          aria-label="Undo"
+          title="Undo"
+          onClick={() => editor.history.undo()}
+        >
+          <Undo2Icon size={16} aria-hidden="true" />
+        </button>
+      </div>
       <div className="demo-toolbar-controls">
         <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_BLOCK_IDS_TOOLTIP}>
           <input
@@ -951,6 +1067,16 @@ function DemoToolbar({
           />
           Block numbers
         </label>
+        {handleVisibility && (
+          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+            <input
+              type="checkbox"
+              checked={handleVisibility.visible}
+              onChange={(event) => handleVisibility.setVisible(event.currentTarget.checked)}
+            />
+            Always show drag handles
+          </label>
+        )}
         {onVirtualizePageThresholdChange && (
           <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
             <input
@@ -994,31 +1120,6 @@ function DemoToolbar({
             />
           </label>
         )}
-        <div className="demo-mode-switch" role="group" aria-label="Editor mode">
-          {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
-          <button
-            type="button"
-            data-editor-mode="block"
-            aria-pressed={mode === "block"}
-            onClick={() => switchMode("block")}
-          >
-            Page
-          </button>
-          <button
-            type="button"
-            data-editor-mode="edgeless"
-            aria-pressed={mode === "edgeless"}
-            onClick={() => switchMode("edgeless")}
-          >
-            Edgeless
-          </button>
-        </div>
-        <button type="button" data-editor-action="delete" onClick={() => editor.selection.delete()}>
-          Delete
-        </button>
-        <button type="button" data-editor-action="undo" onClick={() => editor.history.undo()}>
-          Undo
-        </button>
         <label>
           Restore report
           <input
@@ -1589,12 +1690,31 @@ function SyncEditorsApp() {
  * - `?editors=2` → dual editors (`MultiEditorApp`)
  * - `?embeddings=1` → shared document storage and live source subtree embeds
  * - `?sync=1` → BroadcastChannel peers (`SyncEditorsApp`); `repeat=N` adds N synced blocks
- * - `?repeat=N` → N extra copies of the second journal card (with separators)
+ * - `?test_features=1` → original feature showcase used by browser regressions
+ * - `?repeat=N` → N extra copies of a journal section (with separators)
  *
  * Needed so one Vite demo app can cover walkthrough, regression, and sync
  * without separate entrypoints.
+ *
+ * @returns The selected demo with shared handle visibility controls.
  */
 export function App() {
+  const [visible, setVisible] = useState(false);
+  return (
+    <DemoHandleVisibilityContext.Provider value={{ visible, setVisible }}>
+      <BlockHandleContext.Provider value={{ alwaysVisible: visible }}>
+        <DemoAppContent />
+      </BlockHandleContext.Provider>
+    </DemoHandleVisibilityContext.Provider>
+  );
+}
+
+/**
+ * Selects the requested demo surface from the current URL.
+ *
+ * @returns The selected demo surface.
+ */
+function DemoAppContent() {
   const params = new URLSearchParams(window.location.search);
   if (params.has("elementRegistration")) {
     return <ElementRegistrationTest />;

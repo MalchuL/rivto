@@ -2,7 +2,7 @@ import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test } from "@playwright/test";
 
 test("draws one continuous top-level line to the focused root", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const roots = page.locator(
     `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}`,
   );
@@ -51,7 +51,7 @@ test("draws one continuous top-level line to the focused root", async ({ page })
 });
 
 test("threads only the focused page ancestry and follows its controls", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const parent = page
     .locator(
       `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
@@ -143,7 +143,7 @@ test("threads only the focused page ancestry and follows its controls", async ({
 });
 
 test("repositions the path for a nested scroll container", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const leaf = page
     .locator(
       `[data-journal-document='today'] > .page-surface ${ROOT_BLOCK_SELECTOR}:has(> .rivto-block-children)`,
@@ -183,7 +183,7 @@ test("wrapped and direct container roots keep the root line but stop before desc
   page,
 }) => {
   for (const type of ["table", "kanban", "columns", "bento", "todo-storage"]) {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const container = page.locator(`.page-surface .rivto-block[data-block-type="${type}"]`).first();
     await container.locator("[data-block-content]").first().click();
     const path = page.locator("[data-bullet-threading] path:not([d=''])");

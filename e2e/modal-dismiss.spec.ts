@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 for (const type of ["Bento", "Kanban", "Table"]) {
   for (const repeat of [1, 200]) {
     test(`${type} modal closes only on backdrop press (repeat=${repeat})`, async ({ page }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const id = await page
         .locator(`[data-block-type="${type.toLowerCase()}"]`)
         .first()
@@ -47,7 +47,7 @@ for (const type of ["Bento", "Kanban", "Table"]) {
 
 for (const type of ["Bento", "Kanban", "Table"]) {
   test(`${type} preserves edits and undo across dialog remounts`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const id = await page
       .locator(`[data-block-type="${type.toLowerCase()}"]`)
       .first()
@@ -78,7 +78,7 @@ for (const repeat of [1, 200]) {
   test(`modifier clicks select blocks without dismissing the modal (repeat=${repeat})`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const expand = page.getByRole("button", { name: "Expand Bento", exact: true }).first();
     await expand.scrollIntoViewIfNeeded();
     await expand.click();
@@ -104,7 +104,7 @@ for (const repeat of [1, 200]) {
 for (const mode of ["block", "edgeless"]) {
   for (const repeat of mode === "block" ? [1, 200] : [1]) {
     test(`deletes selected modal blocks in ${mode} mode (repeat=${repeat})`, async ({ page }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       if (mode === "edgeless") {
         await page.evaluate(() => {
           const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

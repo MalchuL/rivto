@@ -28,7 +28,7 @@ interface JournalInspection {
 for (const repeat of [0, 200]) {
   test(`embedded content has no extra ending space with repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     for (const mode of ["Page", "Edgeless"]) {
       await today.getByRole("button", { name: mode, exact: true }).click();
@@ -52,7 +52,7 @@ for (const repeat of [0, 200]) {
   }) => {
     test.setTimeout(120_000);
     page.setDefaultTimeout(10_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     // Host construction precedes asynchronous embedding mount; keep fixture loading outside interaction timing.
     await today.locator(".page-surface").first().waitFor({ state: "visible" });
@@ -174,7 +174,7 @@ for (const repeat of [0, 200]) {
       page,
     }) => {
       test.setTimeout(120_000);
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const today = page.locator('[data-journal-document="today"]');
       if (canvas) {
         await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -241,7 +241,7 @@ for (const [repeat, canvas] of [
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     const ids = await page.evaluate(() => {
       const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
@@ -339,7 +339,7 @@ for (const canvas of [false, true]) {
   test(`trailing insertion controls stay outside embedded subtrees in ${canvas ? "edgeless" : "page"}`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const today = page.locator('[data-journal-document="today"]');
     if (canvas) {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -369,7 +369,7 @@ for (const canvas of [false, true]) {
   test(`embedded root collapse button is reachable and hides descendants in ${canvas ? "edgeless" : "page"}`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const today = page.locator('[data-journal-document="today"]');
     if (canvas) {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -708,7 +708,7 @@ for (const [repeat, canvas] of [
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     const { embedId, movedId, nextId } = await page.evaluate(() => {
       const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
@@ -844,7 +844,7 @@ for (const [repeat, canvas] of [
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const today = page.locator('[data-journal-document="today"]');
     const ids = await page.evaluate(() => {
       const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
@@ -988,7 +988,7 @@ for (const mode of ["Page", "Edgeless"] as const) {
   test(`same-document embedding accepts moves in and out in ${mode} without allowing a cycle`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const today = page.locator('[data-journal-document="today"]');
     const region = today.getByRole("region", { name: "Block editor" });
     await expect(region.locator("[data-block-id]")).toHaveCount(5);
@@ -2060,7 +2060,7 @@ for (const repeat of [0, 200]) {
     }) => {
       test.setTimeout(120_000);
       page.setDefaultTimeout(10_000);
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const today = page.locator('[data-journal-document="today"]');
       const region = today.getByRole("region", { name: "Block editor" });
       await expect(region.locator("[data-block-id]")).toHaveCount(5, { timeout: 30_000 });

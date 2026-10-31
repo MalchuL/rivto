@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 for (const repeat of [0, 200]) {
   test(`canvas tools reset after switching modes, repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const canvas = page.locator(".edgeless-viewport");
     const toolbar = page.getByRole("toolbar", { name: "Visual objects" });

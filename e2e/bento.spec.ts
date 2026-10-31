@@ -34,7 +34,7 @@ async function dragResizeHandle(page: Page, handle: Locator, dx: number): Promis
 
 for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -108,7 +108,7 @@ for (const mode of ["block", "edgeless"]) {
 }
 
 test("Bento edge resize freezes siblings until pointer release", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -163,7 +163,7 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
 
 for (const edge of ["between", "under", "inside", "end-right", "end-under"] as const) {
   test(`Bento drag placement ${edge}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -202,6 +202,13 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
     if (edge === "inside") {
       await expect(target).toHaveAttribute("data-block-drop-active", "true");
       await expect(line).toHaveCount(0);
+      await expect(target).toHaveCSS("outline-style", "none");
+      const overlay = await target.evaluate((element) => {
+        const style = getComputedStyle(element, "::after");
+        return { radius: style.borderRadius, shadow: style.boxShadow };
+      });
+      expect(overlay.radius).toBe("12px");
+      expect(overlay.shadow).not.toBe("none");
     } else {
       await expect(line).toBeVisible();
       const lineBox = (await line.boundingBox())!;
@@ -228,7 +235,7 @@ for (const edge of ["between", "under", "inside", "end-right", "end-under"] as c
 test("drags a page block into a bento as a tile and a tile back onto the page", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -287,7 +294,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
 });
 
 test("drops a page block into an empty Bento grid", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -320,7 +327,7 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
 });
 
 test("Escape cancels a Bento resize while retaining its expanded panel", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;

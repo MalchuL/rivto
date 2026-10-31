@@ -18,7 +18,7 @@
   --rivto-code-number: #986801;
   --rivto-code-title: #4078f2;
   --rivto-code-comment: #7f848e;
-  --rivto-link-color: #5b4bd8;
+  --rivto-link-color: #5038b3;
 }
 
 /* Shared text geometry belongs to the Markdown renderer, independently of its Page shell. */
@@ -60,6 +60,12 @@
 
 .markdown-preview > :last-child {
   margin-bottom: 0;
+}
+
+.markdown-preview blockquote {
+  margin-inline: 0;
+  padding-inline-start: 1em;
+  border-inline-start: 3px solid var(--rivto-accent);
 }
 
 .markdown-preview code {

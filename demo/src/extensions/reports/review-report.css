@@ -7,21 +7,18 @@
 
 .review-report-block,
 .review-report-element {
-  --review-accent: #6d4aff;
-  --review-accent-deep: #4f2bd4;
-  --review-border: #ddd6fe;
-  --review-ink: #241b45;
-  --review-muted: #71678b;
+  --review-accent: var(--rivto-accent);
+  --review-accent-deep: var(--rivto-subtle-foreground);
+  --review-border: var(--rivto-border);
+  --review-ink: var(--rivto-foreground);
+  --review-muted: var(--rivto-muted-foreground);
   display: grid;
   gap: 12px;
   box-sizing: border-box;
   padding: 14px;
   border: 1px solid var(--review-border);
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 100% 0, rgb(109 74 255 / 10%), transparent 42%),
-    linear-gradient(145deg, #fff 0%, #faf8ff 100%);
-  box-shadow: 0 8px 28px rgb(46 28 105 / 9%);
+  background: var(--rivto-card);
   color: var(--review-ink);
 }
 
@@ -158,7 +155,7 @@
 
 .review-report-controls button:first-of-type {
   border-color: transparent;
-  background: linear-gradient(135deg, var(--review-accent), var(--review-accent-deep));
+  background: var(--review-accent);
   box-shadow: 0 5px 12px rgb(79 43 212 / 22%);
   color: #fff;
 }

@@ -4,7 +4,7 @@ import type { DocumentEditorAPI, EditorElementNode } from "@chulane/rivto";
 type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI } };
 
 async function openGroup(page: Page, repeat = 0) {
-  await page.goto(repeat ? `/?repeat=${repeat}` : "/");
+  await page.goto(repeat ? `/?test_features=1&repeat=${repeat}` : "/?test_features=1");
   const today = page.locator('[data-journal-document="today"]');
   await today.locator("[data-block-content]").first().waitFor();
   await today.getByRole("button", { name: "Edgeless", exact: true }).click();

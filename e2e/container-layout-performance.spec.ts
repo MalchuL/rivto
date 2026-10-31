@@ -3,7 +3,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const repeat of [0, 200]) {
   test(`container editing timing with repeat=${repeat} @performance`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const text = page.locator('[data-block-type="bento"]').first().getByRole("textbox").first();
     await text.fill("warmup");
     const blockId = await text.evaluate((element) =>

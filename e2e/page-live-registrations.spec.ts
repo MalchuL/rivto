@@ -9,7 +9,7 @@ interface RegistrationInspection {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const inspection = window as unknown as RegistrationInspection;
     const editor = inspection.__rivtoDemo.editor;

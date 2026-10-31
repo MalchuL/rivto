@@ -34,7 +34,7 @@ async function blocks(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
 });
 

@@ -6,7 +6,7 @@ type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI } };
 for (const mode of ["block", "edgeless"]) {
   for (const repeat of [1, 200]) {
     test(`paste replaces an empty caret block in ${mode}, repeat=${repeat}`, async ({ page }) => {
-      await page.goto(repeat === 1 ? "/" : "/?repeat=200");
+      await page.goto(repeat === 1 ? "/?test_features=1" : "/?test_features=1&repeat=200");
       await page.locator(`[data-editor-mode="${mode}"]`).click();
       const id = await page.evaluate(() => {
         const { editor } = (window as unknown as DemoWindow).__rivtoDemo;

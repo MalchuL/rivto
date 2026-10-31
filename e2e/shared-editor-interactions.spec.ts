@@ -4,7 +4,7 @@ for (const mode of ["Page", "Edgeless"] as const) {
   test(`embedded whitespace reveals its own row and keeps context-menu selection in ${mode}`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const today = page.locator('[data-journal-document="today"]');
     if (mode === "Edgeless") {
       await today.getByRole("button", { name: mode, exact: true }).click();

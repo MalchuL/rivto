@@ -4,7 +4,7 @@ for (const repeat of [0, 200]) {
   test(`journal chrome follows Page and Edgeless mode, repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const stack = page.locator(".journal-stack");
     const today = page.locator('[data-journal-document="today"]');
     const title = today.locator(".journal-date");

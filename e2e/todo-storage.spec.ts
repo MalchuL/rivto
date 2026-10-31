@@ -13,7 +13,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 const DROP_INDICATOR_CLASS = "rivto-block-drop-line";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page
     .locator('[data-journal-document="today"] [data-block-type="todo-storage"]')
     .scrollIntoViewIfNeeded();
@@ -25,6 +25,24 @@ test.beforeEach(async ({ page }) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       ),
   );
+});
+
+test("uses the editor theme for storage controls and status", async ({ page }) => {
+  const storage = page.locator('[data-journal-document="today"] [data-block-type="todo-storage"]');
+  await expect(storage.locator(".rivto-todo-storage-children")).toHaveCSS(
+    "background-color",
+    "rgb(236, 238, 246)",
+  );
+  await expect(storage.getByRole("button", { name: /Status: doing/ })).toHaveCSS(
+    "background-color",
+    "rgb(80, 56, 179)",
+  );
+  const search = storage.getByRole("searchbox", { name: "Search TODOs" });
+  const shape = await search.evaluate((element) => ({
+    radius: parseFloat(getComputedStyle(element).borderTopLeftRadius),
+    height: element.getBoundingClientRect().height,
+  }));
+  expect(shape.radius).toBeGreaterThanOrEqual(shape.height / 2);
 });
 
 test("keeps the storage surface inside its selection and aligns root controls", async ({

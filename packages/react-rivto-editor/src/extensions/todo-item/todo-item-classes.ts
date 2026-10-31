@@ -13,7 +13,7 @@
  * @module
  */
 export const TODO_ITEM_CLASS =
-  "rivto-todo-item group/todo flex min-w-0 items-start gap-2.5 rounded-lg border border-(--rivto-todo-item-border) bg-[var(--rivto-block-selection-fill,var(--rivto-background))] px-3 py-2.5 shadow-[0_1px_2px_rgb(0_0_0/6%)] transition-[border-color, box-shadow] duration-100 hover:border-(--rivto-todo-control-border) hover:shadow-[0_2px_8px_rgb(0_0_0/8%)] focus-within:border-(--rivto-todo-control-border) focus-within:shadow-[0_2px_8px_rgb(0_0_0/8%)] data-[todo-priority=1]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-1))] data-[todo-priority=2]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-2))] data-[todo-priority=3]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-3))]";
+  "rivto-todo-item group/todo flex min-w-0 items-start gap-2.5 rounded-xl border border-(--rivto-todo-item-border) bg-[var(--rivto-block-selection-fill,var(--rivto-background))] px-3 py-2.5 hover:border-(--rivto-todo-control-border) focus-within:border-(--rivto-todo-control-border) data-[todo-priority=1]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-1))] data-[todo-priority=2]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-2))] data-[todo-priority=3]:bg-[var(--rivto-block-selection-fill,var(--rivto-todo-priority-3))]";
 export const TODO_STATUS_CLASS =
   "rivto-todo-status mt-px grid size-[19px] shrink-0 place-items-center rounded-full border-2 p-0 text-white [&_svg]:size-3 [&_svg]:stroke-[3]";
 export const TODO_STATUS_TODO_CLASS =
@@ -56,12 +56,12 @@ export const TODO_STORAGE_DROP_ICON_CLASS =
 export const TODO_STORAGE_DROP_COPY_CLASS =
   "rivto-todo-storage-drop-copy grid gap-px text-sm leading-[18px] [&_small]:text-[11px] [&_small]:text-muted-foreground";
 export const TODO_STORAGE_SEARCH_CLASS =
-  "rivto-todo-storage-search h-7 min-w-[100px] flex-1 px-[7px] py-1 text-sm";
+  "rivto-todo-storage-search h-7 min-w-[100px] flex-1 rounded-full bg-card px-[7px] py-1 text-sm";
 export const TODO_STORAGE_MENU_CLASS = "rivto-todo-storage-menu relative";
 export const TODO_STORAGE_MENU_TRIGGER_CLASS =
-  "rivto-todo-storage-menu-trigger h-7 px-[7px] text-xs font-normal data-[state=open]:bg-accent data-[state=open]:text-accent-foreground";
+  "rivto-todo-storage-menu-trigger h-7 rounded-full bg-card px-[7px] text-xs font-normal data-[state=open]:bg-accent data-[state=open]:text-accent-foreground";
 export const TODO_STORAGE_MENU_PANEL_CLASS =
-  "rivto-todo-storage-menu-panel absolute top-[calc(100%+4px)] right-0 z-20 grid w-max min-w-[150px] gap-[7px] rounded-md border border-border bg-popover p-[9px] text-xs text-popover-foreground shadow-md outline-hidden";
+  "rivto-todo-storage-menu-panel absolute top-[calc(100%+4px)] right-0 z-20 grid w-max min-w-[150px] gap-[7px] rounded-xl border border-border bg-popover p-[9px] text-xs text-popover-foreground shadow-md outline-hidden";
 export const TODO_STORAGE_FILTER_GROUP_CLASS =
   "rivto-todo-storage-filter-group m-0 grid gap-[3px] border-0 p-0";
 export const TODO_STORAGE_FILTER_LEGEND_CLASS = "mb-0.5 font-semibold text-muted-foreground";

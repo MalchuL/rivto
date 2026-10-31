@@ -25,7 +25,7 @@ async function collapsibleRoot(page: Page, index = 0): Promise<Locator> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("toggles an accessible collapsed subtree without exposing hidden rows", async ({ page }) => {

@@ -6,7 +6,7 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`ignores placement padding and drops in declared wrapped-card regions in ${mode}`, async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;

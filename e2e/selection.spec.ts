@@ -63,7 +63,7 @@ async function dragText(
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
 });
 
@@ -622,7 +622,7 @@ test("selecting a parent draws one selection rectangle around its subtree", asyn
   await expect(parent).toHaveAttribute("data-block-selected", "true");
   await expect
     .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .toBe("rgb(229, 223, 255)");
+    .toBe("rgb(222, 217, 247)");
   const parentBox = await parent.boundingBox();
   const childBox = await child.boundingBox();
   if (!parentBox || !childBox) {
@@ -661,26 +661,27 @@ for (const mode of ["block", "edgeless"] as const) {
     const child = page.locator(blockIdSelector("selected-child"));
     const parentContent = parent.locator(":scope > .rivto-block-row [data-block-content]");
     await child.locator("[data-block-content]").click({ modifiers: ["Control"] });
-    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(child).toHaveCSS("background-color", "rgb(222, 217, 247)");
     await parentContent.click({ modifiers: ["Control"] });
     await expect(parent).toHaveAttribute("data-block-selected", "true");
     await expect(child).toHaveAttribute("data-block-selected", "true");
     await expect
       .poll(() => parent.evaluate((element) => getComputedStyle(element).backgroundColor))
-      .toBe("rgb(229, 223, 255)");
+      .toBe("rgb(222, 217, 247)");
     await expect(parent).toHaveCSS("outline-style", "solid");
+    await expect(parent).toHaveCSS("border-radius", "12px");
     await expect(child).toHaveCSS("outline-style", "none");
-    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(child).toHaveCSS("background-color", "rgb(222, 217, 247)");
     await expect(page.locator(blockIdSelector("unselected-child"))).toHaveCSS(
       "background-color",
-      "rgb(229, 223, 255)",
+      "rgb(222, 217, 247)",
     );
     const parentBox = (await parent.boundingBox())!;
     const childBox = (await child.boundingBox())!;
     expect(parentBox.y + parentBox.height).toBeGreaterThanOrEqual(childBox.y + childBox.height);
     await parentContent.click({ modifiers: ["Control"] });
     await expect(parent).not.toHaveAttribute("data-block-selected", "true");
-    await expect(child).toHaveCSS("background-color", "rgb(229, 223, 255)");
+    await expect(child).toHaveCSS("background-color", "rgb(222, 217, 247)");
     await expect(child).toHaveCSS("outline-style", "solid");
   });
 }

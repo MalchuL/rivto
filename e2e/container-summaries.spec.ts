@@ -16,7 +16,7 @@ test("slash converts the current root to each structural container", async ({ pa
     ["kanban", "block.kanban.insert", "kanban"],
     ["columns", "block.columns.insert", "columns"],
   ] as const) {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const content = page
       .locator(`.${PAGE_SURFACE_CLASS} ${ROOT_BLOCK_SELECTOR} > .${ROW_CLASS} [data-block-content]`)
       .first();
@@ -68,7 +68,7 @@ test("slash converts the current root to each structural container", async ({ pa
 test("renders aligned contentless container summaries from reactive block snapshots", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 
   const containers = [
     { type: "bento", name: "Bento", stats: "3 tiles" },
@@ -171,7 +171,7 @@ test("renders aligned contentless container summaries from reactive block snapsh
 });
 
 test("renders a compact TODO storage summary while collapsed", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const storage = page.locator('[data-block-type="todo-storage"]');
   await storage.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`).click();
   await expect(storage.getByText("TODO storage", { exact: true })).toBeVisible();
@@ -184,7 +184,7 @@ test("renders a compact TODO storage summary while collapsed", async ({ page }) 
 test("reveals root block handles in their headers and exposed lateral gutters", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const surfaceBox = (await page.locator(`.${PAGE_SURFACE_CLASS}`).first().boundingBox())!;
 
   for (const type of ["bento", "table", "columns", "kanban", "todo-storage"] as const) {
@@ -281,7 +281,7 @@ test("reveals root block handles in their headers and exposed lateral gutters", 
 
 for (const mode of ["block", "edgeless"] as const) {
   test(`uses layout hover for a custom block's handle in ${mode}`, async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     const id = await page.evaluate(() => {
       const { editor, reactEditor } = (
         window as unknown as {

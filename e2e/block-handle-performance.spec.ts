@@ -10,7 +10,7 @@ for (const repeat of [0, 200]) {
     browserName,
   }) => {
     test.setTimeout(120_000);
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-journal-document="today"] [data-block-content]').first().waitFor();
     const id = await page.evaluate(() => {
       const runtime = window as unknown as Runtime;

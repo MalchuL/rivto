@@ -45,7 +45,7 @@ function input(layout: Layout): EditorBlockInput[] {
  */
 async function load(page: Page, layout: Layout, mode: "block" | "edgeless") {
   await page.setViewportSize({ width: 1400, height: 1000 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
     ({ roots, mode }) => {

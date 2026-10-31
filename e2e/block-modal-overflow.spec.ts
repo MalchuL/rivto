@@ -5,7 +5,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 for (const label of ["Kanban", "Bento", "Table"]) {
   for (const mode of ["block", "edgeless"]) {
     test(`${label} dialog has no empty overflow from ${mode}`, async ({ page }) => {
-      await page.goto("/");
+      await page.goto("/?test_features=1");
       await page.evaluate(
         ({ label, mode }) => {
           const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
@@ -48,7 +48,7 @@ for (const label of ["Kanban", "Bento", "Table"]) {
 }
 
 test("expanded Bento keeps real vertical overflow scrollable", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;

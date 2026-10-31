@@ -12,7 +12,7 @@ for (const mode of ["block", "edgeless"]) {
       page,
       browserName,
     }) => {
-      await page.goto(`/?repeat=${repeat}`);
+      await page.goto(`/?test_features=1&repeat=${repeat}`);
       const today = page.locator('[data-journal-document="today"]');
       await today.locator(`[data-editor-mode="${mode}"]`).click();
       const content = today.locator(".markdown-editor").nth(1);

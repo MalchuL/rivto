@@ -18,7 +18,7 @@ class ContainerPointerFixture {
    * @returns Resolves when the replacement blocks are visible in the production Page.
    */
   async load(blocks: EditorBlockInput[]): Promise<void> {
-    await this.page.goto("/");
+    await this.page.goto("/?test_features=1");
     await expect(
       this.page.locator('[data-journal-document="today"] > .page-surface'),
     ).toBeVisible();

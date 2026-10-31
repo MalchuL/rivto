@@ -243,15 +243,24 @@ export function dropRegionTarget(
   let destination = region.destination;
   let left = rect.left;
   let width = rect.width;
+  const lineInset =
+    Math.max(0, parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-line-inset")) || 0) *
+    geometry.scaleX;
   if (region.depth?.destinations.length) {
     const indent =
       (parseFloat(geometry.style.getPropertyValue("--rivto-block-indent")) || 28) * geometry.scaleX;
     const rtl = geometry.style.direction === "rtl";
     const offset = rtl ? rect.right - point.x : point.x - rect.left;
+    const childOffset =
+      Math.max(
+        0,
+        parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-child-offset")) || 0,
+      ) * geometry.scaleX;
     const level = dropOutlineLevel(
       region.depth.destinations,
       offset / indent,
       geometry.continuesOutline,
+      childOffset / indent,
     );
     destination = region.depth.destinations[level]!;
     width = Math.max(0, rect.width - level * indent);
@@ -259,6 +268,12 @@ export function dropRegionTarget(
   }
   const horizontal = region.side.startsWith("block");
   const end = region.side.endsWith("end");
+  if (horizontal) {
+    const rtl = geometry.style.direction === "rtl";
+    const inset = Math.min(width, lineInset);
+    left += rtl ? 0 : inset;
+    width -= inset;
+  }
   const indicator = horizontal
     ? { left, top: (end ? geometry.rect.bottom : geometry.rect.top) - 1, width, height: 2 }
     : {
@@ -283,16 +298,21 @@ export function dropRegionTarget(
  * @param destinations - Nonempty ordered outline bands from the edge declaration.
  * @param offset - Pointer displacement in indentation units, already accounting for scale and RTL.
  * @param continuesOutline - False for a local child layout; omission defaults to outline continuation.
+ * @param childInset - Extra pointer distance in indentation units for the terminal child band.
  * @returns The selected nonnegative index within the eligible destination bands.
  */
 function dropOutlineLevel(
   destinations: readonly BlockDropDestination[],
   offset: number,
   continuesOutline = true,
+  childInset = 0,
 ): number {
   let last = destinations.length - 1;
   if (!continuesOutline && last > 0 && destinations[last]?.kind === "inside") {
     last -= 1;
+  }
+  if (last > 0 && destinations[last]?.kind === "inside" && offset < last + childInset) {
+    return Math.min(last - 1, Math.max(0, Math.floor(offset)));
   }
   return Math.min(last, Math.max(0, Math.floor(offset)));
 }

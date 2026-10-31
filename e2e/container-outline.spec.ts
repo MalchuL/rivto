@@ -26,7 +26,7 @@ class ContainerOutlineFixture {
    */
   async load(type: Container, mode: "block" | "edgeless", repeat = 0): Promise<void> {
     await this.page.setViewportSize({ width: 1400, height: 1100 });
-    await this.page.goto(repeat ? `/?repeat=${repeat}` : "/");
+    await this.page.goto(repeat ? `/?test_features=1&repeat=${repeat}` : "/?test_features=1");
     await this.page.locator('[data-journal-document="today"] > .page-surface').waitFor();
     await this.page.evaluate(
       ({ container, mode }) => {

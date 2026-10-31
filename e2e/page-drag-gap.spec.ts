@@ -98,7 +98,7 @@ async function loadSingleChildReport(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (
       window as unknown as {
@@ -214,6 +214,7 @@ test("drops a block after the last root container", async ({ page }) => {
   const betaId = await beta.getAttribute("data-block-id");
   const boardId = await board.getAttribute("data-block-id");
   await holdDragAt(page, alpha, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const boardBox = (await board.boundingBox())!;
     return { x: boardBox.x + CHILD_DROP_INDENT / 2, y: boardBox.y + boardBox.height + 12 };
   });
@@ -298,6 +299,7 @@ test("drops a block before the first root container", async ({ page }) => {
     { alphaId, betaId, boardId },
   );
   await holdDragAt(page, beta, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const current = (await board.boundingBox())!;
     return { x: current.x + CHILD_DROP_INDENT / 2, y: current.y - 12 };
   });
@@ -406,7 +408,7 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 test("moves a card out of the demo Kanban into the Kanban–Columns gap", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const document = page.locator('[data-journal-document="today"]');
   const board = document.locator('[data-block-type="kanban"]').first();
   const columns = document.locator('[data-block-type="columns"]').first();
@@ -450,7 +452,7 @@ test("moves a card out of the demo Kanban into the Kanban–Columns gap", async 
 });
 
 test("moves a block between the demo TODO storage and Bento", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const document = page.locator('[data-journal-document="today"]');
   const storage = document.locator('[data-block-type="todo-storage"]').first();
   const bento = document.locator('[data-block-type="bento"]').first();
@@ -597,10 +599,10 @@ for (const mode of ["block", "edgeless"] as const) {
       const line = page.locator(DROP_LINE_SELECTOR);
       await expect(line).toHaveCount(1);
       const lineBox = (await line.boundingBox())!;
-      expect(lineBox.height).toBe(4);
+      expect(lineBox.height).toBe(2);
       expect(lineBox.y + lineBox.height / 2).toBeCloseTo(gapY, 0);
-      expect(lineBox.x).toBeCloseTo(previousBox.x, 0);
-      expect(lineBox.width).toBeCloseTo(previousBox.width, 0);
+      expect(lineBox.x).toBeCloseTo(previousBox.x + 12, 0);
+      expect(lineBox.width).toBeCloseTo(previousBox.width - 12, 0);
       await page.mouse.up();
       await expect
         .poll(() =>
@@ -636,14 +638,10 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
     "data-block-drop-active",
     "true",
   );
-  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
-    "outline-width",
-    "4px",
-  );
-  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
-    "outline-style",
-    "solid",
-  );
+  const shadow = await beta.evaluate((element) => getComputedStyle(element, "::after").boxShadow);
+  expect(shadow).toContain("rgb(80, 56, 179)");
+  expect(shadow).toContain("2px");
+  expect(shadow).toContain("inset");
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute(
     "data-block-drop-active",
     "true",
@@ -691,9 +689,8 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     const parent = page.locator(`[data-block-id="${scenario.parentId}"]`).first();
     const source = page.locator(`[data-block-id="${scenario.sourceId}"]`).first();
     await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
-    const parentRow = parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await holdDragAt(page, source, async () => {
-      await parentRow.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
       const box = (await parent.boundingBox())!;
       return { x: box.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
     });
@@ -887,8 +884,11 @@ test("does not add an ordinary block directly to an empty kanban", async ({ page
     .first();
   const alphaId = await alpha.getAttribute("data-block-id");
   const board = page.locator(`[data-block-id="${boardId}"]`).first();
-  const box = (await board.boundingBox())!;
-  await holdDragAt(page, alpha, box.x + box.width / 2, box.y + box.height * 0.7);
+  await holdDragAt(page, alpha, async () => {
+    await board.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    const box = (await board.boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height * 0.7 };
+  });
   await expect(board).not.toHaveAttribute("data-block-drop-active", "true");
   await expect(board.locator('[data-block-drop-active="true"]')).toHaveCount(0);
   await page.mouse.up();
@@ -962,7 +962,7 @@ test("dragging onto a kanban upper rim inserts a sibling without creating a colu
   const line = page.locator(DROP_LINE_SELECTOR);
   await expect(line).toBeVisible();
   const lineBox = (await line.boundingBox())!;
-  expect(lineBox.height).toBe(4);
+  expect(lineBox.height).toBe(2);
   expect(lineBox.width).toBeGreaterThan(lineBox.height);
   await page.mouse.up();
   await expect

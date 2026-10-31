@@ -12,7 +12,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  */
 async function load(page: Page, mode: "block" | "edgeless") {
   await page.setViewportSize({ width: 1500, height: 1100 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate((mode) => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

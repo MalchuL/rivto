@@ -50,7 +50,7 @@ for (const mode of ["block", "edgeless"] as const) {
  */
 async function load(page: Page, type: Container, mode: "block" | "edgeless") {
   await page.setViewportSize({ width: 1500, height: 1100 });
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   const parent = await page.evaluate(
     ({ type, mode }) => {
@@ -639,28 +639,30 @@ for (const mode of ["block", "edgeless"] as const) {
       (element) =>
         parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")) || 28,
     );
-    const x = first.x + 40;
+    const x = first.x + indent + 2;
     for (let y = first.y + first.height - 2; y <= last.y + 2; y += 0.25) {
       await page.mouse.move(x, y);
       const line = await expectBoundaryLine(page);
-      expect(line.x).toBeCloseTo(first.x + indent, 1);
-      expect(line.width).toBeCloseTo(first.width - indent, 1);
+      expect(line.x).toBeCloseTo(first.x + indent + 12, 1);
+      expect(line.width).toBeCloseTo(first.width - indent - 12, 1);
     }
     const middle = (first.y + first.height + last.y) / 2;
     for (const direction of [1, -1]) {
       const depths: number[] = [];
-      for (let offset = 4; offset <= 60; offset += 2) {
-        const dx = direction === 1 ? offset : 64 - offset;
+      for (let offset = 4; offset <= 120; offset += 2) {
+        const dx = direction === 1 ? offset : 124 - offset;
         await page.mouse.move(first.x + dx, middle);
         const line = await expectBoundaryLine(page);
         expect(line.y + line.height / 2).toBeCloseTo(middle, 1);
-        expect(line.x).toBeCloseTo(first.x + (dx < indent ? 0 : indent), 1);
-        depths.push(Math.round((line.x - first.x) / indent));
+        const child = dx >= indent;
+        expect(line.x).toBeCloseTo(first.x + 12 + (child ? indent : 0), 1);
+        depths.push(child ? 1 : 0);
       }
       expect(new Set(depths).size).toBe(2);
       expect(depths).toEqual([...depths].sort((a, b) => direction * (a - b)));
     }
     await page.mouse.move(x, middle);
+    await expectBoundaryLine(page);
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -671,6 +673,18 @@ for (const mode of ["block", "edgeless"] as const) {
         ),
       )
       .toBe("first");
+    const childText = page.locator(
+      '[data-block-id="source"] > .rivto-block-row > .rivto-block-content',
+    );
+    await expect
+      .poll(async () => {
+        const childBox = await childText.boundingBox();
+        const parentBox = await target
+          .locator(":scope > .rivto-block-row > .rivto-block-content")
+          .boundingBox();
+        return childBox && parentBox ? childBox.x - parentBox.x : undefined;
+      })
+      .toBeCloseTo(indent, 1);
   });
 }
 
@@ -760,8 +774,8 @@ for (const mode of ["block", "edgeless"] as const) {
         await expectBoundaryLine(page);
         const line = (await page.locator(".rivto-block-drop-line:visible").boundingBox())!;
         expect(line.y + line.height / 2).toBeCloseTo(block.y + block.height, 1);
-        expect(line.x).toBeCloseTo(block.x, 1);
-        expect(line.width).toBeCloseTo(block.width, 1);
+        expect(line.x).toBeCloseTo(block.x + 12, 1);
+        expect(line.width).toBeCloseTo(block.width - 12, 1);
       }
     }
     await page.mouse.up();
@@ -1109,8 +1123,8 @@ for (const mode of ["block", "edgeless"] as const) {
         const line = page.locator(".rivto-block-drop-line:visible");
         await expect(line).toHaveCount(1);
         const indicator = (await line.boundingBox())!;
-        expect(indicator.x).toBeCloseTo(bounds.x, 1);
-        expect(indicator.width).toBeCloseTo(bounds.width, 1);
+        expect(indicator.x).toBeCloseTo(bounds.x + 12, 1);
+        expect(indicator.width).toBeCloseTo(bounds.width - 12, 1);
       }
       await page.mouse.up();
       await expect
@@ -1410,7 +1424,9 @@ async function expectInsideOutline(page: Page, id: string) {
   await expect(target).toHaveAttribute("data-block-drop-active", "true", { timeout: 1000 });
   await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(1);
   await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
-  await expect(target).toHaveCSS("outline-style", "solid");
+  expect(
+    await target.evaluate((element) => getComputedStyle(element, "::after").boxShadow),
+  ).toContain("inset");
   return (await target.boundingBox())!;
 }
 
@@ -1575,6 +1591,7 @@ async function expectBoundaryLine(page: Page) {
  * @param ys - Trailing edge, physical gap and next leading edge coordinates.
  * @param rtl - Whether logical indentation starts from the right.
  * @param indent - Local indentation in viewport CSS pixels.
+ * @param contentInset - Inline distance from the placement edge to its content.
  * @returns Resolves after the same line geometry is checked across both boundaries.
  */
 async function sweepBoundaryDepth(
@@ -1583,8 +1600,9 @@ async function sweepBoundaryDepth(
   ys: readonly number[],
   rtl: boolean,
   indent: number,
+  contentInset: number,
 ) {
-  for (const offset of [2, indent + 2, indent * 2 + 2, 2]) {
+  for (const offset of [2, indent + 2, indent + 66, indent + 100, 2]) {
     const depth = offset < indent ? 0 : 1;
     for (const y of ys) {
       await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, y);
@@ -1592,8 +1610,8 @@ async function sweepBoundaryDepth(
       await expect(line).toHaveCount(1, { timeout: 1000 });
       await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
       const actual = (await line.boundingBox())!;
-      expect(actual.x).toBeCloseTo(box.x + (rtl ? 0 : depth * indent), 1);
-      expect(actual.width).toBeCloseTo(box.width - depth * indent, 1);
+      expect(actual.x).toBeCloseTo(box.x + (rtl ? 0 : contentInset + depth * indent), 1);
+      expect(actual.width).toBeCloseTo(box.width - contentInset - depth * indent, 1);
       expect(actual.y + actual.height / 2).toBeCloseTo(ys[1], 1);
     }
   }
@@ -1704,6 +1722,10 @@ for (const mode of ["block", "edgeless"] as const) {
           const indent = await first.evaluate((element) =>
             parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
           );
+          const body = (await first
+            .locator(":scope > .rivto-block-row > .rivto-block-content")
+            .boundingBox())!;
+          const contentInset = 12;
           await startDrag(page);
           await sweepBoundaryDepth(
             page,
@@ -1711,10 +1733,8 @@ for (const mode of ["block", "edgeless"] as const) {
             [box.y + box.height - 1, middle, last.y + 1],
             rtl,
             indent,
+            contentInset,
           );
-          const body = (await first
-            .locator(":scope > .rivto-block-row > .rivto-block-content")
-            .boundingBox())!;
           await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2);
           await expectInsideOutline(page, "first");
           const offset = child ? indent + 2 : 2;

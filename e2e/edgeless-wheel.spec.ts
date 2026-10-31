@@ -4,7 +4,7 @@ for (const repeat of [0, 200]) {
   test(`touchpad scrolling pans the canvas and preserves zoom, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const canvas = page.locator(".edgeless-viewport");
     await canvas.hover({ position: { x: 24, y: 24 } });
@@ -51,7 +51,7 @@ for (const repeat of [0, 200]) {
 }
 
 test("touchpad scrolling inside a fixed-height card keeps native scrolling", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.locator('[data-editor-mode="edgeless"]').click();
   const canvas = page.locator(".edgeless-viewport");
   const card = canvas.locator("[data-edgeless-root]").first();
@@ -70,7 +70,7 @@ test("touchpad scrolling inside a fixed-height card keeps native scrolling", asy
 
 for (const repeat of [0, 200]) {
   test(`panning preserves card styles and drawing coverage, repeat=${repeat}`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await page.locator('[data-editor-mode="edgeless"]').click();
     const canvas = page.locator(".edgeless-viewport");
     await canvas.hover({ position: { x: 24, y: 24 } });
@@ -149,7 +149,7 @@ for (const repeat of [0, 200]) {
   test(`fast trackpad movement reaches the camera in the input event, repeat=${repeat}`, async ({
     page,
   }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     const journal = page.locator('[data-journal-document="today"]');
     await journal.locator('[data-editor-mode="edgeless"]').click();
     const canvas = journal.locator(".edgeless-viewport");

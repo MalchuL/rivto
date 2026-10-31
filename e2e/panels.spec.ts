@@ -7,7 +7,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Inspection = { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor } };
 
 async function seed(page: Page, repeat = 0) {
-  await page.goto(`/?repeat=${repeat}`);
+  await page.goto(`/?test_features=1&repeat=${repeat}`);
   await expect(
     page.locator('[data-journal-document="today"] [data-block-content]').first(),
   ).toBeVisible();
@@ -596,7 +596,11 @@ async function measurePanelMarquee(page: Page, canvas: Locator) {
       { once: true },
     );
   });
-  await page.mouse.move(bounds.x + bounds.width - 10, bounds.y + Math.min(bounds.height - 10, 500));
+  const viewport = page.viewportSize()!;
+  await page.mouse.move(
+    Math.min(bounds.x + bounds.width - 10, viewport.width - 10),
+    Math.min(bounds.y + bounds.height - 10, bounds.y + 500, viewport.height - 10),
+  );
   await page.mouse.up();
   await expect
     .poll(() =>

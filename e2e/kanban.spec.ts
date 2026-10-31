@@ -47,7 +47,7 @@ async function move(
     const line = (await indicator.boundingBox())!;
     const column = (await target.boundingBox())!;
     expect(Math.abs(line.height - column.height)).toBeLessThanOrEqual(1);
-    expect(line.width).toBe(4);
+    expect(line.width).toBe(2);
     expect(line.x + line.width / 2).toBeCloseTo(
       position === "after" ? column.x + column.width : column.x,
       0,
@@ -66,7 +66,7 @@ async function move(
 test("moves cards between columns, back to the outline, and into an empty column", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const columns = board.locator('[data-block-type="kanban-column"]');
@@ -89,7 +89,7 @@ test("moves cards between columns, back to the outline, and into an empty column
 });
 
 test("moves Kanban cards in edgeless mode", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -141,7 +141,7 @@ test("moves Kanban cards in edgeless mode", async ({ page }) => {
 for (const mode of ["block", "edgeless"] as const) {
   test(`reorders sibling cards from their outline edges in ${mode} mode`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto("/");
+    await page.goto("/?test_features=1");
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -241,7 +241,7 @@ for (const mode of ["block", "edgeless"] as const) {
 test("places Kanban add-card controls after cards and hides them while collapsed", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?test_features=1");
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const addColumn = board.getByRole("button", { name: "Add Kanban column" });

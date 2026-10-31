@@ -13,35 +13,40 @@
  */
 :root {
   /* Brand accent shared by selection, focus rings, and primary actions. */
-  --rivto-accent: #6c5ce7;
+  --rivto-accent: #5038b3;
   /* Keep whole-block selection darker than the subtle hover tint. */
-  --rivto-block-selection-background: #e5dfff;
-  --rivto-block-selection-outline: #cfc4ff;
+  --rivto-block-selection-background: #ded9f7;
+  --rivto-block-selection-outline: #a89be5;
 
   /* Semantic surface palette consumed through the Tailwind theme below. */
   --rivto-background: #ffffff;
-  --rivto-foreground: #1f1d2b;
+  --rivto-foreground: #151522;
   --rivto-card: #ffffff;
-  --rivto-card-foreground: #1f1d2b;
+  --rivto-card-foreground: #151522;
   --rivto-popover: #ffffff;
-  --rivto-popover-foreground: #1f1d2b;
+  --rivto-popover-foreground: #151522;
   --rivto-primary: var(--rivto-accent);
   --rivto-primary-foreground: #ffffff;
-  --rivto-secondary: #f4f2f8;
-  --rivto-secondary-foreground: #514a61;
-  --rivto-muted: #f4f5f7;
-  --rivto-muted-foreground: #6b6478;
-  --rivto-subtle: #eeeaff;
-  --rivto-subtle-foreground: #4c3fc9;
+  --rivto-secondary: #e9ebf2;
+  --rivto-secondary-foreground: #343447;
+  --rivto-muted: #e9ebf2;
+  --rivto-muted-foreground: #555569;
+  --rivto-subtle: #edeafa;
+  --rivto-subtle-foreground: #42308e;
   --rivto-destructive: #d64545;
-  --rivto-border: #dedbe7;
-  --rivto-input: #d8d4e2;
+  --rivto-border: #c5c8d5;
+  --rivto-input: #aaafc1;
   --rivto-ring: var(--rivto-accent);
-  --rivto-radius: 0.5rem;
+  --rivto-radius: 0.75rem;
+  --rivto-glass: rgb(255 255 255 / 78%);
+  --rivto-glass-edge: rgb(255 255 255 / 90%);
+  --rivto-glass-shadow: 0 8px 24px rgb(28 29 53 / 14%);
 
   /* Block geometry shared by the page and edgeless block trees. */
   --rivto-default-block-height: 1.5em;
   --rivto-block-surface-padding: 56px 64px;
+  /* Canvas cards can be spaced independently from the writing page. */
+  --rivto-edgeless-card-padding: 56px;
   /* One length for all four edges of container child areas, excluding control gutters. */
   --rivto-container-padding: 16px;
 }

@@ -256,7 +256,7 @@ test.beforeEach(async ({ page }, info) => {
   ) {
     await page.setViewportSize({ width: 1280, height: 1800 });
   }
-  await page.goto("/");
+  await page.goto("/?test_features=1");
 });
 
 test("darkens grid dots around the pointer with a CSS-configurable radius", async ({ page }) => {
@@ -361,7 +361,7 @@ test("uses one continuous card surface with symmetric padding and Moveable contr
         return [style.paddingLeft, style.paddingRight];
       }),
     )
-    .toEqual(["64px", "64px"]);
+    .toEqual(["56px", "56px"]);
 });
 
 test("uses identical block typography and spacing in page and edgeless surfaces", async ({
@@ -419,7 +419,7 @@ test("uses identical block typography and spacing in page and edgeless surfaces"
         return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
       }),
     )
-    .toEqual(["12px", "64px", "56px", "64px"]);
+    .toEqual(["56px", "56px", "56px", "56px"]);
 });
 
 test("double-clicks empty canvas to append and focus a block at that canvas point", async ({
@@ -864,7 +864,7 @@ test("resizes visuals on one axis and rotates them with Shift snapping", async (
 
 for (const repeat of [1, 200]) {
   test(`disables grid snapping for rotated visuals (repeat=${repeat})`, async ({ page }) => {
-    await page.goto(`/?repeat=${repeat}`);
+    await page.goto(`/?test_features=1&repeat=${repeat}`);
     await switchMode(page, "edgeless");
     const rectangle = await createVisual(page, "Rectangle");
     await page.getByRole("button", { name: "Disable object alignment" }).click();
@@ -1304,7 +1304,6 @@ test("previews a group dragged by its Moveable border before committing the move
 
 test("drags categorized presets to canvas and edits a styled sticky", async ({ page }) => {
   await switchMode(page, "edgeless");
-  const viewport = page.locator(".edgeless-viewport");
   await page
     .getByRole("toolbar", { name: "Canvas zoom" })
     .getByRole("button", { name: "Disable object alignment" })
@@ -1318,11 +1317,10 @@ test("drags categorized presets to canvas and edits a styled sticky", async ({ p
     .getByRole("button", { name: "Rectangle" });
   const rectanglesBefore = await page.locator('[data-edgeless-visual-kind="rectangle"]').count();
   const presetBox = await rectanglePreset.boundingBox();
-  const viewportBox = await viewport.boundingBox();
-  if (!presetBox || !viewportBox) {
+  if (!presetBox) {
     throw new Error("Expected preset drag geometry");
   }
-  const drop = { x: viewportBox.x + 760, y: viewportBox.y + 420 };
+  const drop = await emptyCanvasPoint(page);
   await page.mouse.move(presetBox.x + presetBox.width / 2, presetBox.y + presetBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(drop.x, drop.y, { steps: 8 });
