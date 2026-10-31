@@ -12,6 +12,7 @@ import {
   blockExtension,
   columnsExtension,
   editorControlProps,
+  intelligentUiExtension,
   kanbanExtension,
   MarkdownContent,
   tableExtension,
@@ -207,6 +208,7 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
 
 /** Creation-time extensions for the demo's optional and custom block types. */
 export const customBlockExtensions: readonly ReactEditorExtension[] = [
+  intelligentUiExtension(),
   kanbanExtension(),
   bentoExtension(),
   tableExtension(),

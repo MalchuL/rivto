@@ -77,6 +77,18 @@ export {
   type EmbeddingProps,
 } from "./extensions/embedding/embedding";
 
+export { intelligentUiLibrary } from "./extensions/intelligent-ui/library";
+export {
+  INTELLIGENT_UI_BLOCK_TYPE,
+  IntelligentUiBlock,
+  createIntelligentUiBlockInput,
+  intelligentUiExtension,
+} from "./extensions/intelligent-ui/intelligent-ui-block";
+export type {
+  IntelligentUiBlockProps,
+  IntelligentUiExtensionOptions,
+} from "./extensions/intelligent-ui/intelligent-ui-block";
+
 export { blockHandleExtension } from "./extensions/built-ins/block-handle/extension";
 export {
   createBlockFactory,

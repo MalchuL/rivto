@@ -55,6 +55,11 @@
 /* TODO item and storage. */
 @import "../extensions/todo-item/todo-item.css" layer(components);
 
+/* Intelligent UI programs. Tokens stay under .rivto-intelligent-ui. */
+@import "../extensions/intelligent-ui/vendor/components/theme.css" layer(components);
+@import "../extensions/intelligent-ui/vendor/components/components.css" layer(components);
+@import "katex/dist/katex.min.css" layer(components);
+
 /* Chrome shares the utility layer with the primitives it customizes. */
 @import "../components/edgeless/controls.css" layer(utilities);
 @import "../extensions/edgeless/visuals/controls.css" layer(utilities);

@@ -22,6 +22,7 @@ import {
   tableExtension,
   columnsExtension,
   bentoExtension,
+  intelligentUiExtension,
   createKanbanBlockInput,
   createTableBlockInput,
   createColumnsBlockInput,
@@ -87,6 +88,7 @@ function createSession() {
       tableExtension(),
       columnsExtension(),
       bentoExtension(),
+      intelligentUiExtension(),
     ],
   });
   let error = "";

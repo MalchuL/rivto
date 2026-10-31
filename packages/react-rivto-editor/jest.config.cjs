@@ -14,6 +14,7 @@ module.exports = {
     "^react-markdown$": "<rootDir>/src/test-mocks/react-markdown.ts",
     "^rehype-highlight$": "<rootDir>/src/test-mocks/empty-plugin.ts",
     "^remark-gfm$": "<rootDir>/src/test-mocks/empty-plugin.ts",
+    "^lucide-react/dynamic\\.mjs$": "<rootDir>/src/test-mocks/lucide-dynamic.ts",
   },
   transform: {
     "^.+\\.tsx?$": ["<rootDir>/jest-transformer.cjs", { tsconfig: "tsconfig.json", useESM: true }],

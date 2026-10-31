@@ -220,6 +220,17 @@ export {
   embeddingExtension,
   type EmbeddingProps,
 } from "./extensions/embedding/embedding";
+export { intelligentUiLibrary } from "./extensions/intelligent-ui/library";
+export {
+  INTELLIGENT_UI_BLOCK_TYPE,
+  IntelligentUiBlock,
+  createIntelligentUiBlockInput,
+  intelligentUiExtension,
+} from "./extensions/intelligent-ui/intelligent-ui-block";
+export type {
+  IntelligentUiBlockProps,
+  IntelligentUiExtensionOptions,
+} from "./extensions/intelligent-ui/intelligent-ui-block";
 
 export { EdgelessSurface } from "./surfaces/edgeless/edgeless-surface";
 export { PageSurface } from "./surfaces/page/page-surface";

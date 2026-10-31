@@ -19,6 +19,7 @@ import {
   COLUMNS_BLOCK_TYPE,
   createBentoBlockInput,
   createColumnsBlockInput,
+  createIntelligentUiBlockInput,
   createReactEditor,
   createKanbanBlockInput,
   createTableBlockInput,
@@ -47,6 +48,7 @@ import {
   customBlockExtensions,
   SLIDER_BLOCK_TYPE,
 } from "./blocks/custom-blocks";
+import { INTELLIGENT_UI_DEMO_PROGRAMS } from "./intelligent-ui/examples";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
 import { DemoEditorSurface } from "./editor-surface";
@@ -779,6 +781,18 @@ async function createDemoEditor() {
     },
     editor.blocks.getInsertionDestinationAfter(paragraphId),
   );
+  editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content:
+      "Intelligent UI blocks run a program inside the page. Use **Edit** to change the source, then **Draw** to run it again. Buttons and inputs update the app without another edit.",
+  });
+  for (const source of INTELLIGENT_UI_DEMO_PROGRAMS) {
+    editor.blocks.insertBlock(createIntelligentUiBlockInput(source));
+  }
+  editor.blocks.insertBlock({
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "The journal continues after the running programs.",
+  });
   editor.history.clear();
 
   return { ...resources, editor, reactEditor, editorStorage };
