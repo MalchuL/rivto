@@ -2,7 +2,7 @@ import { registeredBlockRegion } from "../../presentation/components/block-layou
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
 import type {
   BlockDropEdgeRegion,
-  BlockDropDestination,
+  BlockDropDepth,
   BlockDropIndicator,
   BlockDropPoint,
   BlockDropRegion,
@@ -263,22 +263,7 @@ export function dropRegionTarget(
   if (region.depth?.destinations.length) {
     const indent = dropIndent(geometry.style) * geometry.scaleX;
     const rtl = geometry.style.direction === "rtl";
-    const offset = rtl ? rect.right - point.x : point.x - rect.left;
-    const childOffset =
-      Math.max(
-        0,
-        parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-child-offset")) || 0,
-      ) * geometry.scaleX;
-    const level = dropOutlineLevel(
-      region.depth.destinations,
-      offset,
-      indent,
-      region.depth.ancestors,
-      !geometry.contentRect ||
-        (point.y >= geometry.contentRect.top && point.y <= geometry.contentRect.bottom),
-      geometry.continuesOutline,
-      childOffset,
-    );
+    const level = dropOutlineLevel(region.depth, geometry, rect, point, indent);
     destination = region.depth.destinations[level]!;
     width = Math.max(0, rect.width - level * indent);
     left = rtl ? rect.left : rect.left + level * indent;
@@ -311,27 +296,35 @@ export function dropRegionTarget(
  * A local child scope omits the terminal inside band while retaining sibling and
  * ancestor bands. A sole explicit destination remains available. Body declarations
  * bypass this calculation and continue accepting inside drops independently.
+ * An omitted child layout policy continues the outline. The configured child
+ * offset adds viewport-scaled pointer distance before advancing to a deeper band.
  *
- * @param destinations - Nonempty ordered outline bands from the edge declaration.
- * @param offset - Pointer displacement in viewport CSS pixels, accounting for RTL.
+ * @param depth - Nonempty ordered outline bands and the number of outer ancestor bands.
+ * @param geometry - Measured anchor, its own content bounds, direction, scale and child layout policy.
+ * @param rect - Edge bounds used to measure pointer displacement in viewport CSS pixels, accounting for RTL.
+ * @param point - Pointer position used to distinguish the anchor's own content from its descendants.
  * @param indent - Viewport-scaled indentation, which may be zero.
- * @param ancestors - Number of outer depth bands before the anchor's own siblings.
- * @param inOwnContent - Whether the pointer is alongside the anchor's own content rather than its descendants.
- * @param continuesOutline - False for a local child layout; omission defaults to outline continuation.
- * @param childInset - Extra pointer distance in viewport CSS pixels before advancing to a deeper band.
  * @returns The selected nonnegative index within the eligible destination bands.
  */
 function dropOutlineLevel(
-  destinations: readonly BlockDropDestination[],
-  offset: number,
+  depth: BlockDropDepth,
+  geometry: BlockDropGeometry,
+  rect: BlockDropBounds,
+  point: BlockDropPoint,
   indent: number,
-  ancestors: number,
-  inOwnContent: boolean,
-  continuesOutline = true,
-  childInset = 0,
 ): number {
+  const { destinations, ancestors } = depth;
+  const offset = geometry.style.direction === "rtl" ? rect.right - point.x : point.x - rect.left;
+  const childInset =
+    Math.max(
+      0,
+      parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-child-offset")) || 0,
+    ) * geometry.scaleX;
+  const inOwnContent =
+    !geometry.contentRect ||
+    (point.y >= geometry.contentRect.top && point.y <= geometry.contentRect.bottom);
   let last = destinations.length - 1;
-  if (!continuesOutline && last > 0 && destinations[last]?.kind === "inside") {
+  if (geometry.continuesOutline === false && last > 0 && destinations[last]?.kind === "inside") {
     last -= 1;
   }
   // Zero indentation collapses the depth bands; only the child inset can separate the last two.
