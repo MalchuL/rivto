@@ -1,9 +1,11 @@
+import { Listeners } from "@chulane/rivto-utils";
+
 import type { EdgelessSnappingSnapshot } from "./types";
 
 /** Observable snapping settings whose persistence is owned by the host. */
 export class EdgelessSnappingStore {
   private value: EdgelessSnappingSnapshot;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
 
   /**
    * Initializes snapping preferences, defaulting grid snapping and object alignment to enabled.
@@ -34,8 +36,7 @@ export class EdgelessSnappingStore {
    * @returns Disposer removing this listener from subsequent notifications.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -57,6 +58,6 @@ export class EdgelessSnappingStore {
       return;
     }
     this.value = next;
-    [...this.listeners].forEach((listener) => listener());
+    this.listeners.emit("changed");
   }
 }

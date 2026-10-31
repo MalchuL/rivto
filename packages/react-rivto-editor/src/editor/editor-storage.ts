@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
 import { createDocumentEditor } from "@chulane/rivto";
@@ -27,7 +28,7 @@ export class EditorStorage {
   /** Resolves embedding sources without acquiring candidate documents. */
   readonly blockReferences: BlockReferenceResolver<DocumentModel, ReactEditorApi>;
   private readonly entries = new Map<string, Entry>();
-  private readonly documentListeners = new Set<() => void>();
+  private readonly documentListeners = new Listeners<{ changed: void }>();
   private destroyed = false;
   private destruction?: Promise<void>;
   private readonly openDocument: NonNullable<EditorStorageOptions["openDocument"]>;
@@ -45,10 +46,7 @@ export class EditorStorage {
 
   /** @param listener - Open/close or registry observer; text edits do not notify it. @returns Cleanup. */
   subscribeDocuments(listener: () => void): () => void {
-    this.documentListeners.add(listener);
-    return () => {
-      this.documentListeners.delete(listener);
-    };
+    return this.documentListeners.subscribe("changed", listener);
   }
   /** @returns Usable editors, excluding pending and closing entries. */
   getEditors(): readonly ReactEditorApi[] {
@@ -234,7 +232,7 @@ export class EditorStorage {
   }
   /** Publishes only document lifecycle or registry metadata changes. */
   private notifyDocuments(): void {
-    this.documentListeners.forEach((listener) => listener());
+    this.documentListeners.emit("changed");
   }
   /** Rejects operations after shutdown starts. */
   private assertActive(): void {

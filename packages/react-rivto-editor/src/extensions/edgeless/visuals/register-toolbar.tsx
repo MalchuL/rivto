@@ -120,6 +120,8 @@ export function registerVisualToolbar(
       ).values(),
     ];
     const TextGroup = (props: EdgelessToolbarGroupProps) => <TextTools {...props} fonts={fonts} />;
+    // Group defaults provide initial tool settings; rememberedProperties selects which
+    // committed edits and frame dimensions can become defaults for later creations.
     for (const group of [
       {
         id: VISUAL_TOOL_GROUPS.shapes,
@@ -220,11 +222,13 @@ export function registerVisualToolbar(
       icon: "eraser",
       createTool: (options) => new EraserTool(options),
     });
+    // Explicit preset properties win over group defaults and remembered settings.
+    // Supplying the label here gives every new text element the same initial content.
     preset(
       VISUAL_TOOL_IDS.text,
       "Text",
       VISUAL_TOOL_GROUPS.text,
-      { kind: VISUAL_ELEMENT_TYPES.text },
+      { kind: VISUAL_ELEMENT_TYPES.text, text: "Text" },
       "text",
     );
     for (const sticker of stickers) {

@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 /**
  * Stores first-class canvas elements in adapter-neutral collaborative maps.
  * The manager validates portable records, observes changes, delegates snapshot
@@ -32,6 +33,12 @@ import {
 import { ElementHierarchy } from "./hierarchy";
 import { ElementCache } from "./cache";
 
+/** Element snapshots are keyed by ID; collection, membership, and structure channels are independent. */
+type ElementListenerEvents = Record<
+  `tree:${string}` | `node:${string}` | "changed" | "membership" | "structure",
+  void
+>;
+
 type PreparedElementInput = ElementInput & { id: string; frame: ElementFrame };
 
 const ELEMENTS_KEY = "rivto.editor.elements";
@@ -53,19 +60,17 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   private readonly cache = new ElementCache();
   private readonly hierarchy: ElementHierarchy;
   private readonly rootIds: CRDTArray<string>;
-  private readonly structureListeners = new Set<() => void>();
   private readonly pendingNodes = new Set<string>();
   private readonly pendingTrees = new Set<string>();
   private pendingStructure = false;
   private pendingMembership = false;
   private pendingCollection = false;
-  /** Subscribers to any element record or collection change. */
-  private readonly listeners = new Set<() => void>();
-  /** Subscribers to element insertion or deletion. */
-  private readonly membershipListeners = new Set<() => void>();
-  /** Subscribers to individual element records. */
-  private readonly treeListeners = new Map<string, Set<() => void>>();
-  private readonly elementListeners = new Map<IDElement, Set<() => void>>();
+  /**
+   * Subscribers to any element record or collection change, and to element insertion or deletion.
+   * Tree and node subscriptions are keyed by element ID for subtree and individual record changes.
+   * Structure subscriptions observe hierarchy changes independently.
+   */
+  private readonly listeners = new Listeners<ElementListenerEvents>();
 
   /**
    * Creates an element manager over existing collaborative document storage.
@@ -174,18 +179,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this listener.
    */
   subscribeElement(id: string, listener: () => void): () => void {
-    let listeners = this.treeListeners.get(id);
-    if (!listeners) {
-      listeners = new Set();
-      this.treeListeners.set(id, listeners);
-    }
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-      if (!listeners.size) {
-        this.treeListeners.delete(id);
-      }
-    };
+    return this.listeners.subscribe(`tree:${id}`, listener);
   }
 
   /**
@@ -317,8 +311,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.listeners.subscribe("changed", listener);
   }
 
   /**
@@ -334,18 +327,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeElementNode(id: string, listener: () => void): () => void {
-    let listeners = this.elementListeners.get(id);
-    if (!listeners) {
-      listeners = new Set();
-      this.elementListeners.set(id, listeners);
-    }
-    listeners.add(listener);
-    return () => {
-      listeners!.delete(listener);
-      if (!listeners!.size) {
-        this.elementListeners.delete(id);
-      }
-    };
+    return this.listeners.subscribe(`node:${id}`, listener);
   }
 
   /**
@@ -356,10 +338,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeStructure(listener: () => void): () => void {
-    this.structureListeners.add(listener);
-    return () => {
-      this.structureListeners.delete(listener);
-    };
+    return this.listeners.subscribe("structure", listener);
   }
 
   /**
@@ -373,8 +352,7 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeMembership(listener: () => void): () => void {
-    this.membershipListeners.add(listener);
-    return () => this.membershipListeners.delete(listener);
+    return this.listeners.subscribe("membership", listener);
   }
 
   /**
@@ -763,17 +741,6 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     this.hierarchy.invalidate();
   }
 
-  /**
-   * Publishes to a stable listener snapshot so callbacks may unsubscribe safely.
-   * @param listeners - Subscribers for one change channel.
-   * @returns No value.
-   */
-  private emit(listeners: ReadonlySet<() => void> | undefined): void {
-    if (listeners) {
-      [...listeners].forEach((listener) => listener());
-    }
-  }
-
   /** Computes initial parent geometry from child frames without changing their coordinates. */
   private childrenFrame(frames: readonly ElementFrame[]): ElementFrame {
     if (!frames.length) {
@@ -828,15 +795,15 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     this.pendingCollection = false;
     this.pendingStructure = false;
     this.pendingMembership = false;
-    nodes.forEach((id) => this.emit(this.elementListeners.get(id)));
-    trees.forEach((id) => this.emit(this.treeListeners.get(id)));
+    nodes.forEach((id) => this.listeners.emit(`node:${id}`));
+    trees.forEach((id) => this.listeners.emit(`tree:${id}`));
     if (structure) {
-      this.emit(this.structureListeners);
+      this.listeners.emit("structure");
     }
     if (membership) {
-      this.emit(this.membershipListeners);
+      this.listeners.emit("membership");
     }
-    this.emit(this.listeners);
+    this.listeners.emit("changed");
   }
 
   /** Writes prepared or restored element data without running application preparation again. */

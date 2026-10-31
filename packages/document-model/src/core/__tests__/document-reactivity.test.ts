@@ -43,6 +43,37 @@ describe("document reactivity", () => {
     },
   );
 
+  test.each([10, 2000])(
+    "checks insertion collisions without enumerating %i existing block IDs",
+    async (count) => {
+      const doc = new YjsDoc("insertion-collision-cost");
+      const model = new DocumentModelImpl(doc);
+      model.loadSnapshot({
+        version: 9,
+        blocks: Array.from({ length: count }, (_, index) => ({
+          id: `existing-${index}`,
+          type: "paragraph",
+          content: "",
+          props: {},
+          listProps: {},
+          pluginData: {},
+          children: [],
+        })),
+        elements: [],
+        pluginData: {},
+      });
+      const keys = jest.spyOn(doc.doc.getMap("rivto.editor.blocks"), "keys");
+      model.blocks.insertBlock({ id: "new", type: "paragraph" });
+      expect(model.blocks.getBlockNode("new")?.id).toBe("new");
+      expect(() => model.blocks.insertBlock({ id: "existing-0", type: "paragraph" })).toThrow(
+        "already exists",
+      );
+      expect(keys).not.toHaveBeenCalled();
+      keys.mockRestore();
+      await model.destroy();
+    },
+  );
+
   test("checks child presence for placed blocks", () => {
     const doc = new YjsDoc("has-children-reactivity");
     const model = new DocumentModelImpl(doc);
@@ -122,6 +153,34 @@ describe("document reactivity", () => {
     expect(model.blocks.getRootIds()).toBe(roots);
     disposers.forEach((dispose) => dispose());
     void doc.destroy();
+  });
+
+  test("isolates block notification kinds even when IDs resemble channel names", async () => {
+    const model = new DocumentModelImpl(new YjsDoc("block-listener-keys"));
+    model.blocks.insertBlock({ id: "roots", type: "paragraph" });
+    model.blocks.insertBlock({ id: "node:roots", type: "paragraph" });
+    const block = jest.fn();
+    const node = jest.fn();
+    const other = jest.fn();
+    const roots = jest.fn();
+    const structure = jest.fn();
+    const release = model.blocks.subscribeBlock("roots", block);
+    model.blocks.subscribeBlockNode("roots", node);
+    model.blocks.subscribeBlock("node:roots", other);
+    model.blocks.subscribeRootIds(roots);
+    model.blocks.subscribeStructure(structure);
+
+    model.blocks.updateBlock("roots", { content: "changed" });
+    expect(block).toHaveBeenCalledTimes(1);
+    expect(node).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(roots).not.toHaveBeenCalled();
+    expect(structure).not.toHaveBeenCalled();
+    release();
+    model.blocks.updateBlock("roots", { content: "again" });
+    expect(block).toHaveBeenCalledTimes(1);
+    expect(node).toHaveBeenCalledTimes(2);
+    await model.destroy();
   });
 
   test("recursive snapshots share the cached child objects", () => {

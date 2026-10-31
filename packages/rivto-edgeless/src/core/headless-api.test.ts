@@ -42,8 +42,11 @@ function checkEntry(entry: string, allowBrowser: boolean): void {
     const inspect = (node: ts.Node): void => {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
         const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
-        expect(specifier.startsWith(".")).toBe(true);
-        const target = resolve(dirname(path), specifier);
+        expect(specifier.startsWith(".") || specifier === "@chulane/rivto-utils").toBe(true);
+        const target =
+          specifier === "@chulane/rivto-utils"
+            ? resolve("../rivto-utils/src/index")
+            : resolve(dirname(path), specifier);
         const file = [target + ".ts", target + ".tsx", target + "/index.ts"].find(existsSync);
         expect(file).toBeDefined();
         pending.push(file!);
@@ -57,7 +60,7 @@ function checkEntry(entry: string, allowBrowser: boolean): void {
   }
 }
 
-test("the core public API has no React, DOM, Rivto or storage dependency, including type imports", () => {
+test("the core public API has no React, DOM, editor or storage dependency, including type imports", () => {
   checkEntry("src/index.ts", false);
 });
 

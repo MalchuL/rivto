@@ -863,6 +863,31 @@ test("resizes visuals on one axis and rotates them with Shift snapping", async (
 });
 
 for (const repeat of [1, 200]) {
+  test(`resizes rotated visuals without snapping (repeat=${repeat})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/?repeat=${repeat}`);
+    await switchMode(page, "edgeless");
+    const rectangle = await createVisual(page, "Rectangle");
+    const rotate = page.locator("[data-edgeless-controls-for] [data-edgeless-rotation-handle]");
+    await rotate.focus();
+    await page.keyboard.press("ArrowRight");
+    const before = await visualFrame(rectangle);
+    const handle = page.locator('[data-edgeless-controls-for] [data-edgeless-resize-handle="e"]');
+    const box = (await handle.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (const delta of [4, 7, 11]) {
+      await page.mouse.move(x + delta, y);
+      const preview = await visualFrame(rectangle);
+      expect(preview.width - before.width).toBeCloseTo(delta, 0);
+    }
+    await page.mouse.up();
+    const after = await visualFrame(rectangle);
+    expect(after.width - before.width).toBeCloseTo(11, 0);
+  });
+
   test(`disables grid snapping for rotated visuals (repeat=${repeat})`, async ({ page }) => {
     await page.goto(`/?repeat=${repeat}`);
     await switchMode(page, "edgeless");
@@ -1059,6 +1084,21 @@ const pasteIntoLabel = async (
   }, payload);
 };
 
+test("new text elements start with Text after editing an earlier element", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const first = await createVisual(page, "Text");
+  await expect(first.locator(".edgeless-visual-text")).toHaveText("Text");
+  await first.dblclick();
+  const editor = first.locator(".edgeless-label-editor");
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.insertText("Changed");
+  await page.locator(".edgeless-viewport").click({ position: { x: 24, y: 24 } });
+  await expect(first.locator(".edgeless-visual-text")).toHaveText("Changed");
+  const second = await createVisual(page, "Text");
+  await expect(second.locator(".edgeless-visual-text")).toHaveText("Text");
+});
+
 test("pastes plain text into visual labels instead of the previous block", async ({ page }) => {
   await switchMode(page, "edgeless");
   const blockContent = page.locator("[data-edgeless-root] [data-block-content]").first();
@@ -1231,7 +1271,8 @@ test("edits visual properties immediately and enters text editing on double-clic
   await content.dblclick();
   await expect(content).toHaveAttribute("contenteditable", "true");
   await expect(content).toBeFocused();
-  await expect(content).toHaveText("");
+  await expect(content).toHaveText("Text");
+  await page.keyboard.press("Control+a");
   await page.keyboard.type("Draft");
   await page.keyboard.press("Control+a");
   await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe("Draft");

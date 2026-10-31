@@ -3,6 +3,7 @@
  * It demonstrates host subscriptions, undirected property sync, directed value
  * flow, and independent slot flow without depending on the Rivto document model.
  */
+import { Listeners } from "@chulane/rivto-utils";
 import type { PropagationContext } from "@chulane/graph-runtime";
 import { blockPropertyId, type BlockPropertyAddress } from "./addresses";
 import { BlockGraph } from "./block-graph";
@@ -15,20 +16,19 @@ export async function runInMemoryExample(): Promise<{
   calls: unknown[];
 }> {
   const values = new Map<string, unknown>();
-  const listeners = new Map<string, Set<(value: unknown, context?: PropagationContext) => void>>();
+  /** Property-change listeners keyed by the ID derived from a block property address. */
+  const listeners = new Listeners<
+    Record<string, { value: unknown; context?: PropagationContext }>
+  >();
   const key = (address: BlockPropertyAddress) => blockPropertyId(address);
   const host: BlockValueHost = {
     read: (address) => values.get(key(address)),
     write: (address, value, context) => {
       values.set(key(address), value);
-      listeners.get(key(address))?.forEach((listener) => listener(value, context));
+      listeners.emit(key(address), { value, context });
     },
     subscribe: (address, listener) => {
-      const id = key(address);
-      const current = listeners.get(id) ?? new Set();
-      current.add(listener);
-      listeners.set(id, current);
-      return () => current.delete(listener);
+      return listeners.subscribe(key(address), ({ value, context }) => listener(value, context));
     },
   };
   const graph = new BlockGraph(host);

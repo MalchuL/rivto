@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import type { BlockSelectionSnapshot } from "../editor/selection/types";
 import type {
   BlockEditorAdapter,
@@ -18,7 +19,8 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
   private selectionSnapshot: BlockSelectionSnapshot | undefined;
   private selectableIds: readonly string[] | undefined;
   private selected = new Set<string>();
-  private readonly listeners = new Map<string, Set<() => void>>();
+  /** Keys identify block-ids or block IDs prefixed with node: or selection:. */
+  private readonly listeners = new Listeners<Record<string, void>>();
 
   rootIds: readonly string[] | undefined;
 
@@ -148,7 +150,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
    * @returns Active listeners across display-list, nodes, and selection sources.
    */
   get subscriberCount(): number {
-    return [...this.listeners.values()].reduce((count, listeners) => count + listeners.size, 0);
+    return this.listeners.listenerCount;
   }
 
   /**
@@ -220,18 +222,8 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
    * @returns Idempotent disposer removing the callback and any empty listener set.
    */
   private subscribe(key: string, listener: () => void): () => void {
-    let listeners = this.listeners.get(key);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(key, listeners);
-    }
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-      if (!listeners.size && this.listeners.get(key) === listeners) {
-        this.listeners.delete(key);
-      }
-    };
+    const callback = () => listener();
+    return this.listeners.subscribe(key, callback);
   }
 
   /**
@@ -241,9 +233,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
    * @returns Current listeners have run synchronously.
    */
   private emit(key: string): void {
-    for (const listener of [...(this.listeners.get(key) ?? [])]) {
-      listener();
-    }
+    this.listeners.emit(key);
   }
   /**
    * Stores host selection and notifies only changed membership booleans.

@@ -1,3 +1,5 @@
+import { Listeners } from "@chulane/rivto-utils";
+
 /** Read-only synchronous snapshot contract suitable for useSyncExternalStore. */
 export interface CanvasSnapshot<T> {
   /**
@@ -17,7 +19,7 @@ export interface CanvasSnapshot<T> {
 
 /** Small synchronous store with stable snapshots for React external subscriptions. */
 export class Store<T> {
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Listeners<{ changed: void }>();
   /**
    * Creates a store without installing external subscriptions.
    *
@@ -39,10 +41,7 @@ export class Store<T> {
    * @returns Cleanup removing this callback.
    */
   subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return this.listeners.subscribe("changed", listener);
   };
   /**
    * Replaces the snapshot and notifies subscribers when its identity changes.
@@ -55,9 +54,7 @@ export class Store<T> {
       return;
     }
     this.value = value;
-    for (const listener of this.listeners) {
-      listener();
-    }
+    this.listeners.emit("changed");
   }
   /**
    * Releases all observers while retaining the last snapshot.

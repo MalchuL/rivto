@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 /**
  * Stores collaborative block records, text, and ordered subtree placement.
  * Keeps IDs stable, validates writes before mutation, and owns change observation.
@@ -44,6 +45,12 @@ import {
 import { contentFrom, strings, validateBlockForest, validateBlockListProps } from "./utils";
 import { BlockCache } from "./cache";
 
+/** Block snapshots are keyed by ID; root and structure channels are independent. */
+type BlockListenerEvents = Record<
+  `block:${string}` | `node:${string}` | "roots" | "structure",
+  void
+>;
+
 const ROOTS_KEY = "rivto.editor.roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
 /** One subtree placement in an ordered batch of block moves. */
@@ -79,14 +86,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
   /** Detached snapshots invalidated before subscribers are notified. */
   private readonly cache: BlockCache;
-  /** Per-block subscribers, including recursive snapshot consumers on ancestors. */
-  private readonly blockListeners = new Map<IDBlock, Set<() => void>>();
-  /** Subscribers for own fields and direct child IDs only. */
-  private readonly blockNodeListeners = new Map<IDBlock, Set<() => void>>();
-  /** Subscribers interested only in the ordered root identifier list. */
-  private readonly rootListeners = new Set<() => void>();
-  /** Subscribers interested in root or child ordering changes. */
-  private readonly structureListeners = new Set<() => void>();
+  /**
+   * Per-block subscribers keyed by block ID, including recursive snapshot consumers on ancestors.
+   * Node subscribers observe own fields and direct child IDs only; root subscribers observe
+   * the ordered root identifier list, and structure subscribers observe root or child ordering.
+   */
+  private readonly listeners = new Listeners<BlockListenerEvents>();
   /** Monotonic block-data revision used by derived presentation caches. */
   private currentRevision = 0;
   /** Last transaction already published to hierarchy subscribers. */
@@ -219,7 +224,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeBlock(id: string, listener: () => void): () => void {
-    return this.subscribeById(this.blockListeners, id, listener);
+    return this.listeners.subscribe(`block:${id}`, listener);
   }
 
   /**
@@ -229,7 +234,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @returns Function that removes this listener.
    */
   subscribeBlockNode(id: string, listener: () => void): () => void {
-    return this.subscribeById(this.blockNodeListeners, id, listener);
+    return this.listeners.subscribe(`node:${id}`, listener);
   }
 
   /**
@@ -239,8 +244,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeRootIds(listener: () => void): () => void {
-    this.rootListeners.add(listener);
-    return () => this.rootListeners.delete(listener);
+    return this.listeners.subscribe("roots", listener);
   }
 
   /**
@@ -250,8 +254,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @returns Function that removes this exact listener.
    */
   subscribeStructure(listener: () => void): () => void {
-    this.structureListeners.add(listener);
-    return () => this.structureListeners.delete(listener);
+    return this.listeners.subscribe("structure", listener);
   }
 
   /**
@@ -442,14 +445,14 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     // roots. Duplicate references can change the first winner on reorder.
     if (previousParents) {
       const changed = this.cache.invalidateChangedParents(previousParents);
-      this.emitFocused(changed, this.blockListeners);
+      this.emitFocused(changed, "block");
     } else {
       this.cache.getAncestorIds(changedRoots, true).forEach((id) => affected.add(id));
       this.cache.invalidate(affected);
-      this.emitFocused(affected, this.blockListeners);
+      this.emitFocused(affected, "block");
     }
-    this.emitFocused(changedRoots, this.blockNodeListeners);
-    this.emit(this.rootListeners);
+    this.emitFocused(changedRoots, "node");
+    this.listeners.emit("roots");
     this.emitStructure(transaction);
   }
 
@@ -1229,7 +1232,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @throws {Error} When any descendant is malformed or collides with storage.
    */
   private validateInsertedForest(blocks: readonly BlockInput[]): void {
-    validateBlockForest(blocks, { existingIds: new Set([...this.storage.keys()]) });
+    validateBlockForest(blocks, { existingIds: this.storage });
   }
 
   /**
@@ -1308,62 +1311,19 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   ): void {
     const affected = this.cache.getAncestorIds(ids);
     this.cache.invalidate(affected, nodeIds, childListIds);
-    this.emitFocused(affected, this.blockListeners);
-    this.emitFocused(new Set([...nodeIds, ...childListIds]), this.blockNodeListeners);
+    this.emitFocused(affected, "block");
+    this.emitFocused(new Set([...nodeIds, ...childListIds]), "node");
   }
 
   /**
-   * Adds a listener to one keyed channel.
-   * @param registry - Listener registry for the requested snapshot kind.
-   * @param id - Block identifier to observe.
-   * @param listener - Callback to register.
-   * @returns Function that removes this listener.
-   */
-  private subscribeById(
-    registry: Map<IDBlock, Set<() => void>>,
-    id: string,
-    listener: () => void,
-  ): () => void {
-    let listeners = registry.get(id);
-    if (!listeners) {
-      listeners = new Set();
-      registry.set(id, listeners);
-    }
-    listeners.add(listener);
-    return () => {
-      listeners!.delete(listener);
-      if (!listeners!.size) {
-        registry.delete(id);
-      }
-    };
-  }
-
-  /**
-   * Notifies only listeners whose requested ID is in a changed set.
-   * @param ids - Changed block identifiers.
-   * @param registry - Listener registry for one snapshot kind.
-   * @returns No value.
-   */
-  private emitFocused(
-    ids: ReadonlySet<string>,
-    registry: ReadonlyMap<IDBlock, Set<() => void>>,
-  ): void {
-    ids.forEach((id) => {
-      const listeners = registry.get(id);
-      if (listeners) {
-        this.emit(listeners);
-      }
-    });
-  }
-
-  /**
-   * Calls a stable listener snapshot so callbacks may unsubscribe safely.
+   * Notifies subscribers for each changed block identifier.
    *
-   * @param listeners - Callbacks to invoke once.
-   * @returns No value.
+   * @param ids - Changed block identifiers.
+   * @param kind - Snapshot kind whose keyed listeners should be notified.
+   * @returns Subscribers for the changed identifiers have been notified.
    */
-  private emit(listeners: ReadonlySet<() => void>): void {
-    [...listeners].forEach((listener) => listener());
+  private emitFocused(ids: ReadonlySet<string>, kind: "block" | "node"): void {
+    ids.forEach((id) => this.listeners.emit(`${kind}:${id}`));
   }
 
   /**
@@ -1377,7 +1337,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       return;
     }
     this.lastStructureTransaction = transaction;
-    this.emit(this.structureListeners);
+    this.listeners.emit("structure");
   }
 
   /**
