@@ -41,6 +41,7 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "reports/**",
+      "packages/react-rivto-editor/src/extensions/intelligent-ui/vendor/**",
       "**/encore.gen/**",
       "**/encore.gen.ts",
       "**/next-env.d.ts",

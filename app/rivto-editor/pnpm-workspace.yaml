@@ -5,6 +5,10 @@ packages:
 storeDir: ../../.pnpm-store
 
 allowBuilds:
+  "@openuidev/lang-core": false
   "@parcel/watcher": false
   electron: true
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - lucide-react@1.65.0
