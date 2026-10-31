@@ -1,3 +1,4 @@
+import { Listeners } from "@chulane/rivto-utils";
 import {
   createEdgelessSelection,
   isEdgelessSelectionActive,
@@ -40,7 +41,8 @@ interface PageSelectionHost {
 
 /** Panel-owned selection adapter with addressed membership feedback and model-based outline order. */
 export class PageSelection implements BlockEditorSelection {
-  private readonly listeners = new Map<string, Set<() => void>>();
+  /** Selection membership subscribers keyed by block ID. */
+  private readonly listeners = new Listeners<Record<string, void>>();
   private readonly releases: Array<() => void> = [];
   private previousSelection: Selection | undefined;
   private order: readonly string[] = [];
@@ -244,24 +246,9 @@ export class PageSelection implements BlockEditorSelection {
     if (this.destroyed) {
       throw new Error("Page selection is destroyed");
     }
-    let entries = this.listeners.get(blockId);
-    if (!entries) {
-      entries = new Set();
-      this.listeners.set(blockId, entries);
-    }
+    // Keep repeated registrations of the same listener independently disposable.
     const notify = () => listener();
-    entries.add(notify);
-    let active = true;
-    return () => {
-      if (!active) {
-        return;
-      }
-      active = false;
-      entries.delete(notify);
-      if (!entries.size) {
-        this.listeners.delete(blockId);
-      }
-    };
+    return this.listeners.subscribe(blockId, notify);
   }
 
   /**
@@ -332,12 +319,7 @@ export class PageSelection implements BlockEditorSelection {
    * @throws Propagates the first observer failure.
    */
   private notifyBlock(blockId: string): void {
-    const entries = this.listeners.get(blockId);
-    if (entries) {
-      for (const listener of [...entries]) {
-        listener();
-      }
-    }
+    this.listeners.emit(blockId);
   }
 
   /**

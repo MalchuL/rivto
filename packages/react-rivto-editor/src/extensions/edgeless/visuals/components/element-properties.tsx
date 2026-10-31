@@ -88,7 +88,7 @@ export function ElementProperties({
         elements={elements}
         reactPanel={reactPanel}
         common={common}
-        preview={(patch) => operations.previewProperties(ids, patch)}
+        preview={(patch) => operations.setPropertyPreview(ids, patch)}
         commit={() => operations.commitPropertyPreview()}
         cancel={() => operations.discardPropertyPreview()}
       />

@@ -9,6 +9,11 @@ export const drawingDefaults = {
 /**
  * Returns fresh built-in creation defaults, independent of mounted panels and session choices.
  *
+ * Element definitions and toolbar groups use these values as their starting styles.
+ * A surface can remember later style changes separately; changing those settings does
+ * not mutate these defaults. The text tool supplies its initial label in its preset,
+ * so the text category here contains appearance only.
+ *
  * @returns Independent mutable category objects; dimensions are canvas units and opacity is a zero-to-one fraction.
  */
 export function createEdgelessDefaults() {

@@ -782,16 +782,9 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
       return block ? [block] : [];
     });
     editor.history.batchUpdates(() => {
-      let afterId = editor.blocks.getRootIds().at(-1);
       for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock(
-          separatorBlockFactory.createEmptyBlock(),
-          editor.blocks.getInsertionDestinationAfter(afterId),
-        ).id;
-        afterId =
-          editor.blocks
-            .importForest(template, editor.blocks.getInsertionDestinationAfter(afterId))
-            .roots.at(-1)?.id ?? afterId;
+        editor.blocks.insertBlock(separatorBlockFactory.createEmptyBlock());
+        editor.blocks.importForest(template);
       }
     });
   }

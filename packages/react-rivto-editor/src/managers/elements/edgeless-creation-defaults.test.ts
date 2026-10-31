@@ -69,7 +69,7 @@ it("remembers only committed changed fields and leaves memory unchanged on previ
   f.first.updateProperties(old.id, { cornerRadius: 12 });
   expect(f.defaults.get({ type: "rectangle" }).props?.fill).toBe("blue");
   const before = f.defaults.get({ type: "rectangle" });
-  f.first.previewProperties([old.id], { cornerRadius: 24, fill: "green" });
+  f.first.setPropertyPreview([old.id], { cornerRadius: 24, fill: "green" });
   expect(f.defaults.get({ type: "rectangle" })).toEqual(before);
   expect(f.defaults.getGroupPreview("shapes").props?.fill).toBe("green");
   f.first.discardPropertyPreview();
@@ -77,7 +77,7 @@ it("remembers only committed changed fields and leaves memory unchanged on previ
   expect(() => f.first.updateProperties(old.id, { cornerRadius: -1 })).toThrow();
   expect(() => f.first.createElement({ type: "rectangle", props: { cornerRadius: -1 } })).toThrow();
   expect(f.defaults.get({ type: "rectangle" })).toEqual(before);
-  f.first.previewProperties([old.id], { cornerRadius: 24 });
+  f.first.setPropertyPreview([old.id], { cornerRadius: 24 });
   f.first.commitPropertyPreview();
   expect(f.defaults.get({ type: "rectangle" }).props?.cornerRadius).toBe(24);
   f.editor.history.undo();
@@ -179,7 +179,7 @@ it.each([1, 200])(
     });
     const revision = tools.revision;
     const otherRevision = other.revision;
-    f.first.previewProperties(
+    f.first.setPropertyPreview(
       nodes.map((node) => node.id),
       { fill: "#123456", strokeWidth: 3 },
     );

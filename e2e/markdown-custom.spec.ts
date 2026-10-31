@@ -42,6 +42,34 @@ test("renders plain writing text and keeps Markdown list syntax", async ({ page 
   ).toHaveText("item");
 });
 
+test("highlights separate blocks independently when one source changes", async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return [
+      editor.blocks.insertBlock({
+        type: "paragraph",
+        content: "```javascript\nconst first = 1;\n```",
+      }).id,
+      editor.blocks.insertBlock({
+        type: "paragraph",
+        content: "```python\ndef second():\n    return 2\n```",
+      }).id,
+    ];
+  });
+  const first = page.locator(blockIdSelector(ids[0]!));
+  const second = page.locator(blockIdSelector(ids[1]!));
+  await expect(first.locator("code.language-javascript .hljs-keyword")).toContainText("const");
+  await expect(second.locator("code.language-python .hljs-keyword").first()).toHaveText("def");
+  await page.evaluate((id) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.updateBlock(id, { content: "```javascript\nlet changed = 3;\n```" });
+  }, ids[0]!);
+  await expect(first.locator("code.language-javascript .hljs-keyword")).toContainText("let");
+  await expect(second.locator("code.language-python .hljs-keyword").first()).toHaveText("def");
+});
+
 for (const mode of ["block", "edgeless"]) {
   for (const repeat of [0, 200]) {
     test(`inline code keeps paragraph height while editing (${mode}, repeat=${repeat})`, async ({
