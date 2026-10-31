@@ -10,9 +10,13 @@
  * to native and host-defined types through the same canonical placement data.
  */
 :root {
+  /* Drop calculation: none. Highlight: sets insertion-line and inside-border thickness. */
   --rivto-drop-indicator-thickness: 2px;
+  /* Drop calculation: none. Highlight: sets insertion-line and inside-border color. */
   --rivto-drop-indicator-color: var(--rivto-accent);
+  /* Drop calculation: none. Highlight: rounds the inside-drop border. */
   --rivto-drop-indicator-radius: var(--rivto-radius);
+  /* Drop calculation: none. Highlight: tints an inside-drop target. */
   --rivto-drop-inside-background: color-mix(
     in srgb,
     var(--rivto-drop-indicator-color) 4%,

@@ -191,6 +191,38 @@ it("partitions terminal depth explicitly and honors RTL", () => {
   });
 });
 
+it.each(["ltr", "rtl"] as const)(
+  "uses the child offset to extend the sibling placement band in %s",
+  (direction) => {
+    item.style.setProperty("--rivto-block-indent", "20px");
+    item.style.setProperty("--rivto-block-drop-line-inset", "12px");
+    item.style.setProperty("--rivto-block-drop-child-offset", "24px");
+    item.style.direction = direction;
+    const inside = { kind: "inside", parentId: "a" } as const;
+    register(item, [
+      {
+        kind: "edge",
+        side: "block-end",
+        destination,
+        depth: { ancestors: 0, destinations: [destination, inside] },
+      },
+    ]);
+    adapter.setNode("a");
+    const point = (offset: number) => (direction === "rtl" ? 200 - offset : offset);
+    expect(editor.dropTargets.resolve(point(43), 99, undefined, item)?.destination).toEqual(
+      destination,
+    );
+    const child = editor.dropTargets.resolve(point(44), 99, undefined, item);
+    expect(child?.destination).toEqual(inside);
+    expect(child?.indicator).toEqual({
+      left: direction === "rtl" ? 0 : 32,
+      top: 99,
+      width: 168,
+      height: 2,
+    });
+  },
+);
+
 it("scales local target thickness with an existing transformed anchor", () => {
   Object.defineProperty(item, "offsetWidth", { value: 100 });
   Object.defineProperty(item, "offsetHeight", { value: 50 });

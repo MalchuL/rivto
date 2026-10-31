@@ -12,6 +12,10 @@ export interface BlockEditorTheme extends CSSProperties {
   readonly "--rivto-block-gap"?: string;
   /** Logical indentation of a child group; defaults to 28px. */
   readonly "--rivto-block-indent"?: string;
+  /** Inline inset in local pixels for horizontal insertion lines; defaults to zero. */
+  readonly "--rivto-block-drop-line-inset"?: string;
+  /** Extra pointer distance in local pixels before selecting child placement; defaults to zero. */
+  readonly "--rivto-block-drop-child-offset"?: string;
   /** Gap between row slots/content and between controls; defaults to 4px. */
   readonly "--rivto-slot-gap"?: string;
   /** Minimum first-line height for the row and flow slots; defaults to 24px. */

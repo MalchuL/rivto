@@ -599,10 +599,10 @@ for (const mode of ["block", "edgeless"] as const) {
       const line = page.locator(DROP_LINE_SELECTOR);
       await expect(line).toHaveCount(1);
       const lineBox = (await line.boundingBox())!;
-      expect(lineBox.height).toBe(4);
+      expect(lineBox.height).toBe(2);
       expect(lineBox.y + lineBox.height / 2).toBeCloseTo(gapY, 0);
-      expect(lineBox.x).toBeCloseTo(previousBox.x, 0);
-      expect(lineBox.width).toBeCloseTo(previousBox.width, 0);
+      expect(lineBox.x).toBeCloseTo(previousBox.x + 12, 0);
+      expect(lineBox.width).toBeCloseTo(previousBox.width - 12, 0);
       await page.mouse.up();
       await expect
         .poll(() =>
@@ -638,18 +638,10 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
     "data-block-drop-active",
     "true",
   );
-  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
-    "outline-width",
-    "4px",
-  );
-  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
-    "outline-style",
-    "solid",
-  );
-  await expect(betaRow.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveCSS(
-    "outline-color",
-    "rgb(80, 56, 179)",
-  );
+  const shadow = await beta.evaluate((element) => getComputedStyle(element, "::after").boxShadow);
+  expect(shadow).toContain("rgb(80, 56, 179)");
+  expect(shadow).toContain("2px");
+  expect(shadow).toContain("inset");
   await expect(page.locator('[data-block-type="kanban"]')).not.toHaveAttribute(
     "data-block-drop-active",
     "true",
@@ -970,7 +962,7 @@ test("dragging onto a kanban upper rim inserts a sibling without creating a colu
   const line = page.locator(DROP_LINE_SELECTOR);
   await expect(line).toBeVisible();
   const lineBox = (await line.boundingBox())!;
-  expect(lineBox.height).toBe(4);
+  expect(lineBox.height).toBe(2);
   expect(lineBox.width).toBeGreaterThan(lineBox.height);
   await page.mouse.up();
   await expect
