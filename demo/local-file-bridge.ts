@@ -122,61 +122,80 @@ function openNativeFile(path: string): Promise<void> {
 }
 
 /**
- * Serves one bounded local file to the same-origin demo resolver.
+ * Stores submitted bytes and authorizes only the resulting path for native opening.
  *
- * @param request - Incoming request handled by the demo middleware.
- * @param response - Response used for file bytes or validation errors.
- * @param next - Callback for routes not owned by the local file bridge.
- * @returns A promise that settles after the request is handled or delegated.
+ * @param request - Same-origin request containing file bytes.
+ * @param response - Response receiving the created path or an error.
+ * @param url - Request URL containing the optional filename.
+ * @param authorizedFiles - Paths stored by this server instance.
+ * @returns A promise resolving after the response is sent.
  */
-async function serveLocalFile(
+async function serveClipboardFile(
   request: IncomingMessage,
   response: ServerResponse,
-  next: () => void,
+  url: URL,
+  authorizedFiles: Set<string>,
 ): Promise<void> {
-  const url = new URL(request.url ?? "/", "http://localhost");
-  if (url.pathname === CLIPBOARD_FILE_ROUTE) {
-    try {
-      if (request.method !== "POST") {
-        throw new TypeError("POST required");
-      }
-      const uri = await storeClipboardFile(request, url.searchParams.get("name") ?? "");
-      const body = JSON.stringify({ uri });
-      response.writeHead(201, {
-        "Cache-Control": "no-store",
-        "Content-Length": Buffer.byteLength(body),
-        "Content-Type": "application/json",
-      });
-      response.end(body);
-    } catch {
-      response.writeHead(400, { "Cache-Control": "no-store", "Content-Type": "text/plain" });
-      response.end("Clipboard file could not be stored");
+  try {
+    if (request.method !== "POST") {
+      throw new TypeError("POST required");
     }
-    return;
+    const uri = await storeClipboardFile(request, url.searchParams.get("name") ?? "");
+    authorizedFiles.add(uri);
+    const body = JSON.stringify({ uri });
+    response.writeHead(201, {
+      "Cache-Control": "no-store",
+      "Content-Length": Buffer.byteLength(body),
+      "Content-Type": "application/json",
+    });
+    response.end(body);
+  } catch {
+    response.writeHead(400, { "Cache-Control": "no-store", "Content-Type": "text/plain" });
+    response.end("Clipboard file could not be stored");
   }
-  if (url.pathname === OPEN_FILE_ROUTE) {
-    try {
-      if (request.method !== "POST") {
-        throw new TypeError("POST required");
-      }
-      const path = localFilePath(url.searchParams.get("uri") ?? "");
-      const metadata = path ? await stat(path) : undefined;
-      if (!path || !metadata?.isFile()) {
-        throw new TypeError("Regular file required");
-      }
-      await openNativeFile(path);
-      response.writeHead(204, { "Cache-Control": "no-store" });
-      response.end();
-    } catch {
-      response.writeHead(404, { "Cache-Control": "no-store", "Content-Type": "text/plain" });
-      response.end("Local file could not be opened");
+}
+
+/**
+ * Opens a regular file previously stored by this server through its native app.
+ *
+ * @param request - Same-origin request asking to open a stored file.
+ * @param response - Response receiving the opening result or an error.
+ * @param url - Request URL containing the stored file reference.
+ * @param authorizedFiles - Paths stored by this server instance.
+ * @returns A promise resolving after the response is sent.
+ */
+async function serveNativeOpen(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  authorizedFiles: Set<string>,
+): Promise<void> {
+  try {
+    if (request.method !== "POST") {
+      throw new TypeError("POST required");
     }
-    return;
+    const path = localFilePath(url.searchParams.get("uri") ?? "");
+    const metadata = path && authorizedFiles.has(path) ? await stat(path) : undefined;
+    if (!path || !metadata?.isFile()) {
+      throw new TypeError("Regular file required");
+    }
+    await openNativeFile(path);
+    response.writeHead(204, { "Cache-Control": "no-store" });
+    response.end();
+  } catch {
+    response.writeHead(404, { "Cache-Control": "no-store", "Content-Type": "text/plain" });
+    response.end("Local file could not be opened");
   }
-  if (url.pathname !== LOCAL_FILE_ROUTE) {
-    next();
-    return;
-  }
+}
+
+/**
+ * Reads a bounded local file for the demo attachment provider.
+ *
+ * @param response - Response receiving file bytes or an error.
+ * @param url - Request URL containing the local file reference.
+ * @returns A promise resolving after the response is sent.
+ */
+async function serveFileBytes(response: ServerResponse, url: URL): Promise<void> {
   const path = localFilePath(url.searchParams.get("uri") ?? "");
   const contentType = path
     ? (IMAGE_CONTENT_TYPES[extname(path).toLowerCase()] ?? "application/octet-stream")
@@ -199,11 +218,52 @@ async function serveLocalFile(
   }
 }
 
+/**
+ * Serves one bounded local file to the same-origin demo resolver.
+ *
+ * @param request - Incoming request handled by the demo middleware.
+ * @param response - Response used for file bytes or validation errors.
+ * @param next - Callback for routes not owned by the local file bridge.
+ * @param authorizedFiles - Paths created from files submitted to this server.
+ * @returns A promise that settles after the request is handled or delegated.
+ */
+async function serveLocalFile(
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void,
+  authorizedFiles: Set<string>,
+): Promise<void> {
+  const url = new URL(request.url ?? "/", "http://localhost");
+  if (url.pathname === CLIPBOARD_FILE_ROUTE || url.pathname === OPEN_FILE_ROUTE) {
+    const protocol = "encrypted" in request.socket && request.socket.encrypted ? "https" : "http";
+    if (
+      !request.headers.host ||
+      request.headers.origin !== `${protocol}://${request.headers.host}`
+    ) {
+      response.writeHead(403, { "Cache-Control": "no-store" });
+      response.end();
+      return;
+    }
+    if (url.pathname === CLIPBOARD_FILE_ROUTE) {
+      await serveClipboardFile(request, response, url, authorizedFiles);
+    } else {
+      await serveNativeOpen(request, response, url, authorizedFiles);
+    }
+    return;
+  }
+  if (url.pathname === LOCAL_FILE_ROUTE) {
+    await serveFileBytes(response, url);
+    return;
+  }
+  next();
+}
+
 /** Registers the same local-file middleware for Vite dev and preview servers. */
 export function localFileBridgePlugin(): Plugin {
   const configure = (server: ViteDevServer | PreviewServer): void => {
+    const authorizedFiles = new Set<string>();
     server.middlewares.use((request, response, next) => {
-      void serveLocalFile(request, response, next);
+      void serveLocalFile(request, response, next, authorizedFiles);
     });
   };
   return {

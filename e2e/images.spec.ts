@@ -122,6 +122,42 @@ test("pastes an image file as an inline macro at a text caret", async ({ page })
   );
 });
 
+for (const repeat of [false, true]) {
+  test(`image alt controls use shared styling and update text${repeat ? " in a large document" : ""}`, async ({
+    page,
+  }) => {
+    if (repeat) {
+      await page.goto("/?repeat=200");
+    }
+    await page.evaluate(() => {
+      const demo = window as typeof window & {
+        __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+      };
+      const block = demo.__rivtoDemo?.editor.blocks.getBlocks()[0];
+      if (!block) {
+        throw new Error("Demo block is unavailable");
+      }
+      demo.__rivtoDemo!.editor.blocks.updateBlock(block.id, {
+        content: "![Plain image](missing.png)",
+      });
+    });
+    const frame = page.locator('.markdown-preview [data-image-kind="inline"]').first();
+    await frame.hover();
+    const input = frame.getByRole("textbox", { name: "Image alternative text" });
+    await expect(input).toHaveAttribute("data-slot", "input");
+    await expect(frame.getByRole("button", { name: "Reset size" })).toHaveAttribute(
+      "data-slot",
+      "button",
+    );
+    await expect(frame.getByRole("button", { name: "Reset size" })).toHaveAttribute(
+      "title",
+      "Reset size",
+    );
+    await input.fill("Updated image");
+    await expect(input).toHaveValue("Updated image");
+  });
+}
+
 test("converts a resized standard Markdown image to an adjustable image macro", async ({
   page,
 }) => {
@@ -335,3 +371,301 @@ for (const repeat of [0, 200]) {
     await expect.poll(stored).toEqual(original);
   });
 }
+
+for (const repeat of [0, 200]) {
+  for (const eventType of ["paste", "drop"] as const) {
+    test(`mixed file ${eventType} routes each attachment to its own provider, repeat=${repeat}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      if (repeat) {
+        await page.goto(`/?repeat=${repeat}`);
+      }
+      await page.evaluate(() => {
+        const demo = window as unknown as {
+          __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+          attachmentWrites: string[];
+        };
+        demo.attachmentWrites = [];
+        for (const id of ["image", "file"]) {
+          const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler(id)!;
+          const provider = handler.provider;
+          Object.defineProperty(handler, "provider", {
+            value: {
+              ...provider,
+              write: async (
+                blob: Blob,
+                context: import("@chulane/rivto-react").BinaryWriteContext,
+              ) => {
+                demo.attachmentWrites.push(`${id}:${context.name}`);
+                return provider.write(blob, context);
+              },
+            },
+          });
+        }
+      });
+      await page
+        .locator(".page-surface")
+        .first()
+        .evaluate((element, eventType) => {
+          const data = new DataTransfer();
+          const bytes = Uint8Array.from(
+            atob(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            ),
+            (character) => character.charCodeAt(0),
+          );
+          data.items.add(new File([bytes], "picture.png", { type: "image/png" }));
+          data.items.add(new File(["text"], "document.txt", { type: "text/plain" }));
+          const event =
+            eventType === "paste"
+              ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
+              : new DragEvent("drop", {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 300,
+                  clientY: 300,
+                });
+          Object.defineProperty(event, eventType === "paste" ? "clipboardData" : "dataTransfer", {
+            value: data,
+          });
+          element.dispatchEvent(event);
+        }, eventType);
+      await expect(page.locator(IMAGE_BLOCK_SELECTOR)).toHaveCount(1);
+      await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(1);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => (window as unknown as { attachmentWrites: string[] }).attachmentWrites,
+          ),
+        )
+        .toEqual(["image:picture.png", "file:document.txt"]);
+      const types = await page.evaluate(() => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks
+          .getBlocks()
+          .filter((block) => block.type === "image" || block.type === "file")
+          .map((block) => block.type);
+      });
+      expect(types).toEqual(["image", "file"]);
+    });
+  }
+}
+
+test("preserves text edited while a file upload is pending", async ({ page }) => {
+  let releaseUpload: (() => void) | undefined;
+  let uploadStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    uploadStarted = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await page.route("**/__rivto_demo_clipboard_file**", async (route) => {
+    uploadStarted?.();
+    await released;
+    await route.continue();
+  });
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await sendFile(content, "paste", "pending.txt");
+  await started;
+  await page.keyboard.type(" newly typed");
+  const changed = await content.textContent();
+  releaseUpload?.();
+  const conflict = page.getByRole("alert").filter({ hasText: "changed" });
+  await expect(conflict).toBeVisible();
+  await expect(content).toHaveText(changed ?? "");
+  await conflict.getByRole("button", { name: "Retry" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return demo.__rivtoDemo?.editor.blocks.getBlocks()[0]?.content ?? "";
+      }),
+    )
+    .toContain("pending.txt");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return demo.__rivtoDemo?.editor.blocks.getBlocks()[0]?.content ?? "";
+      }),
+    )
+    .toContain("newly typed");
+});
+
+test("inserts files when randomUUID is unavailable", async ({ page }) => {
+  await page.locator(BLOCK_CONTENT_SELECTOR).first().waitFor();
+  await page.evaluate(() =>
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined }),
+  );
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await sendFile(content, "paste", "http-file.txt");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return demo.__rivtoDemo?.editor.blocks.getBlocks()[0]?.content ?? "";
+      }),
+    )
+    .toContain("http-file.txt");
+});
+
+test("rejects cross-origin and unauthorized native file opening", async ({ request, baseURL }) => {
+  const url = new URL("/__rivto_demo_open_file?uri=%2Fetc%2Fpasswd", baseURL);
+  const crossOrigin = await request.post(url.href, {
+    headers: { Origin: "https://attacker.example" },
+  });
+  expect(crossOrigin.status()).toBe(403);
+  const crossOriginUpload = await request.post(
+    new URL("/__rivto_demo_clipboard_file?name=test.txt", baseURL).href,
+    { headers: { Origin: "https://attacker.example" }, data: "test" },
+  );
+  expect(crossOriginUpload.status()).toBe(403);
+  const unauthorized = await request.post(url.href, { headers: { Origin: url.origin } });
+  expect(unauthorized.status()).toBe(404);
+});
+
+test("preserves a changed destination while a file reference is prepared", async ({ page }) => {
+  await page.locator(BLOCK_CONTENT_SELECTOR).first().waitFor();
+  await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      releaseFileReference?: () => void;
+    };
+    const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler("file")!;
+    const prepare = handler.prepare;
+    Object.defineProperty(handler, "prepare", {
+      value: async (...args: Parameters<typeof prepare>) => {
+        await new Promise<void>((resolve) => {
+          demo.releaseFileReference = resolve;
+        });
+        return prepare(...args);
+      },
+    });
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await content.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData("text/uri-list", "file:///tmp/example.txt");
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: data });
+    element.dispatchEvent(event);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean((window as unknown as { releaseFileReference?: () => void }).releaseFileReference),
+      ),
+    )
+    .toBe(true);
+  await page.keyboard.type(" edited");
+  const changed = await content.textContent();
+  await page.evaluate(() =>
+    (window as unknown as { releaseFileReference: () => void }).releaseFileReference(),
+  );
+  await expect(page.getByRole("alert").filter({ hasText: "changed" })).toBeVisible();
+  await expect(content).toHaveText(changed ?? "");
+});
+
+test("inserts image files when randomUUID is unavailable", async ({ page }) => {
+  await page.locator(BLOCK_CONTENT_SELECTOR).first().waitFor();
+  await page.evaluate(() =>
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined }),
+  );
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await sendImage(content, "paste", false, "http-image.png");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return demo.__rivtoDemo?.editor.blocks.getBlocks()[0]?.content ?? "";
+      }),
+    )
+    .toContain("http-image.png");
+});
+
+test("does not replace an empty block that was edited during upload", async ({ page }) => {
+  let releaseUpload: (() => void) | undefined;
+  let uploadStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    uploadStarted = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await page.route("**/__rivto_demo_clipboard_file**", async (route) => {
+    uploadStarted?.();
+    await released;
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+    };
+    const block = demo.__rivtoDemo.editor.blocks.getBlocks()[0]!;
+    demo.__rivtoDemo.editor.blocks.updateBlock(block.id, { content: "" });
+  });
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await sendFile(content, "paste", "pending-empty.txt");
+  await started;
+  await page.keyboard.type("new text");
+  releaseUpload?.();
+  await expect(page.getByRole("alert").filter({ hasText: "changed" })).toBeVisible();
+  await expect(content).toHaveText("new text");
+});
+
+test("standalone image insertion preserves edits made during upload", async ({ page }) => {
+  let releaseUpload: (() => void) | undefined;
+  let uploadStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    uploadStarted = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await page.route("**/__rivto_demo_clipboard_file**", async (route) => {
+    uploadStarted?.();
+    await released;
+    await route.continue();
+  });
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+    };
+    demo.__rivtoDemo.reactEditor.events.delete("file.paste");
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+  await sendImage(content, "paste", false, "pending-image.png");
+  await started;
+  await page.keyboard.type(" edited");
+  const changed = await content.textContent();
+  releaseUpload?.();
+  await expect(page.getByRole("alert").filter({ hasText: "changed" })).toBeVisible();
+  await expect(content).toHaveText(changed ?? "");
+});

@@ -39,7 +39,7 @@ const imageProvider: BinaryProvider<string, Blob> = {
 };
 ```
 
-`createLocalFileBridge` creates a provider using host filesystem callbacks.
+`LocalFileBridge` creates a provider using host filesystem callbacks.
 The demo uses its own bounded local provider; filesystem access is host-owned.
 
 Unsupported file types fall back to an openable `file` chip, block, or canvas

@@ -1,3 +1,4 @@
+import type { FileCandidate, FileHandler } from "../../attachments";
 import type { RegistrationOwner } from "../extensions/types";
 import type {
   ClipboardBundle,
@@ -107,6 +108,8 @@ function browserClipboardType(
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
+  private readonly fileHandlers: FileHandler[] = [];
+  private defaultFileHandler?: FileHandler;
   private readonly postprocessors: ClipboardPostprocessor[] = [];
   private writer?: ClipboardWriter;
 
@@ -114,7 +117,7 @@ export class ClipboardManager {
    * Creates structured clipboard operations shared by a document's panels.
    * @param document - Core runtime providing clipboard operations and paste transactions.
    * @param editor - React runtime providing shared clipboard operations and portable formats.
-   * @param extensions - Internal converter registration ownership and destruction guard.
+   * @param registrations - Extension registration ownership and destruction guard.
    */
   constructor(
     private readonly document: DocumentEditorAPI,
@@ -123,6 +126,84 @@ export class ClipboardManager {
   ) {
     this.converters = new ClipboardConverters(registrations);
     this.registerElementConverter("block", blockElementClipboardConverter);
+  }
+
+  /**
+   * Registers a file handler for matching, lookup, or explicit default selection.
+   *
+   * Matching handlers are tried in registration order before the single default.
+   * Registrations are released by the extension lifecycle or the returned disposer.
+   *
+   * @param handler - File preparation, provider, matcher, and optional inline view.
+   * @returns Disposer that unregisters the handler.
+   * @throws If the runtime is inactive, the provider is invalid, the ID is empty or
+   * duplicated.
+   */
+  registerFileHandler(handler: FileHandler): () => void {
+    this.registrations.assertActive();
+    if (
+      !handler.provider ||
+      typeof handler.provider.write !== "function" ||
+      typeof handler.provider.read !== "function"
+    ) {
+      throw new TypeError("File handler requires a binary provider");
+    }
+    if (!handler.id.trim() || this.fileHandlers.some(({ id }) => id === handler.id)) {
+      throw new Error(`File handler ${handler.id || "<empty>"} is already registered`);
+    }
+    this.fileHandlers.push(handler);
+    return this.registrations.registerCleanup(() => {
+      const index = this.fileHandlers.indexOf(handler);
+      if (index >= 0) {
+        this.fileHandlers.splice(index, 1);
+      }
+      if (this.defaultFileHandler === handler) {
+        this.defaultFileHandler = undefined;
+      }
+    });
+  }
+
+  /**
+   * Sets a registered file handler as the default when no handler matches.
+   *
+   * Selecting another default replaces the previous selection. Removing the
+   * selected registration clears it; no earlier selection is restored.
+   *
+   * @param id - ID of the registered handler to use as the default.
+   * @returns Completion of the default selection.
+   * @throws If the runtime is inactive or no handler has the supplied ID.
+   */
+  setDefaultFileHandler(id: string): void {
+    this.registrations.assertActive();
+    const handler = this.getFileHandler(id);
+    if (!handler) {
+      throw new Error(`File handler ${id} is not registered`);
+    }
+    this.defaultFileHandler = handler;
+  }
+
+  /**
+   * Selects the first matching handler, falling back to the generic attachment handler.
+   *
+   * @param candidate - File or reference to classify.
+   * @returns Matching handler, or undefined when no handler is installed.
+   */
+  selectFileHandler(candidate: FileCandidate): FileHandler | undefined {
+    return (
+      this.fileHandlers.find(
+        (entry) => entry !== this.defaultFileHandler && entry.matches?.(candidate),
+      ) ?? this.defaultFileHandler
+    );
+  }
+
+  /**
+   * Looks up a registered attachment handler by its stable identifier.
+   *
+   * @param id - Attachment handler identifier.
+   * @returns Registered handler, if present.
+   */
+  getFileHandler(id: string): FileHandler | undefined {
+    return this.fileHandlers.find((handler) => handler.id === id);
   }
 
   /**

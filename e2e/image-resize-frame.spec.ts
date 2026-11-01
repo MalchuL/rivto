@@ -66,7 +66,8 @@ for (const repeat of [0, 200]) {
         id: "resize-image",
         type: "image",
         frame: { x: 100, y: 100, width: 120, height: 60 },
-        zIndex: 100,
+        zIndex:
+          Math.max(0, ...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1,
         props: { uri, alt: "image", name: "image.svg", mimeType: "image/svg+xml" },
       });
     }, URI);

@@ -158,17 +158,20 @@ const demoBinaryProvider: BinaryProvider<string, Blob> = {
 const demoLocalFileExtension: ReactEditorExtension = {
   id: "demo.local-files",
   setup: (editor) => {
-    editor.files.registerOpenHandler({
+    editor.attachments.registerFileOpenHandler({
       id: "demo.native-files",
       open: async (reference, context) => {
-        const uri = isDemoLocalFileUri(reference.uri)
-          ? reference.uri
-          : await storeDemoFile(
-              await editor.files.read(reference.uri, reference.mimeType, context),
-              reference.name,
-              reference.mimeType,
-              context.signal,
-            );
+        const uri = await storeDemoFile(
+          await editor.attachments.readBinary(
+            demoBinaryProvider,
+            reference.uri,
+            reference.mimeType,
+            context,
+          ),
+          reference.name,
+          reference.mimeType,
+          context.signal,
+        );
         const response = await fetch(`${DEMO_OPEN_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
           method: "POST",
           signal: context.signal,
@@ -178,6 +181,7 @@ const demoLocalFileExtension: ReactEditorExtension = {
         }
       },
     });
+    editor.attachments.setDefaultFileOpenHandler("demo.native-files");
   },
 };
 

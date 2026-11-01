@@ -164,7 +164,9 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockCollapseActions(editor: ReactEditorApi): void {
+export function registerBlockCollapseActions(
+  editor: Pick<ReactEditorApi, "blockContextMenu">,
+): void {
   for (const [id, title, collapsed] of [
     ["collapse", "Collapse subtree", true],
     ["expand", "Expand whole subtree", false],

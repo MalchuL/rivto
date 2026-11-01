@@ -7,17 +7,22 @@
  *
  * @module
  */
+import {
+  inlineDestination,
+  isFileDestinationCurrent,
+  retryFileDestination,
+  type FileDestination as ImageDestination,
+} from "../file/file-destination";
 import { createCaretSelection, type EditorBlock, type EditorMode } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorExtension } from "../../managers";
-import type { BinaryProvider } from "../../managers/files";
-import { BlockSelectionEndpoints } from "@chulane/rivto-page";
+import type { BinaryProvider } from "../../attachments";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import { configureImageViews, ImageView, type ImageViewCustomizations } from "./image-view";
 import { serializeImageMacro } from "./image-macro";
-import type { FileInlineViewProps, FileReference } from "../../managers/files";
+import { validateBinaryUri, type FileInlineViewProps, type FileReference } from "../../attachments";
 
 /** Persisted native type used by standalone image blocks. */
 export const IMAGE_BLOCK_TYPE = "image";
@@ -48,16 +53,6 @@ interface ImageAsset extends FileReference {
   readonly intrinsicWidth: number;
   readonly intrinsicHeight: number;
 }
-
-type ImageDestination =
-  | {
-      readonly kind: "inline";
-      readonly blockId: string;
-      readonly start: number;
-      readonly end: number;
-    }
-  | { readonly kind: "block"; readonly afterId?: string; readonly replaceId?: string }
-  | { readonly kind: "element"; readonly x: number; readonly y: number };
 
 interface PendingUpload {
   readonly id: string;
@@ -332,32 +327,6 @@ function remoteImageUri(data: DataTransfer | null): { uri: string; alt: string }
   return uri ? { uri, alt: "" } : undefined;
 }
 
-/** Returns the current selection as a safe inline insertion target. */
-function inlineDestination(
-  reactPanel: ReactPanelApi,
-  fallbackBlockId?: string,
-): ImageDestination | undefined {
-  const selection = reactPanel.selection.readDOM() ?? reactPanel.selection.get();
-  const endpoints =
-    selection &&
-    BlockSelectionEndpoints.resolve(
-      selection,
-      (id) => reactPanel.blocks.getBlock(id)?.content.length ?? 0,
-    );
-  if (endpoints && endpoints.anchor.blockId === endpoints.head.blockId) {
-    return {
-      kind: "inline",
-      blockId: endpoints.anchor.blockId,
-      start: Math.min(endpoints.anchor.offset, endpoints.head.offset),
-      end: Math.max(endpoints.anchor.offset, endpoints.head.offset),
-    };
-  }
-  const block = fallbackBlockId ? reactPanel.blocks.getBlock(fallbackBlockId) : undefined;
-  return block
-    ? { kind: "inline", blockId: block.id, start: block.content.length, end: block.content.length }
-    : undefined;
-}
-
 /** Renders canvas image content within the shared element host. */
 function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
   const image = imageProps(element.props);
@@ -390,6 +359,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
     id: "image",
     setup: (reactEditor) => {
       const statuses = new UploadStatusStore();
+      let nextUploadId = 0;
       const abort = new AbortController();
       const disposeImageViews = configureImageViews(reactEditor, options.views ?? {});
       reactEditor.extensions.mount(() => <ImageUploadStatuses store={statuses} />, "afterSurface");
@@ -402,20 +372,18 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         render: ImageElement,
         title: "Image",
       });
-      reactEditor.files.registerPasteHandler({
+      reactEditor.clipboard.registerFileHandler({
         id: "image",
         provider: options.provider,
-        elementType: "image",
         InlineView: InlineImageFileView,
         matches: ({ file, reference }) =>
           Boolean(file ? isImageFile(file) : reference.mimeType.startsWith("image/")),
         prepare: async ({ file, reference }, context) => {
           const resolved = file
             ? file
-            : await reactEditor.files.resolve(reference.uri, {
+            : await reactEditor.attachments.resolveBinary(options.provider, reference.uri, {
                 signal: context.signal,
                 mode: context.mode,
-                providerId: "image",
               });
           const localUrl = resolved instanceof Blob ? URL.createObjectURL(resolved) : resolved;
           const dimensions = await inspectImage(localUrl, resolved instanceof Blob);
@@ -461,10 +429,14 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
             ? {
                 name: image.name,
                 mimeType: image.mimeType,
-                data: reactEditor.files.read(image.uri, image.mimeType, {
-                  signal: abort.signal,
-                  providerId: "image",
-                }),
+                data: reactEditor.attachments.readBinary(
+                  options.provider,
+                  image.uri,
+                  image.mimeType,
+                  {
+                    signal: abort.signal,
+                  },
+                ),
               }
             : undefined;
         },
@@ -569,7 +541,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         point: { x: number; y: number },
       ): void => {
         if (destination.kind === "element" && !reactEditor.elementRegistry.get("image")) {
-          const id = crypto.randomUUID();
+          const id = String(++nextUploadId);
           statuses.set({
             id,
             name: files[0]?.name ?? "image",
@@ -581,11 +553,18 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           return;
         }
         const mode = reactPanel.getSurfaceType();
+        const completedIds: string[] = [];
         const jobs = files.filter(isImageFile).map((file, index) => {
-          const id = crypto.randomUUID();
+          const id = String(++nextUploadId);
           const retry = () => {
             statuses.delete(id);
-            upload(reactPanel, [file], destination, source, point);
+            upload(
+              reactPanel,
+              [file],
+              retryFileDestination(reactPanel, destination),
+              source,
+              point,
+            );
           };
           statuses.set({
             id,
@@ -598,15 +577,22 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
             try {
               const localUrl = URL.createObjectURL(file);
               const dimensions = await inspectImage(localUrl, true);
-              const uri = await reactEditor.files.upload(file, {
-                source,
-                mode,
-                destination: destination.kind,
-                signal: abort.signal,
-                reportProgress: (progress) =>
-                  statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
-              });
-              statuses.delete(id);
+              abort.signal.throwIfAborted();
+              const uri = validateBinaryUri(
+                await options.provider.write(file, {
+                  documentId: reactEditor.getDocument().id,
+                  name: file.name || "image",
+                  mimeType: file.type || "application/octet-stream",
+                  source,
+                  mode,
+                  destination: destination.kind,
+                  signal: abort.signal,
+                  reportProgress: (progress) =>
+                    statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
+                }),
+              );
+              abort.signal.throwIfAborted();
+              completedIds.push(id);
               return {
                 uri,
                 name: file.name || "image",
@@ -625,13 +611,23 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           })();
         });
         void Promise.all(jobs).then((assets) => {
-          if (!abort.signal.aborted) {
-            insert(
-              reactPanel,
-              assets.filter((asset): asset is ImageAsset => Boolean(asset)),
-              destination,
-            );
+          if (abort.signal.aborted || !completedIds.length) {
+            return;
           }
+          if (!isFileDestinationCurrent(reactPanel, destination)) {
+            const error = new Error(
+              "The destination changed while the image was uploading. Select a location and retry.",
+            );
+            completedIds.forEach((id) => statuses.update(id, { error: error.message }));
+            options.onError?.(error);
+            return;
+          }
+          completedIds.forEach((id) => statuses.delete(id));
+          insert(
+            reactPanel,
+            assets.filter((asset): asset is ImageAsset => Boolean(asset)),
+            destination,
+          );
         });
       };
 
@@ -643,7 +639,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         point: { x: number; y: number },
       ): void => {
         if (destination.kind === "element" && !reactEditor.elementRegistry.get("image")) {
-          const id = crypto.randomUUID();
+          const id = String(++nextUploadId);
           statuses.set({
             id,
             name: remote.uri,
@@ -654,23 +650,27 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           });
           return;
         }
-        const id = crypto.randomUUID();
+        const id = String(++nextUploadId);
         const retry = () => {
           statuses.delete(id);
-          insertRemote(reactPanel, remote, destination, point);
+          insertRemote(reactPanel, remote, retryFileDestination(reactPanel, destination), point);
         };
         statuses.set({ id, name: remote.uri, x: point.x, y: point.y, retry });
-        void reactEditor.files
-          .resolve(remote.uri, {
+        void reactEditor.attachments
+          .resolveBinary(options.provider, remote.uri, {
             signal: abort.signal,
             mode: reactPanel.getSurfaceType(),
-            providerId: "image",
           })
           .then(async (resolved) => {
             const source = resolved instanceof Blob ? URL.createObjectURL(resolved) : resolved;
             const dimensions = await inspectImage(source, resolved instanceof Blob);
             if (abort.signal.aborted) {
               return;
+            }
+            if (!isFileDestinationCurrent(reactPanel, destination)) {
+              throw new Error(
+                "The destination changed while the image was loading. Select a location and retry.",
+              );
             }
             statuses.delete(id);
             const name = (() => {
@@ -817,7 +817,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           } else if (remote) {
             insertRemote(reactPanel, remote, destination, point);
           } else {
-            const id = crypto.randomUUID();
+            const id = String(++nextUploadId);
             const read = (): void => {
               statuses.set({ id, name: "clipboard image", x: point.x, y: point.y, retry: read });
               const clipboard = root.ownerDocument.defaultView?.navigator.clipboard;
@@ -879,7 +879,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
               upload(
                 reactPanel,
                 [...(input.files ?? [])],
-                { kind: "block", afterId: blockId, replaceId },
+                { kind: "block", afterId: blockId, replaceId, content: block?.content },
                 "picker",
                 {
                   x: bounds?.left ?? innerWidth / 2,

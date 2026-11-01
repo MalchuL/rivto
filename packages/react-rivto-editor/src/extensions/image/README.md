@@ -130,15 +130,15 @@ The provider stores binary content and returns a stable URI. Reads can decline
 unrecognized URIs so browser-supported HTTP(S), data and blob URLs remain usable.
 The provider controls size limits and durable storage policy.
 
-For a desktop or native host, `createLocalFileBridge()` creates a binary provider without importing Node APIs into the React package:
+For a desktop or native host, `LocalFileBridge` implements a binary provider without importing Node APIs into the React package:
 
 ```ts
-const localFiles = createLocalFileBridge({
+const localFiles = new LocalFileBridge({
   directory: "file:///home/user/notes/assets/",
   uriPrefix: "assets/",
   maxBytes: 25 * 1024 * 1024,
   writeFile: ({ directory, fileName, file, signal }) =>
-    desktopBridge.writeFile({ directory, fileName, bytes: file, signal }),
+    desktopBridge.createFileExclusive({ directory, fileName, bytes: file, signal }),
   readFile: ({ directory, uri, signal }) =>
     desktopBridge.readFile({ directory, uri, signal }),
 });
@@ -149,9 +149,11 @@ createReactEditor({
 });
 ```
 
-The bridge sanitizes the original basename, appends a UUID, preserves a short
-extension, and returns an encoded logical URI. The privileged callbacks decide
-how files are physically written and read.
+The bridge preserves a safe original filename, removes unsafe characters, and
+adds a seven-character UUID suffix before the extension when a name already exists.
+The `writeFile` callback must atomically create the file without overwriting and
+return `false` on a filename collision or `true` after creation; other errors
+must be thrown. The bridge returns an encoded logical URI.
 
-See [`../../managers/files/README.md`](../../managers/files/README.md) for custom
+See [`../../attachments/README.md`](../../attachments/README.md) for custom
 provider configuration and attachment handlers.

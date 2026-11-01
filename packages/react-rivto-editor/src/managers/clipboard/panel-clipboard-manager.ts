@@ -6,7 +6,7 @@ import type { ClipboardManager } from "./clipboard-manager";
 export class PanelClipboardManager implements PanelClipboardApi {
   /** @param clipboard - Shared structured clipboard operations. @param reactPanel - Receiving occurrence. */
   constructor(
-    private readonly clipboard: ClipboardManager,
+    private readonly clipboard: Pick<ClipboardManager, "copy" | "copyText" | "paste">,
     private readonly reactPanel: ReactPanelApi,
   ) {}
   /**

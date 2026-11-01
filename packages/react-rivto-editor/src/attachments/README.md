@@ -1,9 +1,8 @@
 # File pipeline
 
-`ReactEditor.files` is the browser-safe integration point for storing any file,
-dispatching pasted file types, and resolving persisted logical URIs. It contains
-no filesystem or cloud SDK. Hosts register those capabilities from a normal
-`ReactEditorExtension`.
+`ReactEditor.clipboard` classifies attachment inputs, while `ReactEditor.attachments`
+resolves references and registers file-opening handlers. File and image extensions
+use their own binary providers for storage and resolution; the clipboard does not store bytes.
 
 ## Binary providers
 
@@ -25,40 +24,40 @@ imageExtension({ provider });
 Providers receive document ID, surface mode and cancellation; writes also receive
 file metadata, source, destination and optional progress. Hosts can adapt the
 generic `BinaryProvider<Reference, Binary>` contract to URI strings and Blobs.
-`createLocalFileBridge` provides an adapter around host filesystem callbacks.
+`LocalFileBridge` provides an adapter around host filesystem callbacks.
 
 ## Open handlers
 
 Generic file views open on double-click or keyboard activation. Right-click
 offers Open file plus Copy file when the active clipboard supports its MIME
-type. Register typed handlers for in-app viewers and optionally one matcher-less
-host fallback:
+type. Register typed handlers for in-app viewers and optionally select a registered
+host handler explicitly as the default:
 
 ```ts
-editor.files.registerOpenHandler({
+editor.attachments.registerFileOpenHandler({
   id: "pdf-viewer",
   matches: ({ mimeType }) => mimeType === "application/pdf",
   open: (reference) => router.open(`/pdf/${encodeURIComponent(reference.uri)}`),
 });
-editor.files.registerOpenHandler({
+editor.attachments.registerFileOpenHandler({
   id: "native-app",
   open: (reference, context) => desktop.openFile(reference.uri, context.signal),
 });
+editor.attachments.setDefaultFileOpenHandler("native-app");
 ```
 
-Typed handlers always win over the matcher-less fallback, even when registered
+Matching handlers always win over the selected default, even when registered
 later. Without any handler, Rivto resolves the URI and opens it in a browser tab.
 
-## Paste handlers
+## File handlers
 
 `fileExtension()` owns paste, drop, picker, placement, and the generic `file`
 fallback. Rich extensions register a matcher before users interact:
 
 ```ts
-editor.files.registerPasteHandler({
+editor.clipboard.registerFileHandler({
   id: "audio",
   provider: audioProvider,
-  elementType: "audio",
   matches: ({ reference }) => reference.mimeType.startsWith("audio/"),
   prepare: async ({ reference }) => ({
     inline: serializeAudioMacro(reference),
@@ -69,7 +68,8 @@ editor.files.registerPasteHandler({
 });
 ```
 
-Matched handlers are tried in registration order. The one matcher-less handler
-registered by `fileExtension()` is always consulted last. A rich extension also
+Matched handlers are tried in registration order. The default handler selected by `fileExtension()` is always consulted last.
+Use `editor.clipboard.setDefaultFileHandler(id)` to choose a registered default;
+a handler without `matches` is never selected automatically. A rich extension also
 registers its block renderer through `editor.blockTypes` and its canvas renderer
 through `editor.elementTypes`. `InlineView` handles matching generic file macros.

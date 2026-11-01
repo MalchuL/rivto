@@ -6,7 +6,7 @@
  *
  * @module
  */
-import type { FileReference } from "../../managers/files";
+import type { FileReference } from "../../attachments";
 
 /** One parsed file macro and its exact source range. */
 export interface ParsedFileMacro extends FileReference {

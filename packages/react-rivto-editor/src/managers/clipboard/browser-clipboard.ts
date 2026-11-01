@@ -13,7 +13,10 @@ import type { ReactEditorApi } from "../../editor/types";
  * @returns Plain text, wrapped HTML, and the unencoded structured JSON string.
  * @throws If a registered formatter or JSON serialization fails.
  */
-export function browserClipboardFormats(editor: ReactEditorApi, bundle: ClipboardBundle) {
+export function browserClipboardFormats(
+  editor: Pick<ReactEditorApi, "clipboardFormats">,
+  bundle: ClipboardBundle,
+) {
   const portable = editor.clipboardFormats.formatBundle(bundle);
   const structured = JSON.stringify(bundle);
   return {
@@ -61,7 +64,7 @@ export function readClipboardEnvelope(html: string): string | undefined {
  * cannot obtain a copy event with writable clipboard data.
  */
 export async function writeClipboardBundle(
-  editor: ReactEditorApi,
+  editor: Pick<ReactEditorApi, "clipboardFormats">,
   bundle: ClipboardBundle,
 ): Promise<void> {
   const formats = browserClipboardFormats(editor, bundle);

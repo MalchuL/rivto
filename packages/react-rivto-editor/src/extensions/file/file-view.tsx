@@ -1,7 +1,7 @@
 /**
  * Accessible interactive presentation for generic file references.
  *
- * Double-click and keyboard activation delegate opening to the file manager,
+ * Double-click and keyboard activation use registered attachment openers,
  * where type-specific handlers can replace the host or browser fallback.
  *
  * @module
@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import type { FileReference } from "../../managers/files";
+import type { FileReference } from "../../attachments";
 import { useReactPanel } from "../../hooks";
 
 const FILE_VIEW_CLASS = "rivto-file";
@@ -127,15 +127,27 @@ export function FileView(reference: FileReference) {
 
   useEffect(() => () => opening.current?.abort(), []);
 
-  /** @returns Nothing; opening completes asynchronously through the file manager. */
+  /**
+   * Opens the file through its provider and reports asynchronous failures in the menu.
+   *
+   * @returns Starts opening the file and cancels any previous operation.
+   */
   const open = (): void => {
     opening.current?.abort();
     const controller = new AbortController();
     opening.current = controller;
     setOpenError(undefined);
     setContextMenu(undefined);
-    void editor.files
-      .open(reference, { signal: controller.signal, mode: reactPanel.getSurfaceType() })
+    const provider = editor.clipboard.getFileHandler("file")?.provider;
+    if (!provider) {
+      setOpenError("No file provider is installed");
+      return;
+    }
+    void editor.attachments
+      .openBinary(provider, reference, {
+        signal: controller.signal,
+        mode: reactPanel.getSurfaceType(),
+      })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
           setOpenError(reason instanceof Error ? reason.message : "Unable to open file");
@@ -143,16 +155,25 @@ export function FileView(reference: FileReference) {
       });
   };
 
-  /** @returns Nothing; clipboard bytes resolve asynchronously through the file manager. */
+  /**
+   * Copies the file bytes through the clipboard and reports asynchronous failures.
+   *
+   * @returns Starts copying the file and cancels any previous operation.
+   */
   const copy = (): void => {
     opening.current?.abort();
     const controller = new AbortController();
     opening.current = controller;
     setOpenError(undefined);
-    const data = editor.files.read(reference.uri, mimeType, {
-      signal: controller.signal,
-      mode: reactPanel.getSurfaceType(),
-    });
+    const data = editor.attachments.readBinary(
+      editor.clipboard.getFileHandler("file")?.provider,
+      reference.uri,
+      mimeType,
+      {
+        signal: controller.signal,
+        mode: reactPanel.getSurfaceType(),
+      },
+    );
     void editor.clipboard
       .writeBinary({ name, mimeType, data })
       .then((copied) => {
@@ -251,6 +272,6 @@ export function FileView(reference: FileReference) {
  */
 export function RegisteredFileView({ reference }: { readonly reference: FileReference }) {
   const editor = useReactPanel().editor;
-  const InlineView = editor.files.getInlineView(reference);
+  const InlineView = editor.clipboard.selectFileHandler({ reference })?.InlineView;
   return InlineView ? <InlineView reference={reference} /> : <FileView {...reference} />;
 }

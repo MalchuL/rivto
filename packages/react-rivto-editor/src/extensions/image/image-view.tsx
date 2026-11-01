@@ -1,7 +1,7 @@
 /**
  * Shared resolved image presentation with accessible metadata and resize controls.
  *
- * Logical URIs are resolved through the editor file pipeline. Blob results are
+ * Logical URIs are resolved through the image extension provider. Blob results are
  * represented by component-owned object URLs and revoked on replacement or
  * unmount. Pointer previews stay local; callers persist only completed sizes.
  * Inline, block, and edgeless records select behavior through one per-kind
@@ -9,6 +9,7 @@
  *
  * @module
  */
+import { RotateCcwIcon } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -17,6 +18,8 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { useReactPanel } from "../../hooks";
 import type { ReactEditorApi as ReactEditor } from "../../editor/types";
 
@@ -98,17 +101,23 @@ export function imageResizeMode(editor: ReactEditor, kind: ImageViewKind): Image
 export function DefaultImageHoverMenu({ alt, onAltChange, onReset }: ImageHoverMenuProps) {
   return (
     <>
-      <label>
-        Alt{" "}
-        <input
-          aria-label="Image alternative text"
-          value={alt}
-          onChange={(event) => onAltChange(event.currentTarget.value)}
-        />
-      </label>
-      <button type="button" onClick={onReset}>
-        Reset size
-      </button>
+      <Input
+        className="h-8"
+        aria-label="Image alternative text"
+        placeholder="Alternative text"
+        value={alt}
+        onChange={(event) => onAltChange(event.currentTarget.value)}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        aria-label="Reset size"
+        title="Reset size"
+        onClick={onReset}
+      >
+        <RotateCcwIcon aria-hidden="true" />
+      </Button>
     </>
   );
 }
@@ -223,11 +232,10 @@ export function ImageView({
     setShowLoading(false);
     // Fast local images resolve before a loading label is useful.
     const loadingTimer = window.setTimeout(() => setShowLoading(true), IMAGE_LOADING_DELAY_MS);
-    reactEditor.files
-      .resolve(uri, {
+    reactEditor.attachments
+      .resolveBinary(reactEditor.clipboard.getFileHandler("image")?.provider, uri, {
         signal: abort.signal,
         mode: reactPanel.getSurfaceType(),
-        providerId: "image",
       })
       .then((resolved) => {
         if (abort.signal.aborted) {
@@ -415,13 +423,13 @@ export function ImageView({
             autoFocus
             onClick={() => {
               const type = copyMimeType();
-              const data = reactEditor.files.read(
+              const data = reactEditor.attachments.readBinary(
+                reactEditor.clipboard.getFileHandler("image")?.provider,
                 uri,
                 type === "application/octet-stream" ? undefined : type,
                 {
                   signal: new AbortController().signal,
                   mode: reactPanel.getSurfaceType(),
-                  providerId: "image",
                 },
               );
               void reactEditor.clipboard

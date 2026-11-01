@@ -12,13 +12,18 @@ import { createCaretSelection, type EditorMode } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
-import type { BinaryProvider } from "../../managers/files";
-import { BlockSelectionEndpoints } from "@chulane/rivto-page";
+import type { BinaryProvider } from "../../attachments";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
-import type { FilePasteDestination, FileReference, PreparedFilePaste } from "../../managers/files";
+import { validateBinaryUri, type FileReference, type PreparedFile } from "../../attachments";
 import { FileView, RegisteredFileView } from "./file-view";
 import { serializeFileMacro } from "./file-macro";
+import {
+  inlineDestination,
+  isFileDestinationCurrent,
+  retryFileDestination,
+  type FileDestination,
+} from "./file-destination";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
@@ -52,16 +57,6 @@ export interface FileExtensionOptions {
   readonly provider: BinaryProvider<string, Blob>;
   readonly onError?: (error: unknown) => void;
 }
-
-type FileDestination =
-  | {
-      readonly kind: "inline";
-      readonly blockId: string;
-      readonly start: number;
-      readonly end: number;
-    }
-  | { readonly kind: "block"; readonly afterId?: string; readonly replaceId?: string }
-  | { readonly kind: "element"; readonly x: number; readonly y: number };
 
 interface PendingFileUpload {
   readonly id: string;
@@ -290,39 +285,8 @@ function referenceFromUri(uri: string): FileReference {
 }
 
 /**
- * Returns the current single-block selection as an inline destination.
- * @param reactEditor - Active React editor runtime.
- * @param fallbackBlockId - Block used when no live DOM selection exists.
- * @returns Inline destination, when one block can own the insertion.
- */
-function inlineDestination(
-  reactPanel: ReactPanelApi,
-  fallbackBlockId?: string,
-): FileDestination | undefined {
-  const selection = reactPanel.selection.readDOM() ?? reactPanel.selection.get();
-  const endpoints =
-    selection &&
-    BlockSelectionEndpoints.resolve(
-      selection,
-      (id) => reactPanel.blocks.getBlock(id)?.content.length ?? 0,
-    );
-  if (endpoints && endpoints.anchor.blockId === endpoints.head.blockId) {
-    return {
-      kind: "inline",
-      blockId: endpoints.anchor.blockId,
-      start: Math.min(endpoints.anchor.offset, endpoints.head.offset),
-      end: Math.max(endpoints.anchor.offset, endpoints.head.offset),
-    };
-  }
-  const block = fallbackBlockId ? reactPanel.blocks.getBlock(fallbackBlockId) : undefined;
-  return block
-    ? { kind: "inline", blockId: block.id, start: block.content.length, end: block.content.length }
-    : undefined;
-}
-
-/**
  * Chooses inline, block, or canvas placement for one browser point.
- * @param reactEditor - Active React editor runtime.
+ * @param reactPanel - Panel supplying the destination and document commands.
  * @param mode - Current editor mode.
  * @param contentElement - Editable content under the event.
  * @param blockId - Block under the event.
@@ -370,14 +334,14 @@ function destinationAt(
 
 /**
  * Commits prepared file representations without persisting pending state.
- * @param reactEditor - Active React editor runtime.
+ * @param reactPanel - Panel supplying the destination and document commands.
  * @param prepared - Successful handler results in source order.
  * @param destination - Captured insertion destination.
  * @returns Nothing.
  */
 function insertPrepared(
   reactPanel: ReactPanelApi,
-  prepared: readonly PreparedFilePaste[],
+  prepared: readonly PreparedFile[],
   destination: FileDestination,
 ): void {
   if (!prepared.length) {
@@ -449,6 +413,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
     setup: (reactEditor) => {
       const abort = new AbortController();
       const statuses = new FileUploadStore();
+      let nextUploadId = 0;
       reactEditor.extensions.mount(() => <FileUploadStatuses store={statuses} />, "afterSurface");
       reactEditor.blockTypes.register({
         definition: { type: FILE_BLOCK_TYPE, title: "File" },
@@ -459,11 +424,9 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         title: "File",
         render: FileCanvasElement,
       });
-      reactEditor.files.registerPasteHandler({
+      reactEditor.clipboard.registerFileHandler({
         id: "file",
         provider: options.provider,
-        elementType: FILE_ELEMENT_TYPE,
-        ElementView: FileElementView,
         prepare: ({ reference }) => ({
           inline: serializeFileMacro(reference),
           block: { type: FILE_BLOCK_TYPE, props: { ...reference } },
@@ -475,6 +438,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
           },
         }),
       });
+      reactEditor.clipboard.setDefaultFileHandler("file");
       reactEditor.clipboardFormats.registerFormatter({
         id: "file",
         matches: ({ block }) => block.type === FILE_BLOCK_TYPE,
@@ -507,21 +471,62 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             ? {
                 name: reference.name,
                 mimeType: reference.mimeType,
-                data: reactEditor.files.read(reference.uri, reference.mimeType, {
-                  signal: abort.signal,
-                }),
+                data: reactEditor.attachments.readBinary(
+                  options.provider,
+                  reference.uri,
+                  reference.mimeType,
+                  {
+                    signal: abort.signal,
+                  },
+                ),
               }
             : undefined;
         },
       });
 
       /**
+       * Commits a completed batch only if its captured text is still current.
+       *
+       * @param reactPanel - Panel receiving the prepared attachments.
+       * @param items - Prepared attachments and failed jobs in source order.
+       * @param completedIds - Status cards belonging to successful jobs.
+       * @param destination - Destination and text captured before asynchronous work.
+       * @returns Commits the batch or marks successful jobs as needing a retry.
+       */
+      const commitPrepared = (
+        reactPanel: ReactPanelApi,
+        items: readonly (PreparedFile | undefined)[],
+        completedIds: readonly string[],
+        destination: FileDestination,
+      ): void => {
+        if (abort.signal.aborted || !completedIds.length) {
+          return;
+        }
+        if (!isFileDestinationCurrent(reactPanel, destination)) {
+          const error = new Error(
+            "The destination changed while the file was uploading. Select a location and retry.",
+          );
+          completedIds.forEach((id) => statuses.update(id, { error: error.message }));
+          options.onError?.(error);
+          return;
+        }
+        completedIds.forEach((id) => statuses.delete(id));
+        insertPrepared(
+          reactPanel,
+          items.filter((item): item is PreparedFile => Boolean(item)),
+          destination,
+        );
+      };
+
+      /**
        * Uploads and prepares one file batch in source order.
+       *
+       * @param reactPanel - Panel receiving the prepared files.
        * @param files - Browser files to store and dispatch.
        * @param destination - Captured insertion destination.
        * @param source - Browser interaction that supplied the files.
        * @param point - Viewport position for status feedback.
-       * @returns Nothing; completion commits asynchronously.
+       * @returns Starts asynchronous preparation and commits successful files when safe.
        */
       const upload = (
         reactPanel: ReactPanelApi,
@@ -531,11 +536,18 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         point: { readonly x: number; readonly y: number },
       ): void => {
         const mode = reactPanel.getSurfaceType();
-        const jobs = files.map(async (file, index): Promise<PreparedFilePaste | undefined> => {
-          const id = crypto.randomUUID();
+        const completedIds: string[] = [];
+        const jobs = files.map(async (file, index): Promise<PreparedFile | undefined> => {
+          const id = String(++nextUploadId);
           const retry = () => {
             statuses.delete(id);
-            upload(reactPanel, [file], destination, source, point);
+            upload(
+              reactPanel,
+              [file],
+              retryFileDestination(reactPanel, destination),
+              source,
+              point,
+            );
           };
           statuses.set({
             id,
@@ -545,29 +557,42 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             retry,
           });
           try {
-            const uri = await reactEditor.files.upload(file, {
-              source,
-              mode,
-              destination: destination.kind as FilePasteDestination,
-              signal: abort.signal,
-              reportProgress: (progress) =>
-                statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
-            });
             const reference: FileReference = {
-              uri,
+              uri: "",
               name: file.name || "file",
               mimeType: file.type || "application/octet-stream",
               size: file.size,
             };
-            const prepared = await reactEditor.files.preparePaste(
-              { file, reference },
-              {
-                destination: destination.kind,
+            const handler = reactEditor.clipboard.selectFileHandler({ file, reference });
+            if (!handler) {
+              throw new TypeError(`No attachment handler accepted ${reference.name}`);
+            }
+            abort.signal.throwIfAborted();
+            const uri = validateBinaryUri(
+              await handler.provider.write(file, {
+                documentId: reactEditor.getDocument().id,
+                name: reference.name,
+                mimeType: reference.mimeType,
+                source,
                 mode,
+                destination: destination.kind,
                 signal: abort.signal,
-              },
+                reportProgress: (progress) =>
+                  statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
+              }),
             );
-            statuses.delete(id);
+            abort.signal.throwIfAborted();
+            if (reactEditor.clipboard.getFileHandler(handler.id) !== handler) {
+              throw new Error("Attachment handler was removed during upload");
+            }
+            const prepared = await handler.prepare(
+              { file, reference: { ...reference, uri } },
+              { destination: destination.kind, mode, signal: abort.signal },
+            );
+            if (reactEditor.clipboard.getFileHandler(handler.id) !== handler) {
+              throw new Error("Attachment handler was removed during preparation");
+            }
+            completedIds.push(id);
             return prepared;
           } catch (error) {
             statuses.update(id, {
@@ -578,22 +603,18 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
           }
         });
         void Promise.all(jobs).then((items) => {
-          if (!abort.signal.aborted) {
-            insertPrepared(
-              reactPanel,
-              items.filter((item): item is PreparedFilePaste => Boolean(item)),
-              destination,
-            );
-          }
+          commitPrepared(reactPanel, items, completedIds, destination);
         });
       };
 
       /**
        * Resolves and prepares already-addressable local file references.
+       *
+       * @param reactPanel - Panel receiving the prepared references.
        * @param uris - Absolute paths or file URIs in source order.
        * @param destination - Captured insertion destination.
        * @param point - Viewport position for status feedback.
-       * @returns Nothing; completion commits asynchronously.
+       * @returns Starts asynchronous preparation and commits successful files when safe.
        */
       const insertReferences = (
         reactPanel: ReactPanelApi,
@@ -602,11 +623,17 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         point: { readonly x: number; readonly y: number },
       ): void => {
         const mode = reactPanel.getSurfaceType();
-        const jobs = uris.map(async (uri, index): Promise<PreparedFilePaste | undefined> => {
-          const id = crypto.randomUUID();
+        const completedIds: string[] = [];
+        const jobs = uris.map(async (uri, index): Promise<PreparedFile | undefined> => {
+          const id = String(++nextUploadId);
           const retry = () => {
             statuses.delete(id);
-            insertReferences(reactPanel, [uri], destination, point);
+            insertReferences(
+              reactPanel,
+              [uri],
+              retryFileDestination(reactPanel, destination),
+              point,
+            );
           };
           const reference = referenceFromUri(uri);
           statuses.set({
@@ -617,15 +644,18 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             retry,
           });
           try {
-            const prepared = await reactEditor.files.preparePaste(
+            const handler = reactEditor.clipboard.selectFileHandler({ reference });
+            if (!handler) {
+              throw new TypeError(`No attachment handler accepted ${reference.name}`);
+            }
+            const prepared = await handler.prepare(
               { reference },
-              {
-                destination: destination.kind,
-                mode,
-                signal: abort.signal,
-              },
+              { destination: destination.kind, mode, signal: abort.signal },
             );
-            statuses.delete(id);
+            if (reactEditor.clipboard.getFileHandler(handler.id) !== handler) {
+              throw new Error("Attachment handler was removed during preparation");
+            }
+            completedIds.push(id);
             return prepared;
           } catch (error) {
             statuses.update(id, {
@@ -636,13 +666,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
           }
         });
         void Promise.all(jobs).then((items) => {
-          if (!abort.signal.aborted) {
-            insertPrepared(
-              reactPanel,
-              items.filter((item): item is PreparedFilePaste => Boolean(item)),
-              destination,
-            );
-          }
+          commitPrepared(reactPanel, items, completedIds, destination);
         });
       };
 
@@ -666,7 +690,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         return block?.type === defaultType &&
           !reactEditor.blocks.hasChildren(block.id) &&
           reactEditor.defaultWritingBlockFactory.isEmptyBlock(block)
-          ? { kind: "block", afterId: blockId, replaceId: blockId }
+          ? { kind: "block", afterId: blockId, replaceId: blockId, content: block.content }
           : destination;
       };
 
@@ -788,7 +812,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
                 block &&
                 !reactPanel.blocks.hasChildren(block.id) &&
                 reactEditor.defaultWritingBlockFactory.isEmptyBlock(block)
-                  ? { kind: "block", afterId: blockId, replaceId: blockId }
+                  ? { kind: "block", afterId: blockId, replaceId: blockId, content: block.content }
                   : { kind: "block", afterId: blockId };
               const blockElement = reactPanel
                 .getRoot()

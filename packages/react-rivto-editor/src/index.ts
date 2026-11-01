@@ -307,4 +307,4 @@ export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
 
 export * from "./extensions/file";
 export * from "./extensions/image";
-export * from "./managers/files";
+export * from "./attachments";

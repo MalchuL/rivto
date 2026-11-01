@@ -21,20 +21,10 @@ describe("fileExtension", () => {
         imageExtension({ provider: imageProvider }),
       ],
     });
-    const context = {
-      source: "drop" as const,
-      destination: "block" as const,
-      signal: new AbortController().signal,
-    };
-    await expect(
-      runtime.files.upload(new File(["x"], "picture.png", { type: "image/png" }), context),
-    ).resolves.toBe("images:one");
-    await expect(
-      runtime.files.upload(new File(["x"], "document.pdf", { type: "application/pdf" }), context),
-    ).resolves.toBe("files:one");
-    await expect(
-      runtime.files.resolve("images:one", { signal: context.signal, providerId: "image" }),
-    ).resolves.toBeInstanceOf(Blob);
+    const image = { reference: { uri: "", name: "picture.png", mimeType: "image/png" } };
+    const file = { reference: { uri: "", name: "document.pdf", mimeType: "application/pdf" } };
+    expect(runtime.clipboard.selectFileHandler(image)?.provider).toBe(imageProvider);
+    expect(runtime.clipboard.selectFileHandler(file)?.provider).toBe(fileProvider);
     await runtime.destroy();
     await editor.destroy();
   });
@@ -53,19 +43,20 @@ describe("fileExtension", () => {
     };
 
     await expect(
-      reactEditor.files.preparePaste(
-        { reference },
-        {
-          destination: "block",
-          signal: new AbortController().signal,
-        },
+      Promise.resolve(
+        reactEditor.clipboard.selectFileHandler({ reference })!.prepare(
+          { reference },
+          {
+            destination: "block",
+            signal: new AbortController().signal,
+          },
+        ),
       ),
     ).resolves.toMatchObject({
       inline: expect.stringContaining("{{file "),
       block: { type: FILE_BLOCK_TYPE, props: reference },
       element: { type: FILE_ELEMENT_TYPE, props: reference },
     });
-    expect(reactEditor.files.getElementView(FILE_ELEMENT_TYPE)).toBeDefined();
     await reactEditor.destroy();
     await editor.destroy();
   });
