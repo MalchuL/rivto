@@ -6,6 +6,39 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Container = "outline" | "columns" | "kanban" | "bento" | "table" | "todo-storage";
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`deep child boundary keeps its destination above and below the line in ${mode}`, async ({
+    page,
+  }) => {
+    await load(page, "outline", mode);
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      let parent = "first";
+      for (let level = 1; level <= 5; level += 1) {
+        const id = `deep-${level}`;
+        editor.blocks.insertBlock({ id, type: "paragraph", content: id });
+        editor.blocks.moveBlocks([id], parent, "inside");
+        parent = id;
+      }
+      editor.history.clear();
+    });
+    const target = page.locator('[data-block-id="deep-5"]');
+    const box = (await target.boundingBox())!;
+    await startDrag(page);
+    let expectedLine: DropRegionBox | undefined;
+    for (const offset of [-2, -0.25, 0.25, 2, 4, 2, -2, 4]) {
+      await page.mouse.move(box.x + box.width - 2, box.y + box.height + offset);
+      const line = await expectBoundaryLine(page);
+      expect(line.x, `offset ${offset}`).toBeGreaterThan(box.x + 8);
+      expectedLine ??= line;
+      expect(line).toEqual(expectedLine);
+    }
+    await page.mouse.up();
+    await expect.poll(() => readChildIds(page, "deep-5")).toEqual(["source"]);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => readChildIds(page, "deep-5")).toEqual([]);
+  });
+
   test(`zero indentation uses the configured child threshold in ${mode}`, async ({ page }) => {
     await load(page, "outline", mode);
     const target = page.locator('[data-block-id="first"]');
