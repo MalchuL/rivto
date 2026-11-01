@@ -1107,7 +1107,9 @@ function gutterTarget(
  * destination describes the same insertion, including terminal child append.
  * Comparing after depth selection prevents an ancestor's inside choice from
  * borrowing feedback for an unrelated sibling destination. A terminal child
- * append can also match an explicitly declared inside depth of its parent.
+ * append can also match an explicitly declared inside depth of its parent. A
+ * terminal descendant at the same physical bottom shares the ancestor's seam
+ * even when it selects a deeper child destination.
  *
  * @param edge - Selected anchor and original declaration.
  * @param previous - Mounted preceding sibling registration.
@@ -1136,9 +1138,18 @@ function isPairEdge(
   if (owner.element === edge.element) {
     return owner.getRegions().includes(region);
   }
+  // Terminal descendants can select deeper destinations on the same outline seam.
   return (
     owner.element.contains(edge.element) &&
     (sameOutlineBoundary(destination, edge.destination) ||
+      (!horizontal &&
+        region.side === "block-end" &&
+        Boolean(region.depth) &&
+        continuesDropOutline(owner.element) &&
+        Math.abs(
+          owner.element.getBoundingClientRect().bottom -
+            edge.element.getBoundingClientRect().bottom,
+        ) <= 1) ||
       owner
         .getRegions()
         .some(
