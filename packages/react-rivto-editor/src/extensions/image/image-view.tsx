@@ -30,6 +30,8 @@ const IMAGE_RESIZE_CLASS = "rivto-image-resize";
 const IMAGE_ERROR_CLASS = "rivto-image-error";
 const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
 const IMAGE_LOADING_DELAY_MS = 200;
+/** Minimum image dimension in pixels during insertion and resizing. */
+export const MIN_IMAGE_SIZE = 24;
 
 /** Persisted presentation context using the shared image component. */
 export type ImageViewKind = "inline" | "block" | "element";
@@ -307,13 +309,15 @@ export function ImageView({
         ? dx
         : (dy * start.width) / start.height;
     const desiredWidth = start.width + (freeResize ? dx : proportionalDelta);
-    const minWidth = freeResize ? 24 : Math.max(24, (24 * start.width) / start.height);
+    const minWidth = freeResize
+      ? MIN_IMAGE_SIZE
+      : Math.max(MIN_IMAGE_SIZE, (MIN_IMAGE_SIZE * start.width) / start.height);
     const nextWidth = Math.round(
       Math.min(Math.max(minWidth, desiredWidth), Math.max(minWidth, start.maxWidth)),
     );
     const nextHeight = freeResize
-      ? Math.max(24, Math.round(start.height + dy))
-      : Math.max(24, Math.round((nextWidth * start.height) / start.width));
+      ? Math.max(MIN_IMAGE_SIZE, Math.round(start.height + dy))
+      : Math.max(MIN_IMAGE_SIZE, Math.round((nextWidth * start.height) / start.width));
     previewRef.current = { width: nextWidth, height: nextHeight };
     setPreview(previewRef.current);
   };

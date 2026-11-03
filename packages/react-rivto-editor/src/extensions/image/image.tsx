@@ -13,16 +13,27 @@ import {
   retryFileDestination,
   type FileDestination as ImageDestination,
 } from "../file/file-destination";
-import { createCaretSelection, type EditorBlock, type EditorMode } from "@chulane/rivto";
+import { ingestFileBatch, insertPrepared } from "../file/file-ingestion";
+import { type EditorBlock, type EditorMode } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorExtension } from "../../managers";
 import type { BinaryProvider } from "../../attachments";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
-import { configureImageViews, ImageView, type ImageViewCustomizations } from "./image-view";
+import {
+  configureImageViews,
+  ImageView,
+  MIN_IMAGE_SIZE,
+  type ImageViewCustomizations,
+} from "./image-view";
 import { serializeImageMacro } from "./image-macro";
-import { validateBinaryUri, type FileInlineViewProps, type FileReference } from "../../attachments";
+import {
+  validateBinaryUri,
+  type FileInlineViewProps,
+  type FileReference,
+  type PreparedFile,
+} from "../../attachments";
 
 /** Persisted native type used by standalone image blocks. */
 export const IMAGE_BLOCK_TYPE = "image";
@@ -30,6 +41,10 @@ const IMAGE_BLOCK_CLASS = "rivto-image-block";
 const IMAGE_UPLOADS_CLASS = "rivto-image-uploads";
 const IMAGE_UPLOAD_CLASS = "rivto-image-upload";
 const IMAGE_FILE_INPUT_CLASS = "rivto-image-file-input";
+/** Maximum initial canvas image width, in pixels. */
+const MAX_INITIAL_IMAGE_WIDTH = 640;
+/** Maximum initial canvas image height, in pixels. */
+const MAX_INITIAL_IMAGE_HEIGHT = 480;
 
 /** Persisted image metadata shared by standalone blocks and canvas elements. */
 export interface ImageProps extends FileReference {
@@ -52,6 +67,30 @@ interface ImageAsset extends FileReference {
   readonly alt: string;
   readonly intrinsicWidth: number;
   readonly intrinsicHeight: number;
+}
+
+/**
+ * Builds the inline, block, and canvas representations of an inspected image.
+ *
+ * @param asset - Stored reference and decoded intrinsic dimensions.
+ * @returns Prepared image representations using the shared initial canvas size.
+ */
+function prepareImageAsset(asset: ImageAsset): PreparedFile {
+  const scale = Math.min(
+    1,
+    MAX_INITIAL_IMAGE_WIDTH / asset.intrinsicWidth,
+    MAX_INITIAL_IMAGE_HEIGHT / asset.intrinsicHeight,
+  );
+  return {
+    inline: serializeImageMacro({ uri: asset.uri, alt: asset.alt }),
+    block: { type: IMAGE_BLOCK_TYPE, props: { ...asset } },
+    element: {
+      type: "image",
+      props: { ...asset, rotation: 0 },
+      width: Math.max(MIN_IMAGE_SIZE, Math.round(asset.intrinsicWidth * scale)),
+      height: Math.max(MIN_IMAGE_SIZE, Math.round(asset.intrinsicHeight * scale)),
+    },
+  };
 }
 
 interface PendingUpload {
@@ -394,23 +433,12 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
               resolved instanceof Blob && resolved.type ? resolved.type : reference.mimeType,
             ...(resolved instanceof Blob ? { size: resolved.size } : {}),
           };
-          const props = {
+          return prepareImageAsset({
             ...completeReference,
             alt: file ? file.name || "Image" : reference.name || "Image",
             intrinsicWidth: dimensions.width,
             intrinsicHeight: dimensions.height,
-          };
-          const scale = Math.min(1, 640 / dimensions.width, 480 / dimensions.height);
-          return {
-            inline: serializeImageMacro({ uri: reference.uri, alt: props.alt }),
-            block: { type: IMAGE_BLOCK_TYPE, props },
-            element: {
-              type: "image",
-              props: { ...props, rotation: 0 },
-              width: Math.max(24, Math.round(dimensions.width * scale)),
-              height: Math.max(24, Math.round(dimensions.height * scale)),
-            },
-          };
+          });
         },
       });
       reactEditor.clipboard.registerPostprocessor({
@@ -463,75 +491,6 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         },
       });
 
-      /** Commits uploaded images to their captured destination. */
-      const insert = (
-        reactPanel: ReactPanelApi,
-        assets: readonly ImageAsset[],
-        destination: ImageDestination,
-      ): void => {
-        if (!assets.length) {
-          return;
-        }
-        const editor = reactPanel.editor;
-        reactPanel.batchUpdates(() => {
-          if (destination.kind === "inline") {
-            const block = editor.blocks.getBlock(destination.blockId);
-            if (!block) {
-              return;
-            }
-            const macros = assets
-              .map((asset) => serializeImageMacro({ uri: asset.uri, alt: asset.alt }))
-              .join(" ");
-            editor.blocks.updateBlock(block.id, {
-              content:
-                block.content.slice(0, destination.start) +
-                macros +
-                block.content.slice(destination.end),
-            });
-            reactPanel.selection.set(
-              createCaretSelection(destination.blockId, destination.start + macros.length),
-            );
-          } else if (destination.kind === "block") {
-            let afterId = destination.afterId;
-            assets.forEach((asset, index) => {
-              if (index === 0 && destination.replaceId) {
-                editor.blocks.setBlockType(destination.replaceId, IMAGE_BLOCK_TYPE);
-                editor.blocks.updateBlock(destination.replaceId, { props: { ...asset } });
-                afterId = destination.replaceId;
-                return;
-              }
-              afterId = reactPanel.blocks.insertBlock(
-                { type: IMAGE_BLOCK_TYPE, props: { ...asset } },
-                reactPanel.blocks.getInsertionDestinationAfter(afterId),
-              ).id;
-            });
-          } else {
-            const created = assets.map((asset, index) => {
-              const scale = Math.min(1, 640 / asset.intrinsicWidth, 480 / asset.intrinsicHeight);
-              return reactPanel.elements.insertElement({
-                type: "image",
-                frame: {
-                  x: destination.x + index * 24,
-                  y: destination.y + index * 24,
-                  width: Math.max(24, Math.round(asset.intrinsicWidth * scale)),
-                  height: Math.max(24, Math.round(asset.intrinsicHeight * scale)),
-                },
-                zIndex:
-                  Math.max(
-                    0,
-                    ...reactPanel.elements.getElements().map((element) => element.zIndex),
-                  ) +
-                  index +
-                  1,
-                props: { ...asset, rotation: 0 },
-              }).id;
-            });
-            reactPanel.selection.set({ type: "selection", blocks: [], elements: created });
-          }
-        });
-        reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
-      };
-
       /** Uploads one batch concurrently and inserts successful results in source order. */
       const upload = (
         reactPanel: ReactPanelApi,
@@ -553,81 +512,50 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           return;
         }
         const mode = reactPanel.getSurfaceType();
-        const completedIds: string[] = [];
-        const jobs = files.filter(isImageFile).map((file, index) => {
-          const id = String(++nextUploadId);
-          const retry = () => {
-            statuses.delete(id);
-            upload(
-              reactPanel,
-              [file],
-              retryFileDestination(reactPanel, destination),
-              source,
-              point,
-            );
-          };
-          statuses.set({
-            id,
-            name: file.name || "image",
-            x: point.x + index * 12,
-            y: point.y + index * 12,
-            retry,
-          });
-          return (async (): Promise<ImageAsset | undefined> => {
-            try {
-              const localUrl = URL.createObjectURL(file);
-              const dimensions = await inspectImage(localUrl, true);
-              abort.signal.throwIfAborted();
-              const uri = validateBinaryUri(
-                await options.provider.write(file, {
-                  documentId: reactEditor.getDocument().id,
-                  name: file.name || "image",
-                  mimeType: file.type || "application/octet-stream",
-                  source,
-                  mode,
-                  destination: destination.kind,
-                  signal: abort.signal,
-                  reportProgress: (progress) =>
-                    statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
-                }),
-              );
-              abort.signal.throwIfAborted();
-              completedIds.push(id);
-              return {
-                uri,
+        ingestFileBatch<File, ImageAsset>({
+          panel: reactPanel,
+          destination,
+          items: files.filter(isImageFile),
+          point,
+          signal: abort.signal,
+          statuses,
+          nextId: () => String(++nextUploadId),
+          name: (file) => file.name || "image",
+          retry: (file, nextDestination) =>
+            upload(reactPanel, [file], nextDestination, source, point),
+          onError: options.onError,
+          failureMessage: "Unable to upload image",
+          staleMessage:
+            "The destination changed while the image was uploading. Select a location and retry.",
+          commit: (items) => insertPrepared(reactPanel, items.map(prepareImageAsset), destination),
+          prepare: async (file, id): Promise<ImageAsset> => {
+            const localUrl = URL.createObjectURL(file);
+            const dimensions = await inspectImage(localUrl, true);
+            abort.signal.throwIfAborted();
+            const uri = validateBinaryUri(
+              await options.provider.write(file, {
+                documentId: reactEditor.getDocument().id,
                 name: file.name || "image",
                 mimeType: file.type || "application/octet-stream",
-                size: file.size,
-                alt: file.name || "Image",
-                intrinsicWidth: dimensions.width,
-                intrinsicHeight: dimensions.height,
-              };
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "Unable to upload image";
-              statuses.update(id, { error: message });
-              options.onError?.(error);
-              return undefined;
-            }
-          })();
-        });
-        void Promise.all(jobs).then((assets) => {
-          if (abort.signal.aborted || !completedIds.length) {
-            return;
-          }
-          if (!isFileDestinationCurrent(reactPanel, destination)) {
-            const error = new Error(
-              "The destination changed while the image was uploading. Select a location and retry.",
+                source,
+                mode,
+                destination: destination.kind,
+                signal: abort.signal,
+                reportProgress: (progress) =>
+                  statuses.update(id, { progress: Math.max(0, Math.min(1, progress)) }),
+              }),
             );
-            completedIds.forEach((id) => statuses.update(id, { error: error.message }));
-            options.onError?.(error);
-            return;
-          }
-          completedIds.forEach((id) => statuses.delete(id));
-          insert(
-            reactPanel,
-            assets.filter((asset): asset is ImageAsset => Boolean(asset)),
-            destination,
-          );
+            abort.signal.throwIfAborted();
+            return {
+              uri,
+              name: file.name || "image",
+              mimeType: file.type || "application/octet-stream",
+              size: file.size,
+              alt: file.name || "Image",
+              intrinsicWidth: dimensions.width,
+              intrinsicHeight: dimensions.height,
+            };
+          },
         });
       };
 
@@ -682,10 +610,10 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
                 return "image";
               }
             })();
-            insert(
+            insertPrepared(
               reactPanel,
               [
-                {
+                prepareImageAsset({
                   uri: remote.uri,
                   name,
                   mimeType:
@@ -696,7 +624,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
                   alt: remote.alt,
                   intrinsicWidth: dimensions.width,
                   intrinsicHeight: dimensions.height,
-                },
+                }),
               ],
               destination,
             );

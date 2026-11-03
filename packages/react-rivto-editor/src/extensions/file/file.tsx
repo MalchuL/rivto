@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { createCaretSelection, type EditorMode } from "@chulane/rivto";
+import { type EditorMode } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
@@ -18,12 +18,8 @@ import type { ReactPanelApi } from "../../panels/types";
 import { validateBinaryUri, type FileReference, type PreparedFile } from "../../attachments";
 import { FileView, RegisteredFileView } from "./file-view";
 import { serializeFileMacro } from "./file-macro";
-import {
-  inlineDestination,
-  isFileDestinationCurrent,
-  retryFileDestination,
-  type FileDestination,
-} from "./file-destination";
+import { ingestFileBatch, insertPrepared } from "./file-ingestion";
+import { inlineDestination, type FileDestination } from "./file-destination";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
@@ -333,76 +329,6 @@ function destinationAt(
 }
 
 /**
- * Commits prepared file representations without persisting pending state.
- * @param reactPanel - Panel supplying the destination and document commands.
- * @param prepared - Successful handler results in source order.
- * @param destination - Captured insertion destination.
- * @returns Nothing.
- */
-function insertPrepared(
-  reactPanel: ReactPanelApi,
-  prepared: readonly PreparedFile[],
-  destination: FileDestination,
-): void {
-  if (!prepared.length) {
-    return;
-  }
-  const editor = reactPanel.editor;
-  reactPanel.batchUpdates(() => {
-    if (destination.kind === "inline") {
-      const block = editor.blocks.getBlock(destination.blockId);
-      if (!block) {
-        return;
-      }
-      const inline = prepared.map((item) => item.inline).join(" ");
-      editor.blocks.updateBlock(block.id, {
-        content:
-          block.content.slice(0, destination.start) + inline + block.content.slice(destination.end),
-      });
-      reactPanel.selection.set(createCaretSelection(block.id, destination.start + inline.length));
-      return;
-    }
-    if (destination.kind === "block") {
-      let afterId = destination.afterId;
-      prepared.forEach((item, index) => {
-        if (index === 0 && destination.replaceId) {
-          editor.blocks.setBlockType(destination.replaceId, item.block.type);
-          editor.blocks.updateBlock(destination.replaceId, { props: item.block.props });
-          afterId = destination.replaceId;
-        } else {
-          afterId = reactPanel.blocks.insertBlock(
-            { type: item.block.type, props: item.block.props },
-            reactPanel.blocks.getInsertionDestinationAfter(afterId),
-          ).id;
-        }
-      });
-      return;
-    }
-    const zIndex =
-      Math.max(0, ...editor.elements.getElements().map((element) => element.zIndex)) + 1;
-    const ids = prepared.map((item, index) =>
-      editor.elements.insertElement({
-        type: item.element.type,
-        frame: {
-          x: destination.x + index * 24,
-          y: destination.y + index * 24,
-          width: item.element.width,
-          height: item.element.height,
-        },
-        zIndex: zIndex + index,
-        props: item.element.props,
-      }),
-    );
-    reactPanel.selection.set({
-      type: "selection",
-      blocks: [],
-      elements: ids.map((element) => element.id),
-    });
-  });
-  reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
-}
-
-/**
  * Installs generic file paste/drop, fallback views, and the native picker.
  * @param options - Optional asynchronous error notification.
  * @returns Lifecycle-owned React editor extension.
@@ -485,40 +411,6 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
       });
 
       /**
-       * Commits a completed batch only if its captured text is still current.
-       *
-       * @param reactPanel - Panel receiving the prepared attachments.
-       * @param items - Prepared attachments and failed jobs in source order.
-       * @param completedIds - Status cards belonging to successful jobs.
-       * @param destination - Destination and text captured before asynchronous work.
-       * @returns Commits the batch or marks successful jobs as needing a retry.
-       */
-      const commitPrepared = (
-        reactPanel: ReactPanelApi,
-        items: readonly (PreparedFile | undefined)[],
-        completedIds: readonly string[],
-        destination: FileDestination,
-      ): void => {
-        if (abort.signal.aborted || !completedIds.length) {
-          return;
-        }
-        if (!isFileDestinationCurrent(reactPanel, destination)) {
-          const error = new Error(
-            "The destination changed while the file was uploading. Select a location and retry.",
-          );
-          completedIds.forEach((id) => statuses.update(id, { error: error.message }));
-          options.onError?.(error);
-          return;
-        }
-        completedIds.forEach((id) => statuses.delete(id));
-        insertPrepared(
-          reactPanel,
-          items.filter((item): item is PreparedFile => Boolean(item)),
-          destination,
-        );
-      };
-
-      /**
        * Uploads and prepares one file batch in source order.
        *
        * @param reactPanel - Panel receiving the prepared files.
@@ -536,27 +428,23 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         point: { readonly x: number; readonly y: number },
       ): void => {
         const mode = reactPanel.getSurfaceType();
-        const completedIds: string[] = [];
-        const jobs = files.map(async (file, index): Promise<PreparedFile | undefined> => {
-          const id = String(++nextUploadId);
-          const retry = () => {
-            statuses.delete(id);
-            upload(
-              reactPanel,
-              [file],
-              retryFileDestination(reactPanel, destination),
-              source,
-              point,
-            );
-          };
-          statuses.set({
-            id,
-            name: file.name || "file",
-            x: point.x + index * 12,
-            y: point.y + index * 12,
-            retry,
-          });
-          try {
+        ingestFileBatch<File, PreparedFile>({
+          panel: reactPanel,
+          destination,
+          items: files,
+          point,
+          signal: abort.signal,
+          statuses,
+          nextId: () => String(++nextUploadId),
+          name: (file) => file.name || "file",
+          retry: (file, nextDestination) =>
+            upload(reactPanel, [file], nextDestination, source, point),
+          onError: options.onError,
+          failureMessage: "Unable to upload file",
+          staleMessage:
+            "The destination changed while the file was uploading. Select a location and retry.",
+          commit: (items) => insertPrepared(reactPanel, items, destination),
+          prepare: async (file, id) => {
             const reference: FileReference = {
               uri: "",
               name: file.name || "file",
@@ -592,18 +480,8 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             if (reactEditor.clipboard.getFileHandler(handler.id) !== handler) {
               throw new Error("Attachment handler was removed during preparation");
             }
-            completedIds.push(id);
             return prepared;
-          } catch (error) {
-            statuses.update(id, {
-              error: error instanceof Error ? error.message : "Unable to upload file",
-            });
-            options.onError?.(error);
-            return undefined;
-          }
-        });
-        void Promise.all(jobs).then((items) => {
-          commitPrepared(reactPanel, items, completedIds, destination);
+          },
         });
       };
 
@@ -623,27 +501,24 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         point: { readonly x: number; readonly y: number },
       ): void => {
         const mode = reactPanel.getSurfaceType();
-        const completedIds: string[] = [];
-        const jobs = uris.map(async (uri, index): Promise<PreparedFile | undefined> => {
-          const id = String(++nextUploadId);
-          const retry = () => {
-            statuses.delete(id);
-            insertReferences(
-              reactPanel,
-              [uri],
-              retryFileDestination(reactPanel, destination),
-              point,
-            );
-          };
-          const reference = referenceFromUri(uri);
-          statuses.set({
-            id,
-            name: reference.name,
-            x: point.x + index * 12,
-            y: point.y + index * 12,
-            retry,
-          });
-          try {
+        ingestFileBatch<string, PreparedFile>({
+          panel: reactPanel,
+          destination,
+          items: uris,
+          point,
+          signal: abort.signal,
+          statuses,
+          nextId: () => String(++nextUploadId),
+          name: (uri) => referenceFromUri(uri).name,
+          retry: (uri, nextDestination) =>
+            insertReferences(reactPanel, [uri], nextDestination, point),
+          onError: options.onError,
+          failureMessage: "Unable to load file",
+          staleMessage:
+            "The destination changed while the file was uploading. Select a location and retry.",
+          commit: (items) => insertPrepared(reactPanel, items, destination),
+          prepare: async (uri) => {
+            const reference = referenceFromUri(uri);
             const handler = reactEditor.clipboard.selectFileHandler({ reference });
             if (!handler) {
               throw new TypeError(`No attachment handler accepted ${reference.name}`);
@@ -655,18 +530,8 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             if (reactEditor.clipboard.getFileHandler(handler.id) !== handler) {
               throw new Error("Attachment handler was removed during preparation");
             }
-            completedIds.push(id);
             return prepared;
-          } catch (error) {
-            statuses.update(id, {
-              error: error instanceof Error ? error.message : "Unable to load file",
-            });
-            options.onError?.(error);
-            return undefined;
-          }
-        });
-        void Promise.all(jobs).then((items) => {
-          commitPrepared(reactPanel, items, completedIds, destination);
+          },
         });
       };
 
