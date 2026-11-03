@@ -40,7 +40,7 @@ declares its child layout. Their committed refs register occurrence-local bounds
 content renderers do not provide custom target-search functions.
 
 The geometry resolver uses only those declared regions and canonical neighbors.
-A placement edge cannot consume the middle third of the block's registered content
+A placement edge cannot consume the center of the block's registered content
 (or primary row when content is absent), even when children enlarge the shell or
 a layout inherits a larger target-size token. Shell/item padding remains available
 for sorting without adding any new hitbox DOM or presentation spacing. Missing

@@ -6,6 +6,28 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 type Container = "outline" | "columns" | "kanban" | "bento" | "table" | "todo-storage";
 
 for (const mode of ["block", "edgeless"] as const) {
+  for (const type of ["outline", "kanban"] as const) {
+    test(`populated block keeps its configured top sibling edge in ${type}, ${mode}`, async ({
+      page,
+    }) => {
+      const parent = await load(page, type, mode);
+      await insertNestedParagraph(page, "nested", "first");
+      const target = page.locator('[data-block-id="first"]');
+      await target.evaluate((element) => {
+        element.style.setProperty("--rivto-drop-target-size", "12px");
+      });
+      const box = (await target.boundingBox())!;
+      await startDrag(page);
+      await page.mouse.move(box.x + box.width / 2, box.y + 10);
+      const line = await expectBoundaryLine(page);
+      expect(line.y + line.height / 2).toBeCloseTo(box.y, 1);
+      await page.mouse.up();
+      await expect.poll(() => readChildIds(page, parent)).toEqual(["source", "first", "last"]);
+      await page.keyboard.press("ControlOrMeta+z");
+      await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+    });
+  }
+
   test(`deep child boundary keeps its destination above and below the line in ${mode}`, async ({
     page,
   }) => {

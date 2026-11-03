@@ -197,8 +197,8 @@ export function containsDropCrossAxisPoint(
  *
  * @param region - Declared side, size and optional terminal outline bands.
  * @param geometry - Current anchor geometry and computed layout tokens.
- * @returns Inset strip capped to one third of the anchor axis and before the owned body
- * middle third, retaining inside placement even when descendants enlarge the shell.
+ * @returns Inset strip capped to half of the anchor axis and before the owned body
+ * center, retaining inside placement even when descendants enlarge the shell.
  * Declared terminal ancestors can extend the strip toward outer indentation levels.
  * @throws If an explicit size is negative or nonfinite.
  */
@@ -395,10 +395,11 @@ function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
 }
 
 /**
- * Limits an edge so its owner's middle body remains available for inside drops.
+ * Limits an edge so its owner's body center remains available for inside drops.
  *
  * Shell padding retains its sorting area. Child subtree height cannot enlarge an
  * inset edge over the primary content, and inline limits respect RTL direction.
+ * A two-local-pixel central band remains available when opposite edges are large.
  *
  * @param region - Declared logical edge.
  * @param geometry - Shell and optional registered body in viewport coordinates.
@@ -407,7 +408,8 @@ function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
 function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeometry): number {
   const { rect, contentRect: content } = geometry;
   const block = region.side.startsWith("block");
-  const limit = (block ? rect.height : rect.width) / 3;
+  const centerInset = block ? geometry.scaleY : geometry.scaleX;
+  const limit = Math.max(0, (block ? rect.height : rect.width) / 2 - centerInset);
   if (!content) {
     return limit;
   }
@@ -417,7 +419,9 @@ function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeomet
   const finish = block ? rect.bottom : rect.right;
   const bodyStart = block ? content.top : content.left;
   const bodyEnd = block ? content.bottom : content.right;
-  const third = (bodyEnd - bodyStart) / 3;
-  const distance = trailing ? finish - (bodyEnd - third) : bodyStart + third - start;
+  const half = (bodyEnd - bodyStart) / 2;
+  const distance = trailing
+    ? finish - (bodyEnd - half) - centerInset
+    : bodyStart + half - start - centerInset;
   return Math.max(0, Math.min(limit, distance));
 }

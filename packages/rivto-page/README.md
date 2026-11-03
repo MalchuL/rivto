@@ -679,8 +679,8 @@ Physical sibling gaps span the same host cross axis; shared/separate feedback an
 outline depth stay consistent when crossing an item's side. Lookup stays within
 the native owning layout, uses binary search over mounted anchors, and does not
 fill virtual holes or unoccupied space beneath short tiles. On `BlockChildren`,
-`dropGaps={false}` disables this layout continuation. Insets are capped to one third
-of the anchor axis and stop before the middle third of its registered own content
+`dropGaps={false}` disables this layout continuation. Insets are capped to half
+of the anchor axis and stop before the center of its registered own content
 (or primary row when content is omitted). Descendants can enlarge the complete
 shell without consuming its own inside body. Existing padding remains available
 to declared edges. These measurements use primitive-owned refs rather than
