@@ -54,6 +54,11 @@
   white-space: normal;
 }
 
+.markdown-preview p,
+.markdown-preview li {
+  white-space: pre-line;
+}
+
 .markdown-preview > :first-child {
   margin-top: 0;
 }
