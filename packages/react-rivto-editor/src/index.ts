@@ -55,6 +55,7 @@ export {
   separatorBlockExtension,
 } from "./extensions/built-ins/separator/separator-block";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
+export { nestingLinesExtension } from "./extensions/nesting-lines/nesting-lines";
 export type {
   BulletThreadingAnchor,
   BulletThreadingOptions,

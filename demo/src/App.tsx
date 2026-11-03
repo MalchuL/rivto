@@ -17,6 +17,7 @@ import {
   BENTO_BLOCK_TYPE,
   BlockHandleContext,
   bulletThreadingExtension,
+  nestingLinesExtension,
   COLUMNS_BLOCK_TYPE,
   createBentoBlockInput,
   createColumnsBlockInput,
@@ -617,6 +618,7 @@ async function createDemoEditor() {
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
+          nestingLinesExtension(),
           bulletThreadingExtension({
             anchor: demoThreadAnchor,
             excludeBlockTypes: [
