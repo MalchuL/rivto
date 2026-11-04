@@ -1,4 +1,4 @@
-import { escapeHtml } from "./escape-html";
+import { escapeHtml } from "./utils/escape-html";
 /**
  * Generic browser file ingestion and fallback attachment presentation.
  *
@@ -17,14 +17,18 @@ import type { ReactPanelApi } from "../../panels/types";
 import { validateBinaryUri, type FileReference, type PreparedFile } from "../../attachments";
 import { FileView, RegisteredFileView } from "./file-view";
 import { serializeFileMacro } from "./file-macro";
-import { ingestFileBatch, insertPrepared } from "./file-ingestion";
+import { ingestFileBatch, insertPrepared } from "./ingestion/file-ingestion";
 import {
   fileDestinationAtPoint,
   inlineDestination,
   type FileDestination,
-} from "./file-destination";
-import { FileUploadStatusOverlay, FileUploadStatusStore } from "./file-upload-status";
-import { getTransferredFiles, findLocalFileUri, createFileReferenceFromUri } from "./file-input";
+} from "./ingestion/file-destination";
+import { FileUploadStatusOverlay, FileUploadStatusStore } from "./ingestion/file-upload-status";
+import {
+  getTransferredFiles,
+  findLocalFileUri,
+  createFileReferenceFromUri,
+} from "./utils/file-input";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";

@@ -1,4 +1,4 @@
-import { escapeHtml } from "../file/escape-html";
+import { escapeHtml } from "../file/utils/escape-html";
 /**
  * Opt-in image blocks, inline image insertion, and browser file interactions.
  *
@@ -14,10 +14,13 @@ import {
   isFileDestinationCurrent,
   retryFileDestination,
   type FileDestination as ImageDestination,
-} from "../file/file-destination";
-import { ingestFileBatch, insertPrepared } from "../file/file-ingestion";
+} from "../file/ingestion/file-destination";
+import { ingestFileBatch, insertPrepared } from "../file/ingestion/file-ingestion";
 import { type EditorBlock } from "@chulane/rivto";
-import { FileUploadStatusOverlay, FileUploadStatusStore } from "../file/file-upload-status";
+import {
+  FileUploadStatusOverlay,
+  FileUploadStatusStore,
+} from "../file/ingestion/file-upload-status";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorExtension } from "../../managers";
@@ -36,7 +39,7 @@ import {
   getTransferredImageFiles,
   findImageUri,
   findTransferredImageUri,
-} from "./image-input";
+} from "./utils/image-input";
 import {
   validateBinaryUri,
   type FileInlineViewProps,

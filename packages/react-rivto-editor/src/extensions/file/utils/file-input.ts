@@ -1,4 +1,4 @@
-import type { FileReference } from "../../attachments";
+import type { FileReference } from "../../../attachments";
 
 /**
  * Returns files exposed by a clipboard or drag data store.

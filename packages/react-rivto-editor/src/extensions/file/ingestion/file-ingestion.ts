@@ -1,6 +1,6 @@
 import { createCaretSelection } from "@chulane/rivto";
-import type { PreparedFile } from "../../attachments";
-import type { ReactPanelApi } from "../../panels/types";
+import type { PreparedFile } from "../../../attachments";
+import type { ReactPanelApi } from "../../../panels/types";
 import {
   isFileDestinationCurrent,
   retryFileDestination,

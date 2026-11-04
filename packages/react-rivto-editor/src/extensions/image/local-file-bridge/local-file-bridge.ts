@@ -7,7 +7,7 @@
  *
  * @module
  */
-import type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "../../attachments";
+import type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "../../../attachments";
 
 /** Settings and privileged callbacks required by the local asset bridge. */
 export interface LocalFileBridgeOptions {

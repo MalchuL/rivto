@@ -1,4 +1,4 @@
-import type { ReactPanelApi } from "../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import type { FileDestination } from "./file-destination";
 
 /** Status card for one active or failed file operation. */

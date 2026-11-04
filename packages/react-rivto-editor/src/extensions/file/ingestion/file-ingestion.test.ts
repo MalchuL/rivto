@@ -1,4 +1,4 @@
-import type { ReactPanelApi } from "../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 import { ingestFileBatch } from "./file-ingestion";
 import type { FileIngestionStatus, FileIngestionStatuses } from "./types";
 

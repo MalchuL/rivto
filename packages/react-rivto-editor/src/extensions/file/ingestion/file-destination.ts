@@ -1,6 +1,6 @@
 import type { EditorMode } from "@chulane/rivto";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
-import type { ReactPanelApi } from "../../panels/types";
+import type { ReactPanelApi } from "../../../panels/types";
 
 /** Location and original text captured before asynchronous attachment preparation. */
 export type FileDestination =
