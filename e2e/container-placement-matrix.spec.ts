@@ -182,7 +182,12 @@ async function placementPoint(page: Page, placement: Placement): Promise<{ x: nu
   } else if (placement === "last") {
     y = b.y + b.height - 1;
   }
-  return { x: a.x + (placement === "nested" ? 36 : 12), y };
+  const row = page.locator('[data-block-id="first"] > .rivto-block-row > .rivto-block-content');
+  const content = (await row.boundingBox())!;
+  const indent = await row.evaluate((element) =>
+    parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+  );
+  return { x: content.x + (placement === "nested" ? indent : 0) + 1, y };
 }
 
 for (const source of kinds) {

@@ -114,7 +114,14 @@ for (const mode of ["block", "edgeless"] as const) {
       await startDrag(page);
       const currentTile = (await tile.boundingBox())!;
       const currentTodo = (await todo.boundingBox())!;
-      await page.mouse.move(currentTile.x + offset, currentTodo.y + currentTodo.height - 2);
+      const content = (await todo
+        .locator(":scope > .rivto-block-row > .rivto-block-content")
+        .boundingBox())!;
+      const indent = await todo.evaluate((element) =>
+        parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+      );
+      const x = parentId === todoId ? content.x + 3 * indent : currentTile.x + offset;
+      await page.mouse.move(x, currentTodo.y + currentTodo.height - 2);
       await expect(line).toHaveAttribute("data-axis", "horizontal");
       await page.mouse.up();
       await expect

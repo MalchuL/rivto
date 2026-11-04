@@ -25,6 +25,51 @@ The focused checks cover empty and populated lists, leaf and expanded items,
 physical gaps and gutters, bidirectional sweeps, rejected moves, cross-container
 moves and a second drag after undo in Page and Edgeless.
 
+## Inline controls and deeply nested outlines
+
+An ordinary outline inside a layout with in-flow controls uses the measured
+space occupied by the row's controls for both pointer depth and line placement.
+The same calculation applies to any layout that places controls inside the row;
+it does not identify container types. Outlines with outside controls keep their
+existing geometry. Direct sibling-only container boundaries retain their own
+placement policy.
+
+When a preceding block ends in multiple nested descendants, a shared gap must
+offer the same destination and line on both sides of the seam. The registered
+terminal descendants supply those depths, including when their rows contain
+inline controls. The browser regression exercises four levels, both directions,
+different control sizes, Page and Edgeless, and right-to-left layout; it verifies
+the destination and undo as well as the line position.
+
+The updated regression passed 240 Chromium and Firefox cases. The container
+placement and deep-outline suites passed 180 cases; boundary feedback and
+container-bottom checks passed another 88. The Page drop-target and feedback
+unit suites passed 154 tests. Production-preview pointer measurements passed in
+both browsers with default content and `repeat=200`: the combined control and
+Bento-region median two-frame times changed from 31.2 to 30.7 ms in Chromium and
+31.5 to 31.5 ms in Firefox at default size, and from 279 to 315.6 ms and 292.5
+to 304 ms respectively with `repeat=200`. The large-document samples were noisy;
+the after ranges were 276.8–334 ms and 291–334 ms. A separate 12-case run of
+the actual container-outline performance scenarios also passed.
+The corresponding median synchronous command times were 1.4 to 1.6 ms and
+2 to 2 ms at default size, and 7.3 to 8.2 ms and 18 to 17.5 ms at `repeat=200`
+for Chromium and Firefox respectively.
+
+The lower edge of a terminal descendant must retain the same depth as the
+adjacent gap when the pointer is outside that descendant's content horizontally.
+Own-content protection applies only when the pointer is inside the content in
+both axes. The regression also sweeps up to ten pixels into the final row and
+commits the drop there, checking the resulting parent and undo.
+The corrected lower-edge check passed 240 Chromium and Firefox scenarios, with
+204 container-placement and bottom-boundary checks and 64 direct boundary
+checks. Production-preview control and Bento-region measurements compared with
+the preceding implementation gave median synchronous / two-frame times of
+1.7 / 31.3 ms in Chromium and 2 / 32 ms in Firefox at default size, and 7.4 /
+272.2 ms and 19.5 / 292 ms at `repeat=200`. The preceding medians were 1.6 /
+30.7 ms, 2 / 31.5 ms, 8.2 / 315.6 ms and 17.5 / 304 ms respectively. Large
+document two-frame measurements ranged from 268.5 to 303.6 ms in Chromium and
+285 to 312 ms in Firefox after the change.
+
 ## Verification results
 
 - The cross-container matrix and bottom/deep-outline suites passed 168 checks in

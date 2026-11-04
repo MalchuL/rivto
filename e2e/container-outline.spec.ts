@@ -76,11 +76,18 @@ class ContainerOutlineFixture {
     const from = (await handle.boundingBox())!;
     const upper = (await this.page.locator('[data-block-id="upper"]').boundingBox())!;
     const lower = (await this.page.locator('[data-block-id="lower"]').boundingBox())!;
+    const row = this.page.locator('[data-block-id="upper"] > .rivto-block-row');
+    const content = (await row.locator(":scope > .rivto-block-content").boundingBox())!;
+    const inlineControls = (await row.getAttribute("data-controls-placement")) === "inside";
+    const outlineStart = inlineControls && allowsNested ? content.x : upper.x + 12;
+    const indent = await row.evaluate((element) =>
+      parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+    );
     await this.page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await this.page.mouse.down();
     await this.page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
     await this.page.mouse.move(
-      upper.x + (nested ? 36 : 12),
+      outlineStart + (nested ? indent : 0) + 1,
       (upper.y + upper.height + lower.y) / 2,
       { steps: 12 },
     );
@@ -88,7 +95,7 @@ class ContainerOutlineFixture {
     await expect(line).toBeVisible();
     const childDestination = nested && allowsNested;
     expect((await line.boundingBox())!.x).toBeCloseTo(
-      upper.x + 12 + (childDestination ? 24 : 0),
+      outlineStart + (childDestination ? indent : 0),
       0,
     );
     await this.page.mouse.up();
@@ -237,7 +244,7 @@ for (const type of containers) {
     test(`default outline placement inside ${type} in ${mode}`, async ({ page }) => {
       const fixture = new ContainerOutlineFixture(page);
       await fixture.load(type, mode);
-      await fixture.move(false);
+      await fixture.move(false, type !== "kanban");
       await page.keyboard.press("ControlOrMeta+z");
       await expect
         .poll(() =>
@@ -273,7 +280,7 @@ for (const repeat of [0, 200]) {
         });
         await fixture.moveFromHeader();
       } else {
-        await fixture.move(false);
+        await fixture.move(false, type !== "kanban");
       }
       await page.keyboard.press("ControlOrMeta+z");
       await fixture.measure();
@@ -281,7 +288,7 @@ for (const repeat of [0, 200]) {
         if (header) {
           await fixture.moveFromHeader();
         } else {
-          await fixture.move(false);
+          await fixture.move(false, type !== "kanban");
         }
         await page.evaluate(
           () =>
