@@ -53,10 +53,15 @@ import type { ReactPanelApi } from "../../panels/types";
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
+  /** File handlers in registration order. */
   private readonly fileHandlers: FileHandler[] = [];
+  /** Revision published when file handler registrations change. */
   private readonly fileHandlerChanges = new RevisionStore();
+  /** Explicit fallback when no registered file handler matches. */
   private defaultFileHandler?: FileHandler;
+  /** Binary clipboard contributors in registration order. */
   private readonly postprocessors: ClipboardPostprocessor[] = [];
+  /** Optional host writer for binary clipboard content. */
   private writer?: ClipboardWriter;
 
   /**
@@ -68,6 +73,7 @@ export class ClipboardManager {
   constructor(
     private readonly document: DocumentEditorAPI,
     private readonly editor: ReactEditorApi,
+    /** Owner that guards and cleans up extension registrations. */
     private readonly registrations: RegistrationOwner,
   ) {
     this.converters = new ClipboardConverters(registrations);
@@ -99,6 +105,7 @@ export class ClipboardManager {
       throw new Error(`File handler ${handler.id || "<empty>"} is already registered`);
     }
     this.fileHandlers.push(handler);
+    // Removing a handler also clears it as the default and updates subscribers.
     const dispose = this.registrations.registerCleanup(() => {
       const index = this.fileHandlers.indexOf(handler);
       if (index >= 0) {
@@ -171,8 +178,12 @@ export class ClipboardManager {
 
   /**
    * Registers one ordered final clipboard refinement.
+   *
+   * Contributions are considered in registration order and the first match is used.
+   *
    * @param postprocessor - Single-object binary contribution hook.
-   * @returns Lifecycle-owned disposer.
+   * @returns A disposer that removes this registration.
+   * @throws If the runtime is inactive or the ID is empty or already registered.
    */
   registerPostprocessor(postprocessor: ClipboardPostprocessor): () => void {
     this.registrations.assertActive();
@@ -182,6 +193,7 @@ export class ClipboardManager {
       );
     }
     this.postprocessors.push(postprocessor);
+    // Remove only this registration when its extension is destroyed.
     return this.registrations.registerCleanup(() => {
       const index = this.postprocessors.indexOf(postprocessor);
       if (index >= 0) {
@@ -192,8 +204,10 @@ export class ClipboardManager {
 
   /**
    * Registers the single host binary writer used before the browser fallback.
+   *
    * @param writer - Privileged host clipboard bridge.
-   * @returns Lifecycle-owned disposer.
+   * @returns A disposer that removes this writer.
+   * @throws If the runtime is inactive, the ID is empty, or a writer is already registered.
    */
   registerWriter(writer: ClipboardWriter): () => void {
     this.registrations.assertActive();
@@ -204,6 +218,7 @@ export class ClipboardManager {
       throw new Error(`Clipboard writer ${this.writer.id} is already registered`);
     }
     this.writer = writer;
+    // Do not clear a writer installed after this registration was removed.
     return this.registrations.registerCleanup(() => {
       if (this.writer === writer) {
         this.writer = undefined;
@@ -328,7 +343,11 @@ export class ClipboardManager {
     return this.converters.registerElement(type, converter);
   }
 
-  /** Core paste strategies extended by React clipboard integrations. */
+  /**
+   * Exposes the core paste strategies extended by React clipboard integrations.
+   *
+   * @returns The core manager's current paste strategy registry.
+   */
   get pasteStrategies(): CoreClipboardManager["pasteStrategies"] {
     return this.document.clipboard.pasteStrategies;
   }
@@ -615,7 +634,20 @@ export class ClipboardManager {
     return { nodes, idMap, referencedBlocks };
   }
 
-  /** Keeps source IDs in strategy inputs while converted properties refer to allocated destination IDs. */
+  /**
+   * Prepares a detached paste bundle and allocates IDs before running converters.
+   *
+   * Strategy inputs retain source IDs while converted properties can refer to
+   * allocated destination IDs. A text merge may reuse the selected target ID.
+   *
+   * @param bundle - Source clipboard bundle to validate and clone.
+   * @param input - Paste placement and optional default block type.
+   * @param selection - Current destination selection used to resolve text merges.
+   * @param reactPanel - Receiving panel or editor-wide runtime.
+   * @param operation - Paste or duplicate operation supplied to converters.
+   * @returns Converted bundle, block ID map, and prepared canvas elements.
+   * @throws If validation, ID allocation, cloning, or a converter fails.
+   */
   private convertPasteBundle(
     bundle: ClipboardBundle,
     input: ClipboardPasteInput,
@@ -623,8 +655,11 @@ export class ClipboardManager {
     reactPanel: ReactPanelApi | ReactEditorApi,
     operation: "paste" | "duplicate",
   ): {
+    /** Validated and converted clipboard content. */
     bundle: ClipboardBundle;
+    /** Source-to-destination block identities allocated for the paste. */
     blockIdMap: ReadonlyMap<string, string>;
+    /** Converted canvas elements and their associated identity maps. */
     elements: ConvertedClipboardElements;
   } {
     validateClipboardBundle(bundle);
@@ -637,6 +672,7 @@ export class ClipboardManager {
       bundle = this.pageBundle(bundle, input.defaultBlockType);
     }
     const sourceIds: string[] = [];
+    // Collect source block IDs recursively before allocating destination IDs.
     const collect = (block: EditorBlock): void => {
       sourceIds.push(block.id);
       block.children.forEach(collect);
@@ -669,6 +705,7 @@ export class ClipboardManager {
       this.document.elements.createImportIdMap(retained.map((node) => node.id)),
     );
     const context = this.pasteContext(bundle, reactPanel, blockIdMap, elementIdMap, operation);
+    // Apply the paste converter recursively while preserving child order.
     const convert = (block: EditorBlock): EditorBlock => {
       const fields = this.converters.blocks
         .get(block.type)
@@ -710,7 +747,18 @@ export class ClipboardManager {
     };
   }
 
-  /** Applies copy hooks once to detached nodes, retaining source identities and hierarchy. */
+  /**
+   * Applies copy hooks once to detached nodes, retaining source identities and hierarchy.
+   *
+   * The source bundle is cloned before converters run and the returned bundle
+   * records the current source document ID.
+   *
+   * @param source - Clipboard snapshot to clone and convert.
+   * @param reactPanel - Optional source panel supplied to converters.
+   * @param operation - Copy, cut, or duplicate intent; defaults to copy.
+   * @returns Converted bundle with the original source left unchanged.
+   * @throws If cloning or a converter fails.
+   */
   private convertCopy(
     source: ClipboardBundle,
     reactPanel?: ReactPanelApi,
@@ -723,6 +771,7 @@ export class ClipboardManager {
       reactPanel,
       rootBlockIds: reactPanel?.blocks.getRootIds() ?? this.document.blocks.getRootIds(),
     };
+    // Apply each block's copy converter recursively to its descendants.
     const visit = (block: EditorBlock): EditorBlock => ({
       ...block,
       ...this.blockFields(
@@ -754,6 +803,7 @@ export class ClipboardManager {
   ): ClipboardBundle {
     const elements: EditorElementNode[] = [];
     const seen = new Set<string>();
+    // Collect existing canvas elements and descendants without revisiting IDs.
     const visit = (id: string): void => {
       if (seen.has(id)) {
         return;

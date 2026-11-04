@@ -34,6 +34,7 @@ for (const repeat of [0, 200]) {
     const frame = page.locator('[data-block-id="resize-overflow"] .rivto-image-frame');
     await expect(image).toBeVisible();
     const original = (await image.boundingBox())!;
+    // Read persisted properties while pointer movement changes only the preview.
     const props = () =>
       page.evaluate(() => {
         const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

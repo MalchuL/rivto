@@ -4,6 +4,7 @@ import { createReactEditor } from "../editor/react-editor";
 import type { FileReference } from "./types";
 
 const provider = { write: async () => "stored:test", read: async () => undefined };
+// Prepare an inline representation using the stored reference for handler tests.
 const prepare = ({ reference }: { reference: FileReference }) => ({
   kind: "inline" as const,
   content: reference.uri,
@@ -16,7 +17,12 @@ test("clipboard file handlers select specific handlers before the default and cl
     extensions: [
       {
         id: "handlers",
-        /** Installs the attachment handlers. */
+        /**
+         * Installs the attachment handlers for this test runtime.
+         *
+         * @param value - Runtime receiving the generic and image handlers.
+         * @returns Completes handler registration and default selection.
+         */
         setup(value) {
           value.clipboard.registerFileHandler({ id: "file", provider, prepare });
           value.clipboard.setDefaultFileHandler("file");
@@ -106,7 +112,13 @@ test("file opening prefers a typed handler and then the fallback", async () => {
     extensions: [
       {
         id: "openers",
-        /** Installs opener fixtures. */ setup(value) {
+        /**
+         * Installs the typed and default opener fixtures.
+         *
+         * @param value - Runtime receiving the file openers.
+         * @returns Completes opener registration and default selection.
+         */
+        setup(value) {
           value.attachments.registerFileOpenHandler({
             id: "default",
             open: ({ name }) => {

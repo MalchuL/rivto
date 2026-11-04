@@ -10,10 +10,16 @@ import { firstUriListEntry, isLocalFileUri } from "../../file/utils/file-input";
  * @returns A promise resolving to intrinsic pixel dimensions.
  * @throws If the browser cannot create an object URL or decode the image.
  */
-export function inspectImage(source: string | Blob): Promise<{ width: number; height: number }> {
+export function inspectImage(source: string | Blob): Promise<{
+  /** Decoded image width in pixels. */
+  width: number;
+  /** Decoded image height in pixels. */
+  height: number;
+}> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
+    // Revoke Blob URLs created here; string sources remain borrowed.
     const cleanup = () => {
       if (source instanceof Blob) {
         URL.revokeObjectURL(sourceUrl);
@@ -78,9 +84,14 @@ export function findImageUri(text: string): string | undefined {
  * @param data - Browser clipboard or drag data, if available.
  * @returns Image URI and alternative text, or undefined when the payload is not image-only.
  */
-export function findTransferredImageUri(
-  data: DataTransfer | null,
-): { uri: string; alt: string } | undefined {
+export function findTransferredImageUri(data: DataTransfer | null):
+  | {
+      /** Image URI extracted from the transfer. */
+      uri: string;
+      /** Alternative text supplied by the transfer, or an empty string. */
+      alt: string;
+    }
+  | undefined {
   if (!data || data.files.length) {
     return undefined;
   }

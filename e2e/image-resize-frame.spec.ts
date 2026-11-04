@@ -77,6 +77,7 @@ for (const repeat of [0, 200]) {
     await expect(image).toHaveCSS("object-fit", "fill");
     await host.click();
     const before = (await image.boundingBox())!;
+    // Read the persisted frame to distinguish a live preview from a committed resize.
     const stored = () =>
       page.evaluate(() => {
         const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })

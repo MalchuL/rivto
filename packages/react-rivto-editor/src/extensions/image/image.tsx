@@ -33,17 +33,30 @@ const IMAGE_BLOCK_CLASS = "rivto-image-block";
 
 /** Persisted image metadata shared by standalone blocks and canvas elements. */
 export interface ImageProps extends FileReference {
+  /** Alternative text used for the image. */
   readonly alt: string;
+  /** Persisted display width in pixels, when specified. */
   readonly width?: number;
+  /** Persisted display height in pixels, when specified. */
   readonly height?: number;
+  /** Decoded source width in pixels, when known. */
   readonly intrinsicWidth?: number;
+  /** Decoded source height in pixels, when known. */
   readonly intrinsicHeight?: number;
 }
 
 /** Storage, presentation, and asynchronous error notification for images. */
 export interface ImageExtensionOptions {
+  /** Storage provider for uploaded and resolved images. */
   readonly provider: BinaryProvider;
+  /**
+   * Receives asynchronous image input or preparation failures.
+   *
+   * @param error - Failure reported while the extension is active.
+   * @returns Completes the host notification.
+   */
   readonly onError?: (error: unknown) => void;
+  /** Optional presentation overrides for each image context. */
   readonly views?: ImageViewCustomizations;
 }
 
@@ -64,11 +77,20 @@ function InlineImageFileView({ reference }: FileInlineViewProps) {
   );
 }
 
-/** Returns normalized image props from an opaque persisted property record. */
+/**
+ * Reads image metadata from an opaque persisted property record.
+ *
+ * A URI and alternative text must be strings. Missing filenames and MIME types
+ * receive display defaults; non-positive or non-finite dimensions are omitted.
+ *
+ * @param props - Persisted properties from an image block or canvas element.
+ * @returns Normalized image properties, or undefined when required fields are not strings.
+ */
 function imageProps(props: Record<string, unknown>): ImageProps | undefined {
   if (typeof props.uri !== "string" || typeof props.alt !== "string") {
     return undefined;
   }
+  // Discard non-positive or non-finite persisted sizes and dimensions.
   const number = (value: unknown): number | undefined =>
     typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
   return {
@@ -118,6 +140,7 @@ export function ImageBlock({ blockId }: BlockRendererProps) {
         width={image.width}
         height={image.height}
         onIntrinsicSize={(intrinsicWidth, intrinsicHeight) => {
+          // Preserve previously persisted dimensions once both are known.
           if (!image.intrinsicWidth || !image.intrinsicHeight) {
             operations.update({ props: { ...image, intrinsicWidth, intrinsicHeight } });
           }
@@ -139,7 +162,18 @@ export function ImageBlock({ blockId }: BlockRendererProps) {
   );
 }
 
-/** Renders canvas image content within the shared element host. */
+/**
+ * Renders canvas image content within the shared element host.
+ *
+ * Live transform previews do not write to the document. Normal edits update
+ * the element's alternative text through the owning panel.
+ *
+ * @param props - Shared canvas renderer inputs.
+ * @param props.element - Persisted image element and its current properties.
+ * @param props.reactPanel - Panel used to commit image property changes.
+ * @param props.preview - Whether this render represents a transient preview.
+ * @returns The image view, or an error when required properties are invalid.
+ */
 function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
   const image = imageProps(element.props);
   if (!image) {
@@ -156,6 +190,7 @@ function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
         preview
           ? undefined
           : (patch) => {
+              // Canvas resizing is owned by the element host; this view edits alt text.
               reactPanel.elements.updateElement(element.id, {
                 props: { ...element.props, ...(patch.alt === undefined ? {} : { alt: patch.alt }) },
               });
@@ -183,8 +218,10 @@ function registerImageHandler(
     id: "image",
     provider,
     InlineView: InlineImageFileView,
+    // Match browser files by image metadata and references by their persisted MIME type.
     matches: ({ file, reference }) =>
       Boolean(file ? isImageFile(file) : reference.mimeType.startsWith("image/")),
+    // Inspect file bytes or the resolved reference before preparing an image representation.
     prepare: async ({ file, reference }, context) => {
       const resolved = file
         ? file
@@ -230,6 +267,7 @@ function registerImageClipboardCopy(
 ): void {
   clipboard.registerPostprocessor({
     id: "image.binary",
+    // Contribute binary data only when the selection contains one image.
     process: ({ bundle }) => {
       const props = singleSelectedClipboardProps(bundle, IMAGE_BLOCK_TYPE, "image");
       const image = props ? imageProps(props) : undefined;
@@ -258,7 +296,9 @@ function registerImageFormatter(
 ): void {
   formats.registerFormatter({
     id: "image",
+    // Select only image blocks for portable formatting.
     matches: ({ block }) => block.type === IMAGE_BLOCK_TYPE,
+    // Preserve nested content alongside the image macro and HTML image.
     format: ({ block, children, depth }) => {
       const image = imageProps(block.props);
       if (!image) {
@@ -290,6 +330,7 @@ function registerImageFormatter(
 export function imageExtension(options: ImageExtensionOptions): ReactEditorExtension {
   return {
     id: "image",
+    // Keep image configuration and ingestion scoped to this extension installation.
     setup: (reactEditor) => {
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);
@@ -298,6 +339,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         options.views ?? {},
         options.provider,
       );
+      // Cancel pending work before removing image-view configuration.
       const dispose = reactEditor.extensions.registerCleanup(() => {
         ingestion.destroy();
         disposeImageViews();
@@ -336,7 +378,12 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
   };
 }
 
-/** Returns whether a block is a valid standalone image record. */
+/**
+ * Checks whether a block contains valid standalone image properties.
+ *
+ * @param block - Persisted block to inspect.
+ * @returns True when the block type is image and its required properties are usable.
+ */
 export function isImageBlock(block: EditorBlock): boolean {
   return block.type === IMAGE_BLOCK_TYPE && Boolean(imageProps(block.props));
 }

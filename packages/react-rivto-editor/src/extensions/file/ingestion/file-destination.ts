@@ -5,6 +5,7 @@ import type { FileIngestionPoint } from "./types";
 
 /** Editor operations borrowed when validating a file destination. */
 export interface FileDestinationEditor {
+  /** Creates or identifies the default empty writing block. */
   readonly defaultWritingBlockFactory: Pick<
     ReactPanelApi["editor"]["defaultWritingBlockFactory"],
     "createEmptyBlock" | "isEmptyBlock"
@@ -13,13 +14,17 @@ export interface FileDestinationEditor {
 
 /** Panel operations borrowed when capturing an inline file destination. */
 export interface FileSelectionPanel {
+  /** Reads the DOM and stored selection. */
   readonly selection: Pick<ReactPanelApi["selection"], "readDOM" | "get">;
+  /** Looks up a selected block and its content. */
   readonly blocks: Pick<ReactPanelApi["blocks"], "getBlock">;
 }
 
 /** Panel operations borrowed when capturing or validating file destinations. */
 export interface FileDestinationPanel extends FileSelectionPanel {
+  /** Provides default writing-block operations. */
   readonly editor: FileDestinationEditor;
+  /** Looks up blocks, their nodes, and their children. */
   readonly blocks: Pick<ReactPanelApi["blocks"], "getBlock" | "getBlockNode" | "hasChildren">;
 }
 
@@ -31,25 +36,45 @@ export interface FileDestinationPanel extends FileSelectionPanel {
  */
 export type FileDestination =
   | {
+      /** Inserts within an existing block. */
       readonly kind: "inline";
+      /** Stable ID of the block receiving the file. */
       readonly blockId: string;
+      /** Inclusive start of the captured text selection. */
       readonly start: number;
+      /** Exclusive end of the captured text selection. */
       readonly end: number;
+      /** Original block content used to detect intervening edits. */
       readonly content: string;
     }
   | {
+      /** Inserts a block without replacing an existing block. */
       readonly kind: "block";
+      /** Block after which the new block is inserted, when provided. */
       readonly afterId?: string;
+      /** This variant does not replace a block. */
       readonly replaceId?: never;
+      /** This variant does not capture replacement content. */
       readonly content?: never;
     }
   | {
+      /** Replaces an existing block with a prepared file block. */
       readonly kind: "block";
+      /** Block preceding the insertion point, when provided. */
       readonly afterId?: string;
+      /** Stable ID of the block to replace. */
       readonly replaceId: string;
+      /** Original content used to detect intervening edits. */
       readonly content: string;
     }
-  | { readonly kind: "element"; readonly x: number; readonly y: number };
+  | {
+      /** Inserts a canvas element. */
+      readonly kind: "element";
+      /** Horizontal insertion coordinate in canvas units. */
+      readonly x: number;
+      /** Vertical insertion coordinate in canvas units. */
+      readonly y: number;
+    };
 
 /**
  * Returns the current single-block selection as an inline destination.
@@ -117,12 +142,15 @@ interface FileDestinationContext extends Pick<
   EditorEvent<"surface", "paste">,
   "mode" | "contentElement" | "blockId" | "root"
 > {
+  /** Panel used to capture selection and look up blocks. */
   readonly reactPanel: FileSelectionPanel;
 }
 
 /** Captured destination and viewport position for file paste feedback. */
 export interface FilePasteDestination {
+  /** Captured location for inserting the file. */
   readonly destination: FileDestination;
+  /** Viewport position for upload feedback. */
   readonly point: FileIngestionPoint;
 }
 
@@ -269,6 +297,13 @@ export function fileDestinationAtPoint(
  */
 function placeCaretAtPoint(ownerDocument: Document, point: FileIngestionPoint): void {
   const document = ownerDocument as Document & {
+    /**
+     * Resolves a legacy browser caret range from viewport coordinates.
+     *
+     * @param x - Viewport horizontal coordinate in CSS pixels.
+     * @param y - Viewport vertical coordinate in CSS pixels.
+     * @returns A range at the point, or null when the browser cannot resolve one.
+     */
     caretRangeFromPoint?: (x: number, y: number) => Range | null;
   };
   const hit = document.caretPositionFromPoint?.(point.x, point.y);

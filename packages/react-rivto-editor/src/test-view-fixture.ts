@@ -5,8 +5,11 @@ import type { BinaryProvider } from "./attachments";
 
 /** Mounted editor resources owned by one browser-environment test. */
 interface TestViewFixture {
+  /** Editor panel owned by the fixture. */
   readonly panel: ReturnType<typeof createTestReactEditor>;
+  /** DOM container mounted for the test. */
   readonly container: HTMLDivElement;
+  /** React root responsible for the mounted view. */
   readonly root: Root;
   /**
    * Unmounts the view, releases test registrations, and destroys the editor.
@@ -92,12 +95,15 @@ export async function createTestViewFixture(): Promise<TestViewFixture> {
 
 /** Pending provider read and the signals passed to it. */
 interface PendingBinaryRead {
+  /** Provider whose reads remain pending until cancelled. */
   readonly provider: BinaryProvider;
+  /** Signals captured by the pending reads. */
   readonly signals: AbortSignal[];
 }
 
 /** Options for a provider used by mounted-view cancellation tests. */
 interface PendingBinaryReadOptions {
+  /** Leave the first read unclaimed before creating pending reads. */
   readonly skipFirstRead?: boolean;
 }
 

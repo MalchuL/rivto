@@ -7,22 +7,31 @@ const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
 
 /** Metadata and storage used by the image copy menu. */
 interface ImageCopyMenuOptions {
+  /** Optional provider used to read the referenced image. */
   readonly provider?: BinaryProvider;
+  /** URI or provider reference for the image. */
   readonly uri: string;
+  /** Alternative text used when copying the image. */
   readonly alt: string;
+  /** Optional filename supplied to the clipboard writer. */
   readonly name?: string;
+  /** Optional MIME type hint for the image. */
   readonly mimeType?: string;
 }
 
 /** Viewport coordinates at which the image copy menu opens. */
 interface ImageCopyMenuPosition {
+  /** Horizontal viewport coordinate in pixels. */
   readonly x: number;
+  /** Vertical viewport coordinate in pixels. */
   readonly y: number;
 }
 
 /** Position, feedback, and actions shown by the image copy menu. */
 interface ImageCopyMenuProps {
+  /** Viewport position where the menu is displayed. */
   readonly position: ImageCopyMenuPosition;
+  /** Copy failure text, when an operation has failed. */
   readonly error?: string;
   /**
    * Starts copying the image through the configured clipboard writer.
@@ -78,12 +87,7 @@ export function useImageCopyMenu(options: ImageCopyMenuOptions) {
   const [error, setError] = useState<string>();
   const copyImage = useImageCopy(options, () => setPosition(undefined), setError);
 
-  /**
-   * Opens the copy menu only if a writer accepts the image type.
-   *
-   * @param event - Context-menu event from the image frame.
-   * @returns Opens the custom menu or leaves the browser menu available.
-   */
+  // Leave the browser menu available when no writer accepts the image type.
   const openCopyMenu = (event: MouseEvent<HTMLSpanElement>): void => {
     if (!editor.clipboard.canWriteBinary(copyMimeType(options.uri, options.mimeType))) {
       return;
@@ -128,7 +132,9 @@ function useImageCopy(
   const panel = useReactPanel();
   const copyAbort = useRef<AbortController | undefined>(undefined);
   const { provider, uri, alt, name, mimeType } = options;
+  // Cancel the active copy when its provider or URI changes or the view unmounts.
   useEffect(() => () => copyAbort.current?.abort(), [provider, uri]);
+  // Replace any previous copy and read image bytes only when copying starts.
   return () => {
     copyAbort.current?.abort();
     const controller = new AbortController();
@@ -142,6 +148,7 @@ function useImageCopy(
     );
     void panel.editor.clipboard
       .writeBinary({ name: name || alt || "image", mimeType: type, data })
+      // Only the active successful copy may close the current menu.
       .then((copied) => {
         if (controller.signal.aborted) {
           return;
@@ -152,6 +159,7 @@ function useImageCopy(
           onError("This clipboard cannot copy this image type");
         }
       })
+      // Ignore failures from copies cancelled by replacement or unmounting.
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
           onError(reason instanceof Error ? reason.message : "Unable to copy image");

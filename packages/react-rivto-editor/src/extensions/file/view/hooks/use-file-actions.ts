@@ -5,7 +5,9 @@ import { getFileProvider } from "../file-configuration";
 
 /** Operations and feedback owned by one mounted file view. */
 interface FileActions {
+  /** Latest opening or copying failure, when present. */
   readonly error: string | undefined;
+  /** Whether a clipboard writer can copy the file. */
   readonly canCopy: boolean;
   /**
    * Clears the last opening or copying failure.
@@ -42,13 +44,10 @@ export function useFileActions(reference: FileReference, onCopied: () => void): 
   const operation = useRef<AbortController | undefined>(undefined);
   const [error, setError] = useState<string>();
   const { uri, name, mimeType } = reference;
+  // Cancel the active operation when its file metadata changes or the view unmounts.
   useEffect(() => () => operation.current?.abort(), [uri, name, mimeType]);
 
-  /**
-   * Starts a cancellable operation and clears its previous error.
-   *
-   * @returns The controller for the newly active operation.
-   */
+  // Cancel the previous operation and clear its error before starting another.
   const start = (): AbortController => {
     operation.current?.abort();
     const controller = new AbortController();
@@ -84,6 +83,7 @@ function useFileOpen(
 ): () => void {
   const panel = useReactPanel();
   const editor = panel.editor;
+  // Start opening through the provider currently registered for this editor.
   return () => {
     const controller = start();
     const provider = getFileProvider(editor);
@@ -93,6 +93,7 @@ function useFileOpen(
     }
     void editor.attachments
       .openBinary(provider, reference, { signal: controller.signal, mode: panel.getSurfaceType() })
+      // Ignore failures from an operation superseded by another action.
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
           setError(reason instanceof Error ? reason.message : "Unable to open file");
@@ -119,6 +120,7 @@ function useFileCopy(
   const panel = useReactPanel();
   const editor = panel.editor;
   const { uri, name, mimeType } = reference;
+  // Copy the current reference using the active operation's cancellation signal.
   return () => {
     const controller = start();
     const data = editor.attachments.readBinary(getFileProvider(editor), uri, mimeType, {
@@ -127,6 +129,7 @@ function useFileCopy(
     });
     void editor.clipboard
       .writeBinary({ name, mimeType, data })
+      // Only an active successful copy may close the current menu.
       .then((copied) => {
         if (controller.signal.aborted) {
           return;
@@ -137,6 +140,7 @@ function useFileCopy(
           setError("This clipboard cannot copy this file type");
         }
       })
+      // Ignore errors from a cancelled or superseded copy.
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
           setError(reason instanceof Error ? reason.message : "Unable to copy file");

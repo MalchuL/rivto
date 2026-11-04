@@ -28,12 +28,15 @@ function preparedFile(name: string) {
 function feedbackStore() {
   const statuses = new Map<string, FileIngestionStatus & { error?: string }>();
   const feedback: FileIngestionStatuses = {
+    // Keep the current status available for assertions.
     set: (status) => {
       statuses.set(status.id, status);
     },
+    // Apply progress and failure changes to the stored status.
     update: (id, patch) => {
       Object.assign(statuses.get(id)!, patch);
     },
+    // Remove finished or retried statuses.
     delete: (id) => {
       statuses.delete(id);
     },
@@ -195,10 +198,15 @@ test("stores files with document context, validated URI, and bounded progress", 
   const { statuses, feedback } = feedbackStore();
   statuses.set("upload", { id: "upload", name: "note.txt", x: 0, y: 0, retry: () => {} });
   const writes: Array<{
+    /** Document identity supplied to the provider. */
     documentId: string;
+    /** Surface captured for the write. */
     mode: string;
+    /** File name supplied to the provider. */
     name: string;
+    /** Input mechanism recorded for the upload. */
     source: string;
+    /** Requested insertion representation. */
     destination: string;
   }> = [];
   const ingestion = new FileIngestion(feedback);

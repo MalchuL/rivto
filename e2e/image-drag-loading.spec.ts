@@ -15,6 +15,7 @@ for (const repeat of [0, 200]) {
       const target = page
         .locator(mode === "block" ? ".page-surface" : ".edgeless-viewport")
         .first();
+      // Observe transient loading text as well as the final image state.
       await page.evaluate(() => {
         const state = window as unknown as { loadingSeen: boolean; observer: MutationObserver };
         state.loadingSeen = false;
@@ -62,6 +63,7 @@ for (const repeat of [0, 200]) {
 }
 
 test("slow image resolution shows loading and retains failure feedback", async ({ page }) => {
+  // Delay the failure beyond the loading-indicator threshold.
   await page.route("**/__rivto_demo_local_file**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 600));
     await route.fulfill({ status: 404 });

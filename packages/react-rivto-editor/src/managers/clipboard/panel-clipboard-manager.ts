@@ -39,8 +39,17 @@ interface PanelClipboardSource {
 
 /** Clipboard operations use this panel; parsers, formatters, and strategies stay document-owned. */
 export class PanelClipboardManager implements PanelClipboardApi {
-  /** @param clipboard - Shared structured clipboard operations. @param reactPanel - Receiving occurrence. */
+  /**
+   * Binds shared structured clipboard operations to one panel occurrence.
+   *
+   * The panel owns its selection and scope; this manager borrows the shared
+   * clipboard and does not own its registrations or lifetime.
+   *
+   * @param clipboard - Shared structured clipboard operations.
+   * @param reactPanel - Receiving panel occurrence.
+   */
   constructor(
+    /** Shared clipboard operations borrowed from the document runtime. */
     private readonly clipboard: PanelClipboardSource,
     private readonly reactPanel: ReactPanelApi,
   ) {}

@@ -4,16 +4,23 @@ import type { ComponentType } from "react";
 
 /** Document and surface context captured when a binary operation starts. */
 export interface BinaryReadContext {
+  /** Document containing the attachment reference. */
   readonly documentId: string;
+  /** Editor surface captured when the operation started. */
   readonly mode: EditorMode;
+  /** Signal for cancelling this operation. */
   readonly signal: AbortSignal;
 }
 
 /** Metadata and progress for a newly stored attachment. */
 export interface BinaryWriteContext extends BinaryReadContext {
+  /** Name presented to the user for the stored file. */
   readonly name: string;
+  /** Media type supplied to the provider. */
   readonly mimeType: string;
+  /** Input mechanism that supplied the file. */
   readonly source: "clipboard" | "drop" | "picker";
+  /** Representation requested for the inserted file. */
   readonly destination: PreparedFile["kind"];
   /**
    * Reports provider progress for the current upload.
@@ -78,43 +85,89 @@ export interface AttachmentOptions {
 
 /** Stable metadata persisted by every uploaded or referenced file type. */
 export interface FileReference {
+  /** Provider reference or URI persisted in the document. */
   readonly uri: string;
+  /** Display name supplied with the file. */
   readonly name: string;
+  /** Media type associated with the file. */
   readonly mimeType: string;
+  /** File size in bytes, when known. */
   readonly size?: number;
 }
 
-/** Candidate supplied to ordered rich-file handlers before storage or for an existing reference. */
+/**
+ * Candidate supplied to ordered rich-file handlers before storage or for an existing reference.
+ *
+ * New browser files have metadata but no URI until their provider stores them;
+ * existing references include a URI and do not include a browser file.
+ */
 export type FileCandidate =
-  | { readonly file: File; readonly reference: Omit<FileReference, "uri"> }
-  | { readonly file?: never; readonly reference: FileReference };
+  | {
+      /** Browser file awaiting storage. */
+      readonly file: File;
+      /** File metadata before a provider has assigned its URI. */
+      readonly reference: Omit<FileReference, "uri">;
+    }
+  | {
+      /** Existing references do not carry a browser file. */
+      readonly file?: never;
+      /** Existing persisted file reference and metadata. */
+      readonly reference: FileReference;
+    };
 
 /** Stored file or existing reference supplied to a handler for preparation. */
 export interface FilePreparation {
+  /** Original browser file, absent when preparing an existing reference. */
   readonly file?: File;
+  /** Persisted reference and metadata available to the handler. */
   readonly reference: FileReference;
 }
 
 /** Props supplied to a registered inline file renderer. */
 export interface FileInlineViewProps {
+  /** Attachment represented by the inline view. */
   readonly reference: FileReference;
 }
 
-/** Prepared representation for the requested insertion destination. */
+/**
+ * Prepared representation for the requested insertion destination.
+ *
+ * Inline content is inserted as text; block and element variants carry their
+ * registered type and properties. Element dimensions are in surface units.
+ */
 export type PreparedFile =
-  | { readonly kind: "inline"; readonly content: string }
-  | { readonly kind: "block"; readonly type: string; readonly props: Record<string, unknown> }
   | {
-      readonly kind: "element";
+      /** Inserts text into an existing block. */
+      readonly kind: "inline";
+      /** Serialized inline representation. */
+      readonly content: string;
+    }
+  | {
+      /** Inserts a document block. */
+      readonly kind: "block";
+      /** Registered block type. */
       readonly type: string;
+      /** Properties persisted on the block. */
       readonly props: Record<string, unknown>;
+    }
+  | {
+      /** Inserts a canvas element. */
+      readonly kind: "element";
+      /** Registered canvas element type. */
+      readonly type: string;
+      /** Properties persisted on the element. */
+      readonly props: Record<string, unknown>;
+      /** Initial element width in surface units. */
       readonly width: number;
+      /** Initial element height in surface units. */
       readonly height: number;
     };
 
 /** Ordered media-specific preparation and optional canvas presentation. */
 export interface FileHandler {
+  /** Identifier used for registration and selection. */
   readonly id: string;
+  /** Provider used to store files accepted by this handler. */
   readonly provider: BinaryProvider;
   /**
    * Determines whether this handler accepts a file before the selected default.
@@ -135,6 +188,7 @@ export interface FileHandler {
     candidate: FilePreparation,
     context: FilePreparationContext,
   ) => PreparedFile | Promise<PreparedFile>;
+  /** Optional renderer for references represented inline. */
   readonly InlineView?: ComponentType<FileInlineViewProps>;
 }
 
@@ -143,6 +197,7 @@ export type FileOpenContext = BinaryReadContext;
 
 /** Type-specific opener that may also be explicitly selected as the host default. */
 export interface FileOpenHandler {
+  /** Identifier used for registration and default selection. */
   readonly id: string;
   /**
    * Determines whether this opener accepts a file before the selected default.
@@ -164,6 +219,8 @@ export interface FileOpenHandler {
 
 /** Context captured from the receiving surface for asynchronous file work. */
 export interface FileRequestContext {
+  /** Signal for cancelling the request. */
   readonly signal: AbortSignal;
+  /** Captured surface, when the request originated from one. */
   readonly mode?: EditorMode;
 }

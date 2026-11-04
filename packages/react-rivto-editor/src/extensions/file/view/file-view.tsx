@@ -34,7 +34,9 @@ const FILE_CONTEXT_MENU_CLASS = "rivto-file-context-menu";
 
 /** Viewport coordinates of the file context menu. */
 interface FileContextMenuPosition {
+  /** Horizontal viewport coordinate in pixels. */
   readonly x: number;
+  /** Vertical viewport coordinate in pixels. */
   readonly y: number;
 }
 
@@ -128,6 +130,7 @@ export function fileTypeIcon({
 export function FileView(reference: FileReference) {
   const [contextMenu, setContextMenu] = useState<FileContextMenuPosition>();
   const actions = useFileActions(reference, () => setContextMenu(undefined));
+  // Close the menu before starting the view-owned cancellable open operation.
   const open = () => {
     setContextMenu(undefined);
     actions.open();
@@ -160,7 +163,9 @@ export function FileView(reference: FileReference) {
 
 /** Display metadata and actions used by the generic file trigger. */
 interface FileTriggerProps {
+  /** File metadata displayed by the trigger. */
   readonly reference: Pick<FileReference, "name" | "mimeType" | "size">;
+  /** Opening or copying failure shown alongside the trigger. */
   readonly error?: string;
   /**
    * Starts opening the represented file.
@@ -229,7 +234,9 @@ function FileTrigger({ reference, error, onOpen, onContextMenu }: FileTriggerPro
 
 /** Position and actions for the generic file context menu. */
 interface FileContextMenuProps {
+  /** Viewport position where the menu is displayed. */
   readonly position: FileContextMenuPosition;
+  /** Whether the copy action is available. */
   readonly canCopy: boolean;
   /**
    * Opens the file and closes this menu.
@@ -293,6 +300,7 @@ function FileContextMenu({ position, canCopy, onOpen, onCopy, onClose }: FileCon
 
 /** Persisted reference rendered by the selected inline file view. */
 export interface RegisteredFileViewProps {
+  /** Persisted reference used to choose and render a file view. */
   readonly reference: FileReference;
 }
 

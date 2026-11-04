@@ -7,8 +7,11 @@ const IMAGE_LOADING_DELAY_MS = 200;
 
 /** Resolved image source and loading feedback for one mounted image view. */
 interface ImageSource {
+  /** Browser-readable source, or undefined until resolution completes. */
   readonly source: string | undefined;
+  /** Resolution or decoding failure text, when present. */
   readonly error: string | undefined;
+  /** Whether the delayed loading indicator should be shown. */
   readonly showLoading: boolean;
   /**
    * Reports an image decoding failure from the rendered image element.
@@ -41,6 +44,7 @@ export function useImageSource(
   const [source, setSource] = useState<string>();
   const [error, setError] = useState<string>();
   const [showLoading, setShowLoading] = useState(false);
+  // Resolve each reference independently and release its timer, request, and object URL.
   useEffect(() => {
     const abort = new AbortController();
     let objectUrl: string | undefined;
@@ -54,6 +58,7 @@ export function useImageSource(
         signal: abort.signal,
         mode: panel.getSurfaceType(),
       })
+      // Publish only the active result and create an object URL for provider bytes.
       .then((resolved) => {
         if (abort.signal.aborted) {
           return;
@@ -66,12 +71,14 @@ export function useImageSource(
           setSource(resolved);
         }
       })
+      // Suppress failures from a request cancelled by replacement or unmounting.
       .catch((reason: unknown) => {
         if (!abort.signal.aborted) {
           window.clearTimeout(loadingTimer);
           setError(reason instanceof Error ? reason.message : "Unable to load image");
         }
       });
+    // Revoke only the object URL created by this effect.
     return () => {
       abort.abort();
       window.clearTimeout(loadingTimer);

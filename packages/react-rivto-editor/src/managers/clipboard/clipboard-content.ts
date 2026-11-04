@@ -8,10 +8,19 @@ import {
 } from "@chulane/rivto";
 import type { ClipboardContent } from "./types";
 
-/** Collects selected element subtrees once, retaining source record order. */
+/**
+ * Collects selected element subtrees once, retaining source record order.
+ *
+ * When explicit selected IDs are absent, every element record is a root.
+ * Unknown IDs and repeated or cyclic child references are ignored.
+ *
+ * @param bundle - Clipboard bundle containing element records and optional selected IDs.
+ * @returns Included element records in their original bundle order.
+ */
 export function selectedClipboardElements(bundle: ClipboardBundle): EditorElementNode[] {
   const nodes = new Map(bundle.elements?.map((node) => [node.id, node]));
   const included = new Set<string>();
+  // Include each reachable element and its descendants at most once.
   const visit = (id: string) => {
     const node = nodes.get(id);
     if (!node || included.has(id)) {
@@ -51,8 +60,19 @@ export function singleSelectedClipboardProps(
   return (blocks[0] ?? elements[0])?.props;
 }
 
-/** Converts parser creation inputs into a detached bundle; generated IDs are source-local only. */
+/**
+ * Converts parser creation inputs into a clipboard bundle; generated IDs are source-local only.
+ *
+ * Missing IDs are generated, missing block properties receive defaults, and
+ * nested elements are flattened while preserving their child references. Supplied
+ * property objects are reused rather than cloned.
+ *
+ * @param content - Parsed block and element creation inputs.
+ * @returns A versioned clipboard bundle containing the converted records and selected element IDs.
+ * @throws If ID generation or input traversal fails.
+ */
 export function clipboardContentBundle(content: ClipboardContent): ClipboardBundle {
+  // Convert nested block inputs using source-local IDs and defaults.
   const block = (input: EditorBlockInput): EditorBlock => ({
     ...input,
     id: input.id ?? crypto.randomUUID(),
@@ -63,6 +83,7 @@ export function clipboardContentBundle(content: ClipboardContent): ClipboardBund
     children: input.children?.map(block) ?? [],
   });
   const elements: EditorElementNode[] = [];
+  // Flatten nested elements and return each existing or generated source-local ID.
   const element = (input: EditorElementInput): string => {
     const id = input.id ?? crypto.randomUUID();
     const childIds = input.children?.map(element) ?? [...(input.childIds ?? [])];

@@ -10,9 +10,13 @@ const MAX_INITIAL_IMAGE_WIDTH = 640;
 /** Maximum initial canvas image height, in pixels. */
 const MAX_INITIAL_IMAGE_HEIGHT = 480;
 
+/** Stored image reference and dimensions read from the image data. */
 export interface ImageAsset extends FileReference {
+  /** Alternative text used when presenting the image. */
   readonly alt: string;
+  /** Decoded image width in pixels. */
   readonly intrinsicWidth: number;
+  /** Decoded image height in pixels. */
   readonly intrinsicHeight: number;
 }
 

@@ -25,12 +25,20 @@ import { FileUploadStatusOverlay, FileUploadStatusStore } from "./ingestion/file
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
+/** Persisted native type used by generic file canvas elements. */
 export const FILE_ELEMENT_TYPE = "file";
 const FILE_BLOCK_CLASS = "rivto-file-block";
 
 /** Storage and asynchronous error notification for generic files. */
 export interface FileExtensionOptions {
+  /** Provider used to store and resolve generic files. */
   readonly provider: BinaryProvider;
+  /**
+   * Receives asynchronous file input or preparation failures.
+   *
+   * @param error - Failure reported while the extension is active.
+   * @returns Completes the host notification.
+   */
   readonly onError?: (error: unknown) => void;
 }
 
@@ -168,6 +176,7 @@ function registerFileClipboardCopy(
 ): void {
   clipboard.registerPostprocessor({
     id: "file",
+    // Only a single selected file contributes binary data to the clipboard.
     process: ({ bundle }) => {
       const props = singleSelectedClipboardProps(bundle, FILE_BLOCK_TYPE, FILE_ELEMENT_TYPE);
       const reference = props ? fileReference(props) : undefined;
@@ -192,10 +201,12 @@ function registerFileClipboardCopy(
 export function fileExtension(options: FileExtensionOptions): ReactEditorExtension {
   return {
     id: "file",
+    // Keep provider configuration, pending uploads, and registrations extension-owned.
     setup: (reactEditor) => {
       const disposeFileViews = configureFileProvider(reactEditor, options.provider);
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);
+      // Cancel pending work before removing the view provider.
       const dispose = reactEditor.extensions.registerCleanup(() => {
         ingestion.destroy();
         disposeFileViews();

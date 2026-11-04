@@ -13,7 +13,15 @@ const FILE_ELEMENT_SELECTOR = '[data-edgeless-visual-kind="file"]';
 const FILE_NAME_SELECTOR = ".rivto-file-name";
 const FILE_TEXT_ICON_SELECTOR = ".lucide-file-text";
 
-/** Dispatches one tiny valid PNG through a clipboard or drop event. */
+/**
+ * Dispatches one tiny valid PNG through a clipboard or drop event.
+ *
+ * @param target - Element receiving the synthetic event.
+ * @param eventType - Clipboard paste or pointer drop to dispatch.
+ * @param itemOnly - Whether to expose the file through transfer items only.
+ * @param name - Filename supplied with the generated image.
+ * @returns Resolves after the event has been dispatched in the browser.
+ */
 async function sendImage(
   target: Locator,
   eventType: "paste" | "drop",
@@ -52,7 +60,14 @@ async function sendImage(
   );
 }
 
-/** Dispatches one ordinary file through the shared ingestion path. */
+/**
+ * Dispatches one ordinary file through the shared ingestion path.
+ *
+ * @param target - Element receiving the synthetic event.
+ * @param eventType - Clipboard paste or pointer drop to dispatch.
+ * @param name - Filename supplied with the generated text file.
+ * @returns Resolves after the event has been dispatched in the browser.
+ */
 async function sendFile(
   target: Locator,
   eventType: "paste" | "drop",
@@ -75,7 +90,13 @@ async function sendFile(
   );
 }
 
-/** Dispatches the plain absolute path produced by desktop file-manager copy. */
+/**
+ * Dispatches the plain absolute path produced by desktop file-manager copy.
+ *
+ * @param target - Element receiving the synthetic paste event.
+ * @param path - Absolute path returned by the mocked clipboard reader.
+ * @returns Resolves after the event has been dispatched in the browser.
+ */
 async function sendLocalImagePath(target: Locator, path: string): Promise<void> {
   await target.evaluate((element, localPath) => {
     Object.defineProperty(navigator.clipboard, "readText", {
@@ -589,6 +610,7 @@ for (const repeat of [0, 200]) {
     await host.click();
     const image = host.locator(".rivto-image");
     const id = (await host.getAttribute("data-edgeless-object-id"))!;
+    // Compare the stored element before, during, and after the resize gesture.
     const stored = () =>
       page.evaluate((elementId) => {
         const demo = window as typeof window & {
@@ -937,6 +959,7 @@ test("unsupported binary copy observes a failed data read", async ({ page }) => 
       }
     ).__rivtoDemo.reactEditor;
     const errors: string[] = [];
+    // Record rejected clipboard reads that escape as unhandled browser promises.
     const onUnhandled = (event: PromiseRejectionEvent) => {
       errors.push(String(event.reason));
       event.preventDefault();
@@ -992,6 +1015,7 @@ for (const stage of ["upload", "preparation"] as const) {
         __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
         pendingHandler: { started: boolean; release: () => void; remove: () => void };
       };
+      // Hold the selected stage until the test removes its handler.
       const state = { started: false, release: () => {}, remove: () => {} };
       const pending = new Promise<void>((resolve) => {
         state.release = resolve;

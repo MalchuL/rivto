@@ -19,7 +19,9 @@ const INSERTED_ELEMENT_OFFSET = 24;
 
 /** Owns local state and cancellation for batches started by one extension. */
 export class FileIngestion {
+  /** Shared cancellation for operations started by this instance. */
   private readonly abort = new AbortController();
+  /** Counter for locally unique status identifiers. */
   private nextStatusId = 0;
 
   /**
@@ -29,7 +31,9 @@ export class FileIngestion {
    * @param onError - Optional notification for failed operations.
    */
   constructor(
+    /** Extension-owned feedback for active and failed operations. */
     private readonly statuses: FileIngestionStatuses,
+    /** Optional host notification for failed operations. */
     private readonly onError?: (error: unknown) => void,
   ) {}
 
@@ -115,6 +119,8 @@ export class FileIngestion {
     if (this.signal.aborted) {
       return;
     }
+    // Track successful statuses separately: preparation may settle out of order,
+    // while Promise.all keeps the representations in their original input order.
     const preparedStatusIds: string[] = [];
     const preparationJobs = batch.items.map(
       async (item, index): Promise<PreparedFile | undefined> => {
@@ -124,6 +130,7 @@ export class FileIngestion {
           name: batch.name(item),
           x: batch.point.x + index * UPLOAD_STATUS_OFFSET,
           y: batch.point.y + index * UPLOAD_STATUS_OFFSET,
+          // Retry one input at a destination refreshed from the current panel state.
           retry: () => {
             this.statuses.delete(statusId);
             this.ingest({
@@ -148,6 +155,7 @@ export class FileIngestion {
         }
       },
     );
+    // Commit after every preparation settles so successful results retain input order.
     void Promise.all(preparationJobs).then((preparedResults) => {
       this.commitPrepared(batch, preparedStatusIds, preparedResults);
     });
@@ -172,6 +180,7 @@ export class FileIngestion {
     if (this.signal.aborted || !preparedStatusIds.length) {
       return;
     }
+    // Async preparation must not overwrite text changed since the drop or paste.
     if (!isFileDestinationCurrent(batch.panel, batch.destination)) {
       const error = new Error(batch.staleMessage);
       preparedStatusIds.forEach((id) => this.statuses.update(id, { error: error.message }));

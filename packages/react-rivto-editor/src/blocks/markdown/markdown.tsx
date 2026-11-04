@@ -130,6 +130,7 @@ export function MarkdownContent({
   );
   const components = useMemo<Components>(
     () => ({
+      // Render file macro links through the registered attachment view.
       a: ({ node, href = "", ...props }) => {
         const properties = node?.properties ?? {};
         const uri = properties["data-rivto-file-uri"];
@@ -158,6 +159,7 @@ export function MarkdownContent({
           />
         );
       },
+      // Preserve ordinary Markdown images when their source range is unavailable.
       img: ({ node, alt = "", width, height, ...props }) => {
         const properties = node?.properties ?? {};
         const macroUri = properties["data-rivto-image-uri"];
@@ -175,6 +177,7 @@ export function MarkdownContent({
             width={Number(width) || undefined}
             height={Number(height) || undefined}
             onChange={(patch) => {
+              // Apply edits to current content so a stale render does not replace it.
               if (patch.reset && typeof macroUri !== "string") {
                 return;
               }

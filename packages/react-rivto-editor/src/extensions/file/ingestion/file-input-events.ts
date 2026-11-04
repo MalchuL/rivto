@@ -27,13 +27,18 @@ const FILE_INPUT_CLASS = "rivto-file-input";
 
 /** Editor operations borrowed while routing generic file input. */
 interface FileInputEditor {
+  /** Selects and looks up registered file handlers. */
   readonly clipboard: Pick<ReactEditorApi["clipboard"], "selectFileHandler" | "getFileHandler">;
+  /** Looks up block nodes and whether they contain children. */
   readonly blocks: Pick<ReactEditorApi["blocks"], "getBlockNode" | "hasChildren">;
+  /** Creates and recognizes default empty writing blocks. */
   readonly defaultWritingBlockFactory: Pick<
     ReactEditorApi["defaultWritingBlockFactory"],
     "createEmptyBlock" | "isEmptyBlock"
   >;
+  /** Registers file input listeners. */
   readonly events: Pick<ReactEditorApi["events"], "register">;
+  /** Registers the file picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
 }
 
@@ -49,8 +54,11 @@ export class FileInputEvents {
    * @param onError - Optional notification for failures reading a clipboard path.
    */
   constructor(
+    /** Borrowed editor operations for routing and handler lookup. */
     private readonly editor: FileInputEditor,
+    /** Coordinator for preparing, storing, and inserting files. */
     private readonly ingestion: Pick<FileIngestion, "ingest" | "storeFile" | "signal">,
+    /** Optional notification for clipboard path failures. */
     private readonly onError?: (error: unknown) => void,
   ) {}
 
@@ -76,6 +84,7 @@ export class FileInputEvents {
   private registerDragOver(): void {
     this.editor.events.register(
       { id: "file.dragover", type: "dragover", capture: true },
+      // Claim file drags only inside the receiving root and advertise a copy.
       ({ raw, root }) => {
         const accepts = raw.dataTransfer?.types.includes("Files") === true;
         if (accepts && raw.dataTransfer) {
@@ -95,6 +104,7 @@ export class FileInputEvents {
   private registerDrop(): void {
     this.editor.events.register(
       { id: FILE_DROP_EVENT_ID, type: "drop", capture: true },
+      // Prefer transferred files; otherwise prepare the local URI as a reference.
       (event) => {
         const { raw, blockId, reactPanel } = event;
         const files = getTransferredFiles(raw.dataTransfer);
@@ -127,6 +137,7 @@ export class FileInputEvents {
   private registerPaste(): void {
     this.editor.events.register(
       { id: FILE_PASTE_EVENT_ID, type: "paste", capture: true },
+      // Route files or local paths to the captured paste destination.
       (event) => {
         const { raw, blockId, root, reactPanel } = event;
         const files = getTransferredFiles(raw.clipboardData);
@@ -168,6 +179,7 @@ export class FileInputEvents {
       title: "File",
       group: "Insert",
       keywords: ["attachment", "upload"],
+      // Open a multiple-file picker for the block that invoked the command.
       execute: ({ blockId, reactPanel }) => {
         const input = document.createElement("input");
         input.className = FILE_INPUT_CLASS;
@@ -175,6 +187,7 @@ export class FileInputEvents {
         input.multiple = true;
         input.addEventListener(
           "change",
+          // Replace an empty leaf only when exactly one file was selected.
           () => {
             const files = [...(input.files ?? [])];
             const block = reactPanel.blocks.getBlockNode(blockId);
@@ -218,6 +231,7 @@ export class FileInputEvents {
     const clipboard = root.ownerDocument.defaultView?.navigator.clipboard;
     void clipboard
       ?.readText()
+      // Ignore results after teardown and reject text that is not a local path.
       .then((text) => {
         if (this.ingestion.signal.aborted) {
           return;
@@ -228,6 +242,7 @@ export class FileInputEvents {
         }
         this.insertReferences(reactPanel, [local], destination, point);
       })
+      // Only notify the host while this ingestion instance remains active.
       .catch((error: unknown) => {
         if (!this.ingestion.signal.aborted) {
           this.onError?.(error);

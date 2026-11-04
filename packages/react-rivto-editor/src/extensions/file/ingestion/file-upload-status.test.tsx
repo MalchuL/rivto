@@ -33,6 +33,7 @@ test("keeps independent upload feedback and renders both existing presentations"
 test("notifies a stable snapshot when listeners unsubscribe during delivery", () => {
   const store = new FileUploadStatusStore();
   const calls: string[] = [];
+  // The first listener calls the second listener's disposer during notification.
   let unsubscribeSecond = () => {};
   store.subscribe(() => {
     calls.push("first");

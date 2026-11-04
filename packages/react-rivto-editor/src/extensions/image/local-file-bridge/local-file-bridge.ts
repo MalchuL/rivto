@@ -11,24 +11,35 @@ import type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "../.
 
 /** Destination, binary contents, and cancellation for an exclusive file write. */
 export interface LocalFileWriteInput {
+  /** Host directory selected for storing the file. */
   readonly directory: string;
+  /** Generated filename to create within the directory. */
   readonly fileName: string;
+  /** Binary content to write. */
   readonly file: Blob;
+  /** Signal for cancelling the write. */
   readonly signal: AbortSignal;
 }
 
 /** Host filesystem reference and document context for a file read. */
 export interface LocalFileReadInput {
+  /** Host directory containing local assets. */
   readonly directory: string;
+  /** Logical URI to resolve within the directory. */
   readonly uri: string;
+  /** Signal for cancelling the read. */
   readonly signal: AbortSignal;
+  /** Document requesting the file. */
   readonly documentId: string;
 }
 
 /** Settings and privileged callbacks required by the local asset bridge. */
 export interface LocalFileBridgeOptions {
+  /** Host directory used by read and write callbacks. */
   readonly directory: string;
+  /** Logical URI prefix assigned to locally stored files. */
   readonly uriPrefix: string;
+  /** Optional upper bound on file size in bytes. */
   readonly maxBytes?: number;
   /**
    * Creates a file only when its name does not already exist.
@@ -214,8 +225,11 @@ function isSafeRelativePath(path: string): boolean {
  * from document text; host callbacks must enforce filesystem boundaries, including symlinks.
  */
 export class LocalFileBridge implements BinaryProvider {
+  /** Host callbacks and configuration retained for filesystem operations. */
   private readonly options: LocalFileBridgeOptions;
+  /** Normalized logical URI prefix used to recognize local files. */
   private readonly prefix: string;
+  /** Maximum accepted binary size in bytes. */
   private readonly maxBytes: number;
 
   /**

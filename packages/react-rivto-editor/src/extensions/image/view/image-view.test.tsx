@@ -64,7 +64,11 @@ describe("ImageView", () => {
     });
     const kinds: readonly ImageViewKind[] = ["inline", "block", "element"];
 
-    /** Renders all persisted image contexts through the public shared component. */
+    /**
+     * Renders all persisted image contexts through the public shared component.
+     *
+     * @returns Image views for the inline, block, and element contexts.
+     */
     function Surface() {
       return (
         <>

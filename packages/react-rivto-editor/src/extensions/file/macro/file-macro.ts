@@ -10,7 +10,9 @@ import type { FileReference } from "../../../attachments";
 
 /** One parsed file macro and its exact source range. */
 export interface ParsedFileMacro extends FileReference {
+  /** Inclusive offset where the macro begins in the source string. */
   readonly start: number;
+  /** Exclusive offset immediately after the macro in the source string. */
   readonly end: number;
 }
 
@@ -22,6 +24,10 @@ const FILE_MACRO_PATTERN = new RegExp(
 
 /**
  * Parses every valid canonical file macro in source order.
+ *
+ * Invalid metadata and JSON quoting remain literal Markdown. Source ranges
+ * are offsets into the supplied text and include the complete macro.
+ *
  * @param source - Markdown source to inspect.
  * @returns Valid file macros with exact source ranges.
  */
@@ -62,8 +68,12 @@ export function parseFileMacros(source: string): ParsedFileMacro[] {
 
 /**
  * Serializes one stable file reference for inline persistence.
+ *
+ * Metadata strings use JSON quoting, and an omitted size is not serialized.
+ *
  * @param file - Portable file metadata.
  * @returns Canonical inline file macro.
+ * @throws If required metadata is empty or size is not a non-negative safe integer.
  */
 export function serializeFileMacro(file: FileReference): string {
   if (!file.uri || !file.name || !file.mimeType) {
@@ -79,21 +89,42 @@ export function serializeFileMacro(file: FileReference): string {
   );
 }
 
+/** Minimal Markdown tree fields read or populated by the file transformer. */
 interface MarkdownNode {
+  /** Markdown node type. */
   type: string;
+  /** Text held by a text node, when present. */
   value?: string;
+  /** Link target for generated file nodes. */
   url?: string;
-  data?: { hProperties?: Record<string, unknown> };
-  position?: { start?: { offset?: number } };
+  /** Renderer properties attached to generated nodes. */
+  data?: {
+    /** HTML properties consumed by the renderer. */
+    hProperties?: Record<string, unknown>;
+  };
+  /** Source position used to locate macro text. */
+  position?: {
+    /** Source position at the start of the node. */
+    start?: {
+      /** Offset into the original Markdown string. */
+      offset?: number;
+    };
+  };
+  /** Child nodes visited by the transformer. */
   children?: MarkdownNode[];
 }
 
 /**
  * Converts canonical file macros into inert nodes rendered by `FileView`.
- * @returns Remark transformer factory.
+ *
+ * The returned transformer mutates text children in place and attaches source
+ * offsets and file metadata for the renderer; missing node offsets use zero.
+ *
+ * @returns A remark transformer that expands valid macros and preserves other text.
  */
 export function remarkFileMacros() {
   return (tree: MarkdownNode): void => {
+    // Expand macros in text children in place and visit nested Markdown nodes.
     const visit = (node: MarkdownNode): void => {
       if (!node.children) {
         return;

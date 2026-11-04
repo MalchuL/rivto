@@ -30,19 +30,26 @@ const IMAGE_FILE_INPUT_CLASS = "rivto-image-file-input";
 
 /** Image URI and alternative text supplied by a transfer. */
 interface RemoteImage {
+  /** Image URI supplied by the transfer. */
   readonly uri: string;
+  /** Alternative text supplied with the URI. */
   readonly alt: string;
 }
 
 /** Editor operations borrowed while routing image input. */
 interface ImageInputEditor {
+  /** Resolves image references to readable binary content. */
   readonly attachments: Pick<ReactEditorApi["attachments"], "resolveBinary">;
+  /** Looks up registered element definitions. */
   readonly elementRegistry: Pick<ReactEditorApi["elementRegistry"], "get">;
+  /** Recognizes empty default writing blocks. */
   readonly defaultWritingBlockFactory: Pick<
     ReactEditorApi["defaultWritingBlockFactory"],
     "isEmptyBlock"
   >;
+  /** Registers input listeners and checks existing registrations. */
   readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
+  /** Registers the image picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
 }
 
@@ -60,10 +67,15 @@ export class ImageInputEvents {
    * @param onError - Optional notification for asynchronous image failures.
    */
   constructor(
+    /** Borrowed editor operations for routing and resolving images. */
     private readonly editor: ImageInputEditor,
+    /** Coordinator for preparing, storing, and inserting images. */
     private readonly ingestion: Pick<FileIngestion, "ingest" | "storeFile" | "signal" | "nextId">,
+    /** Local feedback for input and clipboard failures. */
     private readonly statuses: Pick<FileUploadStatusStore, "set" | "update" | "delete">,
+    /** Provider used to store and resolve image content. */
     private readonly provider: BinaryProvider,
+    /** Optional host notification for asynchronous image failures. */
     private readonly onError?: (error: unknown) => void,
   ) {}
 
@@ -89,6 +101,7 @@ export class ImageInputEvents {
   private registerDragOver(): void {
     this.editor.events.register(
       { id: "image.dragover", type: "dragover", capture: true },
+      // Claim compatible drags inside the receiving root and advertise a copy.
       ({ raw, root }) => {
         const data = raw.dataTransfer;
         if (!data) {
@@ -113,6 +126,7 @@ export class ImageInputEvents {
    * @throws If the editor rejects the registration.
    */
   private registerDrop(): void {
+    // Defer to generic file input when it owns the same transfer.
     this.editor.events.register({ id: "image.drop", type: "drop", capture: true }, (event) => {
       const { raw, reactPanel } = event;
       if (this.hasGenericFileInput(FILE_DROP_EVENT_ID, raw, raw.dataTransfer)) {
@@ -141,6 +155,7 @@ export class ImageInputEvents {
    * @throws If the editor rejects the registration.
    */
   private registerPaste(): void {
+    // Defer to generic file input before resolving image files or URIs.
     this.editor.events.register({ id: "image.paste", type: "paste", capture: true }, (event) => {
       const { raw, root, reactPanel } = event;
       if (this.hasGenericFileInput(FILE_PASTE_EVENT_ID, raw, raw.clipboardData)) {
@@ -179,6 +194,7 @@ export class ImageInputEvents {
       title: "Image",
       group: "Insert",
       keywords: ["picture", "photo", "upload"],
+      // Capture the insertion destination before opening the native picker.
       execute: ({ blockId, reactPanel }) => {
         const block = reactPanel.blocks.getBlockNode(blockId);
         const destination: FileDestination =
@@ -194,6 +210,7 @@ export class ImageInputEvents {
         input.multiple = true;
         input.addEventListener(
           "change",
+          // Upload the chosen images using the captured destination.
           () => {
             this.upload(
               reactPanel,
@@ -226,11 +243,13 @@ export class ImageInputEvents {
     point: FileIngestionPoint,
   ): void {
     const id = this.ingestion.nextId();
+    // Reuse the status ID on retry and ignore reads completed after destruction.
     const read = (): void => {
       this.statuses.set({ id, name: "clipboard image", x: point.x, y: point.y, retry: read });
       const clipboard = root.ownerDocument.defaultView?.navigator.clipboard;
       void clipboard
         ?.readText()
+        // Validate the clipboard path before replacing the retryable status.
         .then((text) => {
           if (this.ingestion.signal.aborted) {
             return;
@@ -242,6 +261,7 @@ export class ImageInputEvents {
           this.statuses.delete(id);
           this.insertRemote(reactPanel, { uri, alt: "" }, destination, point);
         })
+        // Keep the status retryable unless the owning ingestion was destroyed.
         .catch((error: unknown) => {
           if (this.ingestion.signal.aborted) {
             return;
@@ -292,6 +312,7 @@ export class ImageInputEvents {
       failureMessage: "Unable to upload image",
       staleMessage:
         "The destination changed while the image was uploading. Select a location and retry.",
+      // Decode before storage, then prepare the requested representation.
       prepare: async (file, id, currentDestination): Promise<PreparedFile> => {
         const mode = reactPanel.getSurfaceType();
         const dimensions = await inspectImage(file);
@@ -349,6 +370,7 @@ export class ImageInputEvents {
       failureMessage: "Unable to load image",
       staleMessage:
         "The destination changed while the image was loading. Select a location and retry.",
+      // Resolve and decode an existing reference without uploading it again.
       prepare: async (item, _id, currentDestination) => {
         const resolved = await this.editor.attachments.resolveBinary(this.provider, item.uri, {
           signal: this.ingestion.signal,

@@ -7,6 +7,7 @@ import {
 } from "./file-input";
 
 test("prefers a local URI list entry and falls back to plain clipboard text", () => {
+  // Expose separate URI-list and plain-text payloads through a transfer fixture.
   const transfer = (uriList: string, text: string) => ({
     getData: (type: string) => (type === "text/uri-list" ? uriList : text),
   });

@@ -10,15 +10,21 @@
 
 /** Portable image metadata shared by inline macros and standalone images. */
 export interface ImageReference {
+  /** Persisted image URI or provider reference. */
   readonly uri: string;
+  /** Optional alternative text for the image. */
   readonly alt?: string;
+  /** Optional display width in pixels. */
   readonly width?: number;
+  /** Optional display height in pixels. */
   readonly height?: number;
 }
 
 /** One parsed image macro and its source range. */
 export interface ParsedImageMacro extends ImageReference {
+  /** Inclusive offset where the macro begins in the source string. */
   readonly start: number;
+  /** Exclusive offset immediately after the macro in the source string. */
   readonly end: number;
 }
 
@@ -28,13 +34,26 @@ const IMAGE_MACRO_PATTERN = new RegExp(
   "g",
 );
 
-/** Returns a finite positive integer or no value. */
+/**
+ * Parses an optional positive integer dimension.
+ *
+ * @param value - Decimal attribute text, or undefined when the attribute is absent.
+ * @returns A positive safe integer, or undefined for absent or invalid input.
+ */
 function positiveInteger(value: string | undefined): number | undefined {
   const parsed = value === undefined ? undefined : Number(value);
   return parsed !== undefined && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-/** Parses every valid canonical image macro in source order. */
+/**
+ * Parses every valid canonical image macro in source order.
+ *
+ * Invalid quoting, empty paths, and invalid dimensions are ignored so their
+ * original text remains available to Markdown rendering.
+ *
+ * @param source - Markdown text containing zero or more image macros.
+ * @returns Parsed metadata and UTF-16 source offsets in occurrence order.
+ */
 export function parseImageMacros(source: string): ParsedImageMacro[] {
   const macros: ParsedImageMacro[] = [];
   for (const match of source.matchAll(IMAGE_MACRO_PATTERN)) {
@@ -58,7 +77,15 @@ export function parseImageMacros(source: string): ParsedImageMacro[] {
   return macros;
 }
 
-/** Serializes one image reference using the stable macro attribute order. */
+/**
+ * Serializes one image reference using the stable macro attribute order.
+ *
+ * String attributes use JSON quoting; omitted metadata is not written.
+ *
+ * @param image - URI and optional alternative text and pixel dimensions.
+ * @returns Canonical inline image macro.
+ * @throws If the URI is empty or a dimension is not a positive safe integer.
+ */
 export function serializeImageMacro(image: ImageReference): string {
   if (!image.uri) {
     throw new TypeError("Image URI is required");
@@ -78,7 +105,18 @@ export function serializeImageMacro(image: ImageReference): string {
   );
 }
 
-/** Replaces one exact macro range without disturbing surrounding Markdown. */
+/**
+ * Replaces one exact macro range without disturbing surrounding Markdown.
+ *
+ * The caller supplies offsets captured from the same source; this function
+ * does not verify that the range still contains the original macro.
+ *
+ * @param source - Markdown text containing the range to replace.
+ * @param range - Start and exclusive end offsets in the supplied source.
+ * @param image - Replacement image reference.
+ * @returns Source text with the replacement macro spliced into the range.
+ * @throws If the replacement URI or dimensions cannot be serialized.
+ */
 export function replaceImageMacro(
   source: string,
   range: Pick<ParsedImageMacro, "start" | "end">,
@@ -87,19 +125,49 @@ export function replaceImageMacro(
   return source.slice(0, range.start) + serializeImageMacro(image) + source.slice(range.end);
 }
 
+/** Minimal Markdown tree fields read or populated by the image transformer. */
 interface MarkdownNode {
+  /** Markdown node type. */
   type: string;
+  /** Text held by a text node, when present. */
   value?: string;
+  /** Image source for generated nodes. */
   url?: string;
+  /** Alternative text for generated images. */
   alt?: string;
-  data?: { hProperties?: Record<string, unknown> };
-  position?: { start?: { offset?: number }; end?: { offset?: number } };
+  /** Renderer properties attached to generated nodes. */
+  data?: {
+    /** HTML properties consumed by the renderer. */
+    hProperties?: Record<string, unknown>;
+  };
+  /** Source range used to locate and edit macro text. */
+  position?: {
+    /** Source position at the start of the node. */
+    start?: {
+      /** Inclusive offset into the original Markdown string. */
+      offset?: number;
+    };
+    /** Source position at the end of the node. */
+    end?: {
+      /** Exclusive offset into the original Markdown string. */
+      offset?: number;
+    };
+  };
+  /** Child nodes visited by the transformer. */
   children?: MarkdownNode[];
 }
 
-/** Converts macro text nodes into ordinary Markdown image nodes with edit metadata. */
+/**
+ * Converts macro text nodes into ordinary Markdown image nodes with edit metadata.
+ *
+ * The returned transformer mutates the supplied tree. Source offsets are
+ * attached to each generated node for later edits; missing node offsets use zero.
+ *
+ * @returns A remark transformer that expands valid macros and preserves other text.
+ */
 export function remarkImageMacros() {
   return (tree: MarkdownNode): void => {
+    // Expand macros in text children in place and visit nested Markdown nodes.
     const visit = (node: MarkdownNode): void => {
       if (node.children) {
         node.children = node.children.flatMap((child) => {

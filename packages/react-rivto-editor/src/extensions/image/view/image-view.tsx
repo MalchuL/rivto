@@ -34,10 +34,15 @@ export type ImageResizeMode = "letterbox" | "stretch";
 
 /** State and actions supplied to a custom hover-menu component. */
 export interface ImageHoverMenuProps {
+  /** Document context in which the image appears. */
   readonly kind: ImageViewKind;
+  /** Persisted URI or provider reference. */
   readonly uri: string;
+  /** Current alternative text. */
   readonly alt: string;
+  /** Persisted display width in pixels, when specified. */
   readonly width?: number;
+  /** Persisted display height in pixels, when specified. */
   readonly height?: number;
   /**
    * Applies edited alternative text to the image.
@@ -56,16 +61,22 @@ export interface ImageHoverMenuProps {
 
 /** Per-kind overrides for the shared image component. */
 export interface ImageViewCustomization {
+  /** Fit and resize behavior for this image context. */
   readonly resizeMode?: ImageResizeMode;
+  /** Whether the view exposes a drag-resize control. */
   readonly dragResize?: boolean;
+  /** Custom menu component, or null to suppress the menu. */
   readonly HoverMenu?: ComponentType<ImageHoverMenuProps> | null;
 }
 
 /** Static image-view overrides registered for one editor runtime. */
 export type ImageViewCustomizations = Partial<Record<ImageViewKind, ImageViewCustomization>>;
 
+/** Image presentation options and provider registered for one editor. */
 interface ImageViewConfiguration {
+  /** Presentation overrides indexed by image context. */
   readonly customizations: ImageViewCustomizations;
+  /** Provider used to resolve the image content. */
   readonly provider: BinaryProvider;
 }
 
@@ -86,6 +97,7 @@ export function configureImageViews(
 ): () => void {
   const configuration = { customizations, provider };
   CUSTOMIZATIONS.set(editor, configuration);
+  // An older disposer must not remove a newer configuration for the same editor.
   return () => {
     if (CUSTOMIZATIONS.get(editor) === configuration) {
       CUSTOMIZATIONS.delete(editor);
@@ -139,21 +151,33 @@ export function DefaultImageHoverMenu({ alt, onAltChange, onReset }: ImageHoverM
 
 /** A completed edit to image text or dimensions. */
 export interface ImageViewChange {
+  /** Replacement alternative text, when edited. */
   readonly alt?: string;
+  /** Committed display width in pixels, when resized. */
   readonly width?: number;
+  /** Committed display height in pixels, when resized. */
   readonly height?: number;
+  /** Requests restoration of the original dimensions. */
   readonly reset?: true;
 }
 
 /** Values accepted by the shared image view. */
 export interface ImageViewProps {
+  /** Document context in which the image appears. */
   readonly kind: ImageViewKind;
+  /** Persisted URI or provider reference. */
   readonly uri: string;
+  /** Alternative text displayed and exposed to assistive technology. */
   readonly alt: string;
+  /** Optional filename used for copying. */
   readonly name?: string;
+  /** Optional media type used for copying. */
   readonly mimeType?: string;
+  /** Display width in pixels, when specified. */
   readonly width?: number;
+  /** Display height in pixels, when specified. */
   readonly height?: number;
+  /** Per-instance presentation overrides. */
   readonly customization?: ImageViewCustomization;
   /**
    * Reports an alternative-text edit, completed resize, or size reset.
@@ -301,10 +325,15 @@ function useImageView({
 
 /** Loaded image and feedback owned by the shared image frame. */
 interface ImageContentProps {
+  /** Browser-readable image source, when resolved. */
   readonly source?: string;
+  /** Resolution or decoding error text, when present. */
   readonly error?: string;
+  /** Whether to display delayed loading feedback. */
   readonly showLoading: boolean;
+  /** Alternative text for the rendered image. */
   readonly alt: string;
+  /** Optional callback receiving the loaded image's intrinsic dimensions. */
   readonly onIntrinsicSize?: ImageViewProps["onIntrinsicSize"];
   /**
    * Reports a browser image decoding failure.
@@ -363,12 +392,16 @@ interface ImageControlsProps extends Pick<
   ImageViewProps,
   "kind" | "uri" | "alt" | "width" | "height"
 > {
+  /** Menu component, or null when the menu is disabled. */
   readonly HoverMenu: ComponentType<ImageHoverMenuProps> | null;
+  /** Whether the resize handle is available. */
   readonly dragResize: boolean;
+  /** Pointer callbacks for the current resize gesture. */
   readonly resize: Pick<
     ReturnType<typeof useImageResize>,
     "startResize" | "moveResize" | "finishResize"
   >;
+  /** Callback that persists completed image edits. */
   readonly onChange: NonNullable<ImageViewProps["onChange"]>;
 }
 

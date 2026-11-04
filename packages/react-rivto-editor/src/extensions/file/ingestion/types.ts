@@ -8,12 +8,15 @@ import type {
 
 /** Viewport coordinates for local file-operation feedback. */
 export interface FileIngestionPoint {
+  /** Horizontal viewport coordinate in pixels. */
   readonly x: number;
+  /** Vertical viewport coordinate in pixels. */
   readonly y: number;
 }
 
 /** Editor operations borrowed while committing prepared files. */
 interface FileIngestionEditor extends FileDestinationEditor {
+  /** Block operations used to commit prepared representations. */
   readonly blocks: Pick<
     ReactPanelApi["editor"]["blocks"],
     "getBlock" | "setBlockType" | "updateBlock"
@@ -22,12 +25,16 @@ interface FileIngestionEditor extends FileDestinationEditor {
 
 /** Panel operations borrowed to validate and commit prepared file batches. */
 export interface FileIngestionPanel extends FileDestinationPanel {
+  /** Borrowed editor operations for the destination document. */
   readonly editor: FileIngestionEditor;
+  /** Block lookup and insertion operations. */
   readonly blocks: Pick<
     ReactPanelApi["blocks"],
     "getBlock" | "getBlockNode" | "hasChildren" | "insertBlock" | "getInsertionDestinationAfter"
   >;
+  /** Element lookup and insertion operations. */
   readonly elements: Pick<ReactPanelApi["elements"], "getElements" | "insertElement">;
+  /** Selection operations used while committing a batch. */
   readonly selection: Pick<
     ReactPanelApi["selection"],
     "readDOM" | "get" | "set" | "scheduleIfSelectionUnchanged" | "restoreDOM"
@@ -56,6 +63,7 @@ interface FileInputPanelEditor extends FileIngestionEditor {
 
 /** Panel operations borrowed while preparing and inserting file input. */
 export interface FileInputPanel extends FileIngestionPanel {
+  /** Editor operations needed to identify the receiving document. */
   readonly editor: FileInputPanelEditor;
   /**
    * Reads the active panel surface for file preparation.
@@ -67,24 +75,35 @@ export interface FileInputPanel extends FileIngestionPanel {
 
 /** Panel document access needed when a file is stored. */
 interface FileUploadPanel {
+  /** Document lookup for the upload context. */
   readonly editor: Pick<ReactPanelApi["editor"], "getDocument">;
 }
 
 /** Context for storing one file during a batch attempt. */
 export interface FileUploadContext {
+  /** Panel owning the receiving document. */
   readonly panel: FileUploadPanel;
+  /** Requested insertion representation. */
   readonly destination: BinaryWriteContext["destination"];
+  /** Surface captured for the upload. */
   readonly mode: BinaryWriteContext["mode"];
+  /** Input mechanism that supplied the file. */
   readonly source: BinaryWriteContext["source"];
+  /** Local status identifier used for progress updates. */
   readonly statusId: string;
+  /** Display name supplied to the provider. */
   readonly name: string;
 }
 
 /** Status card for one active or failed file operation. */
 export interface FileIngestionStatus {
+  /** Identifier for updates to this status. */
   readonly id: string;
+  /** File name shown in the status card. */
   readonly name: string;
+  /** Horizontal viewport coordinate in pixels. */
   readonly x: number;
+  /** Vertical viewport coordinate in pixels. */
   readonly y: number;
   /**
    * Retries the failed operation at a refreshed destination.
@@ -110,7 +129,15 @@ export interface FileIngestionStatuses {
    * @param patch - New progress or error text.
    * @returns Publishes the change when the job exists.
    */
-  update(id: string, patch: { progress?: number; error?: string }): void;
+  update(
+    id: string,
+    patch: {
+      /** Latest upload completion fraction. */
+      progress?: number;
+      /** Failure text to display for the upload. */
+      error?: string;
+    },
+  ): void;
   /**
    * Removes a finished or retried job.
    *
@@ -122,9 +149,13 @@ export interface FileIngestionStatuses {
 
 /** Inputs and callbacks for one asynchronous file ingestion batch. */
 export interface FileIngestionBatch<TInput> {
+  /** Panel receiving the prepared files. */
   readonly panel: FileIngestionPanel;
+  /** Destination captured when the batch starts. */
   readonly destination: FileDestination;
+  /** Inputs prepared for insertion in their original order. */
   readonly items: readonly TInput[];
+  /** Viewport position for local status cards. */
   readonly point: FileIngestionPoint;
   /**
    * Names an input for its status card.
@@ -147,6 +178,8 @@ export interface FileIngestionBatch<TInput> {
     id: string,
     destination: FileDestination,
   ) => Promise<PreparedFile>;
+  /** Message displayed when preparation or insertion fails. */
   readonly failureMessage: string;
+  /** Message displayed when the destination is no longer usable. */
   readonly staleMessage: string;
 }

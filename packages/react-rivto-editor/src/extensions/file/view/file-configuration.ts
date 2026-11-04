@@ -1,7 +1,9 @@
 import type { BinaryProvider } from "../../../attachments";
 import type { ReactEditorApi } from "../../../editor/types";
 
+/** Provider registration associated with one editor runtime. */
 interface FileProviderRegistration {
+  /** Provider used for generic file references. */
   readonly provider: BinaryProvider;
 }
 
@@ -20,6 +22,7 @@ export function configureFileProvider(
 ): () => void {
   const registration = { provider };
   FILE_PROVIDERS.set(editor, registration);
+  // An older disposer must not remove a newer registration for the same editor.
   return () => {
     if (FILE_PROVIDERS.get(editor) === registration) {
       FILE_PROVIDERS.delete(editor);

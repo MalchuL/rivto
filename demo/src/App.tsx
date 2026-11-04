@@ -79,7 +79,12 @@ const DEMO_LOCAL_FILE_ROUTE = "/__rivto_demo_local_file";
 const DEMO_CLIPBOARD_FILE_ROUTE = "/__rivto_demo_clipboard_file";
 const DEMO_OPEN_FILE_ROUTE = "/__rivto_demo_open_file";
 
-/** Returns whether the demo server can resolve one pasted filesystem path. */
+/**
+ * Returns whether the demo server can resolve one pasted filesystem path.
+ *
+ * @param uri - Candidate file URI or filesystem path.
+ * @returns True for file URIs and absolute Unix or Windows paths.
+ */
 function isDemoLocalFileUri(uri: string): boolean {
   return /^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri);
 }
@@ -117,7 +122,18 @@ async function storeDemoFile(
 
 /** Demo storage keeps pasted files on disk and other files as bounded data URLs. */
 const demoBinaryProvider: BinaryProvider = {
-  /** @inheritdoc BinaryProvider.write */
+  /**
+   * Stores clipboard bytes on the demo server and other files as data URLs.
+   *
+   * A 10 MiB limit applies to both paths. Abort signals cancel file reading or
+   * the server request, and the caller receives the resulting reference.
+   *
+   * @param file - Browser-provided binary content.
+   * @param context - Name, MIME type, input source, and cancellation signal.
+   * @returns A promise resolving to a local path or data URL.
+   * @throws If the file is too large, cancelled, or cannot be stored or read.
+   * @inheritdoc BinaryProvider.write
+   */
   async write(file, context) {
     if (file.size > 10 * 1024 * 1024) {
       throw new RangeError("File exceeds the 10 MiB limit");
@@ -127,9 +143,11 @@ const demoBinaryProvider: BinaryProvider = {
     }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      // Cancel the active browser file read when the operation is aborted.
       const abort = () => reader.abort();
       context.signal.throwIfAborted();
       context.signal.addEventListener("abort", abort, { once: true });
+      // Remove the abort listener after any terminal FileReader event.
       reader.addEventListener("loadend", () => context.signal.removeEventListener("abort", abort), {
         once: true,
       });
@@ -139,7 +157,15 @@ const demoBinaryProvider: BinaryProvider = {
       reader.readAsDataURL(file);
     });
   },
-  /** @inheritdoc BinaryProvider.read */
+  /**
+   * Reads local references through the demo server and declines other URIs.
+   *
+   * @param uri - Logical binary reference to resolve.
+   * @param context - Operation context containing the cancellation signal.
+   * @returns A promise resolving to bytes, or undefined for a nonlocal reference.
+   * @throws If the request is cancelled or the server cannot provide the file.
+   * @inheritdoc BinaryProvider.read
+   */
   async read(uri, context) {
     if (!isDemoLocalFileUri(uri)) {
       return undefined;
@@ -157,9 +183,11 @@ const demoBinaryProvider: BinaryProvider = {
 /** Demo-only native opener. */
 const demoLocalFileExtension: ReactEditorExtension = {
   id: "demo.local-files",
+  // Register a host opener for files stored through the demo bridge.
   setup: (editor) => {
     editor.attachments.registerFileOpenHandler({
       id: "demo.native-files",
+      // Store the resolved bytes before requesting a native application open.
       open: async (reference, context) => {
         const uri = await storeDemoFile(
           await editor.attachments.readBinary(
@@ -979,6 +1007,9 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
  *
  * Needed to show two independent editor instances on one page (journal stack)
  * and to contrast a populated document with an empty one.
+ *
+ * @returns A promise resolving to document resources and initialized core and React editors.
+ * @throws If document or editor initialization fails.
  */
 async function createEmptyDemoEditor() {
   const resources = await createDemoDocument();
@@ -1414,10 +1445,22 @@ function JournalDemoApp() {
  * ids (`left-parent`, …) keep panes readable with Block IDs on and let e2e
  * target rows. Optional `empty` / `conflict` flags cover edge cases (also used
  * by Playwright via query params).
+ *
+ * @param side - Pane whose document and sample blocks should be created.
+ * @param options - Optional right-pane empty state and conflicting block fixture.
+ * @param options.empty - Leaves the right pane without sample blocks when true.
+ * @param options.conflict - Adds a conflicting child ID to the populated right pane when set to `block`.
+ * @returns A promise resolving to document resources and initialized core and React editors.
+ * @throws If document initialization or fixture creation fails.
  */
 async function createMultiEditor(
   side: "left" | "right",
-  options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
+  options: {
+    /** Skip sample blocks in the right pane. */
+    readonly empty?: boolean;
+    /** Add a conflicting child block ID to the right pane. */
+    readonly conflict?: "block";
+  } = {},
 ) {
   const resources = await createDemoDocument();
   const editor = createDocumentEditor({ document: resources.document });
@@ -1641,10 +1684,12 @@ async function createSyncedPeer(
     signal.throwIfAborted();
     if (side === "right" && !storage.getDocumentIds().includes("shared")) {
       await new Promise<void>((resolve, reject) => {
+        // Release both listeners before completing the wait.
         const finish = () => {
           unsubscribe();
           signal.removeEventListener("abort", abort);
         };
+        // Resolve only after the shared document has been registered.
         const refresh = () => {
           if (!storage.getDocumentIds().includes("shared")) {
             return;
@@ -1652,6 +1697,7 @@ async function createSyncedPeer(
           finish();
           resolve();
         };
+        // Reject the wait and release its listeners when cancelled.
         const abort = () => {
           finish();
           reject(signal.reason);

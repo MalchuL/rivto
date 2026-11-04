@@ -4,23 +4,35 @@ import { MIN_IMAGE_SIZE } from "../../image-constants";
 
 /** Width and height of a local image resize preview, in pixels. */
 interface ImageSize {
+  /** Preview width in pixels. */
   readonly width: number;
+  /** Preview height in pixels. */
   readonly height: number;
 }
 
+/** Frame dimensions and pointer position captured at the start of a gesture. */
 interface ResizeStart {
+  /** Available parent width in pixels. */
   readonly maxWidth: number;
+  /** Pointer whose movement controls this gesture. */
   readonly pointerId: number;
+  /** Initial frame width in pixels. */
   readonly width: number;
+  /** Initial frame height in pixels. */
   readonly height: number;
+  /** Initial horizontal viewport coordinate in pixels. */
   readonly x: number;
+  /** Initial vertical viewport coordinate in pixels. */
   readonly y: number;
 }
 
 /** Pointer coordinates and modifier used while computing an image resize. */
 interface ImageResizePointer {
+  /** Current horizontal viewport coordinate in pixels. */
   readonly clientX: number;
+  /** Current vertical viewport coordinate in pixels. */
   readonly clientY: number;
+  /** Whether Shift requests free resizing. */
   readonly shiftKey: boolean;
 }
 
@@ -63,7 +75,9 @@ export function calculateImageResize(
 
 /** Current preview and pointer operations for one image resize gesture. */
 interface ImageResize {
+  /** Ref to the frame whose bounds are captured on pointer-down. */
   readonly frameRef: RefObject<HTMLSpanElement | null>;
+  /** Local dimensions during a gesture, or undefined when idle. */
   readonly preview: ImageSize | undefined;
   /**
    * Captures the pointer and initial image bounds.
@@ -105,12 +119,7 @@ export function useImageResize(
   const frameRef = useRef<HTMLSpanElement>(null);
   const gesture = useImageResizeGesture(resizeMode, onChange);
 
-  /**
-   * Starts a pointer-captured resize from current rendered geometry.
-   *
-   * @param event - Pointer-down event from the shared resize handle.
-   * @returns Captures the pointer and stores the initial frame bounds when available.
-   */
+  // Capture the pointer and current frame geometry when a resize starts.
   const startResize = (event: ReactPointerEvent<HTMLButtonElement>): void => {
     const bounds = frameRef.current?.getBoundingClientRect();
     if (!bounds) {
@@ -139,6 +148,7 @@ export function useImageResize(
 
 /** Preview state and pointer operations for an active resize gesture. */
 interface ImageResizeGesture {
+  /** Current gesture preview, or undefined when no resize is active. */
   readonly preview: ImageSize | undefined;
   /**
    * Captures the initial geometry for a pointer gesture.
@@ -178,12 +188,7 @@ function useImageResizeGesture(
   const previewRef = useRef<ImageSize | undefined>(undefined);
   const [preview, setPreview] = useState<ImageSize>();
 
-  /**
-   * Updates the local resize preview while preserving ratio unless Shift is held.
-   *
-   * @param event - Pointer movement captured by the resize handle.
-   * @returns Updates the local preview for the active pointer.
-   */
+  // Update only the active pointer's preview using the resize mode and Shift modifier.
   const moveResize = (event: ReactPointerEvent<HTMLButtonElement>): void => {
     const start = resize.current;
     if (!start || start.pointerId !== event.pointerId) {
@@ -193,12 +198,7 @@ function useImageResizeGesture(
     setPreview(previewRef.current);
   };
 
-  /**
-   * Commits the completed pointer preview through the owning document record.
-   *
-   * @param event - Pointer completion or cancellation event.
-   * @returns Commits a completed preview or clears a cancelled gesture.
-   */
+  // Commit a completed preview; cancellation clears it without a document change.
   const finishResize = (event: ReactPointerEvent<HTMLButtonElement>): void => {
     if (resize.current?.pointerId !== event.pointerId) {
       return;
@@ -213,6 +213,7 @@ function useImageResizeGesture(
 
   return {
     preview,
+    // Store the captured geometry until the gesture finishes or is cancelled.
     beginResize: (start) => {
       resize.current = start;
     },

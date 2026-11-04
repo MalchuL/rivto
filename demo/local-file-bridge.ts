@@ -25,7 +25,13 @@ const IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".webp": "image/webp",
 };
 
-/** Reads a request body while enforcing the same bound as the editor fallback. */
+/**
+ * Reads a request body while enforcing the same bound as the editor fallback.
+ *
+ * @param request - Incoming stream carrying clipboard file bytes.
+ * @returns A promise resolving to the complete concatenated body.
+ * @throws If the stream fails or exceeds the 10 MiB limit.
+ */
 async function readBoundedBody(request: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -40,7 +46,16 @@ async function readBoundedBody(request: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-/** Produces a safe supplied filename or a UUID name with a useful extension. */
+/**
+ * Produces a safe supplied filename or a UUID name with a useful extension.
+ *
+ * The supplied basename is normalized, has unsafe characters replaced and
+ * leading or trailing dots, and limited to 100 UTF-16 code units.
+ *
+ * @param name - Filename supplied by the request.
+ * @param contentType - MIME type used to choose a fallback image extension.
+ * @returns Sanitized basename, or a generated name with a known extension or `.bin`.
+ */
 function clipboardFileName(name: string, contentType: string): string {
   const supplied = basename(name)
     .normalize("NFKC")
@@ -82,7 +97,12 @@ async function storeClipboardFile(request: IncomingMessage, name: string): Promi
   return path;
 }
 
-/** Converts an accepted absolute path or file URI into a local filename. */
+/**
+ * Converts an accepted absolute path or file URI into a local filename.
+ *
+ * @param uri - Candidate file URI or absolute filesystem path.
+ * @returns A local path, or undefined when the input is invalid or relative.
+ */
 function localFilePath(uri: string): string | undefined {
   let result: string | undefined;
   try {
@@ -111,8 +131,10 @@ function openNativeFile(path: string): Promise<void> {
     command = "explorer.exe";
   }
   const args = [path];
+  // Resolve when the opener starts; its independent lifetime is not awaited.
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    // Detach the child after startup so it can outlive the demo server.
     child.once("spawn", () => {
       child.unref();
       resolve();
@@ -258,8 +280,16 @@ async function serveLocalFile(
   next();
 }
 
-/** Registers the same local-file middleware for Vite dev and preview servers. */
+/**
+ * Registers the same local-file middleware for Vite dev and preview servers.
+ *
+ * Each configured server owns its own set of temporary paths authorized for
+ * native opening; it is not shared between server instances.
+ *
+ * @returns A Vite plugin that installs the middleware during server setup.
+ */
 export function localFileBridgePlugin(): Plugin {
+  // Install local-file routes with a separate authorization set for each server.
   const configure = (server: ViteDevServer | PreviewServer): void => {
     const authorizedFiles = new Set<string>();
     server.middlewares.use((request, response, next) => {

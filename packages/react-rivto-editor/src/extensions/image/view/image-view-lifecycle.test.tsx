@@ -7,6 +7,7 @@ import { ImageView } from "./image-view";
 
 /** Object URL replacements and observed revocations used by the view fixture. */
 interface ObjectUrlFixture {
+  /** Object URLs revoked while the fixture is active. */
   readonly revoked: string[];
   /**
    * Restores the URL methods replaced by this fixture.

@@ -4,14 +4,22 @@ import type { FileIngestionStatus } from "./types";
 
 /** One locally displayed upload, including its latest progress or error. */
 interface FileUploadStatus extends FileIngestionStatus {
+  /** Reported completion fraction, when available. */
   readonly progress?: number;
+  /** Failure text displayed for a failed operation. */
   readonly error?: string;
 }
 
 /** Observable upload feedback owned independently by each extension. */
 export class FileUploadStatusStore {
+  /** Current statuses keyed by their local upload IDs. */
   private readonly uploads = new Map<string, FileUploadStatus>();
-  private readonly listeners = new Listeners<{ changed: void }>();
+  /** Subscribers notified when statuses change. */
+  private readonly listeners = new Listeners<{
+    /** Notification that the status snapshot changed. */
+    changed: void;
+  }>();
+  /** Snapshot version advanced after each published change. */
   private revision = 0;
 
   /**
@@ -62,7 +70,15 @@ export class FileUploadStatusStore {
    * @param patch - New progress or error message.
    * @returns Publishes the update when the upload exists.
    */
-  update(id: string, patch: { progress?: number; error?: string }): void {
+  update(
+    id: string,
+    patch: {
+      /** Latest upload completion fraction. */
+      progress?: number;
+      /** Failure text to display for the upload. */
+      error?: string;
+    },
+  ): void {
     const current = this.uploads.get(id);
     if (current) {
       this.uploads.set(id, { ...current, ...patch });
@@ -99,8 +115,11 @@ type FileUploadStatusViewStore = Pick<
   "subscribe" | "getRevision" | "getUploads" | "delete"
 >;
 
+/** State and visual kind supplied to an upload status overlay. */
 interface FileUploadStatusOverlayProps {
+  /** Extension-owned observable upload state. */
   readonly store: FileUploadStatusViewStore;
+  /** Selects file or image overlay styling. */
   readonly kind: "file" | "image";
 }
 

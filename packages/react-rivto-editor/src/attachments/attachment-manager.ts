@@ -40,7 +40,9 @@ interface AttachmentPanels {
 
 /** Manages attachment handlers, file opening, and URI resolution. */
 export class AttachmentManager {
+  /** Registered openers in their matching order. */
   private readonly openHandlers: FileOpenHandler[] = [];
+  /** Explicit fallback when no opener matches. */
   private defaultOpenHandler?: FileOpenHandler;
 
   /**
@@ -51,8 +53,11 @@ export class AttachmentManager {
    * @param options - Relative URI resolution configuration.
    */
   constructor(
+    /** Borrowed document and panel context. */
     private readonly editor: AttachmentEditor,
+    /** Owner responsible for guarding and cleaning up registrations. */
     private readonly registrations: RegistrationOwner,
+    /** Relative URI resolution configuration. */
     private readonly options: AttachmentOptions = {},
   ) {}
 
@@ -72,6 +77,7 @@ export class AttachmentManager {
       throw new Error(`File open handler ${handler.id || "<empty>"} is already registered`);
     }
     this.openHandlers.push(handler);
+    // Unregistration also clears this handler if it was selected as the fallback.
     return this.registrations.registerCleanup(() => {
       const index = this.openHandlers.indexOf(handler);
       if (index >= 0) {
@@ -260,6 +266,7 @@ export class AttachmentManager {
       link.rel = "noopener noreferrer";
       link.click();
       if (objectUrl) {
+        // Give the browser time to open provider bytes before revoking their URL.
         window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       }
     }
