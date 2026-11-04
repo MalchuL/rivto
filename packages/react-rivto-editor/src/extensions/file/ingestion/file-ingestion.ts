@@ -92,6 +92,7 @@ export class FileIngestion {
         source: context.source,
         destination: context.destination,
         signal: this.signal,
+        // Clamp provider progress and ignore updates after cancellation.
         reportProgress: (progress) => {
           if (!this.signal.aborted) {
             this.statuses.update(context.statusId, {
@@ -231,6 +232,7 @@ function insertPrepared(
     throw new TypeError("Prepared file does not match its insertion destination");
   }
   const editor = reactPanel.editor;
+  // Apply one history group without rolling back earlier mutations on failure.
   reactPanel.batchUpdates(() => {
     if (destination.kind === "inline") {
       const block = editor.blocks.getBlock(destination.blockId);
@@ -251,6 +253,7 @@ function insertPrepared(
     }
     insertPreparedElements(reactPanel, prepared, destination);
   });
+  // Restore the DOM selection only if the user has not changed it in the meantime.
   reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
 }
 
@@ -261,6 +264,7 @@ function insertPrepared(
  * @param prepared - Representations in source order.
  * @param destination - Captured block destination.
  * @returns Inserts or replaces blocks in the current batch.
+ * @throws If a representation is not a block or a document operation fails.
  */
 function insertPreparedBlocks(
   panel: FileIngestionPanel,
@@ -268,6 +272,7 @@ function insertPreparedBlocks(
   destination: Extract<FileDestination, { kind: "block" }>,
 ): void {
   let afterId = destination.afterId;
+  // Reuse the captured empty block for the first item; append subsequent blocks in order.
   prepared.forEach((item, index) => {
     if (item.kind !== "block") {
       throw new TypeError("Expected a prepared block");
@@ -292,6 +297,7 @@ function insertPreparedBlocks(
  * @param prepared - Representations in source order.
  * @param destination - Captured canvas coordinates.
  * @returns Inserts and selects the new elements in the current batch.
+ * @throws If a representation is not an element or a document operation fails.
  */
 function insertPreparedElements(
   panel: FileIngestionPanel,
@@ -299,6 +305,7 @@ function insertPreparedElements(
   destination: Extract<FileDestination, { kind: "element" }>,
 ): void {
   const zIndex = Math.max(0, ...panel.elements.getElements().map((element) => element.zIndex)) + 1;
+  // Offset each inserted element and place the batch above existing canvas elements.
   const ids = prepared.map((item, index) => {
     if (item.kind !== "element") {
       throw new TypeError("Expected a prepared element");

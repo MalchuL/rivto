@@ -7,6 +7,7 @@
 export function escapeHtml(value: string): string {
   return value.replace(
     /[&<>"']/g,
+    // Replace each HTML-sensitive character with its matching entity.
     (character) =>
       ({
         "&": "&amp;",

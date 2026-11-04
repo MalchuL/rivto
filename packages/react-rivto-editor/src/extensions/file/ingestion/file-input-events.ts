@@ -275,10 +275,12 @@ export class FileInputEvents {
       destination,
       items: files,
       point,
+      // Use a stable display fallback for unnamed browser files.
       name: (file) => file.name || "file",
       failureMessage: "Unable to upload file",
       staleMessage:
         "The destination changed while the file was uploading. Select a location and retry.",
+      // Select the handler before storage and verify it remains installed afterward.
       prepare: async (file, id, currentDestination) => {
         const mode = reactPanel.getSurfaceType();
         const reference: Omit<FileReference, "uri"> = {
@@ -298,6 +300,7 @@ export class FileInputEvents {
           statusId: id,
           name: reference.name,
         });
+        // A removed or replaced handler must not finish an upload it no longer owns.
         if (this.editor.clipboard.getFileHandler(handler.id) !== handler) {
           throw new Error("Attachment handler was removed during upload");
         }
@@ -330,10 +333,12 @@ export class FileInputEvents {
       destination,
       items: uris,
       point,
+      // Derive status text from the file reference.
       name: (uri) => createFileReferenceFromUri(uri).name,
       failureMessage: "Unable to load file",
       staleMessage:
         "The destination changed while the file was uploading. Select a location and retry.",
+      // Prepare an existing reference without uploading its bytes again.
       prepare: async (uri, _id, currentDestination) => {
         const mode = reactPanel.getSurfaceType();
         const reference = createFileReferenceFromUri(uri);
@@ -369,6 +374,7 @@ export class FileInputEvents {
     context: FilePreparationContext,
   ): Promise<PreparedFile> {
     const prepared = await handler.prepare(candidate, context);
+    // Check identity again after asynchronous preparation, including ID reuse.
     if (this.editor.clipboard.getFileHandler(handler.id) !== handler) {
       throw new Error("Attachment handler was removed during preparation");
     }

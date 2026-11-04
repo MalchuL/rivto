@@ -134,6 +134,7 @@ interface FileUploadStatusOverlayProps {
  * @returns The local-only live status overlay.
  */
 export function FileUploadStatusOverlay({ store, kind }: FileUploadStatusOverlayProps) {
+  // Subscribe to a stable revision so React refreshes the current status cards.
   useSyncExternalStore(
     (listener) => store.subscribe(listener),
     () => store.getRevision(),

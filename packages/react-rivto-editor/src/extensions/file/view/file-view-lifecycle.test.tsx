@@ -6,6 +6,7 @@ import { fileExtension } from "../file";
 import { RegisteredFileView } from "./file-view";
 import type { ReactEditorExtension } from "../../../managers/extensions/types";
 
+// Use a browser-readable fixture URI and leave provider reads unclaimed.
 const provider = { write: async () => "data:text/plain,file", read: async () => undefined };
 
 /** Rich inline file renderer installed by the lifecycle test. */
@@ -21,8 +22,11 @@ const richFileExtension: ReactEditorExtension = {
     editor.clipboard.registerFileHandler({
       id: "rich-text-file",
       provider,
+      // Match the fixture's text attachment with the rich renderer.
       matches: ({ reference }) => reference.mimeType === "text/plain",
+      // Supply an inline representation for the registered handler.
       prepare: () => ({ kind: "inline", content: "rich" }),
+      // Make the active handler visible in rendered output.
       InlineView: () => <span>Rich file</span>,
     });
   },
@@ -55,7 +59,9 @@ test("updates mounted inline files when rich handlers are installed and removed"
       removeDirect = panel.editor.clipboard.registerFileHandler({
         id: "direct-file",
         provider,
+        // Prepare the fallback handler's inline representation.
         prepare: () => ({ kind: "inline", content: "direct" }),
+        // Identify the fallback renderer in the mounted view.
         InlineView: () => <span>Default file</span>,
       });
       panel.editor.clipboard.setDefaultFileHandler("direct-file");

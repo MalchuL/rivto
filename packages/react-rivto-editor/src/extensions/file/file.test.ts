@@ -4,11 +4,13 @@ import { createTestCoreEditor } from "../../test-utils";
 import { FILE_BLOCK_TYPE, fileExtension } from "./file";
 import { imageExtension } from "../image/image";
 
+// Return a stable reference and leave reads unclaimed unless a test overrides the provider.
 const testProvider = { write: async () => "test:asset", read: async () => undefined };
 
 describe("fileExtension", () => {
   test("image and file extensions select their own binary providers", async () => {
     const editor = await createTestCoreEditor();
+    // Distinct references and bytes reveal which provider each handler selects.
     const imageProvider = {
       write: async () => "images:one",
       read: async () => new Blob(["image"]),
@@ -65,6 +67,7 @@ describe("fileExtension", () => {
     const editor = await createTestCoreEditor();
     const writes: string[] = [];
     let finishWrite: (() => void) | undefined;
+    // Wait for the host writer because binary postprocessing runs asynchronously.
     const written = new Promise<void>((resolve) => {
       finishWrite = resolve;
     });
@@ -74,10 +77,13 @@ describe("fileExtension", () => {
         fileExtension({ provider: testProvider }),
         {
           id: "file.writer",
+          // Install a host clipboard writer for this runtime.
           setup: (runtime) =>
             runtime.clipboard.registerWriter({
               id: "host",
+              // Accept the file's exact MIME type.
               supports: () => true,
+              // Record the MIME type after the copied bytes are available.
               write: async ({ mimeType, data }) => {
                 await data;
                 writes.push(mimeType);
@@ -116,6 +122,7 @@ test("removes its provider configuration when extension setup fails", async () =
   runtime.clipboard.registerFileHandler({
     id: "file",
     provider: testProvider,
+    // Occupy the file handler ID so extension setup fails during registration.
     prepare: ({ reference }) => ({ kind: "inline", content: reference.uri }),
   });
   expect(() => runtime.extensions.install(fileExtension({ provider: testProvider }))).toThrow();
@@ -131,6 +138,7 @@ test("removes image view configuration when extension setup fails", async () => 
   runtime.clipboard.registerFileHandler({
     id: "image",
     provider: testProvider,
+    // Occupy the image handler ID so extension setup fails during registration.
     prepare: ({ reference }) => ({ kind: "inline", content: reference.uri }),
   });
   expect(() =>
@@ -163,6 +171,7 @@ test("stops clipboard postprocessing after the first binary contribution", async
   const visited: string[] = [];
   runtime.clipboard.registerPostprocessor({
     id: "first",
+    // Contribute binary data so later postprocessors must not run.
     process: () => {
       visited.push("first");
       return { name: "file", mimeType: "text/plain", data: new Blob(["data"]) };
@@ -170,6 +179,7 @@ test("stops clipboard postprocessing after the first binary contribution", async
   });
   runtime.clipboard.registerPostprocessor({
     id: "second",
+    // Record an unexpected visit if processing continues past the first contribution.
     process: () => {
       visited.push("second");
       return undefined;
@@ -193,6 +203,7 @@ test("does not read binary data when more than one file is selected", async () =
       fileExtension({
         provider: {
           write: async () => "test:file",
+          // Count binary reads so multi-selection can be verified as read-free.
           read: async () => {
             reads += 1;
             return new Blob(["data"]);

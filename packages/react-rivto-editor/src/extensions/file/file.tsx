@@ -111,6 +111,7 @@ function registerFileHandler(
   clipboard.registerFileHandler({
     id: "file",
     provider,
+    // Select the persisted representation requested by the destination.
     prepare: ({ reference }, { destination }) => {
       if (destination === "inline") {
         return { kind: "inline", content: serializeFileMacro(reference) };
@@ -142,7 +143,9 @@ function registerFileFormatter(
 ): void {
   formats.registerFormatter({
     id: "file",
+    // Select only generic file blocks for portable formatting.
     matches: ({ block }) => block.type === FILE_BLOCK_TYPE,
+    // Preserve nested content alongside the portable file representation.
     format: ({ block, children, depth }) => {
       const reference = fileReference(block.props);
       if (!reference) {
@@ -212,6 +215,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         disposeFileViews();
       });
       reactEditor.extensions.mount(
+        // Show this extension's local pending and failed file statuses.
         () => <FileUploadStatusOverlay store={statuses} kind="file" />,
         "afterSurface",
       );

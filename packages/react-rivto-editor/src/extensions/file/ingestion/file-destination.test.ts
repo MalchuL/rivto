@@ -12,6 +12,7 @@ test("places picker feedback at the block or at the viewport center", () => {
   const originalCSS = Object.getOwnPropertyDescriptor(globalThis, "CSS");
   Object.defineProperty(globalThis, "CSS", {
     configurable: true,
+    // The fixture's simple block ID needs no selector escaping.
     value: { escape: (value: string) => value },
   });
   const root = document.createElement("div");
@@ -38,8 +39,11 @@ test("places picker feedback at the block or at the viewport center", () => {
 
 test("ignores a selection whose block no longer exists", () => {
   const selection = createCaretSelection("deleted", 0);
+  // Keep a stored selection whose block lookup deliberately fails.
   const panel = {
+    // No DOM selection exists, so the stored selection is used.
     selection: { readDOM: () => undefined, get: () => selection },
+    // The selected block was deleted before the destination was captured.
     blocks: { getBlock: () => undefined },
   };
   expect(inlineDestination(panel)).toBeUndefined();
@@ -63,10 +67,12 @@ test.each(["standard", "legacy", "unresolved"] as const)(
     const legacy = Object.getOwnPropertyDescriptor(document, "caretRangeFromPoint");
     Object.defineProperty(document, "caretPositionFromPoint", {
       configurable: true,
+      // Supply a standard caret position only for the corresponding case.
       value: () => (method === "standard" ? { offsetNode: text, offset: 3 } : null),
     });
     Object.defineProperty(document, "caretRangeFromPoint", {
       configurable: true,
+      // Supply a legacy caret range only for the corresponding case.
       value: () => (method === "legacy" ? range : null),
     });
     try {

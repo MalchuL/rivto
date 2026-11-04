@@ -288,6 +288,7 @@ function useImageView({
 }: ImageViewStateProps) {
   const reactPanel = useReactPanel();
   const reactEditor = reactPanel.editor;
+  // Refresh provider and presentation when extension registrations change.
   const configuration = useSyncExternalStore(
     (listener) => reactEditor.extensions.subscribe(listener),
     () => CUSTOMIZATIONS.get(reactEditor),
@@ -333,7 +334,13 @@ interface ImageContentProps {
   readonly showLoading: boolean;
   /** Alternative text for the rendered image. */
   readonly alt: string;
-  /** Optional callback receiving the loaded image's intrinsic dimensions. */
+  /**
+   * Reports the loaded image's intrinsic dimensions when a callback is supplied.
+   *
+   * @param width - Natural image width in pixels.
+   * @param height - Natural image height in pixels.
+   * @returns Notifies the owning view after the image loads.
+   */
   readonly onIntrinsicSize?: ImageViewProps["onIntrinsicSize"];
   /**
    * Reports a browser image decoding failure.
@@ -457,6 +464,7 @@ function ImageControls({
           onPointerCancel={resize.finishResize}
           onDoubleClick={() => onChange({ reset: true })}
           onKeyDown={(event) => {
+            // Keyboard users can restore the original size from the resize control.
             if (event.key === "Enter") {
               onChange({ reset: true });
             }

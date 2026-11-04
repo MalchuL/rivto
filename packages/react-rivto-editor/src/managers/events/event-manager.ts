@@ -137,6 +137,7 @@ export class EventManager {
    * @returns True when the registration remains active in the event snapshot.
    */
   has(id: string, event: Event): boolean {
+    // A registration removed after dispatch began is absent even in the captured snapshot.
     return (
       this.eventRegistrations.get(event)?.some((entry) => entry.id === id && entry.active) ?? false
     );

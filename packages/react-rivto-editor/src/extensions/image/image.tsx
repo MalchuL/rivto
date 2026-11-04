@@ -345,6 +345,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         disposeImageViews();
       });
       reactEditor.extensions.mount(
+        // Show this extension's local pending and failed image statuses.
         () => <FileUploadStatusOverlay store={statuses} kind="image" />,
         "afterSurface",
       );

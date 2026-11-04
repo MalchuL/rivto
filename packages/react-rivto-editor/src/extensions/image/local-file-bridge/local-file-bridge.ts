@@ -175,6 +175,7 @@ function randomFileId(): string {
     return crypto.randomUUID();
   }
   const bytes = crypto.getRandomValues(new Uint8Array(16));
+  // Set the version and variant bits when randomUUID is unavailable.
   bytes[6] = (bytes[6]! & 0x0f) | 0x40;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
@@ -205,6 +206,7 @@ function logicalUri(prefix: string, fileName: string): string {
  */
 function isSafeRelativePath(path: string): boolean {
   try {
+    // Decode each segment before rejecting traversal and encoded path separators.
     return path.split("/").every((segment) => {
       const decoded = decodeURIComponent(segment);
       return (
@@ -289,6 +291,7 @@ export class LocalFileBridge implements BinaryProvider {
       if (created !== false) {
         throw new TypeError("File bridge writeFile must report whether the file was created");
       }
+      // A collision retries with a fresh suffix; an existing file is never overwritten here.
       fileName = collisionFileName(originalName);
     }
     throw new Error("Unable to find an available filename");
@@ -325,6 +328,7 @@ export class LocalFileBridge implements BinaryProvider {
         const directoryPath = directory.pathname.endsWith("/")
           ? directory.pathname
           : `${directory.pathname}/`;
+        // Require the same host and a safe descendant path before asking the host to read.
         localFile =
           file.protocol === "file:" &&
           isSafeRelativePath(uri) &&

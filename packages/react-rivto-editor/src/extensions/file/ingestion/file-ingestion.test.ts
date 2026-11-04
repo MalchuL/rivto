@@ -44,6 +44,7 @@ function feedbackStore() {
   return { statuses, feedback };
 }
 
+// Supply a stable stored reference without claiming unrelated reads.
 const provider = { write: async () => "test:file", read: async () => undefined };
 
 test("inserts successful jobs in source order and retries a failed job", async () => {
@@ -51,6 +52,7 @@ test("inserts successful jobs in source order and retries a failed job", async (
   const panel = createTestReactEditor({ editor, extensions: [fileExtension({ provider })] });
   const { statuses, feedback } = feedbackStore();
   let finishFirst: ((value: ReturnType<typeof preparedFile>) => void) | undefined;
+  // Keep the first input pending while later preparations complete.
   const first = new Promise<ReturnType<typeof preparedFile>>((resolve) => {
     finishFirst = resolve;
   });
@@ -61,7 +63,9 @@ test("inserts successful jobs in source order and retries a failed job", async (
     destination: { kind: "element", x: 0, y: 0 },
     items: ["first", "failed", "last"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Fail the middle input once so its status can be retried independently.
     prepare: async (item) => {
       if (item === "first") {
         return first;
@@ -107,7 +111,9 @@ test("retains failed insertion feedback when a handler returns the wrong placeme
     destination: { kind: "element", x: 0, y: 0 },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Return the wrong representation to exercise insertion failure feedback.
     prepare: async () => ({ kind: "inline" as const, content: "file" }),
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
@@ -125,6 +131,7 @@ test("does not insert a prepared file after its extension is destroyed", async (
   const panel = createTestReactEditor({ editor, extensions: [fileExtension({ provider })] });
   const { feedback } = feedbackStore();
   let finish: ((value: ReturnType<typeof preparedFile>) => void) | undefined;
+  // Allow preparation to finish after the ingestion owner has been destroyed.
   const pending = new Promise<ReturnType<typeof preparedFile>>((resolve) => {
     finish = resolve;
   });
@@ -134,7 +141,9 @@ test("does not insert a prepared file after its extension is destroyed", async (
     destination: { kind: "element", x: 0, y: 0 },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Keep this preparation pending until the test destroys its owner.
     prepare: () => pending,
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
@@ -154,6 +163,7 @@ test("prepares a retry for its refreshed inline destination", async () => {
   const block = editor.blocks.insertBlock({ type: "paragraph", content: "" });
   const { statuses, feedback } = feedbackStore();
   let finish: (() => void) | undefined;
+  // Hold the original block preparation until its destination becomes stale.
   const pending = new Promise<void>((resolve) => {
     finish = resolve;
   });
@@ -164,7 +174,9 @@ test("prepares a retry for its refreshed inline destination", async () => {
     destination: { kind: "block", afterId: block.id, replaceId: block.id, content: "" },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Prepare a block first and an inline representation when the retry refreshes its destination.
     prepare: async (_item, _id, destination) => {
       destinations.push(destination.kind);
       if (destination.kind === "block") {
@@ -196,6 +208,7 @@ test("stores files with document context, validated URI, and bounded progress", 
   const editor = await createTestCoreEditor();
   const panel = createTestReactEditor({ editor });
   const { statuses, feedback } = feedbackStore();
+  // Retry is unused while this status records provider progress.
   statuses.set("upload", { id: "upload", name: "note.txt", x: 0, y: 0, retry: () => {} });
   const writes: Array<{
     /** Document identity supplied to the provider. */
@@ -213,6 +226,7 @@ test("stores files with document context, validated URI, and bounded progress", 
   const file = new File(["hello"], "note.txt", { type: "text/plain" });
   const uri = await ingestion.storeFile(
     {
+      // Record the provider context and report progress outside both bounds.
       write: async (_file, context) => {
         writes.push(context);
         context.reportProgress?.(-1);
@@ -220,6 +234,7 @@ test("stores files with document context, validated URI, and bounded progress", 
         context.reportProgress?.(2);
         return "test:note";
       },
+      // Reading is unused in this storage-only case.
       read: async () => undefined,
     },
     file,
@@ -259,7 +274,9 @@ test("inserts an inline file at the captured range and moves the caret after it"
     destination: { kind: "inline", blockId: block.id, start: 7, end: 12, content: "before after" },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Return inline content for replacement of the captured range.
     prepare: async () => ({ kind: "inline", content: "[file]" }),
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
@@ -288,7 +305,9 @@ test("replaces an empty block with the first file and inserts later files in ord
     destination: { kind: "block", afterId: original.id, replaceId: original.id, content: "" },
     items: ["first", "second"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Produce a block for each input while retaining its name.
     prepare: async (name) => ({
       kind: "block",
       type: "file",
@@ -324,7 +343,9 @@ test("places canvas files diagonally above existing elements", async () => {
     destination: { kind: "element", x: 100, y: 200 },
     items: ["first", "second"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Prepare canvas files in the order supplied to the batch.
     prepare: async (name) => preparedFile(name),
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
@@ -351,7 +372,9 @@ test("keeps insertion errors retryable when no error callback is supplied", asyn
     destination: { kind: "element", x: 0, y: 0 },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Return the wrong representation without installing an error callback.
     prepare: async () => ({ kind: "inline", content: "file" }),
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
@@ -375,7 +398,9 @@ test("does not start a batch after the owning extension is destroyed", async () 
     destination: { kind: "element", x: 0, y: 0 },
     items: ["file"],
     point: { x: 0, y: 0 },
+    // Use the input as the status card name.
     name: (item) => item,
+    // Record whether a destroyed ingestion instance incorrectly starts preparation.
     prepare: async (name) => {
       prepared = true;
       return preparedFile(name);
@@ -395,9 +420,11 @@ test("ignores provider progress after destruction", async () => {
   const editor = await createTestCoreEditor();
   const panel = createTestReactEditor({ editor });
   const { statuses, feedback } = feedbackStore();
+  // Retry is unused while this status records late progress.
   statuses.set("upload", { id: "upload", name: "note.txt", x: 0, y: 0, retry: () => {} });
   let reportProgress: ((progress: number) => void) | undefined;
   let finishWrite: ((uri: string) => void) | undefined;
+  // Hold the provider write until after the owner has been destroyed.
   const pending = new Promise<string>((resolve) => {
     finishWrite = resolve;
   });
@@ -405,10 +432,12 @@ test("ignores provider progress after destruction", async () => {
   try {
     const result = ingestion.storeFile(
       {
+        // Capture progress reporting and delay completion until the test releases it.
         write: async (_content, context) => {
           reportProgress = context.reportProgress;
           return pending;
         },
+        // Reading is unused in this storage-only case.
         read: async () => undefined,
       },
       new File(["hello"], "note.txt", { type: "text/plain" }),
@@ -439,6 +468,7 @@ test("does not report preparation failures after destruction", async () => {
   const { statuses, feedback } = feedbackStore();
   const errors: unknown[] = [];
   let rejectPreparation: ((reason: Error) => void) | undefined;
+  // Reject preparation only after destruction to verify late failures are ignored.
   const pending = new Promise<ReturnType<typeof preparedFile>>((_resolve, reject) => {
     rejectPreparation = reject;
   });
@@ -449,7 +479,9 @@ test("does not report preparation failures after destruction", async () => {
       destination: { kind: "element", x: 0, y: 0 },
       items: ["file"],
       point: { x: 0, y: 0 },
+      // Use the input as the status card name.
       name: (item) => item,
+      // Reject this pending preparation after destruction.
       prepare: () => pending,
       failureMessage: "Unable to upload",
       staleMessage: "Destination changed",

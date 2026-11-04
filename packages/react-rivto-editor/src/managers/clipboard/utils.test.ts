@@ -7,11 +7,13 @@ test("chooses a supported clipboard MIME type and falls back to generic bytes", 
   try {
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
+      // Expose clipboard writing without performing a system write.
       value: { write: () => {} },
     });
     Object.defineProperty(window, "ClipboardItem", {
       configurable: true,
       value: {
+        // Allow the image type and the generic binary fallback.
         supports: (type: string) => type === "image/png" || type === "application/octet-stream",
       },
     });
@@ -19,6 +21,7 @@ test("chooses a supported clipboard MIME type and falls back to generic bytes", 
     expect(browserClipboardType(window, "application/pdf")).toBe("application/octet-stream");
     Object.defineProperty(window, "ClipboardItem", {
       configurable: true,
+      // Simulate a browser that accepts neither format.
       value: { supports: () => false },
     });
     expect(browserClipboardType(window, "image/png")).toBeUndefined();

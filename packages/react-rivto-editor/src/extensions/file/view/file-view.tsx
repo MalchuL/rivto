@@ -142,6 +142,7 @@ export function FileView(reference: FileReference) {
         error={actions.error}
         onOpen={open}
         onContextMenu={(event) => {
+          // Use a local menu and clear failures from a previous action.
           event.preventDefault();
           event.stopPropagation();
           actions.clearError();
@@ -205,11 +206,13 @@ function FileTrigger({ reference, error, onOpen, onContextMenu }: FileTriggerPro
       title="Double-click to open"
       onContextMenu={onContextMenu}
       onDoubleClick={(event) => {
+        // Keep the gesture inside the file control while opening the attachment.
         event.preventDefault();
         event.stopPropagation();
         onOpen();
       }}
       onKeyDown={(event) => {
+        // Open once per Enter or Space press rather than repeating while held.
         if (!event.repeat && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           event.stopPropagation();
@@ -276,11 +279,13 @@ function FileContextMenu({ position, canCopy, onOpen, onCopy, onClose }: FileCon
       role="menu"
       style={{ left: position.x, top: position.y }}
       onBlur={(event) => {
+        // Moving focus within the menu does not dismiss it.
         if (!event.currentTarget.contains(event.relatedTarget)) {
           onClose();
         }
       }}
       onKeyDown={(event) => {
+        // Escape dismisses the menu without starting an action.
         if (event.key === "Escape") {
           onClose();
         }
@@ -315,6 +320,7 @@ export interface RegisteredFileViewProps {
  */
 export function RegisteredFileView({ reference }: RegisteredFileViewProps) {
   const editor = useReactPanel().editor;
+  // Re-select the view when handlers are installed, removed, or change default.
   const InlineView = useSyncExternalStore(
     (listener) => editor.clipboard.subscribeFileHandlers(listener),
     () => editor.clipboard.selectFileHandler({ reference })?.InlineView,

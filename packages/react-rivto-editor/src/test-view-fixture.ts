@@ -49,6 +49,7 @@ function prepareBrowserTest(): () => void {
       },
     });
   }
+  // Restore only the globals that this fixture changed.
   return () => {
     if (!originalThrowIfAborted) {
       Reflect.deleteProperty(AbortSignal.prototype, "throwIfAborted");
@@ -82,6 +83,7 @@ export async function createTestViewFixture(): Promise<TestViewFixture> {
      */
     async dispose(release) {
       try {
+        // Unmount inside React's test boundary before releasing editor registrations.
         act(() => root.unmount());
         release?.();
         await panel.editor.destroy();
@@ -122,28 +124,19 @@ export function createPendingBinaryRead(options: PendingBinaryReadOptions = {}):
   return {
     signals,
     provider: {
-      /**
-       * Provides an unused stable URI to satisfy the storage contract.
-       *
-       * @returns A promise resolving to the fixture URI.
-       */
+      // Provide an unused stable URI to satisfy the storage contract.
       write: async () => "test:file",
-      /**
-       * Leaves the optional first read unclaimed and waits for cancellation thereafter.
-       *
-       * @param _uri - Reference supplied by the view.
-       * @param context - Operation context containing the cancellation signal.
-       * @returns A promise resolving to undefined for the optional first read; later reads reject on cancellation.
-       * @throws When a pending read is aborted.
-       */
+      // Leave the optional first read unclaimed; later reads reject when cancelled.
       read: async (_uri, { signal }) => {
         if (++reads === 1 && options.skipFirstRead) {
           return undefined;
         }
         signals.push(signal);
+        // Keep the read pending until its view-owned cancellation signal fires.
         return new Promise<Blob>((_resolve, reject) => {
           signal.addEventListener(
             "abort",
+            // Reject the pending read when the owning view cancels it.
             () => reject(new DOMException("Aborted", "AbortError")),
             {
               once: true,

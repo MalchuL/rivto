@@ -185,11 +185,13 @@ function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps)
       role="menu"
       style={{ left: position.x, top: position.y }}
       onBlur={(event) => {
+        // Moving focus within the menu does not dismiss it.
         if (!event.currentTarget.contains(event.relatedTarget)) {
           onClose();
         }
       }}
       onKeyDown={(event) => {
+        // Escape dismisses the menu without starting a copy.
         if (event.key === "Escape") {
           onClose();
         }

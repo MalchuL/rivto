@@ -62,6 +62,7 @@ export function useFileActions(reference: FileReference, onCopied: () => void): 
   return {
     error,
     canCopy: editor.clipboard.canWriteBinary(mimeType),
+    // Clear the failure shown by the current view.
     clearError: () => setError(undefined),
     open,
     copy,

@@ -23,6 +23,7 @@ function TestHoverMenu({ kind }: ImageHoverMenuProps) {
   return <button type="button">Custom {kind} menu</button>;
 }
 
+// Supply a stable reference while allowing browser-readable image sources to pass through.
 const testProvider = { write: async () => "test:asset", read: async () => undefined };
 
 describe("ImageView", () => {

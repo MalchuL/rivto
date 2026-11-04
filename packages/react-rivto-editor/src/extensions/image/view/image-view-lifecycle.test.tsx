@@ -25,19 +25,17 @@ interface ObjectUrlFixture {
 function mockObjectUrls(): ObjectUrlFixture {
   const originalCreate = URL.createObjectURL;
   const originalRevoke = URL.revokeObjectURL;
+  // Give the two fixture blobs distinct object URLs.
   URL.createObjectURL = (blob) =>
     blob instanceof Blob && blob.size === 1 ? "blob:first" : "blob:second";
   const revoked: string[] = [];
+  // Record revocations so the test can distinguish owned and borrowed URLs.
   URL.revokeObjectURL = (url) => {
     revoked.push(url);
   };
   return {
     revoked,
-    /**
-     * Restores both URL methods replaced for the test.
-     *
-     * @returns Restores the original methods.
-     */
+    // Restore both URL methods replaced for the test.
     restore: () => {
       URL.createObjectURL = originalCreate;
       URL.revokeObjectURL = originalRevoke;
@@ -49,9 +47,11 @@ test("reloads an existing image when its extension provider is replaced", async 
   const urls = mockObjectUrls();
   const fixture = await createTestViewFixture();
   const { panel, container, root } = fixture;
+  // The first provider produces a one-byte blob identified by the object-URL fixture.
   const first = { write: async () => "test:image", read: async () => new Blob(["a"]) };
   const second = {
     write: async () => "test:image",
+    // Leave browser blob URLs unclaimed while returning new bytes for provider references.
     read: async (uri: string) => (uri.startsWith("blob:") ? undefined : new Blob(["ab"])),
   };
   let remove = panel.editor.extensions.install(imageExtension({ provider: first }));

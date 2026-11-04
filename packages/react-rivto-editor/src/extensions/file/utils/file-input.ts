@@ -59,6 +59,8 @@ export function getTransferredFiles(
   if (files.length) {
     return files;
   }
+  // Some clipboard implementations expose files only through transfer items.
+  // File items can still return null when the browser no longer exposes their data.
   return [...data.items]
     .filter((item) => item.kind === "file")
     .map((item) => item.getAsFile())
@@ -72,6 +74,7 @@ export function getTransferredFiles(
  * @returns The first entry, or undefined when no entry is present.
  */
 export function firstUriListEntry(text: string): string | undefined {
+  // URI-list comments do not identify transferable files.
   return text
     .trim()
     .split(/\r?\n/)

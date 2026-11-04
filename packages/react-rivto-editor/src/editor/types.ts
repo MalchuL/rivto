@@ -177,7 +177,7 @@ export interface ClipboardApi {
    * @param binary - Named attachment bytes and original MIME type.
    * @param formats - Portable representations included beside binary data.
    * @returns A promise resolving to true when a host or browser writer accepted the payload, or false when unsupported.
-   * @throws If the browser clipboard write fails.
+   * @throws If a capability check, binary preparation, or browser clipboard write fails.
    */
   readonly writeBinary: ClipboardManager["writeBinary"];
 

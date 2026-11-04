@@ -3,6 +3,7 @@ import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../editor/react-editor";
 import type { FileReference } from "./types";
 
+// Use a stable stored reference and leave reads unclaimed in handler-selection tests.
 const provider = { write: async () => "stored:test", read: async () => undefined };
 // Prepare an inline representation using the stored reference for handler tests.
 const prepare = ({ reference }: { reference: FileReference }) => ({
@@ -29,6 +30,7 @@ test("clipboard file handlers select specific handlers before the default and cl
           value.clipboard.registerFileHandler({
             id: "image",
             provider,
+            // Select image metadata ahead of the generic fallback.
             matches: ({ reference }) => reference.mimeType.startsWith("image/"),
             prepare,
           });
@@ -61,6 +63,7 @@ test("binary access propagates provider failures and falls back only for unclaim
   );
   const failing = {
     ...provider,
+    // A provider failure must propagate instead of falling back to a browser URL.
     read: async () => {
       throw new Error("read failed");
     },
@@ -84,6 +87,7 @@ test("resolves provider blobs and returns bytes with the requested MIME type", a
   const runtime = createReactEditor({ editor });
   const signal = new AbortController().signal;
   const original = new Blob(["content"], { type: "text/plain" });
+  // Claim the reference with the same blob so identity and MIME conversion can be checked.
   const owningProvider = { ...provider, read: async () => original };
 
   await expect(
@@ -121,6 +125,7 @@ test("file opening prefers a typed handler and then the fallback", async () => {
         setup(value) {
           value.attachments.registerFileOpenHandler({
             id: "default",
+            // Record files routed to the fallback opener.
             open: ({ name }) => {
               opened.push(`default:${name}`);
             },
@@ -128,7 +133,9 @@ test("file opening prefers a typed handler and then the fallback", async () => {
           value.attachments.setDefaultFileOpenHandler("default");
           value.attachments.registerFileOpenHandler({
             id: "pdf",
+            // Match PDF references before the fallback is considered.
             matches: ({ mimeType }) => mimeType === "application/pdf",
+            // Record files routed to the PDF opener.
             open: ({ name }) => {
               opened.push(`pdf:${name}`);
             },
@@ -140,6 +147,7 @@ test("file opening prefers a typed handler and then the fallback", async () => {
   const signal = new AbortController().signal;
   const unreadableProvider = {
     ...provider,
+    // The selected host opener must receive the reference without reading its bytes.
     read: async () => {
       throw new Error("the host opener must not read the provider");
     },
@@ -155,6 +163,7 @@ test("file opening prefers a typed handler and then the fallback", async () => {
     { signal },
   );
   expect(opened).toEqual(["pdf:a.pdf", "default:b.txt"]);
+  // The no-op callback is never installed because the opener ID is duplicated.
   expect(() =>
     runtime.attachments.registerFileOpenHandler({ id: "default", open: () => {} }),
   ).toThrow();
@@ -192,6 +201,7 @@ test("file opener defaults require registration and clear when the selected open
   const editor = await createTestCoreEditor();
   const runtime = createReactEditor({ editor });
   const reference = { uri: "a", name: "a.txt", mimeType: "text/plain" };
+  // These openers need no behavior; the test observes their registration lifetimes.
   const first = runtime.attachments.registerFileOpenHandler({ id: "first", open: () => {} });
   const second = runtime.attachments.registerFileOpenHandler({ id: "second", open: () => {} });
   expect(runtime.attachments.selectFileOpenHandler(reference)).toBeUndefined();
@@ -214,24 +224,30 @@ test("explicit defaults do not precede matching handlers even when their own pre
     id: "default",
     provider,
     prepare,
+    // The fallback matches too, so selection must still prefer the specific handler.
     matches: () => true,
   });
   runtime.clipboard.registerFileHandler({
     id: "specific",
     provider,
     prepare,
+    // Claim the same candidate as the fallback.
     matches: () => true,
   });
   runtime.clipboard.setDefaultFileHandler("default");
   expect(runtime.clipboard.selectFileHandler({ reference })?.id).toBe("specific");
   runtime.attachments.registerFileOpenHandler({
     id: "default",
+    // Opening is not invoked while testing selection order.
     open: () => {},
+    // The fallback opener also matches the test reference.
     matches: () => true,
   });
   runtime.attachments.registerFileOpenHandler({
     id: "specific",
+    // Opening is not invoked while testing selection order.
     open: () => {},
+    // The specific opener claims the same reference as the fallback.
     matches: () => true,
   });
   runtime.attachments.setDefaultFileOpenHandler("default");

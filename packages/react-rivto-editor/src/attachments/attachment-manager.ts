@@ -258,6 +258,7 @@ export class AttachmentManager {
     if (handler) {
       await handler.open(reference, operationContext);
     } else {
+      // Fall back to browser navigation when no host opener is selected.
       const resolved = await this.resolveBinary(provider, reference.uri, context);
       const objectUrl = resolved instanceof Blob ? URL.createObjectURL(resolved) : undefined;
       const link = document.createElement("a");

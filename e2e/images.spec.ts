@@ -39,6 +39,7 @@ async function sendImage(
       const data = new DataTransfer();
       const file = new File([bytes], fileName, { type: "image/png" });
       data.items.add(file);
+      // Simulate browsers that expose the image only through transfer items.
       const payload = itemOnlyPayload
         ? {
             files: [],
@@ -101,6 +102,7 @@ async function sendLocalImagePath(target: Locator, path: string): Promise<void> 
   await target.evaluate((element, localPath) => {
     Object.defineProperty(navigator.clipboard, "readText", {
       configurable: true,
+      // Supply the redacted path through the asynchronous clipboard API.
       value: async () => localPath,
     });
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
@@ -109,6 +111,7 @@ async function sendLocalImagePath(target: Locator, path: string): Promise<void> 
         files: [],
         items: [],
         types: ["text/uri-list"],
+        // The event hides the path, forcing the asynchronous clipboard read.
         getData: () => "",
       },
     });
@@ -457,6 +460,7 @@ test("retries a failed clipboard image path read", async ({ page }) => {
     let attempts = 0;
     Object.defineProperty(navigator.clipboard, "readText", {
       configurable: true,
+      // Fail once so the retry action can resolve the same path.
       value: async () => {
         if (attempts++ === 0) {
           throw new Error("Clipboard read denied");
@@ -465,6 +469,7 @@ test("retries a failed clipboard image path read", async ({ page }) => {
       },
     });
     const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    // Expose the URI-list type but redact its synchronous data.
     Object.defineProperty(event, "clipboardData", {
       value: { files: [], items: [], types: ["text/uri-list"], getData: () => "" },
     });
@@ -492,6 +497,7 @@ for (const unavailable of [false, true]) {
       } else {
         Object.defineProperty(navigator.clipboard, "readText", {
           configurable: true,
+          // Return text that cannot be interpreted as an image path.
           value: async () => "not an image path",
         });
       }
@@ -670,6 +676,7 @@ for (const repeat of [0, 200]) {
           for (const id of ["image", "file"]) {
             const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler(id)!;
             const provider = handler.provider;
+            // Record which provider receives each file without changing its storage behavior.
             Object.defineProperty(handler, "provider", {
               value: {
                 ...provider,
@@ -826,11 +833,17 @@ test("preserves a changed destination while a file reference is prepared", async
   await page.evaluate(() => {
     const demo = window as unknown as {
       __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      /**
+       * Releases the file preparation paused by this fixture.
+       *
+       * @returns Allows preparation to continue after the destination changes.
+       */
       releaseFileReference?: () => void;
     };
     const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler("file")!;
     const prepare = handler.prepare;
     Object.defineProperty(handler, "prepare", {
+      // Pause preparation until the test has changed the destination.
       value: async (...args: Parameters<typeof prepare>) => {
         await new Promise<void>((resolve) => {
           demo.releaseFileReference = resolve;
@@ -850,6 +863,7 @@ test("preserves a changed destination while a file reference is prepared", async
     Object.defineProperty(event, "clipboardData", { value: data });
     element.dispatchEvent(event);
   });
+  // Wait until preparation exposes its release callback before changing the destination.
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -859,6 +873,7 @@ test("preserves a changed destination while a file reference is prepared", async
     .toBe(true);
   await page.keyboard.type(" edited");
   const changed = await content.textContent();
+  // Let the paused preparation resume against the now-stale destination.
   await page.evaluate(() =>
     (window as unknown as { releaseFileReference: () => void }).releaseFileReference(),
   );
@@ -1013,7 +1028,22 @@ for (const stage of ["upload", "preparation"] as const) {
     await page.evaluate((pendingStage) => {
       const host = window as unknown as {
         __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
-        pendingHandler: { started: boolean; release: () => void; remove: () => void };
+        pendingHandler: {
+          /** Whether the requested asynchronous stage has begun. */
+          started: boolean;
+          /**
+           * Releases the held upload or preparation stage.
+           *
+           * @returns Allows the pending handler operation to continue.
+           */
+          release: () => void;
+          /**
+           * Unregisters the handler while its operation is pending.
+           *
+           * @returns Removes the handler registration.
+           */
+          remove: () => void;
+        };
       };
       // Hold the selected stage until the test removes its handler.
       const state = { started: false, release: () => {}, remove: () => {} };
@@ -1023,6 +1053,7 @@ for (const stage of ["upload", "preparation"] as const) {
       state.remove = host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
         id: "pending-handler",
         provider: {
+          // Hold upload only when this test is exercising handler removal during storage.
           write: async () => {
             if (pendingStage === "upload") {
               state.started = true;
@@ -1032,7 +1063,9 @@ for (const stage of ["upload", "preparation"] as const) {
           },
           read: async () => undefined,
         },
+        // Claim only the test file, leaving other files to existing handlers.
         matches: ({ reference }) => reference.name === "pending-handler.txt",
+        // Hold preparation separately when that is the selected test stage.
         prepare: async ({ reference }) => {
           if (pendingStage === "preparation") {
             state.started = true;
@@ -1052,6 +1085,7 @@ for (const stage of ["upload", "preparation"] as const) {
         ),
       )
       .toBe(true);
+    // Unregister the handler before releasing its pending asynchronous operation.
     await page.evaluate(() => {
       const state = (
         window as unknown as { pendingHandler: { release: () => void; remove: () => void } }
@@ -1089,17 +1123,26 @@ test("updates a mounted inline file when its handler changes", async ({ page }) 
   await page.evaluate(() => {
     const host = window as unknown as {
       __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      /**
+       * Removes the dynamically installed renderer handler.
+       *
+       * @returns Removes the registration so the default renderer can return.
+       */
       removeDynamicHandler: () => void;
     };
     host.removeDynamicHandler = host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
       id: "dynamic-inline-test",
       provider: { write: async () => "data:text/plain,file", read: async () => undefined },
+      // Replace the inline view only for the named fixture file.
       matches: ({ reference }) => reference.name === "dynamic-handler.txt",
+      // The test renders an existing reference rather than inserting new content.
       prepare: () => ({ kind: "inline", content: "" }),
+      // Suppress visible output while this handler is registered.
       InlineView: () => null,
     });
   });
   await expect(file).toHaveCount(0);
+  // Removing the temporary handler restores the previously rendered fallback.
   await page.evaluate(() =>
     (window as unknown as { removeDynamicHandler: () => void }).removeDynamicHandler(),
   );
@@ -1115,7 +1158,9 @@ test("an older file copy cannot close a newer copy menu", async ({ page }) => {
     host.pendingCopies = [];
     host.__rivtoDemo.reactEditor.clipboard.registerWriter({
       id: "delayed-file-copy",
+      // Accept the file type so both copy attempts reach the writer.
       supports: () => true,
+      // Hold each write independently so the older copy can finish first.
       write: async ({ data }) => {
         await data;
         await new Promise<void>((resolve) => host.pendingCopies.push(resolve));
@@ -1141,6 +1186,7 @@ test("an older file copy cannot close a newer copy menu", async ({ page }) => {
       page.evaluate(() => (window as unknown as { pendingCopies: unknown[] }).pendingCopies.length),
     )
     .toBe(2);
+  // Completing the superseded copy must not close the menu for the active copy.
   await page.evaluate(() =>
     (window as unknown as { pendingCopies: Array<() => void> }).pendingCopies[0]!(),
   );
@@ -1159,7 +1205,9 @@ test("copies an image through a host clipboard writer", async ({ page }) => {
     };
     host.__rivtoDemo.reactEditor.clipboard.registerWriter({
       id: "image-copy-test",
+      // Accept the PNG representation used by this fixture.
       supports: (mimeType) => mimeType === "image/png",
+      // Record the resolved binary size to prove the writer received image bytes.
       write: async ({ data }) => {
         host.copiedImageSize = (await data).size;
       },
@@ -1233,7 +1281,9 @@ test("matches an unstored file before preparing its stored reference", async ({ 
     host.fileCandidate = { matchedUri: true };
     host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
       id: "candidate-contract",
+      // Assign a stable URI during storage and leave reads unclaimed.
       provider: { write: async () => "data:text/plain,stored", read: async () => undefined },
+      // Observe whether matching happens before the provider assigns a URI.
       matches: ({ file, reference }) => {
         if (reference.name !== "candidate-contract.txt") {
           return false;
@@ -1243,6 +1293,7 @@ test("matches an unstored file before preparing its stored reference", async ({ 
         }
         return true;
       },
+      // Capture the URI visible to preparation after storage completes.
       prepare: ({ reference }) => {
         host.fileCandidate.preparedUri = reference.uri;
         return { kind: "block", type: "file", props: { ...reference } };

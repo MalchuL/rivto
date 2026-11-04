@@ -50,12 +50,14 @@ test("prefers transferred files and falls back to file items", () => {
   const first = new File(["first"], "first.txt", { type: "text/plain" });
   const second = new File(["second"], "second.txt", { type: "text/plain" });
   expect(getTransferredFiles(null)).toEqual([]);
+  // A populated file list wins even when transfer items expose another file.
   expect(
     getTransferredFiles({
       files: [first],
       items: [{ kind: "file", getAsFile: () => second }],
     }),
   ).toEqual([first]);
+  // Item fallback ignores non-file entries and null browser file results.
   expect(
     getTransferredFiles({
       files: [],
@@ -81,6 +83,7 @@ test("prefers image files and falls back to image items when file lists contain 
   const image = new File(["image"], "image.png", { type: "image/png" });
   const fallback = new File(["image"], "other.jpg", { type: "application/octet-stream" });
   expect(getTransferredFiles(null, isImageFile)).toEqual([]);
+  // An image in the file list takes precedence over image transfer items.
   expect(
     getTransferredFiles(
       {
@@ -90,6 +93,7 @@ test("prefers image files and falls back to image items when file lists contain 
       isImageFile,
     ),
   ).toEqual([image]);
+  // Fall back to items when the file list contains no matching image.
   expect(
     getTransferredFiles(
       {

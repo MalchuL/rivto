@@ -77,6 +77,7 @@ export class ClipboardManager {
     private readonly registrations: RegistrationOwner,
   ) {
     this.converters = new ClipboardConverters(registrations);
+    // Release revision listeners when their owning runtime is destroyed.
     registrations.registerCleanup(() => this.fileHandlerChanges.clear());
     this.registerElementConverter("block", blockElementClipboardConverter);
   }
@@ -159,6 +160,7 @@ export class ClipboardManager {
    * @returns Matching handler, or undefined when no handler is installed.
    */
   selectFileHandler(candidate: FileCandidate): FileHandler | undefined {
+    // Exclude the fallback from matching so it cannot shadow a specific handler.
     return (
       this.fileHandlers.find(
         (entry) => entry !== this.defaultFileHandler && entry.matches?.(candidate),
@@ -257,6 +259,7 @@ export class ClipboardManager {
       for (const processor of this.postprocessors) {
         const binary = processor.process({ bundle, formats });
         if (binary) {
+          // Portable formats were already written synchronously, so ignore later binary failures.
           void this.writeBinary(binary, formats).catch(() => undefined);
           break;
         }
@@ -268,9 +271,14 @@ export class ClipboardManager {
 
   /**
    * Writes exact MIME bytes, falling back to application/octet-stream.
+   *
+   * The host writer is tried before the browser. A host failure permits browser
+   * fallback; unsupported browser formats return false without awaiting the data.
+   *
    * @param binary - Named attachment bytes and original MIME type.
    * @param formats - Portable representations included beside binary data.
-   * @returns Whether a host or browser writer accepted the payload.
+   * @returns A promise resolving to whether a host or browser writer accepted the payload.
+   * @throws If capability checks, binary preparation, or the browser write fail.
    */
   async writeBinary(
     binary: ClipboardBinaryRepresentation,
@@ -306,6 +314,7 @@ export class ClipboardManager {
     if (!ClipboardItemConstructor || !clipboard?.write || !browserType) {
       return false;
     }
+    // ClipboardItem requires the blob's type to match the selected browser format.
     const data = Promise.resolve(binary.data).then(
       (blob) => new Blob([blob], { type: browserType }),
     );

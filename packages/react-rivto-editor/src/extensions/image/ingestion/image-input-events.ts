@@ -308,6 +308,7 @@ export class ImageInputEvents {
       destination,
       items: files.filter(isImageFile),
       point,
+      // Use a display fallback for unnamed image files.
       name: (file) => file.name || "image",
       failureMessage: "Unable to upload image",
       staleMessage:
@@ -366,6 +367,7 @@ export class ImageInputEvents {
       destination,
       items: [remote],
       point,
+      // Show the original reference while its image is resolved.
       name: (item) => item.uri,
       failureMessage: "Unable to load image",
       staleMessage:
@@ -426,6 +428,7 @@ export class ImageInputEvents {
       x: point.x,
       y: point.y,
       error: "Canvas images require edgelessVisualsExtension()",
+      // Dismiss this status; retrying cannot install the missing renderer.
       retry: () => this.statuses.delete(id),
     });
     return false;

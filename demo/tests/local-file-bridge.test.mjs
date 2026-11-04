@@ -89,6 +89,7 @@ async function startFileBridge() {
       },
     },
   });
+  // Route requests through the real middleware and return 404 for unhandled paths.
   const server = createServer((request, response) =>
     middleware(request, response, () => response.writeHead(404).end()),
   );
@@ -119,6 +120,7 @@ test(
       });
       assert.equal(stored.status, 201);
       ({ uri: storedPath } = await stored.json());
+      // Exercise native opening with both trusted and untrusted origins.
       const open = (uri, requestOrigin) =>
         fetch(`${origin}/__rivto_demo_open_file?uri=${encodeURIComponent(uri)}`, {
           method: "POST",

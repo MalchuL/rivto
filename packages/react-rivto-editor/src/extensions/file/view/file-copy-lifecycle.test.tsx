@@ -12,7 +12,9 @@ test("cancels an in-flight copy when the mounted file reference changes", async 
   const remove = panel.editor.extensions.install(fileExtension({ provider }));
   const removeWriter = panel.editor.clipboard.registerWriter({
     id: "test-writer",
+    // Accept the fixture MIME type so copying reaches the pending read.
     supports: () => true,
+    // Wait for the provider read so cancellation remains observable.
     write: async ({ data }) => {
       await data;
     },

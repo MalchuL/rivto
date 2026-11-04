@@ -12,7 +12,9 @@ test("cancels a pending image copy when its view unmounts", async () => {
   const remove = panel.editor.extensions.install(imageExtension({ provider }));
   const removeWriter = panel.editor.clipboard.registerWriter({
     id: "test-writer",
+    // Accept the fixture MIME type so copying reaches the pending read.
     supports: () => true,
+    // Wait for the provider read so cancellation remains observable.
     write: async ({ data }) => {
       await data;
     },

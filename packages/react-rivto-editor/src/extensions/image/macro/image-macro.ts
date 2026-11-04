@@ -170,6 +170,7 @@ export function remarkImageMacros() {
     // Expand macros in text children in place and visit nested Markdown nodes.
     const visit = (node: MarkdownNode): void => {
       if (node.children) {
+        // Replace only text children; preserve non-text nodes and traverse their descendants.
         node.children = node.children.flatMap((child) => {
           if (child.type !== "text" || !child.value) {
             visit(child);
@@ -182,6 +183,7 @@ export function remarkImageMacros() {
           }
           const result: MarkdownNode[] = [];
           let cursor = 0;
+          // Keep surrounding text and attach source offsets to generated images.
           macros.forEach((macro) => {
             if (macro.start > cursor) {
               result.push({ type: "text", value: child.value!.slice(cursor, macro.start) });

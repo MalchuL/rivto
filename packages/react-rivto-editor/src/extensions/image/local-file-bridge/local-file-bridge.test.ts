@@ -7,10 +7,12 @@ it("writes and reads owned files and rejects oversized files", async () => {
     directory: "/assets",
     uriPrefix: "assets",
     maxBytes: 3,
+    // Record the sanitized filename accepted by the host.
     writeFile: ({ fileName }) => {
       writes.push(fileName);
       return true;
     },
+    // Return fixture bytes for a claimed reference.
     readFile: async () => new Blob(["ok"]),
   });
   const signal = new AbortController().signal;
@@ -39,6 +41,7 @@ it("writes collision-resistant filenames when randomUUID is unavailable", async 
     const provider = new LocalFileBridge({
       directory: "/assets",
       uriPrefix: "assets/",
+      // Report a collision when the generated name was already written.
       writeFile: ({ fileName }) => {
         if (names.includes(fileName)) {
           return false;
@@ -46,6 +49,7 @@ it("writes collision-resistant filenames when randomUUID is unavailable", async 
         names.push(fileName);
         return true;
       },
+      // Satisfy the read contract without accessing the filesystem.
       readFile: async () => new Blob(),
     });
     const context = {
@@ -76,6 +80,7 @@ it("preserves available names, removes unsafe characters, and avoids collisions"
   const provider = new LocalFileBridge({
     directory: "/assets",
     uriPrefix: "assets/",
+    // Model exclusive creation and retain sizes to detect accidental overwrites.
     writeFile: async ({ fileName, file }) => {
       if (files.has(fileName)) {
         return false;
@@ -83,6 +88,7 @@ it("preserves available names, removes unsafe characters, and avoids collisions"
       files.set(fileName, String(file.size));
       return true;
     },
+    // Satisfy the read contract without accessing the filesystem.
     readFile: async () => new Blob(),
   });
   const context = {
@@ -122,14 +128,17 @@ it("propagates write failures and stops after repeated collisions", async () => 
     name: "a.txt",
     mimeType: "text/plain",
   };
+  // Reads are unused while these cases exercise write errors and collisions.
   const options = { directory: "/assets", uriPrefix: "assets/", readFile: async () => new Blob() };
   const failure = new LocalFileBridge({
     ...options,
+    // Make a host error distinguishable from an ordinary name collision.
     writeFile: () => {
       throw new Error("disk failure");
     },
   });
   await expect(failure.write(new Blob(), context)).rejects.toThrow("disk failure");
+  // Force every exclusive-create attempt to report a collision.
   const collision = new LocalFileBridge({ ...options, writeFile: () => false });
   await expect(collision.write(new Blob(), context)).rejects.toThrow(
     "Unable to find an available filename",
@@ -145,6 +154,7 @@ it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
           directory: "/assets",
           uriPrefix: "assets/",
           maxBytes,
+          // Construction fails before these filesystem stubs can be called.
           writeFile: () => true,
           readFile: () => new Blob(),
         }),
@@ -157,7 +167,9 @@ it("does not claim paths outside the configured file directory", async () => {
   const provider = new LocalFileBridge({
     directory: "file:///assets",
     uriPrefix: "assets/",
+    // These read-only assertions do not need actual filesystem writes.
     writeFile: () => true,
+    // Record every URI that reaches the host after ownership checks.
     readFile: ({ uri }) => {
       reads.push(uri);
       return new Blob();

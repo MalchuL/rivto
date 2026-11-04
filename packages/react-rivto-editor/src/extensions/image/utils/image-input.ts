@@ -25,10 +25,12 @@ export function inspectImage(source: string | Blob): Promise<{
         URL.revokeObjectURL(sourceUrl);
       }
     };
+    // Release the temporary URL after the browser decodes the image dimensions.
     image.onload = () => {
       cleanup();
       resolve({ width: image.naturalWidth, height: image.naturalHeight });
     };
+    // Release the same resource when decoding fails.
     image.onerror = () => {
       cleanup();
       reject(new TypeError("File or URI is not a decodable image"));
@@ -100,6 +102,7 @@ export function findTransferredImageUri(data: DataTransfer | null):
     const document = new DOMParser().parseFromString(html, "text/html");
     const images = [...document.body.querySelectorAll("img")];
     const remaining = document.body.cloneNode(true) as HTMLElement;
+    // Remove images from the clone to detect any remaining text.
     remaining.querySelectorAll("img").forEach((image) => image.remove());
     if (images.length === 1 && !remaining.textContent?.trim()) {
       return { uri: images[0]!.src, alt: images[0]!.alt };
