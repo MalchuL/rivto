@@ -74,6 +74,31 @@ test("binary access propagates provider failures and falls back only for unclaim
   await editor.destroy();
 });
 
+test("resolves provider blobs and returns bytes with the requested MIME type", async () => {
+  const editor = await createTestCoreEditor();
+  const runtime = createReactEditor({ editor });
+  const signal = new AbortController().signal;
+  const original = new Blob(["content"], { type: "text/plain" });
+  const owningProvider = { ...provider, read: async () => original };
+
+  await expect(
+    runtime.attachments.resolveBinary(owningProvider, "stored:asset", { signal }),
+  ).resolves.toBe(original);
+  await expect(
+    runtime.attachments.readBinary(owningProvider, "stored:asset", "text/plain", { signal }),
+  ).resolves.toBe(original);
+  const converted = await runtime.attachments.readBinary(
+    owningProvider,
+    "stored:asset",
+    "application/example",
+    { signal },
+  );
+  expect(converted.type).toBe("application/example");
+  expect(converted.size).toBe(original.size);
+  await runtime.destroy();
+  await editor.destroy();
+});
+
 test("file opening prefers a typed handler and then the fallback", async () => {
   const editor = await createTestCoreEditor();
   const opened: string[] = [];
@@ -102,8 +127,14 @@ test("file opening prefers a typed handler and then the fallback", async () => {
     ],
   });
   const signal = new AbortController().signal;
+  const unreadableProvider = {
+    ...provider,
+    read: async () => {
+      throw new Error("the host opener must not read the provider");
+    },
+  };
   await runtime.attachments.openBinary(
-    provider,
+    unreadableProvider,
     { uri: "a", name: "a.pdf", mimeType: "application/pdf" },
     { signal },
   );
