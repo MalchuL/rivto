@@ -1,0 +1,146 @@
+import { useEffect, useRef, useState } from "react";
+import type { FileReference } from "../../../../attachments";
+import { useReactPanel } from "../../../../hooks";
+import { getFileProvider } from "../file-configuration";
+
+/** Operations and feedback owned by one mounted file view. */
+interface FileActions {
+  readonly error: string | undefined;
+  readonly canCopy: boolean;
+  /**
+   * Clears the last opening or copying failure.
+   *
+   * @returns Removes the displayed failure.
+   */
+  readonly clearError: () => void;
+  /**
+   * Opens the current file and cancels any earlier operation.
+   *
+   * @returns Starts opening the file and reports a failure if it remains active.
+   */
+  readonly open: () => void;
+  /**
+   * Copies the current file and cancels any earlier operation.
+   *
+   * @returns Starts copying and reports a failure if it remains active.
+   */
+  readonly copy: () => void;
+}
+
+/**
+ * Owns opening and copying for a mounted generic file view.
+ *
+ * A new operation, a changed URI or copy metadata, or unmounting cancels the
+ * active read. Successful copies notify the caller so it can close its menu.
+ *
+ * @param reference - Persisted file URI and metadata.
+ * @param onCopied - Callback invoked after an active copy succeeds.
+ * @returns Current feedback, clipboard capability, and file operations.
+ */
+export function useFileActions(reference: FileReference, onCopied: () => void): FileActions {
+  const { editor } = useReactPanel();
+  const operation = useRef<AbortController | undefined>(undefined);
+  const [error, setError] = useState<string>();
+  const { uri, name, mimeType } = reference;
+  useEffect(() => () => operation.current?.abort(), [uri, name, mimeType]);
+
+  /**
+   * Starts a cancellable operation and clears its previous error.
+   *
+   * @returns The controller for the newly active operation.
+   */
+  const start = (): AbortController => {
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    setError(undefined);
+    return controller;
+  };
+
+  const open = useFileOpen(reference, start, setError);
+  const copy = useFileCopy(reference, start, setError, onCopied);
+
+  return {
+    error,
+    canCopy: editor.clipboard.canWriteBinary(mimeType),
+    clearError: () => setError(undefined),
+    open,
+    copy,
+  };
+}
+
+/**
+ * Binds file opening to the current panel and the view's cancellation state.
+ *
+ * @param reference - Persisted attachment to open.
+ * @param start - Cancels the prior operation and returns its replacement.
+ * @param setError - Displays a failure for the active operation.
+ * @returns A callback that starts opening the file.
+ */
+function useFileOpen(
+  reference: FileReference,
+  start: () => AbortController,
+  setError: (message: string) => void,
+): () => void {
+  const panel = useReactPanel();
+  const editor = panel.editor;
+  return () => {
+    const controller = start();
+    const provider = getFileProvider(editor);
+    if (!provider) {
+      setError("No file provider is installed");
+      return;
+    }
+    void editor.attachments
+      .openBinary(provider, reference, { signal: controller.signal, mode: panel.getSurfaceType() })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "Unable to open file");
+        }
+      });
+  };
+}
+
+/**
+ * Binds binary copying to the current panel and the view's cancellation state.
+ *
+ * @param reference - Persisted attachment and clipboard metadata.
+ * @param start - Cancels the prior operation and returns its replacement.
+ * @param setError - Displays a failure for the active operation.
+ * @param onCopied - Callback invoked after an active write succeeds.
+ * @returns A callback that starts copying the file.
+ */
+function useFileCopy(
+  reference: FileReference,
+  start: () => AbortController,
+  setError: (message: string) => void,
+  onCopied: () => void,
+): () => void {
+  const panel = useReactPanel();
+  const editor = panel.editor;
+  const { uri, name, mimeType } = reference;
+  return () => {
+    const controller = start();
+    const data = editor.attachments.readBinary(getFileProvider(editor), uri, mimeType, {
+      signal: controller.signal,
+      mode: panel.getSurfaceType(),
+    });
+    void editor.clipboard
+      .writeBinary({ name, mimeType, data })
+      .then((copied) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (copied) {
+          onCopied();
+        } else {
+          setError("This clipboard cannot copy this file type");
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "Unable to copy file");
+        }
+      });
+  };
+}

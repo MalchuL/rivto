@@ -1,6 +1,6 @@
 /** Public image extension exports. @module */
 export * from "./image";
-export * from "./image-macro";
+export * from "./macro/image-macro";
 export * from "./local-file-bridge/local-file-bridge";
 export {
   DefaultImageHoverMenu,
@@ -11,4 +11,5 @@ export {
   type ImageViewCustomizations,
   type ImageViewKind,
   type ImageViewProps,
-} from "./image-view";
+  type ImageViewChange,
+} from "./view/image-view";

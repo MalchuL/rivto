@@ -1,4 +1,5 @@
 import type { FileCandidate, FileHandler } from "../../attachments";
+import { RevisionStore } from "../../internal-store";
 import type { RegistrationOwner } from "../extensions/types";
 import type {
   ClipboardBundle,
@@ -53,6 +54,7 @@ export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
   private readonly fileHandlers: FileHandler[] = [];
+  private readonly fileHandlerChanges = new RevisionStore();
   private defaultFileHandler?: FileHandler;
   private readonly postprocessors: ClipboardPostprocessor[] = [];
   private writer?: ClipboardWriter;
@@ -69,6 +71,7 @@ export class ClipboardManager {
     private readonly registrations: RegistrationOwner,
   ) {
     this.converters = new ClipboardConverters(registrations);
+    registrations.registerCleanup(() => this.fileHandlerChanges.clear());
     this.registerElementConverter("block", blockElementClipboardConverter);
   }
 
@@ -96,7 +99,7 @@ export class ClipboardManager {
       throw new Error(`File handler ${handler.id || "<empty>"} is already registered`);
     }
     this.fileHandlers.push(handler);
-    return this.registrations.registerCleanup(() => {
+    const dispose = this.registrations.registerCleanup(() => {
       const index = this.fileHandlers.indexOf(handler);
       if (index >= 0) {
         this.fileHandlers.splice(index, 1);
@@ -104,7 +107,10 @@ export class ClipboardManager {
       if (this.defaultFileHandler === handler) {
         this.defaultFileHandler = undefined;
       }
+      this.fileHandlerChanges.changed();
     });
+    this.fileHandlerChanges.changed();
+    return dispose;
   }
 
   /**
@@ -123,7 +129,20 @@ export class ClipboardManager {
     if (!handler) {
       throw new Error(`File handler ${id} is not registered`);
     }
-    this.defaultFileHandler = handler;
+    if (this.defaultFileHandler !== handler) {
+      this.defaultFileHandler = handler;
+      this.fileHandlerChanges.changed();
+    }
+  }
+
+  /**
+   * Subscribes to changes in file-handler registrations or the selected fallback.
+   *
+   * @param listener - Callback invoked after the handler selection may have changed.
+   * @returns Disposer that removes the listener.
+   */
+  subscribeFileHandlers(listener: () => void): () => void {
+    return this.fileHandlerChanges.subscribe(listener);
   }
 
   /**
@@ -210,17 +229,22 @@ export class ClipboardManager {
 
   /**
    * Runs postprocessors and starts a binary write without delaying the copy event.
+   *
+   * Stops at the first binary contribution; portable formats remain available if
+   * a postprocessor or asynchronous binary write fails.
+   *
    * @param bundle - Structured selected objects.
    * @param formats - Synchronous portable clipboard formats.
-   * @returns Nothing.
+   * @returns Starts writing the first available binary contribution.
    */
   writeProcessed(bundle: ClipboardBundle, formats: PortableBlockFormats): void {
     try {
-      const binary = this.postprocessors
-        .map((processor) => processor.process({ bundle, formats }))
-        .find(Boolean);
-      if (binary) {
-        void this.writeBinary(binary, formats).catch(() => undefined);
+      for (const processor of this.postprocessors) {
+        const binary = processor.process({ bundle, formats });
+        if (binary) {
+          void this.writeBinary(binary, formats).catch(() => undefined);
+          break;
+        }
       }
     } catch {
       // The synchronous event already contains portable formats; refinement is optional.
@@ -241,6 +265,8 @@ export class ClipboardManager {
       html: binary.name,
     },
   ): Promise<boolean> {
+    // A contribution can reject even when no writer supports its MIME type.
+    void Promise.resolve(binary.data).catch(() => undefined);
     const fallbackType = "application/octet-stream";
     const writer = this.writer;
     let hostType: string | undefined;

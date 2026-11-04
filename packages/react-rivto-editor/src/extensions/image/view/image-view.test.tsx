@@ -1,9 +1,9 @@
 /** Regression coverage for the shared image presentation customization API. @module */
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createTestReactEditor, TestPanel } from "../../test-utils";
-import { createTestCoreEditor } from "../../test-utils";
-import { imageExtension } from "./image";
+import { createTestReactEditor, TestPanel } from "../../../test-utils";
+import { createTestCoreEditor } from "../../../test-utils";
+import { imageExtension } from "../image";
 import {
   ImageView,
   imageResizeMode,

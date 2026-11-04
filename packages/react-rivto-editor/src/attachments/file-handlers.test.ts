@@ -5,9 +5,8 @@ import type { FileReference } from "./types";
 
 const provider = { write: async () => "stored:test", read: async () => undefined };
 const prepare = ({ reference }: { reference: FileReference }) => ({
-  inline: reference.uri,
-  block: { type: "file", props: { ...reference } },
-  element: { type: "file", props: { ...reference }, width: 1, height: 1 },
+  kind: "inline" as const,
+  content: reference.uri,
 });
 
 test("clipboard file handlers select specific handlers before the default and cleans up", async () => {

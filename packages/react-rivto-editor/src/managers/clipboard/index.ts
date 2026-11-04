@@ -6,6 +6,7 @@ export type {
   ClipboardPostprocessContext,
   ClipboardPostprocessor,
   ClipboardWriter,
+  ClipboardWriteInput,
   BlockClipboardFields,
   ElementClipboardFields,
   ClipboardCopyContext,

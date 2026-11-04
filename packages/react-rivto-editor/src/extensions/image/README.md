@@ -125,7 +125,7 @@ collection belongs to the host storage system.
 
 ## Storage behavior
 
-Image and file extensions each require a `BinaryProvider<string, Blob>`.
+Image and file extensions each require a `BinaryProvider`.
 The provider stores binary content and returns a stable URI. Reads can decline
 unrecognized URIs so browser-supported HTTP(S), data and blob URLs remain usable.
 The provider controls size limits and durable storage policy.

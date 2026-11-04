@@ -13,10 +13,10 @@ import ReactMarkdown, {
 } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { ImageView } from "../../extensions/image/image-view";
-import { remarkImageMacros, replaceImageMacro } from "../../extensions/image/image-macro";
-import { remarkFileMacros } from "../../extensions/file/file-macro";
-import { RegisteredFileView } from "../../extensions/file/file-view";
+import { ImageView } from "../../extensions/image/view/image-view";
+import { remarkImageMacros, replaceImageMacro } from "../../extensions/image/macro/image-macro";
+import { remarkFileMacros } from "../../extensions/file/macro/file-macro";
+import { RegisteredFileView } from "../../extensions/file/view/file-view";
 import { editorControlProps } from "../../constants";
 import { useBlockEditing, usePanel } from "../../hooks";
 import type { MarkdownLinkClick } from "../../types";

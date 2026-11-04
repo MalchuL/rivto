@@ -27,13 +27,13 @@ hold Shift for free resizing, or double-click/press Enter on the handle to reset
 Standard Markdown images such as `![Alt](photo.png)` use the same controls and
 become an image macro only when an adjustment needs persisted dimensions.
 
-Both extensions require a `BinaryProvider<string, Blob>`. Providers write bytes and
+Both extensions require a `BinaryProvider`. Providers write bytes and
 return URI strings, then read references they own. An unrecognized reference may
 return `undefined`; HTTP(S), data and blob URLs can then use browser resolution.
 Provider failures are reported rather than falling back to another storage backend.
 
 ```ts
-const imageProvider: BinaryProvider<string, Blob> = {
+const imageProvider: BinaryProvider = {
   write: (blob, context) => cloud.upload(blob, context),
   read: (uri, context) => cloud.readIfOwned(uri, context),
 };

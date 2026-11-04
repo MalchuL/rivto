@@ -6,14 +6,14 @@ use their own binary providers for storage and resolution; the clipboard does no
 
 ## Binary providers
 
-`fileExtension` and `imageExtension` require a `BinaryProvider<string, Blob>`.
+`fileExtension` and `imageExtension` require a `BinaryProvider`.
 A provider writes attachment bytes and returns a durable URI, then reads bytes
 for URIs it owns. Return `undefined` for unrecognized URIs; browser-readable
 HTTP(S), data and blob URLs retain their normal fallback. Provider failures
 propagate to the attachment error UI.
 
 ```ts
-const provider: BinaryProvider<string, Blob> = {
+const provider: BinaryProvider = {
   write: (content, context) => storage.write(content, context),
   read: (uri, context) => storage.readIfOwned(uri, context),
 };
@@ -22,8 +22,7 @@ imageExtension({ provider });
 ```
 
 Providers receive document ID, surface mode and cancellation; writes also receive
-file metadata, source, destination and optional progress. Hosts can adapt the
-generic `BinaryProvider<Reference, Binary>` contract to URI strings and Blobs.
+file metadata, source, destination and optional progress. Providers use URI strings and Blobs.
 `LocalFileBridge` provides an adapter around host filesystem callbacks.
 
 ## Open handlers
@@ -59,17 +58,24 @@ editor.clipboard.registerFileHandler({
   id: "audio",
   provider: audioProvider,
   matches: ({ reference }) => reference.mimeType.startsWith("audio/"),
-  prepare: async ({ reference }) => ({
-    inline: serializeAudioMacro(reference),
-    block: { type: "audio", props: { ...reference } },
-    element: { type: "audio", props: { ...reference }, width: 320, height: 64 },
-  }),
+  prepare: async ({ reference }, { destination }) => {
+    if (destination === "inline") {
+      return { kind: "inline", content: serializeAudioMacro(reference) };
+    }
+    if (destination === "block") {
+      return { kind: "block", type: "audio", props: { ...reference } };
+    }
+    return { kind: "element", type: "audio", props: { ...reference }, width: 320, height: 64 };
+  },
   InlineView: AudioInline,
 });
 ```
 
+For a new file, `matches` receives file metadata without a URI; `prepare` receives the stored reference with its URI. Existing references have a URI at both stages.
+
 Matched handlers are tried in registration order. The default handler selected by `fileExtension()` is always consulted last.
 Use `editor.clipboard.setDefaultFileHandler(id)` to choose a registered default;
-a handler without `matches` is never selected automatically. A rich extension also
+a handler without `matches` is never selected automatically. Mounted inline file views
+update when handlers are registered, removed, or selected as the default. A rich extension also
 registers its block renderer through `editor.blockTypes` and its canvas renderer
 through `editor.elementTypes`. `InlineView` handles matching generic file macros.

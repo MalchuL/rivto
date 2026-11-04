@@ -116,7 +116,7 @@ async function storeDemoFile(
 }
 
 /** Demo storage keeps pasted files on disk and other files as bounded data URLs. */
-const demoBinaryProvider: BinaryProvider<string, Blob> = {
+const demoBinaryProvider: BinaryProvider = {
   /** @inheritdoc BinaryProvider.write */
   async write(file, context) {
     if (file.size > 10 * 1024 * 1024) {
@@ -548,6 +548,10 @@ async function createDemoEditor() {
           [KEYBOARD_BINDING_IDS.blockOutdent]: [],
         }
       : undefined;
+  const demoParams = new URLSearchParams(window.location.search);
+  const imageFirst = demoParams.has("imageFirst");
+  const imageOnly = demoParams.has("imageOnly");
+  const fileOnly = demoParams.has("fileOnly");
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -567,9 +571,12 @@ async function createDemoEditor() {
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
-          fileExtension({ provider: demoBinaryProvider }),
+          ...(imageFirst || imageOnly ? [imageExtension({ provider: demoBinaryProvider })] : []),
+          ...(imageOnly ? [] : [fileExtension({ provider: demoBinaryProvider })]),
           demoLocalFileExtension,
-          imageExtension({ provider: demoBinaryProvider }),
+          ...(imageFirst || imageOnly || fileOnly
+            ? []
+            : [imageExtension({ provider: demoBinaryProvider })]),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),

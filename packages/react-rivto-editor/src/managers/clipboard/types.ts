@@ -239,6 +239,9 @@ export interface ClipboardPostprocessor {
   ) => ClipboardBinaryRepresentation | undefined;
 }
 
+/** Binary data and portable formats supplied to a host clipboard writer. */
+export interface ClipboardWriteInput extends ClipboardBinaryRepresentation, PortableBlockFormats {}
+
 /** Host bridge for MIME formats unavailable through the browser clipboard. */
 export interface ClipboardWriter {
   readonly id: string;
@@ -261,7 +264,5 @@ export interface ClipboardWriter {
    * @returns Completion of the host write, immediately or when its promise resolves.
    * @throws If the host rejects or cannot complete the write.
    */
-  readonly write: (
-    input: ClipboardBinaryRepresentation & PortableBlockFormats,
-  ) => void | Promise<void>;
+  readonly write: (input: ClipboardWriteInput) => void | Promise<void>;
 }

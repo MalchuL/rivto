@@ -14,7 +14,7 @@ export interface BinaryWriteContext extends BinaryReadContext {
   readonly name: string;
   readonly mimeType: string;
   readonly source: "clipboard" | "drop" | "picker";
-  readonly destination: "inline" | "block" | "element";
+  readonly destination: PreparedFile["kind"];
   /**
    * Reports provider progress for the current upload.
    *
@@ -25,11 +25,11 @@ export interface BinaryWriteContext extends BinaryReadContext {
 }
 
 /**
- * Generic binary storage contract shared by attachment extensions and their hosts.
+ * Binary storage contract shared by attachment extensions and their hosts.
  * Providers own storage; the editor persists the returned references and supplies
  * contextual cancellation and metadata for every request.
  */
-export interface BinaryProvider<TReference, TBinary> {
+export interface BinaryProvider {
   /**
    * Persists binary content and returns its durable reference.
    *
@@ -38,7 +38,7 @@ export interface BinaryProvider<TReference, TBinary> {
    * @returns A promise resolving to the durable provider reference.
    * @throws If storage or cancellation fails.
    */
-  write(content: TBinary, context: BinaryWriteContext): Promise<TReference>;
+  write(content: Blob, context: BinaryWriteContext): Promise<string>;
   /**
    * Reads a recognized reference without claiming references from other backends.
    *
@@ -47,13 +47,13 @@ export interface BinaryProvider<TReference, TBinary> {
    * @returns A promise resolving to content, or undefined when the provider does not own the reference.
    * @throws If storage access or cancellation fails.
    */
-  read(reference: TReference, context: BinaryReadContext): Promise<TBinary | undefined>;
+  read(reference: string, context: BinaryReadContext): Promise<Blob | undefined>;
 }
 
 /** Captured surface and cancellation supplied when preparing a file representation. */
 export interface FilePreparationContext {
   /** Requested persisted placement. */
-  readonly destination: "inline" | "block" | "element";
+  readonly destination: PreparedFile["kind"];
   /** Cancels preparation when the extension is destroyed. */
   readonly signal: AbortSignal;
   /** Surface at the start of preparation, when available. */
@@ -65,8 +65,10 @@ export interface AttachmentOptions {
   /**
    * Base URI used for relative references when their provider does not claim them.
    *
-   * A callback can select a base for each document; returning undefined leaves
-   * relative references unresolved.
+   * Set this to a base URI string shared by documents, or to a callback that
+   * selects a base using the current document ID. If the option is omitted or
+   * the callback returns undefined, unclaimed relative references cannot be resolved.
+   * The base is passed to the URL constructor and must be an absolute URL.
    *
    * @param documentId - ID of the document containing the reference.
    * @returns Base URI, or undefined when no base is configured for the document.
@@ -82,8 +84,13 @@ export interface FileReference {
   readonly size?: number;
 }
 
-/** Candidate supplied to ordered rich-file handlers. */
-export interface FileCandidate {
+/** Candidate supplied to ordered rich-file handlers before storage or for an existing reference. */
+export type FileCandidate =
+  | { readonly file: File; readonly reference: Omit<FileReference, "uri"> }
+  | { readonly file?: never; readonly reference: FileReference };
+
+/** Stored file or existing reference supplied to a handler for preparation. */
+export interface FilePreparation {
   readonly file?: File;
   readonly reference: FileReference;
 }
@@ -93,22 +100,22 @@ export interface FileInlineViewProps {
   readonly reference: FileReference;
 }
 
-/** Handler-produced representations committed by the shared file extension. */
-export interface PreparedFile {
-  readonly inline: string;
-  readonly block: { readonly type: string; readonly props: Record<string, unknown> };
-  readonly element: {
-    readonly type: string;
-    readonly props: Record<string, unknown>;
-    readonly width: number;
-    readonly height: number;
-  };
-}
+/** Prepared representation for the requested insertion destination. */
+export type PreparedFile =
+  | { readonly kind: "inline"; readonly content: string }
+  | { readonly kind: "block"; readonly type: string; readonly props: Record<string, unknown> }
+  | {
+      readonly kind: "element";
+      readonly type: string;
+      readonly props: Record<string, unknown>;
+      readonly width: number;
+      readonly height: number;
+    };
 
 /** Ordered media-specific preparation and optional canvas presentation. */
 export interface FileHandler {
   readonly id: string;
-  readonly provider: BinaryProvider<string, Blob>;
+  readonly provider: BinaryProvider;
   /**
    * Determines whether this handler accepts a file before the selected default.
    *
@@ -117,26 +124,22 @@ export interface FileHandler {
    */
   readonly matches?: (candidate: FileCandidate) => boolean;
   /**
-   * Produces representations for the captured destination after storage completes.
+   * Produces the representation for the captured destination after storage completes.
    *
    * @param candidate - File and its stored reference, or an existing reference.
    * @param context - Captured placement, surface, and cancellation signal.
-   * @returns Prepared representations immediately or after asynchronous inspection.
+   * @returns The prepared representation immediately or after asynchronous inspection.
    * @throws If preparation fails or is cancelled, including a rejected promise.
    */
   readonly prepare: (
-    candidate: FileCandidate,
+    candidate: FilePreparation,
     context: FilePreparationContext,
   ) => PreparedFile | Promise<PreparedFile>;
   readonly InlineView?: ComponentType<FileInlineViewProps>;
 }
 
 /** Runtime context supplied when a host opens one persisted file reference. */
-export interface FileOpenContext {
-  readonly documentId: string;
-  readonly mode: EditorMode;
-  readonly signal: AbortSignal;
-}
+export type FileOpenContext = BinaryReadContext;
 
 /** Type-specific opener that may also be explicitly selected as the host default. */
 export interface FileOpenHandler {

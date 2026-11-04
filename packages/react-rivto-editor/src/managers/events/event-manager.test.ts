@@ -314,3 +314,33 @@ it("delivers outside window events without block context only to matching scopes
   expect(scoped).not.toHaveBeenCalled();
   expect(wrongMode).not.toHaveBeenCalled();
 });
+
+it("excludes a registration immediately when it is removed during dispatch", () => {
+  const seen: boolean[] = [];
+  const dispose = panel.editor.events.register({ id: "watched-click", type: "click" }, () => false);
+  expect(panel.editor.events.has("watched-click", new MouseEvent("click"))).toBe(false);
+  panel.editor.events.register({ id: "observe-click", type: "click" }, ({ raw }) => {
+    seen.push(panel.editor.events.has("watched-click", raw));
+    dispose();
+    seen.push(panel.editor.events.has("watched-click", raw));
+    return false;
+  });
+  clickRoot();
+  expect(seen).toEqual([true, false]);
+});
+
+it("reports registrations captured in the event's original snapshot", () => {
+  const seen: boolean[] = [];
+  let installed = false;
+  panel.editor.events.register({ id: "install-during-click", type: "click" }, ({ raw }) => {
+    if (!installed) {
+      installed = true;
+      panel.editor.events.register({ id: "late-click", type: "click" }, () => false);
+    }
+    seen.push(panel.editor.events.has("late-click", raw));
+    return false;
+  });
+  clickRoot();
+  clickRoot();
+  expect(seen).toEqual([false, true]);
+});

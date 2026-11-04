@@ -142,7 +142,7 @@ export class AttachmentManager {
    * // source is a Blob from the provider, or a URL the browser can display.
    */
   async resolveBinary(
-    provider: BinaryProvider<string, Blob> | undefined,
+    provider: BinaryProvider | undefined,
     uri: string,
     context: FileRequestContext,
   ): Promise<string | Blob> {
@@ -162,11 +162,14 @@ export class AttachmentManager {
       if (/^https?:/i.test(value) || /^data:/i.test(value) || /^blob:/i.test(value)) {
         source = value;
       } else {
+        // Other explicit schemes, such as bibo:, must be resolved by the provider.
         if (/^[a-z][a-z\d+.-]*:/i.test(value)) {
           throw new TypeError(`No binary provider accepted ${value.split(":", 1)[0]}:`);
         }
-        const configured = this.options.documentBaseUri;
-        const base =
+        // The option can be a fixed base, a document-specific lookup, or absent.
+        const configured: AttachmentOptions["documentBaseUri"] = this.options.documentBaseUri;
+        // A lookup can also return undefined when this document has no base.
+        const base: string | undefined =
           typeof configured === "function" ? configured(operationContext.documentId) : configured;
         if (!base) {
           throw new TypeError(
@@ -199,7 +202,7 @@ export class AttachmentManager {
    * // bytes is a Blob, including when the provider declined an HTTP URL.
    */
   async readBinary(
-    provider: BinaryProvider<string, Blob> | undefined,
+    provider: BinaryProvider | undefined,
     uri: string,
     mimeType: string | undefined,
     context: FileRequestContext,
@@ -239,7 +242,7 @@ export class AttachmentManager {
    * // The selected host opener has completed, or the browser link was clicked.
    */
   async openBinary(
-    provider: BinaryProvider<string, Blob>,
+    provider: BinaryProvider,
     reference: FileReference,
     context: FileRequestContext,
   ): Promise<void> {

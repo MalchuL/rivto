@@ -1,22 +1,22 @@
+import { firstUriListEntry, isLocalFileUri } from "../../file/utils/file-input";
+
 /**
  * Loads intrinsic dimensions and rejects undecodable image data.
  *
- * When requested, the source object URL is revoked after loading or failure.
+ * Blob inputs use a temporary object URL that is revoked after loading or failure.
+ * Browser-readable URI strings are used directly.
  *
- * @param source - Browser-readable image URL to decode.
- * @param revoke - Whether to revoke the source object URL after the attempt; defaults to false.
+ * @param source - Image bytes or a browser-readable image URL to decode.
  * @returns A promise resolving to intrinsic pixel dimensions.
- * @throws If the browser cannot decode the image.
+ * @throws If the browser cannot create an object URL or decode the image.
  */
-export function inspectImage(
-  source: string,
-  revoke = false,
-): Promise<{ width: number; height: number }> {
+export function inspectImage(source: string | Blob): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
     const cleanup = () => {
-      if (revoke) {
-        URL.revokeObjectURL(source);
+      if (source instanceof Blob) {
+        URL.revokeObjectURL(sourceUrl);
       }
     };
     image.onload = () => {
@@ -27,7 +27,7 @@ export function inspectImage(
       cleanup();
       reject(new TypeError("File or URI is not a decodable image"));
     };
-    image.src = source;
+    image.src = sourceUrl;
   });
 }
 
@@ -48,38 +48,13 @@ export function isImageFile(file: File): boolean {
 }
 
 /**
- * Reads image files from either clipboard/drag file lists or item-only browser payloads.
- *
- * The item list is consulted only when the file list contains no matching images.
- *
- * @param data - Browser clipboard or drag data, if available.
- * @returns Matching image files in browser-provided order.
- */
-export function getTransferredImageFiles(data: DataTransfer | null): File[] {
-  if (!data) {
-    return [];
-  }
-  const files = [...data.files].filter(isImageFile);
-  if (files.length) {
-    return files;
-  }
-  return [...data.items]
-    .filter((item) => item.kind === "file")
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file && isImageFile(file)));
-}
-
-/**
  * Checks whether clipboard text is a host-resolvable local image path.
  *
  * @param uri - Candidate path or file URI.
  * @returns True for a supported image extension on an absolute local path.
  */
 function isLocalImageUri(uri: string): boolean {
-  return (
-    /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(uri) &&
-    (/^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri))
-  );
+  return /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(uri) && isLocalFileUri(uri);
 }
 
 /**
@@ -91,10 +66,7 @@ function isLocalImageUri(uri: string): boolean {
  * @returns The supported URI, or undefined when no supported URI is present.
  */
 export function findImageUri(text: string): string | undefined {
-  const uri = text
-    .trim()
-    .split(/\r?\n/)
-    .find((line) => line && !line.startsWith("#"));
+  const uri = firstUriListEntry(text);
   return uri && (/^https?:\/\//i.test(uri) || isLocalImageUri(uri)) ? uri : undefined;
 }
 

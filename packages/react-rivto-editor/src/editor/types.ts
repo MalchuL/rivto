@@ -121,6 +121,14 @@ export interface ClipboardApi {
   readonly selectFileHandler: ClipboardManager["selectFileHandler"];
 
   /**
+   * Subscribes to changes in file-handler registrations or the selected fallback.
+   *
+   * @param listener - Callback invoked after the handler selection may have changed.
+   * @returns Disposer that removes the listener.
+   */
+  readonly subscribeFileHandlers: ClipboardManager["subscribeFileHandlers"];
+
+  /**
    * Looks up a registered attachment handler by its stable identifier.
    *
    * @param id - Attachment handler identifier.
@@ -319,7 +327,7 @@ export interface AttachmentApi {
    * // source is a Blob from the provider, or a URL the browser can display.
    */
   resolveBinary(
-    provider: BinaryProvider<string, Blob> | undefined,
+    provider: BinaryProvider | undefined,
     uri: string,
     context: FileRequestContext,
   ): Promise<string | Blob>;
@@ -344,7 +352,7 @@ export interface AttachmentApi {
    * // bytes is a Blob, including when the provider declined an HTTP URL.
    */
   readBinary(
-    provider: BinaryProvider<string, Blob> | undefined,
+    provider: BinaryProvider | undefined,
     uri: string,
     mimeType: string | undefined,
     context: FileRequestContext,
@@ -371,7 +379,7 @@ export interface AttachmentApi {
    * // The selected host opener has completed, or the browser link was clicked.
    */
   openBinary(
-    provider: BinaryProvider<string, Blob>,
+    provider: BinaryProvider,
     reference: FileReference,
     context: FileRequestContext,
   ): Promise<void>;
@@ -442,7 +450,7 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: Pick<EventManager, "register" | "delete">;
+  readonly events: Pick<EventManager, "register" | "delete" | "has">;
   /** Mounted occurrences and explicit active/default view lookup. */
   readonly panels: Pick<
     PanelRegistry,

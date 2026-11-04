@@ -1,7 +1,7 @@
 /** Generic file fallback registration regression coverage. @module */
 import { createReactEditor } from "../../editor/react-editor";
 import { createTestCoreEditor } from "../../test-utils";
-import { FILE_BLOCK_TYPE, FILE_ELEMENT_TYPE, fileExtension } from "./file";
+import { FILE_BLOCK_TYPE, fileExtension } from "./file";
 import { imageExtension } from "../image/image";
 
 const testProvider = { write: async () => "test:asset", read: async () => undefined };
@@ -29,7 +29,7 @@ describe("fileExtension", () => {
     await editor.destroy();
   });
 
-  test("prepares unknown MIME types as generic inline, block, and element attachments", async () => {
+  test("prepares only the requested block representation for an unknown MIME type", async () => {
     const editor = await createTestCoreEditor();
     const reactEditor = createReactEditor({
       editor,
@@ -53,9 +53,9 @@ describe("fileExtension", () => {
         ),
       ),
     ).resolves.toMatchObject({
-      inline: expect.stringContaining("{{file "),
-      block: { type: FILE_BLOCK_TYPE, props: reference },
-      element: { type: FILE_ELEMENT_TYPE, props: reference },
+      kind: "block",
+      type: FILE_BLOCK_TYPE,
+      props: reference,
     });
     await reactEditor.destroy();
     await editor.destroy();
@@ -107,4 +107,114 @@ describe("fileExtension", () => {
     await reactEditor.destroy();
     await editor.destroy();
   });
+});
+
+test("removes its provider configuration when extension setup fails", async () => {
+  const { getFileProvider } = await import("./view/file-configuration");
+  const editor = await createTestCoreEditor();
+  const runtime = createReactEditor({ editor });
+  runtime.clipboard.registerFileHandler({
+    id: "file",
+    provider: testProvider,
+    prepare: ({ reference }) => ({ kind: "inline", content: reference.uri }),
+  });
+  expect(() => runtime.extensions.install(fileExtension({ provider: testProvider }))).toThrow();
+  expect(getFileProvider(runtime)).toBeUndefined();
+  await runtime.destroy();
+  await editor.destroy();
+});
+
+test("removes image view configuration when extension setup fails", async () => {
+  const { imageResizeMode } = await import("../image/view/image-view");
+  const editor = await createTestCoreEditor();
+  const runtime = createReactEditor({ editor });
+  runtime.clipboard.registerFileHandler({
+    id: "image",
+    provider: testProvider,
+    prepare: ({ reference }) => ({ kind: "inline", content: reference.uri }),
+  });
+  expect(() =>
+    runtime.extensions.install(
+      imageExtension({ provider: testProvider, views: { block: { resizeMode: "stretch" } } }),
+    ),
+  ).toThrow();
+  expect(imageResizeMode(runtime, "block")).toBe("letterbox");
+  await runtime.destroy();
+  await editor.destroy();
+});
+
+test("old provider cleanup does not remove a replacement using the same provider", async () => {
+  const { configureFileProvider, getFileProvider } = await import("./view/file-configuration");
+  const editor = await createTestCoreEditor();
+  const runtime = createReactEditor({ editor });
+  const disposeFirst = configureFileProvider(runtime, testProvider);
+  const disposeSecond = configureFileProvider(runtime, testProvider);
+  disposeFirst();
+  expect(getFileProvider(runtime)).toBe(testProvider);
+  disposeSecond();
+  expect(getFileProvider(runtime)).toBeUndefined();
+  await runtime.destroy();
+  await editor.destroy();
+});
+
+test("stops clipboard postprocessing after the first binary contribution", async () => {
+  const editor = await createTestCoreEditor();
+  const runtime = createReactEditor({ editor });
+  const visited: string[] = [];
+  runtime.clipboard.registerPostprocessor({
+    id: "first",
+    process: () => {
+      visited.push("first");
+      return { name: "file", mimeType: "text/plain", data: new Blob(["data"]) };
+    },
+  });
+  runtime.clipboard.registerPostprocessor({
+    id: "second",
+    process: () => {
+      visited.push("second");
+      return undefined;
+    },
+  });
+  runtime.clipboard.writeProcessed(
+    { version: 4, blocks: [] },
+    { plain: "", markdown: "", html: "" },
+  );
+  expect(visited).toEqual(["first"]);
+  await runtime.destroy();
+  await editor.destroy();
+});
+
+test("does not read binary data when more than one file is selected", async () => {
+  const editor = await createTestCoreEditor();
+  let reads = 0;
+  const runtime = createReactEditor({
+    editor,
+    extensions: [
+      fileExtension({
+        provider: {
+          write: async () => "test:file",
+          read: async () => {
+            reads += 1;
+            return new Blob(["data"]);
+          },
+        },
+      }),
+    ],
+  });
+  const first = editor.blocks.insertBlock({
+    type: FILE_BLOCK_TYPE,
+    props: { uri: "test:first", name: "first", mimeType: "text/plain" },
+  });
+  const second = editor.blocks.insertBlock({
+    type: FILE_BLOCK_TYPE,
+    props: { uri: "test:second", name: "second", mimeType: "text/plain" },
+  });
+  runtime.clipboard.writeProcessed(
+    { version: 4, blocks: [editor.blocks.getBlock(first.id)!, editor.blocks.getBlock(second.id)!] },
+    { plain: "", markdown: "", html: "" },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(reads).toBe(0);
+  await runtime.destroy();
+  await editor.destroy();
 });

@@ -9,6 +9,22 @@
  */
 import type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "../../../attachments";
 
+/** Destination, binary contents, and cancellation for an exclusive file write. */
+export interface LocalFileWriteInput {
+  readonly directory: string;
+  readonly fileName: string;
+  readonly file: Blob;
+  readonly signal: AbortSignal;
+}
+
+/** Host filesystem reference and document context for a file read. */
+export interface LocalFileReadInput {
+  readonly directory: string;
+  readonly uri: string;
+  readonly signal: AbortSignal;
+  readonly documentId: string;
+}
+
 /** Settings and privileged callbacks required by the local asset bridge. */
 export interface LocalFileBridgeOptions {
   readonly directory: string;
@@ -25,12 +41,7 @@ export interface LocalFileBridgeOptions {
    * const created = await options.writeFile(input);
    * // true: file created; false: filename already exists.
    */
-  readonly writeFile: (input: {
-    readonly directory: string;
-    readonly fileName: string;
-    readonly file: Blob;
-    readonly signal: AbortSignal;
-  }) => boolean | Promise<boolean>;
+  readonly writeFile: (input: LocalFileWriteInput) => boolean | Promise<boolean>;
   /**
    * Resolves a stored reference through the host filesystem bridge.
    *
@@ -44,12 +55,7 @@ export interface LocalFileBridgeOptions {
    * const result = await options.readFile(input);
    * // A Blob containing the file, or a URL such as "blob:https://app.test/...".
    */
-  readonly readFile: (input: {
-    readonly directory: string;
-    readonly uri: string;
-    readonly signal: AbortSignal;
-    readonly documentId: string;
-  }) => string | Blob | Promise<string | Blob>;
+  readonly readFile: (input: LocalFileReadInput) => string | Blob | Promise<string | Blob>;
 }
 
 /** Maximum portable filename length in UTF-8 bytes. */
@@ -207,7 +213,7 @@ function isSafeRelativePath(path: string): boolean {
  * Broader filesystem access requires an explicit host resolver and is never inferred
  * from document text; host callbacks must enforce filesystem boundaries, including symlinks.
  */
-export class LocalFileBridge implements BinaryProvider<string, Blob> {
+export class LocalFileBridge implements BinaryProvider {
   private readonly options: LocalFileBridgeOptions;
   private readonly prefix: string;
   private readonly maxBytes: number;

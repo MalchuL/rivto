@@ -1,8 +1,34 @@
-import type { EditorMode } from "@chulane/rivto";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../../../panels/types";
+import type { EditorEvent } from "../../../managers/events/editor-event";
+import type { FileIngestionPoint } from "./types";
 
-/** Location and original text captured before asynchronous attachment preparation. */
+/** Editor operations borrowed when validating a file destination. */
+export interface FileDestinationEditor {
+  readonly defaultWritingBlockFactory: Pick<
+    ReactPanelApi["editor"]["defaultWritingBlockFactory"],
+    "createEmptyBlock" | "isEmptyBlock"
+  >;
+}
+
+/** Panel operations borrowed when capturing an inline file destination. */
+export interface FileSelectionPanel {
+  readonly selection: Pick<ReactPanelApi["selection"], "readDOM" | "get">;
+  readonly blocks: Pick<ReactPanelApi["blocks"], "getBlock">;
+}
+
+/** Panel operations borrowed when capturing or validating file destinations. */
+export interface FileDestinationPanel extends FileSelectionPanel {
+  readonly editor: FileDestinationEditor;
+  readonly blocks: Pick<ReactPanelApi["blocks"], "getBlock" | "getBlockNode" | "hasChildren">;
+}
+
+/**
+ * Location and original text captured before asynchronous attachment preparation.
+ *
+ * A block replacement always carries the content used to detect intervening edits;
+ * insertion after a block does not capture replacement state.
+ */
 export type FileDestination =
   | {
       readonly kind: "inline";
@@ -14,21 +40,58 @@ export type FileDestination =
   | {
       readonly kind: "block";
       readonly afterId?: string;
-      readonly replaceId?: string;
-      readonly content?: string;
+      readonly replaceId?: never;
+      readonly content?: never;
+    }
+  | {
+      readonly kind: "block";
+      readonly afterId?: string;
+      readonly replaceId: string;
+      readonly content: string;
     }
   | { readonly kind: "element"; readonly x: number; readonly y: number };
 
 /**
  * Returns the current single-block selection as an inline destination.
+ *
+ * The live DOM selection takes precedence over the panel selection. If the
+ * chosen selection does not identify a single existing block, the fallback
+ * block is captured at its end.
+ *
  * @param reactPanel - Panel providing the current selection and blocks.
- * @param fallbackBlockId - Block used when no live DOM selection exists.
- * @returns Inline destination, when one block can own the insertion.
+ * @param fallbackBlockId - Block used when the selection cannot provide a single destination.
+ * @returns Inline destination, or undefined when neither selection nor fallback resolves.
  */
 export function inlineDestination(
-  reactPanel: ReactPanelApi,
+  reactPanel: FileSelectionPanel,
   fallbackBlockId?: string,
 ): FileDestination | undefined {
+  const selected = selectedInlineDestination(reactPanel);
+  if (selected) {
+    return selected;
+  }
+  const block = fallbackBlockId ? reactPanel.blocks.getBlock(fallbackBlockId) : undefined;
+  return block
+    ? {
+        kind: "inline",
+        blockId: block.id,
+        content: block.content,
+        start: block.content.length,
+        end: block.content.length,
+      }
+    : undefined;
+}
+
+/**
+ * Captures the current selection when its endpoints belong to one existing block.
+ *
+ * The DOM selection takes precedence over the panel selection, and the stored
+ * range is normalized so its start precedes its end.
+ *
+ * @param reactPanel - Panel supplying the current selection and block contents.
+ * @returns The selected inline destination, or undefined for an unresolved or multi-block selection.
+ */
+function selectedInlineDestination(reactPanel: FileSelectionPanel): FileDestination | undefined {
   const selection = reactPanel.selection.readDOM() ?? reactPanel.selection.get();
   const endpoints =
     selection &&
@@ -46,15 +109,61 @@ export function inlineDestination(
       end: Math.max(endpoints.anchor.offset, endpoints.head.offset),
     };
   }
-  const block = fallbackBlockId ? reactPanel.blocks.getBlock(fallbackBlockId) : undefined;
-  return block
-    ? {
-        kind: "inline",
-        blockId: block.id,
-        content: block.content,
-        start: block.content.length,
-        end: block.content.length,
-      }
+  return undefined;
+}
+
+/** Event context needed to resolve a file destination. */
+interface FileDestinationContext extends Pick<
+  EditorEvent<"surface", "paste">,
+  "mode" | "contentElement" | "blockId" | "root"
+> {
+  readonly reactPanel: FileSelectionPanel;
+}
+
+/** Captured destination and viewport position for file paste feedback. */
+export interface FilePasteDestination {
+  readonly destination: FileDestination;
+  readonly point: FileIngestionPoint;
+}
+
+/**
+ * Locates the feedback position for a file selected from a block's picker.
+ *
+ * The block's lower left corner is used when mounted; otherwise feedback starts
+ * at the center of the current viewport.
+ *
+ * @param root - Active panel root, or null when the panel is unmounted.
+ * @param blockId - Stable ID of the block that opened the picker.
+ * @returns Viewport coordinates for upload feedback.
+ */
+export function filePickerPoint(root: HTMLElement | null, blockId: string): FileIngestionPoint {
+  const block = root?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`);
+  const bounds = block?.getBoundingClientRect();
+  return { x: bounds?.left ?? innerWidth / 2, y: bounds?.bottom ?? innerHeight / 2 };
+}
+
+/**
+ * Captures the insertion destination and status position for a paste event.
+ *
+ * Content pastes use the current text selection. Surface pastes use the center
+ * of the receiving bounds and may update the native selection through hit testing.
+ *
+ * @param context - Receiving panel, surface mode, and captured DOM boundaries.
+ * @returns The destination and viewport position, or undefined when text has no destination.
+ */
+export function filePasteDestination(
+  context: FileDestinationContext,
+): FilePasteDestination | undefined {
+  const { reactPanel, contentElement, blockId, root } = context;
+  const bounds = contentElement?.getBoundingClientRect() ?? root.getBoundingClientRect();
+  const destination = contentElement
+    ? inlineDestination(reactPanel, blockId)
+    : fileDestinationAtPoint(context, {
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
+  return destination
+    ? { destination, point: { x: bounds.left + bounds.width / 2, y: bounds.bottom } }
     : undefined;
 }
 
@@ -66,7 +175,7 @@ export function inlineDestination(
  * @returns False when the original block was deleted, edited, or is no longer replaceable.
  */
 export function isFileDestinationCurrent(
-  reactPanel: ReactPanelApi,
+  reactPanel: Pick<FileDestinationPanel, "editor" | "blocks">,
   destination: FileDestination,
 ): boolean {
   if (destination.kind === "inline") {
@@ -94,7 +203,7 @@ export function isFileDestinationCurrent(
  * @returns A current inline destination or the original non-text destination.
  */
 export function retryFileDestination(
-  reactPanel: ReactPanelApi,
+  reactPanel: FileSelectionPanel,
   destination: FileDestination,
 ): FileDestination {
   let blockId: string | undefined;
@@ -112,35 +221,25 @@ export function retryFileDestination(
  * Text hit testing updates the native selection before capturing the destination.
  * Canvas coordinates account for the surface pan and zoom.
  *
- * @param reactPanel - Panel supplying the destination and document commands.
- * @param mode - Current editor mode.
- * @param contentElement - Editable content under the event.
- * @param blockId - Block under the event.
- * @param clientX - Viewport x coordinate.
- * @param clientY - Viewport y coordinate.
- * @param root - Active surface root.
+ * @param context - Receiving panel, surface mode, and captured DOM boundaries.
+ * @param context.reactPanel - Panel supplying the selection and block contents.
+ * @param context.mode - Current editor mode.
+ * @param context.contentElement - Editable content under the event, when present.
+ * @param context.blockId - Block under the event, when present.
+ * @param context.root - Active surface root.
+ * @param point - Viewport coordinates to inspect.
+ * @param point.x - Viewport x coordinate.
+ * @param point.y - Viewport y coordinate.
  * @returns Captured insertion destination.
  */
 export function fileDestinationAtPoint(
-  reactPanel: ReactPanelApi,
-  mode: EditorMode,
-  contentElement: HTMLElement | null,
-  blockId: string | undefined,
-  clientX: number,
-  clientY: number,
-  root: HTMLElement,
+  context: FileDestinationContext,
+  point: FileIngestionPoint,
 ): FileDestination {
+  const { reactPanel, mode, contentElement, blockId, root } = context;
+  const { x: clientX, y: clientY } = point;
   if (contentElement) {
-    const document = root.ownerDocument as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    };
-    const hit = document.caretPositionFromPoint?.(clientX, clientY);
-    const range = document.caretRangeFromPoint?.(clientX, clientY);
-    const node = hit?.offsetNode ?? range?.startContainer;
-    const offset = hit?.offset ?? range?.startOffset;
-    if (node !== undefined && offset !== undefined) {
-      root.ownerDocument.getSelection()?.setBaseAndExtent(node, offset, node, offset);
-    }
+    placeCaretAtPoint(root.ownerDocument, point);
     const inline = inlineDestination(reactPanel, blockId);
     if (inline) {
       return inline;
@@ -156,4 +255,38 @@ export function fileDestinationAtPoint(
     x: (clientX - bounds.left - (Number(root.dataset.edgelessPanX) || 0)) / zoom,
     y: (clientY - bounds.top - (Number(root.dataset.edgelessPanY) || 0)) / zoom,
   };
+}
+
+/**
+ * Places the native caret at a browser hit-test position when one is available.
+ *
+ * The standard caret API is preferred; the legacy range API is used when it
+ * cannot resolve the point. If neither succeeds, the current selection remains unchanged.
+ *
+ * @param ownerDocument - Document containing the receiving editor surface.
+ * @param point - Viewport coordinates to hit-test.
+ * @returns Updates the native selection when a caret position can be resolved.
+ */
+function placeCaretAtPoint(ownerDocument: Document, point: FileIngestionPoint): void {
+  const document = ownerDocument as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  const hit = document.caretPositionFromPoint?.(point.x, point.y);
+  if (hit) {
+    ownerDocument
+      .getSelection()
+      ?.setBaseAndExtent(hit.offsetNode, hit.offset, hit.offsetNode, hit.offset);
+    return;
+  }
+  const range = document.caretRangeFromPoint?.(point.x, point.y);
+  if (range) {
+    ownerDocument
+      .getSelection()
+      ?.setBaseAndExtent(
+        range.startContainer,
+        range.startOffset,
+        range.startContainer,
+        range.startOffset,
+      );
+  }
 }
