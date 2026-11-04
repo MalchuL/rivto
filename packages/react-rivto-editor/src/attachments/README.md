@@ -21,8 +21,8 @@ fileExtension({ provider });
 imageExtension({ provider });
 ```
 
-Providers receive document ID, surface mode and cancellation; writes also receive
-file metadata, source, destination and optional progress. Providers use URI strings and Blobs.
+Providers receive document ID and cancellation; writes also receive
+file metadata and optional progress. Providers use URI strings and Blobs.
 `LocalFileBridge` provides an adapter around host filesystem callbacks.
 
 ## Open handlers

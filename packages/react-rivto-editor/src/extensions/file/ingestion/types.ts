@@ -1,4 +1,4 @@
-import type { BinaryWriteContext, PreparedFile } from "../../../attachments";
+import type { PreparedFile } from "../../../attachments";
 import type { ReactPanelApi } from "../../../panels/types";
 import type {
   FileDestination,
@@ -65,12 +65,6 @@ interface FileInputPanelEditor extends FileIngestionEditor {
 export interface FileInputPanel extends FileIngestionPanel {
   /** Editor operations needed to identify the receiving document. */
   readonly editor: FileInputPanelEditor;
-  /**
-   * Reads the active panel surface for file preparation.
-   *
-   * @returns The panel's current surface type.
-   */
-  readonly getSurfaceType: ReactPanelApi["getSurfaceType"];
 }
 
 /** Panel document access needed when a file is stored. */
@@ -83,12 +77,6 @@ interface FileUploadPanel {
 export interface FileUploadContext {
   /** Panel owning the receiving document. */
   readonly panel: FileUploadPanel;
-  /** Requested insertion representation. */
-  readonly destination: BinaryWriteContext["destination"];
-  /** Surface captured for the upload. */
-  readonly mode: BinaryWriteContext["mode"];
-  /** Input mechanism that supplied the file. */
-  readonly source: BinaryWriteContext["source"];
   /** Local status identifier used for progress updates. */
   readonly statusId: string;
   /** Display name supplied to the provider. */

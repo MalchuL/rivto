@@ -98,6 +98,29 @@ async function startFileBridge() {
   return { server, origin };
 }
 
+test("stores an empty file submitted by the demo", async () => {
+  const { server, origin } = await startFileBridge();
+  let storedPath;
+  try {
+    const response = await fetch(`${origin}/__rivto_demo_clipboard_file?name=empty.txt`, {
+      method: "POST",
+      headers: { Origin: origin },
+      body: "",
+    });
+    assert.equal(response.status, 201);
+    ({ uri: storedPath } = await response.json());
+    assert.equal((await readFile(storedPath)).length, 0);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+    if (storedPath) {
+      await rm(storedPath, { force: true });
+    }
+  }
+});
+
 test(
   "native opening requires a trusted origin and a file stored by this server",
   { skip: process.platform !== "linux" },

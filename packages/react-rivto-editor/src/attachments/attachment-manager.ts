@@ -18,24 +18,6 @@ interface AttachmentEditor {
    * @returns The document whose identity is used for binary operations.
    */
   readonly getDocument: ReactEditorApi["getDocument"];
-  /** Active and default panel lookup used to determine the surface mode. */
-  readonly panels: AttachmentPanels;
-}
-
-/** Panel lookups borrowed while determining the surface for a binary operation. */
-interface AttachmentPanels {
-  /**
-   * Reads the active registered panel.
-   *
-   * @returns The active panel, or undefined when none is available.
-   */
-  readonly getActive: ReactEditorApi["panels"]["getActive"];
-  /**
-   * Reads the default registered panel.
-   *
-   * @returns The default panel, or undefined when none is available.
-   */
-  readonly getDefault: ReactEditorApi["panels"]["getDefault"];
 }
 
 /** Manages attachment handlers, file opening, and URI resolution. */
@@ -48,12 +30,12 @@ export class AttachmentManager {
   /**
    * Configures attachment URI resolution and extension-owned file openers.
    *
-   * @param editor - Document identity and panel context used by binary operations.
+   * @param editor - Document identity used by binary operations.
    * @param registrations - Owner that guards and disposes registrations.
    * @param options - Relative URI resolution configuration.
    */
   constructor(
-    /** Borrowed document and panel context. */
+    /** Borrowed document identity. */
     private readonly editor: AttachmentEditor,
     /** Owner responsible for guarding and cleaning up registrations. */
     private readonly registrations: RegistrationOwner,
@@ -133,12 +115,12 @@ export class AttachmentManager {
    * data, and blob URLs are returned after validation; relative references are
    * resolved against the configured document base URI.
    *
-   * The document ID and surface mode are captured when this method starts.
+   * The document ID is captured when this method starts.
    * Cancellation is checked before and after the provider's asynchronous read.
    *
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to resolve.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving to the provider's Blob or a browser-readable URI.
    * @throws If cancelled, the provider fails or returns a non-Blob value, or the
    * unclaimed URI is unsafe, unsupported, or relative without a configured base.
@@ -199,7 +181,7 @@ export class AttachmentManager {
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to read.
    * @param mimeType - Optional MIME type to apply to the returned Blob.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving to a Blob after resolution and any fetch complete.
    * @throws If resolution, fetching, or response reading fails, or cancellation occurs.
    *
@@ -239,7 +221,7 @@ export class AttachmentManager {
    *
    * @param provider - Storage provider for the attachment.
    * @param reference - Persisted attachment metadata.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving after the opener completes or browser link is clicked.
    * @throws If cancelled, the host opener fails, or the attachment cannot be resolved.
    *
@@ -274,23 +256,17 @@ export class AttachmentManager {
   }
 
   /**
-   * Captures document identity and surface mode for one binary operation.
+   * Captures document identity and cancellation for one binary operation.
    *
-   * An explicit mode wins; otherwise the active panel, default panel, and block
-   * mode are consulted in order. The supplied cancellation signal is retained.
+   * The supplied cancellation signal is retained.
    *
-   * @param context - Caller-provided surface override and cancellation signal.
-   * @returns Document, surface, and cancellation context for the operation.
+   * @param context - Caller-provided cancellation signal.
+   * @returns Document and cancellation context for the operation.
    */
   private getFileOperationContext(context: FileRequestContext): BinaryReadContext {
     return {
       signal: context.signal,
       documentId: this.editor.getDocument().id,
-      mode:
-        context.mode ??
-        this.editor.panels.getActive()?.getSurfaceType() ??
-        this.editor.panels.getDefault()?.getSurfaceType() ??
-        "block",
     };
   }
 }

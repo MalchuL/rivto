@@ -86,6 +86,6 @@ test("slow image resolution shows loading and retains failure feedback", async (
   const image = page.locator('[data-block-id="slow-image"]');
   await expect(image.getByRole("status")).toHaveText("Loading image…");
   await expect(image.getByRole("alert")).toHaveText(
-    "The pasted local file is unavailable to the demo server",
+    "The local file is unavailable to the demo server",
   );
 });

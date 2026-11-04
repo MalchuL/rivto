@@ -306,7 +306,7 @@ function useImageView({
     configuredHoverMenu === null ? null : (configuredHoverMenu ?? DefaultImageHoverMenu);
   const fill = kind === "element";
   const resize = useImageResize(resizeMode, onChange);
-  const image = useImageSource(reactEditor.attachments, reactPanel, provider, uri);
+  const image = useImageSource(reactEditor.attachments, provider, uri);
   const copy = useImageCopyMenu({ provider, uri, alt, name, mimeType });
 
   const style: CSSProperties = fill

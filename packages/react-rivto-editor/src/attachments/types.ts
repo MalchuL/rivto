@@ -1,13 +1,10 @@
 /** Types for attachment classification and file operations. @module */
-import type { EditorMode } from "@chulane/rivto";
 import type { ComponentType } from "react";
 
-/** Document and surface context captured when a binary operation starts. */
+/** Document and cancellation context captured for a binary operation or file open. */
 export interface BinaryReadContext {
   /** Document containing the attachment reference. */
   readonly documentId: string;
-  /** Editor surface captured when the operation started. */
-  readonly mode: EditorMode;
   /** Signal for cancelling this operation. */
   readonly signal: AbortSignal;
 }
@@ -18,10 +15,6 @@ export interface BinaryWriteContext extends BinaryReadContext {
   readonly name: string;
   /** Media type supplied to the provider. */
   readonly mimeType: string;
-  /** Input mechanism that supplied the file. */
-  readonly source: "clipboard" | "drop" | "picker";
-  /** Representation requested for the inserted file. */
-  readonly destination: PreparedFile["kind"];
   /**
    * Reports provider progress for the current upload.
    *
@@ -41,7 +34,7 @@ export interface BinaryProvider {
    * Persists binary content and returns its durable reference.
    *
    * @param content - Binary content to store.
-   * @param context - Attachment metadata, destination and cancellation.
+   * @param context - Attachment metadata and cancellation.
    * @returns A promise resolving to the durable provider reference.
    * @throws If storage or cancellation fails.
    */
@@ -50,21 +43,19 @@ export interface BinaryProvider {
    * Reads a recognized reference without claiming references from other backends.
    *
    * @param reference - Durable reference to resolve.
-   * @param context - Document, surface and cancellation context.
+   * @param context - Document and cancellation context.
    * @returns A promise resolving to content, or undefined when the provider does not own the reference.
    * @throws If storage access or cancellation fails.
    */
   read(reference: string, context: BinaryReadContext): Promise<Blob | undefined>;
 }
 
-/** Captured surface and cancellation supplied when preparing a file representation. */
+/** Captured placement and cancellation supplied when preparing a file representation. */
 export interface FilePreparationContext {
   /** Requested persisted placement. */
   readonly destination: PreparedFile["kind"];
   /** Cancels preparation when the extension is destroyed. */
   readonly signal: AbortSignal;
-  /** Surface at the start of preparation, when available. */
-  readonly mode?: EditorMode;
 }
 
 /** Creation-time defaults for the file pipeline. */
@@ -180,7 +171,7 @@ export interface FileHandler {
    * Produces the representation for the captured destination after storage completes.
    *
    * @param candidate - File and its stored reference, or an existing reference.
-   * @param context - Captured placement, surface, and cancellation signal.
+   * @param context - Captured placement and cancellation signal.
    * @returns The prepared representation immediately or after asynchronous inspection.
    * @throws If preparation fails or is cancelled, including a rejected promise.
    */
@@ -191,9 +182,6 @@ export interface FileHandler {
   /** Optional renderer for references represented inline. */
   readonly InlineView?: ComponentType<FileInlineViewProps>;
 }
-
-/** Runtime context supplied when a host opens one persisted file reference. */
-export type FileOpenContext = BinaryReadContext;
 
 /** Type-specific opener that may also be explicitly selected as the host default. */
 export interface FileOpenHandler {
@@ -210,17 +198,15 @@ export interface FileOpenHandler {
    * Opens an attachment through a host-specific viewer or application.
    *
    * @param reference - Persisted attachment metadata.
-   * @param context - Document, surface, and cancellation for this request.
+   * @param context - Document and cancellation for this request.
    * @returns Completion of opening, either immediately or after the host finishes.
    * @throws If the host cannot open the attachment or cancellation fails the operation.
    */
-  readonly open: (reference: FileReference, context: FileOpenContext) => void | Promise<void>;
+  readonly open: (reference: FileReference, context: BinaryReadContext) => void | Promise<void>;
 }
 
-/** Context captured from the receiving surface for asynchronous file work. */
+/** Cancellation supplied for asynchronous file work. */
 export interface FileRequestContext {
   /** Signal for cancelling the request. */
   readonly signal: AbortSignal;
-  /** Captured surface, when the request originated from one. */
-  readonly mode?: EditorMode;
 }

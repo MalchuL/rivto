@@ -354,7 +354,7 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
           ?.props.uri;
       }),
     )
-    .toContain("data:image/png;base64,");
+    .toMatch(/\.png$/);
   if (browserName === "chromium") {
     await imageBlock.locator(".rivto-image-frame").click({ button: "right" });
     const copyImage = page.getByRole("menuitem", { name: "Copy image" });

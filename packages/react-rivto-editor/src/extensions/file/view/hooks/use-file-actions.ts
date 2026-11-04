@@ -93,7 +93,7 @@ function useFileOpen(
       return;
     }
     void editor.attachments
-      .openBinary(provider, reference, { signal: controller.signal, mode: panel.getSurfaceType() })
+      .openBinary(provider, reference, { signal: controller.signal })
       // Ignore failures from an operation superseded by another action.
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
@@ -126,7 +126,6 @@ function useFileCopy(
     const controller = start();
     const data = editor.attachments.readBinary(getFileProvider(editor), uri, mimeType, {
       signal: controller.signal,
-      mode: panel.getSurfaceType(),
     });
     void editor.clipboard
       .writeBinary({ name, mimeType, data })

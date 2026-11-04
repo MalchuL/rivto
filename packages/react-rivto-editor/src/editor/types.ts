@@ -312,12 +312,12 @@ export interface AttachmentApi {
    * data, and blob URLs are returned after validation; relative references are
    * resolved against the configured document base URI.
    *
-   * The document ID and surface mode are captured when this method starts.
+   * The document ID is captured when this method starts.
    * Cancellation is checked before and after the provider's asynchronous read.
    *
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to resolve.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving to the provider's Blob or a browser-readable URI.
    * @throws If cancelled, the provider fails or returns a non-Blob value, or the
    * unclaimed URI is unsafe, unsupported, or relative without a configured base.
@@ -343,7 +343,7 @@ export interface AttachmentApi {
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to read.
    * @param mimeType - Optional MIME type to apply to the returned Blob.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving to a Blob after resolution and any fetch complete.
    * @throws If resolution, fetching, or response reading fails, or cancellation occurs.
    *
@@ -370,7 +370,7 @@ export interface AttachmentApi {
    *
    * @param provider - Storage provider for the attachment.
    * @param reference - Persisted attachment metadata.
-   * @param context - Optional surface mode and required cancellation signal.
+   * @param context - Cancellation signal.
    * @returns A promise resolving after the opener completes or browser link is clicked.
    * @throws If cancelled, the host opener fails, or the attachment cannot be resolved.
    *

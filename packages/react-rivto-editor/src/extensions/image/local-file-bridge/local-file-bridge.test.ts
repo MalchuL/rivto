@@ -18,10 +18,7 @@ it("writes and reads owned files and rejects oversized files", async () => {
   const signal = new AbortController().signal;
   const context = {
     documentId: "doc",
-    mode: "block" as const,
     signal,
-    source: "drop" as const,
-    destination: "block" as const,
     name: "../test.png",
     mimeType: "image/png",
   };
@@ -54,10 +51,7 @@ it("writes collision-resistant filenames when randomUUID is unavailable", async 
     });
     const context = {
       documentId: "doc",
-      mode: "block" as const,
       signal: new AbortController().signal,
-      source: "drop" as const,
-      destination: "block" as const,
       name: "photo.png",
       mimeType: "image/png",
     };
@@ -93,10 +87,7 @@ it("preserves available names, removes unsafe characters, and avoids collisions"
   });
   const context = {
     documentId: "doc",
-    mode: "block" as const,
     signal: new AbortController().signal,
-    source: "drop" as const,
-    destination: "block" as const,
     name: "Photo 1.PNG",
     mimeType: "image/png",
   };
@@ -121,10 +112,7 @@ it("preserves available names, removes unsafe characters, and avoids collisions"
 it("propagates write failures and stops after repeated collisions", async () => {
   const context = {
     documentId: "doc",
-    mode: "block" as const,
     signal: new AbortController().signal,
-    source: "drop" as const,
-    destination: "block" as const,
     name: "a.txt",
     mimeType: "text/plain",
   };
@@ -177,7 +165,6 @@ it("does not claim paths outside the configured file directory", async () => {
   });
   const context = {
     documentId: "doc",
-    mode: "block" as const,
     signal: new AbortController().signal,
   };
   await expect(provider.read("file:///assets/photo.png", context)).resolves.toBeInstanceOf(Blob);

@@ -83,9 +83,6 @@ async function storeClipboardFile(request: IncomingMessage, name: string): Promi
     .toLowerCase();
   const fileName = clipboardFileName(name, contentType);
   const contents = await readBoundedBody(request);
-  if (!contents.byteLength) {
-    throw new TypeError("Clipboard file is empty");
-  }
   await mkdir(CLIPBOARD_FILE_DIRECTORY, { recursive: true });
   let path = join(CLIPBOARD_FILE_DIRECTORY, fileName);
   try {

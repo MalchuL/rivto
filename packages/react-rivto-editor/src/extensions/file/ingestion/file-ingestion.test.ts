@@ -213,14 +213,8 @@ test("stores files with document context, validated URI, and bounded progress", 
   const writes: Array<{
     /** Document identity supplied to the provider. */
     documentId: string;
-    /** Surface captured for the write. */
-    mode: string;
     /** File name supplied to the provider. */
     name: string;
-    /** Input mechanism recorded for the upload. */
-    source: string;
-    /** Requested insertion representation. */
-    destination: string;
   }> = [];
   const ingestion = new FileIngestion(feedback);
   const file = new File(["hello"], "note.txt", { type: "text/plain" });
@@ -240,9 +234,6 @@ test("stores files with document context, validated URI, and bounded progress", 
     file,
     {
       panel,
-      destination: "element",
-      mode: panel.getSurfaceType(),
-      source: "drop",
       statusId: "upload",
       name: "note.txt",
     },
@@ -251,13 +242,13 @@ test("stores files with document context, validated URI, and bounded progress", 
   expect(writes).toEqual([
     expect.objectContaining({
       documentId: editor.getDocument().id,
-      mode: panel.getSurfaceType(),
       name: "note.txt",
       mimeType: "text/plain",
-      source: "drop",
-      destination: "element",
     }),
   ]);
+  expect(writes[0]).not.toHaveProperty("source");
+  expect(writes[0]).not.toHaveProperty("destination");
+  expect(writes[0]).not.toHaveProperty("mode");
   expect(statuses.get("upload")).toMatchObject({ progress: 1 });
   await panel.editor.destroy();
   await editor.destroy();
@@ -443,9 +434,6 @@ test("ignores provider progress after destruction", async () => {
       new File(["hello"], "note.txt", { type: "text/plain" }),
       {
         panel,
-        destination: "element",
-        mode: panel.getSurfaceType(),
-        source: "drop",
         statusId: "upload",
         name: "note.txt",
       },

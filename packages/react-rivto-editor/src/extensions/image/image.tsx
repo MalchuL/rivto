@@ -227,7 +227,6 @@ function registerImageHandler(
         ? file
         : await attachments.resolveBinary(provider, reference.uri, {
             signal: context.signal,
-            mode: context.mode,
           });
       const dimensions = await inspectImage(resolved);
       context.signal.throwIfAborted();

@@ -304,7 +304,7 @@ export class LocalFileBridge implements BinaryProvider {
    * URLs are rejected before fetching; cancellation is passed to the host and fetch.
    *
    * @param uri - Persisted reference to check against the configured prefix or directory.
-   * @param context - Document identity, surface mode, and cancellation signal.
+   * @param context - Document identity and cancellation signal.
    * @returns File contents, or undefined when the reference is not owned by this provider.
    * @throws If cancelled, the host fails, its URL is unsafe, or fetching fails.
    *

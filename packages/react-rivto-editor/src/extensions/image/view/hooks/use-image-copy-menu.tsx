@@ -144,7 +144,7 @@ function useImageCopy(
       provider,
       uri,
       type === "application/octet-stream" ? undefined : type,
-      { signal: controller.signal, mode: panel.getSurfaceType() },
+      { signal: controller.signal },
     );
     void panel.editor.clipboard
       .writeBinary({ name: name || alt || "image", mimeType: type, data })

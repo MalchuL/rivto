@@ -67,13 +67,12 @@ export class FileIngestion {
   /**
    * Stores a file and validates the URI while publishing bounded progress.
    *
-   * The caller supplies the surface captured at the start of the attempt. Cancellation
-   * is checked before and after the provider's asynchronous write. Progress
+   * Cancellation is checked before and after the provider's asynchronous write. Progress
    * reported after cancellation is ignored.
    *
    * @param provider - Storage provider selected for this file.
    * @param file - Browser file to store.
-   * @param context - Receiving panel, placement, source, and feedback identity.
+   * @param context - Receiving panel, name and feedback identity.
    * @returns A promise resolving to the validated URI.
    * @throws If cancelled, storage fails, or the returned URI is invalid.
    */
@@ -86,11 +85,8 @@ export class FileIngestion {
     const uri = validateBinaryUri(
       await provider.write(file, {
         documentId: context.panel.editor.getDocument().id,
-        mode: context.mode,
         name: context.name,
         mimeType: file.type || "application/octet-stream",
-        source: context.source,
-        destination: context.destination,
         signal: this.signal,
         // Clamp provider progress and ignore updates after cancellation.
         reportProgress: (progress) => {

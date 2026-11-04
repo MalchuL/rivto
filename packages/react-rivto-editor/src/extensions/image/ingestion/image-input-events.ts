@@ -1,11 +1,7 @@
 import type { ReactEditorApi } from "../../../editor/types";
 import type { BinaryProvider, PreparedFile } from "../../../attachments";
 import type { FileIngestion } from "../../file/ingestion/file-ingestion";
-import type {
-  FileIngestionPoint,
-  FileInputPanel,
-  FileUploadContext,
-} from "../../file/ingestion/types";
+import type { FileIngestionPoint, FileInputPanel } from "../../file/ingestion/types";
 import type { FileUploadStatusStore } from "../../file/ingestion/file-upload-status";
 import {
   fileDestinationAtPoint,
@@ -140,7 +136,7 @@ export class ImageInputEvents {
       const point = { x: raw.clientX, y: raw.clientY };
       const destination = fileDestinationAtPoint(event, point);
       if (files.length) {
-        this.upload(reactPanel, files, destination, "drop", point);
+        this.upload(reactPanel, files, destination, point);
       } else if (remote) {
         this.insertRemote(reactPanel, remote, destination, point);
       }
@@ -172,7 +168,7 @@ export class ImageInputEvents {
       }
       const { destination, point } = location;
       if (files.length) {
-        this.upload(reactPanel, files, destination, "clipboard", point);
+        this.upload(reactPanel, files, destination, point);
       } else if (remote) {
         this.insertRemote(reactPanel, remote, destination, point);
       } else {
@@ -216,7 +212,6 @@ export class ImageInputEvents {
               reactPanel,
               [...(input.files ?? [])],
               destination,
-              "picker",
               filePickerPoint(reactPanel.getRoot(), blockId),
             );
           },
@@ -289,7 +284,6 @@ export class ImageInputEvents {
    * @param reactPanel - Panel receiving the prepared images.
    * @param files - Browser files to inspect and store.
    * @param destination - Captured insertion destination.
-   * @param source - Browser interaction that supplied the files.
    * @param point - Viewport position for status feedback.
    * @returns Starts preparation and inserts successful images when the destination remains valid.
    */
@@ -297,7 +291,6 @@ export class ImageInputEvents {
     reactPanel: FileInputPanel,
     files: readonly File[],
     destination: FileDestination,
-    source: FileUploadContext["source"],
     point: FileIngestionPoint,
   ): void {
     if (!this.canInsert(destination, point, files[0]?.name ?? "image")) {
@@ -315,14 +308,10 @@ export class ImageInputEvents {
         "The destination changed while the image was uploading. Select a location and retry.",
       // Decode before storage, then prepare the requested representation.
       prepare: async (file, id, currentDestination): Promise<PreparedFile> => {
-        const mode = reactPanel.getSurfaceType();
         const dimensions = await inspectImage(file);
         this.ingestion.signal.throwIfAborted();
         const uri = await this.ingestion.storeFile(this.provider, file, {
           panel: reactPanel,
-          destination: currentDestination.kind,
-          mode,
-          source,
           statusId: id,
           name: file.name || "image",
         });
@@ -376,7 +365,6 @@ export class ImageInputEvents {
       prepare: async (item, _id, currentDestination) => {
         const resolved = await this.editor.attachments.resolveBinary(this.provider, item.uri, {
           signal: this.ingestion.signal,
-          mode: reactPanel.getSurfaceType(),
         });
         const dimensions = await inspectImage(resolved);
         this.ingestion.signal.throwIfAborted();

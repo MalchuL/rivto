@@ -7,7 +7,7 @@ import type {
   PreparedFile,
 } from "../../../attachments";
 import type { FileIngestion } from "./file-ingestion";
-import type { FileIngestionPoint, FileInputPanel, FileUploadContext } from "./types";
+import type { FileIngestionPoint, FileInputPanel } from "./types";
 import {
   fileDestinationAtPoint,
   filePasteDestination,
@@ -119,7 +119,7 @@ export class FileInputEvents {
           blockId,
         );
         if (files.length) {
-          this.upload(reactPanel, files, destination, "drop", point);
+          this.upload(reactPanel, files, destination, point);
         } else if (uri) {
           this.insertReferences(reactPanel, [uri], destination, point);
         }
@@ -156,7 +156,7 @@ export class FileInputEvents {
         );
         const { point } = location;
         if (files.length) {
-          this.upload(reactPanel, files, destination, "clipboard", point);
+          this.upload(reactPanel, files, destination, point);
         } else if (uri) {
           this.insertReferences(reactPanel, [uri], destination, point);
         } else {
@@ -202,7 +202,6 @@ export class FileInputEvents {
               reactPanel,
               files,
               destination,
-              "picker",
               filePickerPoint(reactPanel.getRoot(), blockId),
             );
           },
@@ -259,7 +258,6 @@ export class FileInputEvents {
    * @param reactPanel - Panel receiving the prepared files.
    * @param files - Browser files to store and dispatch.
    * @param destination - Captured insertion destination.
-   * @param source - Browser interaction that supplied the files.
    * @param point - Viewport position for status feedback.
    * @returns Starts asynchronous preparation and commits successful files when safe.
    */
@@ -267,7 +265,6 @@ export class FileInputEvents {
     reactPanel: FileInputPanel,
     files: readonly File[],
     destination: FileDestination,
-    source: FileUploadContext["source"],
     point: FileIngestionPoint,
   ): void {
     this.ingestion.ingest<File>({
@@ -282,7 +279,6 @@ export class FileInputEvents {
         "The destination changed while the file was uploading. Select a location and retry.",
       // Select the handler before storage and verify it remains installed afterward.
       prepare: async (file, id, currentDestination) => {
-        const mode = reactPanel.getSurfaceType();
         const reference: Omit<FileReference, "uri"> = {
           name: file.name || "file",
           mimeType: file.type || "application/octet-stream",
@@ -294,9 +290,6 @@ export class FileInputEvents {
         }
         const uri = await this.ingestion.storeFile(handler.provider, file, {
           panel: reactPanel,
-          destination: currentDestination.kind,
-          mode,
-          source,
           statusId: id,
           name: reference.name,
         });
@@ -307,7 +300,7 @@ export class FileInputEvents {
         return this.prepareFile(
           handler,
           { file, reference: { ...reference, uri } },
-          { destination: currentDestination.kind, mode, signal: this.ingestion.signal },
+          { destination: currentDestination.kind, signal: this.ingestion.signal },
         );
       },
     });
@@ -340,7 +333,6 @@ export class FileInputEvents {
         "The destination changed while the file was uploading. Select a location and retry.",
       // Prepare an existing reference without uploading its bytes again.
       prepare: async (uri, _id, currentDestination) => {
-        const mode = reactPanel.getSurfaceType();
         const reference = createFileReferenceFromUri(uri);
         const handler = this.editor.clipboard.selectFileHandler({ reference });
         if (!handler) {
@@ -351,7 +343,6 @@ export class FileInputEvents {
           { reference },
           {
             destination: currentDestination.kind,
-            mode,
             signal: this.ingestion.signal,
           },
         );
@@ -364,7 +355,7 @@ export class FileInputEvents {
    *
    * @param handler - Handler selected for the candidate before preparation.
    * @param candidate - Stored file or already-addressable reference.
-   * @param context - Captured destination, surface, and cancellation signal.
+   * @param context - Captured destination and cancellation signal.
    * @returns The prepared representation while the same handler remains installed.
    * @throws If preparation fails or the selected handler is removed or replaced.
    */

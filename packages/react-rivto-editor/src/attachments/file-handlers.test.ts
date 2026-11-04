@@ -1,7 +1,7 @@
 /** Attachment classification and binary access boundaries. @module */
 import { createTestCoreEditor } from "../test-utils";
 import { createReactEditor } from "../editor/react-editor";
-import type { FileReference } from "./types";
+import type { BinaryReadContext, FileReference } from "./types";
 
 // Use a stable stored reference and leave reads unclaimed in handler-selection tests.
 const provider = { write: async () => "stored:test", read: async () => undefined };
@@ -87,8 +87,15 @@ test("resolves provider blobs and returns bytes with the requested MIME type", a
   const runtime = createReactEditor({ editor });
   const signal = new AbortController().signal;
   const original = new Blob(["content"], { type: "text/plain" });
+  const contexts: BinaryReadContext[] = [];
   // Claim the reference with the same blob so identity and MIME conversion can be checked.
-  const owningProvider = { ...provider, read: async () => original };
+  const owningProvider = {
+    ...provider,
+    read: async (_uri: string, context: BinaryReadContext) => {
+      contexts.push(context);
+      return original;
+    },
+  };
 
   await expect(
     runtime.attachments.resolveBinary(owningProvider, "stored:asset", { signal }),
@@ -104,6 +111,8 @@ test("resolves provider blobs and returns bytes with the requested MIME type", a
   );
   expect(converted.type).toBe("application/example");
   expect(converted.size).toBe(original.size);
+  expect(contexts).toHaveLength(3);
+  expect(contexts[0]).toEqual({ documentId: editor.getDocument().id, signal });
   await runtime.destroy();
   await editor.destroy();
 });

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BinaryProvider } from "../../../../attachments";
 import type { AttachmentApi } from "../../../../editor/types";
-import type { ReactPanelApi } from "../../../../panels/types";
 
 const IMAGE_LOADING_DELAY_MS = 200;
 
@@ -30,14 +29,12 @@ interface ImageSource {
  * for sources that resolve promptly.
  *
  * @param attachments - Borrowed binary reference resolution operation.
- * @param panel - Receiving panel used to capture the current surface mode.
  * @param provider - Extension provider, or undefined for browser-readable URIs.
  * @param uri - Logical image reference to resolve.
  * @returns Current source, loading and error feedback, and a decoding-error setter.
  */
 export function useImageSource(
   attachments: Pick<AttachmentApi, "resolveBinary">,
-  panel: Pick<ReactPanelApi, "getSurfaceType">,
   provider: BinaryProvider | undefined,
   uri: string,
 ): ImageSource {
@@ -56,7 +53,6 @@ export function useImageSource(
     attachments
       .resolveBinary(provider, uri, {
         signal: abort.signal,
-        mode: panel.getSurfaceType(),
       })
       // Publish only the active result and create an object URL for provider bytes.
       .then((resolved) => {
@@ -86,6 +82,6 @@ export function useImageSource(
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [attachments, panel, provider, uri]);
+  }, [attachments, provider, uri]);
   return { source, error, showLoading, setError };
 }

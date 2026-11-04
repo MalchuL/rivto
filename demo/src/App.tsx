@@ -78,9 +78,17 @@ import { RevisionsPanel } from "./RevisionsPanel";
 const DEMO_LOCAL_FILE_ROUTE = "/__rivto_demo_local_file";
 const DEMO_CLIPBOARD_FILE_ROUTE = "/__rivto_demo_clipboard_file";
 const DEMO_OPEN_FILE_ROUTE = "/__rivto_demo_open_file";
+/** Maximum image size retained briefly for immediate display, in bytes. */
+const DEMO_PREVIEW_MAX_BYTES = 1024 * 1024;
+/** Maximum number of recently uploaded image previews retained. */
+const DEMO_PREVIEW_MAX_COUNT = 16;
+/** Maximum time an unused preview remains available, in milliseconds. */
+const DEMO_PREVIEW_LIFETIME_MS = 30_000;
+/** Recent uploaded image bytes awaiting their first display. */
+const demoImagePreviews = new Map<string, Blob>();
 
 /**
- * Returns whether the demo server can resolve one pasted filesystem path.
+ * Returns whether the demo server can resolve one local filesystem path.
  *
  * @param uri - Candidate file URI or filesystem path.
  * @returns True for file URIs and absolute Unix or Windows paths.
@@ -120,45 +128,40 @@ async function storeDemoFile(
   return result.uri;
 }
 
-/** Demo storage keeps pasted files on disk and other files as bounded data URLs. */
+/** Demo storage keeps uploaded files on disk. */
 const demoBinaryProvider: BinaryProvider = {
   /**
-   * Stores clipboard bytes on the demo server and other files as data URLs.
+   * Stores file bytes on the demo server.
    *
-   * A 10 MiB limit applies to both paths. Abort signals cancel file reading or
-   * the server request, and the caller receives the resulting reference.
+   * A 10 MiB limit applies. Abort signals cancel the server request, and the
+   * caller receives the resulting reference. Small images are retained briefly
+   * for their first display to avoid immediately fetching the bytes again.
    *
    * @param file - Browser-provided binary content.
-   * @param context - Name, MIME type, input source, and cancellation signal.
-   * @returns A promise resolving to a local path or data URL.
-   * @throws If the file is too large, cancelled, or cannot be stored or read.
+   * @param context - Name, MIME type, and cancellation signal.
+   * @returns A promise resolving to the stored local path.
+   * @throws If the file is too large, cancelled, or cannot be stored.
    * @inheritdoc BinaryProvider.write
    */
   async write(file, context) {
     if (file.size > 10 * 1024 * 1024) {
       throw new RangeError("File exceeds the 10 MiB limit");
     }
-    if (context.source === "clipboard") {
-      return storeDemoFile(file, context.name, context.mimeType, context.signal);
+    const uri = await storeDemoFile(file, context.name, context.mimeType, context.signal);
+    if (context.mimeType.startsWith("image/") && file.size <= DEMO_PREVIEW_MAX_BYTES) {
+      if (demoImagePreviews.size >= DEMO_PREVIEW_MAX_COUNT) {
+        demoImagePreviews.delete(demoImagePreviews.keys().next().value!);
+      }
+      demoImagePreviews.set(uri, file);
+      // Release previews that never reach a mounted image view.
+      window.setTimeout(() => demoImagePreviews.delete(uri), DEMO_PREVIEW_LIFETIME_MS);
     }
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      // Cancel the active browser file read when the operation is aborted.
-      const abort = () => reader.abort();
-      context.signal.throwIfAborted();
-      context.signal.addEventListener("abort", abort, { once: true });
-      // Remove the abort listener after any terminal FileReader event.
-      reader.addEventListener("loadend", () => context.signal.removeEventListener("abort", abort), {
-        once: true,
-      });
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
-      reader.onabort = () => reject(context.signal.reason);
-      reader.readAsDataURL(file);
-    });
+    return uri;
   },
   /**
    * Reads local references through the demo server and declines other URIs.
+   *
+   * A cached upload is consumed on its first read; later reads use the server.
    *
    * @param uri - Logical binary reference to resolve.
    * @param context - Operation context containing the cancellation signal.
@@ -170,11 +173,17 @@ const demoBinaryProvider: BinaryProvider = {
     if (!isDemoLocalFileUri(uri)) {
       return undefined;
     }
+    context.signal.throwIfAborted();
+    const preview = demoImagePreviews.get(uri);
+    if (preview) {
+      demoImagePreviews.delete(uri);
+      return preview;
+    }
     const response = await fetch(`${DEMO_LOCAL_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
       signal: context.signal,
     });
     if (!response.ok) {
-      throw new Error("The pasted local file is unavailable to the demo server");
+      throw new Error("The local file is unavailable to the demo server");
     }
     return response.blob();
   },
