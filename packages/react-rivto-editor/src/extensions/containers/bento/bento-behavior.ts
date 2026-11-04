@@ -5,7 +5,8 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  *
  * Enter on an empty board inserts the first tile. Nested containers inside a
  * tile keep their own views. Drag may relocate a tile onto the page, add a
- * sibling tile, or nest one tile inside another.
+ * sibling tile, or use an inside target to nest one tile inside another. Tile
+ * boundaries keep sibling placement while nested child lists use their own policy.
  *
  * @module
  */
@@ -18,6 +19,14 @@ export const BENTO_BLOCK_TYPE = "bento";
  * Behavior registered for the `bento` block type.
  */
 export class BentoBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps tile boundary drops at the board's direct-child level.
+   *
+   * @returns Sibling-only boundary placement without restricting inside drops.
+   */
+  childDropPlacement(): "siblings" {
+    return "siblings";
+  }
   /**
    * Preserves the fixed depth of direct structural children.
    *

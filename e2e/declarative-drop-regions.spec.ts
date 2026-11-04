@@ -86,7 +86,7 @@ for (const mode of ["block", "edgeless"] as const) {
   });
 
   for (const type of ["root", "outline", "columns", "kanban", "todo-storage"] as const) {
-    test(`terminal nesting keeps its depth above and below the line in ${type}, ${mode}`, async ({
+    test(`terminal boundary keeps its configured placement above and below the line in ${type}, ${mode}`, async ({
       page,
     }) => {
       const parent = await load(page, type === "root" ? "outline" : type, mode);
@@ -112,9 +112,17 @@ for (const mode of ["block", "edgeless"] as const) {
         expect(line.y + line.height / 2).toBeCloseTo(last.y + last.height, 1);
       }
       await page.mouse.up();
-      await expect.poll(() => readChildIds(page, "last")).toEqual(["source"]);
+      if (type === "kanban") {
+        await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last", "source"]);
+        await expect.poll(() => readChildIds(page, "last")).toEqual([]);
+      } else {
+        await expect.poll(() => readChildIds(page, "last")).toEqual(["source"]);
+      }
       await page.keyboard.press("Control+z");
       await expect.poll(() => readChildIds(page, "last")).toEqual([]);
+      if (type === "kanban") {
+        await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
+      }
     });
   }
 }
@@ -657,6 +665,47 @@ for (const mode of ["block", "edgeless"] as const) {
 }
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`Bento tile side edges retain a drop target in ${mode}`, async ({ page }) => {
+    await load(page, "bento", mode);
+    await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      editor.blocks.insertBlock({ id: "nested", type: "paragraph", content: "Nested" });
+      editor.blocks.moveBlocks(["nested"], "first", "inside");
+      editor.history.clear();
+    });
+    await startDrag(page);
+    const tile = page
+      .locator('[data-block-id="first"]')
+      .locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]");
+    const box = (await tile.boundingBox())!;
+    for (const side of ["left", "right"] as const) {
+      for (const inset of [1, 4, 8, 12, 16, 20, 24]) {
+        const x = side === "left" ? box.x + inset : box.x + box.width - inset;
+        for (const ratio of [0.25, 0.5, 0.75]) {
+          await page.mouse.move(x, box.y + box.height * ratio);
+          await expect
+            .poll(
+              async () =>
+                (await page.locator(".rivto-block-drop-line:visible").count()) +
+                (await page.locator('[data-block-drop-active="true"]').count()),
+              { message: `side=${side}, inset=${inset}, ratio=${ratio}` },
+            )
+            .toBeGreaterThan(0);
+        }
+      }
+    }
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height * 0.25);
+    await expect(page.locator('[data-block-id="first"]')).toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
+    await page.mouse.up();
+    await expect.poll(() => readChildIds(page, "first")).toEqual(["nested", "source"]);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => readChildIds(page, "first")).toEqual(["nested"]);
+  });
+
   for (const wrapped of [false, true]) {
     test(`Bento shared tile seam stays active at fractional coordinates in ${mode}, wrapped=${wrapped}`, async ({
       page,
@@ -1467,7 +1516,7 @@ for (const mode of ["block", "edgeless"] as const) {
           expected.splice(initial.indexOf(id) + (placement === "after" ? 1 : 0), 0, "source");
           await startDrag(page);
           await page.mouse.move(x, y);
-          const inside = placement === "after" && side === "right";
+          const inside = type !== "kanban" && placement === "after" && side === "right";
           let destination = expected;
           if (type === "bento") {
             await expectInsideOutline(page, parent);
@@ -1640,6 +1689,15 @@ for (const mode of ["block", "edgeless"] as const) {
         }
         if (type === "bento" && location === "gutter") {
           await commitDropIntoBlock(page, parent, ["first", "last"], point, "outline");
+        } else if (type === "kanban" || type === "bento") {
+          await startDrag(page);
+          await page.mouse.move(point.x, point.y, { steps: 5 });
+          await expectBoundaryLine(page);
+          await page.mouse.up();
+          await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "source", "last"]);
+          await expect.poll(() => readChildIds(page, "first")).toEqual([]);
+          await page.keyboard.press("Control+z");
+          await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
         } else {
           await commitDropIntoBlock(page, "first", [], point, "line");
         }
@@ -1671,6 +1729,7 @@ async function expectBoundaryLine(page: Page) {
  * @param rtl - Whether logical indentation starts from the right.
  * @param indent - Local indentation in viewport CSS pixels.
  * @param contentInset - Inline distance from the placement edge to its content.
+ * @param allowsChild - Whether the direct list exposes an indented child band.
  * @returns Resolves after the same line geometry is checked across both boundaries.
  */
 async function sweepBoundaryDepth(
@@ -1680,9 +1739,10 @@ async function sweepBoundaryDepth(
   rtl: boolean,
   indent: number,
   contentInset: number,
+  allowsChild: boolean,
 ) {
   for (const offset of [2, indent + 2, indent + 11, indent + 12, indent + 66, 2]) {
-    const depth = offset < indent + 12 ? 0 : 1;
+    const depth = allowsChild && offset >= indent + 12 ? 1 : 0;
     for (const y of ys) {
       await page.mouse.move(rtl ? box.x + box.width - offset : box.x + offset, y);
       const line = page.locator(".rivto-block-drop-line:visible");
@@ -1805,6 +1865,7 @@ for (const mode of ["block", "edgeless"] as const) {
             .locator(":scope > .rivto-block-row > .rivto-block-content")
             .boundingBox())!;
           const contentInset = 12;
+          const allowsChild = type !== "kanban" && type !== "bento";
           await startDrag(page);
           await sweepBoundaryDepth(
             page,
@@ -1813,6 +1874,7 @@ for (const mode of ["block", "edgeless"] as const) {
             rtl,
             indent,
             contentInset,
+            allowsChild,
           );
           await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2);
           await expectInsideOutline(page, "first");
@@ -1822,10 +1884,13 @@ for (const mode of ["block", "edgeless"] as const) {
           await expect(page.locator('[data-block-drop-active="true"]')).toHaveCount(0);
           await expectPaintedBoundary(page);
           await page.mouse.up();
+          const childDestination = child && allowsChild;
           await expect
             .poll(() => readChildIds(page, parent))
-            .toEqual(child ? ["first", "last"] : ["first", "source", "last"]);
-          await expect.poll(() => readChildIds(page, "first")).toEqual(child ? ["source"] : []);
+            .toEqual(childDestination ? ["first", "last"] : ["first", "source", "last"]);
+          await expect
+            .poll(() => readChildIds(page, "first"))
+            .toEqual(childDestination ? ["source"] : []);
           await page.keyboard.press("Control+z");
           await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
           await expect.poll(() => readChildIds(page, "first")).toEqual([]);
@@ -1957,12 +2022,10 @@ for (const mode of ["block", "edgeless"] as const) {
         await page.mouse.up();
         let children = ["first", "source"];
         if (near) {
-          children = side === "top" ? ["source", "first"] : ["first"];
+          children = side === "top" ? ["source", "first"] : ["first", "source"];
         }
         await expect.poll(() => readChildIds(page, "board")).toEqual(children);
-        await expect
-          .poll(() => readChildIds(page, "first"))
-          .toEqual(near && side === "bottom" ? ["source"] : []);
+        await expect.poll(() => readChildIds(page, "first")).toEqual([]);
         await page.keyboard.press("Control+z");
         await expect.poll(() => readChildIds(page, "board")).toEqual(["first"]);
         await expect.poll(() => readChildIds(page, "first")).toEqual([]);
@@ -2011,10 +2074,17 @@ for (const mode of ["block", "edgeless"] as const) {
         }
         expect(await host.boundingBox()).toEqual(initialHost);
         await page.mouse.up();
+        const childDestination = end && type !== "kanban";
+        let expected = ["source", "first", "last"];
+        if (childDestination) {
+          expected = ["first", "last"];
+        } else if (end) {
+          expected = ["first", "last", "source"];
+        }
+        await expect.poll(() => readChildIds(page, parent)).toEqual(expected);
         await expect
-          .poll(() => readChildIds(page, parent))
-          .toEqual(end ? ["first", "last"] : ["source", "first", "last"]);
-        await expect.poll(() => readChildIds(page, "last")).toEqual(end ? ["source"] : []);
+          .poll(() => readChildIds(page, "last"))
+          .toEqual(childDestination ? ["source"] : []);
         await page.keyboard.press("Control+z");
         await expect.poll(() => readChildIds(page, parent)).toEqual(["first", "last"]);
         await expect.poll(() => readChildIds(page, "last")).toEqual([]);

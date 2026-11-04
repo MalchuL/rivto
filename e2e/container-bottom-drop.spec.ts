@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
-type Container = "bento" | "todo-storage";
+type Container = "bento" | "todo-storage" | "custom-container";
 type Mode = "block" | "edgeless";
 
 /**
@@ -18,8 +19,25 @@ async function load(page: Page, type: Container, mode: Mode): Promise<void> {
   await page.locator('[data-journal-document="today"] > .page-surface').waitFor();
   await page.evaluate(
     ({ type, mode }) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-        .__rivtoDemo.editor;
+      const { editor, reactEditor } = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
+        }
+      ).__rivtoDemo;
+      if (type === "custom-container") {
+        const bento = reactEditor.renderers
+          .getRegistrations()
+          .find((entry) => entry.type === "bento")!;
+        reactEditor.blockTypes.register({
+          definition: { type, title: "Custom container" },
+          render: bento.renderer,
+          layout: bento.layout,
+          behavior: {
+            isAvailable: ({ block }) => block.type === type,
+            childDropPlacement: () => "siblings",
+          },
+        });
+      }
       editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
       const leaf = type === "todo-storage" ? "todo-item" : "paragraph";
       editor.blocks.insertBlock({ id: "source", type: leaf, content: "Source" });
@@ -66,13 +84,15 @@ async function startDrag(page: Page): Promise<void> {
   await expect(page.locator('[data-block-id="source"]')).toHaveAttribute("data-dragging", "true");
 }
 
-for (const type of ["bento", "todo-storage"] as const) {
+for (const type of ["bento", "todo-storage", "custom-container"] as const) {
   for (const mode of ["block", "edgeless"] as const) {
     test(`${type} retains its last item's bottom boundary in ${mode}`, async ({ page }) => {
       await load(page, type, mode);
       const last = page.locator('[data-block-id="last"]');
       const anchor =
-        type === "bento" ? last.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]") : last;
+        type !== "todo-storage"
+          ? last.locator("xpath=ancestor::*[@data-drop-wrapper-axis][1]")
+          : last;
       const lastBox = (await last.boundingBox())!;
       const anchorBox = (await anchor.boundingBox())!;
       await startDrag(page);
@@ -85,6 +105,14 @@ for (const type of ["bento", "todo-storage"] as const) {
         await expect(line).toHaveCount(1);
         const lineBox = (await line.boundingBox())!;
         expect(lineBox.y + lineBox.height / 2).toBeCloseTo(anchorBox.y + anchorBox.height, 1);
+      }
+      if (type !== "todo-storage") {
+        for (const inset of [36, 4, 36]) {
+          await page.mouse.move(lastBox.x + inset, lastBox.y + lastBox.height - 3, { steps: 8 });
+          await expect(line).toHaveCount(1);
+          const lineBox = (await line.boundingBox())!;
+          expect(lineBox.y + lineBox.height / 2).toBeCloseTo(anchorBox.y + anchorBox.height, 1);
+        }
       }
       await page.mouse.up();
       await expect

@@ -5,9 +5,17 @@ import type {
   BlockBehaviorData,
   BlockMoveContext,
 } from "../../block-behaviors/types";
+import type { BlockDropPlacement } from "@chulane/rivto-page";
 
 /** Outline, split, and movement behavior selected from current detached block data. */
 export interface BlockBehaviorsApi {
+  /**
+   * Selects the first declared placement policy for an owner's direct children.
+   *
+   * @param block - Current detached fields of the child-list owner.
+   * @returns The first applicable policy, or undefined when all behaviors defer.
+   */
+  childDropPlacement(block: BlockBehaviorData): BlockDropPlacement | undefined;
   /** Revision of the installed behavior order, independent of document payload edits. */
   readonly revision: number;
   /**

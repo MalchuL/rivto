@@ -456,6 +456,9 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    *
    * Ancestor fallback considers only an actual edge beyond a nested layout;
    * ancestor body and background append declarations never gain priority.
+   * An owner's bounded child layout also participates when a native hit lands
+   * on its shell rather than the child host, so overlapping controls cannot
+   * change which ancestor edge owns the same physical boundary.
    * A nearer explicit item edge retains its ordinary nesting unless a declared
    * local owner has a stationary sibling strip covering that same edge. This
    * reserves external shared boundaries without promoting ordinary outline
@@ -491,7 +494,7 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       if (element.hasAttribute(BLOCK_DROP_EXCLUDE_ATTRIBUTE)) {
         return;
       }
-      const layout = this.layouts.get(element as HTMLElement);
+      const layout = this.readLayout(element);
       hasOuterPerpendicularLayout ||= areDropAxesPerpendicular(innerLayout?.axis, layout?.axis);
       // Normalize only after reaching the ancestor edge's containing list.
       if (ancestorEdge && layout && innerLayout) {

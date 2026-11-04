@@ -83,8 +83,14 @@ function BlockNodeView({ blockId, node, block, selected }: BlockNodeViewProps) {
     [node, childrenId, block, selected, entries],
   );
   const childrenState = useMemo(
-    () => ({ blockId, childIds: block.childIds, childrenId, collapsed: block.collapsed === true }),
-    [blockId, block.childIds, childrenId, block.collapsed],
+    () => ({
+      blockId,
+      childIds: block.childIds,
+      childrenId,
+      collapsed: block.collapsed === true,
+      dropPlacement: block.dropPlacement,
+    }),
+    [blockId, block.childIds, childrenId, block.collapsed, block.dropPlacement],
   );
   return (
     <BlockLayoutContext.Provider value={layoutState}>

@@ -137,7 +137,10 @@ hit geometry, while the resolver measures the actual styled child host.
 `BlockChildren.item` receives `{ blockId, children }`, with the existing child node
 as `children`. Render it once inside `BlockItem` for placement/counter-aware chrome,
 or `BlockDropWrapper` when a wrapping item needs explicit sibling boundaries.
-Declare item components outside render so their identities remain stable.
+Declare item components outside render so their identities remain stable. The
+wrapper's existing content element declares an inside destination for its item;
+controls alongside the block shell participate without adding a hitbox. The
+wrapper's declared insertion edges retain priority over that inside destination.
 
 `BlockChildren.dropGaps` enables physical gaps between mounted canonical anchors.
 Use `BlockDropExclude asChild` or `BlockDropTarget.exclude` for intentional subtree
@@ -214,20 +217,32 @@ ownership, canonical destination and feedback geometry separate: destination kin
 alone does not identify whether the user is over a body or an insertion boundary.
 
 Choose `BlockChildren.dropAxis` for actual child flow: vertical, horizontal or grid.
-Vertical layout retains ordinary outline depth placement. Register explicit regions
+Flow does not determine boundary depth placement. Register explicit regions
 with `BlockDropTarget asChild`, canonical gaps with `dropGaps`, and wrapping edges
 with `BlockDropWrapper`. Do not reintroduce `PAGE_DRAG_METADATA_KEY`,
 `acceptsDropContainer` or per-type axis switches in shared Page code.
 
-Choose `dropPlacement="siblings"` when background gaps must stay at the list's
-own level; the default `outline` preserves horizontal depth selection. This is
-independent of flow axis. `BlockDropWrapper.axis` selects block-start/end edges for
-vertical flow, inline edges for horizontal flow, or all four for its default grid.
-Linear items and wrapping block-end edges share the same canonical declaration
-builder and inherit this list policy. Direct cards/tiles retain outline nesting;
-do not disable it merely to make sibling insertion span a larger area. Inline
-grid seams keep sibling order, while terminal descendants inherit their item's
-trailing outline levels. Structural columns may intentionally use `siblings`.
+Choose the direct-child boundary policy through the owner's registered
+`BlockBehavior.childDropPlacement(block)`. The first applicable behavior in
+priority order returning `"outline"` or `"siblings"` wins; `undefined` defers.
+The resolved policy takes precedence over `BlockChildren.dropPlacement`; without
+either, `outline` is the default. It is projected with the addressed Page node
+and updates when behavior registrations or the owner's node change. The policy is
+independent of flow axis and applies only to that owner's direct child list.
+
+`outline` exposes horizontal sibling, child and eligible terminal-ancestor depth
+bands. `siblings` keeps direct-item edges and gaps at the owning list's sibling
+level. Bento tiles and Kanban column cards use `siblings`; their body/inside
+targets remain available and each item's own child list uses its own policy.
+Ordinary blocks default to `outline`, including ordinary blocks inside a tile or
+card. Structural columns may also use `siblings`. The policy changes drop gesture
+geometry, not child eligibility, keyboard indentation or `canMove` permissions.
+`BlockChildren.dropScope` independently controls whether the owner's outer rim is
+local or continues an outline; an inside-list gesture must not escape a local scope.
+`BlockDropWrapper.axis` selects block-start/end edges for vertical flow, inline
+edges for horizontal flow, or all four for its default grid. Linear items and
+wrapping block-end edges share the declaration builder; inline grid seams sort
+siblings, and terminal descendants inherit only the levels their list exposes.
 Use the public `BlockEditorTheme` geometry tokens to customize padding, gutters,
 child gaps and inset edge thickness without container-specific pointer calculations.
 `--rivto-drop-target-size` uses local CSS pixels and never changes presentation spacing.
@@ -352,13 +367,18 @@ conversion. Use browser tests for the behavior that depends on actual layout:
   feedback placement and persisted parent/order; test rejected destinations too.
   Exercise the own row of a populated block, not only a leaf or the center of its
   entire subtree. A large shell can hide an edge that consumes its short header.
-  Check body inside actions against the hierarchy outline and edge/gap-derived
-  child insertion against an indented line. Sweep horizontally in both directions
+  Check body inside actions against the hierarchy outline and edge/gap feedback
+  against the owning list's placement policy. Sweep horizontally in both directions
   and across both neighboring edges without losing the line or changing its Y.
   Independently exercise indented lower edges, physical gaps and exposed row
   gutters outside content on direct children, comparing ordinary outlines with
-  containers. A passing body drop or a deeper nested-row drop does not verify
-  this boundary gesture. Assert the receiving child IDs and one-step undo.
+  sibling-only Bento tiles and Kanban cards. Enter populated items and verify
+  their own child-list policy independently; test ordinary-in-container,
+  container-in-ordinary, container-in-container and a registered custom policy.
+  Where items have resize controls, sweep both strips and adjacent edge/body
+  transitions, verifying native hits, feedback, committed parent/order and undo;
+  check resize gestures still work. A passing body drop or a deeper nested-row drop
+  does not verify direct-item boundary placement.
 - Width/resize persistence and cancellation, filters, menus, ordering and modal
   expansion when those features are in scope. A redesign preserves existing
   features unless the user explicitly chooses a smaller scope.

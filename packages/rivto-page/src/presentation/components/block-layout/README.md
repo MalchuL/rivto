@@ -147,13 +147,15 @@ the same position manually and automatically. `BlockBody` remains the convenient
 body-contribution primitive. Moving contributions does not change their owner,
 predicates or registration lifetime.
 
-`BlockChildren.dropPlacement` defaults to `outline`: each physical gap declares
+An owner's `BlockEditorNodeSnapshot.dropPlacement` selects its direct-child boundary
+policy and takes precedence over `BlockChildren.dropPlacement`. With neither set,
+placement defaults to `outline`: each physical gap declares
 separate horizontal sibling and child-append bands. Terminal subtrees additionally
 expose their ancestor insertion bands. Choose `siblings` to keep a list's gaps at
 its own parent. This is independent of `dropAxis`, which describes actual flow.
 Linear lists generate item-owned regions; grid items compose BlockDropWrapper.
 Both use the same canonical edge builder and inherit the list's placement policy.
-Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
+Wrapping block-end edges use the same configured depth policy; inline grid
 seams insert siblings. Terminal descendants inherit their item's trailing levels,
 so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.

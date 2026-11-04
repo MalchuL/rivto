@@ -14,6 +14,7 @@ export type {
   BlockEditorNodeSnapshot,
   BlockEditorSelection,
   BlockListType,
+  BlockDropPlacement,
 } from "./adapter/types";
 export {
   BlockEditor,

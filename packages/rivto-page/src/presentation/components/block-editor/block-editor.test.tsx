@@ -2015,3 +2015,22 @@ it("declares outline drop scope for the default block layout", () => {
       ?.getAttribute("data-block-drop-scope"),
   ).toBe("outline");
 });
+
+it("updates each child list's placement independently when its owner policy changes", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.rootIds = ["parent"];
+  adapter.setBlockIds(["parent"]);
+  adapter.setNode("parent", { type: "custom", childIds: ["child"], dropPlacement: "siblings" });
+  adapter.setNode("child", { childIds: ["grandchild"] });
+  adapter.setNode("grandchild");
+  const editor = createEditor(adapter);
+  editor.renderers.register("custom", { layout: () => <BlockChildren dropPlacement="outline" /> });
+  act(() => root.render(<BlockEditor editor={editor} />));
+  const parent = container.querySelector('[data-block-id="parent"] > .rivto-block-children')!;
+  const child = container.querySelector('[data-block-id="child"] > .rivto-block-children')!;
+  expect(parent.getAttribute("data-block-drop-placement")).toBe("siblings");
+  expect(child.getAttribute("data-block-drop-placement")).toBe("outline");
+  act(() => adapter.setNode("parent", { dropPlacement: "outline" }));
+  expect(parent.getAttribute("data-block-drop-placement")).toBe("outline");
+  expect(child.getAttribute("data-block-drop-placement")).toBe("outline");
+});

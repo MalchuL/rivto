@@ -44,7 +44,7 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
   readonly dropAxis?: "vertical" | "horizontal" | "grid";
   /** Inherited inset edge thickness in local CSS pixels; omission preserves the theme token. */
   readonly targetSize?: number;
-  /** Outline declares depth bands; siblings keeps each region at this parent. Defaults to outline. */
+  /** Outline declares depth bands; siblings keeps each region at this parent. The owner's policy takes precedence; otherwise defaults to outline. */
   readonly dropPlacement?: "outline" | "siblings";
   /** Local (default) keeps the owner's outer boundaries at its sibling level. Outline continues ordinary nesting depth through the owner. Body drops and depth choices within this list remain independent. */
   readonly dropScope?: "local" | "outline";
@@ -72,7 +72,7 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * @param props.dropBackground - Enables append on unoccupied host background, including filtered lists.
  * @param props.dropAxis - Flow for declared regions, default vertical. Linear lists register inset edges without forcing indentation; grid items supply wrapping boundaries. Background padding has no implicit action.
  * @param props.targetSize - Optional edge thickness shared by direct items and descendants, including wrapping items; changes hit geometry only. The existing style token takes precedence.
- * @param props.dropPlacement - Outline declares horizontal depth regions; siblings fixes each gap to this list, independently of axis.
+ * @param props.dropPlacement - Outline declares horizontal depth regions; siblings fixes each gap to this list, independently of axis. The owner's registered policy takes precedence.
  * @param props.dropScope - Local (default) declares a self-contained child layout whose owner's outer edges sort siblings. Outline continues ordinary outline nesting through that owner; neither mode disables body drops or nesting between children.
  * @param props.hoverBoundary - True bounds descendant row hover to this layout; false inherits the enclosing area without changing indentation or drop permission.
  * @param props.renderEmpty - False omits the entire host when childIds is empty, including extra controls.
@@ -97,14 +97,21 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     dropBackground = false,
     dropAxis = "vertical",
     targetSize,
-    dropPlacement = "outline",
+    dropPlacement: requestedDropPlacement,
     dropScope = "local",
     hoverBoundary = true,
     ...attributes
   },
   ref,
 ) {
-  const { blockId, childIds, childrenId, collapsed } = useBlockChildrenState();
+  const {
+    blockId,
+    childIds,
+    childrenId,
+    collapsed,
+    dropPlacement: behaviorDropPlacement,
+  } = useBlockChildrenState();
+  const dropPlacement = behaviorDropPlacement ?? requestedDropPlacement ?? "outline";
   const childrenRef = useBlockRegion(blockId, "children", ref);
   const dropLayout = useBlockDropLayout(
     {

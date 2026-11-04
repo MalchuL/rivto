@@ -53,7 +53,7 @@ export class PageBlocks implements BlockEditorBlocks {
     private readonly panel: PageBlockHost,
     private readonly behaviors: Pick<
       BlockBehaviorsApi,
-      "childrenVisible" | "subscribe" | "revision"
+      "childrenVisible" | "childDropPlacement" | "subscribe" | "revision"
     >,
   ) {}
 
@@ -128,6 +128,7 @@ export class PageBlocks implements BlockEditorBlocks {
       listType: this.readListType(node.listProps.type),
       checked: node.listProps.checked === true,
       collapsed: !this.behaviors.childrenVisible(node),
+      dropPlacement: this.behaviors.childDropPlacement(node),
       color:
         typeof background === "string" && background
           ? `var(--rivto-block-${background})`

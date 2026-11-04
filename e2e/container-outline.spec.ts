@@ -66,9 +66,10 @@ class ContainerOutlineFixture {
    * Drops into the physical gap using horizontal pointer position to choose depth.
    *
    * @param nested - True requests a child of the upper block; false requests its next sibling.
+   * @param allowsNested - Whether the receiving list exposes a child boundary band.
    * @returns Resolves after the model order and the visible indicator agree.
    */
-  async move(nested: boolean): Promise<void> {
+  async move(nested: boolean, allowsNested = true): Promise<void> {
     const source = this.page.locator('[data-block-id="moving"]');
     await source.locator(":scope > .rivto-block-row").hover();
     const handle = source.locator(":scope > .rivto-block-row .block-handle");
@@ -85,7 +86,11 @@ class ContainerOutlineFixture {
     );
     const line = this.page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
-    expect((await line.boundingBox())!.x).toBeCloseTo(upper.x + 12 + (nested ? 24 : 0), 0);
+    const childDestination = nested && allowsNested;
+    expect((await line.boundingBox())!.x).toBeCloseTo(
+      upper.x + 12 + (childDestination ? 24 : 0),
+      0,
+    );
     await this.page.mouse.up();
     await expect
       .poll(() =>
@@ -99,8 +104,8 @@ class ContainerOutlineFixture {
         }),
       )
       .toEqual({
-        parent: nested ? "upper" : "writing",
-        children: nested ? ["upper", "lower"] : ["upper", "moving", "lower"],
+        parent: childDestination ? "upper" : "writing",
+        children: childDestination ? ["upper", "lower"] : ["upper", "moving", "lower"],
       });
     await expect(line).toHaveCount(0);
   }
@@ -243,7 +248,7 @@ for (const type of containers) {
           ),
         )
         .toEqual(["upper", "lower", "moving"]);
-      await fixture.move(true);
+      await fixture.move(true, type !== "kanban");
     });
   }
 }

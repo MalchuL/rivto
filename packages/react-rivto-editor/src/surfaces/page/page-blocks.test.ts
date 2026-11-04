@@ -13,6 +13,7 @@ it("reuses model snapshots and addressed subscriptions without visiting descenda
   const first = blocks.getBlockNode(root.id)!;
   expect(blocks.getBlockNode(root.id)).toBe(first);
   expect(first.color).toBe("transparent");
+  expect(first.dropPlacement).toBeUndefined();
   expect(first.childIds).toBe(panel.blocks.getBlockNode(root.id)!.childIds);
   expect(blocks.getRootIds()).toBe(panel.blocks.getRootIds());
   const listener = jestApi.fn();
@@ -34,12 +35,15 @@ it("reuses model snapshots and addressed subscriptions without visiting descenda
      * @returns False for the selected parent.
      */
     childrenVisible: () => false,
+    childDropPlacement: () => "siblings",
   });
   expect(listener).toHaveBeenCalledTimes(1);
   expect(blocks.getBlockNode(root.id)?.collapsed).toBe(true);
+  expect(blocks.getBlockNode(root.id)?.dropPlacement).toBe("siblings");
   remove();
   expect(listener).toHaveBeenCalledTimes(2);
   expect(blocks.getBlockNode(root.id)?.collapsed).toBe(false);
+  expect(blocks.getBlockNode(root.id)?.dropPlacement).toBeUndefined();
   expect(recursive).not.toHaveBeenCalled();
   release();
   panel.editor.destroy();

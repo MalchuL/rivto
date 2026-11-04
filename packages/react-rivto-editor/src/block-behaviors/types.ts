@@ -1,5 +1,6 @@
 import type { BlockDestination } from "@chulane/document-model";
 import type { EditorBlock, Selection } from "@chulane/rivto";
+import type { BlockDropPlacement } from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../panels/types";
 import type { ReactEditorApi } from "../editor/types";
 import type { KeyboardSelectionTarget } from "../managers";
@@ -90,6 +91,16 @@ export interface BlockMoveContext {
  * must allow movement; geometry and input handling remain owned by extensions.
  */
 export interface BlockBehavior {
+  /**
+   * Chooses boundary depth for this block's direct child list.
+   *
+   * The first applicable behavior supplying a value wins; this does not affect
+   * inside targets, nested lists, keyboard operations, or move permissions.
+   *
+   * @param block - Current detached fields of the child-list owner.
+   * @returns A placement policy, or undefined to defer to lower-priority behavior.
+   */
+  childDropPlacement?(block: BlockBehaviorData): BlockDropPlacement | undefined;
   /**
    * Determines whether this behavior applies to the supplied block, independently of the called method.
    * @param context - Current detached block fields and owning runtime; foreign movement sources are supplied directly.

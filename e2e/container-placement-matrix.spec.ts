@@ -75,9 +75,10 @@ async function loadContainers(
  *
  * @param page - Browser containing the two mounted container lists.
  * @param placement - First, interior, last or child-depth destination.
+ * @param target - Receiving layout whose direct-item policy determines depth.
  * @returns Resolves after undo restores the source list for the next sample.
  */
-async function verifyPlacement(page: Page, placement: Placement): Promise<void> {
+async function verifyPlacement(page: Page, placement: Placement, target: Kind): Promise<void> {
   const point = await drag(page, placement);
   const line = page.locator(".rivto-block-drop-line:visible");
   await expect(line).toBeVisible();
@@ -86,12 +87,12 @@ async function verifyPlacement(page: Page, placement: Placement): Promise<void> 
     expect(rect.y + rect.height / 2).toBeCloseTo(point.y, 0);
   }
   await page.mouse.up();
-  await expect
-    .poll(() => sourceParent(page))
-    .toBe(placement === "nested" ? "first" : "target-list");
+  const nested = placement === "nested" && target !== "kanban";
+  await expect.poll(() => sourceParent(page)).toBe(nested ? "first" : "target-list");
   const expected = ["first", "last"];
-  if (placement !== "nested") {
-    expected.splice(["first", "between", "last"].indexOf(placement), 0, "moving");
+  if (!nested) {
+    const index = placement === "nested" ? 1 : ["first", "between", "last"].indexOf(placement);
+    expected.splice(index, 0, "moving");
   }
   expect(
     await page.evaluate(() =>
@@ -199,9 +200,56 @@ for (const source of kinds) {
         ];
         await loadContainers(page, blocks, mode);
         for (const placement of ["first", "between", "last", "nested"] as const) {
-          await verifyPlacement(page, placement);
+          await verifyPlacement(page, placement, target);
         }
       });
     }
   }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`nested Kanban in Bento inside an ordinary block keeps its own card policy in ${mode}`, async ({
+    page,
+  }) => {
+    await loadContainers(
+      page,
+      [
+        { id: "moving", type: "paragraph", content: "Moving" },
+        {
+          id: "outer",
+          type: "paragraph",
+          content: "Outer",
+          children: [
+            {
+              id: "outer-bento",
+              type: "bento",
+              children: [
+                container("kanban", "target", [
+                  { id: "first", type: "paragraph", content: "First" },
+                  { id: "last", type: "paragraph", content: "Last" },
+                ]),
+              ],
+            },
+          ],
+        },
+      ],
+      mode,
+    );
+    await drag(page, "nested");
+    const line = page.locator(".rivto-block-drop-line:visible");
+    await expect(line).toBeVisible();
+    await page.mouse.up();
+    await expect.poll(() => sourceParent(page)).toBe("target-list");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+          ).__rivtoDemo.editor.blocks.getChildIds("target-list"),
+        ),
+      )
+      .toEqual(["first", "moving", "last"]);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => sourceParent(page)).toBeNull();
+  });
 }

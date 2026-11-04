@@ -4,6 +4,7 @@ import { BlockItem, type BlockItemProps } from "../components/block-layout/block
 import { BlockChildPlacementContext } from "../components/block-layout/block-item-context";
 import { useBlockDropRegions } from "./block-drop-layout";
 import { BlockDropDepthContext, useBlockDropEdges } from "./block-drop-item";
+import { BlockDropTarget } from "./block-drop-target";
 
 /** Existing placement attributes with independently declared edge geometry. */
 export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
@@ -23,6 +24,8 @@ export interface BlockDropWrapperProps extends Omit<BlockItemProps, "block"> {
  * Top/inline-start declare before and bottom/inline-end declare after, including RTL.
  * Block-end boundaries inherit the list's outline depth policy through the same
  * declaration builder as linear items; inline grid seams remain sibling placement.
+ * The existing content wrapper also owns the item's inside target, so controls
+ * outside the block shell participate without obscuring the placement edges.
  *
  * @param props - Existing native placement attributes and its already-rendered node.
  * @param props.axis - Edges to enable; defaults to all four for wrapping layouts.
@@ -59,7 +62,9 @@ export const BlockDropWrapper = forwardRef<HTMLDivElement, BlockDropWrapperProps
           className={["rivto-block-drop-wrapper", className].filter(Boolean).join(" ")}
         >
           <BlockDropDepthContext.Provider value={depth}>
-            <div className="rivto-block-drop-wrapper-content">{children}</div>
+            <BlockDropTarget asChild destination={{ kind: "inside", parentId: placement.blockId }}>
+              <div className="rivto-block-drop-wrapper-content">{children}</div>
+            </BlockDropTarget>
           </BlockDropDepthContext.Provider>
         </BlockItem>
       </Slot.Root>

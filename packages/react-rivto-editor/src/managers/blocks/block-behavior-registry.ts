@@ -119,6 +119,22 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
   }
 
   /**
+   * Resolves direct-child boundary placement using the existing behavior priority.
+   *
+   * @param block - Current detached fields of the child-list owner.
+   * @returns The first declared policy, or undefined when all behaviors defer.
+   */
+  childDropPlacement(block: BlockBehaviorData): "outline" | "siblings" | undefined {
+    for (const behavior of this.resolveAll({ editor: this.reactEditor, block })) {
+      const placement = behavior.childDropPlacement?.(block);
+      if (placement !== undefined) {
+        return placement;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Resolves applicability and continues until an action is handled or explicitly refused.
    *
    * Indent and outdent first run the live parent's child-operation chain with the
