@@ -426,6 +426,7 @@ test("pastes a redacted desktop image path without the file handler", async ({ p
 });
 
 test("retries a failed clipboard image path read", async ({ page }) => {
+  await expect(page.locator(".page-surface").first()).toBeVisible();
   const localImage = resolve("docs/00-rivto/assets/pasted-1786747914356-844df263.png");
   await page.evaluate((path) => {
     const host = window as unknown as {
