@@ -1,10 +1,24 @@
 import { focusSelectionCaret } from "../../../managers";
 import { deletePanelSelection } from "../selection/selection-deletion";
 import { createStructuralSelection } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../../editor/types";
-import type { BlockContextMenuContext } from "../../../managers/block-context-menu/types";
+import type {
+  BlockContextMenuContext,
+  BlockContextMenuEntry,
+} from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
+
+/** Registration capability borrowed from the block context menu. */
+interface BlockContextMenuRegistration {
+  /**
+   * Registers a menu entry for the current extension lifecycle.
+   *
+   * @param entry - Menu contribution to register.
+   * @returns Disposer that removes the registered entry.
+   * @throws If the registry is inactive or the entry is invalid or duplicated.
+   */
+  register(entry: BlockContextMenuEntry): () => void;
+}
 
 /**
  * Copies selected root subtrees, optionally deleting them after a successful write.
@@ -26,7 +40,7 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
   if (!bundle) {
     return;
   }
-  await writeClipboardBundle(reactPanel.editor, bundle);
+  await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
   if (cut) {
     assertBlockMenuTargets(context);
     // Do not remove edits that arrived while the clipboard permission prompt was open.
@@ -44,16 +58,16 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
  * Copy and Cut operate on captured root subtrees. Delete restores those roots as
  * a structural selection and uses the same container policies as keyboard deletion.
  *
- * @param editor - Runtime registry receiving extension-owned menu registrations.
+ * @param menu - Block menu registration capability owned by the extension lifecycle.
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockClipboardActions(editor: ReactEditorApi): void {
+export function registerBlockClipboardActions(menu: BlockContextMenuRegistration): void {
   for (const [id, title, cut] of [
     ["copy", "Copy", false],
     ["cut", "Cut", true],
   ] as const) {
-    editor.blockContextMenu.register({
+    menu.register({
       id: `clipboard.${id}`,
       title,
       order: 80,
@@ -67,7 +81,7 @@ export function registerBlockClipboardActions(editor: ReactEditorApi): void {
       execute: (context) => copyBlocks(context, cut),
     });
   }
-  editor.blockContextMenu.register({
+  menu.register({
     id: "block.delete",
     title: "Delete",
     order: 100,
@@ -82,18 +96,18 @@ export function registerBlockClipboardActions(editor: ReactEditorApi): void {
  * targets have no checked choice. Executing a choice updates all captured blockIds
  * in one updateBlocks call and resets their checked list property to false.
  *
- * @param editor - Runtime registry receiving extension-owned menu registrations.
+ * @param menu - Block menu registration capability owned by the extension lifecycle.
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockListActions(editor: ReactEditorApi): void {
-  editor.blockContextMenu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
+export function registerBlockListActions(menu: BlockContextMenuRegistration): void {
+  menu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
   for (const [type, title] of [
     ["list", "Ordinary list"],
     ["numbered_list", "Numbered list"],
     ["checkbox", "Checkboxes"],
   ] as const) {
-    editor.blockContextMenu.register({
+    menu.register({
       id: `list.${type}`,
       parentId: "list",
       title,
@@ -160,18 +174,16 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * Both actions visit captured root subtrees, including hidden descendants, and
  * write the collapse extension's persisted list property through panel operations.
  *
- * @param editor - Runtime registry receiving extension-owned menu registrations.
+ * @param menu - Block menu registration capability owned by the extension lifecycle.
  * @returns No value; registration cleanup belongs to the active extension lifecycle.
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
-export function registerBlockCollapseActions(
-  editor: Pick<ReactEditorApi, "blockContextMenu">,
-): void {
+export function registerBlockCollapseActions(menu: BlockContextMenuRegistration): void {
   for (const [id, title, collapsed] of [
     ["collapse", "Collapse subtree", true],
     ["expand", "Expand whole subtree", false],
   ] as const) {
-    editor.blockContextMenu.register({
+    menu.register({
       id: `block.${id}`,
       title,
       order: 60,

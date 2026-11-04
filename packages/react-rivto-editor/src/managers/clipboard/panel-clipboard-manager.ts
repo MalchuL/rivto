@@ -1,12 +1,47 @@
 import type { ReactPanelApi } from "../../panels/types";
 import type { PanelClipboardApi } from "./api";
-import type { ClipboardManager } from "./clipboard-manager";
+import type { ClipboardApi } from "../../editor/types";
+
+/** Document clipboard operations borrowed by one panel. */
+interface PanelClipboardSource {
+  /**
+   * Copies a structural or text selection in the supplied panel.
+   *
+   * @param selection - Selection to serialize, or omitted to read the panel or runtime selection.
+   * @param reactPanel - Source panel, or omitted for a document-only copy.
+   * @param operation - Copy, cut, or duplicate intent; defaults to copy.
+   * @returns A detached clipboard bundle, or undefined when nothing can be copied.
+   * @throws If a converter rejects the copied data.
+   */
+  readonly copy: ClipboardApi["copy"];
+
+  /**
+   * Copies an explicit text selection using the supplied panel's converters.
+   *
+   * @param selection - Text selection to serialize.
+   * @param reactPanel - Optional source panel supplied to converters.
+   * @returns A detached clipboard bundle, or undefined when there is no text to copy.
+   * @throws If a converter rejects the copied data.
+   */
+  readonly copyText: ClipboardApi["copyText"];
+
+  /**
+   * Pastes clipboard input through the supplied panel's operations.
+   *
+   * @param input - Clipboard payload and insertion options; defaults to an empty input.
+   * @param reactPanel - Receiving panel or document runtime; defaults to the editor.
+   * @param operation - Paste or duplicate intent; defaults to paste.
+   * @returns The resulting caret position, or undefined when no strategy produces one.
+   * @throws If a converter, creation processor, validator, or panel scope check fails.
+   */
+  readonly paste: ClipboardApi["paste"];
+}
 
 /** Clipboard operations use this panel; parsers, formatters, and strategies stay document-owned. */
 export class PanelClipboardManager implements PanelClipboardApi {
   /** @param clipboard - Shared structured clipboard operations. @param reactPanel - Receiving occurrence. */
   constructor(
-    private readonly clipboard: Pick<ClipboardManager, "copy" | "copyText" | "paste">,
+    private readonly clipboard: PanelClipboardSource,
     private readonly reactPanel: ReactPanelApi,
   ) {}
   /**

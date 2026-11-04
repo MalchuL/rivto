@@ -232,7 +232,13 @@ export type { EditorPanelProps } from "./components/editor-panel/types";
 export type { PanelBlocksAPI } from "@chulane/rivto";
 export type { PanelDestination } from "@chulane/rivto";
 export type { PanelElementsAPI } from "@chulane/rivto";
-export type { EditorStorageOptions, EditorAcquisition, ReactEditorApi } from "./editor/types";
+export type {
+  AttachmentApi,
+  ClipboardApi,
+  EditorStorageOptions,
+  EditorAcquisition,
+  ReactEditorApi,
+} from "./editor/types";
 export { useReactEditor } from "./hooks/editor/use-react-editor";
 export type { ReactEditorState, UseReactEditorOptions } from "./hooks/editor/types";
 export type { ReactPanelApi } from "./types";

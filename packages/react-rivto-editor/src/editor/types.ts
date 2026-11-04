@@ -23,8 +23,13 @@ import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
-import type { AttachmentOptions } from "../attachments";
-import type { AttachmentManager } from "../attachments/attachment-manager";
+import type {
+  AttachmentOptions,
+  BinaryProvider,
+  FileOpenHandler,
+  FileReference,
+  FileRequestContext,
+} from "../attachments";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
@@ -78,6 +83,298 @@ export interface Entry {
   editor?: ReactEditorApi;
   core?: DocumentEditorAPI;
   closing?: Promise<void>;
+}
+
+/** Clipboard operations available to editor components and extensions. */
+export interface ClipboardApi {
+  /**
+   * Registers a file handler for matching, lookup, or explicit default selection.
+   *
+   * Matching handlers are tried in registration order before the single default.
+   * Registrations are released by the extension lifecycle or the returned disposer.
+   *
+   * @param handler - File preparation, provider, matcher, and optional inline view.
+   * @returns Disposer that unregisters the handler.
+   * @throws If the runtime is inactive, the provider is invalid, the ID is empty or
+   * duplicated.
+   */
+  readonly registerFileHandler: ClipboardManager["registerFileHandler"];
+
+  /**
+   * Sets a registered file handler as the default when no handler matches.
+   *
+   * Selecting another default replaces the previous selection. Removing the
+   * selected registration clears it; no earlier selection is restored.
+   *
+   * @param id - ID of the registered handler to use as the default.
+   * @returns Completion of the default selection.
+   * @throws If the runtime is inactive or no handler has the supplied ID.
+   */
+  readonly setDefaultFileHandler: ClipboardManager["setDefaultFileHandler"];
+
+  /**
+   * Selects the first matching handler, falling back to the generic attachment handler.
+   *
+   * @param candidate - File or reference to classify.
+   * @returns Matching handler, or undefined when no handler is installed.
+   */
+  readonly selectFileHandler: ClipboardManager["selectFileHandler"];
+
+  /**
+   * Looks up a registered attachment handler by its stable identifier.
+   *
+   * @param id - Attachment handler identifier.
+   * @returns Registered handler, if present.
+   */
+  readonly getFileHandler: ClipboardManager["getFileHandler"];
+
+  /**
+   * Registers one ordered final clipboard refinement.
+   *
+   * @param postprocessor - Single-object binary contribution hook.
+   * @returns Lifecycle-owned disposer.
+   * @throws If the runtime is inactive or the postprocessor ID is invalid or duplicated.
+   */
+  readonly registerPostprocessor: ClipboardManager["registerPostprocessor"];
+
+  /**
+   * Registers the single host binary writer used before the browser fallback.
+   *
+   * @param writer - Privileged host clipboard bridge.
+   * @returns Lifecycle-owned disposer.
+   * @throws If the runtime is inactive, the writer ID is empty, or a writer is already registered.
+   */
+  readonly registerWriter: ClipboardManager["registerWriter"];
+
+  /**
+   * Reports whether a registered host or the current browser can attempt a binary write.
+   *
+   * @param mimeType - Exact file MIME type proposed for copying.
+   * @returns Whether the custom copy menu should handle this type.
+   */
+  readonly canWriteBinary: ClipboardManager["canWriteBinary"];
+
+  /**
+   * Runs postprocessors and starts a binary write without delaying the copy event.
+   *
+   * @param bundle - Structured selected objects.
+   * @param formats - Synchronous portable clipboard formats.
+   * @returns Starts any supported binary write without delaying the copy event.
+   */
+  readonly writeProcessed: ClipboardManager["writeProcessed"];
+
+  /**
+   * Writes exact MIME bytes, falling back to application/octet-stream.
+   *
+   * @param binary - Named attachment bytes and original MIME type.
+   * @param formats - Portable representations included beside binary data.
+   * @returns A promise resolving to true when a host or browser writer accepted the payload, or false when unsupported.
+   * @throws If the browser clipboard write fails.
+   */
+  readonly writeBinary: ClipboardManager["writeBinary"];
+
+  /**
+   * Installs one block converter and disposes it with its owning extension.
+   *
+   * @param type - Persisted block type; only one converter may be registered per type.
+   * @param converter - Optional copy, paste, formatting and external parsing methods.
+   * @returns Idempotent disposer for this registration.
+   * @throws If the type is empty, already registered, or the runtime is destroyed.
+   */
+  readonly registerBlockConverter: ClipboardManager["registerBlockConverter"];
+
+  /**
+   * Installs one canvas converter and disposes it with its owning extension.
+   *
+   * @param type - Persisted element type; only one converter may be registered per type.
+   * @param converter - Optional conversion methods and referenced-block collection.
+   * @returns Idempotent disposer for this registration.
+   * @throws If the type is empty, already registered, or the runtime is destroyed.
+   */
+  readonly registerElementConverter: ClipboardManager["registerElementConverter"];
+
+  /** Core paste strategies extended by React clipboard integrations. */
+  readonly pasteStrategies: ClipboardManager["pasteStrategies"];
+
+  /**
+   * Copies selected block subtrees, text ranges and canvas subtrees through type converters.
+   *
+   * @param selection - Explicit selection, or omitted to read the panel/runtime selection.
+   * @param reactPanel - Source panel defining Panel roots; omitted for a document-only copy.
+   * @param operation - Copy, cut or duplicate intent supplied to converters; defaults to copy.
+   * @returns Detached payload, or undefined for an empty selection. Does not write the document.
+   * @throws If a converter rejects the copied data.
+   */
+  readonly copy: ClipboardManager["copy"];
+
+  /**
+   * Copies an explicit text selection through block converters, excluding unselected children.
+   *
+   * @param selection - Block text ranges to copy.
+   * @param reactPanel - Optional source panel supplied to converters.
+   * @returns Detached partial-text bundle, or undefined when there is no text to copy.
+   */
+  readonly copyText: ClipboardManager["copyText"];
+
+  /**
+   * Copies the runtime selection and checks portable formats before deleting it.
+   *
+   * @returns Detached copied bundle, or undefined for an empty selection.
+   * @throws If copy or formatting rejects the data; deletion has not started in that case.
+   */
+  readonly cut: ClipboardManager["cut"];
+
+  /**
+   * Prepares structured data through type converters, then invokes core paste strategies.
+   *
+   * ID allocation and converters run before import. Creation processors and validation run
+   * during insertion. On failure, new records are removed and the error is rethrown; changes
+   * to existing text are not reverted by this cleanup. A malformed
+   * serialized bundle falls back to plain text; an invalid explicit bundle throws.
+   *
+   * @param input - Clipboard data, selection override and placement; plain text keeps core behavior.
+   * @param reactPanel - Receiving panel, or runtime for document-only commands without a mounted panel; defaults to this editor.
+   * @param operation - Paste or duplicate intent; defaults to paste.
+   * @returns Core paste result, including the resulting caret when text was inserted.
+   * @throws If a converter, creation processor or validator rejects the payload.
+   */
+  readonly paste: ClipboardManager["paste"];
+
+  /**
+   * Collects selected canvas subtrees and referenced block trees before applying copy hooks once.
+   *
+   * @param ids - Selected element IDs; overlapping subtrees are visited only once.
+   * @param reactPanel - Source panel restricting elements and block roots, or the owning runtime.
+   * @param operation - Copy, cut or duplicate intent; defaults to copy.
+   * @returns Detached bundle with source identities and ordered referenced block roots.
+   */
+  readonly copyElements: ClipboardManager["copyElements"];
+
+  /**
+   * Converts selected canvas records without writing either document forest.
+   *
+   * Empty block cards are omitted. Other elements retain their type and child order; creation
+   * processors run later through ordinary insertion. Copied frames move by 24 document units on each axis.
+   *
+   * @param bundle - Detached source records and referenced block roots.
+   * @param reactPanel - Destination panel or document runtime used for placement and processors.
+   * @param blockIdMap - Already allocated source-to-destination block IDs.
+   * @param ids - Preallocated element IDs, or omitted to allocate them here.
+   * @param operation - Paste or duplicate intent; defaults to paste.
+   * @returns Converted records, element ID map and remapped block dependencies; insertion still validates them.
+   * @throws If a type converter rejects the source data.
+   */
+  readonly convertElements: ClipboardManager["convertElements"];
+}
+
+/** Attachment operations available to editor components and extensions. */
+export interface AttachmentApi {
+  /**
+   * Registers a file opener for matching or explicit default selection.
+   *
+   * Typed handlers always take priority over the fallback, so a later PDF or
+   * audio extension can replace generic native opening without registration-order coupling.
+   *
+   * @param handler - File matcher and opening operation.
+   * @returns Disposer that unregisters the handler.
+   * @throws If the runtime is inactive or the ID is empty or duplicated.
+   */
+  registerFileOpenHandler(handler: FileOpenHandler): () => void;
+
+  /**
+   * Sets a registered file opener as the default when no opener matches.
+   *
+   * Selecting another default replaces the previous selection. Removing the
+   * selected registration clears it; no earlier selection is restored.
+   *
+   * @param id - ID of the registered opener to use as the default.
+   * @returns Completion of the default selection.
+   * @throws If the runtime is inactive or no opener has the supplied ID.
+   */
+  setDefaultFileOpenHandler(id: string): void;
+
+  /**
+   * Resolves a reference through its provider or a browser-readable URI.
+   *
+   * Use this when a caller can display or inspect either a Blob or a URL, such
+   * as an image view. It does not fetch browser-readable URLs or open a file.
+   * The provider is consulted first: its Blob is returned directly, while
+   * `undefined` means it does not own the reference. Provider failures propagate
+   * rather than falling back to the browser. Without a provider result, HTTP(S),
+   * data, and blob URLs are returned after validation; relative references are
+   * resolved against the configured document base URI.
+   *
+   * The document ID and surface mode are captured when this method starts.
+   * Cancellation is checked before and after the provider's asynchronous read.
+   *
+   * @param provider - Storage provider to consult first, if installed.
+   * @param uri - Persisted reference to resolve.
+   * @param context - Optional surface mode and required cancellation signal.
+   * @returns A promise resolving to the provider's Blob or a browser-readable URI.
+   * @throws If cancelled, the provider fails or returns a non-Blob value, or the
+   * unclaimed URI is unsafe, unsupported, or relative without a configured base.
+   *
+   * @example
+   * const source = await editor.attachments.resolveBinary(provider, uri, { signal });
+   * // source is a Blob from the provider, or a URL the browser can display.
+   */
+  resolveBinary(
+    provider: BinaryProvider<string, Blob> | undefined,
+    uri: string,
+    context: FileRequestContext,
+  ): Promise<string | Blob>;
+
+  /**
+   * Reads attachment bytes as a Blob for copying or other byte-based operations.
+   *
+   * Unlike `resolveBinary`, this always produces bytes: it first resolves the
+   * reference, then fetches it if the result is a URL. A provider-supplied Blob
+   * is reused unless a different MIME hint was supplied, in which case a new
+   * Blob wraps the same bytes with that type. It does not open the file.
+   *
+   * @param provider - Storage provider to consult first, if installed.
+   * @param uri - Persisted reference to read.
+   * @param mimeType - Optional MIME type to apply to the returned Blob.
+   * @param context - Optional surface mode and required cancellation signal.
+   * @returns A promise resolving to a Blob after resolution and any fetch complete.
+   * @throws If resolution, fetching, or response reading fails, or cancellation occurs.
+   *
+   * @example
+   * const bytes = await editor.attachments.readBinary(provider, uri, "image/png", { signal });
+   * // bytes is a Blob, including when the provider declined an HTTP URL.
+   */
+  readBinary(
+    provider: BinaryProvider<string, Blob> | undefined,
+    uri: string,
+    mimeType: string | undefined,
+    context: FileRequestContext,
+  ): Promise<Blob>;
+
+  /**
+   * Opens an attachment with a registered host opener or a browser link.
+   *
+   * Unlike `resolveBinary` and `readBinary`, this performs an opening action
+   * and returns no content. The first matching registered opener takes priority,
+   * followed by the explicitly selected default opener. A selected opener receives
+   * the reference and operation context; the provider is not read in that path.
+   * Without an opener, the reference is resolved and a browser link is clicked.
+   * Resolved Blobs use an object URL scheduled for revocation after 60 seconds.
+   *
+   * @param provider - Storage provider for the attachment.
+   * @param reference - Persisted attachment metadata.
+   * @param context - Optional surface mode and required cancellation signal.
+   * @returns A promise resolving after the opener completes or browser link is clicked.
+   * @throws If cancelled, the host opener fails, or the attachment cannot be resolved.
+   *
+   * @example
+   * await editor.attachments.openBinary(provider, reference, { signal });
+   * // The selected host opener has completed, or the browser link was clicked.
+   */
+  openBinary(
+    provider: BinaryProvider<string, Blob>,
+    reference: FileReference,
+    context: FileRequestContext,
+  ): Promise<void>;
 }
 
 /** Shared React registrations and the operations of one fixed document editor.
@@ -135,37 +432,9 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboardFormats: ClipboardFormatRegistry;
   /** Structured document operations; view-dependent paste receives its destination explicitly. */
-  readonly clipboard: Pick<
-    ClipboardManager,
-    | "converters"
-    | "registerFileHandler"
-    | "setDefaultFileHandler"
-    | "selectFileHandler"
-    | "getFileHandler"
-    | "registerPostprocessor"
-    | "registerWriter"
-    | "canWriteBinary"
-    | "writeProcessed"
-    | "writeBinary"
-    | "registerBlockConverter"
-    | "registerElementConverter"
-    | "pasteStrategies"
-    | "copy"
-    | "copyText"
-    | "cut"
-    | "paste"
-    | "copyElements"
-    | "convertElements"
-  >;
+  readonly clipboard: ClipboardApi;
   /** Attachment handlers, binary resolution, and opening shared across views. */
-  readonly attachments: Pick<
-    AttachmentManager,
-    | "registerFileOpenHandler"
-    | "setDefaultFileOpenHandler"
-    | "resolveBinary"
-    | "readBinary"
-    | "openBinary"
-  >;
+  readonly attachments: AttachmentApi;
   /** Core paste strategies extended by React clipboard integrations. */
   readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
   /** Root surfaces and their ordered block/editor wrappers. */

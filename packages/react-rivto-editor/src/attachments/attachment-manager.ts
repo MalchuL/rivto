@@ -11,9 +11,31 @@ import type {
 } from "./types";
 
 /** Editor capabilities borrowed while resolving or opening attachments. */
-interface AttachmentEditor extends Pick<ReactEditorApi, "getDocument"> {
+interface AttachmentEditor {
+  /**
+   * Reads the current editor's borrowed document.
+   *
+   * @returns The document whose identity is used for binary operations.
+   */
+  readonly getDocument: ReactEditorApi["getDocument"];
   /** Active and default panel lookup used to determine the surface mode. */
-  readonly panels: Pick<ReactEditorApi["panels"], "getActive" | "getDefault">;
+  readonly panels: AttachmentPanels;
+}
+
+/** Panel lookups borrowed while determining the surface for a binary operation. */
+interface AttachmentPanels {
+  /**
+   * Reads the active registered panel.
+   *
+   * @returns The active panel, or undefined when none is available.
+   */
+  readonly getActive: ReactEditorApi["panels"]["getActive"];
+  /**
+   * Reads the default registered panel.
+   *
+   * @returns The default panel, or undefined when none is available.
+   */
+  readonly getDefault: ReactEditorApi["panels"]["getDefault"];
 }
 
 /** Manages attachment handlers, file opening, and URI resolution. */

@@ -1,4 +1,5 @@
 import type {
+  ClipboardBundle,
   EditorBlock,
   EditorBlockInput,
   EditorBlockNode,
@@ -206,4 +207,61 @@ export interface CreatedClipboardRecords {
 export interface PanelPasteStrategy extends PasteStrategy {
   /** Returns an algorithm bound to the receiving occurrence, without changing registrations. */
   createPanelStrategy(reactPanel: ReactPanelApi): PasteStrategy;
+}
+
+/** One binary representation contributed for a single copied attachment. */
+export interface ClipboardBinaryRepresentation {
+  readonly name: string;
+  readonly mimeType: string;
+  readonly data: Blob | Promise<Blob>;
+}
+
+/** Context supplied while refining the final clipboard payload. */
+export interface ClipboardPostprocessContext {
+  readonly bundle: ClipboardBundle;
+  readonly formats: PortableBlockFormats;
+}
+
+/** Ordered extension hook that may contribute single-object binary data. */
+export interface ClipboardPostprocessor {
+  readonly id: string;
+  /**
+   * Contributes binary data for a copied selection when this hook recognizes it.
+   *
+   * Hooks run synchronously in registration order; the first contribution is used.
+   *
+   * @param context - Structured clipboard bundle and its portable representations.
+   * @returns Binary data to copy, or undefined when this hook does not handle the selection.
+   * @throws If preparing the contribution fails.
+   */
+  readonly process: (
+    context: ClipboardPostprocessContext,
+  ) => ClipboardBinaryRepresentation | undefined;
+}
+
+/** Host bridge for MIME formats unavailable through the browser clipboard. */
+export interface ClipboardWriter {
+  readonly id: string;
+  /**
+   * Checks whether the host can accept a proposed binary MIME type.
+   *
+   * The clipboard may check the original MIME type and application/octet-stream.
+   *
+   * @param mimeType - MIME type proposed for the binary item.
+   * @returns True when the host writer can accept the type.
+   * @throws If the host capability check fails.
+   */
+  readonly supports: (mimeType: string) => boolean;
+  /**
+   * Writes binary data and its portable text representations through the host.
+   *
+   * The clipboard may try the browser writer if this call fails.
+   *
+   * @param input - Named binary item and portable text, Markdown, and HTML formats.
+   * @returns Completion of the host write, immediately or when its promise resolves.
+   * @throws If the host rejects or cannot complete the write.
+   */
+  readonly write: (
+    input: ClipboardBinaryRepresentation & PortableBlockFormats,
+  ) => void | Promise<void>;
 }

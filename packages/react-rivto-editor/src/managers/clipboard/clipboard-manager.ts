@@ -22,9 +22,13 @@ import { blockElementClipboardConverter } from "../../elements/clipboard-convert
 import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/element-paste-strategy";
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
+import { browserClipboardType } from "./utils";
 import { panelClipboardDocument } from "./panel-clipboard-document";
 import type {
   BlockClipboardConverter,
+  ClipboardBinaryRepresentation,
+  ClipboardPostprocessor,
+  ClipboardWriter,
   ClipboardCopyContext,
   ClipboardPasteContext,
   ConvertedClipboardElements,
@@ -43,66 +47,6 @@ import {
   TEXT_PASTE_STRATEGY_ID,
 } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
-
-/** One binary representation contributed for a single copied attachment. */
-export interface ClipboardBinaryRepresentation {
-  readonly name: string;
-  readonly mimeType: string;
-  readonly data: Blob | Promise<Blob>;
-}
-
-/** Context supplied while refining the final clipboard payload. */
-export interface ClipboardPostprocessContext {
-  readonly bundle: ClipboardBundle;
-  readonly formats: PortableBlockFormats;
-}
-
-/** Ordered extension hook that may contribute single-object binary data. */
-export interface ClipboardPostprocessor {
-  readonly id: string;
-  readonly process: (
-    context: ClipboardPostprocessContext,
-  ) => ClipboardBinaryRepresentation | undefined;
-}
-
-/** Host bridge for MIME formats unavailable through the browser clipboard. */
-export interface ClipboardWriter {
-  readonly id: string;
-  readonly supports: (mimeType: string) => boolean;
-  readonly write: (
-    input: ClipboardBinaryRepresentation & PortableBlockFormats,
-  ) => void | Promise<void>;
-}
-
-/**
- * Returns the exact or generic binary MIME type accepted by a browser clipboard.
- *
- * Browsers predating `ClipboardItem.supports` are allowed to attempt the exact
- * type; the eventual write remains the authoritative capability check.
- *
- * @param view - Window owning the editor surface.
- * @param mimeType - Exact binary MIME type requested by the extension.
- * @returns Accepted browser MIME type, or undefined when binary writing is unavailable.
- */
-function browserClipboardType(
-  view: (Window & typeof globalThis) | null | undefined,
-  mimeType: string,
-): string | undefined {
-  const ClipboardItemConstructor = view?.ClipboardItem;
-  const clipboard = view?.navigator.clipboard;
-  if (!ClipboardItemConstructor || !clipboard?.write) {
-    return undefined;
-  }
-  if (!ClipboardItemConstructor.supports) {
-    return mimeType;
-  }
-  if (ClipboardItemConstructor.supports(mimeType)) {
-    return mimeType;
-  }
-  return ClipboardItemConstructor.supports("application/octet-stream")
-    ? "application/octet-stream"
-    : undefined;
-}
 
 /** Shared clipboard operations; paste receives a panel or a runtime for document-only commands. */
 export class ClipboardManager {

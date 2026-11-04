@@ -22,7 +22,7 @@ import { collapseTargets } from "./utils";
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditorApi): () => void {
-  registerBlockCollapseActions(reactEditor);
+  registerBlockCollapseActions(reactEditor.blockContextMenu);
   reactEditor.slashCommands.register({
     id: "block.collapse",
     title: "Collapse block",

@@ -25,7 +25,7 @@ import { listShortcutPatch } from "./utils";
  * @returns No value.
  */
 export function registerListShortcuts(reactEditor: ReactEditorApi): void {
-  registerBlockListActions(reactEditor);
+  registerBlockListActions(reactEditor.blockContextMenu);
   const listCommands: readonly { type: BlockListType; title: string }[] = [
     { type: "list", title: "List" },
     { type: "checkbox", title: "Checkbox" },
