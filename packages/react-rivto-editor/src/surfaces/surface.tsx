@@ -19,8 +19,15 @@ export function SurfaceBoundary({
 }) {
   const editor = useReactPanel();
   const extensions = editor.editor.extensions;
-  const subscribe = useCallback((listener: () => void) => extensions.subscribe(listener), [extensions]);
-  useSyncExternalStore(subscribe, () => extensions.revision, () => extensions.revision);
+  const subscribe = useCallback(
+    (listener: () => void) => extensions.subscribe(listener),
+    [extensions],
+  );
+  useSyncExternalStore(
+    subscribe,
+    () => extensions.revision,
+    () => extensions.revision,
+  );
   let content = (
     <>
       {editor.editor.extensions.getComponents("beforeSurface").map((Component, index) => (

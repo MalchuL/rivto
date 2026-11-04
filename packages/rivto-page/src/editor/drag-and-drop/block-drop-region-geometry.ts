@@ -350,10 +350,12 @@ function dropOutlineLevel(
       parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-child-offset")) || 0,
     ) * geometry.scaleX;
   const row = geometry.contentRect;
-  // A point beside the content can select an ancestor even at the same vertical position.
+  // In-flow controls leave space beside the content for selecting an ancestor.
   const inOwnContent =
     !row ||
-    (point.x >= row.left && point.x <= row.right && point.y >= row.top && point.y <= row.bottom);
+    (point.y >= row.top &&
+      point.y <= row.bottom &&
+      (slotOffset === 0 || (point.x >= row.left && point.x <= row.right)));
   let last = destinations.length - 1;
   if (geometry.continuesOutline === false && last > 0 && destinations[last]?.kind === "inside") {
     last -= 1;

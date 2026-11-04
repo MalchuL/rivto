@@ -11,15 +11,15 @@ targets remain independent. Bento and Kanban columns use `siblings`; ordinary
 blocks default to `outline`. A local list does not expose a sibling of its owner
 while the pointer remains inside that list.
 
-| Setup | Pointer and feedback | Result and undo |
-| --- | --- | --- |
-| Ordinary block in editor | Sweep a lower edge across outline depth bands; line tracks the selected sibling or child level. | Move to the selected canonical parent and position; undo restores the original hierarchy. |
-| Ordinary item in Bento or Kanban | Sweep either direction across its lower edge; the line remains at its list's sibling level. Its body can show inside feedback. | Edge inserts a sibling; inside appends to the item when allowed. Undo restores order. |
-| Expanded ordinary item in Bento or Kanban | Its own outer boundary stays sibling-only. Enter its child list to select that list's outline levels. | Insert at the selected child-list destination; undo restores the source. |
-| Container inside ordinary block | The ordinary list controls the container's outer edge; the container controls its own child list. | Insert at the indicated owner and position; undo restores hierarchy. |
-| Container inside Bento or Kanban | Its outer direct-item boundary stays sibling-only; entering its child area uses its own policy. | Edge inserts beside the container; inside and nested-list targets use the indicated parent. Undo restores hierarchy. |
-| Container inside container inside ordinary block | Each entered list applies its own policy and local boundary. | Place at the indicated level without escaping an enclosing local list; undo restores hierarchy. |
-| Custom block with registered policy | Its child boundaries follow the registered policy, irrespective of its visual layout. | Destination matches feedback; undo restores hierarchy. |
+| Setup                                            | Pointer and feedback                                                                                                           | Result and undo                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Ordinary block in editor                         | Sweep a lower edge across outline depth bands; line tracks the selected sibling or child level.                                | Move to the selected canonical parent and position; undo restores the original hierarchy.                            |
+| Ordinary item in Bento or Kanban                 | Sweep either direction across its lower edge; the line remains at its list's sibling level. Its body can show inside feedback. | Edge inserts a sibling; inside appends to the item when allowed. Undo restores order.                                |
+| Expanded ordinary item in Bento or Kanban        | Its own outer boundary stays sibling-only. Enter its child list to select that list's outline levels.                          | Insert at the selected child-list destination; undo restores the source.                                             |
+| Container inside ordinary block                  | The ordinary list controls the container's outer edge; the container controls its own child list.                              | Insert at the indicated owner and position; undo restores hierarchy.                                                 |
+| Container inside Bento or Kanban                 | Its outer direct-item boundary stays sibling-only; entering its child area uses its own policy.                                | Edge inserts beside the container; inside and nested-list targets use the indicated parent. Undo restores hierarchy. |
+| Container inside container inside ordinary block | Each entered list applies its own policy and local boundary.                                                                   | Place at the indicated level without escaping an enclosing local list; undo restores hierarchy.                      |
+| Custom block with registered policy              | Its child boundaries follow the registered policy, irrespective of its visual layout.                                          | Destination matches feedback; undo restores hierarchy.                                                               |
 
 The focused checks cover empty and populated lists, leaf and expanded items,
 physical gaps and gutters, bidirectional sweeps, rejected moves, cross-container

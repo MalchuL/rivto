@@ -80,6 +80,13 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   const { blocks, selection } = useBlockEditorController().adapter;
   const host = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
+  const [windowReady, setWindowReady] = useState(
+    () => virtualization !== undefined && virtualization.enabled !== false,
+  );
+  const estimatedRootSizes = useRef(new Map<string, number>());
+  // Newly inserted roots must window immediately when they cross the threshold.
+  const previousBlockIds = useRef(blockIds);
+  const rootsChanged = previousBlockIds.current !== blockIds;
   const [revision, invalidate] = useReducer((value: number) => value + 1, 0);
   const controller = useMemo(
     () => new BlockVirtualizationController(blocks, selection, invalidate),
@@ -98,6 +105,7 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   );
   useBlockTreeRootLayout(host, dropLayout.items.read);
   const enabled = virtualization !== undefined && virtualization.enabled !== false;
+  const windowing = enabled && (windowReady || rootsChanged);
   const estimate = virtualization?.estimateSize ?? 240;
   const overscan = virtualization?.overscan ?? 3;
   if (!Number.isFinite(estimate) || estimate <= 0 || !Number.isInteger(overscan) || overscan < 0) {
@@ -107,33 +115,64 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   }
   const rangeExtractor = useCallback(
     (range: Parameters<typeof controller.getRangeIndices>[0]) => {
-      if (!enabled) {
+      if (!windowing) {
         return blockIds.map((_, index) => index);
       }
       return controller.getRangeIndices(range);
     },
-    [controller, revision, blockIds, enabled],
+    [controller, revision, blockIds, windowing],
   );
   const virtualizer = useWindowVirtualizer({
     count: blockIds.length,
-    estimateSize: () => estimate,
+    estimateSize: (index) => estimatedRootSizes.current.get(blockIds[index]!) ?? estimate,
     getItemKey: (index) => blockIds[index]!,
     scrollMargin: margin,
     overscan,
     rangeExtractor,
   });
+  useLayoutEffect(() => {
+    if (!enabled) {
+      setWindowReady(false);
+      return;
+    }
+    if (windowReady || !host.current) {
+      return;
+    }
+    if (rootsChanged) {
+      setWindowReady(true);
+      return;
+    }
+    // Measure the still-mounted roots once before windowing removes offscreen items.
+    const hostElement = host.current;
+    const sizes = new Map<string, number>();
+    for (const wrapper of hostElement.children) {
+      const element = wrapper.firstElementChild;
+      if (element instanceof hostElement.ownerDocument.defaultView!.HTMLElement) {
+        const id = element.dataset.virtualBlockId;
+        if (id) {
+          sizes.set(id, element.getBoundingClientRect().height);
+        }
+      }
+    }
+    estimatedRootSizes.current = sizes;
+    virtualizer.measure();
+    setWindowReady(true);
+  }, [enabled, windowReady, virtualizer, rootsChanged]);
+  useLayoutEffect(() => {
+    previousBlockIds.current = blockIds;
+  }, [blockIds]);
   controller.setBlockIds(blockIds);
   useLayoutEffect(() => controller.attach(host.current!, setMargin), [controller]);
   useLayoutEffect(() => controller.reconcileListSubscriptions(), [controller, blockIds]);
-  const items = enabled
+  const items = windowing
     ? virtualizer.getVirtualItems()
     : blockIds.map((key, index) => ({ key, index, start: 0, end: 0 }));
   let end = margin;
   return (
-    <div ref={dropLayout.ref} className={BLOCK_EDITOR_CLASSES.tree} data-virtualized={enabled}>
+    <div ref={dropLayout.ref} className={BLOCK_EDITOR_CLASSES.tree} data-virtualized={windowing}>
       <BlockDropLayoutContext.Provider value={dropLayout.items}>
         {items.map((item) => {
-          const gap = enabled ? Math.max(0, item.start - end) : 0;
+          const gap = windowing ? Math.max(0, item.start - end) : 0;
           end = item.end;
           return (
             <div key={item.key} style={{ paddingTop: gap }}>
@@ -145,7 +184,7 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
                   counterReset: `rivto-list-number ${controller.getListNumber(blockIds[item.index]!)}`,
                 }}
                 className={BLOCK_EDITOR_CLASSES.virtualRoot}
-                ref={virtualizer.measureElement}
+                ref={windowing ? virtualizer.measureElement : undefined}
               >
                 <BlockItemIdentityContext.Provider value={blockIds[item.index]}>
                   <BlockRootNode blockId={blockIds[item.index]!} />
@@ -157,7 +196,9 @@ function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
         <BlockDropExclude asChild>
           <div
             aria-hidden="true"
-            style={{ height: enabled ? Math.max(0, margin + virtualizer.getTotalSize() - end) : 0 }}
+            style={{
+              height: windowing ? Math.max(0, margin + virtualizer.getTotalSize() - end) : 0,
+            }}
           />
         </BlockDropExclude>
       </BlockDropLayoutContext.Provider>

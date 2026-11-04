@@ -186,6 +186,8 @@ for (const type of ["bento", "table"] as const) {
     await expect(page.locator(`[data-block-id="${ids.child}"]`)).toHaveCount(0);
     await expect(path).toHaveAttribute("d", "");
     await container.locator(":scope > .rivto-block-row .page-collapse-toggle").click();
-    await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(type === "table" ? 2 : 1);
+    await expect
+      .poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length)
+      .toBe(type === "table" ? 2 : 1);
   });
 }
