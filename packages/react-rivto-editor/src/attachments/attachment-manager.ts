@@ -6,6 +6,7 @@ import type {
   FileOpenHandler,
   FileReference,
   BinaryProvider,
+  BinaryReadContext,
   FileRequestContext,
 } from "./types";
 
@@ -110,16 +111,8 @@ export class AttachmentManager {
     context: FileRequestContext,
   ): Promise<string | Blob> {
     context.signal.throwIfAborted();
-    const complete = {
-      signal: context.signal,
-      documentId: this.editor.getDocument().id,
-      mode:
-        context.mode ??
-        this.editor.panels.getActive()?.getSurfaceType() ??
-        this.editor.panels.getDefault()?.getSurfaceType() ??
-        ("block" as const),
-    };
-    const resolved = await provider?.read(uri, complete);
+    const operationContext = this.getFileOperationContext(context);
+    const resolved = await provider?.read(uri, operationContext);
     context.signal.throwIfAborted();
     if (resolved !== undefined) {
       if (!(resolved instanceof Blob)) {
@@ -135,7 +128,8 @@ export class AttachmentManager {
       throw new TypeError(`No binary provider accepted ${value.split(":", 1)[0]}:`);
     }
     const configured = this.options.documentBaseUri;
-    const base = typeof configured === "function" ? configured(complete.documentId) : configured;
+    const base =
+      typeof configured === "function" ? configured(operationContext.documentId) : configured;
     if (!base) {
       throw new TypeError("Relative file URI requires attachments.documentBaseUri or a provider");
     }
@@ -191,18 +185,10 @@ export class AttachmentManager {
     context: FileRequestContext,
   ): Promise<void> {
     context.signal.throwIfAborted();
-    const complete = {
-      signal: context.signal,
-      documentId: this.editor.getDocument().id,
-      mode:
-        context.mode ??
-        this.editor.panels.getActive()?.getSurfaceType() ??
-        this.editor.panels.getDefault()?.getSurfaceType() ??
-        ("block" as const),
-    };
+    const operationContext = this.getFileOperationContext(context);
     const handler = this.selectFileOpenHandler(reference);
     if (handler) {
-      await handler.open(reference, complete);
+      await handler.open(reference, operationContext);
       return;
     }
     const resolved = await this.resolveBinary(provider, reference.uri, context);
@@ -215,5 +201,26 @@ export class AttachmentManager {
     if (objectUrl) {
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     }
+  }
+
+  /**
+   * Captures document identity and surface mode for one binary operation.
+   *
+   * An explicit mode wins; otherwise the active panel, default panel, and block
+   * mode are consulted in order. The supplied cancellation signal is retained.
+   *
+   * @param context - Caller-provided surface override and cancellation signal.
+   * @returns Document, surface, and cancellation context for the operation.
+   */
+  private getFileOperationContext(context: FileRequestContext): BinaryReadContext {
+    return {
+      signal: context.signal,
+      documentId: this.editor.getDocument().id,
+      mode:
+        context.mode ??
+        this.editor.panels.getActive()?.getSurfaceType() ??
+        this.editor.panels.getDefault()?.getSurfaceType() ??
+        "block",
+    };
   }
 }

@@ -181,11 +181,31 @@ function logicalUri(prefix: string, fileName: string): string {
 }
 
 /**
+ * Checks that a relative URI path contains no encoded separators or traversal segments.
+ *
+ * @param path - URI-encoded path relative to the configured directory.
+ * @returns True when each segment can be decoded without changing the path hierarchy.
+ */
+function isSafeRelativePath(path: string): boolean {
+  try {
+    return path.split("/").every((segment) => {
+      const decoded = decodeURIComponent(segment);
+      return (
+        decoded !== "." && decoded !== ".." && !decoded.includes("/") && !decoded.includes("\\")
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Provides binary storage through a host filesystem bridge.
  *
  * Relative URIs are claimed only under `uriPrefix`; file URIs are claimed only
- * under a `file:` directory. Broader filesystem access requires an explicit
- * host resolver and is never inferred from document text.
+ * under a `file:` directory. Encoded separators and traversal segments are rejected.
+ * Broader filesystem access requires an explicit host resolver and is never inferred
+ * from document text; host callbacks must enforce filesystem boundaries, including symlinks.
  */
 export class LocalFileBridge implements BinaryProvider<string, Blob> {
   private readonly options: LocalFileBridgeOptions;
@@ -272,9 +292,31 @@ export class LocalFileBridge implements BinaryProvider<string, Blob> {
    */
   async read(uri: string, context: BinaryReadContext): Promise<Blob | undefined> {
     context.signal.throwIfAborted();
-    const localRelative = !/^[a-z][a-z\d+.-]*:/i.test(uri) && uri.startsWith(this.prefix);
-    const localFile =
-      this.options.directory.startsWith("file:") && uri.startsWith(this.options.directory);
+    const localRelative =
+      !/^[a-z][a-z\d+.-]*:/i.test(uri) &&
+      uri.startsWith(this.prefix) &&
+      !/[?#]/.test(uri) &&
+      isSafeRelativePath(uri.slice(this.prefix.length));
+    let localFile = false;
+    if (this.options.directory.startsWith("file:") && uri.startsWith("file:")) {
+      try {
+        const directory = new URL(this.options.directory);
+        const file = new URL(uri);
+        const directoryPath = directory.pathname.endsWith("/")
+          ? directory.pathname
+          : `${directory.pathname}/`;
+        localFile =
+          file.protocol === "file:" &&
+          isSafeRelativePath(uri) &&
+          file.host === directory.host &&
+          !file.search &&
+          !file.hash &&
+          file.pathname.startsWith(directoryPath) &&
+          isSafeRelativePath(file.pathname.slice(directoryPath.length));
+      } catch {
+        localFile = false;
+      }
+    }
     if (!localRelative && !localFile) {
       return undefined;
     }

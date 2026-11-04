@@ -1,3 +1,4 @@
+import type { EditorMode } from "@chulane/rivto";
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../../panels/types";
 
@@ -103,4 +104,56 @@ export function retryFileDestination(
     blockId = destination.replaceId;
   }
   return blockId ? (inlineDestination(reactPanel, blockId) ?? destination) : destination;
+}
+
+/**
+ * Chooses inline, block, or canvas placement for one browser point.
+ *
+ * Text hit testing updates the native selection before capturing the destination.
+ * Canvas coordinates account for the surface pan and zoom.
+ *
+ * @param reactPanel - Panel supplying the destination and document commands.
+ * @param mode - Current editor mode.
+ * @param contentElement - Editable content under the event.
+ * @param blockId - Block under the event.
+ * @param clientX - Viewport x coordinate.
+ * @param clientY - Viewport y coordinate.
+ * @param root - Active surface root.
+ * @returns Captured insertion destination.
+ */
+export function fileDestinationAtPoint(
+  reactPanel: ReactPanelApi,
+  mode: EditorMode,
+  contentElement: HTMLElement | null,
+  blockId: string | undefined,
+  clientX: number,
+  clientY: number,
+  root: HTMLElement,
+): FileDestination {
+  if (contentElement) {
+    const document = root.ownerDocument as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const hit = document.caretPositionFromPoint?.(clientX, clientY);
+    const range = document.caretRangeFromPoint?.(clientX, clientY);
+    const node = hit?.offsetNode ?? range?.startContainer;
+    const offset = hit?.offset ?? range?.startOffset;
+    if (node !== undefined && offset !== undefined) {
+      root.ownerDocument.getSelection()?.setBaseAndExtent(node, offset, node, offset);
+    }
+    const inline = inlineDestination(reactPanel, blockId);
+    if (inline) {
+      return inline;
+    }
+  }
+  if (mode === "block") {
+    return { kind: "block", afterId: blockId };
+  }
+  const bounds = root.getBoundingClientRect();
+  const zoom = Number(root.dataset.edgelessZoom) || 1;
+  return {
+    kind: "element",
+    x: (clientX - bounds.left - (Number(root.dataset.edgelessPanX) || 0)) / zoom,
+    y: (clientY - bounds.top - (Number(root.dataset.edgelessPanY) || 0)) / zoom,
+  };
 }

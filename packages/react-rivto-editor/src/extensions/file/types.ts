@@ -87,9 +87,9 @@ export interface FileIngestionBatch<TInput, TResult> {
    */
   readonly commit: (items: readonly TResult[]) => void;
   /**
-   * Reports a preparation failure or changed destination.
+   * Reports a preparation or commit failure, or a changed destination.
    *
-   * @param error - Failure from preparation or destination checking.
+   * @param error - Failure from preparation, insertion, or destination checking.
    * @returns Notifies the host.
    */
   readonly onError?: (error: unknown) => void;

@@ -151,3 +151,29 @@ it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
     ).toThrow("File limit must be a positive integer");
   },
 );
+
+it("does not claim paths outside the configured file directory", async () => {
+  const reads: string[] = [];
+  const provider = new LocalFileBridge({
+    directory: "file:///assets",
+    uriPrefix: "assets/",
+    writeFile: () => true,
+    readFile: ({ uri }) => {
+      reads.push(uri);
+      return new Blob();
+    },
+  });
+  const context = {
+    documentId: "doc",
+    mode: "block" as const,
+    signal: new AbortController().signal,
+  };
+  await expect(provider.read("file:///assets/photo.png", context)).resolves.toBeInstanceOf(Blob);
+  await expect(provider.read("file:///assets-other/photo.png", context)).resolves.toBeUndefined();
+  await expect(
+    provider.read("file:///assets/%2e%2e/private.png", context),
+  ).resolves.toBeUndefined();
+  await expect(provider.read("assets/%2e%2e/private.png", context)).resolves.toBeUndefined();
+  await expect(provider.read("assets/%2fprivate.png", context)).resolves.toBeUndefined();
+  expect(reads).toEqual(["file:///assets/photo.png"]);
+});

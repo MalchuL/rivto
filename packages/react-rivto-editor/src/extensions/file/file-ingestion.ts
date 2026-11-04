@@ -23,43 +23,56 @@ const INSERTED_ELEMENT_OFFSET = 24;
  * @returns Starts preparation and commits the successful results when safe.
  */
 export function ingestFileBatch<TInput, TResult>(batch: FileIngestionBatch<TInput, TResult>): void {
-  const completedIds: string[] = [];
-  const jobs = batch.items.map(async (item, index): Promise<TResult | undefined> => {
-    const id = batch.nextId();
+  const preparedStatusIds: string[] = [];
+  const preparationJobs = batch.items.map(async (item, index): Promise<TResult | undefined> => {
+    const statusId = batch.nextId();
     batch.statuses.set({
-      id,
+      id: statusId,
       name: batch.name(item),
       x: batch.point.x + index * UPLOAD_STATUS_OFFSET,
       y: batch.point.y + index * UPLOAD_STATUS_OFFSET,
       retry: () => {
-        batch.statuses.delete(id);
+        batch.statuses.delete(statusId);
         batch.retry(item, retryFileDestination(batch.panel, batch.destination));
       },
     });
     try {
-      const result = await batch.prepare(item, id);
-      completedIds.push(id);
-      return result;
+      const preparedItem = await batch.prepare(item, statusId);
+      preparedStatusIds.push(statusId);
+      return preparedItem;
     } catch (error) {
-      batch.statuses.update(id, {
+      batch.statuses.update(statusId, {
         error: error instanceof Error ? error.message : batch.failureMessage,
       });
       batch.onError?.(error);
       return undefined;
     }
   });
-  void Promise.all(jobs).then((results) => {
-    if (batch.signal.aborted || !completedIds.length) {
+  void Promise.all(preparationJobs).then((preparedResults) => {
+    if (batch.signal.aborted || !preparedStatusIds.length) {
       return;
     }
     if (!isFileDestinationCurrent(batch.panel, batch.destination)) {
       const error = new Error(batch.staleMessage);
-      completedIds.forEach((id) => batch.statuses.update(id, { error: error.message }));
+      preparedStatusIds.forEach((id) => batch.statuses.update(id, { error: error.message }));
       batch.onError?.(error);
       return;
     }
-    completedIds.forEach((id) => batch.statuses.delete(id));
-    batch.commit(results.filter((result): result is Awaited<TResult> => result !== undefined));
+    try {
+      batch.commit(
+        preparedResults.filter((result): result is Awaited<TResult> => result !== undefined),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : batch.failureMessage;
+      preparedStatusIds.forEach((id) =>
+        batch.statuses.update(id, {
+          error: `${message}. Some files may already have been inserted; check before retrying.`,
+        }),
+      );
+      batch.onError?.(error);
+      return;
+    }
+    preparedStatusIds.forEach((id) => batch.statuses.delete(id));
   });
 }
 

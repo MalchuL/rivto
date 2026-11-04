@@ -1,3 +1,4 @@
+import { escapeHtml } from "../file/escape-html";
 /**
  * Opt-in image blocks, inline image insertion, and browser file interactions.
  *
@@ -8,14 +9,15 @@
  * @module
  */
 import {
+  fileDestinationAtPoint,
   inlineDestination,
   isFileDestinationCurrent,
   retryFileDestination,
   type FileDestination as ImageDestination,
 } from "../file/file-destination";
 import { ingestFileBatch, insertPrepared } from "../file/file-ingestion";
-import { type EditorBlock, type EditorMode } from "@chulane/rivto";
-import { useSyncExternalStore } from "react";
+import { type EditorBlock } from "@chulane/rivto";
+import { FileUploadStatusOverlay, FileUploadStatusStore } from "../file/file-upload-status";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorExtension } from "../../managers";
@@ -29,6 +31,13 @@ import {
 } from "./image-view";
 import { serializeImageMacro } from "./image-macro";
 import {
+  inspectImage,
+  isImageFile,
+  getTransferredImageFiles,
+  findImageUri,
+  findTransferredImageUri,
+} from "./image-input";
+import {
   validateBinaryUri,
   type FileInlineViewProps,
   type FileReference,
@@ -38,8 +47,6 @@ import {
 /** Persisted native type used by standalone image blocks. */
 export const IMAGE_BLOCK_TYPE = "image";
 const IMAGE_BLOCK_CLASS = "rivto-image-block";
-const IMAGE_UPLOADS_CLASS = "rivto-image-uploads";
-const IMAGE_UPLOAD_CLASS = "rivto-image-upload";
 const IMAGE_FILE_INPUT_CLASS = "rivto-image-file-input";
 /** Maximum initial canvas image width, in pixels. */
 const MAX_INITIAL_IMAGE_WIDTH = 640;
@@ -93,16 +100,6 @@ function prepareImageAsset(asset: ImageAsset): PreparedFile {
   };
 }
 
-interface PendingUpload {
-  readonly id: string;
-  readonly name: string;
-  readonly x: number;
-  readonly y: number;
-  readonly retry: () => void;
-  progress?: number;
-  error?: string;
-}
-
 /**
  * Renders an image reference encountered through the generic file macro.
  * @param props - Portable file metadata matched as an image.
@@ -117,87 +114,6 @@ function InlineImageFileView({ reference }: FileInlineViewProps) {
       name={reference.name}
       mimeType={reference.mimeType}
     />
-  );
-}
-
-/** Small observable store for non-persisted upload feedback. */
-class UploadStatusStore {
-  private readonly uploads = new Map<string, PendingUpload>();
-  private readonly listeners = new Set<() => void>();
-  private revision = 0;
-
-  /** Returns a stable revision for React subscription. */
-  getRevision(): number {
-    return this.revision;
-  }
-  /** Returns current status cards in insertion order. */
-  getUploads(): readonly PendingUpload[] {
-    return [...this.uploads.values()];
-  }
-  /** Subscribes to status changes. */
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  /** Adds or replaces one status. */
-  set(upload: PendingUpload): void {
-    this.uploads.set(upload.id, upload);
-    this.emit();
-  }
-  /** Applies a partial status update. */
-  update(id: string, patch: Partial<PendingUpload>): void {
-    const current = this.uploads.get(id);
-    if (current) {
-      this.uploads.set(id, { ...current, ...patch });
-      this.emit();
-    }
-  }
-  /** Removes one completed or dismissed status. */
-  delete(id: string): void {
-    if (this.uploads.delete(id)) {
-      this.emit();
-    }
-  }
-  /** Notifies subscribers after one local state change. */
-  private emit(): void {
-    this.revision += 1;
-    this.listeners.forEach((listener) => listener());
-  }
-}
-
-/** Overlay of accessible pending/error upload cards near their insertion point. */
-function ImageUploadStatuses({ store }: { readonly store: UploadStatusStore }) {
-  useSyncExternalStore(
-    (listener) => store.subscribe(listener),
-    () => store.getRevision(),
-    () => store.getRevision(),
-  );
-  return (
-    <div className={IMAGE_UPLOADS_CLASS} aria-live="polite">
-      {store.getUploads().map((upload) => (
-        <div
-          key={upload.id}
-          className={IMAGE_UPLOAD_CLASS}
-          role={upload.error ? "alert" : "status"}
-          style={{ left: upload.x, top: upload.y }}
-        >
-          <span>
-            {upload.error ??
-              `Uploading ${upload.name}${upload.progress === undefined ? "…" : ` ${Math.round(upload.progress * 100)}%`}`}
-          </span>
-          {upload.error && (
-            <>
-              <button type="button" onClick={upload.retry}>
-                Retry
-              </button>
-              <button type="button" onClick={() => store.delete(upload.id)}>
-                Dismiss
-              </button>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -222,21 +138,6 @@ function imageProps(props: Record<string, unknown>): ImageProps | undefined {
     intrinsicWidth: number(props.intrinsicWidth),
     intrinsicHeight: number(props.intrinsicHeight),
   };
-}
-
-/** Escapes one string for safe portable HTML attributes. */
-function escapeHtml(value: string): string {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      })[character]!,
-  );
 }
 
 /** Standalone image block renderer shared by page and block-card surfaces. */
@@ -283,89 +184,6 @@ export function ImageBlock({ blockId }: { readonly blockId: string }) {
   );
 }
 
-/** Loads intrinsic dimensions and rejects undecodable image data. */
-function inspectImage(source: string, revoke = false): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const cleanup = () => {
-      if (revoke) {
-        URL.revokeObjectURL(source);
-      }
-    };
-    image.onload = () => {
-      cleanup();
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      cleanup();
-      reject(new TypeError("File or URI is not a decodable image"));
-    };
-    image.src = source;
-  });
-}
-
-/** Returns whether a transferable file is plausibly an image before decode validation. */
-function isImageFile(file: File): boolean {
-  return (
-    file.type.startsWith("image/") ||
-    (/^(?:application\/octet-stream)?$/i.test(file.type) &&
-      /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(file.name))
-  );
-}
-
-/** Reads image files from either clipboard/drag file lists or item-only browser payloads. */
-function transferableImageFiles(data: DataTransfer | null): File[] {
-  if (!data) {
-    return [];
-  }
-  const files = [...data.files].filter(isImageFile);
-  if (files.length) {
-    return files;
-  }
-  return [...data.items]
-    .filter((item) => item.kind === "file")
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file && isImageFile(file)));
-}
-
-/** Returns whether clipboard text is a host-resolvable local image path. */
-function isLocalImageUri(uri: string): boolean {
-  return (
-    /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(uri) &&
-    (/^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri))
-  );
-}
-
-/** Extracts one supported remote or local image URI from clipboard text. */
-function imageUriFromText(text: string): string | undefined {
-  const uri = text
-    .trim()
-    .split(/\r?\n/)
-    .find((line) => line && !line.startsWith("#"));
-  return uri && (/^https?:\/\//i.test(uri) || isLocalImageUri(uri)) ? uri : undefined;
-}
-
-/** Returns an image-only remote URI from transferable HTML/plain data. */
-function remoteImageUri(data: DataTransfer | null): { uri: string; alt: string } | undefined {
-  if (!data || data.files.length) {
-    return undefined;
-  }
-  const html = data.getData("text/html").trim();
-  if (html) {
-    const document = new DOMParser().parseFromString(html, "text/html");
-    const images = [...document.body.querySelectorAll("img")];
-    const remaining = document.body.cloneNode(true) as HTMLElement;
-    remaining.querySelectorAll("img").forEach((image) => image.remove());
-    if (images.length === 1 && !remaining.textContent?.trim()) {
-      return { uri: images[0]!.src, alt: images[0]!.alt };
-    }
-    return undefined;
-  }
-  const uri =
-    imageUriFromText(data.getData("text/uri-list")) ?? imageUriFromText(data.getData("text/plain"));
-  return uri ? { uri, alt: "" } : undefined;
-}
-
 /** Renders canvas image content within the shared element host. */
 function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
   const image = imageProps(element.props);
@@ -397,11 +215,14 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
   return {
     id: "image",
     setup: (reactEditor) => {
-      const statuses = new UploadStatusStore();
+      const statuses = new FileUploadStatusStore();
       let nextUploadId = 0;
       const abort = new AbortController();
       const disposeImageViews = configureImageViews(reactEditor, options.views ?? {});
-      reactEditor.extensions.mount(() => <ImageUploadStatuses store={statuses} />, "afterSurface");
+      reactEditor.extensions.mount(
+        () => <FileUploadStatusOverlay store={statuses} kind="image" />,
+        "afterSurface",
+      );
       reactEditor.blockTypes.register({
         definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
         render: ImageBlock,
@@ -637,45 +458,6 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           });
       };
 
-      /** Chooses inline, block, or element placement from one browser event. */
-      const destinationAt = (
-        reactPanel: ReactPanelApi,
-        mode: EditorMode,
-        contentElement: HTMLElement | null,
-        blockId: string | undefined,
-        clientX: number,
-        clientY: number,
-        root: HTMLElement,
-      ): ImageDestination => {
-        if (contentElement) {
-          const document = root.ownerDocument as Document & {
-            caretRangeFromPoint?: (x: number, y: number) => Range | null;
-          };
-          const hit = document.caretPositionFromPoint?.(clientX, clientY);
-          const range = document.caretRangeFromPoint?.(clientX, clientY);
-          const node = hit?.offsetNode ?? range?.startContainer;
-          const offset = hit?.offset ?? range?.startOffset;
-          if (node !== undefined && offset !== undefined) {
-            const selection = root.ownerDocument.getSelection();
-            selection?.setBaseAndExtent(node, offset, node, offset);
-          }
-          const inline = inlineDestination(reactPanel, blockId);
-          if (inline) {
-            return inline;
-          }
-        }
-        if (mode === "block") {
-          return { kind: "block", afterId: blockId };
-        }
-        const bounds = root.getBoundingClientRect();
-        const zoom = Number(root.dataset.edgelessZoom) || 1;
-        return {
-          kind: "element",
-          x: (clientX - bounds.left - (Number(root.dataset.edgelessPanX) || 0)) / zoom,
-          y: (clientY - bounds.top - (Number(root.dataset.edgelessPanY) || 0)) / zoom,
-        };
-      };
-
       reactEditor.events.register(
         { id: "image.dragover", type: "dragover", capture: true },
         ({ raw, root }) => {
@@ -692,12 +474,12 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
       reactEditor.events.register(
         { id: "image.drop", type: "drop", capture: true },
         ({ raw, mode, contentElement, blockId, root, reactPanel }) => {
-          const files = transferableImageFiles(raw.dataTransfer);
-          const remote = remoteImageUri(raw.dataTransfer);
+          const files = getTransferredImageFiles(raw.dataTransfer);
+          const remote = findTransferredImageUri(raw.dataTransfer);
           if (!files.length && !remote) {
             return false;
           }
-          const destination = destinationAt(
+          const destination = fileDestinationAtPoint(
             reactPanel,
             mode,
             contentElement,
@@ -717,8 +499,8 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
       reactEditor.events.register(
         { id: "image.paste", type: "paste", capture: true },
         ({ raw, mode, contentElement, blockId, root, reactPanel }) => {
-          const files = transferableImageFiles(raw.clipboardData);
-          const remote = remoteImageUri(raw.clipboardData);
+          const files = getTransferredImageFiles(raw.clipboardData);
+          const remote = findTransferredImageUri(raw.clipboardData);
           const redactedFileList =
             !files.length && !remote && raw.clipboardData?.types.includes("text/uri-list") === true;
           if (!files.length && !remote && !redactedFileList) {
@@ -727,7 +509,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
           const bounds = contentElement?.getBoundingClientRect() ?? root.getBoundingClientRect();
           const destination = contentElement
             ? inlineDestination(reactPanel, blockId)
-            : destinationAt(
+            : fileDestinationAtPoint(
                 reactPanel,
                 mode,
                 null,
@@ -752,7 +534,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
               void clipboard
                 ?.readText()
                 .then((text) => {
-                  const uri = imageUriFromText(text);
+                  const uri = findImageUri(text);
                   if (!uri) {
                     throw new TypeError("Clipboard does not contain a readable image path");
                   }

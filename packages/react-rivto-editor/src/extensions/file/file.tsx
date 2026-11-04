@@ -1,3 +1,4 @@
+import { escapeHtml } from "./escape-html";
 /**
  * Generic browser file ingestion and fallback attachment presentation.
  *
@@ -8,8 +9,6 @@
  *
  * @module
  */
-import { type EditorMode } from "@chulane/rivto";
-import { useSyncExternalStore } from "react";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
 import type { BinaryProvider } from "../../attachments";
@@ -19,134 +18,24 @@ import { validateBinaryUri, type FileReference, type PreparedFile } from "../../
 import { FileView, RegisteredFileView } from "./file-view";
 import { serializeFileMacro } from "./file-macro";
 import { ingestFileBatch, insertPrepared } from "./file-ingestion";
-import { inlineDestination, type FileDestination } from "./file-destination";
+import {
+  fileDestinationAtPoint,
+  inlineDestination,
+  type FileDestination,
+} from "./file-destination";
+import { FileUploadStatusOverlay, FileUploadStatusStore } from "./file-upload-status";
+import { getTransferredFiles, findLocalFileUri, createFileReferenceFromUri } from "./file-input";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
 export const FILE_ELEMENT_TYPE = "file";
 const FILE_BLOCK_CLASS = "rivto-file-block";
 const FILE_INPUT_CLASS = "rivto-file-input";
-const FILE_UPLOADS_CLASS = "rivto-file-uploads";
-const FILE_UPLOAD_CLASS = "rivto-file-upload";
-
-/**
- * Escapes a string used in portable HTML text.
- * @param value - Untrusted filename text.
- * @returns HTML-safe text.
- */
-function escapeHtml(value: string): string {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      })[character]!,
-  );
-}
 
 /** Optional notification for asynchronous file failures. */
 export interface FileExtensionOptions {
   readonly provider: BinaryProvider<string, Blob>;
   readonly onError?: (error: unknown) => void;
-}
-
-interface PendingFileUpload {
-  readonly id: string;
-  readonly name: string;
-  readonly x: number;
-  readonly y: number;
-  readonly retry: () => void;
-  progress?: number;
-  error?: string;
-}
-
-/** Observable local upload feedback that never enters collaborative state. */
-class FileUploadStore {
-  private readonly uploads = new Map<string, PendingFileUpload>();
-  private readonly listeners = new Set<() => void>();
-  private revision = 0;
-
-  /** @returns Stable revision used by React subscriptions. */
-  getRevision(): number {
-    return this.revision;
-  }
-  /** @returns Current upload cards in insertion order. */
-  getUploads(): readonly PendingFileUpload[] {
-    return [...this.uploads.values()];
-  }
-  /** @param listener - Change callback. @returns Subscription disposer. */
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  /** @param upload - Complete pending upload. @returns Nothing. */
-  set(upload: PendingFileUpload): void {
-    this.uploads.set(upload.id, upload);
-    this.emit();
-  }
-  /** @param id - Pending upload ID. @param patch - Updated progress or error. @returns Nothing. */
-  update(id: string, patch: Partial<PendingFileUpload>): void {
-    const current = this.uploads.get(id);
-    if (current) {
-      this.uploads.set(id, { ...current, ...patch });
-      this.emit();
-    }
-  }
-  /** @param id - Completed or dismissed upload ID. @returns Nothing. */
-  delete(id: string): void {
-    if (this.uploads.delete(id)) {
-      this.emit();
-    }
-  }
-  /** Notifies every subscriber after one local change. @returns Nothing. */
-  private emit(): void {
-    this.revision += 1;
-    this.listeners.forEach((listener) => listener());
-  }
-}
-
-/**
- * Renders accessible pending/error cards near the source interaction.
- * @param props - Observable upload state.
- * @returns Fixed local-only status overlay.
- */
-function FileUploadStatuses({ store }: { readonly store: FileUploadStore }) {
-  useSyncExternalStore(
-    (listener) => store.subscribe(listener),
-    () => store.getRevision(),
-    () => store.getRevision(),
-  );
-  return (
-    <div className={FILE_UPLOADS_CLASS} aria-live="polite">
-      {store.getUploads().map((upload) => (
-        <div
-          key={upload.id}
-          className={FILE_UPLOAD_CLASS}
-          role={upload.error ? "alert" : "status"}
-          style={{ left: upload.x, top: upload.y }}
-        >
-          <span>
-            {upload.error ??
-              `Uploading ${upload.name}${upload.progress === undefined ? "…" : ` ${Math.round(upload.progress * 100)}%`}`}
-          </span>
-          {upload.error && (
-            <>
-              <button type="button" onClick={upload.retry}>
-                Retry
-              </button>
-              <button type="button" onClick={() => store.delete(upload.id)}>
-                Dismiss
-              </button>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -191,141 +80,15 @@ export function FileBlock({ blockId }: { readonly blockId: string }) {
 }
 
 /**
- * Renders one generic file canvas element.
- * @param props - Element identity and persisted properties.
- * @returns Display-only file element or validation error.
+ * Renders one generic file canvas element in the shared element host.
+ *
+ * @param props - Shared host props containing element identity and persisted properties.
+ * @param props.element - Element whose persisted file metadata is displayed.
+ * @returns A display-only file view or a validation error when metadata is invalid.
  */
-function FileElementView({
-  props,
-}: {
-  readonly id: string;
-  readonly props: Record<string, unknown>;
-}) {
-  const reference = fileReference(props);
-  return reference ? <FileView {...reference} /> : <span role="alert">Invalid file element</span>;
-}
-
-/** Renders a file in the shared canvas element host. */
 function FileCanvasElement({ element }: ElementRenderProps) {
-  return <FileElementView id={element.id} props={element.props} />;
-}
-
-/**
- * Returns files exposed by a clipboard or drag data store.
- * @param data - Native transferable data, when provided.
- * @returns Files in browser-provided order.
- */
-function transferableFiles(data: DataTransfer | null): File[] {
-  if (!data) {
-    return [];
-  }
-  if (data.files.length) {
-    return [...data.files];
-  }
-  return [...data.items]
-    .filter((item) => item.kind === "file")
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file));
-}
-
-/**
- * Returns the first local filesystem URI exposed as clipboard text.
- * @param text - URI-list or plain clipboard text.
- * @returns Absolute local reference, when present.
- */
-function localFileUriFromText(text: string): string | undefined {
-  const value = text
-    .trim()
-    .split(/\r?\n/)
-    .find((line) => line && !line.startsWith("#"));
-  return value && (/^file:\/\//i.test(value) || /^\//.test(value) || /^[a-z]:[\\/]/i.test(value))
-    ? value
-    : undefined;
-}
-
-/**
- * Infers conservative metadata for a referenced local file.
- * @param uri - Absolute local path or file URI.
- * @returns Portable reference with conservative MIME inference.
- */
-function referenceFromUri(uri: string): FileReference {
-  const path = uri.split(/[?#]/, 1)[0]!;
-  const encodedName = path.split(/[\\/]/).pop() || "file";
-  let name = encodedName;
-  try {
-    name = decodeURIComponent(encodedName);
-  } catch {
-    /* Keep the literal basename. */
-  }
-  const extension = name.match(/\.([a-z\d]+)$/i)?.[1]?.toLowerCase() ?? "";
-  const mimeType =
-    (
-      {
-        png: "image/png",
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        gif: "image/gif",
-        webp: "image/webp",
-        svg: "image/svg+xml",
-        avif: "image/avif",
-        bmp: "image/bmp",
-        ico: "image/x-icon",
-        pdf: "application/pdf",
-        csv: "text/csv",
-        txt: "text/plain",
-        mp3: "audio/mpeg",
-        wav: "audio/wav",
-      } as Record<string, string>
-    )[extension] ?? "application/octet-stream";
-  return { uri, name, mimeType };
-}
-
-/**
- * Chooses inline, block, or canvas placement for one browser point.
- * @param reactPanel - Panel supplying the destination and document commands.
- * @param mode - Current editor mode.
- * @param contentElement - Editable content under the event.
- * @param blockId - Block under the event.
- * @param clientX - Viewport x coordinate.
- * @param clientY - Viewport y coordinate.
- * @param root - Active surface root.
- * @returns Captured insertion destination.
- */
-function destinationAt(
-  reactPanel: ReactPanelApi,
-  mode: EditorMode,
-  contentElement: HTMLElement | null,
-  blockId: string | undefined,
-  clientX: number,
-  clientY: number,
-  root: HTMLElement,
-): FileDestination {
-  if (contentElement) {
-    const document = root.ownerDocument as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    };
-    const hit = document.caretPositionFromPoint?.(clientX, clientY);
-    const range = document.caretRangeFromPoint?.(clientX, clientY);
-    const node = hit?.offsetNode ?? range?.startContainer;
-    const offset = hit?.offset ?? range?.startOffset;
-    if (node !== undefined && offset !== undefined) {
-      root.ownerDocument.getSelection()?.setBaseAndExtent(node, offset, node, offset);
-    }
-    const inline = inlineDestination(reactPanel, blockId);
-    if (inline) {
-      return inline;
-    }
-  }
-  if (mode === "block") {
-    return { kind: "block", afterId: blockId };
-  }
-  const bounds = root.getBoundingClientRect();
-  const zoom = Number(root.dataset.edgelessZoom) || 1;
-  return {
-    kind: "element",
-    x: (clientX - bounds.left - (Number(root.dataset.edgelessPanX) || 0)) / zoom,
-    y: (clientY - bounds.top - (Number(root.dataset.edgelessPanY) || 0)) / zoom,
-  };
+  const reference = fileReference(element.props);
+  return reference ? <FileView {...reference} /> : <span role="alert">Invalid file element</span>;
 }
 
 /**
@@ -338,9 +101,12 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
     id: "file",
     setup: (reactEditor) => {
       const abort = new AbortController();
-      const statuses = new FileUploadStore();
+      const statuses = new FileUploadStatusStore();
       let nextUploadId = 0;
-      reactEditor.extensions.mount(() => <FileUploadStatuses store={statuses} />, "afterSurface");
+      reactEditor.extensions.mount(
+        () => <FileUploadStatusOverlay store={statuses} kind="file" />,
+        "afterSurface",
+      );
       reactEditor.blockTypes.register({
         definition: { type: FILE_BLOCK_TYPE, title: "File" },
         render: FileBlock,
@@ -509,7 +275,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
           signal: abort.signal,
           statuses,
           nextId: () => String(++nextUploadId),
-          name: (uri) => referenceFromUri(uri).name,
+          name: (uri) => createFileReferenceFromUri(uri).name,
           retry: (uri, nextDestination) =>
             insertReferences(reactPanel, [uri], nextDestination, point),
           onError: options.onError,
@@ -518,7 +284,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             "The destination changed while the file was uploading. Select a location and retry.",
           commit: (items) => insertPrepared(reactPanel, items, destination),
           prepare: async (uri) => {
-            const reference = referenceFromUri(uri);
+            const reference = createFileReferenceFromUri(uri);
             const handler = reactEditor.clipboard.selectFileHandler({ reference });
             if (!handler) {
               throw new TypeError(`No attachment handler accepted ${reference.name}`);
@@ -572,13 +338,13 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
       reactEditor.events.register(
         { id: "file.drop", type: "drop", capture: true },
         ({ raw, mode, contentElement, blockId, root, reactPanel }) => {
-          const files = transferableFiles(raw.dataTransfer);
-          const uri = localFileUriFromText(raw.dataTransfer?.getData("text/uri-list") ?? "");
+          const files = getTransferredFiles(raw.dataTransfer);
+          const uri = findLocalFileUri(raw.dataTransfer?.getData("text/uri-list") ?? "");
           if (!files.length && !uri) {
             return false;
           }
           const destination = replaceEmptyDefault(
-            destinationAt(
+            fileDestinationAtPoint(
               reactPanel,
               mode,
               contentElement,
@@ -602,10 +368,10 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
       reactEditor.events.register(
         { id: "file.paste", type: "paste", capture: true },
         ({ raw, mode, contentElement, blockId, root, reactPanel }) => {
-          const files = transferableFiles(raw.clipboardData);
+          const files = getTransferredFiles(raw.clipboardData);
           const uri =
-            localFileUriFromText(raw.clipboardData?.getData("text/uri-list") ?? "") ??
-            localFileUriFromText(raw.clipboardData?.getData("text/plain") ?? "");
+            findLocalFileUri(raw.clipboardData?.getData("text/uri-list") ?? "") ??
+            findLocalFileUri(raw.clipboardData?.getData("text/plain") ?? "");
           const redacted =
             !files.length && !uri && raw.clipboardData?.types.includes("text/uri-list") === true;
           if (!files.length && !uri && !redacted) {
@@ -614,7 +380,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
           const bounds = contentElement?.getBoundingClientRect() ?? root.getBoundingClientRect();
           const initial = contentElement
             ? inlineDestination(reactPanel, blockId)
-            : destinationAt(
+            : fileDestinationAtPoint(
                 reactPanel,
                 mode,
                 null,
@@ -641,7 +407,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
             void clipboard
               ?.readText()
               .then((text) => {
-                const local = localFileUriFromText(text);
+                const local = findLocalFileUri(text);
                 if (!local) {
                   throw new TypeError("Clipboard does not contain a readable local file path");
                 }
