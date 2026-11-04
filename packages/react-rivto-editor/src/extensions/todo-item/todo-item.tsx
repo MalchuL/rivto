@@ -101,6 +101,7 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
           definition: {
             type: TODO_STORAGE_BLOCK_TYPE,
             title: "TODO storage",
+            metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
             defaultProps: createTodoStorageProps,
             propSchema: todoStoragePropsSchema,
           },

@@ -48,16 +48,18 @@
 
 /* Storage appearance belongs to the layout's own header and child host.
  * The shared BlockView remains the only outer selection and identity boundary. */
-.rivto-block:has(> .rivto-todo-storage-header) {
-  border: 1px solid var(--rivto-todo-storage-border);
-  border-radius: 16px;
-}
 .rivto-todo-storage-header {
   /* Child rows also use z-index: 1 on `.rivto-block-content` (handle layering).
    * Equal z-index paints later siblings above overflowing Filter/Order panels. */
   z-index: 2;
   padding: 8px 7px;
   min-height: 44px;
+  background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));
+  border-radius: 16px 16px 0 0;
+}
+.rivto-todo-storage-header:has(.rivto-todo-storage-summary) {
+  background: transparent;
+  border-radius: 0;
 }
 .rivto-todo-storage-children {
   margin: 0;

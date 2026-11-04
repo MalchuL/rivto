@@ -74,6 +74,7 @@ export function kanbanExtension(): ReactEditorExtension {
           definition: {
             type: KANBAN_BLOCK_TYPE,
             title: "Kanban",
+            metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
           },
           render: Kanban,
           layout: KanbanLayout,

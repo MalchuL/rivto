@@ -57,6 +57,7 @@
 
 /* TODO item and storage. */
 @import "../extensions/todo-item/todo-item.css" layer(components);
+@import "../extensions/containers/container-summaries.css" layer(components);
 
 /* Chrome shares the utility layer with the primitives it customizes. */
 @import "../components/edgeless/controls.css" layer(utilities);

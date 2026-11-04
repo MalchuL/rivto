@@ -12,6 +12,12 @@ import { useId, type KeyboardEvent, type MouseEvent } from "react";
 import { z } from "zod";
 import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
 import { convertLeafToContainer } from "../convert-leaf-to-container";
+import {
+  CONTAINER_SUMMARY_CLASS,
+  CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
+  ContainerSummaryTitle,
+} from "../container-summary-title";
+import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
 import { Button } from "../../../components/ui/button";
 import { Checkbox } from "../../../components/ui/checkbox";
 import { Label } from "../../../components/ui/label";
@@ -152,7 +158,7 @@ export function setColumnsCount(
  * Divider visibility is reflected on this board's selection region for the
  * shared page and edgeless layout stylesheet. Missing preferences show dividers.
  *
- * @param props - Identity of the persisted board; content is intentionally empty.
+ * @param props - Identity of the persisted board and its editable collapsed name.
  * @param props.blockId - Stable ID of the board to observe.
  * @returns Structural selection region and a compact collapsed summary, or null
  * when the board no longer exists.
@@ -169,13 +175,13 @@ export function Columns({ blockId }: { readonly blockId: string }) {
   return (
     <div
       {...attributes}
-      className={COLUMNS_CLASS}
+      className={`${COLUMNS_CLASS} ${CONTAINER_SUMMARY_CLASS}`}
       data-show-dividers={block.props.showDividers !== false}
     >
       {block.listProps.collapsed === true && (
         <>
-          <strong>Columns</strong>
-          <span className={COLUMNS_STATS_CLASS}>
+          <ContainerSummaryTitle blockId={blockId} name="Columns" />
+          <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={COLUMNS_STATS_CLASS}>
             {count} {count === 1 ? "column" : "columns"}
           </span>
         </>
@@ -349,6 +355,7 @@ export function columnsExtension(): ReactEditorExtension {
         definition: {
           type: COLUMNS_BLOCK_TYPE,
           title: "Columns",
+          metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
           defaultProps: { showDividers: true },
           propSchema: z.object({ showDividers: z.boolean().default(true) }),
         },

@@ -9,10 +9,16 @@
  */
 import type { EditorBlockInput } from "@chulane/rivto";
 import type { BlockLayoutProps } from "@chulane/rivto-page";
+import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
 import { BentoLayout } from "./bento-layout";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { useBlockNode, useBlockSelectionAnchor } from "../../../hooks";
+import {
+  CONTAINER_SUMMARY_CLASS,
+  CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
+  ContainerSummaryTitle,
+} from "../container-summary-title";
 import type { ReactEditorExtension } from "../../../managers";
 import { BENTO_BLOCK_TYPE, bentoBehavior } from "./bento-behavior";
 
@@ -30,11 +36,11 @@ export function createBentoBlockInput(): EditorBlockInput {
 }
 
 /**
- * Renders a structural board header and live tile count in both collapse states.
+ * Renders a structural selection anchor and an editable collapsed board summary.
  *
  * @param props - Container identity.
  * @param props.blockId - Stable ID of the Bento board.
- * @returns Board header and statistics; the layout separately places its tile collection.
+ * @returns Selection anchor with statistics when collapsed; the layout separately places its tile collection.
  */
 export function Bento({ blockId }: BlockLayoutProps) {
   const editing = useBlockNode(blockId);
@@ -45,11 +51,15 @@ export function Bento({ blockId }: BlockLayoutProps) {
   }
   const tileCount = block.childIds.length;
   return (
-    <div {...attributes} className={SUMMARY_CLASS}>
-      <strong>Bento</strong>
-      <span className={SUMMARY_STATS_CLASS}>
-        {tileCount} {tileCount === 1 ? "tile" : "tiles"}
-      </span>
+    <div {...attributes} className={`${SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}>
+      {block.listProps.collapsed === true && (
+        <>
+          <ContainerSummaryTitle blockId={blockId} name="Bento" />
+          <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={SUMMARY_STATS_CLASS}>
+            {tileCount} {tileCount === 1 ? "tile" : "tiles"}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -91,6 +101,7 @@ export function bentoExtension(): ReactEditorExtension {
           definition: {
             type: BENTO_BLOCK_TYPE,
             title: "Bento",
+            metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
           },
           render: Bento,
           layout: BentoLayout,

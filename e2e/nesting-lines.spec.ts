@@ -151,7 +151,7 @@ for (const type of ["bento", "table"] as const) {
       if (type === "table") {
         parent = parent.children[0]!.children[0]!;
       }
-      return { parent: parent.id, child: parent.children[0]!.id };
+      return { container: container.id, parent: parent.id, child: parent.children[0]!.id };
     }, type);
     const path = page.locator("[data-nesting-lines] path").first();
     await expect(page.locator(`[data-block-id="${ids.child}"]`)).toBeVisible();
@@ -181,5 +181,11 @@ for (const type of ["bento", "table"] as const) {
     if (type === "bento") {
       expect(line.d).toContain(`M ${line.x} ${line.y} V ${line.end}`);
     }
+    const container = page.locator(`[data-block-id="${ids.container}"]`);
+    await container.locator(":scope > .rivto-block-row .page-collapse-toggle").click();
+    await expect(page.locator(`[data-block-id="${ids.child}"]`)).toHaveCount(0);
+    await expect(path).toHaveAttribute("d", "");
+    await container.locator(":scope > .rivto-block-row .page-collapse-toggle").click();
+    await expect.poll(async () => (await path.getAttribute("d"))?.match(/\bM /g)?.length).toBe(type === "table" ? 2 : 1);
   });
 }

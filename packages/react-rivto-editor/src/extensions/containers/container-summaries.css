@@ -1,0 +1,38 @@
+.rivto-container-summary:not(:empty) {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  gap: 10px;
+  padding: 4px 8px 4px 12px;
+  border-radius: 12px;
+  color: var(--rivto-foreground);
+  background: var(--rivto-block-selection-fill, var(--rivto-secondary));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rivto-border) 65%, transparent);
+}
+
+.rivto-container-summary-title {
+  min-width: 1ch;
+  font-weight: 600;
+  outline: none;
+}
+
+.rivto-container-summary-title:empty::before {
+  content: attr(data-placeholder);
+  color: var(--rivto-muted-foreground);
+  pointer-events: none;
+}
+
+.rivto-container-summary-title:focus-visible {
+  outline: 2px solid var(--rivto-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.rivto-container-summary:not(:empty) > span {
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: var(--rivto-muted-foreground);
+  background: var(--rivto-block-selection-fill, var(--rivto-background));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

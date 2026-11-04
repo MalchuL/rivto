@@ -1,5 +1,5 @@
 import type { EditorMode } from "@chulane/rivto";
-import { createContext, type ReactNode } from "react";
+import { createContext, useCallback, useSyncExternalStore, type ReactNode } from "react";
 import { useReactPanel } from "../hooks/editor/use-react-panel";
 
 /** Presentation kind supplied by an explicit surface, never stored on an editor. */
@@ -18,6 +18,9 @@ export function SurfaceBoundary({
   readonly children: ReactNode;
 }) {
   const editor = useReactPanel();
+  const extensions = editor.editor.extensions;
+  const subscribe = useCallback((listener: () => void) => extensions.subscribe(listener), [extensions]);
+  useSyncExternalStore(subscribe, () => extensions.revision, () => extensions.revision);
   let content = (
     <>
       {editor.editor.extensions.getComponents("beforeSurface").map((Component, index) => (

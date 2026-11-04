@@ -37,6 +37,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { convertLeafToContainer } from "../convert-leaf-to-container";
+import {
+  CONTAINER_SUMMARY_CLASS,
+  CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
+  ContainerSummaryTitle,
+} from "../container-summary-title";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
@@ -338,9 +343,15 @@ function useTableDimensions(tableId: string): { readonly rows: number; readonly 
 }
 
 /**
- * Renders a structural selection region with table dimensions when collapsed.
- * @param props - Stable table identity.
- * @returns Contentless table header; the shared tree renders its rows.
+ * Renders a structural selection region with an editable name and table dimensions when collapsed.
+ *
+ * The name is stored in the table block's content. The shared tree renders
+ * the table rows separately, and the expanded selection region stays empty.
+ *
+ * @param props - Identity of the table to observe.
+ * @param props.blockId - Stable ID of the table whose dimensions are summarized.
+ * @returns Table selection region and collapsed summary; the shared tree renders its rows.
+ * @throws If rendered outside an editor panel.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode(blockId);
@@ -351,11 +362,14 @@ export function Table({ blockId }: { readonly blockId: string }) {
     return null;
   }
   return (
-    <div {...attributes} className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS}`}>
+    <div
+      {...attributes}
+      className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}
+    >
       {block.listProps.collapsed === true && (
         <>
-          <strong>Table</strong>
-          <span className={TABLE_SUMMARY_STATS_CLASS}>
+          <ContainerSummaryTitle blockId={blockId} name="Table" />
+          <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={TABLE_SUMMARY_STATS_CLASS}>
             {rows} × {columns}
           </span>
         </>
@@ -484,6 +498,7 @@ export function tableExtension(): ReactEditorExtension {
         definition: {
           type: TABLE_BLOCK_TYPE,
           title: "Table",
+          metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
         },
         render: Table,
         layout: TableLayout,
