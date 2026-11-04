@@ -278,6 +278,8 @@ export class BlockDropTargets implements BlockDropTargetsApi {
    * ancestor's own inset strip starts. An equivalent merged sibling gap or a
    * terminal descendant sharing its physical bottom may replace its line;
    * destination, depth and declared hit ownership stay unchanged.
+   * A local child layout can append to the same parent at a physically distinct
+   * boundary; its own line must not jump to the enclosing owner's outer edge.
    * Terminal child append and parent-inside choices share that same physical seam,
    * even when the selected child edge remains local to its own list.
    * The walk uses mounted ancestor layouts and their bounded neighbor search;
@@ -309,10 +311,18 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       }
       const layout = this.layouts.get(element);
       const gap = layout && resolveLayoutGap(layout, point, hit, target);
+      const separateLocalBoundary =
+        gap?.region?.kind === "gap" &&
+        gap.indicator &&
+        !continuesDropOutline(gap.region.previous.element) &&
+        gap.region.previous.element.contains(target.element) &&
+        target.destination.parentId === gap.region.previous.element.dataset.blockId &&
+        Math.abs(gap.indicator.top - target.indicator.top) > 1;
       // A deeper destination can share the same physical seam without being the
       // ancestor gap's canonical destination; borrow its line, not its destination.
       if (
         gap?.region?.kind === "gap" &&
+        !separateLocalBoundary &&
         (sameOutlineBoundary(gap.destination, target.destination) ||
           (gap.region.previous.element.contains(target.element) &&
             Math.abs(

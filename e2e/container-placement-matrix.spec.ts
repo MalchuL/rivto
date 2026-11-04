@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
-const kinds = ["bento", "kanban", "columns", "todo-storage"] as const;
+const kinds = ["bento", "kanban", "columns", "todo-storage", "table", "custom-container"] as const;
 type Kind = (typeof kinds)[number];
 type Placement = "first" | "between" | "last" | "nested";
 
@@ -37,8 +38,21 @@ async function loadContainers(
   await page.locator('[data-journal-document="today"] .page-surface').first().waitFor();
   await page.evaluate(
     ({ blocks, mode }) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-        .__rivtoDemo.editor;
+      const { editor, reactEditor } = (
+        window as unknown as {
+          __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
+        }
+      ).__rivtoDemo;
+      if (blocks.some((block) => block.type === "custom-container")) {
+        const bento = reactEditor.renderers
+          .getRegistrations()
+          .find((item) => item.type === "bento")!;
+        reactEditor.blockTypes.register({
+          definition: { type: "custom-container", title: "Custom container" },
+          render: bento.renderer,
+          layout: bento.layout,
+        });
+      }
       editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
       blocks.forEach((block) => editor.blocks.insertBlock(block));
       if (mode === "edgeless") {
@@ -64,20 +78,12 @@ async function loadContainers(
  * @returns Resolves after undo restores the source list for the next sample.
  */
 async function verifyPlacement(page: Page, placement: Placement): Promise<void> {
-  const a = (await page.locator('[data-block-id="first"]').boundingBox())!;
-  const b = (await page.locator('[data-block-id="last"]').boundingBox())!;
-  let y = (a.y + a.height + b.y) / 2;
-  if (placement === "first") {
-    y = a.y + 1;
-  } else if (placement === "last") {
-    y = b.y + b.height - 1;
-  }
-  await drag(page, { x: a.x + (placement === "nested" ? 36 : 12), y });
+  const point = await drag(page, placement);
   const line = page.locator(".rivto-block-drop-line:visible");
   await expect(line).toBeVisible();
   if (placement === "between") {
     const rect = (await line.boundingBox())!;
-    expect(rect.y + rect.height / 2).toBeCloseTo(y, 0);
+    expect(rect.y + rect.height / 2).toBeCloseTo(point.y, 0);
   }
   await page.mouse.up();
   await expect
@@ -112,6 +118,19 @@ function container(kind: Kind, prefix: string, children: EditorBlockInput[]): Ed
   if (kind === "todo-storage") {
     return { id: `${prefix}-list`, type: kind, children };
   }
+  if (kind === "table") {
+    return {
+      id: prefix,
+      type: kind,
+      children: [
+        {
+          id: `${prefix}-row`,
+          type: "table-row",
+          children: [{ id: `${prefix}-list`, type: "table-cell", children }],
+        },
+      ],
+    };
+  }
   let type = "paragraph";
   if (kind === "kanban" || kind === "columns") {
     type = `${kind}-column`;
@@ -127,10 +146,10 @@ function container(kind: Kind, prefix: string, children: EditorBlockInput[]): Ed
  * Drags the original source handle to a current viewport point.
  *
  * @param page - Browser page owning native mouse input.
- * @param point - Destination coordinates after scrolling the test fixture into view.
- * @returns Resolves with the mouse held at the destination so feedback can be checked.
+ * @param placement - Destination determined after the drag activates and scrolling settles.
+ * @returns Destination coordinates with the mouse held so feedback can be checked.
  */
-async function drag(page: Page, point: { x: number; y: number }): Promise<void> {
+async function drag(page: Page, placement: Placement): Promise<{ x: number; y: number }> {
   const row = page.locator('[data-block-id="moving"] > .rivto-block-row');
   await row.hover();
   const handle = row.locator(".block-handle");
@@ -139,7 +158,30 @@ async function drag(page: Page, point: { x: number; y: number }): Promise<void> 
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
+  let point = await placementPoint(page, placement);
   await page.mouse.move(point.x, point.y, { steps: 12 });
+  point = await placementPoint(page, placement);
+  await page.mouse.move(point.x, point.y, { steps: 4 });
+  return point;
+}
+
+/**
+ * Measures the current destination after the source drag can change layout.
+ *
+ * @param page - Browser containing the receiving blocks.
+ * @param placement - Child-list destination to measure.
+ * @returns Viewport point selecting the requested canonical placement.
+ */
+async function placementPoint(page: Page, placement: Placement): Promise<{ x: number; y: number }> {
+  const a = (await page.locator('[data-block-id="first"]').boundingBox())!;
+  const b = (await page.locator('[data-block-id="last"]').boundingBox())!;
+  let y = (a.y + a.height + b.y) / 2;
+  if (placement === "first") {
+    y = a.y + 1;
+  } else if (placement === "last") {
+    y = b.y + b.height - 1;
+  }
+  return { x: a.x + (placement === "nested" ? 36 : 12), y };
 }
 
 for (const source of kinds) {

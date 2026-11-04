@@ -203,6 +203,7 @@ export function useBlockDropLayout(
  * @param anchor - Current existing shell/item or its lookup; null detaches this registration.
  * @param regions - Live declarative geometry, independent of the element's dimensions.
  * @param blockId - Canonical item identity in the containing layout order.
+ * @param subscribeAnchor - Optional addressed notification when a lookup anchor changes.
  * @returns The effect releases registry and containing-layout references on replacement/unmount.
  * @throws If outside an editor or delegated registration fails.
  */
@@ -210,6 +211,7 @@ export function useBlockDropRegions(
   anchor: HTMLElement | null | (() => HTMLElement | null),
   regions: readonly BlockDropRegion[],
   blockId: string,
+  subscribeAnchor?: (listener: () => void) => () => void,
 ): void {
   const editor = useBlockEditorController();
   const items = useContext(BlockDropLayoutContext);
@@ -218,26 +220,42 @@ export function useBlockDropRegions(
     current.current = regions;
   }, [regions]);
   useLayoutEffect(() => {
-    const element = typeof anchor === "function" ? anchor() : anchor;
-    if (!element) {
-      return;
-    }
-    const entry = {
-      element,
-      /**
-       * Reads the last committed declarations for this mounted item.
-       *
-       * @returns Live regions without reinstalling the anchor.
-       */
-      getRegions: () => current.current,
+    let element: HTMLElement | null = null;
+    let release: (() => void) | undefined;
+    const update = () => {
+      const next = typeof anchor === "function" ? anchor() : anchor;
+      if (next === element) {
+        return;
+      }
+      release?.();
+      release = undefined;
+      element = next;
+      if (!next) {
+        return;
+      }
+      const entry = {
+        element: next,
+        /**
+         * Reads the last committed declarations for this mounted item.
+         *
+         * @returns Live regions without reinstalling the anchor.
+         */
+        getRegions: () => current.current,
+      };
+      const stop = editor.dropTargets.register(entry);
+      const stopItem = items?.register(blockId, entry);
+      release = () => {
+        stopItem?.();
+        stop();
+      };
     };
-    const stop = editor.dropTargets.register(entry);
-    const stopItem = items?.register(blockId, entry);
+    const unsubscribe = subscribeAnchor?.(update);
+    update();
     return () => {
-      stopItem?.();
-      stop();
+      unsubscribe?.();
+      release?.();
     };
-  }, [editor, anchor, items, blockId]);
+  }, [editor, anchor, items, blockId, subscribeAnchor]);
 }
 
 /** Existing ref-forwarding layout element and its declarative flow policy. */
