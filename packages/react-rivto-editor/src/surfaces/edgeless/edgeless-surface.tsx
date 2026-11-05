@@ -69,7 +69,6 @@ export function EdgelessSurface(props: EdgelessSurfaceOptions = {}) {
 /** Surface-local snapping and placement configuration. */
 interface SurfaceContentProps {
   readonly snapping: EdgelessSnappingStore;
-  readonly avoidBlockElementOverlap?: boolean;
   readonly blockElementWidth?: number;
 }
 
@@ -84,14 +83,12 @@ interface SurfaceContentProps {
  *
  * @param props - Snapping owner and new-card placement defaults.
  * @param props.snapping - Borrowed surface-local snapping preferences and subscriptions.
- * @param props.avoidBlockElementOverlap - Whether newly created cards avoid existing cards; defaults to true.
  * @param props.blockElementWidth - Preferred new-card width in canvas units; defaults to the shared card width.
  * @returns Virtualized edgeless content with local camera and gesture policies.
  * @throws If rendered outside the receiving EditorPanel and its edgeless canvas provider.
  */
 function EdgelessSurfaceContent({
   snapping,
-  avoidBlockElementOverlap = true,
   blockElementWidth = EDGELESS_CARD_DEFAULT_FRAME.width,
 }: SurfaceContentProps) {
   const panel = useReactPanel();
@@ -99,8 +96,8 @@ function EdgelessSurfaceContent({
   const camera = useCanvasCamera(canvas);
   const snap = useSurfaceSnapping(snapping);
   const controller = useMemo(
-    () => new EdgelessSurfaceController(panel, canvas, avoidBlockElementOverlap, blockElementWidth),
-    [panel, canvas, avoidBlockElementOverlap, blockElementWidth],
+    () => new EdgelessSurfaceController(panel, canvas, blockElementWidth),
+    [panel, canvas, blockElementWidth],
   );
   const spotlight = useMemo(() => new EdgelessGridSpotlight(), []);
   const { reactPanel } = useReactPanelContext();
