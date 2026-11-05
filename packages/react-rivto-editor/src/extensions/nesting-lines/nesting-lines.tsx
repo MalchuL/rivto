@@ -3,10 +3,83 @@ import { createPortal } from "react-dom";
 import { BLOCK_EDITOR_CLASSES } from "@chulane/rivto-page";
 import { useEditorRoot } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
-import { PanelDOM } from "../../panels/panel-dom";
+import { findPanelElements, PanelDOM } from "../../panels/panel-dom";
 
 /** Identifies the scrollable block-list occurrence within a canvas card. */
 const CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
+
+/** Measured control geometry and the lowest preceding bottom edge. */
+interface MeasuredControl {
+  readonly element: HTMLElement;
+  readonly bounds: DOMRect;
+  readonly maximumBottom: number;
+}
+
+/** Rectangle edges in viewport coordinates. */
+type Bounds = Pick<DOMRectReadOnly, "left" | "right" | "top" | "bottom">;
+
+/**
+ * Measures visible-size start-slot controls in vertical order.
+ *
+ * @param dom - Panel-limited access to the mounted occurrence.
+ * @returns Controls with prefix bottom bounds for efficient vertical lookup.
+ */
+function measureRowControls(dom: PanelDOM): MeasuredControl[] {
+  const controls = findPanelElements(
+    dom.root,
+    `.${BLOCK_EDITOR_CLASSES.row} > .${BLOCK_EDITOR_CLASSES.slot}[data-slot-position="start"] > *`,
+  )
+    .map((element) => ({ element, bounds: element.getBoundingClientRect() }))
+    .filter(({ bounds }) => bounds.width > 0 && bounds.height > 0)
+    .sort((left, right) => left.bounds.top - right.bounds.top);
+  let maximumBottom = -Infinity;
+  return controls.map((control) => {
+    maximumBottom = Math.max(maximumBottom, control.bounds.bottom);
+    return { ...control, maximumBottom };
+  });
+}
+
+/**
+ * Finds painted controls intersecting one nesting line.
+ *
+ * @param controls - Controls sorted by top edge with prefix bottom bounds.
+ * @param line - Line's stroke bounds in viewport coordinates.
+ * @param observed - Elements whose later size changes must refresh the overlay.
+ * @returns Bounds of visible controls intersecting the line.
+ */
+function intersectingControlBounds(
+  controls: readonly MeasuredControl[],
+  line: Bounds,
+  observed: Set<Element>,
+): DOMRect[] {
+  // Prefix maxima skip controls above the line without missing unusually tall controls.
+  let low = 0;
+  let high = controls.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (controls[middle]!.maximumBottom > line.top) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  const result: DOMRect[] = [];
+  for (let index = low; index < controls.length; index += 1) {
+    const { element, bounds } = controls[index]!;
+    if (bounds.top >= line.bottom) {
+      break;
+    }
+    if (bounds.bottom <= line.top || bounds.right <= line.left || bounds.left >= line.right) {
+      continue;
+    }
+    observed.add(element);
+    const style = element.ownerDocument.defaultView!.getComputedStyle(element);
+    if (style.visibility !== "hidden" && style.opacity !== "0") {
+      result.push(bounds);
+    }
+  }
+  return result;
+}
 
 /**
  * Measures the painted edges of active drop feedback in viewport coordinates.
@@ -88,6 +161,7 @@ function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
   }
   const nextObserved = new Set<Element>([dom.root]);
   const lines: string[] = [];
+  let controls: MeasuredControl[] | undefined;
   for (const block of blocks) {
     const first = children.get(block)?.[0];
     const childHost = first?.parentElement?.closest(`.${BLOCK_EDITOR_CLASSES.children}`);
@@ -113,21 +187,26 @@ function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
     const content = childRow.querySelector<HTMLElement>(
       `:scope > .${BLOCK_EDITOR_CLASSES.content}`,
     );
-    if (content) {
-      nextObserved.add(content);
+    const startSlot = childRow.querySelector<HTMLElement>(
+      `:scope > .${BLOCK_EDITOR_CLASSES.slot}[data-slot-position="start"]`,
+    );
+    const anchor = startSlot ?? content;
+    if (anchor) {
+      nextObserved.add(anchor);
     }
     const rowBounds = childRow.getBoundingClientRect();
     const style = childRow.ownerDocument.defaultView!.getComputedStyle(childRow);
     const scale = childRow.offsetWidth ? rowBounds.width / childRow.offsetWidth : 1;
     const padding =
-      (parseFloat(style.paddingInlineStart) || 0) + (parseFloat(style.columnGap) || 0);
-    const contentBounds = content?.getBoundingClientRect();
-    // Content bounds include in-flow controls; remove only the normal row inset.
+      (parseFloat(style.paddingInlineStart) || 0) +
+      (startSlot ? 0 : parseFloat(style.columnGap) || 0);
+    const anchorBounds = anchor?.getBoundingClientRect();
+    // Anchor before list controls, while retaining the inset for in-flow handles.
     // Convert CSS pixels to viewport pixels so canvas zoom and RTL use the same anchor.
-    const x = contentBounds
+    const x = anchorBounds
       ? (style.direction === "rtl"
-          ? contentBounds.right + padding * scale
-          : contentBounds.left - padding * scale) - origin.left
+          ? anchorBounds.right + padding * scale
+          : anchorBounds.left - padding * scale) - origin.left
       : rowBounds.left - origin.left;
     const card = block.closest<HTMLElement>(CARD_CONTENT_SELECTOR);
     if (card) {
@@ -139,8 +218,23 @@ function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
       start = Math.max(start, bounds.top - origin.top);
       end = Math.min(end, bounds.bottom - origin.top);
     }
-    // Keep drop feedback visible without hiding the rest of the nesting line.
-    const gaps = feedback
+    if (end <= start) {
+      continue;
+    }
+    // The body overlay also sits above in-flow controls, so preserve their paint.
+    controls ??= measureRowControls(dom);
+    const controlBounds = intersectingControlBounds(
+      controls,
+      {
+        left: x + origin.left - strokeRadius,
+        right: x + origin.left + strokeRadius,
+        top: start + origin.top,
+        bottom: end + origin.top,
+      },
+      nextObserved,
+    );
+    // Keep controls and drop feedback visible without hiding the rest of the line.
+    const gaps = [...feedback, ...controlBounds]
       .filter(
         (rect) =>
           x + origin.left + strokeRadius > rect.left && x + origin.left - strokeRadius < rect.right,

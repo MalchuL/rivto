@@ -200,6 +200,7 @@ test("gives collapsed container summaries the same appearance", async ({ page })
     const summary = block.locator(
       `:scope > .${ROW_CLASS} > .${CONTENT_FLOW_CLASS} > [data-block-selection-anchor]`,
     );
+    await expect(summary).not.toBeEmpty();
     styles.push(
       await summary.evaluate((element) => {
         const style = getComputedStyle(element);
