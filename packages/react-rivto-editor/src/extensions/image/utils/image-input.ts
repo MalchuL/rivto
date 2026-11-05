@@ -1,5 +1,8 @@
 import { firstUriListEntry, isLocalFileUri } from "../../file/utils/file-input";
 
+/** Image filename extensions accepted for local references and browser files. */
+const IMAGE_FILE_EXTENSION = /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i;
+
 /**
  * Loads intrinsic dimensions and rejects undecodable image data.
  *
@@ -50,8 +53,7 @@ export function inspectImage(source: string | Blob): Promise<{
 export function isImageFile(file: File): boolean {
   return (
     file.type.startsWith("image/") ||
-    (/^(?:application\/octet-stream)?$/i.test(file.type) &&
-      /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(file.name))
+    (/^(?:application\/octet-stream)?$/i.test(file.type) && IMAGE_FILE_EXTENSION.test(file.name))
   );
 }
 
@@ -62,7 +64,7 @@ export function isImageFile(file: File): boolean {
  * @returns True for a supported image extension on an absolute local path.
  */
 function isLocalImageUri(uri: string): boolean {
-  return /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(uri) && isLocalFileUri(uri);
+  return IMAGE_FILE_EXTENSION.test(uri) && isLocalFileUri(uri);
 }
 
 /**

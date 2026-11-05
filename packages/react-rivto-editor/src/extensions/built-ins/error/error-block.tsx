@@ -1,21 +1,9 @@
 import type { EditorBlockInput } from "@chulane/rivto";
 import { useBlockNode } from "../../../hooks";
 import type { ReactEditorExtension } from "../../../managers";
+import { escapeHtml } from "../../../utils/escape-html";
 
 export const ERROR_BLOCK_TYPE = "rivto.error";
-
-const escapeHtml = (value: string): string =>
-  value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      })[character]!,
-  );
 
 /**
  * Renders quarantined clipboard data that failed block validation.

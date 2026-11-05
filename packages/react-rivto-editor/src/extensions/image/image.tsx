@@ -7,9 +7,8 @@
  *
  * @module
  */
-import { escapeHtml } from "../file/utils/escape-html";
+import { escapeHtml } from "../../utils/escape-html";
 import { FileIngestion } from "../file/ingestion/file-ingestion";
-import type { EditorBlock } from "@chulane/rivto";
 import {
   FileUploadStatusOverlay,
   FileUploadStatusStore,
@@ -118,7 +117,7 @@ function imageProps(props: Record<string, unknown>): ImageProps | undefined {
  * @param props.blockId - Persisted image block ID to render.
  * @returns The shared image view, or a validation error for invalid props.
  */
-export function ImageBlock({ blockId }: BlockRendererProps) {
+function ImageBlock({ blockId }: BlockRendererProps) {
   const { block, operations } = useBlock(blockId);
   const selectionAnchor = useBlockSelectionAnchor(blockId);
   const image = block ? imageProps(block.props) : undefined;
@@ -376,14 +375,4 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
       return dispose;
     },
   };
-}
-
-/**
- * Checks whether a block contains valid standalone image properties.
- *
- * @param block - Persisted block to inspect.
- * @returns True when the block type is image and its required properties are usable.
- */
-export function isImageBlock(block: EditorBlock): boolean {
-  return block.type === IMAGE_BLOCK_TYPE && Boolean(imageProps(block.props));
 }

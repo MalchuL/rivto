@@ -183,22 +183,6 @@ function randomFileId(): string {
 }
 
 /**
- * Joins one logical URI prefix and encoded filename without path ambiguity.
- *
- * @param prefix - Logical URI prefix, with or without a trailing slash.
- * @param fileName - Filename to encode as a single URI segment.
- * @returns The prefix with a trailing slash followed by the encoded filename.
- * @throws If the filename contains an unpaired surrogate that cannot be URI-encoded.
- *
- * @example
- * logicalUri("assets", "Photo 1.PNG"); // "assets/Photo%201.PNG"
- */
-function logicalUri(prefix: string, fileName: string): string {
-  const normalized = prefix.endsWith("/") ? prefix : `${prefix}/`;
-  return normalized + encodeURIComponent(fileName);
-}
-
-/**
  * Checks that a relative URI path contains no encoded separators or traversal segments.
  *
  * @param path - URI-encoded path relative to the configured directory.
@@ -257,12 +241,15 @@ export class LocalFileBridge implements BinaryProvider {
    *
    * Filename collisions retry with a random suffix, up to 100 write attempts.
    * Cancellation is checked before and after host writes; it does not undo a write.
+   * The logical URI joins the normalized prefix and filename encoded as one segment,
+   * so the filename does not change the path hierarchy.
    *
    * @param file - Binary content subject to the configured byte limit.
    * @param context - Original filename, attachment metadata, and cancellation signal.
    * @returns An encoded logical URI after the host reports successful creation.
    * @throws If cancelled, oversized, the host fails or returns an invalid result,
-   * all attempts collide, or cryptographic randomness is unavailable when needed.
+   * all attempts collide, cryptographic randomness is unavailable when needed,
+   * or the filename contains an unpaired surrogate that cannot be URI-encoded.
    *
    * @example
    * // With uriPrefix "assets/" and an available filename:
@@ -286,7 +273,7 @@ export class LocalFileBridge implements BinaryProvider {
       });
       context.signal.throwIfAborted();
       if (created === true) {
-        return logicalUri(this.prefix, fileName);
+        return this.prefix + encodeURIComponent(fileName);
       }
       if (created !== false) {
         throw new TypeError("File bridge writeFile must report whether the file was created");

@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { escapeHtml } from "./utils/escape-html";
+import { escapeHtml } from "../../utils/escape-html";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
 import type { ReactEditorApi } from "../../editor/types";
@@ -47,7 +47,7 @@ export interface FileExtensionOptions {
  * @param props - Opaque persisted property record.
  * @returns Portable file reference, or undefined for invalid metadata.
  */
-export function fileReference(props: Record<string, unknown>): FileReference | undefined {
+function fileReference(props: Record<string, unknown>): FileReference | undefined {
   const size = props.size;
   if (
     typeof props.uri !== "string" ||
@@ -69,7 +69,7 @@ export function fileReference(props: Record<string, unknown>): FileReference | u
  * @param props.blockId - Persisted file block ID to render.
  * @returns Display-only file block or validation error.
  */
-export function FileBlock({ blockId }: BlockRendererProps) {
+function FileBlock({ blockId }: BlockRendererProps) {
   const { block } = useBlock(blockId);
   const selectionAnchor = useBlockSelectionAnchor(blockId);
   const reference = block ? fileReference(block.props) : undefined;

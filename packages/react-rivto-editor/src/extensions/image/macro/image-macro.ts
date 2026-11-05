@@ -173,7 +173,6 @@ export function remarkImageMacros() {
         // Replace only text children; preserve non-text nodes and traverse their descendants.
         node.children = node.children.flatMap((child) => {
           if (child.type !== "text" || !child.value) {
-            visit(child);
             return [child];
           }
           const base = child.position?.start?.offset ?? 0;

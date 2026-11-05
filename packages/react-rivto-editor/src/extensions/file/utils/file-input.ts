@@ -23,16 +23,10 @@ const MIME_TYPES: Record<string, string> = {
   wav: "audio/wav",
 };
 
-/** Ordered browser files with the length needed to prefer a populated file list. */
-interface TransferredFiles extends Iterable<File> {
-  /** Number of browser files in the list. */
-  readonly length: number;
-}
-
 /** Transfer fields used while collecting clipboard or drag files. */
 interface FileTransferData {
   /** Browser-provided file list, examined before transfer items. */
-  readonly files: TransferredFiles;
+  readonly files: Iterable<File>;
   /** Transfer items used as a fallback when the file list has no match. */
   readonly items: Iterable<Pick<DataTransferItem, "kind" | "getAsFile">>;
 }
