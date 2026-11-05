@@ -191,3 +191,79 @@ for (const layout of ["outline", "bento", "kanban"] as const) {
     }
   }
 }
+
+for (const layout of ["outline", "bento", "kanban"] as const) {
+  for (const mode of ["block", "edgeless"] as const) {
+    for (const rtl of [false, true]) {
+      for (const customSlots of [false, true]) {
+        test(`first child boundary aligns with nested content in ${layout}, ${mode}, RTL=${rtl}, custom slots=${customSlots}`, async ({
+          page,
+        }) => {
+          await load(page, layout, mode);
+          await page.addStyleTag({
+            content: `[data-block-id="writing"] { direction: ${rtl ? "rtl" : "ltr"}; ${customSlots ? "--rivto-block-control-size: 28px;" : ""} }`,
+          });
+          await startDrag(page);
+          const parent = page.locator('[data-block-id="first"]');
+          const parentBefore = (await parent.boundingBox())!;
+          const child = page.locator('[data-block-id="nested"]');
+          const row = (await child.locator(":scope > .rivto-block-row").boundingBox())!;
+          const content = (await child
+            .locator(":scope > .rivto-block-row > .rivto-block-content")
+            .boundingBox())!;
+          await page.mouse.move(rtl ? content.x + content.width - 1 : content.x + 1, row.y + 1, {
+            steps: 8,
+          });
+          const line = page.locator(".rivto-block-drop-line:visible");
+          await expect(line).toBeVisible();
+          const indicator = (await line.boundingBox())!;
+          for (const y of [row.y - 1, row.y + 1]) {
+            await page.mouse.move(rtl ? content.x + content.width - 1 : content.x + 1, y);
+            const current = (await line.boundingBox())!;
+            expect(current.x).toBeCloseTo(indicator.x, 0);
+            expect(current.width).toBeCloseTo(indicator.width, 0);
+          }
+          await page.mouse.up();
+          await expect
+            .poll(() =>
+              page.evaluate(() =>
+                (
+                  window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+                ).__rivtoDemo.editor.blocks.getParentId("source"),
+              ),
+            )
+            .toBe("first");
+          expect(
+            await page.evaluate(() =>
+              (
+                window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+              ).__rivtoDemo.editor.blocks.getChildIds("first"),
+            ),
+          ).toEqual(["source", "nested"]);
+          const inserted = (await page
+            .locator('[data-block-id="source"] > .rivto-block-row > .rivto-block-content')
+            .boundingBox())!;
+          const parentAfter = (await parent.boundingBox())!;
+          if (rtl) {
+            expect(parentBefore.x + parentBefore.width - indicator.x - indicator.width).toBeCloseTo(
+              parentAfter.x + parentAfter.width - inserted.x - inserted.width,
+              0,
+            );
+          } else {
+            expect(indicator.x - parentBefore.x).toBeCloseTo(inserted.x - parentAfter.x, 0);
+          }
+          await page.keyboard.press("ControlOrMeta+z");
+          await expect
+            .poll(() =>
+              page.evaluate(() =>
+                (
+                  window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+                ).__rivtoDemo.editor.blocks.getParentId("source"),
+              ),
+            )
+            .toBeNull();
+        });
+      }
+    }
+  }
+}

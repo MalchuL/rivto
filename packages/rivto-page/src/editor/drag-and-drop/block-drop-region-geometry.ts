@@ -238,6 +238,9 @@ export function dropEdgeRect(
 /**
  * Selects a terminal depth band and places feedback on the anchor's physical edge.
  *
+ * The first boundary in an outline uses the same in-flow control offset as
+ * depth-bearing boundaries; sibling-only container layouts keep their own edge.
+ *
  * @param entry - Mounted target supplying canonical declarations.
  * @param region - Edge whose rectangle contains the pointer, or bounds append region.
  * @param geometry - Shared synchronous measurement of the anchor.
@@ -270,6 +273,17 @@ export function dropRegionTarget(
     const offset = Math.min(rect.width, level * indent + slotOffset);
     width = rect.width - offset;
     left = rtl ? rect.left : rect.left + offset;
+  } else if (
+    region.side === "block-start" &&
+    entry.element.parentElement
+      ?.closest(`.${BLOCK_EDITOR_CLASSES.children}`)
+      ?.classList.contains(BLOCK_EDITOR_CLASSES.outline)
+  ) {
+    const offset = Math.min(width, inlineSlotOffset(entry, geometry.scaleX));
+    width -= offset;
+    if (geometry.style.direction !== "rtl") {
+      left += offset;
+    }
   }
   const horizontal = region.side.startsWith("block");
   const end = region.side.endsWith("end");
