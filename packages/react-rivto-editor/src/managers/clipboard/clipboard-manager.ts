@@ -1,3 +1,5 @@
+import type { FileCandidate, FileHandler } from "../../attachments";
+import { RevisionStore } from "../../internal-store";
 import type { RegistrationOwner } from "../extensions/types";
 import type {
   ClipboardBundle,
@@ -21,9 +23,13 @@ import { blockElementClipboardConverter } from "../../elements/clipboard-convert
 import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/element-paste-strategy";
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
+import { browserClipboardType } from "./utils";
 import { panelClipboardDocument } from "./panel-clipboard-document";
 import type {
   BlockClipboardConverter,
+  ClipboardBinaryRepresentation,
+  ClipboardPostprocessor,
+  ClipboardWriter,
   ClipboardCopyContext,
   ClipboardPasteContext,
   ConvertedClipboardElements,
@@ -31,6 +37,7 @@ import type {
   ElementClipboardConverter,
   PanelPasteStrategy,
   BlockClipboardFields,
+  PortableBlockFormats,
 } from "./types";
 
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -46,20 +53,282 @@ import type { ReactPanelApi } from "../../panels/types";
 export class ClipboardManager {
   /** Runtime-owned type registrations used by structured and portable clipboard operations. */
   readonly converters: ClipboardConverters;
+  /** File handlers in registration order. */
+  private readonly fileHandlers: FileHandler[] = [];
+  /** Revision published when file handler registrations change. */
+  private readonly fileHandlerChanges = new RevisionStore();
+  /** Explicit fallback when no registered file handler matches. */
+  private defaultFileHandler?: FileHandler;
+  /** Binary clipboard contributors in registration order. */
+  private readonly postprocessors: ClipboardPostprocessor[] = [];
+  /** Optional host writer for binary clipboard content. */
+  private writer?: ClipboardWriter;
 
   /**
    * Creates structured clipboard operations shared by a document's panels.
    * @param document - Core runtime providing clipboard operations and paste transactions.
    * @param editor - React runtime providing shared clipboard operations and portable formats.
-   * @param extensions - Internal converter registration ownership and destruction guard.
+   * @param registrations - Extension registration ownership and destruction guard.
    */
   constructor(
     private readonly document: DocumentEditorAPI,
     private readonly editor: ReactEditorApi,
-    extensions: RegistrationOwner,
+    /** Owner that guards and cleans up extension registrations. */
+    private readonly registrations: RegistrationOwner,
   ) {
-    this.converters = new ClipboardConverters(extensions);
+    this.converters = new ClipboardConverters(registrations);
+    // Release revision listeners when their owning runtime is destroyed.
+    registrations.registerCleanup(() => this.fileHandlerChanges.clear());
     this.registerElementConverter("block", blockElementClipboardConverter);
+  }
+
+  /**
+   * Registers a file handler for matching, lookup, or explicit default selection.
+   *
+   * Matching handlers are tried in registration order before the single default.
+   * Registrations are released by the extension lifecycle or the returned disposer.
+   *
+   * @param handler - File preparation, provider, matcher, and optional inline view.
+   * @returns Disposer that unregisters the handler.
+   * @throws If the runtime is inactive, the provider is invalid, the ID is empty or
+   * duplicated.
+   */
+  registerFileHandler(handler: FileHandler): () => void {
+    this.registrations.assertActive();
+    if (
+      !handler.provider ||
+      typeof handler.provider.write !== "function" ||
+      typeof handler.provider.read !== "function"
+    ) {
+      throw new TypeError("File handler requires a binary provider");
+    }
+    if (!handler.id.trim() || this.fileHandlers.some(({ id }) => id === handler.id)) {
+      throw new Error(`File handler ${handler.id || "<empty>"} is already registered`);
+    }
+    this.fileHandlers.push(handler);
+    // Removing a handler also clears it as the default and updates subscribers.
+    const dispose = this.registrations.registerCleanup(() => {
+      const index = this.fileHandlers.indexOf(handler);
+      if (index >= 0) {
+        this.fileHandlers.splice(index, 1);
+      }
+      if (this.defaultFileHandler === handler) {
+        this.defaultFileHandler = undefined;
+      }
+      this.fileHandlerChanges.changed();
+    });
+    this.fileHandlerChanges.changed();
+    return dispose;
+  }
+
+  /**
+   * Sets a registered file handler as the default when no handler matches.
+   *
+   * Selecting another default replaces the previous selection. Removing the
+   * selected registration clears it; no earlier selection is restored.
+   *
+   * @param id - ID of the registered handler to use as the default.
+   * @returns Completion of the default selection.
+   * @throws If the runtime is inactive or no handler has the supplied ID.
+   */
+  setDefaultFileHandler(id: string): void {
+    this.registrations.assertActive();
+    const handler = this.getFileHandler(id);
+    if (!handler) {
+      throw new Error(`File handler ${id} is not registered`);
+    }
+    if (this.defaultFileHandler !== handler) {
+      this.defaultFileHandler = handler;
+      this.fileHandlerChanges.changed();
+    }
+  }
+
+  /**
+   * Subscribes to changes in file-handler registrations or the selected fallback.
+   *
+   * @param listener - Callback invoked after the handler selection may have changed.
+   * @returns Disposer that removes the listener.
+   */
+  subscribeFileHandlers(listener: () => void): () => void {
+    return this.fileHandlerChanges.subscribe(listener);
+  }
+
+  /**
+   * Selects the first matching handler, falling back to the generic attachment handler.
+   *
+   * @param candidate - File or reference to classify.
+   * @returns Matching handler, or undefined when no handler is installed.
+   */
+  selectFileHandler(candidate: FileCandidate): FileHandler | undefined {
+    // Exclude the fallback from matching so it cannot shadow a specific handler.
+    return (
+      this.fileHandlers.find(
+        (entry) => entry !== this.defaultFileHandler && entry.matches?.(candidate),
+      ) ?? this.defaultFileHandler
+    );
+  }
+
+  /**
+   * Looks up a registered attachment handler by its stable identifier.
+   *
+   * @param id - Attachment handler identifier.
+   * @returns Registered handler, if present.
+   */
+  getFileHandler(id: string): FileHandler | undefined {
+    return this.fileHandlers.find((handler) => handler.id === id);
+  }
+
+  /**
+   * Registers one ordered final clipboard refinement.
+   *
+   * Contributions are considered in registration order and the first match is used.
+   *
+   * @param postprocessor - Single-object binary contribution hook.
+   * @returns A disposer that removes this registration.
+   * @throws If the runtime is inactive or the ID is empty or already registered.
+   */
+  registerPostprocessor(postprocessor: ClipboardPostprocessor): () => void {
+    this.registrations.assertActive();
+    if (!postprocessor.id.trim() || this.postprocessors.some(({ id }) => id === postprocessor.id)) {
+      throw new Error(
+        `Clipboard postprocessor ${postprocessor.id || "<empty>"} is already registered`,
+      );
+    }
+    this.postprocessors.push(postprocessor);
+    // Remove only this registration when its extension is destroyed.
+    return this.registrations.registerCleanup(() => {
+      const index = this.postprocessors.indexOf(postprocessor);
+      if (index >= 0) {
+        this.postprocessors.splice(index, 1);
+      }
+    });
+  }
+
+  /**
+   * Registers the single host binary writer used before the browser fallback.
+   *
+   * @param writer - Privileged host clipboard bridge.
+   * @returns A disposer that removes this writer.
+   * @throws If the runtime is inactive, the ID is empty, or a writer is already registered.
+   */
+  registerWriter(writer: ClipboardWriter): () => void {
+    this.registrations.assertActive();
+    if (!writer.id.trim()) {
+      throw new Error("Clipboard writer ID is required");
+    }
+    if (this.writer) {
+      throw new Error(`Clipboard writer ${this.writer.id} is already registered`);
+    }
+    this.writer = writer;
+    // Do not clear a writer installed after this registration was removed.
+    return this.registrations.registerCleanup(() => {
+      if (this.writer === writer) {
+        this.writer = undefined;
+      }
+    });
+  }
+
+  /**
+   * Reports whether a registered host or the current browser can attempt a binary write.
+   *
+   * @param mimeType - Exact file MIME type proposed for copying.
+   * @returns Whether the custom copy menu should handle this type.
+   */
+  canWriteBinary(mimeType: string): boolean {
+    const writer = this.writer;
+    if (writer?.supports(mimeType) || writer?.supports("application/octet-stream")) {
+      return true;
+    }
+    const view = (this.editor.panels.getActiveRoot() ?? this.editor.panels.getDefaultRoot())
+      ?.ownerDocument.defaultView;
+    return browserClipboardType(view, mimeType) !== undefined;
+  }
+
+  /**
+   * Runs postprocessors and starts a binary write without delaying the copy event.
+   *
+   * Stops at the first binary contribution; portable formats remain available if
+   * a postprocessor or asynchronous binary write fails.
+   *
+   * @param bundle - Structured selected objects.
+   * @param formats - Synchronous portable clipboard formats.
+   * @returns Starts writing the first available binary contribution.
+   */
+  writeProcessed(bundle: ClipboardBundle, formats: PortableBlockFormats): void {
+    try {
+      for (const processor of this.postprocessors) {
+        const binary = processor.process({ bundle, formats });
+        if (binary) {
+          // Portable formats were already written synchronously, so ignore later binary failures.
+          void this.writeBinary(binary, formats).catch(() => undefined);
+          break;
+        }
+      }
+    } catch {
+      // The synchronous event already contains portable formats; refinement is optional.
+    }
+  }
+
+  /**
+   * Writes exact MIME bytes, falling back to application/octet-stream.
+   *
+   * The host writer is tried before the browser. A host failure permits browser
+   * fallback; unsupported browser formats return false without awaiting the data.
+   *
+   * @param binary - Named attachment bytes and original MIME type.
+   * @param formats - Portable representations included beside binary data.
+   * @returns A promise resolving to whether a host or browser writer accepted the payload.
+   * @throws If capability checks, binary preparation, or the browser write fail.
+   */
+  async writeBinary(
+    binary: ClipboardBinaryRepresentation,
+    formats: PortableBlockFormats = {
+      plain: binary.name,
+      markdown: binary.name,
+      html: binary.name,
+    },
+  ): Promise<boolean> {
+    // A contribution can reject even when no writer supports its MIME type.
+    void Promise.resolve(binary.data).catch(() => undefined);
+    const fallbackType = "application/octet-stream";
+    const writer = this.writer;
+    let hostType: string | undefined;
+    if (writer?.supports(binary.mimeType)) {
+      hostType = binary.mimeType;
+    } else if (writer?.supports(fallbackType)) {
+      hostType = fallbackType;
+    }
+    if (writer && hostType) {
+      try {
+        await writer.write({ ...binary, ...formats, mimeType: hostType });
+        return true;
+      } catch {
+        // A failed host bridge may still be recoverable through ClipboardItem.
+      }
+    }
+    const view = (this.editor.panels.getActiveRoot() ?? this.editor.panels.getDefaultRoot())
+      ?.ownerDocument.defaultView;
+    const ClipboardItemConstructor = view?.ClipboardItem;
+    const clipboard = view?.navigator.clipboard;
+    const browserType = browserClipboardType(view, binary.mimeType);
+    if (!ClipboardItemConstructor || !clipboard?.write || !browserType) {
+      return false;
+    }
+    // ClipboardItem requires the blob's type to match the selected browser format.
+    const data = Promise.resolve(binary.data).then(
+      (blob) => new Blob([blob], { type: browserType }),
+    );
+    await clipboard.write([
+      new ClipboardItemConstructor(
+        {
+          [browserType]: data,
+          "text/plain": new Blob([formats.plain], { type: "text/plain" }),
+          "text/html": new Blob([formats.html], { type: "text/html" }),
+        },
+        { presentationStyle: "attachment" },
+      ),
+    ]);
+    return true;
   }
 
   /**
@@ -83,7 +352,11 @@ export class ClipboardManager {
     return this.converters.registerElement(type, converter);
   }
 
-  /** Core paste strategies extended by React clipboard integrations. */
+  /**
+   * Exposes the core paste strategies extended by React clipboard integrations.
+   *
+   * @returns The core manager's current paste strategy registry.
+   */
   get pasteStrategies(): CoreClipboardManager["pasteStrategies"] {
     return this.document.clipboard.pasteStrategies;
   }
@@ -370,7 +643,20 @@ export class ClipboardManager {
     return { nodes, idMap, referencedBlocks };
   }
 
-  /** Keeps source IDs in strategy inputs while converted properties refer to allocated destination IDs. */
+  /**
+   * Prepares a detached paste bundle and allocates IDs before running converters.
+   *
+   * Strategy inputs retain source IDs while converted properties can refer to
+   * allocated destination IDs. A text merge may reuse the selected target ID.
+   *
+   * @param bundle - Source clipboard bundle to validate and clone.
+   * @param input - Paste placement and optional default block type.
+   * @param selection - Current destination selection used to resolve text merges.
+   * @param reactPanel - Receiving panel or editor-wide runtime.
+   * @param operation - Paste or duplicate operation supplied to converters.
+   * @returns Converted bundle, block ID map, and prepared canvas elements.
+   * @throws If validation, ID allocation, cloning, or a converter fails.
+   */
   private convertPasteBundle(
     bundle: ClipboardBundle,
     input: ClipboardPasteInput,
@@ -378,8 +664,11 @@ export class ClipboardManager {
     reactPanel: ReactPanelApi | ReactEditorApi,
     operation: "paste" | "duplicate",
   ): {
+    /** Validated and converted clipboard content. */
     bundle: ClipboardBundle;
+    /** Source-to-destination block identities allocated for the paste. */
     blockIdMap: ReadonlyMap<string, string>;
+    /** Converted canvas elements and their associated identity maps. */
     elements: ConvertedClipboardElements;
   } {
     validateClipboardBundle(bundle);
@@ -392,6 +681,7 @@ export class ClipboardManager {
       bundle = this.pageBundle(bundle, input.defaultBlockType);
     }
     const sourceIds: string[] = [];
+    // Collect source block IDs recursively before allocating destination IDs.
     const collect = (block: EditorBlock): void => {
       sourceIds.push(block.id);
       block.children.forEach(collect);
@@ -424,6 +714,7 @@ export class ClipboardManager {
       this.document.elements.createImportIdMap(retained.map((node) => node.id)),
     );
     const context = this.pasteContext(bundle, reactPanel, blockIdMap, elementIdMap, operation);
+    // Apply the paste converter recursively while preserving child order.
     const convert = (block: EditorBlock): EditorBlock => {
       const fields = this.converters.blocks
         .get(block.type)
@@ -465,7 +756,18 @@ export class ClipboardManager {
     };
   }
 
-  /** Applies copy hooks once to detached nodes, retaining source identities and hierarchy. */
+  /**
+   * Applies copy hooks once to detached nodes, retaining source identities and hierarchy.
+   *
+   * The source bundle is cloned before converters run and the returned bundle
+   * records the current source document ID.
+   *
+   * @param source - Clipboard snapshot to clone and convert.
+   * @param reactPanel - Optional source panel supplied to converters.
+   * @param operation - Copy, cut, or duplicate intent; defaults to copy.
+   * @returns Converted bundle with the original source left unchanged.
+   * @throws If cloning or a converter fails.
+   */
   private convertCopy(
     source: ClipboardBundle,
     reactPanel?: ReactPanelApi,
@@ -478,6 +780,7 @@ export class ClipboardManager {
       reactPanel,
       rootBlockIds: reactPanel?.blocks.getRootIds() ?? this.document.blocks.getRootIds(),
     };
+    // Apply each block's copy converter recursively to its descendants.
     const visit = (block: EditorBlock): EditorBlock => ({
       ...block,
       ...this.blockFields(
@@ -509,6 +812,7 @@ export class ClipboardManager {
   ): ClipboardBundle {
     const elements: EditorElementNode[] = [];
     const seen = new Set<string>();
+    // Collect existing canvas elements and descendants without revisiting IDs.
     const visit = (id: string): void => {
       if (seen.has(id)) {
         return;

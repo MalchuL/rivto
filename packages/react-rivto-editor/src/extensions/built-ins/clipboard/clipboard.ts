@@ -80,7 +80,7 @@ export function registerClipboard(
   reactEditor: ReactEditorApi,
   options: ClipboardExtensionOptions = {},
 ): () => void {
-  registerBlockClipboardActions(reactEditor);
+  registerBlockClipboardActions(reactEditor.blockContextMenu);
   const unregisterElementPaste = reactEditor.pasteStrategies.register(
     ELEMENT_PASTE_STRATEGY_ID,
     new ElementPasteStrategy(reactEditor),
@@ -136,7 +136,7 @@ export function registerClipboard(
     event: ClipboardEvent,
     bundle: ClipboardBundle,
   ): void => {
-    const portable = browserClipboardFormats(reactPanel.editor, bundle);
+    const portable = browserClipboardFormats(reactPanel.editor.clipboardFormats, bundle);
     const structured = JSON.stringify(bundle);
     event.clipboardData?.setData(RIVTO_CLIPBOARD_MIME, structured);
     event.clipboardData?.setData("text/html", portable.html);
@@ -146,6 +146,7 @@ export function registerClipboard(
       structured,
       text: portable.plain,
     };
+    reactEditor.clipboard.writeProcessed(bundle, portable);
   };
 
   /** Recovers custom data only when the event still represents our last copy. */

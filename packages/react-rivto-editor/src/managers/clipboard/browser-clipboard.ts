@@ -1,5 +1,17 @@
 import { RIVTO_CLIPBOARD_MIME, type ClipboardBundle } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import type { PortableBlockFormats } from "./types";
+
+/** Formats structured clipboard bundles into portable browser representations. */
+interface ClipboardBundleFormatter {
+  /**
+   * Formats a detached bundle for browser clipboard writes.
+   *
+   * @param bundle - Structured clipboard data to format.
+   * @returns Portable text, Markdown, and HTML formats.
+   * @throws If a registered formatter fails.
+   */
+  formatBundle(bundle: ClipboardBundle): PortableBlockFormats;
+}
 
 /**
  * Formats a bundle for browser clipboard writes without changing the document.
@@ -8,13 +20,16 @@ import type { ReactEditorApi } from "../../editor/types";
  * `data-rivto-clipboard` attribute containing URI-encoded bundle JSON, allowing
  * Rivto paste to recover structure when custom MIME data is unavailable.
  *
- * @param editor - Runtime whose clipboard formatters serialize the bundle.
+ * @param formatter - Clipboard formatter used to serialize the bundle.
  * @param bundle - Clipboard snapshot to serialize; it is not modified.
  * @returns Plain text, wrapped HTML, and the unencoded structured JSON string.
  * @throws If a registered formatter or JSON serialization fails.
  */
-export function browserClipboardFormats(editor: ReactEditorApi, bundle: ClipboardBundle) {
-  const portable = editor.clipboardFormats.formatBundle(bundle);
+export function browserClipboardFormats(
+  formatter: ClipboardBundleFormatter,
+  bundle: ClipboardBundle,
+) {
+  const portable = formatter.formatBundle(bundle);
   const structured = JSON.stringify(bundle);
   return {
     ...portable,
@@ -54,17 +69,17 @@ export function readClipboardEnvelope(html: string): string | undefined {
  * removed. A rejected asynchronous write propagates without retrying the fallback.
  * This helper never deletes or otherwise mutates source document content.
  *
- * @param editor - Runtime providing clipboard formatters for the bundle.
+ * @param formatter - Clipboard formatter used to serialize the bundle.
  * @param bundle - Detached block or element data to place on the system clipboard.
  * @returns A promise resolving after the browser write succeeds.
  * @throws If formatting fails, the browser rejects the write, or the fallback
  * cannot obtain a copy event with writable clipboard data.
  */
 export async function writeClipboardBundle(
-  editor: ReactEditorApi,
+  formatter: ClipboardBundleFormatter,
   bundle: ClipboardBundle,
 ): Promise<void> {
-  const formats = browserClipboardFormats(editor, bundle);
+  const formats = browserClipboardFormats(formatter, bundle);
   if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
     await navigator.clipboard.write([
       new ClipboardItem({

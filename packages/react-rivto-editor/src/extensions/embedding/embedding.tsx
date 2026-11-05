@@ -363,7 +363,7 @@ export function embeddingExtension(): ReactEditorExtension {
             })),
           });
           bundle.sourceDocumentId = reactPanel.editor.getDocument().id;
-          await writeClipboardBundle(reactPanel.editor, bundle);
+          await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
         },
       });
       const dispose = reactEditor.blockTypes.register({

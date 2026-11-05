@@ -127,6 +127,23 @@ export class EventManager {
   }
 
   /**
+   * Reports whether an active registration was captured for a native event.
+   *
+   * Additions during dispatch wait for a later event; removal takes effect
+   * immediately. This checks the snapshot and active state, not scope or mode filters.
+   *
+   * @param id - Registered ID, including the panel prefix for a panel-owned registration.
+   * @param event - Native event whose original registration snapshot is inspected.
+   * @returns True when the registration remains active in the event snapshot.
+   */
+  has(id: string, event: Event): boolean {
+    // A registration removed after dispatch began is absent even in the captured snapshot.
+    return (
+      this.eventRegistrations.get(event)?.some((entry) => entry.id === id && entry.active) ?? false
+    );
+  }
+
+  /**
    * Deletes one DOM registration by its stable ID.
    *
    * @param id - Registered ID, including the panel prefix for a panel-owned registration.

@@ -1,3 +1,4 @@
+import type { ClipboardApi } from "../managers/clipboard/api";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
 import type { ElementTypesApi } from "../managers/elements/types";
@@ -5,7 +6,6 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 import type {
   BlockRenderer,
   ClipboardFormatRegistry,
-  ClipboardManager,
   EventManager,
   KeyboardManager,
   KeymapOverrides,
@@ -23,6 +23,7 @@ import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
+import type { AttachmentApi, AttachmentOptions } from "../attachments";
 import type { SurfacesApi } from "../managers/surfaces/api";
 
 /** Creation options for the React presentation runtime. */
@@ -33,6 +34,8 @@ export interface CreateReactEditorOptions {
   readonly extensions?: readonly ReactEditorExtension[];
   /** Stable binding-ID overrides; empty arrays disable matching bindings. */
   readonly keymap?: KeymapOverrides;
+  /** Attachment URI resolution settings. */
+  readonly attachments?: AttachmentOptions;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
 }
@@ -131,7 +134,9 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** React-owned portable clipboard formatter and parser registry. */
   readonly clipboardFormats: ClipboardFormatRegistry;
   /** Structured document operations; view-dependent paste receives its destination explicitly. */
-  readonly clipboard: ClipboardManager;
+  readonly clipboard: ClipboardApi;
+  /** Attachment handlers, binary resolution, and opening shared across views. */
+  readonly attachments: AttachmentApi;
   /** Core paste strategies extended by React clipboard integrations. */
   readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
   /** Root surfaces and their ordered block/editor wrappers. */
@@ -139,7 +144,7 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */
-  readonly events: Pick<EventManager, "register" | "delete">;
+  readonly events: Pick<EventManager, "register" | "delete" | "has">;
   /** Mounted occurrences and explicit active/default view lookup. */
   readonly panels: Pick<
     PanelRegistry,

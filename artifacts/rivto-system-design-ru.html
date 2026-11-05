@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rivto · Изображения и файлы — устройство изменений</title>
+    <style>
+      :root{--ink:#122e4e;--muted:#5b7189;--line:#dbe5ef;--blue:#d3e4f3;--pale:#f3f7fb;--accent:#1f5a91;--white:#fff;--body:#202c39;--green:#eaf5f1;--amber:#fff5e2}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#eaf0f6;color:var(--body);font:15px/1.6 Inter,"Segoe UI",Arial,sans-serif}a{color:#205c91;text-decoration:none}a:hover{text-decoration:underline}code,pre{font-family:Consolas,"Liberation Mono",monospace}code{color:#204e7b;background:#edf3f9;padding:.1em .3em;border-radius:3px;font-size:.88em}pre{background:#122e4e;color:#f4f8fb;padding:18px 20px;border-radius:5px;overflow:auto;line-height:1.55;font-size:12px}pre code{color:inherit;background:none;padding:0;font-size:inherit}.page{max-width:1020px;margin:32px auto;background:var(--white);box-shadow:0 12px 45px #233a5214;padding:70px 78px}.cover{min-height:650px;display:flex;flex-direction:column;justify-content:space-between}.eyebrow{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.13em;font-weight:700}.cover h1{font-size:42px;line-height:1.13;letter-spacing:-.035em;margin:10px 0 18px;color:var(--ink)}.cover .system{font-size:28px;font-weight:300;color:var(--muted)}.intro{font-size:17px;max-width:670px;color:#425770}.metadata{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;border-top:1px solid var(--line);padding-top:20px;margin-top:40px}.metadata b{display:block;color:var(--muted);font-size:10px;letter-spacing:.1em}.metadata span{font-size:13px}.facts{width:100%;border-collapse:collapse;margin-top:25px;font-size:13px}.facts th,.facts td{padding:9px 12px;border-bottom:2px solid white;text-align:left}.facts th{background:#d0e2f2;width:155px;color:#183959}.facts td{background:#f1f5f9}.topnav{display:flex;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:15px;font-size:12px}.kicker{color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-top:48px}h2{color:var(--ink);font-size:25px;line-height:1.2;margin:5px 0 15px;letter-spacing:-.02em}h3{color:var(--ink);font-size:16px;margin:27px 0 8px}p{margin:0 0 14px}ul,ol{padding-left:21px;margin:9px 0 18px}li{margin:6px 0}.callout{border-left:4px solid #6fa4d0;background:var(--pale);padding:15px 19px;margin:22px 0}.callout.warn{background:var(--amber);border-color:#d9a03d}.columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:var(--pale);border:1px solid var(--line);padding:19px 21px;border-radius:4px}.card h3{margin:0 0 8px}.card p:last-child{margin:0}.pill{display:inline-block;background:#e3eef8;color:#315c80;border-radius:20px;font-size:11px;font-weight:700;padding:3px 9px;margin-right:4px}.diagram{display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr;align-items:stretch;gap:5px;margin:22px 0}.node{border:1px solid #bfd2e3;background:#f5f9fc;padding:15px;border-radius:4px}.node b{display:block;color:var(--ink);margin-bottom:6px}.node small{color:#52687d}.arrow{align-self:center;text-align:center;color:#6493bd;font-size:24px}.flow{counter-reset:step;display:grid;gap:0;margin:18px 0}.step{display:grid;grid-template-columns:36px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.step:before{counter-increment:step;content:counter(step);width:28px;height:28px;border-radius:50%;background:#dceaf6;color:#245985;font-weight:700;text-align:center;line-height:28px}.step b{color:var(--ink)}table.data{width:100%;border-collapse:collapse;margin:18px 0;font-size:13px}table.data th,table.data td{padding:11px 12px;text-align:left;vertical-align:top;border-bottom:1px solid #dce6ef}table.data th{background:#d8e8f5;color:#183b5d;font-size:11px;text-transform:uppercase;letter-spacing:.035em}table.data tr:nth-child(even) td{background:#f7f9fc}.caption{font-size:12px;color:var(--muted);margin-top:-8px}.source-list{font-size:13px;overflow-wrap:anywhere}.source-list li{margin:9px 0}.muted{color:var(--muted)}.footer{border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:12px;margin-top:45px}.metric{font-size:23px;color:var(--ink);font-weight:700}.two-col-list{columns:2;column-gap:35px}@media(max-width:720px){.page{margin:0;padding:32px 22px;box-shadow:none}.cover{min-height:auto;gap:75px}.cover h1{font-size:33px}.metadata,.columns{grid-template-columns:1fr}.diagram{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}.two-col-list{columns:1}table.data{font-size:12px;display:block;overflow-x:auto}}@media print{body{background:white;font-size:10pt}.page{max-width:none;margin:0;box-shadow:none;padding:0}.cover{min-height:95vh;break-after:page}.topnav{display:none}.card,.diagram,table,pre{break-inside:avoid}.kicker{margin-top:24px}a{color:inherit;text-decoration:none}}
+
+      /* Диаграммы используют обычный HTML: текст остаётся читаемым и при печати. */
+      .visual-block{margin:24px 0 30px;padding:23px;border:1px solid var(--line);border-radius:5px;background:#fbfdff}
+      .visual-title{color:var(--ink);font-weight:700;font-size:14px;margin:0 0 5px}.visual-note{color:var(--muted);font-size:12px;margin:0 0 17px}
+      .comparison-lanes{display:grid;grid-template-columns:1fr 1fr;gap:16px}.lane{border:1px solid #d7e4ef;border-radius:5px;background:#fff;padding:16px}.lane-label{font-weight:700;font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}.lane-label.new{color:#1d679f}.lane-box{margin-top:9px;padding:10px 12px;border-radius:4px;background:#f1f5f9;color:#24435f;font-size:13px}.lane-box.primary{background:#dfedf8;border:1px solid #bdd4e8}.lane-arrow{text-align:center;color:#7498b8;font-size:18px;line-height:25px}.lane-result{font-size:12px;color:#51677d;margin:11px 0 0}
+      .matrix{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:6px;align-items:stretch;font-size:12px}.matrix>div{padding:12px 10px;border-radius:4px;background:#f2f6fa}.matrix .matrix-head{background:#d8e8f5;color:#173b5c;font-weight:700}.matrix .matrix-row{background:#edf3f8;color:#233f5b;font-weight:700}.matrix strong{display:block;color:#164b77;font-size:13px}.matrix span{display:block;color:#566d82;margin-top:3px}
+      .pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:15px 0}.pipeline-card{position:relative;background:#edf5fb;border:1px solid #c6ddec;border-radius:5px;padding:13px;min-height:98px}.pipeline-card b{display:block;color:#183e60;font-size:13px}.pipeline-card small{display:block;margin-top:6px;color:#526b80}.pipeline-card:not(:last-child):after{content:"→";position:absolute;right:-11px;top:34%;z-index:1;color:#4f84af;font-size:18px;font-weight:700}.branch-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.branch{padding:13px;border-left:3px solid #75a6cd;background:#f2f7fb;font-size:13px}.branch.warn{border-color:#e2ae51;background:#fff7e9}.branch.good{border-color:#70af98;background:#eff8f3}.branch strong{display:block;color:var(--ink);margin-bottom:4px}.mini-note{margin-top:14px;color:#576b7d;font-size:12px}.example-card{border:1px solid #cdddeb;background:white;border-radius:5px;overflow:hidden}.example-card header{padding:9px 13px;background:#dcebf6;color:#193f60;font-size:12px;font-weight:700}.example-card .content{padding:14px}.example-card pre{margin:10px 0 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}.mock-image{height:92px;background:linear-gradient(155deg,#d8e9f3 0%,#c7dfeb 48%,#90b7ca 49%,#7ba7a5 70%,#d7e8dc 71%);border-radius:3px;display:flex;align-items:end;padding:8px;color:#183c56;font-size:11px}.mock-image span{background:#ffffffdd;border-radius:3px;padding:2px 7px}.mock-file{display:flex;gap:10px;align-items:center;border:1px solid #d1e0eb;background:#f7fafc;border-radius:4px;padding:12px}.mock-icon{font-size:20px;color:#447da9}.mock-file b{color:#22415d;font-size:13px}.mock-file small{display:block;color:#71859a;font-size:11px}
+      @media(max-width:720px){.comparison-lanes,.branch-grid{grid-template-columns:1fr}.pipeline{grid-template-columns:1fr 1fr}.pipeline-card:nth-child(2):after{display:none}.matrix{grid-template-columns:1.15fr 1fr 1fr 1fr;gap:3px;font-size:10px}.matrix>div{padding:8px 5px}.matrix strong{font-size:11px}.visual-block{padding:15px}}
+      @media print{.visual-block,.comparison-lanes,.pipeline,.matrix,.branch-grid,.example-card{break-inside:avoid}}
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="cover">
+        <div>
+          <div class="eyebrow">System design · технический обзор</div>
+          <div style="margin-top:70px" class="system">Rivto Editor</div>
+          <h1>Изображения и файлы:<br />как работают изменения</h1>
+          <p class="intro">
+            Сравнение ветки <strong>vs/images</strong> с <strong>main</strong>: пользовательские
+            сценарии, поток данных, контракты хранения и ограничения.
+          </p>
+        </div>
+        <div>
+          <div class="metadata">
+            <div><b>СТАТУС</b><span>Обзор реализации</span></div>
+            <div><b>ИСТОЧНИК</b><span>Локальный репозиторий Rivto</span></div>
+            <div><b>ДАТА</b><span>4 ноября 2026</span></div>
+          </div>
+          <table class="facts">
+            <tr>
+              <th>Ветка</th>
+              <td><code>vs/images</code> · <code>84a33386</code></td>
+            </tr>
+            <tr>
+              <th>Основание</th>
+              <td><code>main</code> · <code>d09b4573</code> · merge base совпадает с main</td>
+            </tr>
+            <tr>
+              <th>Охват</th>
+              <td>Редактор React, вложения, демо, тесты и документация</td>
+            </tr>
+            <tr>
+              <th>Масштаб diff</th>
+              <td>53 файла · +6 949 / −19 строк</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+      <nav class="topnav" aria-label="Содержание">
+        <a href="#summary">Обзор</a><a href="#comparison">Сравнение</a
+        ><a href="#visual-flow">Схемы</a><a href="#architecture">Архитектура</a
+        ><a href="#lifecycle">Поток данных</a><a href="#contracts">Контракты</a
+        ><a href="#risks">Ограничения</a><a href="#verification">Проверки</a>
+      </nav>
+      <section id="summary">
+        <div class="kicker">01 · Краткое содержание</div>
+        <h2>Что меняется для пользователя</h2>
+        <p>
+          Ветка добавляет в редактор отдельные расширения для изображений и файлов. Файл можно
+          вставить из буфера обмена, перетащить мышью или выбрать через системный диалог. Результат
+          зависит от места вставки: встроенное содержимое, блок на странице или элемент на свободном
+          холсте.
+        </p>
+        <div class="columns">
+          <div class="card">
+            <span class="pill">Изображения</span>
+            <h3>Редактирование в документе</h3>
+            <p>
+              Просмотр, альтернативный текст, изменение размеров и сброс. На холсте изображение
+              становится отдельным элементом с рамкой и координатами.
+            </p>
+          </div>
+          <div class="card">
+            <span class="pill">Другие файлы</span>
+            <h3>Универсальное представление</h3>
+            <p>
+              Если специализированный обработчик не выбран, файл отображается как встроенный
+              элемент, блок или карточка на холсте и может быть открыт пользователем.
+            </p>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Главная граница:</strong> редактор хранит ссылки и метаданные. Сами байты хранит и
+          выдаёт <code>BinaryProvider</code>, который предоставляет приложение-хост.
+        </div>
+      </section>
+      <section id="comparison">
+        <div class="kicker">02 · Сравнение с main</div>
+        <h2>До и после</h2>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Область</th>
+              <th>main</th>
+              <th>vs/images</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Вставка файлов</td>
+              <td>
+                Нет добавленных этой веткой расширений <code>fileExtension</code> и
+                <code>imageExtension</code>.
+              </td>
+              <td>
+                Общие обработчики для вставки, перетаскивания и выбора файлов; специализированная
+                обработка изображений.
+              </td>
+            </tr>
+            <tr>
+              <td>Markdown</td>
+              <td>Обычный конвейер Markdown без новых макросов ветки.</td>
+              <td>
+                Макросы файлов и изображений преобразуются в компоненты редактора; обычные
+                Markdown-изображения используют общий просмотр.
+              </td>
+            </tr>
+            <tr>
+              <td>Представление</td>
+              <td>Нет новых типов файла и изображения из этой ветки.</td>
+              <td>
+                Встроенное представление, блок Page и элемент Edgeless; для изображения доступны
+                параметры просмотра и размера.
+              </td>
+            </tr>
+            <tr>
+              <td>Байты и ссылки</td>
+              <td>Нет добавленного этой веткой контракта провайдера вложений.</td>
+              <td>
+                Провайдеры записывают Blob и возвращают URI; документ хранит ссылку и свойства, а не
+                содержимое файла.
+              </td>
+            </tr>
+            <tr>
+              <td>Копирование</td>
+              <td>Базовый конвейер копирования документов.</td>
+              <td>
+                Для одного выбранного изображения или файла могут добавляться бинарные данные, если
+                буфер браузера или хост их поддерживает.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="caption">
+          Сравнение относится к проверенному diff между указанными коммитами, а не к
+          неподтверждённым возможностям вне этой ветки.
+        </p>
+      </section>
+      <section id="visual-flow">
+        <div class="kicker">02A · Наглядное сравнение</div>
+        <h2>Как изменился путь данных</h2>
+        <p>
+          Ниже показаны два конкретных сценария. В <code>main</code> уже существовали обычный
+          Markdown и общий буфер обмена; новая ветка добавляет отдельный путь для байтов файлов и
+          управление изображением.
+        </p>
+        <div class="visual-block">
+          <div class="visual-title">Сценарий 1 · изображение уже записано в Markdown</div>
+          <p class="visual-note">
+            Сравнивается отображение одной и той же записи <code>![Горы](photo.png)</code>.
+          </p>
+          <div class="comparison-lanes">
+            <div class="lane">
+              <div class="lane-label">До · main</div>
+              <div class="lane-box">Текст Markdown в блоке</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box">ReactMarkdown + обычный HTML <code>&lt;img&gt;</code></div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box">Отображение изображения</div>
+              <p class="lane-result">
+                Специальные элементы управления изображением из ветки отсутствуют.
+              </p>
+            </div>
+            <div class="lane">
+              <div class="lane-label new">После · vs/images</div>
+              <div class="lane-box">Тот же текст Markdown</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box primary">Общий компонент <code>ImageView</code></div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box">Просмотр + alt + изменение размера</div>
+              <p class="lane-result">
+                Когда изменение требуется сохранить, редактор заменяет исходную запись макросом
+                изображения.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="visual-block">
+          <div class="visual-title">Сценарий 2 · новый файл попадает в редактор</div>
+          <p class="visual-note">
+            В <code>main</code> нет добавленных веткой <code>fileExtension</code>,
+            <code>imageExtension</code> и контракта <code>BinaryProvider</code>.
+          </p>
+          <div class="comparison-lanes">
+            <div class="lane">
+              <div class="lane-label">До · main</div>
+              <div class="lane-box">Вставка структурированных данных и текста</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box">Существующие стратегии буфера обмена</div>
+              <p class="lane-result">
+                Отдельный показанный справа конвейер сохранения Blob и выбора файлового
+                представления в этой версии отсутствует.
+              </p>
+            </div>
+            <div class="lane">
+              <div class="lane-label new">После · vs/images</div>
+              <div class="lane-box">Paste / Drop / файловый диалог</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box primary">Обработчик файла → провайдер байтов</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box">URI и метаданные → представление в документе</div>
+              <p class="lane-result">
+                Обработчик изображения или универсальный обработчик выбирает подготовку по типу
+                файла.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="visual-block">
+          <div class="visual-title">Куда попадёт результат</div>
+          <p class="visual-note">
+            Столбцы показывают место ввода; строки — вид обработчика. Это схема возможностей, а не
+            измерение производительности.
+          </p>
+          <div class="matrix" role="group" aria-label="Матрица результатов вставки">
+            <div class="matrix-head">Тип</div>
+            <div class="matrix-head">Внутри текста</div>
+            <div class="matrix-head">Page</div>
+            <div class="matrix-head">Edgeless</div>
+            <div class="matrix-row">Изображение</div>
+            <div><strong>Макрос</strong><span>inline</span></div>
+            <div><strong>Блок</strong><span>image</span></div>
+            <div><strong>Элемент</strong><span>image + frame</span></div>
+            <div class="matrix-row">Другой файл</div>
+            <div><strong>Макрос</strong><span>inline</span></div>
+            <div><strong>Блок</strong><span>file</span></div>
+            <div><strong>Карточка</strong><span>file element</span></div>
+          </div>
+          <p class="mini-note">
+            Для одного файла пустой стандартный блок может быть заменён новым блоком. Показанный
+            исход зависит от места события и установленных расширений.
+          </p>
+        </div>
+        <div class="visual-block">
+          <div class="visual-title">Что видит пользователь и что сохраняется</div>
+          <p class="visual-note">Иллюстрации ниже схематичные: это не скриншоты приложения.</p>
+          <div class="columns">
+            <div class="example-card">
+              <header>Изображение · внутри текста</header>
+              <div class="content">
+                <div class="mock-image"><span>Изображение · alt: «Горы»</span></div>
+                <pre><code>{{image path="assets/photo.png" alt="Горы" width=640 height=480}}</code></pre>
+              </div>
+            </div>
+            <div class="example-card">
+              <header>Другой файл · внутри текста</header>
+              <div class="content">
+                <div class="mock-file">
+                  <span class="mock-icon" aria-hidden="true">▤</span>
+                  <div><b>report.pdf</b><small>PDF · файл</small></div>
+                </div>
+                <pre><code>{{file path="assets/report.pdf" name="report.pdf" type="application/pdf"}}</code></pre>
+              </div>
+            </div>
+          </div>
+          <p class="mini-note">
+            Документ хранит макрос и метаданные. Исходные байты остаются во внешнем хранилище
+            провайдера.
+          </p>
+        </div>
+      </section>
+      <section id="visual-errors">
+        <div class="kicker">02B · Ветвления и ошибки</div>
+        <h2>Как работает новый конвейер</h2>
+        <div class="visual-block">
+          <div class="visual-title">Файл с байтами: от события до документа</div>
+          <p class="visual-note">
+            Общий путь для файла. Для обычной URL-ссылки выполняется отдельное разрешение URI без
+            обязательной загрузки новых байтов.
+          </p>
+          <div class="pipeline">
+            <div class="pipeline-card">
+              <b>1 · Событие</b><small>Считываются File и место: текст, Page или холст.</small>
+            </div>
+            <div class="pipeline-card">
+              <b>2 · Выбор</b
+              ><small>Первое совпадение FileHandler; затем явно выбранный default.</small>
+            </div>
+            <div class="pipeline-card">
+              <b>3 · Подготовка</b
+              ><small>Провайдер сохраняет Blob → URI; обработчик создаёт представления.</small>
+            </div>
+            <div class="pipeline-card">
+              <b>4 · Вставка</b
+              ><small>После проверки назначения фиксируются успешные результаты по порядку.</small>
+            </div>
+          </div>
+          <div class="branch-grid">
+            <div class="branch good">
+              <strong>Назначение не изменилось</strong>Готовое представление записывается в
+              документ; локальная карточка статуса удаляется.
+            </div>
+            <div class="branch warn">
+              <strong>Назначение изменилось</strong>Готовый результат не вставляется в устаревшее
+              место; карточка предлагает повтор.
+            </div>
+            <div class="branch warn">
+              <strong>Ошибка подготовки</strong>Проблема конкретного файла отображается локально;
+              остальные успешные файлы могут быть вставлены.
+            </div>
+            <div class="branch warn">
+              <strong>Ошибка при вставке</strong>Карточки остаются с предупреждением: часть файлов
+              могла уже быть вставлена.
+            </div>
+          </div>
+          <p class="mini-note">
+            При отмене финальная фиксация не выполняется. Уже сохранённые провайдером байты
+            автоматически не удаляются.
+          </p>
+        </div>
+        <div class="visual-block">
+          <div class="visual-title">Два разных маршрута чтения</div>
+          <div class="comparison-lanes">
+            <div class="lane">
+              <div class="lane-label new">Открыть файл</div>
+              <div class="lane-box">FileView → attachments</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box primary">Подходящий open handler → default → браузер</div>
+              <p class="lane-result">
+                Обработчик открытия выбирается по сохранённой ссылке и её метаданным.
+              </p>
+            </div>
+            <div class="lane">
+              <div class="lane-label new">Показать байты</div>
+              <div class="lane-box">ImageView / FileView → attachments</div>
+              <div class="lane-arrow">↓</div>
+              <div class="lane-box primary">provider.read(uri) → Blob или undefined</div>
+              <p class="lane-result">
+                <code>undefined</code> означает «чужая ссылка»; ошибка чтения распространяется и не
+                считается успешным fallback.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="architecture">
+        <div class="kicker">03 · Архитектура</div>
+        <h2>Кто за что отвечает</h2>
+        <div class="diagram" aria-label="Схема архитектуры">
+          <div class="node">
+            <b>Вход пользователя</b><small>Paste · Drop · Picker<br />Page / Edgeless</small>
+          </div>
+          <div class="arrow">→</div>
+          <div class="node">
+            <b>Расширения и clipboard</b
+            ><small>Выбор обработчика<br />Подготовка представления</small>
+          </div>
+          <div class="arrow">→</div>
+          <div class="node">
+            <b>Провайдер + документ</b><small>Blob → URI<br />URI + свойства → CRDT</small>
+          </div>
+        </div>
+        <p class="caption">
+          Рисунок 1. Упрощённая схема записи. При чтении компонент запрашивает данные через
+          <code>editor.attachments</code> и провайдер.
+        </p>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Компонент</th>
+              <th>Ответственность</th>
+              <th>Данные и ошибки</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>fileExtension</code></td>
+              <td>Общий ввод файлов, классификация и универсальное представление.</td>
+              <td>Выбирает обработчик; состояние загрузки и ошибок остаётся локальным.</td>
+            </tr>
+            <tr>
+              <td><code>imageExtension</code></td>
+              <td>Проверка изображения, подготовка представлений и управление изображением.</td>
+              <td>
+                Перед вставкой изображение декодируется; отдельный путь работает и без общего
+                файлового расширения.
+              </td>
+            </tr>
+            <tr>
+              <td><code>clipboard</code></td>
+              <td>
+                Регистрация и выбор файловых обработчиков; постобработка и запись бинарного
+                содержимого при копировании.
+              </td>
+              <td>
+                Специализированные совпадения проверяются по порядку; явно выбранный обработчик по
+                умолчанию используется после них.
+              </td>
+            </tr>
+            <tr>
+              <td><code>attachments</code></td>
+              <td>Разрешение URI, чтение и открытие; регистрация обработчиков открытия.</td>
+              <td>
+                Ошибки провайдера распространяются; нераспознанный им URI может использовать
+                доступный браузеру путь.
+              </td>
+            </tr>
+            <tr>
+              <td><code>BinaryProvider</code></td>
+              <td>Адаптер хоста для записи и чтения байтов.</td>
+              <td>
+                <code>write</code> возвращает URI; <code>read</code> возвращает Blob либо
+                <code>undefined</code> для чужого URI.
+              </td>
+            </tr>
+            <tr>
+              <td>Document model</td>
+              <td>Совместно редактируемая структура блоков, элементов и текста.</td>
+              <td>
+                Успешная вставка сохраняет представление; локальные индикаторы ожидания и ошибок не
+                записываются в документ.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section id="lifecycle">
+        <div class="kicker">04 · Жизненный цикл</div>
+        <h2>Пример: пользователь вставляет изображение</h2>
+        <div class="flow">
+          <div class="step">
+            <div>
+              <b>Событие и место.</b> Расширение получает файл из paste, drop или системного выбора
+              и определяет место: текст, блок Page либо координаты холста.
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <b>Выбор обработки.</b> Для общего пути clipboard выбирает подходящий
+              зарегистрированный обработчик; обработчик изображения распознаёт подходящие файлы.
+              Резервный обработчик выбирается явно.
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <b>Запись и подготовка.</b> Провайдер получает Blob, имя, MIME-тип, идентификатор
+              документа, поверхность и сигнал отмены. Он возвращает URI. Изображение дополнительно
+              декодируется и получает размеры.
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <b>Проверка актуальности.</b> Несколько файлов подготавливаются параллельно. До
+              фиксации проверяется, не изменилось ли захваченное текстовое место вставки; устаревшую
+              операцию можно повторить.
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <b>Фиксация.</b> Успешные результаты вставляются в порядке исходного списка. Формат
+              определяется местом: текстовый макрос, блок или элемент. Показ состояния загрузки при
+              этом не попадает в документ.
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <b>Последующий просмотр.</b> <code>ImageView</code> или
+              <code>FileView</code> разрешает ссылку через <code>attachments</code>; провайдер может
+              вернуть байты, а допустимые браузерные URI используются как запасной путь.
+            </div>
+          </div>
+        </div>
+        <div class="callout warn">
+          <strong>Частичная ошибка вставки:</strong> если фиксация выбросила исключение, карточки
+          остаются с ошибкой и предупреждают, что часть файлов могла уже появиться. Перед повтором
+          нужно проверить документ.
+        </div>
+      </section>
+      <section>
+        <div class="kicker">05 · Данные и пользовательские действия</div>
+        <h2>Где хранится результат</h2>
+        <div class="columns">
+          <div class="card">
+            <h3>Внутри текста</h3>
+            <p>
+              Изображение записывается текстовым макросом. Значения в кавычках используют
+              JSON-экранирование; размеры задаются положительными целыми числами в CSS-пикселях.
+            </p>
+            <pre><code>{{image path="assets/photo.png"
+  alt="Горы" width=640 height=480}}</code></pre>
+            <p class="muted">
+              Пример перенесён на две строки для чтения. Канонический макрос хранится одной строкой.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Блок и холст</h3>
+            <p>
+              Для изображения-блока ссылка и метаданные находятся в свойствах блока. У элемента
+              холста дополнительно есть рамка, координаты, слой и поворот.
+            </p>
+            <p>Обычный файл представлен ссылкой, именем, MIME-типом и, при наличии, размером.</p>
+          </div>
+        </div>
+        <h3>Изменение размера и alt-текста</h3>
+        <p>
+          У встроенных изображений и блоков доступен маркер изменения размера. Обычное
+          перетаскивание сохраняет пропорции; Shift позволяет свободное изменение. Двойной щелчок
+          или Enter на маркере сбрасывает размер. Обычное Markdown-изображение превращается в
+          макрос, когда нужно сохранить изменение.
+        </p>
+        <h3>Открытие и копирование</h3>
+        <p>
+          При открытии файла сначала выбирается подходящий обработчик, затем явно назначенный
+          обработчик по умолчанию; если их нет, используется браузерный способ. Для одного
+          выбранного файла или изображения расширение может предложить бинарное содержимое буферу
+          обмена. Если формат недоступен, поведение зависит от возможностей браузера и подключённого
+          хоста.
+        </p>
+      </section>
+      <section id="contracts">
+        <div class="kicker">06 · Контракты интеграции</div>
+        <h2>Что должен предоставить хост</h2>
+        <pre><code>const editor = createReactEditor({
+  editor: coreEditor,
+  extensions: [
+    fileExtension({ provider: fileProvider }),
+    imageExtension({ provider: imageProvider }),
+    ...edgelessPreset(),
+    standardPreset(),
+  ],
+});</code></pre>
+        <p>
+          Расширения подключаются явно. Провайдеры файлов и изображений могут быть разными; один
+          провайдер можно использовать для обоих.
+        </p>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Контракт</th>
+              <th>Смысл</th>
+              <th>Ответственность</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>write(blob, context)</code></td>
+              <td>Сохраняет байты и возвращает строковый URI.</td>
+              <td>Провайдер определяет фактическое хранилище, лимиты и ошибки записи.</td>
+            </tr>
+            <tr>
+              <td><code>read(uri, context)</code></td>
+              <td>Возвращает Blob; <code>undefined</code> означает, что URI ему не принадлежит.</td>
+              <td>Ошибки чтения не должны маскироваться как отсутствие данных.</td>
+            </tr>
+            <tr>
+              <td><code>FileHandler</code></td>
+              <td>Сопоставляет файл или ссылку и подготавливает inline/block/element.</td>
+              <td>
+                Расширение регистрирует обработчик и провайдер; выбор по умолчанию назначается
+                отдельно.
+              </td>
+            </tr>
+            <tr>
+              <td><code>LocalFileBridge</code></td>
+              <td>Адаптирует привилегированные вызовы хоста к интерфейсу провайдера.</td>
+              <td>
+                Хост реализует чтение и атомарную запись без перезаписи; браузерный пакет не
+                импортирует Node API.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Контекст операции содержит идентификатор документа, режим и сигнал отмены. Для записи
+          также передаются имя, тип, источник, назначение и необязательный прогресс.
+        </p>
+      </section>
+      <section>
+        <div class="kicker">07 · Согласованность и обработка ошибок</div>
+        <h2>Что происходит в особых случаях</h2>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Сценарий</th>
+              <th>Поведение</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Несколько файлов</td>
+              <td>
+                Подготовка конкурентная; успешно подготовленные результаты вставляются в исходном
+                порядке. Ошибки отдельных файлов остаются видимыми.
+              </td>
+            </tr>
+            <tr>
+              <td>Текст изменён во время загрузки</td>
+              <td>
+                Захваченное место проверяется перед фиксацией; устаревшая вставка не должна
+                перезаписать новый текст и остаётся доступной для повтора.
+              </td>
+            </tr>
+            <tr>
+              <td>Провайдер не распознал URI</td>
+              <td>
+                <code>undefined</code> позволяет перейти к разрешению подходящих браузерных адресов
+                или относительного адреса с заданным base URI.
+              </td>
+            </tr>
+            <tr>
+              <td>Провайдер завершился ошибкой</td>
+              <td>
+                Ошибка передаётся вызывающей стороне и отображается через механизм ошибок; это не
+                считается отказом от владения URI.
+              </td>
+            </tr>
+            <tr>
+              <td>Имя файла занято</td>
+              <td>
+                Локальный мост выбирает безопасное имя, пробует эксклюзивное создание и добавляет
+                случайный суффикс при коллизии.
+              </td>
+            </tr>
+            <tr>
+              <td>Удаление ссылки в редакторе</td>
+              <td>
+                Не удаляет соответствующие байты. Политика очистки и срока хранения принадлежит
+                хосту.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section id="risks">
+        <div class="kicker">08 · Границы и ограничения</div>
+        <h2>На что обратить внимание при внедрении</h2>
+        <ul>
+          <li>
+            <strong>Браузер не даёт произвольный доступ к файловой системе.</strong> Копирование из
+            файлового менеджера зависит от данных, которые браузер передал странице. Локальные пути
+            требуют подходящего провайдера или хоста.
+          </li>
+          <li>
+            <strong>Локальный мост — адаптер, а не полномочия файловой системы.</strong> Он
+            проверяет область URI и имена; привилегированный хост обязан отдельно проверять реальные
+            файловые пути, включая символические ссылки.
+          </li>
+          <li>
+            <strong>Demo и пакет различаются.</strong> Локальный Vite-маршрут демонстрации
+            предназначен для тестирования на localhost и не входит в библиотеку редактора.
+          </li>
+          <li>
+            <strong>Хранение и уборка файлов находятся вне модели документа.</strong> Нужно
+            определить долговечность URI, доступность байтов между устройствами и очистку
+            неиспользуемых ресурсов на стороне приложения.
+          </li>
+          <li>
+            <strong>Внешние эффекты не обещают откат.</strong> Отмена после записи не обязательно
+            удалит уже созданный файл; ошибка при фиксации нескольких элементов может оставить
+            частично вставленный результат.
+          </li>
+        </ul>
+      </section>
+      <section id="verification">
+        <div class="kicker">09 · Проверка и эксплуатация</div>
+        <h2>Что подтверждено и что ещё нужно проверить</h2>
+        <p>
+          В предыдущих рабочих запусках для этого направления проходили сфокусированные тесты
+          вложений, сборки и сценарии Chromium/Firefox для смешанной вставки и перетаскивания,
+          включая <code>repeat=200</code>. При параллельных запусках ранее наблюдались отдельные
+          сбои Firefox и геометрии, проходившие при последовательном повторе. Это исторические
+          результаты сессии, а не новый запуск на указанном коммите.
+        </p>
+        <div class="columns">
+          <div class="card">
+            <h3>Перед интеграцией</h3>
+            <ul>
+              <li>Запустить актуальные проверки типов, сборку и тесты на целевом коммите.</li>
+              <li>
+                Проверить загрузку, отмену, повтор и изменённое место вставки в Page и Edgeless.
+              </li>
+              <li>Проверить настройки провайдера и открытие файлов в реальном приложении-хосте.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Производительность</h3>
+            <p>
+              Раздельно измерять синхронную обработку и время до готового DOM на обычном и большом
+              документе. Время до видимого изображения включает асинхронную загрузку и не является
+              измерением одной только команды.
+            </p>
+          </div>
+        </div>
+        <p class="muted">
+          SLO, владельцы развёртывания, мониторинг и условия промышленного выпуска в исследованных
+          исходных материалах не заданы.
+        </p>
+      </section>
+      <section>
+        <div class="kicker">10 · Выводы и дальнейшие шаги</div>
+        <h2>Как использовать эти изменения</h2>
+        <ol>
+          <li>
+            Подключить нужные расширения и провайдеры в хосте; при необходимости зарегистрировать
+            обработчик открытия и выбрать его по умолчанию.
+          </li>
+          <li>
+            Проверить, что возвращаемые URI устойчивы и доступны в целевых средах, а файловый хост
+            ограничивает доступ к разрешённым ресурсам.
+          </li>
+          <li>
+            Прогнать тесты на конкретном коммите и проверить сценарии с браузером и реальным
+            хранилищем приложения.
+          </li>
+        </ol>
+        <div class="callout">
+          Основной архитектурный выбор ветки: единый путь обработки ввода и представлений, при
+          котором расширения выбирают поведение, а хост сохраняет контроль над байтами и доступом к
+          файлам.
+        </div>
+      </section>
+      <section>
+        <div class="kicker">Приложение · Исходные материалы</div>
+        <h2>Где смотреть реализацию</h2>
+        <ul class="source-list">
+          <li>
+            <a href="../packages/react-rivto-editor/src/attachments/README.md"
+              >Контракты вложений и обработчиков</a
+            >
+          </li>
+          <li>
+            <a href="../packages/react-rivto-editor/src/extensions/file/file.tsx"
+              >Расширение файлов</a
+            >
+            ·
+            <a href="../packages/react-rivto-editor/src/extensions/image/image.tsx"
+              >расширение изображений</a
+            >
+          </li>
+          <li>
+            <a href="../packages/react-rivto-editor/src/extensions/file/ingestion/file-ingestion.ts"
+              >Подготовка, проверка и вставка</a
+            >
+            ·
+            <a
+              href="../packages/react-rivto-editor/src/extensions/file/ingestion/file-destination.ts"
+              >назначение вставки</a
+            >
+          </li>
+          <li>
+            <a href="../packages/react-rivto-editor/src/attachments/attachment-manager.ts"
+              >Разрешение и открытие вложений</a
+            >
+            ·
+            <a href="../packages/react-rivto-editor/src/managers/clipboard/clipboard-manager.ts"
+              >обработчики и копирование</a
+            >
+          </li>
+          <li>
+            <a
+              href="../packages/react-rivto-editor/src/extensions/image/local-file-bridge/local-file-bridge.ts"
+              >Локальный файловый мост</a
+            >
+            · <a href="../demo/local-file-bridge.ts">локальный мост демо</a>
+          </li>
+          <li>
+            <a href="../e2e/images.spec.ts">Браузерные сценарии</a> ·
+            <a href="../docs/30-images.md">документация по изображениям</a>
+          </li>
+        </ul>
+      </section>
+      <footer class="footer">
+        Rivto · System Design · локальный снимок репозитория, 4 ноября 2026. HTML-отчёт создан по
+        запросу; исходный шаблон не изменён.
+      </footer>
+    </main>
+  </body>
+</html>

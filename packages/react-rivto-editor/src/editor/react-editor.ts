@@ -1,3 +1,4 @@
+import { AttachmentManager } from "../attachments/attachment-manager";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
@@ -167,6 +168,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly clipboardFormats: ClipboardFormatRegistry;
   /** Structured document operations; view-dependent paste receives its destination explicitly. */
   readonly clipboard: ClipboardManager;
+  /** Attachment handlers, binary resolution, and opening shared across views. */
+  readonly attachments: AttachmentManager;
   /** Core paste strategies extended by React clipboard integrations. */
   readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
   /** Root surfaces and their ordered block/editor wrappers. */
@@ -230,6 +233,7 @@ export class ReactEditor implements ReactEditorApi {
     this.blockBehaviors = new BlockBehaviorRegistry(this, extensions);
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor, extensions);
+    this.attachments = new AttachmentManager(this, extensions, options.attachments);
     this.clipboard = new ClipboardManager(editor, this, extensions);
     this.edgelessToolbar = new EdgelessToolbarManager(extensions);
     this.elementTypes = new ElementTypeManager(this, extensions);

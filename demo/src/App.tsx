@@ -34,6 +34,10 @@ import {
   pageDragExtension,
   PageSurface,
   standardPreset,
+  fileExtension,
+  imageExtension,
+  type ReactEditorExtension,
+  type BinaryProvider,
   TABLE_BLOCK_TYPE,
   TODO_ITEM_BLOCK_TYPE,
   TODO_STORAGE_BLOCK_TYPE,
@@ -70,6 +74,153 @@ import {
 } from "./extensions/reports/review-report";
 import { KeyboardPanel } from "./KeyboardPanel";
 import { RevisionsPanel } from "./RevisionsPanel";
+
+const DEMO_LOCAL_FILE_ROUTE = "/__rivto_demo_local_file";
+const DEMO_CLIPBOARD_FILE_ROUTE = "/__rivto_demo_clipboard_file";
+const DEMO_OPEN_FILE_ROUTE = "/__rivto_demo_open_file";
+/** Maximum image size retained briefly for immediate display, in bytes. */
+const DEMO_PREVIEW_MAX_BYTES = 1024 * 1024;
+/** Maximum number of recently uploaded image previews retained. */
+const DEMO_PREVIEW_MAX_COUNT = 16;
+/** Maximum time an unused preview remains available, in milliseconds. */
+const DEMO_PREVIEW_LIFETIME_MS = 30_000;
+/** Recent uploaded image bytes awaiting their first display. */
+const demoImagePreviews = new Map<string, Blob>();
+
+/**
+ * Returns whether the demo server can resolve one local filesystem path.
+ *
+ * @param uri - Candidate file URI or filesystem path.
+ * @returns True for file URIs and absolute Unix or Windows paths.
+ */
+function isDemoLocalFileUri(uri: string): boolean {
+  return /^file:\/\//i.test(uri) || /^\//.test(uri) || /^[a-z]:[\\/]/i.test(uri);
+}
+
+/**
+ * Stores browser-owned bytes in the demo server so a native app can address them.
+ *
+ * @param data - File or resolved blob to persist temporarily.
+ * @param name - Portable filename retained for native-app selection.
+ * @param mimeType - Persisted MIME type used when the blob has none.
+ * @param signal - Cancellation signal from the file operation.
+ * @returns Absolute temporary file path returned by the demo server.
+ */
+async function storeDemoFile(
+  data: Blob,
+  name: string,
+  mimeType: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const response = await fetch(`${DEMO_CLIPBOARD_FILE_ROUTE}?name=${encodeURIComponent(name)}`, {
+    body: data,
+    headers: { "Content-Type": data.type || mimeType || "application/octet-stream" },
+    method: "POST",
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error("The demo server could not store the file");
+  }
+  const result = (await response.json()) as { readonly uri?: unknown };
+  if (typeof result.uri !== "string") {
+    throw new TypeError("The demo server returned an invalid file URI");
+  }
+  return result.uri;
+}
+
+/** Demo storage keeps uploaded files on disk. */
+const demoBinaryProvider: BinaryProvider = {
+  /**
+   * Stores file bytes on the demo server.
+   *
+   * A 10 MiB limit applies. Abort signals cancel the server request, and the
+   * caller receives the resulting reference. Small images are retained briefly
+   * for their first display to avoid immediately fetching the bytes again.
+   *
+   * @param file - Browser-provided binary content.
+   * @param context - Name, MIME type, and cancellation signal.
+   * @returns A promise resolving to the stored local path.
+   * @throws If the file is too large, cancelled, or cannot be stored.
+   * @inheritdoc BinaryProvider.write
+   */
+  async write(file, context) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new RangeError("File exceeds the 10 MiB limit");
+    }
+    const uri = await storeDemoFile(file, context.name, context.mimeType, context.signal);
+    if (context.mimeType.startsWith("image/") && file.size <= DEMO_PREVIEW_MAX_BYTES) {
+      if (demoImagePreviews.size >= DEMO_PREVIEW_MAX_COUNT) {
+        demoImagePreviews.delete(demoImagePreviews.keys().next().value!);
+      }
+      demoImagePreviews.set(uri, file);
+      // Release previews that never reach a mounted image view.
+      window.setTimeout(() => demoImagePreviews.delete(uri), DEMO_PREVIEW_LIFETIME_MS);
+    }
+    return uri;
+  },
+  /**
+   * Reads local references through the demo server and declines other URIs.
+   *
+   * A cached upload is consumed on its first read; later reads use the server.
+   *
+   * @param uri - Logical binary reference to resolve.
+   * @param context - Operation context containing the cancellation signal.
+   * @returns A promise resolving to bytes, or undefined for a nonlocal reference.
+   * @throws If the request is cancelled or the server cannot provide the file.
+   * @inheritdoc BinaryProvider.read
+   */
+  async read(uri, context) {
+    if (!isDemoLocalFileUri(uri)) {
+      return undefined;
+    }
+    context.signal.throwIfAborted();
+    const preview = demoImagePreviews.get(uri);
+    if (preview) {
+      demoImagePreviews.delete(uri);
+      return preview;
+    }
+    const response = await fetch(`${DEMO_LOCAL_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
+      signal: context.signal,
+    });
+    if (!response.ok) {
+      throw new Error("The local file is unavailable to the demo server");
+    }
+    return response.blob();
+  },
+};
+
+/** Demo-only native opener. */
+const demoLocalFileExtension: ReactEditorExtension = {
+  id: "demo.local-files",
+  // Register a host opener for files stored through the demo bridge.
+  setup: (editor) => {
+    editor.attachments.registerFileOpenHandler({
+      id: "demo.native-files",
+      // Store the resolved bytes before requesting a native application open.
+      open: async (reference, context) => {
+        const uri = await storeDemoFile(
+          await editor.attachments.readBinary(
+            demoBinaryProvider,
+            reference.uri,
+            reference.mimeType,
+            context,
+          ),
+          reference.name,
+          reference.mimeType,
+          context.signal,
+        );
+        const response = await fetch(`${DEMO_OPEN_FILE_ROUTE}?uri=${encodeURIComponent(uri)}`, {
+          method: "POST",
+          signal: context.signal,
+        });
+        if (!response.ok) {
+          throw new Error("The demo server could not open the file with its native app");
+        }
+      },
+    });
+    editor.attachments.setDefaultFileOpenHandler("demo.native-files");
+  },
+};
 
 const DEMO_BLOCK_ID_TOGGLE_CLASS = "demo-block-id-toggle";
 /** Demo-wide setting for persistent block handle visibility. */
@@ -434,6 +585,10 @@ async function createDemoEditor() {
           [KEYBOARD_BINDING_IDS.blockOutdent]: [],
         }
       : undefined;
+  const demoParams = new URLSearchParams(window.location.search);
+  const imageFirst = demoParams.has("imageFirst");
+  const imageOnly = demoParams.has("imageOnly");
+  const fileOnly = demoParams.has("fileOnly");
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -453,6 +608,12 @@ async function createDemoEditor() {
         editor: documentEditor,
         keymap: alternateKeymap,
         extensions: [
+          ...(imageFirst || imageOnly ? [imageExtension({ provider: demoBinaryProvider })] : []),
+          ...(imageOnly ? [] : [fileExtension({ provider: demoBinaryProvider })]),
+          demoLocalFileExtension,
+          ...(imageFirst || imageOnly || fileOnly
+            ? []
+            : [imageExtension({ provider: demoBinaryProvider })]),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
@@ -855,6 +1016,9 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
  *
  * Needed to show two independent editor instances on one page (journal stack)
  * and to contrast a populated document with an empty one.
+ *
+ * @returns A promise resolving to document resources and initialized core and React editors.
+ * @throws If document or editor initialization fails.
  */
 async function createEmptyDemoEditor() {
   const resources = await createDemoDocument();
@@ -862,6 +1026,9 @@ async function createEmptyDemoEditor() {
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension({ provider: demoBinaryProvider }),
+      demoLocalFileExtension,
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1287,16 +1454,31 @@ function JournalDemoApp() {
  * ids (`left-parent`, …) keep panes readable with Block IDs on and let e2e
  * target rows. Optional `empty` / `conflict` flags cover edge cases (also used
  * by Playwright via query params).
+ *
+ * @param side - Pane whose document and sample blocks should be created.
+ * @param options - Optional right-pane empty state and conflicting block fixture.
+ * @param options.empty - Leaves the right pane without sample blocks when true.
+ * @param options.conflict - Adds a conflicting child ID to the populated right pane when set to `block`.
+ * @returns A promise resolving to document resources and initialized core and React editors.
+ * @throws If document initialization or fixture creation fails.
  */
 async function createMultiEditor(
   side: "left" | "right",
-  options: { readonly empty?: boolean; readonly conflict?: "block" } = {},
+  options: {
+    /** Skip sample blocks in the right pane. */
+    readonly empty?: boolean;
+    /** Add a conflicting child block ID to the right pane. */
+    readonly conflict?: "block";
+  } = {},
 ) {
   const resources = await createDemoDocument();
   const editor = createDocumentEditor({ document: resources.document });
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension({ provider: demoBinaryProvider }),
+      demoLocalFileExtension,
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
@@ -1511,10 +1693,12 @@ async function createSyncedPeer(
     signal.throwIfAborted();
     if (side === "right" && !storage.getDocumentIds().includes("shared")) {
       await new Promise<void>((resolve, reject) => {
+        // Release both listeners before completing the wait.
         const finish = () => {
           unsubscribe();
           signal.removeEventListener("abort", abort);
         };
+        // Resolve only after the shared document has been registered.
         const refresh = () => {
           if (!storage.getDocumentIds().includes("shared")) {
             return;
@@ -1522,6 +1706,7 @@ async function createSyncedPeer(
           finish();
           resolve();
         };
+        // Reject the wait and release its listeners when cancelled.
         const abort = () => {
           finish();
           reject(signal.reason);
@@ -1549,6 +1734,9 @@ async function createSyncedPeer(
   const reactEditor = createReactEditor({
     editor,
     extensions: [
+      fileExtension({ provider: demoBinaryProvider }),
+      demoLocalFileExtension,
+      imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),

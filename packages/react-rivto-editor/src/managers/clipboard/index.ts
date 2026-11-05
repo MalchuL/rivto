@@ -2,6 +2,11 @@ export * from "./clipboard-format-registry";
 export * from "./clipboard-manager";
 export * from "./clipboard-converters";
 export type {
+  ClipboardBinaryRepresentation,
+  ClipboardPostprocessContext,
+  ClipboardPostprocessor,
+  ClipboardWriter,
+  ClipboardWriteInput,
   BlockClipboardFields,
   ElementClipboardFields,
   ClipboardCopyContext,

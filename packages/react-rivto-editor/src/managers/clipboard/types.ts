@@ -1,4 +1,5 @@
 import type {
+  ClipboardBundle,
   EditorBlock,
   EditorBlockInput,
   EditorBlockNode,
@@ -61,12 +62,24 @@ export interface ClipboardParsers {
    * Accepts an entire detached HTML subtree, including its children. Returning
    * undefined lets the next parser try it; an empty result deliberately consumes it.
    * Page parsers must return blocks. Edgeless parsers may also return elements.
+   *
+   * @param element - Complete detached HTML element to inspect.
+   * @param context - Receiving surface and default writing block type.
+   * @returns Parsed creation inputs, an empty result to consume the subtree, or undefined to decline it.
+   * @throws If parsing fails.
    */
   readonly parseHTML?: (
     element: Element,
     context: ClipboardParseContext,
   ) => ClipboardContent | undefined;
-  /** Accepts a complete plain-text value, or returns undefined to keep the normal fallback. */
+  /**
+   * Accepts a complete plain-text value, or returns undefined to keep the normal fallback.
+   *
+   * @param text - Complete plain-text clipboard value.
+   * @param context - Receiving surface and default writing block type.
+   * @returns Parsed creation inputs, or undefined to decline the text.
+   * @throws If parsing fails.
+   */
   readonly parseText?: (
     text: string,
     context: ClipboardParseContext,
@@ -81,17 +94,38 @@ export interface ClipboardParsers {
  * are assigned by the shared clipboard code and cannot be replaced by these hooks.
  */
 export interface BlockClipboardConverter extends ClipboardParsers {
-  /** Returns replacement fields on a detached copy. Omitted fields retain their source value. */
+  /**
+   * Returns replacement fields on a detached copy. Omitted fields retain their source value.
+   *
+   * @param block - Detached source block and direct child IDs.
+   * @param context - Copy operation, source document, and optional panel scope.
+   * @returns Fields to replace in the copied payload.
+   * @throws If conversion fails before the clipboard operation completes.
+   */
   readonly copy?: (
     block: EditorBlockNode,
     context: ClipboardCopyContext,
   ) => Partial<BlockClipboardFields>;
-  /** Rewrites type-specific data using complete destination maps, before validation and insertion. */
+  /**
+   * Rewrites type-specific data using complete destination maps, before validation and insertion.
+   *
+   * @param block - Detached source block and direct child IDs.
+   * @param context - Destination document, optional panel, and allocated ID maps.
+   * @returns Fields to replace in the prepared block.
+   * @throws If conversion fails before insertion.
+   */
   readonly paste?: (
     block: EditorBlockNode,
     context: ClipboardPasteContext,
   ) => Partial<BlockClipboardFields>;
-  /** Formats this block and its already formatted descendants; common list formatters run afterwards. */
+  /**
+   * Formats this block and its already formatted descendants; common list formatters run afterwards.
+   *
+   * @param context - Detached block, sibling position, depth, and formatted descendants.
+   * @param current - Portable formats produced before this converter.
+   * @returns Portable formats for the block and its descendants.
+   * @throws If formatting fails.
+   */
   readonly format?: (
     context: ClipboardFormatContext,
     current: PortableBlockFormats,
@@ -114,17 +148,38 @@ export interface ElementClipboardFormatContext {
  * Exceptions abort preparation before clipboard writes; converters must not mutate the document.
  */
 export interface ElementClipboardConverter extends ClipboardParsers {
-  /** Replaces props in the copied payload without changing the source element. */
+  /**
+   * Replaces props in the copied payload without changing the source element.
+   *
+   * @param element - Detached source element record.
+   * @param context - Copy operation and source document information.
+   * @returns Properties to replace in the copied payload.
+   * @throws If conversion fails before the clipboard operation completes.
+   */
   readonly copy?: (
     element: EditorElementNode,
     context: ClipboardCopyContext,
   ) => Partial<ElementClipboardFields>;
-  /** Rewrites props with destination IDs before element processors and validation run. */
+  /**
+   * Rewrites props with destination IDs before element processors and validation run.
+   *
+   * @param element - Detached source element record.
+   * @param context - Destination document and allocated source-to-destination IDs.
+   * @returns Properties to replace in the prepared element.
+   * @throws If conversion fails before insertion.
+   */
   readonly paste?: (
     element: EditorElementNode,
     context: ClipboardPasteContext,
   ) => Partial<ElementClipboardFields>;
-  /** Produces portable text from this element, formatted children and referenced blocks. */
+  /**
+   * Produces portable text from this element, formatted children and referenced blocks.
+   *
+   * @param context - Element and already formatted children and referenced blocks.
+   * @param current - Portable formats produced before this converter.
+   * @returns Portable formats for the element subtree.
+   * @throws If formatting fails.
+   */
   readonly format?: (
     context: ElementClipboardFormatContext,
     current: PortableBlockFormats,
@@ -134,6 +189,11 @@ export interface ElementClipboardConverter extends ClipboardParsers {
    * Canvas Cut removes these original blocks after export, so ordinary external links
    * should stay in props instead of being declared here. Root IDs are ordered siblings
    * from the source panel, allowing a block card to resolve its inclusive range.
+   *
+   * @param element - Detached canvas element being exported.
+   * @param rootBlockIds - Ordered source-panel root IDs.
+   * @returns Referenced block IDs to include with the copied elements.
+   * @throws If reference collection fails.
    */
   readonly getReferencedBlockIds?: (
     element: EditorElementNode,
@@ -169,9 +229,22 @@ export interface ClipboardFormatContext {
 export interface ClipboardFormatter {
   /** Stable ID used to prevent duplicate formatter registration. */
   readonly id: string;
-  /** Optional predicate; returning `false` skips this formatter for the block. */
+  /**
+   * Selects whether this formatter applies to the current block.
+   *
+   * @param context - Detached block and its structural formatting context.
+   * @returns False to skip this formatter; true to apply it.
+   * @throws If the predicate fails.
+   */
   readonly matches?: (context: ClipboardFormatContext) => boolean;
-  /** Produces the next formats from structural context and preceding output. */
+  /**
+   * Produces the next formats from structural context and preceding output.
+   *
+   * @param context - Detached block and its structural formatting context.
+   * @param current - Portable formats produced by earlier formatters.
+   * @returns Updated portable formats.
+   * @throws If formatting fails.
+   */
   readonly format: (
     context: ClipboardFormatContext,
     current: PortableBlockFormats,
@@ -182,7 +255,13 @@ export interface ClipboardFormatter {
 export interface ClipboardParser {
   /** Stable ID used to prevent duplicate parser registration. */
   readonly id: string;
-  /** Returns parsed block inputs on a match or `undefined` to try the next parser. */
+  /**
+   * Parses external clipboard text or declines it for the next parser.
+   *
+   * @param data - Complete HTML and plain-text clipboard strings.
+   * @returns Block creation inputs, or undefined when this parser does not match.
+   * @throws If parsing fails.
+   */
   readonly parse: (data: {
     readonly html: string;
     readonly text: string;
@@ -204,6 +283,76 @@ export interface CreatedClipboardRecords {
 
 /** Optional panel binding for paste algorithms that depend on a rendered surface. */
 export interface PanelPasteStrategy extends PasteStrategy {
-  /** Returns an algorithm bound to the receiving occurrence, without changing registrations. */
+  /**
+   * Returns an algorithm bound to the receiving occurrence, without changing registrations.
+   *
+   * @param reactPanel - Receiving panel whose scope the strategy should use.
+   * @returns A paste strategy bound to that panel.
+   */
   createPanelStrategy(reactPanel: ReactPanelApi): PasteStrategy;
+}
+
+/** One binary representation contributed for a single copied attachment. */
+export interface ClipboardBinaryRepresentation {
+  /** Filename offered to the host clipboard writer. */
+  readonly name: string;
+  /** Media type of the binary representation. */
+  readonly mimeType: string;
+  /** Binary content, possibly still being prepared. */
+  readonly data: Blob | Promise<Blob>;
+}
+
+/** Context supplied while refining the final clipboard payload. */
+export interface ClipboardPostprocessContext {
+  /** Structured content selected for copying. */
+  readonly bundle: ClipboardBundle;
+  /** Portable formats already produced for that selection. */
+  readonly formats: PortableBlockFormats;
+}
+
+/** Ordered extension hook that may contribute single-object binary data. */
+export interface ClipboardPostprocessor {
+  /** Unique identifier used for registration. */
+  readonly id: string;
+  /**
+   * Contributes binary data for a copied selection when this hook recognizes it.
+   *
+   * Hooks run synchronously in registration order; the first contribution is used.
+   *
+   * @param context - Structured clipboard bundle and its portable representations.
+   * @returns Binary data to copy, or undefined when this hook does not handle the selection.
+   * @throws If preparing the contribution fails.
+   */
+  readonly process: (
+    context: ClipboardPostprocessContext,
+  ) => ClipboardBinaryRepresentation | undefined;
+}
+
+/** Binary data and portable formats supplied to a host clipboard writer. */
+export interface ClipboardWriteInput extends ClipboardBinaryRepresentation, PortableBlockFormats {}
+
+/** Host bridge for MIME formats unavailable through the browser clipboard. */
+export interface ClipboardWriter {
+  /** Unique identifier used for registration. */
+  readonly id: string;
+  /**
+   * Checks whether the host can accept a proposed binary MIME type.
+   *
+   * The clipboard may check the original MIME type and application/octet-stream.
+   *
+   * @param mimeType - MIME type proposed for the binary item.
+   * @returns True when the host writer can accept the type.
+   * @throws If the host capability check fails.
+   */
+  readonly supports: (mimeType: string) => boolean;
+  /**
+   * Writes binary data and its portable text representations through the host.
+   *
+   * The clipboard may try the browser writer if this call fails.
+   *
+   * @param input - Named binary item and portable text, Markdown, and HTML formats.
+   * @returns Completion of the host write, immediately or when its promise resolves.
+   * @throws If the host rejects or cannot complete the write.
+   */
+  readonly write: (input: ClipboardWriteInput) => void | Promise<void>;
 }
