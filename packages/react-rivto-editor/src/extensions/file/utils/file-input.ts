@@ -5,6 +5,21 @@ export const FILE_PASTE_EVENT_ID = "file.paste";
 /** Event registration that claims generic file drops on the receiving surface. */
 export const FILE_DROP_EVENT_ID = "file.drop";
 
+/**
+ * Checks whether the browser hides a transferred URI from the paste event.
+ *
+ * @param data - Clipboard or drag data, if available.
+ * @returns True when a URI list is advertised but no text or HTML exposes content.
+ */
+export function hasRedactedUriList(data: Pick<DataTransfer, "types" | "getData"> | null): boolean {
+  return Boolean(
+    data?.types.includes("text/uri-list") &&
+    !data.getData("text/uri-list") &&
+    !data.getData("text/plain") &&
+    !data.getData("text/html"),
+  );
+}
+
 /** Known file extensions used when a browser supplies no MIME type. */
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -83,6 +98,31 @@ export function firstUriListEntry(text: string): string | undefined {
  */
 export function isLocalFileUri(value: string): boolean {
   return /^file:\/\//i.test(value) || /^\//.test(value) || /^[a-z]:[\\/]/i.test(value);
+}
+
+/**
+ * Reads local paths from a URI list or plain clipboard text.
+ *
+ * @param text - Clipboard text containing one path per line and optional URI-list comments.
+ * @returns Paths in source order, or an empty array if any entry is not local.
+ */
+export function findLocalFileUris(text: string): string[] {
+  const paths = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  return paths.every(isLocalFileUri) ? paths : [];
+}
+
+/**
+ * Reads local paths exposed by the clipboard, preferring URI-list data.
+ *
+ * @param data - Clipboard data, or null when unavailable.
+ * @returns Local paths in source order, or an empty array when none are available.
+ */
+export function findTransferredLocalFileUris(data: Pick<DataTransfer, "getData"> | null): string[] {
+  const uris = findLocalFileUris(data?.getData("text/uri-list") ?? "");
+  return uris.length ? uris : findLocalFileUris(data?.getData("text/plain") ?? "");
 }
 
 /**

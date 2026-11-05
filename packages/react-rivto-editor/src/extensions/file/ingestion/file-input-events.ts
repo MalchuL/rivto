@@ -17,9 +17,11 @@ import {
 import {
   FILE_DROP_EVENT_ID,
   FILE_PASTE_EVENT_ID,
+  hasRedactedUriList,
   getTransferredFiles,
   findLocalFileUri,
-  findTransferredLocalFileUri,
+  findLocalFileUris,
+  findTransferredLocalFileUris,
   createFileReferenceFromUri,
 } from "../utils/file-input";
 
@@ -141,8 +143,8 @@ export class FileInputEvents {
       (event) => {
         const { raw, blockId, root, reactPanel } = event;
         const files = getTransferredFiles(raw.clipboardData);
-        const uri = findTransferredLocalFileUri(raw.clipboardData);
-        if (!files.length && !uri && !raw.clipboardData?.types.includes("text/uri-list")) {
+        const uris = findTransferredLocalFileUris(raw.clipboardData);
+        if (!files.length && !uris.length && !hasRedactedUriList(raw.clipboardData)) {
           return false;
         }
         const location = filePasteDestination(event);
@@ -151,14 +153,14 @@ export class FileInputEvents {
         }
         const destination = this.replaceEmptyDefault(
           location.destination,
-          files.length || 1,
+          files.length || uris.length || 1,
           blockId,
         );
         const { point } = location;
         if (files.length) {
           this.upload(reactPanel, files, destination, point);
-        } else if (uri) {
-          this.insertReferences(reactPanel, [uri], destination, point);
+        } else if (uris.length) {
+          this.insertReferences(reactPanel, uris, destination, point);
         } else {
           this.readClipboardPath(root, reactPanel, destination, point);
         }
@@ -235,11 +237,11 @@ export class FileInputEvents {
         if (this.ingestion.signal.aborted) {
           return;
         }
-        const local = findLocalFileUri(text);
-        if (!local) {
+        const local = findLocalFileUris(text);
+        if (!local.length) {
           throw new TypeError("Clipboard does not contain a readable local file path");
         }
-        this.insertReferences(reactPanel, [local], destination, point);
+        this.insertReferences(reactPanel, local, destination, point);
       })
       // Only notify the host while this ingestion instance remains active.
       .catch((error: unknown) => {

@@ -81,23 +81,24 @@ export function findImageUri(text: string): string | undefined {
 }
 
 /**
- * Selects an image URI from transferable HTML or plain data.
+ * Selects image URIs from transferable HTML or plain data.
  *
- * HTML must contain one image and no other text; files take precedence over URIs.
+ * HTML must contain images and no other text, or one link whose text and
+ * target are the same image URL. Plain text and URI lists must contain only
+ * supported image references. Files take precedence over URIs.
  *
  * @param data - Browser clipboard or drag data, if available.
- * @returns Image URI and alternative text, or undefined when the payload is not image-only.
+ * @returns Image URIs and alternative text in source order, or an empty array
+ * when the payload is not image-only.
  */
-export function findTransferredImageUri(data: DataTransfer | null):
-  | {
-      /** Image URI extracted from the transfer. */
-      uri: string;
-      /** Alternative text supplied by the transfer, or an empty string. */
-      alt: string;
-    }
-  | undefined {
+export function findTransferredImageUris(data: DataTransfer | null): {
+  /** Image URI extracted from the transfer. */
+  uri: string;
+  /** Alternative text supplied by the transfer, or an empty string. */
+  alt: string;
+}[] {
   if (!data || data.files.length) {
-    return undefined;
+    return [];
   }
   const html = data.getData("text/html").trim();
   if (html) {
@@ -106,12 +107,29 @@ export function findTransferredImageUri(data: DataTransfer | null):
     const remaining = document.body.cloneNode(true) as HTMLElement;
     // Remove images from the clone to detect any remaining text.
     remaining.querySelectorAll("img").forEach((image) => image.remove());
-    if (images.length === 1 && !remaining.textContent?.trim()) {
-      return { uri: images[0]!.src, alt: images[0]!.alt };
+    if (images.length > 0 && !remaining.textContent?.trim()) {
+      return images.map((image) => ({ uri: image.src, alt: image.alt }));
     }
-    return undefined;
+    const links = [...document.body.querySelectorAll("a")];
+    const uri =
+      findImageUri(data.getData("text/uri-list")) ?? findImageUri(data.getData("text/plain"));
+    if (
+      uri &&
+      images.length === 0 &&
+      links.length === 1 &&
+      links[0]!.href === uri &&
+      document.body.textContent?.trim() === uri &&
+      IMAGE_FILE_EXTENSION.test(links[0]!.pathname)
+    ) {
+      return [{ uri, alt: "" }];
+    }
+    return [];
   }
-  const uri =
-    findImageUri(data.getData("text/uri-list")) ?? findImageUri(data.getData("text/plain"));
-  return uri ? { uri, alt: "" } : undefined;
+  const text = data.getData("text/uri-list") || data.getData("text/plain");
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  const uris = lines.map(findImageUri);
+  return uris.every((uri) => uri !== undefined) ? uris.map((uri) => ({ uri, alt: "" })) : [];
 }

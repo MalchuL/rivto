@@ -2,9 +2,38 @@ import { findImageUri, isImageFile } from "../../image/utils/image-input";
 import {
   createFileReferenceFromUri,
   findLocalFileUri,
+  findLocalFileUris,
+  findTransferredLocalFileUris,
   findTransferredLocalFileUri,
   getTransferredFiles,
+  hasRedactedUriList,
 } from "./file-input";
+
+test("collects every selected local path without consuming mixed text", () => {
+  expect(findLocalFileUris("# copied\nfile:///a.png\nfile:///b.png")).toEqual([
+    "file:///a.png",
+    "file:///b.png",
+  ]);
+  expect(findLocalFileUris("/a.png\nordinary text")).toEqual([]);
+  expect(
+    findTransferredLocalFileUris({
+      getData: (type) => (type === "text/uri-list" ? "file:///a.png\nfile:///b.png" : ""),
+    }),
+  ).toEqual(["file:///a.png", "file:///b.png"]);
+});
+
+test("only treats an empty URI list as redacted", () => {
+  const transfer = (values: Record<string, string>) => ({
+    types: ["text/uri-list"],
+    getData: (type: string) => values[type] ?? "",
+  });
+  expect(hasRedactedUriList(transfer({}))).toBe(true);
+  expect(hasRedactedUriList(transfer({ "text/uri-list": "https://example.test/image.png" }))).toBe(
+    false,
+  );
+  expect(hasRedactedUriList(transfer({ "text/html": "<img src='image.png'>" }))).toBe(false);
+  expect(hasRedactedUriList(null)).toBe(false);
+});
 
 test("prefers a local URI list entry and falls back to plain clipboard text", () => {
   // Expose separate URI-list and plain-text payloads through a transfer fixture.

@@ -158,6 +158,59 @@ interface MarkdownNode {
 }
 
 /**
+ * Rejoins image macro text split by Markdown's automatic URL linking.
+ *
+ * Only automatic links fully contained in a valid macro are rejoined; other
+ * links retain their original nodes and behavior.
+ *
+ * @param children - Adjacent Markdown nodes in their original source order.
+ * @returns Nodes with split image macros restored to text for macro parsing.
+ */
+function joinImageMacroLinks(children: MarkdownNode[]): MarkdownNode[] {
+  const result: MarkdownNode[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    const first = children[index]!;
+    if (first.type !== "text" || !first.value?.includes("{{image")) {
+      result.push(first);
+      continue;
+    }
+    let value = first.value;
+    const macroStart = value.lastIndexOf("{{image");
+    let end = index;
+    const links: number[] = [];
+    while (value.indexOf("}}", macroStart) < 0 && end + 1 < children.length) {
+      const next = children[end + 1]!;
+      if (next.type === "text" && next.value !== undefined) {
+        value += next.value;
+      } else if (
+        next.type === "link" &&
+        typeof next.url === "string" &&
+        next.children?.length === 1 &&
+        next.children[0]?.type === "text" &&
+        next.children[0].value === next.url
+      ) {
+        links.push(value.length);
+        value += next.url;
+      } else {
+        break;
+      }
+      end += 1;
+    }
+    const macros = parseImageMacros(value);
+    if (
+      links.length &&
+      links.every((offset) => macros.some((macro) => macro.start < offset && offset < macro.end))
+    ) {
+      result.push({ ...first, value });
+      index = end;
+    } else {
+      result.push(first);
+    }
+  }
+  return result;
+}
+
+/**
  * Converts macro text nodes into ordinary Markdown image nodes with edit metadata.
  *
  * The returned transformer mutates the supplied tree. Source offsets are
@@ -171,7 +224,7 @@ export function remarkImageMacros() {
     const visit = (node: MarkdownNode): void => {
       if (node.children) {
         // Replace only text children; preserve non-text nodes and traverse their descendants.
-        node.children = node.children.flatMap((child) => {
+        node.children = joinImageMacroLinks(node.children).flatMap((child) => {
           if (child.type !== "text" || !child.value) {
             return [child];
           }

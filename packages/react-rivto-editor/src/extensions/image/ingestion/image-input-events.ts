@@ -12,14 +12,16 @@ import {
 import {
   FILE_DROP_EVENT_ID,
   FILE_PASTE_EVENT_ID,
+  hasRedactedUriList,
   getTransferredFiles,
+  findLocalFileUris,
 } from "../../file/utils/file-input";
 import { prepareImageAsset } from "./image-asset";
 import {
   inspectImage,
   isImageFile,
   findImageUri,
-  findTransferredImageUri,
+  findTransferredImageUris,
 } from "../utils/image-input";
 
 const IMAGE_FILE_INPUT_CLASS = "rivto-image-file-input";
@@ -129,15 +131,15 @@ export class ImageInputEvents {
         return false;
       }
       const files = getTransferredFiles(raw.dataTransfer, isImageFile);
-      const remote = findTransferredImageUri(raw.dataTransfer);
-      if (!files.length && !remote) {
+      const remote = findTransferredImageUris(raw.dataTransfer);
+      if (!files.length && !remote.length) {
         return false;
       }
       const point = { x: raw.clientX, y: raw.clientY };
       const destination = fileDestinationAtPoint(event, point);
       if (files.length) {
         this.upload(reactPanel, files, destination, point);
-      } else if (remote) {
+      } else if (remote.length) {
         this.insertRemote(reactPanel, remote, destination, point);
       }
       return true;
@@ -158,8 +160,8 @@ export class ImageInputEvents {
         return false;
       }
       const files = getTransferredFiles(raw.clipboardData, isImageFile);
-      const remote = findTransferredImageUri(raw.clipboardData);
-      if (!files.length && !remote && !raw.clipboardData?.types.includes("text/uri-list")) {
+      const remote = findTransferredImageUris(raw.clipboardData);
+      if (!files.length && !remote.length && !hasRedactedUriList(raw.clipboardData)) {
         return false;
       }
       const location = filePasteDestination(event);
@@ -169,7 +171,7 @@ export class ImageInputEvents {
       const { destination, point } = location;
       if (files.length) {
         this.upload(reactPanel, files, destination, point);
-      } else if (remote) {
+      } else if (remote.length) {
         this.insertRemote(reactPanel, remote, destination, point);
       } else {
         this.readClipboardPath(root, reactPanel, destination, point);
@@ -249,12 +251,18 @@ export class ImageInputEvents {
           if (this.ingestion.signal.aborted) {
             return;
           }
-          const uri = findImageUri(text);
-          if (!uri) {
+          const paths = findLocalFileUris(text);
+          const uris = paths.length ? paths.map(findImageUri) : [findImageUri(text)];
+          if (uris.some((uri) => !uri)) {
             throw new TypeError("Clipboard does not contain a readable image path");
           }
           this.statuses.delete(id);
-          this.insertRemote(reactPanel, { uri, alt: "" }, destination, point);
+          this.insertRemote(
+            reactPanel,
+            uris.filter((uri): uri is string => !!uri).map((uri) => ({ uri, alt: "" })),
+            destination,
+            point,
+          );
         })
         // Keep the status retryable unless the owning ingestion was destroyed.
         .catch((error: unknown) => {
@@ -332,29 +340,30 @@ export class ImageInputEvents {
   }
 
   /**
-   * Resolves and inserts an existing image reference without uploading it.
+   * Resolves and inserts existing image references without uploading them.
    *
-   * The reference must decode as an image before it is inserted.
+   * Each reference must decode as an image before it is inserted. Successful
+   * images are committed in the order supplied after preparation completes.
    *
    * @param reactPanel - Panel receiving the image.
-   * @param remote - Image URI and its supplied alternative text.
+   * @param remote - Image URIs and their supplied alternative text, in order.
    * @param destination - Captured insertion destination.
    * @param point - Viewport position for status feedback.
-   * @returns Starts resolution and inserts the image when the destination remains valid.
+   * @returns Starts resolution and inserts images when the destination remains valid.
    */
   private insertRemote(
     reactPanel: FileInputPanel,
-    remote: RemoteImage,
+    remote: readonly RemoteImage[],
     destination: FileDestination,
     point: FileIngestionPoint,
   ): void {
-    if (!this.canInsert(destination, point, remote.uri)) {
+    if (!remote.length || !this.canInsert(destination, point, remote[0]!.uri)) {
       return;
     }
     this.ingestion.ingest<RemoteImage>({
       panel: reactPanel,
       destination,
-      items: [remote],
+      items: remote,
       point,
       // Show the original reference while its image is resolved.
       name: (item) => item.uri,
