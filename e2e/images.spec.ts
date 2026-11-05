@@ -48,14 +48,22 @@ async function sendImage(
             getData: () => "",
           }
         : data;
+      const row = element.matches(".page-surface")
+        ? element.querySelector<HTMLElement>(".rivto-block-row")
+        : null;
+      const bounds = row?.getBoundingClientRect();
+      const x = bounds ? bounds.left + bounds.width / 2 : 300;
+      const y = bounds ? bounds.bottom - 2 : 300;
       const event =
         type === "paste"
           ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
-          : new DragEvent("drop", { bubbles: true, cancelable: true, clientX: 300, clientY: 300 });
+          : new DragEvent("drop", { bubbles: true, cancelable: true, clientX: x, clientY: y });
       Object.defineProperty(event, type === "paste" ? "clipboardData" : "dataTransfer", {
         value: payload,
       });
-      element.dispatchEvent(event);
+      const target =
+        type === "drop" && bounds ? (document.elementFromPoint(x, y) ?? element) : element;
+      target.dispatchEvent(event);
     },
     { type: eventType, itemOnlyPayload: itemOnly, fileName: name },
   );
@@ -78,14 +86,22 @@ async function sendFile(
     (element, { type, fileName }) => {
       const data = new DataTransfer();
       data.items.add(new File(["hello"], fileName, { type: "text/plain" }));
+      const row = element.matches(".page-surface")
+        ? element.querySelector<HTMLElement>(".rivto-block-row")
+        : null;
+      const bounds = row?.getBoundingClientRect();
+      const x = bounds ? bounds.left + bounds.width / 2 : 300;
+      const y = bounds ? bounds.bottom - 2 : 300;
       const event =
         type === "paste"
           ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
-          : new DragEvent("drop", { bubbles: true, cancelable: true, clientX: 300, clientY: 300 });
+          : new DragEvent("drop", { bubbles: true, cancelable: true, clientX: x, clientY: y });
       Object.defineProperty(event, type === "paste" ? "clipboardData" : "dataTransfer", {
         value: data,
       });
-      element.dispatchEvent(event);
+      const target =
+        type === "drop" && bounds ? (document.elementFromPoint(x, y) ?? element) : element;
+      target.dispatchEvent(event);
     },
     { type: eventType, fileName: name },
   );
@@ -117,54 +133,6 @@ async function sendLocalImagePath(target: Locator, path: string): Promise<void> 
     });
     element.dispatchEvent(event);
   }, path);
-}
-
-/**
- * Drops a PNG at the caret after the first five characters of a text block.
- *
- * @param target - Editable block containing the text.
- * @param legacyCaret - Whether to force the browser's legacy hit-test API.
- * @returns Resolves after the drop event is dispatched.
- */
-async function dropImageAtTextCaret(target: Locator, legacyCaret: boolean): Promise<void> {
-  await target.evaluate((element, useLegacyCaret) => {
-    const text = element.firstChild;
-    if (!text) {
-      throw new Error("Editable block has no text node");
-    }
-    const range = element.ownerDocument.createRange();
-    range.setStart(text, 5);
-    range.collapse(true);
-    const bounds = range.getBoundingClientRect();
-    const bytes = Uint8Array.from(
-      atob(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-      ),
-      (character) => character.charCodeAt(0),
-    );
-    const data = new DataTransfer();
-    data.items.add(new File([bytes], "caret.png", { type: "image/png" }));
-    const event = new DragEvent("drop", {
-      bubbles: true,
-      cancelable: true,
-      clientX: bounds.x,
-      clientY: bounds.y + bounds.height / 2,
-    });
-    Object.defineProperty(event, "dataTransfer", { value: data });
-    if (useLegacyCaret) {
-      Object.defineProperty(document, "caretPositionFromPoint", {
-        configurable: true,
-        value: undefined,
-      });
-    }
-    try {
-      element.dispatchEvent(event);
-    } finally {
-      if (useLegacyCaret) {
-        Reflect.deleteProperty(document, "caretPositionFromPoint");
-      }
-    }
-  }, legacyCaret);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -487,84 +455,41 @@ test("does not show Page drop feedback on the edgeless canvas", async ({ page })
   ).toHaveCount(0);
 });
 
-test("switches file feedback between a block gap and an inline caret", async ({ page }) => {
-  const [first, second] = await createGapBlocks(page, false);
-  const content = page.locator(`[data-block-id="${first}"] [data-block-content]`);
-  await content.click();
-  const caret = await content.evaluate((element) => {
-    const range = element.ownerDocument.createRange();
-    range.setStart(element.firstChild!, 3);
-    range.collapse(true);
-    const bounds = range.getBoundingClientRect();
-    return { x: bounds.x, y: bounds.y + bounds.height / 2 };
-  });
-  const bounds = await page.locator(`[data-block-id="${second}"]`).boundingBox();
-  if (!bounds) {
-    throw new Error("Block after the gap has no bounds");
-  }
-  const gap = { x: bounds.x + 12, y: bounds.y - 2 };
-  await dispatchFileDrag(page, gap, "dragover", "move.txt");
-  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
-  await dispatchFileDrag(page, caret, "dragover", "move.txt");
-  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
-  await expect(page.locator(".rivto-file-drop-caret")).toBeVisible();
-  await dispatchFileDrag(page, gap, "dragover", "move.txt");
-  await expect(page.locator(".rivto-file-drop-caret")).toHaveCount(0);
-  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
-  await page.evaluate(() => document.dispatchEvent(new DragEvent("dragend", { bubbles: true })));
-  await expect(
-    page.locator(".rivto-block-drop-line, .rivto-file-drop-caret, [data-block-drop-active]"),
-  ).toHaveCount(0);
-});
-
-test("previews an inline file caret without changing the selection", async ({ page }) => {
-  const [first] = await createGapBlocks(page, false);
-  const content = page.locator(`[data-block-id="${first}"] [data-block-content]`);
-  await content.click();
-  const position = await content.evaluate((element) => {
-    const text = element.firstChild;
-    if (!text) {
-      throw new Error("Editable content has no text");
-    }
-    const selection = element.ownerDocument.getSelection()!;
-    selection.setBaseAndExtent(text, 0, text, 0);
-    const range = element.ownerDocument.createRange();
-    range.setStart(text, 3);
-    range.collapse(true);
-    const bounds = range.getBoundingClientRect();
-    const data = new DataTransfer();
-    data.items.add(new File(["notes"], "inline.txt", { type: "text/plain" }));
-    const event = new DragEvent("dragover", {
-      bubbles: true,
-      cancelable: true,
-      clientX: bounds.x,
-      clientY: bounds.y + bounds.height / 2,
+for (const filename of ["inside.txt", "inside.png"]) {
+  test(`uses the block target over editable text for ${filename} without moving the selection`, async ({
+    page,
+  }) => {
+    const [first] = await createGapBlocks(page, false);
+    const block = page.locator(`[data-block-id="${first}"]`);
+    const content = block.locator("[data-block-content]");
+    await content.click();
+    const point = await content.evaluate((element) => {
+      const selection = element.ownerDocument.getSelection()!;
+      selection.setBaseAndExtent(element.firstChild!, 0, element.firstChild!, 0);
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
     });
-    Object.defineProperty(event, "dataTransfer", { value: data });
-    element.dispatchEvent(event);
-    return { x: bounds.x, y: bounds.y + bounds.height / 2, anchor: selection.anchorOffset };
-  });
-  expect(position.anchor).toBe(0);
-  await expect(
-    page.locator(`[data-block-id="${first}"][data-block-drop-active="true"]`),
-  ).toBeVisible();
-  await expect(page.locator(".rivto-file-drop-caret")).toBeVisible();
-  await dispatchFileDrag(page, position, "drop", "inline.txt");
-  await expect(page.locator(".rivto-file-drop-caret")).toHaveCount(0);
-  await expect(page.locator("[data-block-drop-active]")).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate((id) => {
-        const editor = (
-          window as unknown as {
+    await dispatchFileDrag(page, point, "dragover", filename);
+    await expect(page.locator(".rivto-file-drop-caret")).toHaveCount(0);
+    await expect(block).toHaveAttribute("data-block-drop-active", "true");
+    expect(
+      await content.evaluate((element) => element.ownerDocument.getSelection()?.anchorOffset),
+    ).toBe(0);
+    await dispatchFileDrag(page, point, "drop", filename);
+    await expect
+      .poll(() =>
+        page.evaluate((id) => {
+          const host = window as unknown as {
             __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
-          }
-        ).__rivtoDemo.editor;
-        return editor.blocks.getBlockNode(id)?.content;
-      }, first!),
-    )
-    .toMatch(/^Gap\{\{file .*\}\} first$/);
-});
+          };
+          return host.__rivtoDemo.editor.blocks
+            .getChildIds(id)
+            .map((child) => host.__rivtoDemo.editor.blocks.getBlockNode(child)?.props.name);
+        }, first!),
+      )
+      .toEqual([filename]);
+  });
+}
 
 test("outlines a block-body destination and inserts the file inside it", async ({ page }) => {
   const [first] = await createGapBlocks(page, false);
@@ -747,38 +672,6 @@ test("shows copy feedback for image and URI drags without the file handler", asy
   expect(results).toEqual(["copy", "copy", "copy", "none"]);
 });
 
-for (const legacyCaret of [false, true]) {
-  test(`drops an image at the text hit-test position, legacy=${legacyCaret}`, async ({ page }) => {
-    if (legacyCaret) {
-      const supportsLegacy = await page.evaluate(() => "caretRangeFromPoint" in document);
-      test.skip(!supportsLegacy, "Browser does not provide the legacy caret API");
-    }
-    await page.evaluate(() => {
-      const host = window as unknown as {
-        __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
-      };
-      host.__rivtoDemo.editor.blocks.insertBlock({
-        id: "image-drop-caret",
-        type: "paragraph",
-        content: "alpha omega",
-      });
-    });
-    const content = page.locator('[data-block-id="image-drop-caret"] [data-block-content]');
-    await content.click();
-    await dropImageAtTextCaret(content, legacyCaret);
-    await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const host = window as unknown as {
-            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
-          };
-          return host.__rivtoDemo.editor.blocks.getBlock("image-drop-caret")?.content;
-        }),
-      )
-      .toMatch(/^alpha\{\{image .*\}\} omega$/);
-  });
-}
-
 test("pastes an image file as an inline macro at a text caret", async ({ page }) => {
   const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
   await content.click();
@@ -943,8 +836,10 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
         const demo = window as typeof window & {
           __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
         };
-        return demo.__rivtoDemo?.editor.blocks.getBlocks().find(({ type }) => type === "image")
-          ?.props.uri;
+        const id = document
+          .querySelector('[data-block-type="image"]')
+          ?.getAttribute("data-block-id");
+        return id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props.uri : undefined;
       }),
     )
     .toMatch(/\.png$/);
@@ -980,9 +875,10 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
         const demo = window as typeof window & {
           __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
         };
-        const props = demo.__rivtoDemo?.editor.blocks
-          .getBlocks()
-          .find(({ type }) => type === "image")?.props;
+        const id = document
+          .querySelector('[data-block-type="image"]')
+          ?.getAttribute("data-block-id");
+        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
         return typeof props?.width === "number" && props.width > 24 && props.width === props.height;
       }),
     )
@@ -995,9 +891,10 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
         const demo = window as typeof window & {
           __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
         };
-        const props = demo.__rivtoDemo?.editor.blocks
-          .getBlocks()
-          .find(({ type }) => type === "image")?.props;
+        const id = document
+          .querySelector('[data-block-type="image"]')
+          ?.getAttribute("data-block-id");
+        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
         return [props?.width, props?.height];
       }),
     )
@@ -1355,14 +1252,17 @@ test("drops an HTML image without the file handler", async ({ page }) => {
         "text/html",
         '<img alt="dropped" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">',
       );
+      const bounds = root.querySelector<HTMLElement>(".rivto-block-row")!.getBoundingClientRect();
+      const x = bounds.left + bounds.width / 2;
+      const y = bounds.bottom - 2;
       const event = new DragEvent("drop", {
         bubbles: true,
         cancelable: true,
-        clientX: 300,
-        clientY: 300,
+        clientX: x,
+        clientY: y,
       });
       Object.defineProperty(event, "dataTransfer", { value: data });
-      root.dispatchEvent(event);
+      (document.elementFromPoint(x, y) ?? root).dispatchEvent(event);
     });
   await expect(page.locator(`${IMAGE_BLOCK_SELECTOR} .rivto-image`)).toHaveAttribute(
     "alt",
@@ -1497,19 +1397,26 @@ for (const repeat of [0, 200]) {
             );
             data.items.add(new File([bytes], "picture.png", { type: "image/png" }));
             data.items.add(new File(["text"], "document.txt", { type: "text/plain" }));
+            const bounds = element
+              .querySelector<HTMLElement>(".rivto-block-row")!
+              .getBoundingClientRect();
+            const x = bounds.left + bounds.width / 2;
+            const y = bounds.bottom - 2;
             const event =
               eventType === "paste"
                 ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
                 : new DragEvent("drop", {
                     bubbles: true,
                     cancelable: true,
-                    clientX: 300,
-                    clientY: 300,
+                    clientX: x,
+                    clientY: y,
                   });
             Object.defineProperty(event, eventType === "paste" ? "clipboardData" : "dataTransfer", {
               value: data,
             });
-            element.dispatchEvent(event);
+            const target =
+              eventType === "drop" ? (document.elementFromPoint(x, y) ?? element) : element;
+            target.dispatchEvent(event);
           }, eventType);
         await expect(page.locator(IMAGE_BLOCK_SELECTOR)).toHaveCount(1);
         await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(1);
@@ -1526,10 +1433,14 @@ for (const repeat of [0, 200]) {
               __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
             }
           ).__rivtoDemo.editor;
-          return editor.blocks
-            .getBlocks()
-            .filter((block) => block.type === "image" || block.type === "file")
-            .map((block) => block.type);
+          const imageId = document
+            .querySelector('[data-block-type="image"]')!
+            .getAttribute("data-block-id")!;
+          const parentId = editor.blocks.getParentId(imageId);
+          const ids = parentId ? editor.blocks.getChildIds(parentId) : editor.blocks.getRootIds();
+          return ids
+            .map((id) => editor.blocks.getBlockNode(id)?.type)
+            .filter((type) => type === "image" || type === "file");
         });
         expect(types).toEqual(["image", "file"]);
       });

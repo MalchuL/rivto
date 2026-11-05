@@ -117,18 +117,17 @@ export class FileInputEvents {
       { id: FILE_DROP_EVENT_ID, type: "drop", capture: true },
       // Prefer transferred files; otherwise prepare the local URI as a reference.
       (event) => {
-        const { raw, blockId, reactPanel } = event;
+        const { raw, reactPanel } = event;
         const files = getTransferredFiles(raw.dataTransfer);
         const uri = findLocalFileUri(raw.dataTransfer?.getData("text/uri-list") ?? "");
         if (!files.length && !uri) {
           return false;
         }
         const point = { x: raw.clientX, y: raw.clientY };
-        const destination = this.replaceEmptyDefault(
-          fileDropDestination(event, point),
-          files.length || Number(Boolean(uri)),
-          blockId,
-        );
+        const destination = fileDropDestination(event, point);
+        if (!destination) {
+          return true;
+        }
         if (files.length) {
           this.upload(reactPanel, files, destination, point);
         } else if (uri) {

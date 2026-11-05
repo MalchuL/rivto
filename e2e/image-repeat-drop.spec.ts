@@ -10,17 +10,17 @@ interface DropPoint {
 }
 
 /**
- * Drops a small image at the fifth character of an editable block.
+ * Pastes a small image at the fifth character of an editable block.
  *
  * @param content - Editable block receiving the image.
- * @returns Resolves after the drop event is dispatched.
+ * @returns Resolves after the paste event is dispatched.
  */
-async function dropInitialImage(content: Locator): Promise<void> {
+async function pasteInitialImage(content: Locator): Promise<void> {
   await content.evaluate((element) => {
     const range = document.createRange();
     range.setStart(element.firstChild!, 5);
     range.collapse(true);
-    const box = range.getBoundingClientRect();
+    document.getSelection()?.setBaseAndExtent(range.startContainer, 5, range.startContainer, 5);
     const data = new DataTransfer();
     const bytes = Uint8Array.from(
       atob(
@@ -29,19 +29,17 @@ async function dropInitialImage(content: Locator): Promise<void> {
       (character) => character.charCodeAt(0),
     );
     data.items.add(new File([bytes], "first.png", { type: "image/png" }));
-    const event = new DragEvent("drop", {
+    const event = new ClipboardEvent("paste", {
       bubbles: true,
       cancelable: true,
-      clientX: box.x,
-      clientY: box.y + box.height / 2,
     });
-    Object.defineProperty(event, "dataTransfer", { value: data });
+    Object.defineProperty(event, "clipboardData", { value: data });
     element.dispatchEvent(event);
   });
 }
 
 /**
- * Drops an image into text and returns the rendered inline image's viewport point.
+ * Pastes an image into text and returns the rendered inline image's viewport point.
  *
  * @param page - Demo page receiving the image.
  * @returns A point inside the rendered image frame.
@@ -60,7 +58,7 @@ async function createInlineImage(page: Page): Promise<DropPoint> {
   });
   const content = page.locator('[data-block-id="repeat-drop-target"] [data-block-content]');
   await content.click();
-  await dropInitialImage(content);
+  await pasteInitialImage(content);
   await expect
     .poll(() =>
       page.evaluate(() => {

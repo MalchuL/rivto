@@ -1,6 +1,46 @@
 /** @jest-environment ./jest-browser-environment.mjs */
 import type { EditorEvent } from "../../../managers/events/editor-event";
 import { FileDropFeedback } from "./file-drop-feedback";
+import { fileDropDestination, pageFileDropTarget } from "./file-destination";
+
+test("resolves editable content with the same block target as other regions", () => {
+  const root = document.createElement("div");
+  const content = document.createElement("div");
+  root.append(content);
+  const target = { element: content, destination: { kind: "inside", parentId: "block" } };
+  const calls: unknown[][] = [];
+  const resolve = (...args: unknown[]) => {
+    calls.push(args);
+    return target;
+  };
+  const event = {
+    root,
+    mode: "block",
+    contentElement: content,
+    reactPanel: { page: { dropTargets: { resolve } } },
+    raw: { target: content },
+  } as unknown as EditorEvent<"surface", "drop">;
+  expect(pageFileDropTarget(event, { x: 10, y: 20 })).toBe(target);
+  expect(fileDropDestination(event, { x: 10, y: 20 })).toEqual({
+    kind: "block",
+    placement: target.destination,
+  });
+  expect(calls).toEqual([
+    [10, 20, undefined, content],
+    [10, 20, undefined, content],
+  ]);
+});
+
+test("does not insert a Page file when no block target resolves", () => {
+  const root = document.createElement("div");
+  const event = {
+    root,
+    mode: "block",
+    reactPanel: { page: { dropTargets: { resolve: () => undefined } } },
+    raw: { target: root },
+  } as unknown as EditorEvent<"surface", "drop">;
+  expect(fileDropDestination(event, { x: 10, y: 20 })).toBeUndefined();
+});
 
 test.each(["panel", "extension", "drop"] as const)(
   "clears active feedback when the %s ends",
