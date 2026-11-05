@@ -1,5 +1,3 @@
-export { markdownLinkTitleExtension } from "./extensions/markdown-link-title/markdown-link-title";
-export type { MarkdownLinkTitleOptions } from "./extensions/markdown-link-title/markdown-link-title";
 export { BLOCK_TEXT_METADATA_KEY } from "./managers/selection/block-text-metadata";
 /**
  * Primary public API for `@chulane/rivto-react`.
@@ -14,10 +12,9 @@ export * from "./blocks";
 export type {
   MarkdownExtension,
   MarkdownExtensionsApi,
-  MarkdownFileFormatter,
-  MarkdownFileReference,
   MarkdownRenderContext,
 } from "./blocks/markdown/markdown-extensions";
+export { MARKDOWN_EDITOR_CLASS } from "./blocks/markdown/constants";
 export { MarkdownContent } from "./blocks/markdown/markdown";
 export * from "./capabilities";
 export * from "./components";

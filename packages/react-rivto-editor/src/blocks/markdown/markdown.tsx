@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { memo, useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown, {
   defaultUrlTransform,
   type Components,
@@ -14,9 +14,10 @@ import ReactMarkdown, {
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, usePanel, useReactPanel } from "../../hooks";
+import { useBlockEditing, usePanel } from "../../hooks";
 import type { MarkdownExtension } from "./markdown-extensions";
 import { MARKDOWN_EDITOR_CLASS } from "./constants";
+import { useMarkdownExtensions } from "./use-markdown-extensions";
 import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
@@ -109,13 +110,7 @@ export function MarkdownContent({
   const panel = usePanel();
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
-  const markdown = useReactPanel().editor.markdown;
-  const revision = useSyncExternalStore(
-    (listener) => markdown.subscribe(listener),
-    () => markdown.revision,
-    () => markdown.revision,
-  );
-  const extensions = useMemo(() => markdown.get(), [markdown, revision]);
+  const extensions = useMarkdownExtensions();
 
   const updateCode = useCallback(
     (node: PositionedNode, value: string) => {

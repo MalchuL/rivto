@@ -1,4 +1,5 @@
-import { markdownLinkTitleExtension, type ReactEditorExtension } from "@chulane/rivto-react";
+import type { ReactEditorExtension } from "@chulane/rivto-react";
+import { markdownLinkTitleExtension } from "./markdown-link-title";
 
 /**
  * Installs the demo's automatic Markdown URL titles and favicon rendering.

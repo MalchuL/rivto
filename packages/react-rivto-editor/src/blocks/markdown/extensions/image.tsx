@@ -1,19 +1,11 @@
 import type { MarkdownExtension } from "../markdown-extensions";
 import { ImageView } from "../../../extensions/image/view/image-view";
-import {
-  remarkImageMacros,
-  replaceImageMacro,
-  serializeImageMacro,
-} from "../../../extensions/image/macro/image-macro";
+import { replaceImageMacro } from "../../../extensions/image/macro/image-macro";
+import { remarkImageMacros } from "./image-macro";
 
 /** Markdown syntax contributed by the optional image extension. */
 export const imageMarkdownExtension: MarkdownExtension = {
   remarkPlugins: [remarkImageMacros],
-  fileFormatter: {
-    handlerId: "image",
-    format: (reference) =>
-      serializeImageMacro({ uri: reference.uri, alt: reference.alt ?? reference.name }),
-  },
   plainTextSafe: true,
   components: (components, { blockId, blocks }) => ({
     ...components,

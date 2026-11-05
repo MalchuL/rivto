@@ -1,6 +1,8 @@
-import { MARKDOWN_EDITOR_CLASS } from "../../blocks/markdown/constants";
-import type { ReactEditorExtension } from "../../managers";
-import type { ReactPanelApi } from "../../panels/types";
+import {
+  MARKDOWN_EDITOR_CLASS,
+  type ReactEditorExtension,
+  type ReactPanelApi,
+} from "@chulane/rivto-react";
 import { linkFaviconComponents } from "./link-favicon";
 import { findBareLinks, replaceBareLinks, type TitledLink } from "./links";
 

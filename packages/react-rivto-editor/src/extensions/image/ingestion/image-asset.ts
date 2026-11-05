@@ -1,6 +1,6 @@
 import type { FileReference, PreparedFile } from "../../../attachments";
 import type { FileDestination } from "../../file/ingestion/file-destination";
-import type { MarkdownExtensionsApi } from "../../../blocks/markdown/markdown-extensions";
+import { serializeImageMacro } from "../macro/image-macro";
 import { MIN_IMAGE_SIZE } from "../image-constants";
 
 /** Persisted native type used by standalone image blocks. */
@@ -25,16 +25,14 @@ export interface ImageAsset extends FileReference {
  *
  * @param asset - Stored reference and decoded intrinsic dimensions.
  * @param destination - Requested placement of the image.
- * @param markdown - Inline attachment formatting for the current editor.
  * @returns The representation for that placement using the shared initial canvas size.
  */
 export function prepareImageAsset(
   asset: ImageAsset,
   destination: FileDestination["kind"],
-  markdown: Pick<MarkdownExtensionsApi, "formatFile">,
 ): PreparedFile {
   if (destination === "inline") {
-    return { kind: "inline", content: markdown.formatFile("image", asset) };
+    return { kind: "inline", content: serializeImageMacro({ uri: asset.uri, alt: asset.alt }) };
   }
   if (destination === "block") {
     return { kind: "block", type: IMAGE_BLOCK_TYPE, props: { ...asset } };

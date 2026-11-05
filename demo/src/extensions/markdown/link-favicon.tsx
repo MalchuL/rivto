@@ -1,4 +1,6 @@
-import type { Components } from "react-markdown";
+import type { MarkdownExtension } from "@chulane/rivto-react";
+
+type Components = Parameters<NonNullable<MarkdownExtension["components"]>>[0];
 
 /**
  * Decorates external Markdown links with their origin's favicon.

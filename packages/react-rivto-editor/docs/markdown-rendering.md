@@ -68,18 +68,19 @@ and hyphens. Otherwise leave it unset: such text must go through the Markdown
 pipeline for the contribution to run. The demo's `linkPreviewExtension`
 shows a link renderer that delegates other links to the previous renderer.
 
-The optional file and image extensions register their own Markdown macro
-parsers, renderers, and inline attachment formatters. Removing one extension
-removes its contributions; an image-specific formatter is available only while
-the image extension is installed. Raw HTML remains disabled and the normal URL
-transform still applies. Plugins and custom renderers are host-provided code
-and must uphold the application's content and URL policy.
+Markdown observes the installed file and image handlers and enables the matching
+macro parser and renderer while each handler is available. The file and image
+extensions own their input preparation and do not register with the Markdown
+registry. Raw HTML remains disabled and the normal URL transform still applies.
+Plugins and custom renderers are host-provided code and must uphold the
+application's content and URL policy.
 
 ## Automatic link titles
 
-`markdownLinkTitleExtension({ resolveTitle })` adds website titles and favicons.
-When a Markdown block loses focus, the extension finds bare HTTP URLs and asks
-`resolveTitle(url, signal)` for each title. Successful results replace the URLs
+The demo's `markdownLinkTitleExtension({ resolveTitle })` adds website titles
+and favicons. It is demo code, rather than an editor API. When a Markdown block
+loses focus, the extension finds bare HTTP URLs and asks `resolveTitle(url,
+signal)` for each title. Successful results replace the URLs
 with Markdown links. Existing links, code, image URLs, and macro contents are
 left alone. If a lookup fails or the block changes while a lookup is pending,
 the original content is retained. Removing the extension aborts pending lookups.

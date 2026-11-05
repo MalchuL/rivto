@@ -1,11 +1,10 @@
 import type { MarkdownExtension } from "../markdown-extensions";
 import { RegisteredFileView } from "../../../extensions/file/view/file-view";
-import { remarkFileMacros, serializeFileMacro } from "../../../extensions/file/macro/file-macro";
+import { remarkFileMacros } from "./file-macro";
 
 /** Markdown syntax contributed by the optional file extension. */
 export const fileMarkdownExtension: MarkdownExtension = {
   remarkPlugins: [remarkFileMacros],
-  fileFormatter: { handlerId: "file", format: serializeFileMacro },
   plainTextSafe: true,
   components: (components) => {
     const Link = typeof components.a === "string" ? undefined : components.a;

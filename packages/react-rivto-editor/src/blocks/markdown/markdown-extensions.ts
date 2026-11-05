@@ -1,27 +1,7 @@
 import type { PanelAPI } from "@chulane/rivto";
-import type { FileReference } from "../../attachments";
 import type { Components, Options } from "react-markdown";
 import { RevisionStore } from "../../internal-store";
 import type { RegistrationOwner } from "../../managers/extensions/types";
-
-/** File metadata available when a Markdown extension formats an inline attachment. */
-export interface MarkdownFileReference extends FileReference {
-  /** Alternative text supplied by an image input, when available. */
-  readonly alt?: string;
-}
-
-/** Inline file representation associated with one attachment handler. */
-export interface MarkdownFileFormatter {
-  /** Stable attachment handler identity. */
-  readonly handlerId: string;
-  /**
-   * Serializes a stored attachment for insertion into Markdown source.
-   *
-   * @param reference - Stored URI and display metadata.
-   * @returns Source text to insert at the captured selection.
-   */
-  readonly format: (reference: MarkdownFileReference) => string;
-}
 
 /** Block operations available to a Markdown renderer contribution. */
 export interface MarkdownRenderContext {
@@ -33,8 +13,6 @@ export interface MarkdownRenderContext {
 
 /** A contribution to the synchronous Markdown preview pipeline. */
 export interface MarkdownExtension {
-  /** Inline file representation owned by this contribution. */
-  readonly fileFormatter?: MarkdownFileFormatter;
   /** True only when this contribution cannot affect ordinary single-line text. */
   readonly plainTextSafe?: boolean;
   /** Remark plugins run after the built-in GFM parser. */
@@ -66,15 +44,6 @@ export interface MarkdownExtensionsApi {
    * @returns A snapshot of installed contributions.
    */
   get(): readonly MarkdownExtension[];
-  /**
-   * Formats a stored attachment with the registered handler contribution.
-   *
-   * @param handlerId - Attachment handler selected for the file.
-   * @param reference - Stored attachment metadata.
-   * @returns Markdown source for insertion.
-   * @throws If no formatter is registered for the handler.
-   */
-  formatFile(handlerId: string, reference: MarkdownFileReference): string;
   /** Current registration revision. */
   readonly revision: number;
   /**
@@ -101,7 +70,7 @@ export class MarkdownExtensions implements MarkdownExtensionsApi {
   /**
    * Adds a contribution and captures its removal in the active extension.
    *
-   * @param extension - Plugins, renderers, and optional file formatter to install.
+   * @param extension - Plugins and renderers to install.
    * @returns Idempotent disposer for this registration.
    * @throws If the owning editor is being destroyed.
    */
@@ -127,24 +96,6 @@ export class MarkdownExtensions implements MarkdownExtensionsApi {
    */
   get(): readonly MarkdownExtension[] {
     return this.entries.map(({ extension }) => extension);
-  }
-
-  /**
-   * Formats an attachment using the first registered matching handler.
-   *
-   * @param handlerId - Identity of the selected file handler.
-   * @param reference - Stored attachment reference and display metadata.
-   * @returns Markdown source for the attachment.
-   * @throws If no matching formatter is registered or the formatter fails.
-   */
-  formatFile(handlerId: string, reference: MarkdownFileReference): string {
-    const formatter = this.entries.find(
-      ({ extension }) => extension.fileFormatter?.handlerId === handlerId,
-    )?.extension.fileFormatter;
-    if (!formatter) {
-      throw new Error(`No Markdown file formatter registered for ${handlerId}`);
-    }
-    return formatter.format(reference);
   }
 
   /**

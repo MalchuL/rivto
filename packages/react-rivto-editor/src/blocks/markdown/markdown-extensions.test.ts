@@ -22,22 +22,21 @@ test("Markdown contributions are ordered and removed with their extension", asyn
   await core.destroy();
 });
 
-test("attachment Markdown formatters follow their installed extensions", async () => {
+test("file and image extensions do not register Markdown contributions", async () => {
   const { fileExtension } = await import("../../extensions/file/file");
   const { imageExtension } = await import("../../extensions/image/image");
   const core = await createTestCoreEditor();
   const panel = createTestReactEditor({ editor: core });
   const provider = { write: async () => "test:file", read: async () => undefined };
-  const reference = { uri: "test:file", name: "photo.png", mimeType: "image/png" };
   const removeFile = panel.editor.extensions.install(fileExtension({ provider }));
-  expect(panel.editor.markdown.formatFile("file", reference)).toContain("{{file ");
-  expect(() => panel.editor.markdown.formatFile("image", reference)).toThrow(/No Markdown/);
   const removeImage = panel.editor.extensions.install(imageExtension({ provider }));
-  expect(panel.editor.markdown.formatFile("image", reference)).toContain("{{image ");
+  expect(panel.editor.markdown.get()).toEqual([]);
+  expect(panel.editor.markdown.revision).toBe(0);
+  expect(panel.editor.clipboard.getFileHandler("file")).toBeDefined();
+  expect(panel.editor.clipboard.getFileHandler("image")).toBeDefined();
   removeImage();
-  expect(() => panel.editor.markdown.formatFile("image", reference)).toThrow(/No Markdown/);
-  expect(panel.editor.markdown.formatFile("file", reference)).toContain("{{file ");
   removeFile();
+  expect(panel.editor.markdown.revision).toBe(0);
   panel.editor.destroy();
   await core.destroy();
 });

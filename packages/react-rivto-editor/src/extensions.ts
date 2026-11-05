@@ -1,5 +1,3 @@
-export { markdownLinkTitleExtension } from "./extensions/markdown-link-title/markdown-link-title";
-export type { MarkdownLinkTitleOptions } from "./extensions/markdown-link-title/markdown-link-title";
 /**
  * Complete public extension catalog for `@chulane/rivto-react/extensions`.
  *
