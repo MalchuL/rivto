@@ -1,36 +1,34 @@
-import type { ReactEditorExtension } from "@chulane/rivto-react";
+import { markdownLinkTitleExtension, type ReactEditorExtension } from "@chulane/rivto-react";
 
 /**
- * Demonstrates a Markdown link renderer contributed by a host extension.
+ * Installs the demo's automatic Markdown URL titles and favicon rendering.
  *
- * The example is deterministic and does not fetch remote metadata. Other links
- * retain the renderer supplied by the editor and earlier contributions.
+ * The public Microlink API receives each URL that needs a title. Hosts can use
+ * their own metadata service by configuring markdownLinkTitleExtension directly.
  *
- * @returns Extension that recognizes the unified project website.
+ * @returns Extension using the demo metadata resolver.
  */
 export function linkPreviewExtension(): ReactEditorExtension {
-  return {
-    id: "demo.markdown-link-preview",
-    setup: (editor) => {
-      editor.markdown.register({
-        plainTextSafe: true,
-        components: (components) => {
-          const Link = typeof components.a === "string" ? undefined : components.a;
-          return {
-            ...components,
-            a: (props) => {
-              if (props.href === "https://unifiedjs.com/" && Link) {
-                return (
-                  <span className="demo-link-preview">
-                    <Link {...props} /> <small>Markdown processing ecosystem</small>
-                  </span>
-                );
-              }
-              return Link ? <Link {...props} /> : <a href={props.href}>{props.children}</a>;
-            },
-          };
-        },
+  return markdownLinkTitleExtension({
+    resolveTitle: async (url, signal) => {
+      const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`, {
+        signal,
       });
+      if (!response.ok) {
+        return undefined;
+      }
+      const result: unknown = await response.json();
+      if (
+        !result ||
+        typeof result !== "object" ||
+        !("data" in result) ||
+        !result.data ||
+        typeof result.data !== "object" ||
+        !("title" in result.data)
+      ) {
+        return undefined;
+      }
+      return typeof result.data.title === "string" ? result.data.title : undefined;
     },
-  };
+  });
 }

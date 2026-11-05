@@ -75,6 +75,22 @@ the image extension is installed. Raw HTML remains disabled and the normal URL
 transform still applies. Plugins and custom renderers are host-provided code
 and must uphold the application's content and URL policy.
 
+## Automatic link titles
+
+`markdownLinkTitleExtension({ resolveTitle })` adds website titles and favicons.
+When a Markdown block loses focus, the extension finds bare HTTP URLs and asks
+`resolveTitle(url, signal)` for each title. Successful results replace the URLs
+with Markdown links. Existing links, code, image URLs, and macro contents are
+left alone. If a lookup fails or the block changes while a lookup is pending,
+the original content is retained. Removing the extension aborts pending lookups.
+
+The resolver belongs to the host because browsers restrict cross-origin page
+requests. The demo uses the public Microlink API: each URL requiring a title is
+sent to that service. Hosts can provide their own resolver and data policy.
+Favicons are requested from each link's origin. Plain-text image URLs without a
+recognized image filename extension are treated as ordinary links; copied HTML
+image elements continue to use image handling.
+
 ## Fenced code
 
 Fences accept either a language name or a file path:

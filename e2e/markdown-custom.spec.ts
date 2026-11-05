@@ -25,11 +25,10 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/?test_features=1");
 });
 
-test("renders a host-provided link preview while preserving Markdown source", async ({ page }) => {
-  const preview = page.locator(".demo-link-preview").first();
-  await expect(preview.locator("a")).toHaveAttribute("href", "https://unifiedjs.com/");
-  await expect(preview.locator("small")).toHaveText("Markdown processing ecosystem");
-  const id = await preview.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+test("renders a favicon while preserving a Markdown link's source", async ({ page }) => {
+  const link = page.locator('.markdown-preview a[href="https://unifiedjs.com/"]').first();
+  await expect(link.locator("img")).toHaveAttribute("src", "https://unifiedjs.com/favicon.ico");
+  const id = await link.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
   if (!id) {
     throw new Error("Expected block ID");
   }
@@ -37,7 +36,149 @@ test("renders a host-provided link preview while preserving Markdown source", as
   await editor.click();
   await expect(editor).toContainText("[unified](https://unifiedjs.com/)");
   await editor.evaluate((element) => (element as HTMLElement).blur());
-  await expect(preview).toBeVisible();
+  await expect(link).toBeVisible();
+});
+
+test("fetches the title of a pasted URL and stores a Markdown link on blur", async ({ page }) => {
+  await page.route("https://api.microlink.io/**", async (route) => {
+    await route.fulfill({
+      json: { status: "success", data: { title: "Example Website" } },
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  });
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "Visit " }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const editor = block.locator(".markdown-editor");
+  await editor.click();
+  await page.keyboard.press("End");
+  await editor.evaluate(async (element) => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", "https://example.com/");
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: clipboard });
+    element.dispatchEvent(event);
+  });
+  await expect(editor).toContainText("https://example.com/");
+  await editor.evaluate(async () => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  await page.locator("h1").first().click();
+  const link = block.locator('.markdown-preview a[href="https://example.com/"]');
+  await expect(link).toHaveText("Example Website");
+  await expect(link.locator("img")).toHaveAttribute("src", "https://example.com/favicon.ico");
+  await editor.click();
+  await expect(editor).toContainText("[Example Website](https://example.com/)");
+});
+
+test("formats a URL edited in an edgeless block", async ({ page }) => {
+  await page.route("https://api.microlink.io/**", async (route) => {
+    await route.fulfill({
+      json: { status: "success", data: { title: "Example Website" } },
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  });
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  const editor = page.locator(".edgeless-viewport .markdown-editor").first();
+  const id = await editor.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!id) {
+    throw new Error("Expected edgeless block ID");
+  }
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" https://example.com/");
+  await expect(editor).toContainText("https://example.com/");
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await expect
+    .poll(() =>
+      page.evaluate((blockId) => {
+        const runtime = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return runtime.blocks.getBlockNode(blockId)?.content;
+      }, id),
+    )
+    .toContain("[Example Website](https://example.com/)");
+});
+
+test("keeps a URL when its title lookup fails", async ({ page }) => {
+  await page.route("https://api.microlink.io/**", async (route) => {
+    await route.fulfill({ status: 503 });
+  });
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "https://example.com/" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  await block.locator(".markdown-editor").click();
+  const response = page.waitForResponse((item) =>
+    item.url().startsWith("https://api.microlink.io/"),
+  );
+  await page.locator("h1").first().click();
+  await response;
+  await expect(block.locator('.markdown-preview a[href="https://example.com/"]')).toContainText(
+    "https://example.com/",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate((blockId) => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return editor.blocks.getBlockNode(blockId)?.content;
+      }, id),
+    )
+    .toBe("https://example.com/");
+});
+
+test("does not overwrite edits made while a title request is pending", async ({ page }) => {
+  let release: (() => void) | undefined;
+  let started: (() => void) | undefined;
+  const requestStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  await page.route("https://api.microlink.io/**", async (route) => {
+    started?.();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({
+      json: { status: "success", data: { title: "Delayed title" } },
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  });
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "https://example.com/" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const editor = block.locator(".markdown-editor");
+  await editor.click();
+  await page.locator("h1").first().click();
+  await requestStarted;
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" changed");
+  const response = page.waitForResponse((item) =>
+    item.url().startsWith("https://api.microlink.io/"),
+  );
+  release?.();
+  await response;
+  await editor.evaluate(async () => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  await expect(editor).toContainText("https://example.com/ changed");
+  await expect(editor).not.toContainText("Delayed title");
 });
 
 test("updates a mounted preview when a remark plugin is installed and removed", async ({

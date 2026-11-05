@@ -16,6 +16,7 @@ import remarkGfm from "remark-gfm";
 import { editorControlProps } from "../../constants";
 import { useBlockEditing, usePanel, useReactPanel } from "../../hooks";
 import type { MarkdownExtension } from "./markdown-extensions";
+import { MARKDOWN_EDITOR_CLASS } from "./constants";
 import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
@@ -26,7 +27,6 @@ import {
 
 const MARKDOWN_CONTENT_CLASS = "markdown-content";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
-const MARKDOWN_EDITOR_CLASS = "markdown-editor";
 const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 // Single-line text in this alphabet cannot form Markdown syntax or GFM links.
 const PLAIN_TEXT_SOURCE = /^[\p{L}\p{N}][\p{L}\p{N} -]*$/u;

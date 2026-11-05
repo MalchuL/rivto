@@ -1,3 +1,5 @@
+export { markdownLinkTitleExtension } from "./extensions/markdown-link-title/markdown-link-title";
+export type { MarkdownLinkTitleOptions } from "./extensions/markdown-link-title/markdown-link-title";
 export { BLOCK_TEXT_METADATA_KEY } from "./managers/selection/block-text-metadata";
 /**
  * Primary public API for `@chulane/rivto-react`.
