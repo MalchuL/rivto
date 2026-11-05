@@ -1,3 +1,4 @@
+import { MarkdownExtensions } from "../blocks/markdown/markdown-extensions";
 import { AttachmentManager } from "../attachments/attachment-manager";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
@@ -176,6 +177,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly surfaces: SurfacesApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
+  /** Ordered Markdown preview contributions. */
+  readonly markdown: MarkdownExtensions;
   /** Delegated surface/document/window DOM event runtime. */
   readonly events: EventManager;
   /** Mounted occurrences and explicit active/default view lookup. */
@@ -212,6 +215,7 @@ export class ReactEditor implements ReactEditorApi {
     this.core = editor;
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;
+    this.markdown = new MarkdownExtensions(extensions);
     this.disposers.push(() => extensions.destroy());
     this.panels = new PanelRegistry(this.selection, extensions);
     const events = new EventManager(this.panels, extensions);

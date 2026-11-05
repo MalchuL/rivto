@@ -25,6 +25,65 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/?test_features=1");
 });
 
+test("renders a host-provided link preview while preserving Markdown source", async ({ page }) => {
+  const preview = page.locator(".demo-link-preview").first();
+  await expect(preview.locator("a")).toHaveAttribute("href", "https://unifiedjs.com/");
+  await expect(preview.locator("small")).toHaveText("Markdown processing ecosystem");
+  const id = await preview.locator(BLOCK_ANCESTOR_XPATH).getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!id) {
+    throw new Error("Expected block ID");
+  }
+  const editor = page.locator(blockIdSelector(id)).locator(".markdown-editor");
+  await editor.click();
+  await expect(editor).toContainText("[unified](https://unifiedjs.com/)");
+  await editor.evaluate((element) => (element as HTMLElement).blur());
+  await expect(preview).toBeVisible();
+});
+
+test("updates a mounted preview when a remark plugin is installed and removed", async ({
+  page,
+}) => {
+  const id = await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: {
+        editor: DocumentEditorAPI;
+        reactEditor: import("@chulane/rivto-react").ReactEditorApi;
+      };
+      removeMarkdown?: () => void;
+    };
+    const id = demo.__rivtoDemo.editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "plugin sample",
+    }).id;
+    demo.removeMarkdown = demo.__rivtoDemo.reactEditor.extensions.install({
+      id: "test.remark-plugin",
+      setup: (editor) => {
+        editor.markdown.register({
+          remarkPlugins: [
+            () =>
+              (tree: {
+                children: Array<{ children?: Array<{ type: string; value?: string }> }>;
+              }) => {
+                for (const paragraph of tree.children) {
+                  for (const node of paragraph.children ?? []) {
+                    if (node.type === "text" && node.value === "plugin sample") {
+                      node.value = "plugin transformed";
+                    }
+                  }
+                }
+              },
+          ],
+        });
+      },
+    });
+    return id;
+  });
+  const preview = page.locator(blockIdSelector(id)).locator(".markdown-preview");
+  await expect(preview).toHaveText("plugin transformed");
+  await page.evaluate(() => (window as unknown as { removeMarkdown: () => void }).removeMarkdown());
+  await expect(preview).toHaveText("plugin sample");
+});
+
 test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {
   const ids = await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

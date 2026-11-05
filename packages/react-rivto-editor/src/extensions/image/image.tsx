@@ -1,3 +1,4 @@
+import { imageMarkdownExtension } from "../../blocks/markdown/extensions/image";
 /**
  * Opt-in image blocks, inline image insertion, and browser file interactions.
  *
@@ -205,6 +206,7 @@ function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
  * @param clipboard - File handler registration.
  * @param attachments - Binary resolution for existing image references.
  * @param provider - Provider used for image storage and reads.
+ * @param markdown - Inline attachment formatter installed by this extension.
  * @returns Installs the extension-owned image handler.
  * @throws If handler registration fails.
  */
@@ -212,6 +214,7 @@ function registerImageHandler(
   clipboard: Pick<ReactEditorApi["clipboard"], "registerFileHandler">,
   attachments: Pick<ReactEditorApi["attachments"], "resolveBinary">,
   provider: BinaryProvider,
+  markdown: Pick<ReactEditorApi["markdown"], "formatFile">,
 ): void {
   clipboard.registerFileHandler({
     id: "image",
@@ -242,6 +245,7 @@ function registerImageHandler(
           intrinsicHeight: dimensions.height,
         },
         context.destination,
+        markdown,
       );
     },
   });
@@ -356,7 +360,13 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         render: ImageElement,
         title: "Image",
       });
-      registerImageHandler(reactEditor.clipboard, reactEditor.attachments, options.provider);
+      reactEditor.markdown.register(imageMarkdownExtension);
+      registerImageHandler(
+        reactEditor.clipboard,
+        reactEditor.attachments,
+        options.provider,
+        reactEditor.markdown,
+      );
       registerImageClipboardCopy(
         reactEditor.clipboard,
         reactEditor.attachments,

@@ -37,6 +37,44 @@ Typing updates the block through the following path:
 Markdown remains presentation only. Parsing does not create blocks or modify
 the document hierarchy.
 
+## Extending the preview
+
+An editor extension can register remark plugins, rehype plugins, and React
+renderer composition through `editor.markdown.register`. Registrations belong
+to the installing extension and mounted previews update when they are added or
+removed. Plugins execute synchronously, in registration order, after the
+built-in GFM and code processing for their respective stages. Renderer
+contributions receive the renderers installed before them and the source block
+ID and bounded block operations. Wrap the previous renderer to preserve its
+behavior for nodes your extension does not claim.
+
+```tsx
+const example = {
+  id: "example.markdown",
+  setup(editor) {
+    editor.markdown.register({
+      components: (components) => ({
+        ...components,
+        // Add or wrap a renderer here.
+      }),
+    });
+  },
+};
+```
+
+A contribution may set `plainTextSafe: true` only when none of its plugins or
+renderers can affect a single-line source containing letters, numbers, spaces,
+and hyphens. Otherwise leave it unset: such text must go through the Markdown
+pipeline for the contribution to run. The demo's `linkPreviewExtension`
+shows a link renderer that delegates other links to the previous renderer.
+
+The optional file and image extensions register their own Markdown macro
+parsers, renderers, and inline attachment formatters. Removing one extension
+removes its contributions; an image-specific formatter is available only while
+the image extension is installed. Raw HTML remains disabled and the normal URL
+transform still applies. Plugins and custom renderers are host-provided code
+and must uphold the application's content and URL policy.
+
 ## Fenced code
 
 Fences accept either a language name or a file path:

@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import ReactMarkdown, {
   defaultUrlTransform,
   type Components,
@@ -13,12 +13,9 @@ import ReactMarkdown, {
 } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { ImageView } from "../../extensions/image/view/image-view";
-import { remarkImageMacros, replaceImageMacro } from "../../extensions/image/macro/image-macro";
-import { remarkFileMacros } from "../../extensions/file/macro/file-macro";
-import { RegisteredFileView } from "../../extensions/file/view/file-view";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, usePanel } from "../../hooks";
+import { useBlockEditing, usePanel, useReactPanel } from "../../hooks";
+import type { MarkdownExtension } from "./markdown-extensions";
 import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
@@ -54,22 +51,28 @@ function rehypeSharedHighlight() {
  */
 const MarkdownPreview = memo(function MarkdownPreview({
   components,
+  extensions,
   source,
   transformUrl,
 }: {
   readonly components: Components;
+  readonly extensions: readonly MarkdownExtension[];
   readonly source: string;
   readonly transformUrl: UrlTransform;
 }) {
-  if (PLAIN_TEXT_SOURCE.test(source)) {
+  if (extensions.every((extension) => extension.plainTextSafe) && PLAIN_TEXT_SOURCE.test(source)) {
     return <p>{source}</p>;
   }
   return (
     <ReactMarkdown
       components={components}
       urlTransform={transformUrl}
-      remarkPlugins={[remarkGfm, remarkImageMacros, remarkFileMacros]}
-      rehypePlugins={[rehypeCodeFenceMetadata, rehypeSharedHighlight]}
+      remarkPlugins={[remarkGfm, ...extensions.flatMap((item) => item.remarkPlugins ?? [])]}
+      rehypePlugins={[
+        rehypeCodeFenceMetadata,
+        rehypeSharedHighlight,
+        ...extensions.flatMap((item) => item.rehypePlugins ?? []),
+      ]}
       skipHtml
     >
       {source}
@@ -106,6 +109,13 @@ export function MarkdownContent({
   const panel = usePanel();
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
+  const markdown = useReactPanel().editor.markdown;
+  const revision = useSyncExternalStore(
+    (listener) => markdown.subscribe(listener),
+    () => markdown.revision,
+    () => markdown.revision,
+  );
+  const extensions = useMemo(() => markdown.get(), [markdown, revision]);
 
   const updateCode = useCallback(
     (node: PositionedNode, value: string) => {
@@ -130,79 +140,15 @@ export function MarkdownContent({
   );
   const components = useMemo<Components>(
     () => ({
-      // Render file macro links through the registered attachment view.
-      a: ({ node, href = "", ...props }) => {
-        const properties = node?.properties ?? {};
-        const uri = properties["data-rivto-file-uri"];
-        const name = properties["data-rivto-file-name"];
-        const mimeType = properties["data-rivto-file-type"];
-        if (typeof uri === "string" && typeof name === "string" && typeof mimeType === "string") {
-          const size = Number(properties["data-rivto-file-size"]);
-          return (
-            <RegisteredFileView
-              reference={{
-                uri,
-                name,
-                mimeType,
-                size: Number.isSafeInteger(size) ? size : undefined,
-              }}
-            />
-          );
-        }
-        return (
-          <a
-            {...editorControlProps}
-            {...props}
-            href={href}
-            tabIndex={-1}
-            onClick={(event) => onLinkClick?.({ blockId, href, event })}
-          />
-        );
-      },
-      // Preserve ordinary Markdown images when their source range is unavailable.
-      img: ({ node, alt = "", width, height, ...props }) => {
-        const properties = node?.properties ?? {};
-        const macroUri = properties["data-rivto-image-uri"];
-        const uri = typeof macroUri === "string" ? macroUri : props.src;
-        const start = Number(properties["data-rivto-image-start"] ?? node?.position?.start.offset);
-        const end = Number(properties["data-rivto-image-end"] ?? node?.position?.end.offset);
-        if (typeof uri !== "string" || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
-          return <img {...props} alt={alt} width={width} height={height} />;
-        }
-        return (
-          <ImageView
-            kind="inline"
-            uri={uri}
-            alt={alt}
-            width={Number(width) || undefined}
-            height={Number(height) || undefined}
-            onChange={(patch) => {
-              // Apply edits to current content so a stale render does not replace it.
-              if (patch.reset && typeof macroUri !== "string") {
-                return;
-              }
-              const current = panel.blocks.getBlockNode(blockId)?.content;
-              if (current === undefined) {
-                return;
-              }
-              operations.setContent(
-                replaceImageMacro(
-                  current,
-                  { start, end },
-                  patch.reset
-                    ? { uri, alt }
-                    : {
-                        uri,
-                        alt: patch.alt ?? alt,
-                        width: patch.width ?? (Number(width) || undefined),
-                        height: patch.height ?? (Number(height) || undefined),
-                      },
-                ),
-              );
-            }}
-          />
-        );
-      },
+      a: ({ node: _node, href = "", ...props }) => (
+        <a
+          {...editorControlProps}
+          {...props}
+          href={href}
+          tabIndex={-1}
+          onClick={(event) => onLinkClick?.({ blockId, href, event })}
+        />
+      ),
       pre: (props) => (
         <MarkdownCodeBlock
           {...props}
@@ -212,6 +158,16 @@ export function MarkdownContent({
       ),
     }),
     [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode, panel, operations],
+  );
+
+  const extendedComponents = useMemo(
+    () =>
+      extensions.reduce(
+        (current, extension) =>
+          extension.components?.(current, { blockId, blocks: panel.blocks }) ?? current,
+        components,
+      ),
+    [components, extensions, blockId, panel],
   );
 
   return (
@@ -243,7 +199,12 @@ export function MarkdownContent({
       />
       {!isEditing && (
         <div className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_PREVIEW_CLASS}`}>
-          <MarkdownPreview components={components} source={source} transformUrl={transformUrl} />
+          <MarkdownPreview
+            extensions={extensions}
+            components={extendedComponents}
+            source={source}
+            transformUrl={transformUrl}
+          />
         </div>
       )}
     </div>

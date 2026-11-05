@@ -1807,6 +1807,25 @@ test("pastes images with only the image extension installed", async ({ page }) =
     .toContain("image-only.png");
 });
 
+test("pastes an inline file when the image extension is absent", async ({ page }) => {
+  await page.goto("/?fileOnly=1");
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await sendFile(content, "paste", "inline-file.txt");
+  await expect(content).toContainText("{{file ");
+  await expect(content).toContainText("inline-file.txt");
+  await content.evaluate(async () => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  await content.evaluate((element) => (element as HTMLElement).blur());
+  await expect(
+    page.locator(FILE_NAME_SELECTOR).filter({ hasText: "inline-file.txt" }).first(),
+  ).toBeVisible();
+});
+
 test("pastes generic files with only the file extension installed", async ({ page }) => {
   await page.goto("/?fileOnly=1");
   await sendFile(page.locator(".page-surface").first(), "paste", "file-only.txt");

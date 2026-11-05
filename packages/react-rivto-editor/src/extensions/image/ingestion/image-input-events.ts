@@ -37,6 +37,8 @@ interface RemoteImage {
 
 /** Editor operations borrowed while routing image input. */
 interface ImageInputEditor {
+  /** Formats inline images using installed Markdown contributions. */
+  readonly markdown: Pick<ReactEditorApi["markdown"], "formatFile">;
   /** Resolves image references to readable binary content. */
   readonly attachments: Pick<ReactEditorApi["attachments"], "resolveBinary">;
   /** Looks up registered element definitions. */
@@ -344,6 +346,7 @@ export class ImageInputEvents {
             intrinsicHeight: dimensions.height,
           },
           currentDestination.kind,
+          this.editor.markdown,
         );
       },
     });
@@ -408,6 +411,7 @@ export class ImageInputEvents {
             intrinsicHeight: dimensions.height,
           },
           currentDestination.kind,
+          this.editor.markdown,
         );
       },
     });

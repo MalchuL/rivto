@@ -1,3 +1,4 @@
+import type { MarkdownExtensionsApi } from "../blocks/markdown/markdown-extensions";
 import type { ClipboardApi } from "../managers/clipboard/api";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
 import type { EdgelessToolbarApi } from "../managers/edgeless-toolbar/types";
@@ -141,6 +142,8 @@ export interface ReactEditorApi extends DocumentEditorAPI {
   readonly pasteStrategies: DocumentEditorAPI["clipboard"]["pasteStrategies"];
   /** Root surfaces and their ordered block/editor wrappers. */
   readonly surfaces: SurfacesApi;
+  /** Ordered plugins and renderers used by Markdown previews. */
+  readonly markdown: MarkdownExtensionsApi;
   /** Extension setup, mounted UI, registration ownership, and cleanup. */
   readonly extensions: ExtensionsApi;
   /** Delegated surface/document/window DOM event runtime. */

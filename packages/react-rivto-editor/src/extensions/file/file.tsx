@@ -1,3 +1,4 @@
+import { fileMarkdownExtension } from "../../blocks/markdown/extensions/file";
 /**
  * Generic browser file ingestion and fallback attachment presentation.
  *
@@ -101,12 +102,14 @@ function FileCanvasElement({ element }: ElementRenderProps) {
  *
  * @param clipboard - File handler registration and default selection.
  * @param provider - Provider used for generic file storage.
+ * @param markdown - Inline attachment formatter installed by this extension.
  * @returns Installs the extension-owned handler.
  * @throws If registration or default selection fails.
  */
 function registerFileHandler(
   clipboard: Pick<ReactEditorApi["clipboard"], "registerFileHandler" | "setDefaultFileHandler">,
   provider: BinaryProvider,
+  markdown: Pick<ReactEditorApi["markdown"], "formatFile">,
 ): void {
   clipboard.registerFileHandler({
     id: "file",
@@ -114,7 +117,7 @@ function registerFileHandler(
     // Select the persisted representation requested by the destination.
     prepare: ({ reference }, { destination }) => {
       if (destination === "inline") {
-        return { kind: "inline", content: serializeFileMacro(reference) };
+        return { kind: "inline", content: markdown.formatFile("file", reference) };
       }
       if (destination === "block") {
         return { kind: "block", type: FILE_BLOCK_TYPE, props: { ...reference } };
@@ -228,7 +231,8 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         title: "File",
         render: FileCanvasElement,
       });
-      registerFileHandler(reactEditor.clipboard, options.provider);
+      reactEditor.markdown.register(fileMarkdownExtension);
+      registerFileHandler(reactEditor.clipboard, options.provider, reactEditor.markdown);
       registerFileFormatter(reactEditor.clipboardFormats);
       registerFileClipboardCopy(
         reactEditor.clipboard,
