@@ -1,6 +1,5 @@
 import type { ReactPanelApi } from "../../panels/types";
-import type { PanelClipboardApi } from "./api";
-import type { ClipboardApi } from "../../editor/types";
+import type { ClipboardApi, PanelClipboardApi } from "./api";
 
 /** Document clipboard operations borrowed by one panel. */
 interface PanelClipboardSource {
