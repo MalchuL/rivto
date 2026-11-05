@@ -9,7 +9,7 @@ import type {
 import type { FileIngestion } from "./file-ingestion";
 import type { FileIngestionPoint, FileInputPanel } from "./types";
 import {
-  fileDestinationAtPoint,
+  fileDropDestination,
   filePasteDestination,
   filePickerPoint,
   type FileDestination,
@@ -116,7 +116,7 @@ export class FileInputEvents {
         }
         const point = { x: raw.clientX, y: raw.clientY };
         const destination = this.replaceEmptyDefault(
-          fileDestinationAtPoint(event, point),
+          fileDropDestination(event, point),
           files.length || Number(Boolean(uri)),
           blockId,
         );

@@ -4,7 +4,7 @@ import type { FileIngestion } from "../../file/ingestion/file-ingestion";
 import type { FileIngestionPoint, FileInputPanel } from "../../file/ingestion/types";
 import type { FileUploadStatusStore } from "../../file/ingestion/file-upload-status";
 import {
-  fileDestinationAtPoint,
+  fileDropDestination,
   filePasteDestination,
   filePickerPoint,
   type FileDestination,
@@ -136,7 +136,7 @@ export class ImageInputEvents {
         return false;
       }
       const point = { x: raw.clientX, y: raw.clientY };
-      const destination = fileDestinationAtPoint(event, point);
+      const destination = fileDropDestination(event, point);
       if (files.length) {
         this.upload(reactPanel, files, destination, point);
       } else if (remote.length) {

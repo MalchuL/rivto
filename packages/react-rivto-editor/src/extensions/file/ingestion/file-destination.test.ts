@@ -6,7 +6,37 @@ import {
   filePasteDestination,
   filePickerPoint,
   inlineDestination,
+  isFileDestinationCurrent,
+  retryFileDestination,
 } from "./file-destination";
+
+test("rejects a captured block gap when its neighbors change", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  try {
+    const first = core.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const second = core.blocks.insertBlock({ type: "paragraph", content: "Second" }).id;
+    const destination = {
+      kind: "block" as const,
+      gap: { kind: "between" as const, parentId: null, previousId: first, nextId: second },
+    };
+    expect(isFileDestinationCurrent(panel, destination)).toBe(true);
+    const inserted = core.blocks.insertBlock(
+      { type: "paragraph", content: "New" },
+      { parentId: null, beforeId: second },
+    );
+    expect(isFileDestinationCurrent(panel, destination)).toBe(false);
+    const retried = retryFileDestination(panel, destination);
+    expect(retried).toEqual({
+      kind: "block",
+      gap: { kind: "between", parentId: null, previousId: inserted.id, nextId: second },
+    });
+    expect(isFileDestinationCurrent(panel, retried)).toBe(true);
+  } finally {
+    await panel.editor.destroy();
+    await core.destroy();
+  }
+});
 
 test("places picker feedback at the block or at the viewport center", () => {
   const originalCSS = Object.getOwnPropertyDescriptor(globalThis, "CSS");

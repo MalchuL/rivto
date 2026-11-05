@@ -1,4 +1,4 @@
-import { BlockSelectionEndpoints } from "@chulane/rivto-page";
+import { BlockSelectionEndpoints, type BetweenBlockDropDestination } from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../../../panels/types";
 import type { EditorEvent } from "../../../managers/events/editor-event";
 import type { FileIngestionPoint } from "./types";
@@ -25,13 +25,19 @@ export interface FileDestinationPanel extends FileSelectionPanel {
   /** Provides default writing-block operations. */
   readonly editor: FileDestinationEditor;
   /** Looks up blocks, their nodes, and their children. */
-  readonly blocks: Pick<ReactPanelApi["blocks"], "getBlock" | "getBlockNode" | "hasChildren">;
+  readonly blocks: Pick<
+    ReactPanelApi["blocks"],
+    "getBlock" | "getBlockNode" | "hasChildren" | "getRootIds" | "getChildIds" | "hasBlock"
+  >;
+  /** Optional panel boundary used to translate document root placement. */
+  readonly rootBlockId?: string;
 }
 
 /**
  * Location and original text captured before asynchronous attachment preparation.
  *
- * A block replacement always carries the content used to detect intervening edits;
+ * A block replacement carries the content used to detect intervening edits.
+ * A drop in a Page gap captures both neighbors to detect changes during preparation;
  * insertion after a block does not capture replacement state.
  */
 export type FileDestination =
@@ -52,6 +58,8 @@ export type FileDestination =
       readonly kind: "block";
       /** Block after which the new block is inserted, when provided. */
       readonly afterId?: string;
+      /** Exact sibling gap resolved from the mounted Page layout, when dropped between blocks. */
+      readonly gap?: BetweenBlockDropDestination;
       /** This variant does not replace a block. */
       readonly replaceId?: never;
       /** This variant does not capture replacement content. */
@@ -64,6 +72,8 @@ export type FileDestination =
       readonly afterId?: string;
       /** Stable ID of the block to replace. */
       readonly replaceId: string;
+      /** Replacement does not use a between-block gap. */
+      readonly gap?: never;
       /** Original content used to detect intervening edits. */
       readonly content: string;
     }
@@ -196,18 +206,28 @@ export function filePasteDestination(
 }
 
 /**
- * Verifies that a captured text destination is still safe to replace.
+ * Verifies that a captured text destination or Page gap is still safe to use.
  *
  * @param reactPanel - Panel containing the destination block.
  * @param destination - Destination captured before asynchronous work.
- * @returns False when the original block was deleted, edited, or is no longer replaceable.
+ * @returns False when the original block was deleted, edited, or is no longer
+ * replaceable, or when a captured Page gap no longer has the same neighbors.
  */
 export function isFileDestinationCurrent(
-  reactPanel: Pick<FileDestinationPanel, "editor" | "blocks">,
+  reactPanel: Pick<FileDestinationPanel, "editor" | "blocks" | "rootBlockId">,
   destination: FileDestination,
 ): boolean {
   if (destination.kind === "inline") {
     return reactPanel.blocks.getBlock(destination.blockId)?.content === destination.content;
+  }
+  if (destination.kind === "block" && destination.gap) {
+    const { parentId, previousId, nextId } = destination.gap;
+    const siblings = blockGapSiblings(reactPanel, parentId);
+    if (!siblings) {
+      return false;
+    }
+    const index = nextId === null ? siblings.length : siblings.indexOf(nextId);
+    return index >= 0 && (index === 0 ? null : siblings[index - 1]) === previousId;
   }
   if (destination.kind !== "block" || !destination.replaceId) {
     return true;
@@ -224,16 +244,64 @@ export function isFileDestinationCurrent(
 }
 
 /**
- * Captures a fresh text destination for a retry after the original block changed.
+ * Resolves a file drop against the same Page gaps used by block dragging.
  *
- * @param reactPanel - Panel containing the current selection.
+ * Text content retains caret insertion; an exact between-block target creates a
+ * new block and captures its neighbors for validation after preparation.
+ *
+ * @param context - Receiving panel and event context.
+ * @param point - Drop position in viewport pixels.
+ * @returns A captured Page gap, text, block, or canvas destination.
+ * @throws If Page geometry resolution or delegated browser hit testing fails.
+ */
+export function fileDropDestination(
+  context: EditorEvent<"surface", "drop">,
+  point: FileIngestionPoint,
+): FileDestination {
+  if (context.mode === "block" && !context.contentElement) {
+    const target = context.reactPanel.page.dropTargets.resolve(point.x, point.y);
+    if (target?.destination.kind === "between") {
+      return { kind: "block", gap: target.destination };
+    }
+  }
+  return fileDestinationAtPoint(context, point);
+}
+
+/**
+ * Captures a fresh text destination or sibling gap for a retry after changes.
+ *
+ * A gap keeps its following neighbor when present, otherwise its preceding
+ * neighbor; an unavailable parent or both missing anchors keep the original gap.
+ *
+ * @param reactPanel - Panel containing the current selection and sibling lists.
  * @param destination - Destination from the failed attempt.
- * @returns A current inline destination or the original non-text destination.
+ * @returns A refreshed destination when possible, or the original destination.
  */
 export function retryFileDestination(
-  reactPanel: FileSelectionPanel,
+  reactPanel: FileDestinationPanel,
   destination: FileDestination,
 ): FileDestination {
+  if (destination.kind === "block" && destination.gap) {
+    const gap = destination.gap;
+    const siblings = blockGapSiblings(reactPanel, gap.parentId);
+    if (!siblings) {
+      return destination;
+    }
+    let index = gap.nextId === null ? siblings.length : siblings.indexOf(gap.nextId);
+    if (index < 0 && gap.previousId !== null) {
+      const previousIndex = siblings.indexOf(gap.previousId);
+      index = previousIndex < 0 ? -1 : previousIndex + 1;
+    } else if (index < 0 && gap.previousId === null) {
+      index = 0;
+    }
+    if (index < 0) {
+      return destination;
+    }
+    return {
+      kind: "block",
+      gap: { ...gap, previousId: siblings[index - 1] ?? null, nextId: siblings[index] ?? null },
+    };
+  }
   let blockId: string | undefined;
   if (destination.kind === "inline") {
     blockId = destination.blockId;
@@ -241,6 +309,28 @@ export function retryFileDestination(
     blockId = destination.replaceId;
   }
   return blockId ? (inlineDestination(reactPanel, blockId) ?? destination) : destination;
+}
+
+/**
+ * Reads current siblings for a gap inside the panel boundary.
+ *
+ * @param panel - Panel providing boundary-scoped block reads.
+ * @param parentId - Canonical parent, or null for document roots.
+ * @returns Ordered sibling IDs, or undefined when the parent is outside the panel.
+ */
+function blockGapSiblings(
+  panel: Pick<FileDestinationPanel, "blocks" | "rootBlockId">,
+  parentId: string | null,
+): readonly string[] | undefined {
+  if (parentId === null && panel.rootBlockId !== undefined) {
+    return undefined;
+  }
+  if (parentId !== null && parentId !== panel.rootBlockId && !panel.blocks.hasBlock(parentId)) {
+    return undefined;
+  }
+  return parentId === null || !panel.blocks.hasBlock(parentId)
+    ? panel.blocks.getRootIds()
+    : panel.blocks.getChildIds(parentId);
 }
 
 /**

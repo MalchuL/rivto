@@ -1,5 +1,5 @@
 /** Browser coverage for image file paste and page/canvas drop routing. */
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 
 const BLOCK_CONTENT_SELECTOR = "[data-block-content]";
@@ -169,6 +169,205 @@ async function dropImageAtTextCaret(target: Locator, legacyCaret: boolean): Prom
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+});
+
+/**
+ * Drops files at the registered gap immediately before a visible block.
+ *
+ * @param page - Browser page receiving the drop.
+ * @param second - Block following the target gap.
+ * @param names - Ordered filenames; PNG names receive valid image bytes.
+ * @returns Resolves after the browser event is accepted and dispatched.
+ */
+async function dropFilesInGap(page: Page, second: Locator, names: string[]): Promise<void> {
+  const bounds = await second.boundingBox();
+  if (!bounds) {
+    throw new Error("Block after the gap has no bounds");
+  }
+  const accepted = await page.evaluate(
+    ({ x, y, filenames }) => {
+      const target = document.elementFromPoint(x, y);
+      if (!target) {
+        throw new Error("Gap has no event target");
+      }
+      const data = new DataTransfer();
+      for (const name of filenames) {
+        if (name.endsWith(".png")) {
+          const bytes = Uint8Array.from(
+            atob(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            ),
+            (character) => character.charCodeAt(0),
+          );
+          data.items.add(new File([bytes], name, { type: "image/png" }));
+        } else {
+          data.items.add(new File([name], name, { type: "text/plain" }));
+        }
+      }
+      const dragover = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(dragover, "dataTransfer", { value: data });
+      target.dispatchEvent(dragover);
+      const drop = new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(drop, "dataTransfer", { value: data });
+      target.dispatchEvent(drop);
+      return dragover.defaultPrevented;
+    },
+    { x: bounds.x + 12, y: bounds.y - 2, filenames: names },
+  );
+  expect(accepted).toBe(true);
+}
+
+/**
+ * Creates two consecutive top-level paragraphs for the file-drop checks.
+ *
+ * @param page - Demo page with the document already loaded.
+ * @param large - Keeps the existing repeated document when true.
+ * @returns IDs of the two consecutive paragraphs.
+ */
+async function createGapBlocks(page: Page, large: boolean): Promise<string[]> {
+  return page.evaluate((keepDocument) => {
+    const editor = (
+      window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }
+    ).__rivtoDemo.editor;
+    const beforeId = keepDocument ? editor.blocks.getRootIds()[0] : undefined;
+    const first = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Gap first" },
+      { parentId: null, beforeId },
+    ).id;
+    const second = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Gap second" },
+      { parentId: null, beforeId },
+    ).id;
+    if (!keepDocument) {
+      editor.load({
+        ...editor.dump(),
+        rootElementIds: [],
+        blocks: [editor.blocks.getBlock(first)!, editor.blocks.getBlock(second)!],
+        elements: [],
+      });
+    }
+    return [first, second];
+  }, large);
+}
+
+for (const repeat of [0, 200]) {
+  for (const kind of ["file", "image"] as const) {
+    test(`drops a ${kind} into the gap between page blocks, repeat=${repeat}`, async ({ page }) => {
+      if (repeat) {
+        await page.goto(`/?repeat=${repeat}`);
+      }
+      const [first, second] = await createGapBlocks(page, repeat > 0);
+      const following = page.locator(`[data-block-id="${second}"]`);
+      await expect(following).toBeVisible();
+      const name = kind === "file" ? "gap.txt" : "gap.png";
+      await dropFilesInGap(page, following, [name]);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const editor = (
+              window as unknown as {
+                __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+              }
+            ).__rivtoDemo.editor;
+            return editor.blocks
+              .getRootIds()
+              .slice(0, 3)
+              .map((id) => ({
+                id,
+                type: editor.blocks.getBlockNode(id)?.type,
+                name: editor.blocks.getBlockNode(id)?.props.name,
+              }));
+          }),
+        )
+        .toEqual([
+          { id: first, type: "paragraph", name: undefined },
+          { id: expect.any(String), type: kind, name },
+          { id: second, type: "paragraph", name: undefined },
+        ]);
+    });
+  }
+}
+
+test("drops multiple files into a nested gap in their original order", async ({ page }) => {
+  const ids = await page.evaluate(() => {
+    const editor = (
+      window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }
+    ).__rivtoDemo.editor;
+    const parent = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Gap parent",
+      children: [
+        { type: "paragraph", content: "Nested first" },
+        { type: "paragraph", content: "Nested second" },
+      ],
+    });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [parent], elements: [] });
+    return { parent: parent.id, children: editor.blocks.getChildIds(parent.id) };
+  });
+  const second = page.locator(`[data-block-id="${ids.children[1]}"]`);
+  await expect(second).toBeVisible();
+  await dropFilesInGap(page, second, ["first.txt", "second.txt"]);
+  await expect
+    .poll(() =>
+      page.evaluate((parentId) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getChildIds(parentId).map((id) => {
+          const block = editor.blocks.getBlockNode(id);
+          return { id, type: block?.type, name: block?.props.name };
+        });
+      }, ids.parent),
+    )
+    .toEqual([
+      { id: ids.children[0], type: "paragraph", name: undefined },
+      { id: expect.any(String), type: "file", name: "first.txt" },
+      { id: expect.any(String), type: "file", name: "second.txt" },
+      { id: ids.children[1], type: "paragraph", name: undefined },
+    ]);
+});
+
+test("drops an image into a gap without the generic file handler", async ({ page }) => {
+  const [first, second] = await createGapBlocks(page, false);
+  await page.evaluate(() => {
+    const host = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+    };
+    host.__rivtoDemo.reactEditor.events.delete("file.drop");
+  });
+  const following = page.locator(`[data-block-id="${second}"]`);
+  await expect(following).toBeVisible();
+  await dropFilesInGap(page, following, ["gap.png"]);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks
+          .getRootIds()
+          .map((id) => ({ id, type: editor.blocks.getBlockNode(id)?.type }));
+      }),
+    )
+    .toEqual([
+      { id: first, type: "paragraph" },
+      { id: expect.any(String), type: "image" },
+      { id: second, type: "paragraph" },
+    ]);
 });
 
 test("shows copy feedback for image and URI drags without the file handler", async ({ page }) => {
@@ -483,11 +682,9 @@ test("pastes a desktop filesystem path in page and edgeless modes", async ({ pag
 
 test("opening an image menu keeps the page and canvas still", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "Image clipboard writing requires Chromium permissions");
-  await page
-    .context()
-    .grantPermissions(["clipboard-read", "clipboard-write"], {
-      origin: new URL(page.url()).origin,
-    });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(page.url()).origin,
+  });
   for (const mode of ["page", "canvas"] as const) {
     if (mode === "canvas") {
       await page.locator('[data-editor-mode="edgeless"]').click();

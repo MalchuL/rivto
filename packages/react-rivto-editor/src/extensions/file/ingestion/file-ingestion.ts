@@ -1,4 +1,4 @@
-import { createCaretSelection } from "@chulane/rivto";
+import { createCaretSelection, type PanelDestination } from "@chulane/rivto";
 import { validateBinaryUri, type BinaryProvider, type PreparedFile } from "../../../attachments";
 import {
   isFileDestinationCurrent,
@@ -278,10 +278,17 @@ function insertPreparedBlocks(
       panel.editor.blocks.updateBlock(destination.replaceId, { props: item.props });
       afterId = destination.replaceId;
     } else {
-      afterId = panel.blocks.insertBlock(
-        { type: item.type, props: item.props },
-        panel.blocks.getInsertionDestinationAfter(afterId),
-      ).id;
+      let placement: PanelDestination;
+      if (destination.gap) {
+        const { parentId, nextId } = destination.gap;
+        placement =
+          parentId === null || parentId === panel.rootBlockId
+            ? { root: true, beforeId: nextId ?? undefined }
+            : { parentId, beforeId: nextId ?? undefined };
+      } else {
+        placement = panel.blocks.getInsertionDestinationAfter(afterId);
+      }
+      afterId = panel.blocks.insertBlock({ type: item.type, props: item.props }, placement).id;
     }
   });
 }

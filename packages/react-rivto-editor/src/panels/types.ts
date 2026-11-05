@@ -8,6 +8,13 @@ import type { PanelEventsApi } from "../managers/events/api";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { PanelSelectionApi } from "../managers/selection/api";
 import type { PanelSlashCommandsApi } from "../managers/slash/api";
+import type { BlockDropTargetsApi } from "@chulane/rivto-page";
+
+/** Page placement lookup borrowed by panel interaction handlers. */
+export interface PanelPageApi {
+  /** Resolves a point using the mounted Page drop regions. */
+  readonly dropTargets: Pick<BlockDropTargetsApi, "resolve">;
+}
 
 /**
  * Public operations for one EditorPanel component displaying a document or subtree.
@@ -24,6 +31,8 @@ import type { PanelSlashCommandsApi } from "../managers/slash/api";
  * this contract; components obtain it from useReactPanel rather than constructing it.
  */
 export interface ReactPanelApi extends PanelAPI {
+  /** Occurrence-local Page placement without attachment or registration ownership. */
+  readonly page: PanelPageApi;
   /**
    * Adds synchronous cleanup to this panel's local registration list.
    * Other panels and the shared runtime retain their resources when this panel closes.

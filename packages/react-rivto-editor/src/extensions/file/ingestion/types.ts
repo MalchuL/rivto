@@ -30,7 +30,14 @@ export interface FileIngestionPanel extends FileDestinationPanel {
   /** Block lookup and insertion operations. */
   readonly blocks: Pick<
     ReactPanelApi["blocks"],
-    "getBlock" | "getBlockNode" | "hasChildren" | "insertBlock" | "getInsertionDestinationAfter"
+    | "getBlock"
+    | "getBlockNode"
+    | "hasChildren"
+    | "hasBlock"
+    | "getRootIds"
+    | "getChildIds"
+    | "insertBlock"
+    | "getInsertionDestinationAfter"
   >;
   /** Element lookup and insertion operations. */
   readonly elements: Pick<ReactPanelApi["elements"], "getElements" | "insertElement">;
