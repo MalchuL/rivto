@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Copy } from "lucide-react";
+import { createPortal } from "react-dom";
 import type { BinaryProvider } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
 import { mimeTypeFromExtension } from "../../../file/utils/file-input";
@@ -26,6 +27,8 @@ interface ImageCopyMenuPosition {
   readonly x: number;
   /** Vertical viewport coordinate in pixels. */
   readonly y: number;
+  /** Document that owns the image and its overlay. */
+  readonly document: Document;
 }
 
 /** Position, feedback, and actions shown by the image copy menu. */
@@ -94,18 +97,26 @@ export function useImageCopyMenu(options: ImageCopyMenuOptions) {
       return;
     }
     event.preventDefault();
+    event.stopPropagation();
     setError(undefined);
-    setPosition({ x: event.clientX, y: event.clientY });
+    setPosition({
+      x: event.clientX,
+      y: event.clientY,
+      document: event.currentTarget.ownerDocument,
+    });
   };
 
-  const menu = position && (
-    <ImageCopyMenu
-      position={position}
-      error={error}
-      onCopy={copyImage}
-      onClose={() => setPosition(undefined)}
-    />
-  );
+  const menu =
+    position &&
+    createPortal(
+      <ImageCopyMenu
+        position={position}
+        error={error}
+        onCopy={copyImage}
+        onClose={() => setPosition(undefined)}
+      />,
+      position.document.body,
+    );
   return { openCopyMenu, menu };
 }
 
@@ -198,7 +209,12 @@ function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps)
         }
       }}
     >
-      <button type="button" role="menuitem" autoFocus onClick={onCopy}>
+      <button
+        type="button"
+        role="menuitem"
+        ref={(node) => node?.focus({ preventScroll: true })}
+        onClick={onCopy}
+      >
         <Copy size={16} aria-hidden="true" />
         Copy image
       </button>

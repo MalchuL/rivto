@@ -481,6 +481,43 @@ test("pastes a desktop filesystem path in page and edgeless modes", async ({ pag
   await expect(page.locator(`${IMAGE_ELEMENT_SELECTOR} .rivto-image`)).toBeVisible();
 });
 
+test("opening an image menu keeps the page and canvas still", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Image clipboard writing requires Chromium permissions");
+  await page
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"], {
+      origin: new URL(page.url()).origin,
+    });
+  for (const mode of ["page", "canvas"] as const) {
+    if (mode === "canvas") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
+    const surface = page.locator(mode === "page" ? ".page-surface" : ".edgeless-viewport").first();
+    await sendImage(surface, mode === "page" ? "drop" : "paste");
+    const image = page
+      .locator(mode === "page" ? IMAGE_BLOCK_SELECTOR : IMAGE_ELEMENT_SELECTOR)
+      .locator(".rivto-image-frame")
+      .first();
+    await image.scrollIntoViewIfNeeded();
+    const before = await image.boundingBox();
+    if (!before) {
+      throw new Error("Image has no bounds");
+    }
+    const scroll = await page.evaluate(() => [window.scrollX, window.scrollY]);
+    await page.mouse.click(before.x + 5, before.y + 5, { button: "right" });
+    const menu = page.getByRole("menuitem", { name: "Copy image" });
+    await expect(menu).toBeVisible();
+    const after = await image.boundingBox();
+    const menuBounds = await menu.boundingBox();
+    expect(after?.x).toBeCloseTo(before.x, 0);
+    expect(after?.y).toBeCloseTo(before.y, 0);
+    expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual(scroll);
+    expect(Math.abs(menuBounds!.x - (before.x + 5))).toBeLessThan(15);
+    expect(Math.abs(menuBounds!.y - (before.y + 5))).toBeLessThan(15);
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("pastes multiple selected desktop files in page and canvas modes", async ({ page }) => {
   const localImage = resolve("docs/00-rivto/assets/pasted-1786747914356-844df263.png");
   for (const mode of ["page", "canvas"] as const) {

@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState, useSyncExternalStore, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import type { FileReference } from "../../../attachments";
 import { useFileActions } from "./hooks/use-file-actions";
 import { useReactPanel } from "../../../hooks";
@@ -38,6 +39,8 @@ interface FileContextMenuPosition {
   readonly x: number;
   /** Vertical viewport coordinate in pixels. */
   readonly y: number;
+  /** Document that owns the file and its overlay. */
+  readonly document: Document;
 }
 
 /**
@@ -146,18 +149,24 @@ export function FileView(reference: FileReference) {
           event.preventDefault();
           event.stopPropagation();
           actions.clearError();
-          setContextMenu({ x: event.clientX, y: event.clientY });
+          setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            document: event.currentTarget.ownerDocument,
+          });
         }}
       />
-      {contextMenu && (
-        <FileContextMenu
-          position={contextMenu}
-          canCopy={actions.canCopy}
-          onOpen={open}
-          onCopy={actions.copy}
-          onClose={() => setContextMenu(undefined)}
-        />
-      )}
+      {contextMenu &&
+        createPortal(
+          <FileContextMenu
+            position={contextMenu}
+            canCopy={actions.canCopy}
+            onOpen={open}
+            onCopy={actions.copy}
+            onClose={() => setContextMenu(undefined)}
+          />,
+          contextMenu.document.body,
+        )}
     </>
   );
 }
@@ -291,7 +300,12 @@ function FileContextMenu({ position, canCopy, onOpen, onCopy, onClose }: FileCon
         }
       }}
     >
-      <button type="button" role="menuitem" autoFocus onClick={onOpen}>
+      <button
+        type="button"
+        role="menuitem"
+        ref={(node) => node?.focus({ preventScroll: true })}
+        onClick={onOpen}
+      >
         Open file
       </button>
       {canCopy && (

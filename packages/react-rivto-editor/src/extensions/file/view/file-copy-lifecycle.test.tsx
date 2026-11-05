@@ -33,7 +33,7 @@ test("cancels an in-flight copy when the mounted file reference changes", async 
         .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
     await act(async () => {
-      [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
         .find((button) => button.textContent === "Copy file")!
         .click();
     });
