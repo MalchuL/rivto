@@ -64,3 +64,23 @@ test("nearest nested viewport wins without replacing the outer attachment", () =
   expect(CanvasViewport.forElement(innerLayers.plane)).toBe(outer);
   detachOuter();
 });
+
+test("converts viewport scrolling to camera movement and releases the listener", () => {
+  const canvas = new Canvas();
+  canvas.setCamera({ x: 15, y: -10, zoom: 2 });
+  const viewport = new CanvasViewport(canvas);
+  const { root, plane } = layers();
+  const detach = viewport.attach(root, plane);
+  root.scrollLeft = 40;
+  root.scrollTop = 30;
+  root.dispatchEvent(new Event("scroll"));
+  expect([root.scrollLeft, root.scrollTop]).toEqual([0, 0]);
+  expect(canvas.camera.get()).toEqual({ x: -25, y: -40, zoom: 2 });
+  plane.dispatchEvent(new Event("scroll", { bubbles: true }));
+  expect(canvas.camera.get()).toEqual({ x: -25, y: -40, zoom: 2 });
+  detach();
+  root.scrollTop = 20;
+  root.dispatchEvent(new Event("scroll"));
+  expect(root.scrollTop).toBe(20);
+  expect(canvas.camera.get()).toEqual({ x: -25, y: -40, zoom: 2 });
+});

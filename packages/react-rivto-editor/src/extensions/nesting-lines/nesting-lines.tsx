@@ -9,6 +9,51 @@ import { PanelDOM } from "../../panels/panel-dom";
 const CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
 
 /**
+ * Measures the painted edges of active drop feedback in viewport coordinates.
+ *
+ * The nesting overlay is mounted above surface stacking contexts, so its lines
+ * must leave gaps where a drop outline or insertion line is painted underneath.
+ *
+ * @param overlay - Overlay whose document owns the active feedback.
+ * @returns Rectangles occupied by active feedback.
+ */
+function measureDropFeedback(overlay: SVGSVGElement) {
+  const document = overlay.ownerDocument;
+  const view = document.defaultView!;
+  const rects: { left: number; right: number; top: number; bottom: number }[] = [];
+  for (const element of document.querySelectorAll<HTMLElement>('[data-block-drop-active="true"]')) {
+    const bounds = element.getBoundingClientRect();
+    const scale = element.offsetWidth ? bounds.width / element.offsetWidth : 1;
+    const thickness =
+      (parseFloat(
+        view.getComputedStyle(element).getPropertyValue("--rivto-drop-indicator-thickness"),
+      ) || 4) * scale;
+    rects.push(
+      { left: bounds.left, right: bounds.left + thickness, top: bounds.top, bottom: bounds.bottom },
+      {
+        left: bounds.right - thickness,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+      },
+      { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.top + thickness },
+      {
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.bottom - thickness,
+        bottom: bounds.bottom,
+      },
+    );
+  }
+  for (const line of document.querySelectorAll<HTMLElement>(
+    `.${BLOCK_EDITOR_CLASSES.dropLine}:not([hidden])`,
+  )) {
+    rects.push(line.getBoundingClientRect());
+  }
+  return rects;
+}
+
+/**
  * Measures visible ordinary outline rows in one panel occurrence.
  *
  * Custom child layouts do not receive a line, but their nested ordinary
@@ -21,6 +66,12 @@ const CARD_CONTENT_SELECTOR = "[data-edgeless-card-content]";
  */
 function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
   const origin = overlay.getBoundingClientRect();
+  const feedback = measureDropFeedback(overlay);
+  const strokeRadius =
+    parseFloat(
+      overlay.ownerDocument.defaultView!.getComputedStyle(overlay.querySelector("path")!)
+        .strokeWidth,
+    ) / 2;
   const blocks = dom.getBlocks();
   const children = new Map<Element | null, HTMLElement[]>();
   const nextSibling = new Map<Element, HTMLElement>();
@@ -88,6 +139,20 @@ function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
       start = Math.max(start, bounds.top - origin.top);
       end = Math.min(end, bounds.bottom - origin.top);
     }
+    // Keep drop feedback visible without hiding the rest of the nesting line.
+    const gaps = feedback
+      .filter(
+        (rect) =>
+          x + origin.left + strokeRadius > rect.left && x + origin.left - strokeRadius < rect.right,
+      )
+      .map((rect) => ({ start: rect.top - origin.top, end: rect.bottom - origin.top }))
+      .sort((a, b) => a.start - b.start);
+    for (const gap of gaps) {
+      if (gap.start > start && start < end) {
+        lines.push(`M ${x} ${start} V ${Math.min(gap.start, end)}`);
+      }
+      start = Math.max(start, gap.end);
+    }
     if (end > start) {
       lines.push(`M ${x} ${start} V ${end}`);
     }
@@ -144,14 +209,43 @@ function NestingLines() {
       observed.clear();
       nextObserved.forEach((element) => observed.add(element));
       const style = view!.getComputedStyle(root);
-      // A body-hosted overlay does not inherit the canvas viewport's overflow clipping.
-      if (root.matches(".edgeless-viewport")) {
-        const viewport = root.getBoundingClientRect();
-        const bounds = overlay.getBoundingClientRect();
-        overlay.style.clipPath = `inset(${Math.max(0, viewport.top - bounds.top)}px ${Math.max(0, bounds.right - viewport.right)}px ${Math.max(0, bounds.bottom - viewport.bottom)}px ${Math.max(0, viewport.left - bounds.left)}px)`;
-      } else {
-        overlay.style.clipPath = "";
+      // The portal does not inherit clipping from an embedded surface's ancestors.
+      const bounds = overlay.getBoundingClientRect();
+      let top = -Infinity;
+      let right = Infinity;
+      let bottom = Infinity;
+      let left = -Infinity;
+      let clipped = false;
+      for (
+        let element: HTMLElement | null = root;
+        element && element !== root.ownerDocument.body;
+        element = element.parentElement
+      ) {
+        const overflow = view!.getComputedStyle(element);
+        const clipX = overflow.overflowX !== "visible";
+        const clipY = overflow.overflowY !== "visible";
+        if (clipX || clipY) {
+          const rect = element.getBoundingClientRect();
+          if (clipX) {
+            left = Math.max(left, rect.left);
+            right = Math.min(right, rect.right);
+          }
+          if (clipY) {
+            top = Math.max(top, rect.top);
+            bottom = Math.min(bottom, rect.bottom);
+          }
+          clipped = true;
+        }
       }
+      // Unclipped axes must remain visible beyond the SVG's viewport-sized box.
+      const extent = Math.max(
+        root.ownerDocument.documentElement.scrollHeight,
+        bounds.width,
+        bounds.height,
+      );
+      overlay.style.clipPath = clipped
+        ? `inset(${Number.isFinite(top) ? top - bounds.top : -extent}px ${Number.isFinite(right) ? bounds.right - right : -extent}px ${Number.isFinite(bottom) ? bounds.bottom - bottom : -extent}px ${Number.isFinite(left) ? left - bounds.left : -extent}px)`
+        : "";
       overlay.style.setProperty("--rivto-muted", style.getPropertyValue("--rivto-muted"));
       overlay.style.setProperty("--rivto-background", style.getPropertyValue("--rivto-background"));
       if (path.getAttribute("d") !== d) {
@@ -171,15 +265,12 @@ function NestingLines() {
     }
 
     /**
-     * Schedules a refresh when a nested scroll container moves.
+     * Schedules a refresh when a scroll container moves.
      *
-     * @param event - Captured scroll event.
-     * @returns Nested scrolling schedules updated coordinates.
+     * @returns Scrolling schedules updated coordinates and clipping.
      */
-    function onScroll(event: Event) {
-      if (event.target !== root!.ownerDocument && event.target !== view) {
-        schedule();
-      }
+    function onScroll() {
+      schedule();
     }
 
     // Camera and card transforms change coordinates without resizing their contents.
@@ -188,8 +279,21 @@ function NestingLines() {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["style", "data-controls-placement", "dir"],
+      attributeFilter: [
+        "style",
+        "data-controls-placement",
+        "data-block-drop-active",
+        "dir",
+        "hidden",
+      ],
     });
+    // Embedded panels move when a camera or card outside their root transforms.
+    for (let ancestor = root.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      mutations.observe(ancestor, {
+        attributes: true,
+        attributeFilter: ["style", "class", "data-block-drop-active", "dir", "hidden"],
+      });
+    }
     root.addEventListener("focusin", schedule);
     root.addEventListener("focusout", schedule);
     view.addEventListener("scroll", onScroll, true);
