@@ -8,6 +8,7 @@ import type {
 } from "../../../attachments";
 import type { FileIngestion } from "./file-ingestion";
 import type { FileIngestionPoint, FileInputPanel } from "./types";
+import { FileDropFeedback } from "./file-drop-feedback";
 import {
   fileDropDestination,
   filePasteDestination,
@@ -46,6 +47,7 @@ interface FileInputEditor {
 
 /** Registers and routes generic file input for one extension installation. */
 export class FileInputEvents {
+  private readonly dropFeedback: FileDropFeedback;
   /**
    * Borrows the editor operations and ingestion coordinator for file input.
    *
@@ -62,7 +64,9 @@ export class FileInputEvents {
     private readonly ingestion: Pick<FileIngestion, "ingest" | "storeFile" | "signal">,
     /** Optional notification for clipboard path failures. */
     private readonly onError?: (error: unknown) => void,
-  ) {}
+  ) {
+    this.dropFeedback = new FileDropFeedback(ingestion.signal);
+  }
 
   /**
    * Registers file drag, paste, and picker interactions.
@@ -87,12 +91,17 @@ export class FileInputEvents {
     this.editor.events.register(
       { id: "file.dragover", type: "dragover", capture: true },
       // Claim file drags only inside the receiving root and advertise a copy.
-      ({ raw, root }) => {
+      (event) => {
+        const { raw, root } = event;
         const accepts = raw.dataTransfer?.types.includes("Files") === true;
-        if (accepts && raw.dataTransfer) {
+        const inside = root.contains(raw.target as Node);
+        if (accepts && inside && raw.dataTransfer) {
           raw.dataTransfer.dropEffect = "copy";
+          this.dropFeedback.update(event);
+        } else {
+          this.dropFeedback.clear();
         }
-        return accepts && root.contains(raw.target as Node);
+        return accepts && inside;
       },
     );
   }

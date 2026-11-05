@@ -186,10 +186,7 @@ async function dropFilesInGap(page: Page, second: Locator, names: string[]): Pro
   }
   const accepted = await page.evaluate(
     ({ x, y, filenames }) => {
-      const target = document.elementFromPoint(x, y);
-      if (!target) {
-        throw new Error("Gap has no event target");
-      }
+      const target = document.elementFromPoint(x, y)!;
       const data = new DataTransfer();
       for (const name of filenames) {
         if (name.endsWith(".png")) {
@@ -204,27 +201,31 @@ async function dropFilesInGap(page: Page, second: Locator, names: string[]): Pro
           data.items.add(new File([name], name, { type: "text/plain" }));
         }
       }
-      const dragover = new DragEvent("dragover", {
+      const options = {
         bubbles: true,
         cancelable: true,
         clientX: x,
         clientY: y,
-      });
+      };
+      const dragover = new DragEvent("dragover", options);
       Object.defineProperty(dragover, "dataTransfer", { value: data });
       target.dispatchEvent(dragover);
-      const drop = new DragEvent("drop", {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-      });
+      const line = document.querySelector<HTMLElement>(".rivto-block-drop-line:not([hidden])");
+      const lineBounds = line?.getBoundingClientRect();
+      const lineVisible = Boolean(
+        line &&
+        lineBounds?.width &&
+        lineBounds.height &&
+        getComputedStyle(line).visibility === "visible",
+      );
+      const drop = new DragEvent("drop", options);
       Object.defineProperty(drop, "dataTransfer", { value: data });
       target.dispatchEvent(drop);
-      return dragover.defaultPrevented;
+      return { accepted: dragover.defaultPrevented, lineVisible };
     },
     { x: bounds.x + 12, y: bounds.y - 2, filenames: names },
   );
-  expect(accepted).toBe(true);
+  expect(accepted).toEqual({ accepted: true, lineVisible: true });
 }
 
 /**
@@ -259,6 +260,352 @@ async function createGapBlocks(page: Page, large: boolean): Promise<string[]> {
     return [first, second];
   }, large);
 }
+
+/** Viewport point used for synthetic file-drag browser events. */
+interface FileDropPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * Sends one file drag event to the current browser hit at a viewport point.
+ *
+ * @param page - Page receiving the native event.
+ * @param point - Viewport position used for hit testing.
+ * @param type - Drag-over preview or final drop.
+ * @param name - Filename carried by the event.
+ * @returns Resolves after the browser dispatches the event.
+ */
+async function dispatchFileDrag(
+  page: Page,
+  point: FileDropPoint,
+  type: "dragover" | "drop",
+  name: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ x, y, eventType, filename }) => {
+      const target = document.elementFromPoint(x, y);
+      if (!target) {
+        throw new Error("File drag has no target");
+      }
+      const data = new DataTransfer();
+      if (filename.endsWith(".png")) {
+        const bytes = Uint8Array.from(
+          atob(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+          ),
+          (character) => character.charCodeAt(0),
+        );
+        data.items.add(new File([bytes], filename, { type: "image/png" }));
+      } else {
+        data.items.add(new File(["notes"], filename, { type: "text/plain" }));
+      }
+      const event = new DragEvent(eventType, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(event, "dataTransfer", { value: data });
+      target.dispatchEvent(event);
+    },
+    { ...point, eventType: type, filename: name },
+  );
+}
+
+/**
+ * Finds a visible block-body point that resolves to the block's inside region.
+ *
+ * @param block - Rendered block to inspect.
+ * @param blockId - Stable identity expected from the Page placement resolver.
+ * @returns A viewport point outside editable text and inside the block body.
+ * @throws If no matching visible registered region is found.
+ */
+async function insideBlockPoint(block: Locator, blockId: string): Promise<FileDropPoint> {
+  return block.evaluate((element, id) => {
+    const host = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+    };
+    const panel = host.__rivtoDemo.reactEditor.panels.getDefault();
+    const row = element.querySelector<HTMLElement>(":scope > .rivto-block-row")!;
+    const box = row.getBoundingClientRect();
+    for (let y = box.top + 1; y < box.bottom; y += 3) {
+      for (let x = box.left + 1; x < box.right; x += 5) {
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || hit.closest("[data-block-content]")) {
+          continue;
+        }
+        const target = panel?.page.dropTargets.resolve(x, y);
+        if (
+          target?.destination.kind === "inside" &&
+          target.destination.parentId === id &&
+          !target.indicator
+        ) {
+          return { x, y };
+        }
+      }
+    }
+    throw new Error("No visible block-body target found");
+  }, blockId);
+}
+
+test("shows the block insertion line while dragging a file over a page gap", async ({ page }) => {
+  const [, second] = await createGapBlocks(page, false);
+  const following = page.locator(`[data-block-id="${second}"]`);
+  await expect(following).toBeVisible();
+  const bounds = await following.boundingBox();
+  if (!bounds) {
+    throw new Error("Block after the gap has no bounds");
+  }
+  await page.evaluate(
+    ({ x, y }) => {
+      const target = document.elementFromPoint(x, y);
+      if (!target) {
+        throw new Error("Gap has no event target");
+      }
+      const data = new DataTransfer();
+      data.items.add(new File(["notes"], "gap.txt", { type: "text/plain" }));
+      const event = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(event, "dataTransfer", { value: data });
+      target.dispatchEvent(event);
+    },
+    { x: bounds.x + 12, y: bounds.y - 2 },
+  );
+  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
+  await page.evaluate(() => {
+    document.dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+  });
+  await expect(page.locator(".rivto-block-drop-line")).toHaveCount(0);
+  await expect(page.locator("[data-block-drop-active]")).toHaveCount(0);
+});
+
+test("shows Page drop feedback with only image input installed", async ({ page }) => {
+  const [first, second] = await createGapBlocks(page, false);
+  await page.evaluate(() => {
+    const host = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+    };
+    host.__rivtoDemo.reactEditor.events.delete("file.dragover");
+    host.__rivtoDemo.reactEditor.events.delete("file.drop");
+  });
+  const following = page.locator(`[data-block-id="${second}"]`);
+  await expect(following).toBeVisible();
+  const bounds = await following.boundingBox();
+  if (!bounds) {
+    throw new Error("Block after the gap has no bounds");
+  }
+  await dispatchFileDrag(page, { x: bounds.x + 12, y: bounds.y - 2 }, "dragover", "gap.png");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
+  await dropFilesInGap(page, following, ["gap.png"]);
+  await expect(page.locator(".rivto-block-drop-line")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const host = window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return host.__rivtoDemo.editor.blocks
+          .getRootIds()
+          .map((id) => ({ id, type: host.__rivtoDemo.editor.blocks.getBlockNode(id)?.type }));
+      }),
+    )
+    .toEqual([
+      { id: first, type: "paragraph" },
+      { id: expect.any(String), type: "image" },
+      { id: second, type: "paragraph" },
+    ]);
+});
+
+test("keeps feedback while crossing child elements and clears it on leaving the page", async ({
+  page,
+}) => {
+  const [, second] = await createGapBlocks(page, false);
+  const following = page.locator(`[data-block-id="${second}"]`);
+  await expect(following).toBeVisible();
+  const bounds = await following.boundingBox();
+  if (!bounds) {
+    throw new Error("Block after the gap has no bounds");
+  }
+  const counts = await page.evaluate(
+    ({ x, y }) => {
+      const target = document.elementFromPoint(x, y)!;
+      const root = target.closest("[data-rivto-panel]")!;
+      const data = new DataTransfer();
+      data.items.add(new File(["notes"], "gap.txt", { type: "text/plain" }));
+      const over = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+      });
+      Object.defineProperty(over, "dataTransfer", { value: data });
+      target.dispatchEvent(over);
+      const before = document.querySelectorAll(".rivto-block-drop-line").length;
+      target.dispatchEvent(
+        new DragEvent("dragleave", {
+          bubbles: true,
+          relatedTarget: root.querySelector("[data-block-id]"),
+        }),
+      );
+      const inside = document.querySelectorAll(".rivto-block-drop-line").length;
+      target.dispatchEvent(
+        new DragEvent("dragleave", { bubbles: true, relatedTarget: document.body }),
+      );
+      const outside = document.querySelectorAll(".rivto-block-drop-line").length;
+      return { before, inside, outside };
+    },
+    { x: bounds.x + 12, y: bounds.y - 2 },
+  );
+  expect(counts).toEqual({ before: 1, inside: 1, outside: 0 });
+  await expect(page.locator("[data-block-drop-active]")).toHaveCount(0);
+});
+
+test("does not show Page drop feedback on the edgeless canvas", async ({ page }) => {
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await page
+    .locator(".edgeless-viewport")
+    .first()
+    .evaluate((root) => {
+      const data = new DataTransfer();
+      data.items.add(new File(["notes"], "canvas.txt", { type: "text/plain" }));
+      const event = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 300,
+        clientY: 300,
+      });
+      Object.defineProperty(event, "dataTransfer", { value: data });
+      root.dispatchEvent(event);
+    });
+  await expect(
+    page.locator(".rivto-block-drop-line, .rivto-file-drop-caret, [data-block-drop-active]"),
+  ).toHaveCount(0);
+});
+
+test("switches file feedback between a block gap and an inline caret", async ({ page }) => {
+  const [first, second] = await createGapBlocks(page, false);
+  const content = page.locator(`[data-block-id="${first}"] [data-block-content]`);
+  await content.click();
+  const caret = await content.evaluate((element) => {
+    const range = element.ownerDocument.createRange();
+    range.setStart(element.firstChild!, 3);
+    range.collapse(true);
+    const bounds = range.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y + bounds.height / 2 };
+  });
+  const bounds = await page.locator(`[data-block-id="${second}"]`).boundingBox();
+  if (!bounds) {
+    throw new Error("Block after the gap has no bounds");
+  }
+  const gap = { x: bounds.x + 12, y: bounds.y - 2 };
+  await dispatchFileDrag(page, gap, "dragover", "move.txt");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
+  await dispatchFileDrag(page, caret, "dragover", "move.txt");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  await expect(page.locator(".rivto-file-drop-caret")).toBeVisible();
+  await dispatchFileDrag(page, gap, "dragover", "move.txt");
+  await expect(page.locator(".rivto-file-drop-caret")).toHaveCount(0);
+  await expect(page.locator(".rivto-block-drop-line:visible")).toBeVisible();
+  await page.evaluate(() => document.dispatchEvent(new DragEvent("dragend", { bubbles: true })));
+  await expect(
+    page.locator(".rivto-block-drop-line, .rivto-file-drop-caret, [data-block-drop-active]"),
+  ).toHaveCount(0);
+});
+
+test("previews an inline file caret without changing the selection", async ({ page }) => {
+  const [first] = await createGapBlocks(page, false);
+  const content = page.locator(`[data-block-id="${first}"] [data-block-content]`);
+  await content.click();
+  const position = await content.evaluate((element) => {
+    const text = element.firstChild;
+    if (!text) {
+      throw new Error("Editable content has no text");
+    }
+    const selection = element.ownerDocument.getSelection()!;
+    selection.setBaseAndExtent(text, 0, text, 0);
+    const range = element.ownerDocument.createRange();
+    range.setStart(text, 3);
+    range.collapse(true);
+    const bounds = range.getBoundingClientRect();
+    const data = new DataTransfer();
+    data.items.add(new File(["notes"], "inline.txt", { type: "text/plain" }));
+    const event = new DragEvent("dragover", {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.x,
+      clientY: bounds.y + bounds.height / 2,
+    });
+    Object.defineProperty(event, "dataTransfer", { value: data });
+    element.dispatchEvent(event);
+    return { x: bounds.x, y: bounds.y + bounds.height / 2, anchor: selection.anchorOffset };
+  });
+  expect(position.anchor).toBe(0);
+  await expect(
+    page.locator(`[data-block-id="${first}"][data-block-drop-active="true"]`),
+  ).toBeVisible();
+  await expect(page.locator(".rivto-file-drop-caret")).toBeVisible();
+  await dispatchFileDrag(page, position, "drop", "inline.txt");
+  await expect(page.locator(".rivto-file-drop-caret")).toHaveCount(0);
+  await expect(page.locator("[data-block-drop-active]")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks.getBlockNode(id)?.content;
+      }, first!),
+    )
+    .toMatch(/^Gap\{\{file .*\}\} first$/);
+});
+
+test("outlines a block-body destination and inserts the file inside it", async ({ page }) => {
+  const [first] = await createGapBlocks(page, false);
+  const block = page.locator(`[data-block-id="${first}"]`);
+  const point = await insideBlockPoint(block, first!);
+  await dispatchFileDrag(page, point, "dragover", "inside.txt");
+  await expect(block).toHaveAttribute("data-block-drop-active", "true");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  await dispatchFileDrag(page, point, "drop", "inside.txt");
+  await expect(block).not.toHaveAttribute("data-block-drop-active");
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const editor = (
+          window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          }
+        ).__rivtoDemo.editor;
+        return editor.blocks
+          .getChildIds(id)
+          .map((childId) => editor.blocks.getBlockNode(childId)?.props.name);
+      }, first!),
+    )
+    .toEqual(["inside.txt"]);
+  await page.evaluate(() => {
+    const host = window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+    };
+    host.__rivtoDemo.editor.history.undo();
+  });
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const host = window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return host.__rivtoDemo.editor.blocks.getChildIds(id);
+      }, first!),
+    )
+    .toEqual([]);
+});
 
 for (const repeat of [0, 200]) {
   for (const kind of ["file", "image"] as const) {
@@ -889,6 +1236,42 @@ test("retries a failed clipboard image path read", async ({ page }) => {
   await expect(error).toBeVisible();
   await error.getByRole("button", { name: "Retry" }).focus();
   await page.keyboard.press("Enter");
+  await expect(page.locator(`${IMAGE_BLOCK_SELECTOR} .rivto-image`)).toBeVisible();
+  await expect(error).toBeHidden();
+});
+
+test("keeps upload error retry buttons clickable", async ({ page }) => {
+  const path = resolve("docs/00-rivto/assets/pasted-1786747914356-844df263.png");
+  await page
+    .locator(".page-surface")
+    .first()
+    .evaluate((root, imagePath) => {
+      const host = window as unknown as {
+        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      };
+      host.__rivtoDemo.reactEditor.events.delete("file.paste");
+      let attempts = 0;
+      Object.defineProperty(navigator.clipboard, "readText", {
+        configurable: true,
+        value: async () => {
+          if (attempts++ === 0) {
+            throw new Error("Clipboard read denied");
+          }
+          return imagePath;
+        },
+      });
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { files: [], items: [], types: ["text/uri-list"], getData: () => "" },
+      });
+      root.dispatchEvent(event);
+    }, path);
+  const error = page.getByRole("alert").filter({ hasText: "Clipboard read denied" });
+  await error.evaluate((element: HTMLElement) => {
+    element.style.left = "100px";
+    element.style.top = "100px";
+  });
+  await error.getByRole("button", { name: "Retry" }).click();
   await expect(page.locator(`${IMAGE_BLOCK_SELECTOR} .rivto-image`)).toBeVisible();
   await expect(error).toBeHidden();
 });

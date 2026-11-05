@@ -18,7 +18,7 @@ test("rejects a captured block gap when its neighbors change", async () => {
     const second = core.blocks.insertBlock({ type: "paragraph", content: "Second" }).id;
     const destination = {
       kind: "block" as const,
-      gap: { kind: "between" as const, parentId: null, previousId: first, nextId: second },
+      placement: { kind: "between" as const, parentId: null, previousId: first, nextId: second },
     };
     expect(isFileDestinationCurrent(panel, destination)).toBe(true);
     const inserted = core.blocks.insertBlock(
@@ -29,7 +29,7 @@ test("rejects a captured block gap when its neighbors change", async () => {
     const retried = retryFileDestination(panel, destination);
     expect(retried).toEqual({
       kind: "block",
-      gap: { kind: "between", parentId: null, previousId: inserted.id, nextId: second },
+      placement: { kind: "between", parentId: null, previousId: inserted.id, nextId: second },
     });
     expect(isFileDestinationCurrent(panel, retried)).toBe(true);
   } finally {

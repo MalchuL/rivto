@@ -1,8 +1,11 @@
 import { createTestCoreEditor, createTestReactEditor } from "../../../test-utils";
 import { paragraphBlockFactory } from "../../../block-factories";
 import { fileExtension } from "../file";
+import { kanbanExtension } from "../../containers/kanban/kanban";
 import { FileIngestion } from "./file-ingestion";
 import type { FileIngestionStatus, FileIngestionStatuses } from "./types";
+
+const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 /**
  * Creates a canvas file representation for ingestion tests.
@@ -122,6 +125,68 @@ test("retains failed insertion feedback when a handler returns the wrong placeme
   expect(errors).toHaveLength(1);
   expect(statuses.get("1")?.error).toContain("does not match");
   expect(panel.elements.getElements()).toHaveLength(0);
+  await panel.editor.destroy();
+  await editor.destroy();
+});
+
+test("refuses a file block when the receiving block rejects its type", async () => {
+  const editor = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor, extensions: [fileExtension({ provider })] });
+  const parent = panel.blocks.insertBlock({ type: "paragraph" }, { root: true });
+  const { statuses, feedback } = feedbackStore();
+  const permission = jestApi.spyOn(panel.editor.blockBehaviors, "canMove").mockReturnValue(false);
+  const ingestion = new FileIngestion(feedback);
+  ingestion.ingest({
+    panel,
+    destination: { kind: "block", placement: { kind: "inside", parentId: parent.id } },
+    items: ["file"],
+    point: { x: 0, y: 0 },
+    name: (item) => item,
+    prepare: async () => ({ kind: "block", type: "file", props: { uri: "test:file" } }),
+    failureMessage: "Unable to upload",
+    staleMessage: "Destination changed",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(permission).toHaveBeenCalledWith(
+    expect.objectContaining({
+      destination: { parentId: parent.id, beforeId: undefined },
+      sources: [expect.objectContaining({ type: "file", props: { uri: "test:file" } })],
+    }),
+  );
+  expect(panel.blocks.getChildIds(parent.id)).toEqual([]);
+  expect(statuses.get("1")?.error).toContain("cannot be inserted");
+  await panel.editor.destroy();
+  await editor.destroy();
+});
+
+test("rejects files in a Kanban board but accepts them in a column", async () => {
+  const editor = await createTestCoreEditor();
+  const panel = createTestReactEditor({
+    editor,
+    extensions: [kanbanExtension(), fileExtension({ provider })],
+  });
+  const board = panel.blocks.insertBlock({ type: "kanban" }, { root: true });
+  const column = panel.blocks.insertBlock({ type: "kanban-column" }, { parentId: board.id });
+  const { statuses, feedback } = feedbackStore();
+  const ingestion = new FileIngestion(feedback);
+  for (const parentId of [board.id, column.id]) {
+    ingestion.ingest({
+      panel,
+      destination: { kind: "block", placement: { kind: "inside", parentId } },
+      items: ["file"],
+      point: { x: 0, y: 0 },
+      name: (item) => item,
+      prepare: async () => ({ kind: "block", type: "file", props: { uri: "test:file" } }),
+      failureMessage: "Unable to upload",
+      staleMessage: "Destination changed",
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(panel.blocks.getChildIds(board.id)).toEqual([column.id]);
+  expect(statuses.get("2")?.error).toBeUndefined();
+  expect(panel.blocks.getChildIds(column.id)).toHaveLength(1);
+  expect(statuses.get("1")?.error).toContain("cannot be inserted");
+  expect(statuses.has("2")).toBe(false);
   await panel.editor.destroy();
   await editor.destroy();
 });

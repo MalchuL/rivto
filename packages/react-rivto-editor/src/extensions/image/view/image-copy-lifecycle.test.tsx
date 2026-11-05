@@ -33,12 +33,14 @@ test("cancels a pending image copy when its view unmounts", async () => {
         .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();
+      document
+        .querySelector<HTMLButtonElement>('.rivto-image-context-menu [role="menuitem"]')!
+        .click();
     });
     expect(signals).toHaveLength(1);
     await act(async () => {
-      container
-        .querySelector('[role="menu"]')!
+      document
+        .querySelector('.rivto-image-context-menu[role="menu"]')!
         .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(signals[0]?.aborted).toBe(false);

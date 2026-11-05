@@ -227,6 +227,10 @@ function insertPrepared(
   if (prepared.some((item) => item.kind !== destination.kind)) {
     throw new TypeError("Prepared file does not match its insertion destination");
   }
+  const blockIds =
+    destination.kind === "block" && destination.placement
+      ? validatePreparedBlocks(reactPanel, prepared, destination.placement)
+      : undefined;
   const editor = reactPanel.editor;
   // Apply one history group without rolling back earlier mutations on failure.
   reactPanel.batchUpdates(() => {
@@ -244,7 +248,7 @@ function insertPrepared(
       return;
     }
     if (destination.kind === "block") {
-      insertPreparedBlocks(reactPanel, prepared, destination);
+      insertPreparedBlocks(reactPanel, prepared, destination, blockIds);
       return;
     }
     insertPreparedElements(reactPanel, prepared, destination);
@@ -254,11 +258,53 @@ function insertPrepared(
 }
 
 /**
+ * Checks prepared block types against the receiving Page block's move rules.
+ *
+ * The handler output is available only after preparation, so a visible target
+ * can still be rejected before any document mutation. Sources carry the fields
+ * and newly allocated IDs that insertion will persist.
+ *
+ * @param panel - Panel providing semantic placement permissions.
+ * @param prepared - Prepared representations in insertion order.
+ * @param placement - Captured Page parent and optional following sibling.
+ * @returns Allocated block IDs when every applicable behavior permits the batch.
+ * @throws If a representation is not a block or a behavior rejects the placement.
+ */
+function validatePreparedBlocks(
+  panel: FileIngestionPanel,
+  prepared: readonly PreparedFile[],
+  placement: NonNullable<Extract<FileDestination, { kind: "block" }>["placement"]>,
+): readonly string[] {
+  const sources = prepared.map((item) => {
+    if (item.kind !== "block") {
+      throw new TypeError("Expected a prepared block");
+    }
+    return {
+      id: crypto.randomUUID(),
+      type: item.type,
+      props: item.props,
+      content: "",
+      listProps: {},
+      pluginData: {},
+    };
+  });
+  const destination = {
+    parentId: placement.parentId,
+    beforeId: placement.kind === "between" ? (placement.nextId ?? undefined) : undefined,
+  };
+  if (!panel.editor.blockBehaviors.canMove({ sources, destination })) {
+    throw new Error("Files cannot be inserted at this destination");
+  }
+  return sources.map((source) => source.id);
+}
+
+/**
  * Inserts prepared blocks in order, optionally replacing the captured empty block.
  *
  * @param panel - Panel that owns the block destination.
  * @param prepared - Representations in source order.
  * @param destination - Captured block destination.
+ * @param blockIds - IDs allocated during Page placement validation, when present.
  * @returns Inserts or replaces blocks in the current batch.
  * @throws If a representation is not a block or a document operation fails.
  */
@@ -266,6 +312,7 @@ function insertPreparedBlocks(
   panel: FileIngestionPanel,
   prepared: readonly PreparedFile[],
   destination: Extract<FileDestination, { kind: "block" }>,
+  blockIds?: readonly string[],
 ): void {
   let afterId = destination.afterId;
   // Reuse the captured empty block for the first item; append subsequent blocks in order.
@@ -279,8 +326,10 @@ function insertPreparedBlocks(
       afterId = destination.replaceId;
     } else {
       let placement: PanelDestination;
-      if (destination.gap) {
-        const { parentId, nextId } = destination.gap;
+      if (destination.placement) {
+        const { parentId } = destination.placement;
+        const nextId =
+          destination.placement.kind === "between" ? destination.placement.nextId : null;
         placement =
           parentId === null || parentId === panel.rootBlockId
             ? { root: true, beforeId: nextId ?? undefined }
@@ -288,7 +337,10 @@ function insertPreparedBlocks(
       } else {
         placement = panel.blocks.getInsertionDestinationAfter(afterId);
       }
-      afterId = panel.blocks.insertBlock({ type: item.type, props: item.props }, placement).id;
+      afterId = panel.blocks.insertBlock(
+        { id: blockIds?.[index], type: item.type, props: item.props },
+        placement,
+      ).id;
     }
   });
 }

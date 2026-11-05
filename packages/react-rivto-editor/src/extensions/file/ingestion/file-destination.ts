@@ -1,4 +1,8 @@
-import { BlockSelectionEndpoints, type BetweenBlockDropDestination } from "@chulane/rivto-page";
+import {
+  BlockSelectionEndpoints,
+  type BlockDropDestination,
+  type ResolvedBlockDropTarget,
+} from "@chulane/rivto-page";
 import type { ReactPanelApi } from "../../../panels/types";
 import type { EditorEvent } from "../../../managers/events/editor-event";
 import type { FileIngestionPoint } from "./types";
@@ -37,8 +41,9 @@ export interface FileDestinationPanel extends FileSelectionPanel {
  * Location and original text captured before asynchronous attachment preparation.
  *
  * A block replacement carries the content used to detect intervening edits.
- * A drop in a Page gap captures both neighbors to detect changes during preparation;
- * insertion after a block does not capture replacement state.
+ * A Page drop captures its parent and, for a gap, both neighbors so preparation
+ * cannot silently insert into a changed location. Insertion after a block does
+ * not capture replacement state.
  */
 export type FileDestination =
   | {
@@ -58,8 +63,8 @@ export type FileDestination =
       readonly kind: "block";
       /** Block after which the new block is inserted, when provided. */
       readonly afterId?: string;
-      /** Exact sibling gap resolved from the mounted Page layout, when dropped between blocks. */
-      readonly gap?: BetweenBlockDropDestination;
+      /** Page block destination resolved from mounted drop regions. */
+      readonly placement?: BlockDropDestination;
       /** This variant does not replace a block. */
       readonly replaceId?: never;
       /** This variant does not capture replacement content. */
@@ -72,8 +77,8 @@ export type FileDestination =
       readonly afterId?: string;
       /** Stable ID of the block to replace. */
       readonly replaceId: string;
-      /** Replacement does not use a between-block gap. */
-      readonly gap?: never;
+      /** Replacement does not use a Page block destination. */
+      readonly placement?: never;
       /** Original content used to detect intervening edits. */
       readonly content: string;
     }
@@ -206,12 +211,13 @@ export function filePasteDestination(
 }
 
 /**
- * Verifies that a captured text destination or Page gap is still safe to use.
+ * Verifies that a captured text destination or Page placement is still safe to use.
  *
  * @param reactPanel - Panel containing the destination block.
  * @param destination - Destination captured before asynchronous work.
  * @returns False when the original block was deleted, edited, or is no longer
- * replaceable, or when a captured Page gap no longer has the same neighbors.
+ * replaceable, a Page destination is no longer within the panel, or a captured
+ * gap no longer has the same neighbors.
  */
 export function isFileDestinationCurrent(
   reactPanel: Pick<FileDestinationPanel, "editor" | "blocks" | "rootBlockId">,
@@ -220,12 +226,16 @@ export function isFileDestinationCurrent(
   if (destination.kind === "inline") {
     return reactPanel.blocks.getBlock(destination.blockId)?.content === destination.content;
   }
-  if (destination.kind === "block" && destination.gap) {
-    const { parentId, previousId, nextId } = destination.gap;
+  if (destination.kind === "block" && destination.placement) {
+    const { parentId } = destination.placement;
     const siblings = blockGapSiblings(reactPanel, parentId);
     if (!siblings) {
       return false;
     }
+    if (destination.placement.kind === "inside") {
+      return true;
+    }
+    const { previousId, nextId } = destination.placement;
     const index = nextId === null ? siblings.length : siblings.indexOf(nextId);
     return index >= 0 && (index === 0 ? null : siblings[index - 1]) === previousId;
   }
@@ -246,25 +256,53 @@ export function isFileDestinationCurrent(
 /**
  * Resolves a file drop against the same Page gaps used by block dragging.
  *
- * Text content retains caret insertion; an exact between-block target creates a
- * new block and captures its neighbors for validation after preparation.
+ * Text content retains caret insertion; Page drop targets create a new block
+ * at the resolved parent and neighbors, which are validated after preparation.
  *
  * @param context - Receiving panel and event context.
  * @param point - Drop position in viewport pixels.
- * @returns A captured Page gap, text, block, or canvas destination.
+ * @returns A captured Page block placement, text, block, or canvas destination.
  * @throws If Page geometry resolution or delegated browser hit testing fails.
  */
 export function fileDropDestination(
   context: EditorEvent<"surface", "drop">,
   point: FileIngestionPoint,
 ): FileDestination {
-  if (context.mode === "block" && !context.contentElement) {
-    const target = context.reactPanel.page.dropTargets.resolve(point.x, point.y);
-    if (target?.destination.kind === "between") {
-      return { kind: "block", gap: target.destination };
-    }
+  const target = pageFileDropTarget(context, point);
+  if (target) {
+    return { kind: "block", placement: target.destination };
   }
   return fileDestinationAtPoint(context, point);
+}
+
+/**
+ * Resolves the Page block target shared by file-drop preview and insertion.
+ *
+ * Text content is excluded because it receives an inline insertion instead.
+ * The native event target avoids repeating browser hit testing after feedback
+ * changes the DOM; the resolver still checks that the target is connected.
+ *
+ * @param context - Surface and panel captured for the current drag event.
+ * @param point - Pointer position in viewport pixels.
+ * @returns The Page target, or undefined for text, canvas, and unresolved points.
+ * @throws If the Page resolver fails.
+ */
+export function pageFileDropTarget(
+  context: Pick<
+    EditorEvent<"surface", "drop">,
+    "mode" | "contentElement" | "reactPanel" | "root" | "raw"
+  >,
+  point: FileIngestionPoint,
+): ResolvedBlockDropTarget | undefined {
+  if (context.mode !== "block" || context.contentElement) {
+    return undefined;
+  }
+  const ElementConstructor = context.root.ownerDocument.defaultView?.Element;
+  const hit =
+    ElementConstructor && context.raw.target instanceof ElementConstructor
+      ? context.raw.target
+      : undefined;
+  return context.reactPanel.page.dropTargets.resolve(point.x, point.y, undefined, hit);
 }
 
 /**
@@ -281,8 +319,8 @@ export function retryFileDestination(
   reactPanel: FileDestinationPanel,
   destination: FileDestination,
 ): FileDestination {
-  if (destination.kind === "block" && destination.gap) {
-    const gap = destination.gap;
+  if (destination.kind === "block" && destination.placement?.kind === "between") {
+    const gap = destination.placement;
     const siblings = blockGapSiblings(reactPanel, gap.parentId);
     if (!siblings) {
       return destination;
@@ -299,7 +337,11 @@ export function retryFileDestination(
     }
     return {
       kind: "block",
-      gap: { ...gap, previousId: siblings[index - 1] ?? null, nextId: siblings[index] ?? null },
+      placement: {
+        ...gap,
+        previousId: siblings[index - 1] ?? null,
+        nextId: siblings[index] ?? null,
+      },
     };
   }
   let blockId: string | undefined;
@@ -376,16 +418,20 @@ export function fileDestinationAtPoint(
 }
 
 /**
- * Places the native caret at a browser hit-test position when one is available.
+ * Resolves a collapsed caret range at a browser hit-test position.
  *
  * The standard caret API is preferred; the legacy range API is used when it
- * cannot resolve the point. If neither succeeds, the current selection remains unchanged.
+ * cannot resolve the point. This does not modify the current selection.
  *
  * @param ownerDocument - Document containing the receiving editor surface.
  * @param point - Viewport coordinates to hit-test.
- * @returns Updates the native selection when a caret position can be resolved.
+ * @returns A collapsed range, or undefined when neither browser API resolves the point.
+ * @throws If the browser returns an invalid caret position or range creation fails.
  */
-function placeCaretAtPoint(ownerDocument: Document, point: FileIngestionPoint): void {
+export function fileCaretRangeAtPoint(
+  ownerDocument: Document,
+  point: FileIngestionPoint,
+): Range | undefined {
   const document = ownerDocument as Document & {
     /**
      * Resolves a legacy browser caret range from viewport coordinates.
@@ -398,12 +444,23 @@ function placeCaretAtPoint(ownerDocument: Document, point: FileIngestionPoint): 
   };
   const hit = document.caretPositionFromPoint?.(point.x, point.y);
   if (hit) {
-    ownerDocument
-      .getSelection()
-      ?.setBaseAndExtent(hit.offsetNode, hit.offset, hit.offsetNode, hit.offset);
-    return;
+    const range = ownerDocument.createRange();
+    range.setStart(hit.offsetNode, hit.offset);
+    range.collapse(true);
+    return range;
   }
-  const range = document.caretRangeFromPoint?.(point.x, point.y);
+  return document.caretRangeFromPoint?.(point.x, point.y) ?? undefined;
+}
+
+/**
+ * Places the native selection at the shared browser hit-test position.
+ *
+ * @param ownerDocument - Document containing the receiving editor surface.
+ * @param point - Viewport coordinates to hit-test.
+ * @returns Updates the selection when a caret position can be resolved.
+ */
+function placeCaretAtPoint(ownerDocument: Document, point: FileIngestionPoint): void {
+  const range = fileCaretRangeAtPoint(ownerDocument, point);
   if (range) {
     ownerDocument
       .getSelection()

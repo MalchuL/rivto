@@ -8,6 +8,14 @@
   vertical-align: middle;
 }
 
+.rivto-file-drop-caret {
+  position: fixed;
+  z-index: 1001;
+  width: 2px;
+  background: var(--rivto-drop-indicator-color, Highlight);
+  pointer-events: none;
+}
+
 .markdown-preview .rivto-image-frame {
   /* Keep the centered handle inside the Markdown paint boundary. */
   margin: 0 14px 14px 0;
@@ -131,7 +139,9 @@
   border-radius: var(--rivto-radius, 0.75rem);
   color: var(--rivto-popover-foreground);
   background: var(--rivto-popover);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 15%), 0 2px 6px rgb(0 0 0 / 8%);
+  box-shadow:
+    0 12px 28px rgb(0 0 0 / 15%),
+    0 2px 6px rgb(0 0 0 / 8%);
 }
 
 .rivto-image-context-menu [role="menuitem"],
@@ -232,6 +242,11 @@
   border-radius: 0.4rem;
   background: #fff;
   box-shadow: 0 2px 12px rgb(0 0 0 / 18%);
+  pointer-events: none;
+}
+
+.rivto-image-upload button,
+.rivto-file-upload button {
   pointer-events: auto;
 }
 

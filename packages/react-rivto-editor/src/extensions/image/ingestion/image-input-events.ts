@@ -3,6 +3,7 @@ import type { BinaryProvider, PreparedFile } from "../../../attachments";
 import type { FileIngestion } from "../../file/ingestion/file-ingestion";
 import type { FileIngestionPoint, FileInputPanel } from "../../file/ingestion/types";
 import type { FileUploadStatusStore } from "../../file/ingestion/file-upload-status";
+import { FileDropFeedback } from "../../file/ingestion/file-drop-feedback";
 import {
   fileDropDestination,
   filePasteDestination,
@@ -53,6 +54,7 @@ interface ImageInputEditor {
 
 /** Registers and routes image input for one extension installation. */
 export class ImageInputEvents {
+  private readonly dropFeedback: FileDropFeedback;
   /**
    * Borrows the editor operations and local state used by image input.
    *
@@ -75,7 +77,9 @@ export class ImageInputEvents {
     private readonly provider: BinaryProvider,
     /** Optional host notification for asynchronous image failures. */
     private readonly onError?: (error: unknown) => void,
-  ) {}
+  ) {
+    this.dropFeedback = new FileDropFeedback(ingestion.signal);
+  }
 
   /**
    * Registers image drag, paste, and picker interactions.
@@ -100,19 +104,25 @@ export class ImageInputEvents {
     this.editor.events.register(
       { id: "image.dragover", type: "dragover", capture: true },
       // Claim compatible drags inside the receiving root and advertise a copy.
-      ({ raw, root }) => {
+      (event) => {
+        const { raw, root } = event;
         const data = raw.dataTransfer;
         if (!data) {
+          this.dropFeedback.clear();
           return false;
         }
         const accepts =
           [...data.files].some((file) => file.type.startsWith("image/")) ||
           data.types.includes("Files") ||
           data.types.includes("text/uri-list");
-        if (accepts) {
+        const inside = root.contains(raw.target as Node);
+        if (accepts && inside) {
           data.dropEffect = "copy";
+          this.dropFeedback.update(event);
+        } else {
+          this.dropFeedback.clear();
         }
-        return accepts && root.contains(raw.target as Node);
+        return accepts && inside;
       },
     );
   }
