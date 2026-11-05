@@ -12,7 +12,7 @@ export type { EdgelessSnappingSnapshot } from "@chulane/rivto-edgeless";
 export interface EdgelessSurfaceOptions {
   /** Shared settings store; a private default store is created when omitted. */
   readonly snapping?: EdgelessSnappingStore;
-  /** Places automatically projected block cards away from existing block cards; defaults to true. */
+  /** Places automatically projected block cards away from existing elements; defaults to true. */
   readonly avoidBlockElementOverlap?: boolean;
   /** Width of newly created block cards in canvas units; defaults to the 720px page width. */
   readonly blockElementWidth?: number;

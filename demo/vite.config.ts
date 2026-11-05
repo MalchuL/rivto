@@ -44,6 +44,12 @@ export default defineConfig({
     // package's normal dist exports.
     alias: [
       {
+        find: /^@chulane\/rivto-utils$/,
+        replacement: fileURLToPath(
+          new URL("../packages/rivto-utils/src/index.ts", import.meta.url),
+        ),
+      },
+      {
         find: "@chulane/rivto-page/styles.css",
         replacement: fileURLToPath(
           new URL("../packages/rivto-page/src/presentation/styles.css", import.meta.url),

@@ -2,6 +2,7 @@ import { createBlockFactory } from "../block-factories";
 import { PanelElements } from "@chulane/rivto";
 import type { ReactPanelApi } from "../panels/types";
 import type { BlockElementProps } from "./types";
+import { ElementGeometry } from "./element-geometry";
 /**
  * Generic projection between ordered root blocks and persisted block elements.
  *
@@ -64,6 +65,35 @@ export function nonOverlappingBlockFrame(
       }
     }
   }
+}
+
+/**
+ * Measures occupied visual and block-card bounds within one element subtree.
+ *
+ * Groups have no painted surface of their own; their descendants are already
+ * present in the flat element list. Block cards outside this block scope are
+ * excluded, matching the projection's existing card ownership rules.
+ *
+ * @param elements - Flat element snapshot belonging to the receiving subtree.
+ * @param cards - Existing block cards belonging to the receiving block scope.
+ * @returns Axis-aligned bounds for painted elements and scoped block cards.
+ */
+function placementObstacles(
+  elements: readonly EditorElementNode[],
+  cards: readonly EditorElementNode[],
+) {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const cardIds = new Set(cards.map((card) => card.id));
+  const geometry = new ElementGeometry((id) => byId.get(id));
+  return elements.flatMap((element) => {
+    if (
+      element.type === "group" ||
+      (element.type === EDGELESS_BLOCK_ELEMENT_TYPE && !cardIds.has(element.id))
+    ) {
+      return [];
+    }
+    return geometry.bounds(element.id) ?? [];
+  });
 }
 
 /**
@@ -437,7 +467,7 @@ export class BlockElementProjection {
   }
 
   /**
-   * Configures whether future reconciled block cards avoid existing cards.
+   * Configures whether future reconciled block cards avoid existing element bounds.
    * The setting belongs to this document runtime, independent of mounted views.
    * @param enabled - Whether new cards should search for a free frame.
    */
@@ -531,7 +561,8 @@ export class BlockElementProjection {
     const rootSet = new Set(rootOrder);
     // Element roots limit the search; surviving block boundaries identify which
     // block scope can update the element. Fully deleted ranges can be removed.
-    const existing = elements.getElementNodes().filter((element) => {
+    const elementNodes = elements.getElementNodes();
+    const existing = elementNodes.filter((element) => {
       if (element.type !== EDGELESS_BLOCK_ELEMENT_TYPE) {
         return false;
       }
@@ -630,7 +661,7 @@ export class BlockElementProjection {
     const matches = matchConnectedSegments(scores);
     const avoidOverlap = this.avoidOverlap;
     const defaultWidth = this.defaultWidth;
-    const occupied = existing.map((element) => element.frame);
+    let occupied: EditorElementNode["frame"][] | undefined;
 
     // Produce the canonical element for each segment. Matched cards retain all
     // presentation state; only new cards receive default placement and sizing.
@@ -642,10 +673,10 @@ export class BlockElementProjection {
         x: 60 + index * 24,
         y: 60 + index * 24,
       };
-      const frame =
-        existingElement?.frame ??
-        (avoidOverlap ? nonOverlappingBlockFrame(preferred, occupied) : preferred);
-      if (!existingElement) {
+      let frame = existingElement?.frame ?? preferred;
+      if (!existingElement && avoidOverlap) {
+        occupied ??= placementObstacles(elementNodes, existing);
+        frame = nonOverlappingBlockFrame(preferred, occupied);
         occupied.push(frame);
       }
       return {

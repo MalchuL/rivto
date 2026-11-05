@@ -212,9 +212,11 @@ through that store.
 
 Double-clicking empty canvas creates a block card at the clicked position, even
 when its frame overlaps an existing card. Block cards created automatically by
-document projection avoid existing block cards by default. Pass
-`avoidBlockElementOverlap: false` to disable overlap avoidance for those automatic
-placements; visual objects never participate in this placement check.
+document projection avoid existing block cards and visual elements in the same
+element subtree by default. The search uses axis-aligned bounds of rotated
+elements; groups contribute their visible descendants rather than empty space
+between them. Pass `avoidBlockElementOverlap: false` to disable overlap avoidance
+for those automatic placements.
 
 New cards use the page surface's `720px` width by default. Set
 `blockElementWidth` in the edgeless surface options to choose another initial

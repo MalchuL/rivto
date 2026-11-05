@@ -16,6 +16,8 @@ import {
   elementContainsBlock,
   nonOverlappingBlockFrame,
 } from "./block-element-projection";
+import { rotatedFrameBounds } from "./visuals/utils/geometry";
+import { ElementGeometry } from "./element-geometry";
 
 describe("edgeless block element reconciliation", () => {
   test("shares block-card maintenance and releases it once on final disconnect or owner destruction", async () => {
@@ -83,7 +85,7 @@ describe("edgeless block element reconciliation", () => {
     });
   });
 
-  test("avoids only block cards when reconciling new ranges and supports opt-out", async () => {
+  test("avoids visual elements and block cards when reconciling new ranges", async () => {
     const editor = await createDocumentEditor();
     const reactPanel = createRuntime(editor);
     const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
@@ -95,7 +97,7 @@ describe("edgeless block element reconciliation", () => {
       { type: "paragraph", content: "Second" },
       editor.blocks.getInsertionDestinationAfter(separator),
     );
-    editor.elements.insertElement({
+    const visual = editor.elements.insertElement({
       type: "rectangle",
       frame: { x: 60, y: 60, width: 1000, height: 1000 },
       zIndex: 0,
@@ -104,10 +106,13 @@ describe("edgeless block element reconciliation", () => {
     const cards = editor.elements.getElementNodes().filter((element) => element.type === "block");
     expect(cards).toHaveLength(2);
     expect(blockFramesOverlap(cards[0]!.frame, cards[1]!.frame)).toBe(false);
-    expect(cards[0]!.frame).toMatchObject({ x: 60, y: 60 });
+    expect(blockFramesOverlap(cards[0]!.frame, visual.frame)).toBe(false);
+    expect(blockFramesOverlap(cards[1]!.frame, visual.frame)).toBe(false);
     reactPanel.editor.destroy();
     editor.destroy();
+  });
 
+  test("allows overlap with cards and visuals when avoidance is disabled", async () => {
     const overlapEditor = await createDocumentEditor();
     const overlapRuntime = createRuntime(overlapEditor);
     const left = overlapEditor.blocks.insertBlock({ type: "paragraph" }).id;
@@ -120,12 +125,138 @@ describe("edgeless block element reconciliation", () => {
       overlapEditor.blocks.getInsertionDestinationAfter(split),
     );
     overlapRuntime.editor.blockElements.setOverlapAvoidance(false);
+    const ignoredVisual = overlapEditor.elements.insertElement({
+      type: "ellipse",
+      frame: { x: 60, y: 60, width: 1000, height: 1000 },
+      zIndex: 0,
+    });
     overlapRuntime.editor.blockElements.reconcile();
-    const overlapping = overlapEditor.elements.getElementNodes();
+    const overlapping = overlapEditor.elements
+      .getElementNodes()
+      .filter((element) => element.type === "block");
     expect(blockFramesOverlap(overlapping[0]!.frame, overlapping[1]!.frame)).toBe(true);
+    expect(blockFramesOverlap(overlapping[0]!.frame, ignoredVisual.frame)).toBe(true);
     overlapRuntime.editor.destroy();
     overlapEditor.destroy();
   });
+
+  test("avoids the rotated bounds of a visual outside its unrotated frame", async () => {
+    const editor = await createDocumentEditor();
+    const runtime = createRuntime(editor);
+    editor.blocks.insertBlock({ type: "paragraph" });
+    const visual = editor.elements.insertElement({
+      type: "rectangle",
+      frame: { x: 805, y: 0, width: 40, height: 240 },
+      props: { rotation: 90 },
+      zIndex: 0,
+    });
+    const bounds = rotatedFrameBounds(visual.frame, 90);
+    expect(blockFramesOverlap(EDGELESS_CARD_DEFAULT_FRAME, visual.frame)).toBe(false);
+    expect(blockFramesOverlap(EDGELESS_CARD_DEFAULT_FRAME, bounds)).toBe(true);
+    runtime.editor.blockElements.reconcile();
+    const card = editor.elements.getElementNodes().find((element) => element.type === "block")!;
+    expect(blockFramesOverlap(card.frame, bounds)).toBe(false);
+    runtime.editor.destroy();
+    editor.destroy();
+  });
+
+  test("avoids grouped visual children without reserving empty space between them", async () => {
+    const editor = await createDocumentEditor();
+    const runtime = createRuntime(editor);
+    editor.blocks.insertBlock({ type: "paragraph" });
+    editor.elements.insertElement({
+      type: "group",
+      frame: { x: 0, y: 60, width: 1000, height: 100 },
+      zIndex: 0,
+      children: [
+        { type: "image", frame: { x: 0, y: 60, width: 20, height: 100 }, zIndex: 0 },
+        { type: "rectangle", frame: { x: 900, y: 60, width: 20, height: 100 }, zIndex: 0 },
+      ],
+    });
+    runtime.editor.blockElements.reconcile();
+    const card = editor.elements.getElementNodes().find((element) => element.type === "block")!;
+    expect(card.frame).toEqual(EDGELESS_CARD_DEFAULT_FRAME);
+    runtime.editor.destroy();
+    editor.destroy();
+  });
+
+  test("does not measure obstacle bounds when all cards already exist", async () => {
+    const editor = await createDocumentEditor();
+    const runtime = createRuntime(editor);
+    editor.blocks.insertBlock({ type: "paragraph" });
+    editor.elements.insertElement({
+      type: "rectangle",
+      frame: { x: 60, y: 60, width: 100, height: 100 },
+      zIndex: 0,
+    });
+    runtime.editor.blockElements.reconcile();
+    const bounds = jestApi.spyOn(ElementGeometry.prototype, "bounds");
+    try {
+      runtime.editor.blockElements.reconcile();
+      expect(bounds).not.toHaveBeenCalled();
+    } finally {
+      bounds.mockRestore();
+      runtime.editor.destroy();
+      editor.destroy();
+    }
+  });
+
+  test.each(["image", "file", "connector", "drawing"])(
+    "avoids a %s element when creating a new card",
+    async (type) => {
+      const editor = await createDocumentEditor();
+      const runtime = createRuntime(editor);
+      editor.blocks.insertBlock({ type: "paragraph" });
+      const visual = editor.elements.insertElement({
+        type,
+        frame: { x: 60, y: 60, width: 100, height: 100 },
+        zIndex: 0,
+      });
+      runtime.editor.blockElements.reconcile();
+      const card = editor.elements.getElementNodes().find((element) => element.type === "block")!;
+      expect(blockFramesOverlap(card.frame, visual.frame)).toBe(false);
+      editor.elements.updateElement(visual.id, { frame: { x: card.frame.x, y: card.frame.y } });
+      runtime.editor.blockElements.reconcile();
+      expect(editor.elements.getElementNode(card.id)?.frame).toEqual(card.frame);
+      runtime.editor.destroy();
+      editor.destroy();
+    },
+  );
+
+  for (const inside of [false, true]) {
+    test(`automatic card placement respects the element subtree, obstacle inside=${inside}`, async () => {
+      const editor = await createDocumentEditor();
+      const runtime = createRuntime(editor);
+      const parent = editor.blocks.insertBlock({
+        type: "paragraph",
+        children: [{ type: "paragraph" }],
+      });
+      const obstacle = {
+        type: "rectangle",
+        frame: { x: 60, y: 60, width: 100, height: 100 },
+        zIndex: 0,
+      };
+      const container = editor.elements.insertElement({
+        type: "group",
+        frame: { x: 0, y: 0, width: 200, height: 200 },
+        zIndex: 0,
+        children: inside ? [obstacle] : [],
+      });
+      if (!inside) {
+        editor.elements.insertElement(obstacle);
+      }
+      const projection = runtime.editor.blockElements.createPanelProjection(
+        parent.id,
+        container.id,
+      );
+      projection.reconcile();
+      const card = editor.elements.getElementNodes().find((element) => element.type === "block")!;
+      expect(blockFramesOverlap(card.frame, obstacle.frame)).toBe(!inside);
+      projection.destroy();
+      runtime.editor.destroy();
+      editor.destroy();
+    });
+  }
 
   test("uses the page-sized default card width and accepts a panel override", async () => {
     const editor = await createDocumentEditor();
