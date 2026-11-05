@@ -58,6 +58,14 @@ export interface FilePreparationContext {
   readonly signal: AbortSignal;
 }
 
+/**
+ * Defines a shared base URI or selects one for a document.
+ *
+ * @param documentId - ID of the document containing the reference when using a callback.
+ * @returns The document's base URI, or undefined when the callback has no base for it.
+ */
+export type DocumentBaseUri = string | ((documentId: string) => string | undefined);
+
 /** Creation-time defaults for the file pipeline. */
 export interface AttachmentOptions {
   /**
@@ -71,7 +79,7 @@ export interface AttachmentOptions {
    * @param documentId - ID of the document containing the reference.
    * @returns Base URI, or undefined when no base is configured for the document.
    */
-  readonly documentBaseUri?: string | ((documentId: string) => string | undefined);
+  readonly documentBaseUri?: DocumentBaseUri;
 }
 
 /** Stable metadata persisted by every uploaded or referenced file type. */

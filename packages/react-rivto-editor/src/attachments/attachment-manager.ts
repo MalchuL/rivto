@@ -7,6 +7,7 @@ import type {
   FileReference,
   BinaryProvider,
   BinaryReadContext,
+  DocumentBaseUri,
   FileRequestContext,
 } from "./types";
 
@@ -155,7 +156,7 @@ export class AttachmentManager {
           throw new TypeError(`No binary provider accepted ${value.split(":", 1)[0]}:`);
         }
         // The option can be a fixed base, a document-specific lookup, or absent.
-        const configured: AttachmentOptions["documentBaseUri"] = this.options.documentBaseUri;
+        const configured: DocumentBaseUri | undefined = this.options.documentBaseUri;
         // A lookup can also return undefined when this document has no base.
         const base: string | undefined =
           typeof configured === "function" ? configured(operationContext.documentId) : configured;
