@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Copy } from "lucide-react";
 import type { BinaryProvider } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
 import { mimeTypeFromExtension } from "../../../file/utils/file-input";
@@ -198,6 +199,7 @@ function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps)
       }}
     >
       <button type="button" role="menuitem" autoFocus onClick={onCopy}>
+        <Copy size={16} aria-hidden="true" />
         Copy image
       </button>
       {error && <span role="alert">{error}</span>}
