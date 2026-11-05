@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BinaryProvider } from "../../../../attachments";
-import type { AttachmentApi } from "../../../../editor/types";
+import type { AttachmentApi, BinaryProvider } from "../../../../attachments";
 
 const IMAGE_LOADING_DELAY_MS = 200;
 
