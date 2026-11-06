@@ -30,6 +30,43 @@ afterEach(() => {
 });
 
 describe("edgelessVisualsExtension", () => {
+  test("application fonts affect creation and previews without rewriting saved or remembered fonts", async () => {
+    const editor = await createDocumentEditor({ mode: "edgeless" });
+    const panel = createReactEditor({ editor, extensions: [edgelessVisualsExtension()] });
+    const operations = observeOperations(panel);
+    const initial = editor.dump();
+    operations.setDefaultFontFamily("Georgia, serif");
+    expect(editor.dump()).toEqual(initial);
+    expect(operations.getDefaults().connector.fontFamily).toBe("Georgia, serif");
+    for (const type of ["text", "rectangle", "ellipse", "sticker"]) {
+      const input = { type };
+      expect(operations.prepareElementCreation(input).props.fontFamily).toBe("Georgia, serif");
+      expect(operations.createElement(input).props.fontFamily).toBe("Georgia, serif");
+    }
+    const saved = operations.createElement({ type: "text" });
+    operations.setDefaultFontFamily("monospace");
+    expect(editor.elements.getElementNode(saved.id)?.props.fontFamily).toBe("Georgia, serif");
+    expect(operations.createElement({ type: "text" }).props.fontFamily).toBe("monospace");
+    operations.setCreationDefaults("text", { fontFamily: "monospace" });
+    operations.setDefaultFontFamily("sans-serif");
+    expect(operations.createElement({ type: "text" }).props.fontFamily).toBe("monospace");
+    expect(operations.createElement({ type: "sticker" }).props.fontFamily).toBe("sans-serif");
+    expect(
+      operations.prepareElementCreation({ type: "text", props: { fontFamily: "serif" } }).props
+        .fontFamily,
+    ).toBe("serif");
+    operations.previewProperties([saved.id], { fontFamily: "cursive" });
+    operations.commitPropertyPreview();
+    operations.setDefaultFontFamily("fantasy");
+    expect(operations.createElement({ type: "text" }).props.fontFamily).toBe("cursive");
+    const standalone = new EdgelessOperations(panel.editor);
+    expect(standalone.createElement({ type: "text" }).props.fontFamily).toBe(
+      "Inter, ui-sans-serif, system-ui, sans-serif",
+    );
+    standalone.destroy();
+    panel.editor.destroy();
+    editor.destroy();
+  });
   test("resizes drawing coordinates through both visual update and selection resize", async () => {
     const editor = await createDocumentEditor({ mode: "edgeless" });
     const extension = edgelessVisualsExtension({ toolbar: false });

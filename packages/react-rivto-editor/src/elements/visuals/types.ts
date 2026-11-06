@@ -135,9 +135,18 @@ export interface VisualGroup {
   children: EdgelessSelectionRef[];
 }
 
-/** Font offered by text and sticky-note property menus. */
+/**
+ * Font offered by text and sticky-note property menus and the shared application catalog.
+ * Describes a CSS choice only; the application loads the corresponding font files.
+ */
 export interface EdgelessFontOption {
+  /** Human-readable name shown in font pickers; changing it does not alter saved fonts. */
   readonly label: string;
+  /**
+   * CSS family or fallback stack used as the picker value and persisted element font.
+   * Include quoting and browser fallbacks where needed, for example '"Brand Sans", sans-serif'.
+   * Catalog identity and default matching use this exact string, not the display label.
+   */
   readonly fontFamily: string;
 }
 

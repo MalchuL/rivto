@@ -268,3 +268,6 @@ export type {
 } from "./managers/edgeless-toolbar/types";
 export { EdgelessToolButton } from "./components/edgeless/tool-button";
 export type { EdgelessToolButtonProps, EdgelessToolIcon } from "./components/edgeless/tool-button";
+
+export { EditorFontsProvider, useEditorFonts } from "./fonts/editor-fonts";
+export type { EditorFonts, EditorFontsProviderProps } from "./fonts/editor-fonts";

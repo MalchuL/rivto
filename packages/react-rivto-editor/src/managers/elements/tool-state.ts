@@ -1,3 +1,4 @@
+import { DEFAULT_FONTS } from "../../elements/visuals/presets";
 import { RevisionStore } from "../../internal-store";
 import type { EdgelessToolbarApi, EdgelessToolbarTool } from "../edgeless-toolbar/types";
 import type {
@@ -8,7 +9,7 @@ import type {
 } from "../../elements/visuals/types";
 import { DEFAULT_PLACE_SIZE } from "../../elements/visuals/utils/creation-geometry";
 const copy = <Value>(value: Value): Value => structuredClone(value);
-const DEFAULT_FONT = "Inter, ui-sans-serif, system-ui, sans-serif";
+const DEFAULT_FONT = DEFAULT_FONTS[0]!.fontFamily;
 /** Built-in brush presets; stroke widths are canvas units and opacity ranges from zero to one. */
 export const drawingDefaults = {
   pencil: { stroke: "#3f3f46", strokeWidth: 2, opacity: 0.68 },

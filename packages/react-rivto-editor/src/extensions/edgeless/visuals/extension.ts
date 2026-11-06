@@ -15,8 +15,11 @@ import { EdgelessVisualLayer } from "./visual-layer";
  * Setup installs built-in definitions, toolbar groups, connector maintenance and the
  * visual layer. Cleanup removes these registrations in reverse order without deleting
  * persisted content; partial setup is rolled back if any registration fails.
+ * Application font catalogs are supplied separately through EditorFontsProvider,
+ * allowing mounted controls and inherited block typography to update without
+ * reinstalling this extension or rewriting saved element fonts.
  *
- * @param options - Optional font/sticker catalogs, toolbar visibility and connector settings;
+ * @param options - Optional sticker catalog, toolbar visibility and connector settings;
  * omitted fields use the built-in defaults.
  * @returns Creation-time React editor extension.
  */

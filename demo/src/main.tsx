@@ -2,6 +2,7 @@ import "./crypto-polyfill";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { DemoFontsProvider } from "./fonts";
 import "@chulane/rivto-react/styles.css";
 import "./styles.css";
 
@@ -17,9 +18,13 @@ const lifecycleTest = params.has("editorLifecycle") || params.has("elementRegist
 createRoot(root).render(
   lifecycleTest ? (
     <StrictMode>
-      <App />
+      <DemoFontsProvider>
+        <App />
+      </DemoFontsProvider>
     </StrictMode>
   ) : (
-    <App />
+    <DemoFontsProvider>
+      <App />
+    </DemoFontsProvider>
   ),
 );

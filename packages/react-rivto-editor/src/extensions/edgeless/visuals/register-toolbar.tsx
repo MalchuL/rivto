@@ -1,12 +1,9 @@
 import type { ReactEditorApi } from "../../../editor/types";
-import type {
-  EdgelessToolbarGroupProps,
-  EdgelessToolbarTool,
-} from "../../../managers/edgeless-toolbar/types";
+import type { EdgelessToolbarTool } from "../../../managers/edgeless-toolbar/types";
 import type { EdgelessVisualsOptions } from "./types";
 import type { EdgelessToolIcon } from "../../../components/edgeless/tool-button";
 import type { PresetPayload } from "../../../elements/visuals/types";
-import { DEFAULT_FONTS, DEFAULT_STICKERS } from "../../../elements/visuals/presets";
+import { DEFAULT_STICKERS } from "../../../elements/visuals/presets";
 import {
   ShapeTools,
   DrawingTools,
@@ -25,8 +22,8 @@ const STICKER_SWATCH_CLASS = "edgeless-creation-panel-sticker-swatch";
  * custom group contents. Element definitions are installed separately by registerVisualElements.
  * Hosts can add members by registering tools with the corresponding group ID.
  * @param editor - Shared React editor that owns these registrations.
- * @param options - Host font and sticker catalogs used by the registered groups.
- * Host catalog entries replace built-ins with the same fontFamily or sticker ID.
+ * @param options - Host sticker catalog used by the registered groups.
+ * Host catalog entries replace built-ins with the same sticker ID.
  * @returns Idempotent cleanup; partial installation is rolled back if a registration conflicts.
  * @throws If the owner is inactive or a group/tool ID is already registered.
  */
@@ -75,17 +72,11 @@ export function registerVisualToolbar(
     });
   };
   try {
-    const fonts = [
-      ...new Map(
-        [...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font]),
-      ).values(),
-    ];
     const stickers = [
       ...new Map(
         [...DEFAULT_STICKERS, ...(options.stickers ?? [])].map((sticker) => [sticker.id, sticker]),
       ).values(),
     ];
-    const TextGroup = (props: EdgelessToolbarGroupProps) => <TextTools {...props} fonts={fonts} />;
     for (const group of [
       {
         id: "shapes",
@@ -95,7 +86,7 @@ export function registerVisualToolbar(
         defaultToolId: "rectangle",
       },
       { id: "drawing", title: "Drawing", icon: "draw", render: DrawingTools, defaultToolId: "pen" },
-      { id: "text", title: "Text", icon: "text", render: TextGroup },
+      { id: "text", title: "Text", icon: "text", render: TextTools },
       { id: "stickers", title: "Stickies", icon: "sticker", render: StickerTools },
       { id: "connectors", title: "Connectors", icon: "connector", render: ConnectorTools },
     ] as const) {

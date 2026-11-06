@@ -107,13 +107,12 @@ const handleMarkdownLink = ({ href, event }: MarkdownLinkClick): void => {
 };
 
 /**
- * Host-supplied edgeless picker options (extra fonts and sticky presets).
+ * Host-supplied edgeless picker options (additional sticky presets).
  *
  * Needed to show that `edgelessVisualsExtension(...)` accepts real product
  * configuration, not only the library defaults.
  */
 const edgelessOptions = {
-  fonts: [{ label: "Editorial serif", fontFamily: "Georgia, Cambria, serif" }],
   stickers: [
     { id: "lavender", label: "Lavender sticky", fill: "#eeeaff", color: "#362b67" },
     { id: "mint", label: "Mint sticky", fill: "#d3f9d8", color: "#2b8a3e" },

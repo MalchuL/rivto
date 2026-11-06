@@ -1,3 +1,4 @@
+import { useCardHeightMeasurements } from "./use-card-height-measurements";
 import { EDITOR_CONTROL_SELECTOR } from "../../constants";
 import { SurfaceBoundary } from "../surface";
 import { getEdgelessSurfaceOptions } from "./register";
@@ -116,6 +117,7 @@ function EdgelessSurfaceContent({
 }) {
   const reactPanel = useReactPanel();
   const rootIds = useRootBlockIds();
+  const scheduleHeightMeasurement = useCardHeightMeasurements(reactPanel);
   const blockElements = useElements().filter(
     (element) =>
       element.type === EDGELESS_BLOCK_ELEMENT_TYPE &&
@@ -544,6 +546,7 @@ function EdgelessSurfaceContent({
             roots between them render without rewriting element props. */}
         {blockElements.map((element) => (
           <EdgelessBlockElement
+            scheduleHeightMeasurement={scheduleHeightMeasurement}
             key={element.id}
             element={element}
             blockIds={blockIdsOf(element, rootIds)}

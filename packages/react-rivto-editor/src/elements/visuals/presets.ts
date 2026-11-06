@@ -1,6 +1,10 @@
 import type { EdgelessFontOption, EdgelessStickerOption } from "./types";
 
-/** Built-in font choices for text and sticky creation defaults. */
+/**
+ * Built-in font choices for text and sticky creation defaults, and the fallback
+ * application catalog when no EditorFontsProvider is present. The first entry is
+ * the built-in Sans default; these CSS stacks do not load or bundle font files.
+ */
 export const DEFAULT_FONTS: readonly EdgelessFontOption[] = [
   { label: "Sans", fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" },
   { label: "Serif", fontFamily: "Georgia, Cambria, serif" },

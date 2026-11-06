@@ -16,7 +16,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
  * a child that is the only full-list subscriber so marquee growth cannot
  * re-render every shape.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useEditorRoot, useReactPanel } from "../../../hooks";
 import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
@@ -25,12 +25,10 @@ import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
 import { ToolBar } from "./components/tool-bar";
 import { VisualElement } from "../../../elements/visuals/visual-element";
-import { VisualFontContext } from "../../../elements/visuals/properties";
 import type { EdgelessOperations } from "../../../managers/elements/edgeless-operations";
 import { useDrawingGesture, type ConnectorHover } from "./hooks/use-drawing-gesture";
 import { usePresetDrag } from "./hooks/use-preset-drag";
 import { useVisualTool } from "../../../hooks/elements/use-visual-tool";
-import { DEFAULT_FONTS } from "../../../elements/visuals/presets";
 import type { ConnectorEndpoint } from "../../../elements/visuals/types";
 import { canvasPoint } from "../../../elements/visuals/utils/canvas-point";
 
@@ -178,14 +176,6 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
   const plane = root?.querySelector<HTMLElement>("[data-edgeless-plane]") ?? null;
   const zoom = Number(root?.dataset.edgelessZoom) || 1;
   const elements = edgelessOperation.getRenderedElements();
-  const fontOptions = useMemo(
-    () => [
-      ...new Map(
-        [...DEFAULT_FONTS, ...(options.fonts ?? [])].map((font) => [font.fontFamily, font]),
-      ).values(),
-    ],
-    [options.fonts],
-  );
   const presetDrag = usePresetDrag({ edgelessOperation, root, plane, zoom });
   const drawing = useDrawingGesture({ edgelessOperation, root, zoom, tool });
   const drawingRef = useRef(drawing);
@@ -332,12 +322,7 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
           </>,
           root,
         )}
-      {createPortal(
-        <VisualFontContext.Provider value={fontOptions}>
-          <EdgelessSelectionChrome edgelessOperation={edgelessOperation} />
-        </VisualFontContext.Provider>,
-        root,
-      )}
+      {createPortal(<EdgelessSelectionChrome edgelessOperation={edgelessOperation} />, root)}
     </>
   );
 }

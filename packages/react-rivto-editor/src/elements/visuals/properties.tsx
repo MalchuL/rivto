@@ -7,13 +7,13 @@
  * picks a value. Controls are shadcn primitives (`NativeSelect`, `Checkbox`)
  * plus the shared edgeless size and color controls.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Checkbox } from "../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { editorControlProps } from "../../constants";
 import type { ElementPropertiesProps } from "../../managers/elements/types";
-import { DEFAULT_FONTS } from "./presets";
-import type { EdgelessFontOption, TextHorizontalAlign, TextVerticalAlign } from "./types";
+import { useEditorFonts } from "../../fonts/editor-fonts";
+import type { TextHorizontalAlign, TextVerticalAlign } from "./types";
 import { ColorControl } from "../../components/edgeless/color-control";
 import { PropertyGroup, PropertyRow } from "../../components/edgeless/properties-panel";
 import { SizeControl } from "../../components/edgeless/size-control";
@@ -85,9 +85,6 @@ const verticalAlignments: readonly {
   { value: "bottom", label: "Align text bottom", icon: "align-bottom" },
 ];
 
-/** Host-configured font choices are shared by built-in text property editors. */
-export const VisualFontContext = createContext<readonly EdgelessFontOption[]>(DEFAULT_FONTS);
-
 /** Reuses the shared preview API for color and paint controls without dispatching element types. */
 function propertyControls({ elements, common, preview }: ElementPropertiesProps) {
   const color = (label: string, key: "fill" | "stroke" | "color", disabled?: boolean) =>
@@ -119,22 +116,33 @@ function propertyControls({ elements, common, preview }: ElementPropertiesProps)
 
 /**
  * Renders the same-type multi-selection text property editor.
+ *
+ * Font choices follow the nearest application font provider. A common saved family
+ * absent from its catalog remains visible as the current value; differing families
+ * retain the Mixed placeholder. Choosing a font previews it through the supplied
+ * operations and leaves persistence to the property panel's commit boundary.
+ *
  * @param props - Selected snapshots and shared preview operations; connector adds label rotation.
  * @returns Text property rows inside the surface-owned right-side panel.
  */
 export function TextProperties(props: ElementPropertiesProps & { connector?: boolean }) {
   const { connector } = props;
   const { color, common, preview } = propertyControls(props);
-  const fontOptions = useContext(VisualFontContext);
+  const { fonts: fontOptions } = useEditorFonts();
+  const fontFamily = common("fontFamily");
   return (
     <PropertyGroup title="Text">
       <PropertyRow label="Color">{color("Text color", "color")}</PropertyRow>
       <PropertyRow label="Font">
         <PropertySelect
           label="Font family"
-          value={common("fontFamily")}
+          value={fontFamily}
           onChange={(fontFamily) => preview({ fontFamily })}
         >
+          {typeof fontFamily === "string" &&
+            !fontOptions.some((font) => font.fontFamily === fontFamily) && (
+              <NativeSelectOption value={fontFamily}>{fontFamily}</NativeSelectOption>
+            )}
           {fontOptions.map((font) => (
             <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>
               {font.label}

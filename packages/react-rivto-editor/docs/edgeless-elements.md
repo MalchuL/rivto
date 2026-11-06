@@ -55,18 +55,56 @@ clipboard and undo.
 
 `sticker` is a styled editable sticky note. Its props are `text`, `fill`,
 `color`, `fontFamily`, `fontSize`, and `align`; image/emoji sticker props are
-not supported. Applications may append font and sticky presets:
+not supported. Applications provide fonts through `EditorFontsProvider` and may append
+sticky presets through the visual extension:
 
 ```ts
 const reactEditor = createReactEditor({
   editor,
   extensions: [standardPreset(), ...edgelessPreset({ visuals: {
-    fonts: [{ label: "Brand", fontFamily: "Brand Sans, sans-serif" }],
     stickers: [{ id: "brand", label: "Brand sticky", fill: "#e8f0ff" }],
     orphanConnectors: "detach",
   } })],
 });
 ```
+
+Applications own font files and their loading (`@font-face` for bundled assets, or
+application-managed asset URLs for user-added fonts). Wrap panels and embeds in a
+shared provider; its catalog replaces all built-in choices:
+
+```tsx
+<EditorFontsProvider
+  fonts={[
+    { label: "Brand", fontFamily: '"Brand Sans", sans-serif' },
+    { label: "Serif", fontFamily: "Georgia, serif" },
+  ]}
+  defaultFontFamily={'"Brand Sans", sans-serif'}
+>
+  <EditorPanel editor={reactEditor}><PageSurface /></EditorPanel>
+</EditorFontsProvider>
+```
+
+Replace the fonts array to add/remove choices while editors are mounted. The
+catalog must contain unique, nonempty CSS family stacks and include the default;
+invalid configuration throws. Without a provider, the built-in Sans/Serif/Mono
+catalog and Sans default apply. `useEditorFonts()` exposes the nearest configuration
+to custom renderers and controls. No font files are loaded by the editor.
+
+Ordinary block content inherits the current default in page and edgeless modes;
+code keeps its monospace styling. New canvas elements and their previews use the
+application default, overridden by explicit props or the panel's remembered font
+choice. Existing element fonts remain persisted when the default or catalog changes.
+An unlisted selected font remains visible as the current picker value. Removing a
+choice does not delete assets or rewrite documents; unavailable files use their CSS
+fallbacks. Provider updates do not enter document undo history. Auto-height block
+cards still remeasure and save their derived heights when typography reflows content.
+Resize observations share a history-free batch per surface per frame. Custom renderers
+with explicit font styling must opt into inheritance themselves.
+
+The provider is React presentation configuration, not document metadata. Applications
+can persist user catalogs and defaults in application settings and keep font files
+in their own asset storage. Commands and operations created without the React hook
+cannot read the provider; pass explicit `fontFamily` props or use built-in defaults.
 
 Inside an EditorPanel subtree, a canvas component can own typed operations through the React hook:
 

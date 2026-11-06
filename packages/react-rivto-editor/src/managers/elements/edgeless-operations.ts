@@ -67,6 +67,7 @@ export class EdgelessOperations {
   private revision = 0;
   private readonly sharedCreationDefaults = new Map<string, Record<string, unknown>>();
   private readonly creationDefaults = new Map<string, Record<string, unknown>>();
+  private readonly rememberedFontGroups = new Set<string>();
   private readonly propertyPreview = new Map<string, Record<string, unknown>>();
 
   /**
@@ -405,15 +406,54 @@ export class EdgelessOperations {
    * Updates local creation defaults without mutating document content.
    *
    * Only keys already present in the selected defaults are copied; subscribers are notified.
+   * A string fontFamily marks that category's font as remembered, even if it equals
+   * the current application default. Later application default changes preserve
+   * that choice for this operations instance. Values reset when its mounted
+   * edgeless representation is replaced; this method does not validate element props.
    *
    * @param kind - Built-in visual category whose creation defaults change.
-   * @param patch - Property values to clone into the session defaults.
+   * @param patch - Property values to clone into the session defaults; unknown keys are ignored.
+   * @returns No value after publishing the local defaults change synchronously.
    */
   setCreationDefaults(
     kind: "shape" | "drawing" | "text" | "sticker" | "connector",
     patch: Record<string, unknown>,
   ): void {
+    if (typeof patch.fontFamily === "string") {
+      this.rememberedFontGroups.add(kind);
+    }
     return this.tools.setCreationDefaults(kind, patch);
+  }
+  /**
+   * Applies application typography to creation categories without a remembered font choice.
+   *
+   * Updates the built-in shape, text, sticky, and connector font defaults. A font
+   * remembered through creation controls or committed element properties takes
+   * precedence, even when its value matched the previous application default.
+   * Existing document elements and explicit creation props are never changed.
+   * The React operations hook applies the provider's default through this method;
+   * standalone operations otherwise retain their built-in defaults.
+   *
+   * @param fontFamily - Application default CSS family stack, including browser fallbacks;
+   * this method does not validate catalog membership or load font files.
+   * @returns No value; local subscribers are notified synchronously once if at least
+   * one eligible category changes. A call that changes no defaults does not notify.
+   */
+  setDefaultFontFamily(fontFamily: string): void {
+    let changed = false;
+    for (const [group, defaults] of Object.entries(this.defaults)) {
+      if (
+        "fontFamily" in defaults &&
+        !this.rememberedFontGroups.has(group) &&
+        defaults.fontFamily !== fontFamily
+      ) {
+        defaults.fontFamily = fontFamily;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.emit();
+    }
   }
   /**
    * Selects a brush and its complete visual preset for subsequent strokes.
@@ -1266,16 +1306,23 @@ export class EdgelessOperations {
   /**
    * Copies configured remembered properties into shared and per-type creation defaults.
    *
+   * A string fontFamily in properties committed to a shared defaults group also
+   * marks that group's font as remembered, protecting it from later application
+   * default changes. Only configured shared keys and rememberedProperties are copied;
+   * this updates local creation state rather than writing document content.
+   *
    * @param type - Native event or registered editor type name.
    * @param patch - Element properties whose configured creation defaults should be remembered.
+   * @returns No value after cloning the applicable properties into session defaults.
    */
   private remember(type: string, patch: Record<string, unknown>): void {
     const registration = this.runtime.elementTypes.get(type);
-    const shared = this.sessionDefaults(
-      registration?.behavior?.defaultsGroup,
-      registration?.definition.defaults,
-    );
+    const group = registration?.behavior?.defaultsGroup;
+    const shared = this.sessionDefaults(group, registration?.definition.defaults);
     if (shared) {
+      if (group && typeof patch.fontFamily === "string") {
+        this.rememberedFontGroups.add(group);
+      }
       for (const key of Object.keys(shared)) {
         if (key in patch) {
           shared[key] = copy(patch[key]);

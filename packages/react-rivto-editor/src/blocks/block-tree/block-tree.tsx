@@ -1,3 +1,4 @@
+import { EDITOR_CONTENT_FONT_PROPERTY } from "../../fonts/editor-fonts";
 import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Generic recursive block rendering shared by every document surface.
@@ -37,7 +38,7 @@ function BlockTreeShell({ block, isSelected, content, controls, children }: Bloc
       <div className={BLOCK_ROW_CLASS}>
         {controls}
         <BlockSlots block={block} selected={isSelected}>
-          <div className={BLOCK_CONTENT_FLOW_CLASS}>{content}</div>
+          {content}
         </BlockSlots>
       </div>
       <BlockElementRefBoundary>
@@ -97,7 +98,18 @@ function BlockTreeNode({ blockId }: { readonly blockId: string }) {
   );
 }
 
-/** Keeps an unchanged renderer boundary asleep when only an ancestor snapshot changes. */
+/**
+ * Keeps an unchanged renderer boundary asleep when only an ancestor snapshot changes.
+ *
+ * The content wrapper inherits the panel's font through its CSS custom property,
+ * allowing application typography to change without rerendering this boundary.
+ * Explicit renderer font styles, including monospace code content, take precedence.
+ *
+ * @param props - Resolved block renderer and the stable block identity passed to it.
+ * @param props.renderer - Registered content component, including the unknown-block fallback.
+ * @param props.blockId - Persisted block ID supplied to the content renderer.
+ * @returns The renderer inside the shared content-flow and font-inheritance wrapper.
+ */
 const BlockContent = memo(function BlockContent({
   renderer: Content,
   blockId,
@@ -105,7 +117,14 @@ const BlockContent = memo(function BlockContent({
   readonly renderer: ComponentType<{ blockId: string }>;
   readonly blockId: string;
 }) {
-  return <Content blockId={blockId} />;
+  return (
+    <div
+      className={BLOCK_CONTENT_FLOW_CLASS}
+      style={{ fontFamily: `var(${EDITOR_CONTENT_FONT_PROPERTY}, inherit)` }}
+    >
+      <Content blockId={blockId} />
+    </div>
+  );
 });
 
 /** Stable node boundary; focused stores wake only affected IDs and ancestors. */

@@ -1,3 +1,4 @@
+import { useEditorFonts } from "../../../../fonts/editor-fonts";
 /**
  * Category-specific Tools / Defaults content for the bottom create toolbar.
  *
@@ -8,7 +9,7 @@
  */
 import type { ReactNode } from "react";
 import type { EdgelessToolbarGroupProps } from "../../../../managers/edgeless-toolbar/types";
-import type { EdgelessFontOption, ConnectorLineStyle } from "../../../../elements/visuals/types";
+import type { ConnectorLineStyle } from "../../../../elements/visuals/types";
 import { NativeSelect, NativeSelectOption } from "../../../../components/ui/native-select";
 import { editorControlProps } from "../../../../constants";
 import { ColorControl } from "../../../../components/edgeless/color-control";
@@ -21,7 +22,7 @@ const SELECT_CLASS = "edgeless-creation-panel-select";
  * Renders the Tools / Defaults popover content for one registered create-tool group.
  *
  * @param props - Resolved group members and their common renderer, receiving panel,
- * and shared edgeless operations. Font options belong to the registered text group.
+ * and shared edgeless operations. Font options come from the surrounding application font provider.
  * @returns Group contents inside the toolbar-owned popover.
  */
 function CreationPanel({
@@ -34,7 +35,7 @@ function CreationPanel({
 
 /**
  * Registered ShapeTools contents include every contributed tool and the built-in creation defaults.
- * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools reads the shared application font catalog.
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function ShapeTools(props: EdgelessToolbarGroupProps) {
@@ -69,7 +70,7 @@ export function ShapeTools(props: EdgelessToolbarGroupProps) {
 
 /**
  * Registered DrawingTools contents include every contributed tool and the built-in creation defaults.
- * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools reads the shared application font catalog.
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function DrawingTools(props: EdgelessToolbarGroupProps) {
@@ -99,15 +100,18 @@ export function DrawingTools(props: EdgelessToolbarGroupProps) {
 
 /**
  * Registered TextTools contents include every contributed tool and the built-in creation defaults.
- * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ *
+ * Font choices follow the nearest application font provider. A remembered family
+ * removed from its catalog remains visible as the current value, so changing the
+ * catalog does not silently replace the panel's creation font.
+ *
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools reads the shared application font catalog.
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
-export function TextTools(
-  props: EdgelessToolbarGroupProps & { readonly fonts: readonly EdgelessFontOption[] },
-) {
+export function TextTools(props: EdgelessToolbarGroupProps) {
   const edgelessOperation = props.operations;
   const defaults = edgelessOperation.getDefaults();
-  const fontOptions = props.fonts;
+  const { fonts: fontOptions } = useEditorFonts();
   return (
     <CreationPanel {...props}>
       <>
@@ -121,6 +125,11 @@ export function TextTools(
             edgelessOperation.setCreationDefaults("text", { fontFamily: event.currentTarget.value })
           }
         >
+          {!fontOptions.some((font) => font.fontFamily === defaults.text.fontFamily) && (
+            <NativeSelectOption value={defaults.text.fontFamily}>
+              {defaults.text.fontFamily}
+            </NativeSelectOption>
+          )}
           {fontOptions.map((font) => (
             <NativeSelectOption key={font.fontFamily} value={font.fontFamily}>
               {font.label}
@@ -147,7 +156,7 @@ export function TextTools(
 
 /**
  * Registered ConnectorTools contents include every contributed tool and the built-in creation defaults.
- * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools reads the shared application font catalog.
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function ConnectorTools(props: EdgelessToolbarGroupProps) {
@@ -193,7 +202,7 @@ export function ConnectorTools(props: EdgelessToolbarGroupProps) {
 
 /**
  * Sticky presets supply thumbnail icons; contributed tools use the same resolved list.
- * @param props - All contributed group members, the common button renderer and panel operations; TextTools also receives its font catalog.
+ * @param props - All contributed group members, the common button renderer and panel operations; TextTools reads the shared application font catalog.
  * @returns Group contents; default controls update panel-local settings for subsequent creation without changing existing elements.
  */
 export function StickerTools(props: EdgelessToolbarGroupProps) {

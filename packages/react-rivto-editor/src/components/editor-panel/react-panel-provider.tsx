@@ -1,3 +1,4 @@
+import { EDITOR_CONTENT_FONT_PROPERTY, useEditorFonts } from "../../fonts/editor-fonts";
 import { ReactPanel } from "../../panels/react-panel";
 import {
   useCallback,
@@ -67,6 +68,10 @@ function normalizeVirtualizationCount(value: number, fallback: number): number {
  * Document data uses focused block, root, and element subscriptions below this
  * boundary. Presentation and React registry subscriptions update only their owners, so
  * changing one block does not recreate the complete surface tree.
+ * The nearest application font provider supplies a CSS custom property on this
+ * panel's registered DOM root. Only block content consumes it, preserving control
+ * typography and updating inherited fonts without rerendering every block. Root
+ * replacement or configuration cleanup restores the previous inline property value.
  *
  * @param props - Shared editor, panel roots and React subtree to bind together.
  * The panel factory defines block boundaries and whether the block root is included and protected.
@@ -127,6 +132,21 @@ export function ReactPanelProvider({
   const reactPanel = snapshot.api;
   const domIdPrefix = useId();
   const [root, setRoot] = useState<HTMLElement | null>(null);
+  const { defaultFontFamily } = useEditorFonts();
+  useLayoutEffect(() => {
+    if (!root) {
+      return;
+    }
+    const previous = root.style.getPropertyValue(EDITOR_CONTENT_FONT_PROPERTY);
+    root.style.setProperty(EDITOR_CONTENT_FONT_PROPERTY, defaultFontFamily);
+    return () => {
+      if (previous) {
+        root.style.setProperty(EDITOR_CONTENT_FONT_PROPERTY, previous);
+      } else {
+        root.style.removeProperty(EDITOR_CONTENT_FONT_PROPERTY);
+      }
+    };
+  }, [root, defaultFontFamily]);
 
   const subscribeSurfaces = useCallback(
     (listener: () => void) => hostEditor.surfaces.subscribe(listener),
