@@ -66,8 +66,8 @@ importers:
         specifier: ^3.3.1
         version: 3.6.0
       yjs:
-        specifier: ^13.6.27
-        version: 13.6.31
+        specifier: ^13.6.33
+        version: 13.6.33
     devDependencies:
       '@types/react':
         specifier: ^19.1.8
@@ -304,7 +304,7 @@ importers:
     dependencies:
       y-webrtc:
         specifier: ^10.3.0
-        version: 10.3.0(yjs@13.6.31)
+        version: 10.3.0(yjs@13.6.33)
     devDependencies:
       '@types/jest':
         specifier: ^29.5.14
@@ -325,8 +325,8 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
       yjs:
-        specifier: ^13.0.0
-        version: 13.6.31
+        specifier: ^13.6.33
+        version: 13.6.33
 
   packages/document-model:
     dependencies:
@@ -356,8 +356,8 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
       yjs:
-        specifier: ^13.0.0
-        version: 13.6.31
+        specifier: ^13.6.33
+        version: 13.6.33
 
   packages/graph-runtime:
     dependencies:
@@ -564,8 +564,8 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
       yjs:
-        specifier: ^13.0.0
-        version: 13.6.31
+        specifier: ^13.6.33
+        version: 13.6.33
 
   packages/rivto-keyboard:
     dependencies:
@@ -5351,8 +5351,8 @@ packages:
   yauzl@2.10.0:
     resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
 
-  yjs@13.6.31:
-    resolution: {integrity: sha512-Eq+5BRfbeGyqGVrTJL3bEcr8gKkxPuyuoHmAwpk52fDb8kOVMrfVSTRPd6yiGgX5Fskb96qCRjzjbRjrL4YEnw==}
+  yjs@13.6.33:
+    resolution: {integrity: sha512-q/UYvr1gOk4XII+Cu1CW2dINjYqJJFifTzogEaIARznrvX7uOlHsdTEXcnOBMuIsrCGEEKdNxi74kyMLZlKVfw==}
     engines: {node: '>=16.0.0', npm: '>=8.0.0'}
 
   yocto-queue@0.1.0:
@@ -10745,17 +10745,17 @@ snapshots:
 
   xmlchars@2.2.0: {}
 
-  y-protocols@1.0.7(yjs@13.6.31):
+  y-protocols@1.0.7(yjs@13.6.33):
     dependencies:
       lib0: 0.2.117
-      yjs: 13.6.31
+      yjs: 13.6.33
 
-  y-webrtc@10.3.0(yjs@13.6.31):
+  y-webrtc@10.3.0(yjs@13.6.33):
     dependencies:
       lib0: 0.2.117
       simple-peer: 9.11.1
-      y-protocols: 1.0.7(yjs@13.6.31)
-      yjs: 13.6.31
+      y-protocols: 1.0.7(yjs@13.6.33)
+      yjs: 13.6.33
     optionalDependencies:
       ws: 8.21.0
     transitivePeerDependencies:
@@ -10784,7 +10784,7 @@ snapshots:
       buffer-crc32: 0.2.13
       fd-slicer: 1.1.0
 
-  yjs@13.6.31:
+  yjs@13.6.33:
     dependencies:
       lib0: 0.2.117
 

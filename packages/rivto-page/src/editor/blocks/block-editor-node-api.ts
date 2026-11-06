@@ -1,6 +1,6 @@
 import type { BlockEditorNodeSnapshot, BlockListType } from "../../adapter/types";
 
-/** Borrowed live node access; the controller retains identity and exclusive teardown ownership. */
+/** Borrowed live node access; the controller preserves held identity and owns teardown. */
 export interface BlockEditorNodeApi {
   /** Stable ID retained even while the node is missing from the host. */
   readonly id: string;
@@ -74,7 +74,8 @@ export interface BlockEditorNodeApi {
    *
    * @param listener - Callback that rereads the snapshot after a host notification.
    * @returns Idempotent disposer releasing this addressed host subscription.
-   * @throws If destroyed or delegated subscription setup fails.
+   * @throws If destroyed during setup or delegated subscription setup fails;
+   * an AggregateError reports a simultaneous cleanup failure.
    */
   subscribe(listener: () => void): () => void;
 

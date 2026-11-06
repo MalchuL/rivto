@@ -190,6 +190,152 @@ describe("YjsDoc", () => {
       expect(map.has("value")).toBe(false);
       history.destroy();
     });
+
+    it("keeps only the configured number of undo and redo steps", () => {
+      const map = yjsDoc.getMap("limited-undo-map");
+      const history = yjsDoc.createUndoManager([map], undefined, 2);
+      for (const value of [1, 2, 3]) {
+        yjsDoc.transact(() => map.set("value", value));
+        history.stopCapturing();
+      }
+
+      history.undo();
+      expect(map.get("value")).toBe(2);
+      history.undo();
+      expect(map.get("value")).toBe(1);
+      history.undo();
+      expect(map.get("value")).toBe(1);
+      history.redo();
+      history.redo();
+      expect(map.get("value")).toBe(3);
+      history.destroy();
+    });
+
+    it("does not keep deleted content when history is disabled", () => {
+      const map = yjsDoc.getMap("disabled-history");
+      const history = yjsDoc.createUndoManager([map], undefined, 0);
+      const native = yjsDoc.doc.getMap("disabled-history");
+      yjsDoc.transact(() => native.set("block", new Y.Map([["text", "deleted content"]])));
+      yjsDoc.transact(() => native.delete("block"));
+
+      expect(native._map.get("block")?.content).toBeInstanceOf(Y.ContentDeleted);
+      history.undo();
+      expect(native.has("block")).toBe(false);
+      history.destroy();
+    });
+
+    it("cancels scheduled trimming when history is cleared or destroyed", () => {
+      jest.useFakeTimers();
+      try {
+        const map = yjsDoc.getMap("cancel-history-trim");
+        const history = yjsDoc.createUndoManager([map], undefined, 1);
+        for (const value of [1, 2]) {
+          yjsDoc.transact(() => map.set("value", value));
+          history.stopCapturing();
+        }
+        expect(jest.getTimerCount()).toBe(1);
+        history.clear();
+        expect(jest.getTimerCount()).toBe(0);
+        for (const value of [3, 4]) {
+          yjsDoc.transact(() => map.set("value", value));
+          history.stopCapturing();
+        }
+        expect(jest.getTimerCount()).toBe(1);
+        history.destroy();
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("keeps deleted content needed by a separate native history after eviction", async () => {
+      const map = yjsDoc.getMap("limited-shared-undo");
+      const shared = Symbol("shared");
+      const local = Symbol("local");
+      const history = yjsDoc.createUndoManager([map], [shared, local], 1);
+      const native = new Y.UndoManager(yjsDoc.doc.getMap("limited-shared-undo"), {
+        trackedOrigins: new Set([shared]),
+      });
+      yjsDoc.doc.transact(() => map.set("value", "retained"), shared);
+      history.stopCapturing();
+      native.stopCapturing();
+      yjsDoc.doc.transact(() => map.delete("value"), shared);
+      history.stopCapturing();
+      yjsDoc.doc.transact(() => map.set("other", 1), local);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      Y.tryGc(
+        Y.createDeleteSetFromStructStore(yjsDoc.doc.store),
+        yjsDoc.doc.store,
+        yjsDoc.doc.gcFilter,
+      );
+
+      history.undo();
+      expect(map.get("other")).toBeUndefined();
+      history.undo();
+      expect(map.get("value")).toBeUndefined();
+      native.undo();
+      expect(map.get("value")).toBe("retained");
+      history.destroy();
+      native.destroy();
+    });
+
+    it("preserves another history's undo data when one history is cleared", () => {
+      const map = yjsDoc.getMap("shared-undo-map");
+      const first = yjsDoc.createUndoManager([map]);
+      const second = yjsDoc.createUndoManager([map]);
+
+      yjsDoc.transact(() => map.set("value", "retained"));
+      first.stopCapturing();
+      second.stopCapturing();
+      yjsDoc.transact(() => map.delete("value"));
+      first.clear();
+      second.undo();
+
+      expect(map.get("value")).toBe("retained");
+      first.destroy();
+      second.destroy();
+    });
+
+    it("preserves a native Yjs history when adapter history is cleared", () => {
+      const map = yjsDoc.getMap("native-shared-undo-map");
+      const origin = Symbol("shared-history");
+      const adapterHistory = yjsDoc.createUndoManager([map], [origin]);
+      const nativeHistory = new Y.UndoManager(yjsDoc.doc.getMap("native-shared-undo-map"), {
+        trackedOrigins: new Set([origin]),
+      });
+
+      yjsDoc.doc.transact(() => map.set("value", "retained"), origin);
+      adapterHistory.stopCapturing();
+      nativeHistory.stopCapturing();
+      yjsDoc.doc.transact(() => map.delete("value"), origin);
+      adapterHistory.clear();
+      nativeHistory.undo();
+
+      expect(map.get("value")).toBe("retained");
+      adapterHistory.destroy();
+      nativeHistory.destroy();
+    });
+
+    it("removes a destroyed history manager's document listener", () => {
+      const on = jest.spyOn(yjsDoc.doc, "on");
+      const off = jest.spyOn(yjsDoc.doc, "off");
+      const history = yjsDoc.createUndoManager([yjsDoc.getMap("history-listener")]);
+      const destroyListener = on.mock.calls.find(([event]) => event === "destroy")?.[1];
+
+      expect(destroyListener).toBeDefined();
+      history.destroy();
+      expect(off).toHaveBeenCalledWith("destroy", destroyListener);
+    });
+
+    it("does not accumulate teardown listeners for limited histories", () => {
+      const map = yjsDoc.getMap("limited-history-listeners");
+      const before = yjsDoc.doc._observers.get("destroy")?.size ?? 0;
+      for (let index = 0; index < 25; index++) {
+        const history = yjsDoc.createUndoManager([map], undefined, 1);
+        history.destroy();
+      }
+      expect(yjsDoc.doc._observers.get("destroy")?.size ?? 0).toBe(before);
+    });
   });
 
   describe("Events", () => {

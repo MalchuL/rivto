@@ -16,6 +16,7 @@ import * as utils from "./structures/utils";
 import * as Y from "yjs";
 import { Storage } from "../utils";
 import { YjsArray, YjsMap, YjsText } from "./structures";
+import { YjsUndoManager } from "./yjs-undo-manager";
 import type { YJSType } from "./structures/utils/types";
 
 export class YjsDoc implements CRDTDoc {
@@ -162,22 +163,31 @@ export class YjsDoc implements CRDTDoc {
    * only transactions whose origin is included in the provided set will be recorded in the
    * undo/redo history.
    *
-   * @param scopes The list of CRDT scopes to track for undo/redo operations.
-   * @param trackedOrigins Optional origin objects to track instead of the private local origin.
+   * A positive limit schedules eviction during browser idle time, or with a timer
+   * when idle callbacks are unavailable. Pending eviction is completed before
+   * undo or redo. Evicted content can remain in the Yjs document until reload.
+   *
+   * @param scopes - The list of CRDT scopes to track for undo/redo operations.
+   * @param trackedOrigins - Optional origin objects to track instead of the private local origin.
+   * @param maxEntries - Maximum entries per undo or redo stack; zero disables capture and undefined leaves them unlimited.
    * @returns A `CRDTUndoManager` instance with `undo`, `redo`, `clear`, `stopCapturing`, and `destroy` methods.
+   * @throws If the maximum is not a non-negative integer.
    */
-  createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager {
+  createUndoManager(
+    scopes: CRDTUndoScope[],
+    trackedOrigins?: unknown[],
+    maxEntries?: number,
+  ): CRDTUndoManager {
+    if (maxEntries !== undefined && (!Number.isInteger(maxEntries) || maxEntries < 0)) {
+      throw new RangeError("History limit must be a non-negative integer");
+    }
     const nativeScopes = scopes.map((scope) => utils.unwrapCRDTtoYJS(scope) as Y.AbstractType<any>);
     const manager = new Y.UndoManager(nativeScopes, {
       trackedOrigins: new Set(trackedOrigins ?? [this.localOrigin]),
+      // Prevent this history from setting Yjs keep flags when no undo steps can be retained.
+      captureTransaction: maxEntries === 0 ? () => false : undefined,
     });
-    return {
-      undo: () => manager.undo(),
-      redo: () => manager.redo(),
-      clear: () => manager.clear(),
-      stopCapturing: () => manager.stopCapturing(),
-      destroy: () => manager.destroy(),
-    };
+    return new YjsUndoManager(manager, maxEntries);
   }
 
   /**

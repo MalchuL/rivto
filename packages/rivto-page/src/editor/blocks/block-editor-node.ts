@@ -9,7 +9,6 @@ import type {
 /** Stable ID-bound access to live host snapshots, commands, and addressed subscriptions. */
 export class BlockEditorNode implements BlockEditorNodeApi {
   private blocks: BlockEditorBlocks | undefined;
-  private subscriptions: Set<() => void> | undefined;
 
   /**
    * Binds a node to a host source without reading, copying data, or subscribing.
@@ -19,10 +18,12 @@ export class BlockEditorNode implements BlockEditorNodeApi {
    *
    * @param id - Stable identity, including a currently missing node to observe.
    * @param blocks - Bounded host source retained until this node is destroyed.
+   * @param subscribeToBlock - Registers an addressed subscription with its lifecycle owner.
    */
   constructor(
     readonly id: string,
     blocks: BlockEditorBlocks,
+    private subscribeToBlock: ((id: string, listener: () => void) => () => void) | undefined,
   ) {
     this.blocks = blocks;
   }
@@ -111,29 +112,14 @@ export class BlockEditorNode implements BlockEditorNodeApi {
    *
    * @param listener - Callback that rereads the snapshot after a host notification.
    * @returns Idempotent disposer releasing this addressed host subscription.
-   * @throws If destroyed or delegated subscription setup fails.
+   * @throws If destroyed during setup or delegated subscription setup fails;
+   * an AggregateError reports a simultaneous cleanup failure.
    */
   subscribe(listener: () => void): () => void {
-    if (!this.blocks) {
+    if (!this.blocks || !this.subscribeToBlock) {
       throw new Error("BlockEditorNode is destroyed");
     }
-    const subscriptions = (this.subscriptions ??= new Set());
-    let active = true;
-    const release = this.blocks.subscribeBlockNode(this.id, () => {
-      if (active) {
-        listener();
-      }
-    });
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
-      subscriptions.delete(dispose);
-      release();
-    };
-    subscriptions.add(dispose);
-    return dispose;
+    return this.subscribeToBlock(this.id, listener);
   }
 
   /**
@@ -184,32 +170,19 @@ export class BlockEditorNode implements BlockEditorNodeApi {
   }
 
   /**
-   * Invalidates this borrowed node and attempts to release every retained subscription.
+   * Invalidates this borrowed node and releases its references to the host and subscription owner.
    *
    * Only the owning controller should call this method. Host references are dropped
    * before cleanup, so retained node references cannot read or mutate another lifetime.
    *
-   * @returns The node is inactive and all subscription disposers have been attempted.
-   * @throws AggregateError when one or more delegated disposers fail.
+   * The controller independently releases all subscriptions it owns during destruction.
+   *
+   * @returns The node is inactive and its host references are released.
    */
   destroy(): void {
     this.blocks = undefined;
-    const subscriptions = this.subscriptions;
-    this.subscriptions = undefined;
-    if (!subscriptions?.size) {
-      return;
-    }
-    const errors: unknown[] = [];
-    for (const dispose of subscriptions) {
-      try {
-        dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length) {
-      throw new AggregateError(errors, "Failed to release block node subscriptions");
-    }
+    // The callback captures the controller; a borrowed node must not retain it after teardown.
+    this.subscribeToBlock = undefined;
   }
 
   /**

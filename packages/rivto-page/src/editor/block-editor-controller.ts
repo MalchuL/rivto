@@ -54,8 +54,17 @@ export class BlockEditorController implements BlockEditorApi {
   private attachment: BlockEditorAttachment | undefined;
   /** Permanent lifecycle flag set when destruction begins; rejects later attachment and node lookup, independently of view detachment. */
   private destroyed = false;
-  // shortcut: Retain visited IDs for this controller lifetime; add idle eviction if long-session churn warrants it.
-  private readonly nodes = new Map<string, BlockEditorNode>();
+  /** Weakly cached nodes remain stable while a caller retains them. */
+  private readonly nodes = new Map<string, WeakRef<BlockEditorNode>>();
+  /** Active host subscriptions remain available for controller teardown. */
+  private readonly subscriptions = new Set<() => void>();
+  /** Removes cache keys after their unreferenced nodes are collected. */
+  private readonly collectedNodes = new FinalizationRegistry<string>((id) => {
+    // Finalization can arrive after a replacement node for the same ID was cached.
+    if (!this.nodes.get(id)?.deref()) {
+      this.nodes.delete(id);
+    }
+  });
 
   /**
    * Creates editor-owned managers without reading or subscribing to host data, or attaching DOM.
@@ -87,7 +96,8 @@ export class BlockEditorController implements BlockEditorApi {
    * Reuses one live object per requested ID without reading or copying host snapshots.
    *
    * Missing IDs still receive objects so consumers can observe later restoration.
-   * Updates, selection, display-list reordering, and detach/attach retain the same objects.
+   * Updates, selection, display-list reordering, and detach/attach retain the same objects
+   * while a caller still holds them. Unused objects may be collected.
    *
    * @param blockId - Stable identity inside this controller's adapter occurrence.
    * @returns Cached node owned by this controller and borrowed by the caller.
@@ -97,10 +107,14 @@ export class BlockEditorController implements BlockEditorApi {
     if (this.destroyed) {
       throw new Error("BlockEditorController is destroyed");
     }
-    let node = this.nodes.get(blockId);
+    // A weak reference does not keep the node alive; deref returns undefined after collection.
+    let node = this.nodes.get(blockId)?.deref();
     if (!node) {
-      node = new BlockEditorNode(blockId, this.adapter.blocks);
-      this.nodes.set(blockId, node);
+      node = new BlockEditorNode(blockId, this.adapter.blocks, (id, listener) =>
+        this.subscribeNode(id, listener),
+      );
+      this.nodes.set(blockId, new WeakRef(node));
+      this.collectedNodes.register(node, blockId);
     }
     return node;
   }
@@ -190,17 +204,66 @@ export class BlockEditorController implements BlockEditorApi {
     } catch (error) {
       errors.push(error);
     }
-    for (const node of this.nodes.values()) {
+    for (const reference of this.nodes.values()) {
       try {
-        node.destroy();
+        reference.deref()?.destroy();
       } catch (error) {
         errors.push(error);
       }
     }
     this.nodes.clear();
+    for (const dispose of this.subscriptions) {
+      try {
+        dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
     this.regions.destroy();
     if (errors.length) {
       throw new AggregateError(errors, "Failed to destroy block editor resources");
     }
+  }
+
+  /**
+   * Subscribes to one block and retains its disposer until released or destroyed.
+   *
+   * Synchronous host notifications may destroy this controller during setup; in
+   * that case the newly returned host disposer is released immediately.
+   *
+   * @param id - Stable ID to observe in the borrowed host adapter.
+   * @param listener - Callback invoked for host notifications while active.
+   * @returns Idempotent disposer for this individual subscription.
+   * @throws If destroyed during setup or host subscription fails; an AggregateError
+   * reports a simultaneous cleanup failure.
+   */
+  private subscribeNode(id: string, listener: () => void): () => void {
+    let active = true;
+    const release = this.adapter.blocks.subscribeBlockNode(id, () => {
+      if (active) {
+        listener();
+      }
+    });
+    if (this.destroyed) {
+      active = false;
+      const error = new Error("BlockEditorNode is destroyed");
+      try {
+        release();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Block node subscription cleanup failed");
+      }
+      throw error;
+    }
+    const subscriptions = this.subscriptions;
+    const dispose = () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      subscriptions.delete(dispose);
+      release();
+    };
+    subscriptions.add(dispose);
+    return dispose;
   }
 }

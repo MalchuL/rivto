@@ -1,4 +1,8 @@
-export { DocumentModelImpl } from "./document-model";
+export {
+  DocumentModelImpl,
+  DEFAULT_MAX_HISTORY_ENTRIES,
+  type DocumentModelOptions,
+} from "./document-model";
 export * from "./managers";
 export * from "./types";
 

@@ -34,13 +34,15 @@ export interface BlockEditorApi {
   readonly dropTargets: BlockDropTargetsApi;
 
   /**
-   * Reuses one live node per requested ID for this editor's lifetime.
+   * Reuses a live node for each requested ID while it remains referenced.
    *
    * Missing IDs still receive objects so consumers can observe later restoration.
-   * Reading a node does not read its snapshot or subscribe to host data.
+   * Reading a node does not read its snapshot or subscribe to host data. A node
+   * without a caller or active subscription may be garbage collected and recreated.
    *
    * @param blockId - Stable identity inside this editor's adapter occurrence.
-   * @returns Borrowed cached node, retaining identity across updates and view remounts.
+   * @returns Borrowed cached node, retaining identity across updates and view remounts
+   * while a caller or active subscription keeps it alive.
    * @throws If the editor has been destroyed.
    */
   getNode(blockId: string): BlockEditorNodeApi;

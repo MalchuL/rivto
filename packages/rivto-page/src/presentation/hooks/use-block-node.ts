@@ -11,7 +11,7 @@ import { useBlockEditorController } from "./use-block-editor-controller";
  *
  * @param blockId - Stable identity within the current adapter.
  * @returns Cached borrowed node API without destruction, including for missing IDs
- * whose getSnapshot returns undefined. The controller retains the same object for teardown.
+ * whose getSnapshot returns undefined. The subscription retains the same object for teardown.
  * @throws If called outside BlockEditor, its controller is destroyed, or delegated
  * reads/subscriptions fail.
  */

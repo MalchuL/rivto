@@ -100,11 +100,19 @@ export interface CRDTDoc extends Serializible {
 
   /**
    * Creates history for collaborative scopes, tracking the private local origin by default.
+   * Stack limits bound available actions, not necessarily retained CRDT memory.
+   * Pending trimming completes before an undo or redo operation.
    * @param scopes - Collaborative roots included in history.
    * @param trackedOrigins - Optional explicit origins to track instead.
+   * @param maxEntries - Maximum entries in each history stack, zero to disable history, or undefined for no limit.
    * @returns Adapter-neutral undo history.
+   * @throws If the maximum is not a non-negative integer.
    */
-  createUndoManager(scopes: CRDTUndoScope[], trackedOrigins?: unknown[]): CRDTUndoManager;
+  createUndoManager(
+    scopes: CRDTUndoScope[],
+    trackedOrigins?: unknown[],
+    maxEntries?: number,
+  ): CRDTUndoManager;
 
   /**
    * Get a typed CRDT-backed array at the given document path.
