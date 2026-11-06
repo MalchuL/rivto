@@ -43,4 +43,5 @@ test("collects image-only HTML and URI lists without consuming mixed text", () =
     { uri: second, alt: "second" },
   ]);
   expect(findTransferredImageUris(transfer(`${first}\nordinary text`))).toEqual([]);
+  expect(findTransferredImageUris(transfer("https://example.test/article"))).toEqual([]);
 });

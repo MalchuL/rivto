@@ -77,7 +77,21 @@ function isLocalImageUri(uri: string): boolean {
  */
 export function findImageUri(text: string): string | undefined {
   const uri = firstUriListEntry(text);
-  return uri && (/^https?:\/\//i.test(uri) || isLocalImageUri(uri)) ? uri : undefined;
+  if (!uri) {
+    return undefined;
+  }
+  if (isLocalImageUri(uri)) {
+    return uri;
+  }
+  try {
+    const url = new URL(uri);
+    return (url.protocol === "http:" || url.protocol === "https:") &&
+      IMAGE_FILE_EXTENSION.test(url.pathname)
+      ? uri
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

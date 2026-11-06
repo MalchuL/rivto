@@ -1,6 +1,7 @@
 /** Browser coverage for image file paste and page/canvas drop routing. */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { resolve } from "node:path";
+import { blockIdSelector } from "./dom-markers";
 
 const BLOCK_CONTENT_SELECTOR = "[data-block-content]";
 const IMAGE_BLOCK_SELECTOR = '[data-block-type="image"]';
@@ -1716,6 +1717,69 @@ test("pastes images with only the image extension installed", async ({ page }) =
       }),
     )
     .toContain("image-only.png");
+});
+
+test("refreshes mounted Markdown images when an image handler is added or removed", async ({
+  page,
+}) => {
+  await page.goto("/?fileOnly=1");
+  const id = await page.evaluate(() => {
+    const host = window as unknown as {
+      __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+    };
+    return host.__rivtoDemo.editor.blocks.insertBlock({
+      type: "paragraph",
+      content: '{{image path="https://example.com/photo.png" alt="dynamic"}}',
+    }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  await expect(block.locator(".rivto-image")).toHaveCount(0);
+  await page.evaluate(() => {
+    const host = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      removeImageHandler?: () => void;
+    };
+    host.removeImageHandler = host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
+      id: "image",
+      provider: { write: async () => "test:image", read: async () => undefined },
+      prepare: () => ({ kind: "inline", content: "" }),
+    });
+  });
+  await expect(block.locator(".rivto-image")).toHaveCount(1);
+  await page.evaluate(() =>
+    (window as unknown as { removeImageHandler: () => void }).removeImageHandler(),
+  );
+  await expect(block.locator(".rivto-image")).toHaveCount(0);
+  await expect(block.locator(".markdown-preview")).toContainText("{{image path=");
+  await expect
+    .poll(() =>
+      page.evaluate((blockId) => {
+        const host = window as unknown as {
+          __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        return host.__rivtoDemo.editor.blocks.getBlockNode(blockId)?.content;
+      }, id),
+    )
+    .toBe('{{image path="https://example.com/photo.png" alt="dynamic"}}');
+});
+
+test("pastes an inline file when the image extension is absent", async ({ page }) => {
+  await page.goto("/?fileOnly=1");
+  const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+  await content.click();
+  await page.keyboard.press("End");
+  await sendFile(content, "paste", "inline-file.txt");
+  await expect(content).toContainText("{{file ");
+  await expect(content).toContainText("inline-file.txt");
+  await content.evaluate(async () => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  await content.evaluate((element) => (element as HTMLElement).blur());
+  await expect(
+    page.locator(FILE_NAME_SELECTOR).filter({ hasText: "inline-file.txt" }).first(),
+  ).toBeVisible();
 });
 
 test("pastes generic files with only the file extension installed", async ({ page }) => {

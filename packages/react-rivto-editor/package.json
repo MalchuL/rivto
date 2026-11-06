@@ -45,6 +45,7 @@
     "@chulane/rivto-edgeless": "workspace:*",
     "@chulane/rivto-keyboard": "workspace:*",
     "@chulane/rivto-page": "workspace:*",
+    "@chulane/rivto-utils": "workspace:*",
     "@dnd-kit/helpers": "0.5.0",
     "@dnd-kit/react": "0.5.0",
     "class-variance-authority": "^0.7.1",
@@ -55,8 +56,7 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "zod": "^4.1.13",
-    "@chulane/rivto-utils": "workspace:*"
+    "zod": "^4.1.13"
   },
   "peerDependencies": {
     "react": ">=18 <20",

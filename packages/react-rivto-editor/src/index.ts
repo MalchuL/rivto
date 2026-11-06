@@ -9,6 +9,12 @@ export { BLOCK_TEXT_METADATA_KEY } from "./managers/selection/block-text-metadat
  * @module
  */
 export * from "./blocks";
+export type {
+  MarkdownExtension,
+  MarkdownExtensionsApi,
+  MarkdownRenderContext,
+} from "./blocks/markdown/markdown-extensions";
+export { MARKDOWN_EDITOR_CLASS } from "./blocks/markdown/constants";
 export { MarkdownContent } from "./blocks/markdown/markdown";
 export * from "./capabilities";
 export * from "./components";

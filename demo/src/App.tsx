@@ -1,3 +1,4 @@
+import { linkPreviewExtension } from "./extensions/markdown/link-preview";
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
@@ -616,6 +617,7 @@ async function createDemoEditor() {
             ? []
             : [imageExtension({ provider: demoBinaryProvider })]),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+          linkPreviewExtension(),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
           bulletThreadingExtension({
@@ -678,7 +680,7 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     {
       ...paragraphBlockFactory.createEmptyBlock(),
       content:
-        "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited.",
+        "This paragraph renders *Markdown*, ~~old text~~, and `inline code` when it is not edited. Try the [unified](https://unifiedjs.com/) link preview.",
     },
     editor.blocks.getInsertionDestinationAfter(introId),
   ).id;

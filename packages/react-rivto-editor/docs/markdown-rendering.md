@@ -37,6 +37,61 @@ Typing updates the block through the following path:
 Markdown remains presentation only. Parsing does not create blocks or modify
 the document hierarchy.
 
+## Extending the preview
+
+An editor extension can register remark plugins, rehype plugins, and React
+renderer composition through `editor.markdown.register`. Registrations belong
+to the installing extension and mounted previews update when they are added or
+removed. Plugins execute synchronously, in registration order, after the
+built-in GFM and code processing for their respective stages. Renderer
+contributions receive the renderers installed before them and the source block
+ID and bounded block operations. Wrap the previous renderer to preserve its
+behavior for nodes your extension does not claim.
+
+```tsx
+const example = {
+  id: "example.markdown",
+  setup(editor) {
+    editor.markdown.register({
+      components: (components) => ({
+        ...components,
+        // Add or wrap a renderer here.
+      }),
+    });
+  },
+};
+```
+
+A contribution may set `plainTextSafe: true` only when none of its plugins or
+renderers can affect a single-line source containing letters, numbers, spaces,
+and hyphens. Otherwise leave it unset: such text must go through the Markdown
+pipeline for the contribution to run. The demo's `linkPreviewExtension`
+shows a link renderer that delegates other links to the previous renderer.
+
+Markdown observes the installed file and image handlers and enables the matching
+macro parser and renderer while each handler is available. The file and image
+extensions own their input preparation and do not register with the Markdown
+registry. Raw HTML remains disabled and the normal URL transform still applies.
+Plugins and custom renderers are host-provided code and must uphold the
+application's content and URL policy.
+
+## Automatic link titles
+
+The demo's `markdownLinkTitleExtension({ resolveTitle })` adds website titles
+and favicons. It is demo code, rather than an editor API. When a Markdown block
+loses focus, the extension finds bare HTTP URLs and asks `resolveTitle(url,
+signal)` for each title. Successful results replace the URLs
+with Markdown links. Existing links, code, image URLs, and macro contents are
+left alone. If a lookup fails or the block changes while a lookup is pending,
+the original content is retained. Removing the extension aborts pending lookups.
+
+The resolver belongs to the host because browsers restrict cross-origin page
+requests. The demo uses the public Microlink API: each URL requiring a title is
+sent to that service. Hosts can provide their own resolver and data policy.
+Favicons are requested from each link's origin. Plain-text image URLs without a
+recognized image filename extension are treated as ordinary links; copied HTML
+image elements continue to use image handling.
+
 ## Fenced code
 
 Fences accept either a language name or a file path:
