@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from "react";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DemoEditorSurface } from "./editor-surface";
+import { DEMO_ANIMATIONS } from "./animation-durations";
 
 interface Pane {
   readonly mode: ModeManager;
@@ -92,6 +93,7 @@ export function DocumentsDemo() {
       createEditor: (editor) =>
         createReactEditor({
           editor,
+          animations: DEMO_ANIMATIONS,
           extensions: [
             standardPreset(),
             pageDragExtension(),

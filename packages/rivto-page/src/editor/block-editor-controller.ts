@@ -11,6 +11,8 @@ import { BlockSlotRegistry } from "../presentation/slots/block-slot-registry";
 import { BlockRendererRegistry } from "../presentation/renderers/block-renderer-registry";
 import type { BlockEditorAdapter } from "../adapter/types";
 import type { BlockEditorNodeApi } from "./blocks/block-editor-node-api";
+import type { BlockAnimationDurations } from "./animation-durations";
+import { BlockMoveTracker } from "./block-move-tracker";
 import { BlockEditorNode } from "./blocks/block-editor-node";
 
 /** Identity token for one mounted root, independent of later attachments. */
@@ -26,10 +28,16 @@ export interface BlockEditorOptions {
   readonly adapter: BlockEditorAdapter;
   /** Content component for unregistered types; omission leaves their content area empty. */
   readonly fallbackRenderer?: BlockRenderer;
+  /** Optional block animation durations in seconds. */
+  readonly animations?: BlockAnimationDurations;
 }
 
 /** Owns block nodes, feature registrations, and one replaceable DOM attachment. */
 export class BlockEditorController implements BlockEditorApi {
+  /** Structural moves currently being committed by this occurrence. */
+  readonly movingBlocks = new BlockMoveTracker();
+  /** Borrowed immutable animation settings for this occurrence. */
+  readonly animations: BlockAnimationDurations | undefined;
   /** Mounted layout ownership, released by refs and finally by this controller. */
   readonly regions = new BlockLayoutRegions();
   /** Borrowed data access and host selection; this editor never destroys the adapter. */
@@ -66,9 +74,11 @@ export class BlockEditorController implements BlockEditorApi {
    * @param options - Borrowed data adapter for this independently configured instance.
    * @param options.adapter - Live data source retained without taking ownership.
    * @param options.fallbackRenderer - Stable content component for unregistered types, if supplied.
+   * @param options.animations - Optional durations in seconds; omitted or zero entries disable their animations.
    */
-  constructor({ adapter, fallbackRenderer }: BlockEditorOptions) {
+  constructor({ adapter, fallbackRenderer, animations }: BlockEditorOptions) {
     this.adapter = adapter;
+    this.animations = animations;
     this.extensions = new BlockEditorExtensions(this);
     this.slots = new BlockSlotRegistry(this.extensions);
     this.renderers = new BlockRendererRegistry(this.extensions, fallbackRenderer);
@@ -198,6 +208,7 @@ export class BlockEditorController implements BlockEditorApi {
       }
     }
     this.nodes.clear();
+    this.movingBlocks.clear();
     this.regions.destroy();
     if (errors.length) {
       throw new AggregateError(errors, "Failed to destroy block editor resources");

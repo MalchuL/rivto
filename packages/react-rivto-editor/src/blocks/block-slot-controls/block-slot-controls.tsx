@@ -12,8 +12,10 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
  *
  * @module
  */
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useBlockOperations, usePanel } from "../../hooks";
+import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 import type { BlockSlotProps } from "../../managers";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -71,6 +73,8 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const panel = usePanel();
   const operations = useBlockOperations(block.id);
   const childrenId = useBlockChildrenId(block.id);
+  const reducedMotion = useReducedMotion();
+  const duration = useAnimationDuration("collapseIndicator");
   if (!block.childIds.length) {
     return null;
   }
@@ -102,7 +106,14 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         operations.update({ listProps: { collapsed: !currentCollapsed } });
       }}
     >
-      {collapsed ? <ChevronRightIcon aria-hidden="true" /> : <ChevronDownIcon aria-hidden="true" />}
+      <motion.span
+        className="inline-flex"
+        initial={false}
+        animate={{ rotate: collapsed ? 0 : 90 }}
+        transition={{ duration: reducedMotion ? 0 : duration, ease: [0.23, 1, 0.32, 1] }}
+      >
+        <ChevronRightIcon aria-hidden="true" />
+      </motion.span>
     </Button>
   );
 }

@@ -154,6 +154,16 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       // Both methods accept [outline context, requested IDs]. TypeScript does not
       // narrow the generic argument tuple from the action check, hence this cast.
       const [context, ids] = args as [BlockOutlineContext, readonly string[]];
+      const view = context.reactPanel.getRoot()?.ownerDocument.defaultView;
+      if (view && this.reactEditor.animations?.blockInsert) {
+        const release = context.reactPanel.page.movingBlocks.mark(ids);
+        try {
+          view.requestAnimationFrame(release);
+        } catch (error) {
+          release();
+          throw error;
+        }
+      }
       // The caller's context.parentId may predate a move. Resolve the live parent
       // while preserving the selection captured for this operation.
       const parentId = context.reactPanel.blocks.getParentId(context.block.id);
