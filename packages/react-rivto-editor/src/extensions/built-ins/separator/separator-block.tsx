@@ -157,6 +157,31 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         keywords: ["divider", "split"],
         execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
       }),
+      reactEditor.blockContextMenu.register({
+        id: "block.insert-separator",
+        title: "Insert separator",
+        order: 13,
+        /**
+         * Keeps insertion within the invoking panel's block scope.
+         *
+         * @param context - Invoking panel and clicked block.
+         * @returns Whether the clicked block can have a sibling in this panel.
+         */
+        isAvailable: ({ reactPanel, blockId }) => reactPanel.blocks.canRemove(blockId),
+        /**
+         * Inserts a separator immediately after the clicked block.
+         *
+         * @param context - Invoking panel and clicked block.
+         * @returns No value after inserting the separator.
+         * @throws If the panel rejects the insertion.
+         */
+        execute: ({ reactPanel, blockId }) => {
+          reactPanel.blocks.insertBlock(
+            separatorBlockFactory.createEmptyBlock(),
+            reactPanel.blocks.getInsertionDestinationAfter(blockId),
+          );
+        },
+      }),
       reactEditor.keyboard.register(
         {
           id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,

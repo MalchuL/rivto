@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { firstKeyboardTarget, focusSelectionCaret } from "../../managers";
 import type {
   BlockContextMenuContext,
   BlockContextMenuEntry,
@@ -24,6 +25,9 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   LinkIcon,
+  ArrowUpToLineIcon,
+  ArrowDownToLineIcon,
+  MinusIcon,
 } from "lucide-react";
 
 const MENU_CLASS = "block-context-menu rounded-xl border-border/80 p-1.5 shadow-xl";
@@ -38,6 +42,9 @@ const actionIcons = {
   "block.collapse": ChevronsDownUpIcon,
   "block.expand": ChevronsUpDownIcon,
   "embedding.copy": LinkIcon,
+  "block.insert-above": ArrowUpToLineIcon,
+  "block.insert-below": ArrowDownToLineIcon,
+  "block.insert-separator": MinusIcon,
 };
 
 /**
@@ -188,7 +195,15 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
         collisionPadding={8}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          handle?.focus();
+          const panel = context.reactPanel;
+          const root = panel.getRoot();
+          if (root && firstKeyboardTarget(panel.selection.get())?.collapsed) {
+            panel.selection.scheduleIfSelectionUnchanged(() =>
+              focusSelectionCaret(root, panel.selection),
+            );
+          } else {
+            handle?.focus();
+          }
         }}
       >
         <MenuEntries

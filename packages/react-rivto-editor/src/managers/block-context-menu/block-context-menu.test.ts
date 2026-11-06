@@ -39,6 +39,38 @@ test("preserves selected groups, excludes covered roots, and retargets an outsid
   await f.core.destroy();
 });
 
+test("inserts blocks and a separator next to the clicked block", async () => {
+  const f = await fixture();
+  const context = blockMenuTargets(f.panel, f.child.id);
+  const entries = f.panel.blockContextMenu.getAll(context).map((entry) => entry.id);
+  expect(
+    entries.slice(entries.indexOf("block.background"), entries.indexOf("separator.format")),
+  ).toEqual([
+    "block.background",
+    "block.insert-above",
+    "block.insert-below",
+    "block.insert-separator",
+  ]);
+  await executeBlockMenuEntry("block.insert-above", context);
+  await executeBlockMenuEntry("block.insert-below", context);
+  await executeBlockMenuEntry("block.insert-separator", context);
+  const children = f.core.blocks.getBlock(f.parent.id)!.children;
+  expect(children.map((block) => block.type)).toEqual([
+    "paragraph",
+    "paragraph",
+    "separator",
+    "paragraph",
+  ]);
+  expect(children[1]!.id).toBe(f.child.id);
+  expect(children[1]!.children[0]!.content).toBe("Leaf");
+  f.core.history.undo();
+  expect(
+    f.core.blocks.getBlock(f.parent.id)!.children.some((block) => block.type === "separator"),
+  ).toBe(false);
+  f.panel.editor.destroy();
+  await f.core.destroy();
+});
+
 test("recursive collapse includes hidden descendants and expands in one undo step", async () => {
   const f = await fixture();
   const context = blockMenuTargets(f.panel, f.parent.id);
