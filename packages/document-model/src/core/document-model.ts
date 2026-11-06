@@ -16,6 +16,15 @@ import type {
 } from "./types";
 import { assertPortableRecord, clone } from "./utils";
 
+/** Default maximum number of entries in each document history stack. */
+export const DEFAULT_MAX_HISTORY_ENTRIES = 100;
+
+/** Construction settings for document-owned history. */
+export interface DocumentModelOptions {
+  /** Maximum actions in each history stack; defaults to 100 and zero disables history. This does not bound CRDT memory. */
+  readonly maxHistoryEntries?: number;
+}
+
 /**
  * Coordinates collaborative document lifecycle through block and element managers.
  *
@@ -50,8 +59,15 @@ export class DocumentModelImpl implements DocumentModel {
    * can merge into duplicate ids, missing refs, or orphans.
    *
    * @param crdt - Collaborative document owning identity and local transactions.
+   * @param options - Optional history settings for this document.
+   * @param options.maxHistoryEntries - Maximum entries per undo and redo stack; defaults to 100.
+   * @throws If the history limit is not a non-negative integer.
    */
-  constructor(crdt: CRDTDoc) {
+  constructor(crdt: CRDTDoc, options: DocumentModelOptions = {}) {
+    const maxEntries = options.maxHistoryEntries ?? DEFAULT_MAX_HISTORY_ENTRIES;
+    if (!Number.isInteger(maxEntries) || maxEntries < 0) {
+      throw new RangeError("History limit must be a non-negative integer");
+    }
     this.crdt = crdt;
     this.id = crdt.id;
     const blocks = this.createBlockManager(crdt);
@@ -64,7 +80,7 @@ export class DocumentModelImpl implements DocumentModel {
       ...elements.historyScopes,
       ...pluginData.historyScopes,
     ];
-    const history = new DocumentHistoryManager(crdt, undoScopes);
+    const history = new DocumentHistoryManager(crdt, undoScopes, maxEntries);
     this.blocks = blocks;
     this.elements = elements;
     this.pluginData = pluginData;

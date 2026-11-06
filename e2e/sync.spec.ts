@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+test.skip("opening another tab does not duplicate the initial blocks", async ({
+  page,
+  context,
+}) => {
+  const url = `/?sync=1&room=tabs-${Date.now()}-${Math.random()}`;
+  await page.goto(url);
+  const left = page.locator('[data-editor-sync="left"]');
+  await expect(left.locator('[data-block-type="paragraph"]')).toHaveCount(2);
+  const second = await context.newPage();
+  await second.goto(url);
+  await expect(
+    second.locator('[data-editor-sync="right"] [data-block-type="paragraph"]'),
+  ).toHaveCount(2);
+  await expect(left.locator('[data-block-type="paragraph"]')).toHaveCount(2);
+});
+
 for (const mode of ["Page", "Edgeless"] as const) {
   test(`keeps Markdown typing visible after inserting a paragraph in ${mode}`, async ({ page }) => {
     await page.goto(`/?sync=1&room=typing-${Date.now()}`);

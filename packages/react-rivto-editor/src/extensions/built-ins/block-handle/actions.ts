@@ -92,7 +92,8 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
 /**
  * Registers the List style submenu and its ordinary, numbered, and checkbox choices.
  *
- * A choice is checked only when every explicit target has that list type; mixed
+ * A choice is checked only when every explicit target has that list type, with
+ * an absent type treated as an ordinary list; mixed
  * targets have no checked choice. Executing a choice updates all captured blockIds
  * in one updateBlocks call and resets their checked list property to false.
  *
@@ -115,10 +116,13 @@ export function registerBlockListActions(menu: BlockContextMenuRegistration): vo
        * Checks whether every explicit target uses this list choice.
        *
        * @param context - Invoking panel and captured block IDs.
-       * @returns True only when all targets have this entry's list type.
+       * @returns True when all targets have this entry's list type, treating an absent type as ordinary.
        */
       isChecked: ({ reactPanel, blockIds }) =>
-        blockIds.every((id) => reactPanel.blocks.getBlockNode(id)?.listProps.type === type),
+        blockIds.every((id) => {
+          const block = reactPanel.blocks.getBlockNode(id);
+          return block !== undefined && (block.listProps.type ?? "list") === type;
+        }),
       /**
        * Applies this list choice to all explicit targets in one bulk update.
        *

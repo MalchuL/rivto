@@ -19,13 +19,30 @@ for (const repeat of [0, 200]) {
     const withoutSpotlight = await page.screenshot({ clip, caret: "hide", animations: "disabled" });
     expect(withoutSpotlight.equals(withSpotlight)).toBe(true);
     const viewportBounds = (await canvas.boundingBox())!;
-    await canvas.hover({ position: { x: viewportBounds.width - 70, y: 240 } });
+    // The top strip is clear even when the repeated fixture fills the canvas with cards.
+    await canvas.hover({ position: { x: viewportBounds.width - 70, y: 25 } });
     const backgroundClip = {
-      x: viewportBounds.x + viewportBounds.width - 110,
-      y: viewportBounds.y + 200,
-      width: 80,
-      height: 80,
+      x: viewportBounds.x + viewportBounds.width - 82,
+      y: viewportBounds.y + 13,
+      width: 24,
+      height: 24,
     };
+    expect(
+      await page.evaluate(({ x, y }) => {
+        for (const dx of [2, 12, 22]) {
+          for (const dy of [2, 12, 22]) {
+            const hit = document.elementFromPoint(x + dx, y + dy);
+            if (
+              !hit ||
+              hit.closest("[data-edgeless-root], [data-edgeless-object-kind], [data-edgeless-ui]")
+            ) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }, backgroundClip),
+    ).toBe(true);
     const background = await page.screenshot({ clip: backgroundClip });
     await spotlight.evaluate((element) => {
       element.style.visibility = "visible";

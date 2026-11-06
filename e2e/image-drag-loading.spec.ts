@@ -40,14 +40,20 @@ for (const repeat of [0, 200]) {
           (character) => character.charCodeAt(0),
         );
         data.items.add(new File([bytes], "test.png", { type: "image/png" }));
+        const row = element.matches(".page-surface")
+          ? element.querySelector<HTMLElement>(".rivto-block-row")
+          : null;
+        const bounds = row?.getBoundingClientRect();
+        const x = bounds ? bounds.left + bounds.width / 2 : 300;
+        const y = bounds ? bounds.bottom - 2 : 300;
         const event = new DragEvent("drop", {
           bubbles: true,
           cancelable: true,
-          clientX: 300,
-          clientY: 300,
+          clientX: x,
+          clientY: y,
         });
         Object.defineProperty(event, "dataTransfer", { value: data });
-        element.dispatchEvent(event);
+        (bounds ? (document.elementFromPoint(x, y) ?? element) : element).dispatchEvent(event);
       });
       const selector =
         mode === "block"

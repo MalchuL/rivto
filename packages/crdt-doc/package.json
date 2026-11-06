@@ -23,7 +23,7 @@
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {
-    "yjs": "^13.0.0"
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -32,7 +32,7 @@
     "ts-jest": "^29.4.5",
     "tsup": "^8.5.0",
     "typescript": "5.8.3",
-    "yjs": "^13.0.0"
+    "yjs": "^13.6.33"
   },
   "dependencies": {
     "y-webrtc": "^10.3.0"

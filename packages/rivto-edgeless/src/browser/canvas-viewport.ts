@@ -28,6 +28,8 @@ export class CanvasViewport {
    *
    * One viewport accepts one attachment at a time. The disposer belongs to this
    * attachment only and is safe to call again after a later mount.
+   * Native scrolling of the viewport is converted into camera movement so
+   * screen-space overlays stay fixed; nested scroll containers are unaffected.
    *
    * @param root - Focusable viewport containing the world layer.
    * @param plane - Mounted world-coordinate layer inside root.
@@ -58,10 +60,12 @@ export class CanvasViewport {
       }
       throw error;
     }
+    root.addEventListener("scroll", this.onScroll);
     return () => {
       if (this.layers.get() !== layers) {
         return;
       }
+      root.removeEventListener("scroll", this.onScroll);
       detachEvents();
       CanvasViewport.mountedViewports.delete(root);
       this.layersStore.set(null);
@@ -85,4 +89,27 @@ export class CanvasViewport {
     }
     return undefined;
   }
+
+  /**
+   * Converts native viewport scrolling into an equivalent camera movement.
+   *
+   * Browser focus can scroll a hidden-overflow viewport to reveal content.
+   * Moving the camera by the same amount keeps that content visible while
+   * screen-space controls stay fixed. Nested scroll containers remain independent.
+   *
+   * @param event - Scroll event dispatched by the attached viewport.
+   * @returns The viewport scroll is reset and the camera preserves the visible position.
+   * @throws If camera subscribers reject the update.
+   */
+  private readonly onScroll = (event: Event): void => {
+    const root = this.layers.get()?.root;
+    if (!root || event.target !== root || (!root.scrollLeft && !root.scrollTop)) {
+      return;
+    }
+    const { scrollLeft, scrollTop } = root;
+    root.scrollLeft = 0;
+    root.scrollTop = 0;
+    const camera = this.canvas.camera.get();
+    this.canvas.setCamera({ ...camera, x: camera.x - scrollLeft, y: camera.y - scrollTop });
+  };
 }

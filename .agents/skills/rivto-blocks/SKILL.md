@@ -69,11 +69,21 @@ including an inside destination proposed by an indented edge or physical gap.
 Destination kind alone cannot distinguish these gestures. A container or renderer
 must not reinterpret that action to repair its own feedback.
 
+Each block owns its direct-child boundary policy through its registered
+`BlockBehavior.childDropPlacement`; omission defers to the layout, which defaults
+to ordinary outline placement.
+An enclosing list's `siblings` policy changes its direct-item edge gestures, not the
+item's body/inside target, existing children, keyboard behavior or the policy of
+its own child list. Bento tiles and Kanban column cards use sibling-only direct
+boundaries. Consult `rivto-containers` for policy precedence and layout composition.
+
 Controls do not implicitly exclude drops. Use BlockDropExclude or an explicit
 BlockDropTarget exclusion for intentional areas; registered descendants can remain
 eligible inside an excluded ancestor. Permission remains in the source/receiving
 behavior and commit path. Geometry does not grant a move, and rejection must not
-fall through to a different parent.
+fall through to a different parent. A `BlockDropWrapper` registers its existing
+content element as the item's inside destination, so controls alongside a shell
+remain droppable while declared placement edges retain priority.
 
 ## Use shared geometry and flexible content
 
@@ -199,7 +209,12 @@ containers. Cover both a leaf and a populated block, own-row body versus placeme
 edges, committed parent/order and undo. Verify the visible frame matches the actual
 destination. For indentation, compare content coordinates at multiple levels under
 default geometry and a meaningful override; shell bounds alone can hide cancelled
-text indentation. Include RTL when logical geometry changes.
+text indentation. Exercise a populated ordinary block inside a sibling-only list:
+its direct boundary stays at the parent level while its inside target and own
+child-list policy remain available. Where wrapping items have side controls, sweep
+their strips and edge transitions, including native hits, feedback, drop/undo and
+unaffected control use.
+Include RTL when logical geometry changes.
 
 Do not weaken a failing body assertion into a block-edge assertion or repair one
 container's renderer when the same primitive fails elsewhere. New renderers should

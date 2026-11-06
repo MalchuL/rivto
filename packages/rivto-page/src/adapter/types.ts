@@ -3,6 +3,9 @@ import type { BlockSelectionSnapshot } from "../editor/selection/types";
 export type BlockListType =
   "list" | "checkbox" | "numbered_list" | "start_numbered_list" | "continue_numbered_list";
 
+/** Depth choices offered on boundaries between a block's direct children. */
+export type BlockDropPlacement = "outline" | "siblings";
+
 /**
  * Describes the structure Page needs to render a block without knowing its storage model.
  *
@@ -29,6 +32,8 @@ export interface BlockEditorNodeSnapshot {
   readonly checked?: boolean;
   /** Persisted collapse state; omitted when the host supplies no collapse state. */
   readonly collapsed?: boolean;
+  /** Direct-child boundary placement; omitted defaults to outline. */
+  readonly dropPlacement?: BlockDropPlacement;
   /** Resolved CSS background color or expression supplied by the host; omitted for the default background. */
   readonly color?: string;
 }

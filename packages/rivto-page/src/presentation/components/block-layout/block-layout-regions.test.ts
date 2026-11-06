@@ -4,6 +4,27 @@ import {
   registeredBlockRegion,
 } from "./block-layout-regions";
 
+it("notifies only the addressed shell observer and ignores stale releases", () => {
+  const regions = new BlockLayoutRegions();
+  const first = document.createElement("div");
+  const second = document.createElement("div");
+  const seen: Array<HTMLElement | undefined> = [];
+  const other = jest.fn();
+  const stop = regions.subscribeShell("block", () => seen.push(regions.get("block", "shell")));
+  regions.subscribeShell("other", other);
+  const old = regions.register("block", "shell", first);
+  const replacement = regions.register("block", "shell", first);
+  old();
+  replacement();
+  const current = regions.register("block", "shell", second);
+  expect(seen).toEqual([first, first, undefined, second]);
+  expect(other).not.toHaveBeenCalled();
+  stop();
+  current();
+  expect(seen).toHaveLength(4);
+  regions.destroy();
+});
+
 it("resolves wrapped owner regions without borrowing descendant rows", () => {
   const regions = new BlockLayoutRegions();
   const shell = document.createElement("div");

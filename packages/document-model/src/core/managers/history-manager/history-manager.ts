@@ -21,10 +21,11 @@ export class DocumentHistoryManager implements DocumentHistoryManagerApi {
    *
    * @param crdt - Collaborative document that owns transaction identity.
    * @param scopes - Private roots declared by the document storage managers.
+   * @param maxEntries - Maximum undo and redo entries retained in each stack, or undefined for the adapter default.
    */
-  constructor(crdt: CRDTDoc, scopes: CRDTUndoScope[]) {
+  constructor(crdt: CRDTDoc, scopes: CRDTUndoScope[], maxEntries?: number) {
     this.crdt = crdt;
-    this.manager = crdt.createUndoManager(scopes);
+    this.manager = crdt.createUndoManager(scopes, undefined, maxEntries);
   }
 
   /**

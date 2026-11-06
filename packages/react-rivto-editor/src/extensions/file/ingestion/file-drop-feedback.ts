@@ -1,14 +1,12 @@
 import { BlockDropFeedback } from "@chulane/rivto-page";
 import type { EditorEvent } from "../../../managers/events/editor-event";
 import { isInPanel } from "../../../panels/panel-dom";
-import { fileCaretRangeAtPoint, pageFileDropTarget } from "./file-destination";
-import type { FileIngestionPoint } from "./types";
+import { pageFileDropTarget } from "./file-destination";
 
 /** Displays the current Page file-drop target without changing the selection. */
 export class FileDropFeedback {
   private root?: HTMLElement;
   private feedback?: BlockDropFeedback;
-  private caret?: HTMLElement;
   private releasePanel?: () => void;
 
   /**
@@ -23,8 +21,7 @@ export class FileDropFeedback {
   /**
    * Shows the Page target under a file drag without moving the native caret.
    *
-   * A text target shows its block outline and a caret when browser hit testing
-   * can locate one. Other targets use the same geometry as file insertion.
+   * All Page targets use the same geometry as file insertion and block dragging.
    * Edgeless surfaces do not display Page feedback.
    *
    * @param event - Current drag event and its receiving panel.
@@ -40,17 +37,7 @@ export class FileDropFeedback {
       this.attach(event);
     }
     const point = { x: event.raw.clientX, y: event.raw.clientY };
-    if (event.contentElement && event.blockElement && event.blockId) {
-      this.feedback?.update({
-        element: event.blockElement,
-        outlineElement: event.blockElement,
-        destination: { kind: "inside", parentId: event.blockId },
-      });
-      this.updateCaret(event.contentElement, point);
-    } else {
-      this.removeCaret();
-      this.feedback?.update(pageFileDropTarget(event, point));
-    }
+    this.feedback?.update(pageFileDropTarget(event, point));
   }
 
   /**
@@ -60,19 +47,16 @@ export class FileDropFeedback {
    * @throws A cleanup failure, or AggregateError if several releases fail.
    */
   clear(): void {
-    if (!this.root && !this.feedback && !this.caret && !this.releasePanel) {
+    if (!this.root && !this.feedback && !this.releasePanel) {
       return;
     }
     const root = this.root;
     const feedback = this.feedback;
-    const caret = this.caret;
     const releasePanel = this.releasePanel;
     this.root = undefined;
     this.feedback = undefined;
-    this.caret = undefined;
     this.releasePanel = undefined;
     const releases = [
-      () => caret?.remove(),
       () => root?.removeEventListener("dragleave", this.onLeave, true),
       () => root?.ownerDocument.removeEventListener("drop", this.onFinish, true),
       () => root?.ownerDocument.removeEventListener("dragend", this.onFinish, true),
@@ -163,41 +147,5 @@ export class FileDropFeedback {
       }
       throw error;
     }
-  }
-
-  /**
-   * Draws a caret at the same browser hit-test position used by insertion.
-   *
-   * @param content - Editable content under the pointer.
-   * @param point - Pointer position in viewport pixels.
-   * @returns The caret is placed or hidden when hit testing misses the content.
-   */
-  private updateCaret(content: HTMLElement, point: FileIngestionPoint): void {
-    const range = fileCaretRangeAtPoint(content.ownerDocument, point);
-    if (!range || !content.contains(range.startContainer)) {
-      this.removeCaret();
-      return;
-    }
-    const rect = range.getBoundingClientRect();
-    const fallback = content.getBoundingClientRect();
-    if (!this.caret) {
-      this.caret = content.ownerDocument.createElement("div");
-      this.caret.className = "rivto-file-drop-caret";
-      this.caret.setAttribute("aria-hidden", "true");
-      this.root?.append(this.caret);
-    }
-    this.caret.style.left = `${rect.height ? rect.left : fallback.left}px`;
-    this.caret.style.top = `${rect.height ? rect.top : fallback.top}px`;
-    this.caret.style.height = `${rect.height || fallback.height}px`;
-  }
-
-  /**
-   * Removes the temporary visual caret without changing the native selection.
-   *
-   * @returns No file-drop caret remains mounted.
-   */
-  private removeCaret(): void {
-    this.caret?.remove();
-    this.caret = undefined;
   }
 }

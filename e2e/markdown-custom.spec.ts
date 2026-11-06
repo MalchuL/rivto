@@ -42,6 +42,33 @@ test("renders plain writing text and keeps Markdown list syntax", async ({ page 
   ).toHaveText("item");
 });
 
+test("shows single line breaks in the idle Markdown preview", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "First **line**\nSecond line" })
+      .id;
+  });
+  const paragraph = page.locator(blockIdSelector(id)).locator(".markdown-preview p");
+  await expect(paragraph).toBeVisible();
+  const lines = await paragraph.evaluate((element) => {
+    const first = element.firstChild;
+    const last = element.lastChild;
+    if (!first || !last) {
+      throw new Error("Expected both lines");
+    }
+    const range = document.createRange();
+    range.selectNodeContents(first);
+    const firstTop = range.getBoundingClientRect().top;
+    range.selectNodeContents(last);
+    return [firstTop, range.getBoundingClientRect().bottom];
+  });
+  const lineHeight = await paragraph.evaluate((element) =>
+    parseFloat(getComputedStyle(element).lineHeight),
+  );
+  expect(lines[1]! - lines[0]!).toBeGreaterThan(lineHeight * 1.5);
+});
+
 test("highlights separate blocks independently when one source changes", async ({ page }) => {
   const ids = await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

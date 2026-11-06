@@ -90,29 +90,28 @@ test("renders aligned contentless container summaries from reactive block snapsh
     const toggle = row.locator("[data-collapse-toggle]");
     await block.scrollIntoViewIfNeeded();
     await expect(summary).not.toHaveAttribute("contenteditable");
-    await expect(summary).toHaveCSS(
-      "height",
-      type === "table" || type === "columns" ? "0px" : "24px",
-    );
+    if (type === "bento" || type === "kanban") {
+      await expect(row.getByText(name, { exact: true })).toHaveCount(0);
+    }
+    await expect(summary).toHaveCSS("height", "0px");
     await expect(row).toHaveCSS("height", "24px");
 
-    const rowBox = (await row.boundingBox())!;
-    const childrenBox = (await block.locator(":scope > .rivto-block-children").boundingBox())!;
-    if (type === "table" || type === "columns") {
-      expect(childrenBox.y, `${type} contentless row overlaps child layout`).toBeLessThan(
-        rowBox.y + rowBox.height,
-      );
-    } else {
-      expect(childrenBox.y, `${type} children below header`).toBeGreaterThanOrEqual(
-        rowBox.y + rowBox.height,
-      );
-    }
+    const geometry = await block.evaluate((element) => {
+      const row = element.querySelector(":scope > .rivto-block-row")!.getBoundingClientRect();
+      const children = element
+        .querySelector(":scope > .rivto-block-children")!
+        .getBoundingClientRect();
+      return { rowBottom: row.bottom, childrenTop: children.top };
+    });
+    expect(geometry.childrenTop, `${type} contentless row overlaps child layout`).toBeLessThan(
+      geometry.rowBottom,
+    );
 
     const toggleBox = (await toggle.boundingBox())!;
     expect(toggleBox.x, `${type} collapse offset`).toBeCloseTo(referenceToggleBox.x, 0);
 
     await toggle.click();
-    await expect(row.getByText(name, { exact: true })).toBeVisible();
+    await expect(row.getByRole("textbox", { name: `${name} name` })).toBeVisible();
     await expect(row.getByText(stats, { exact: true })).toBeVisible();
   }
 
@@ -170,15 +169,67 @@ test("renders aligned contentless container summaries from reactive block snapsh
   }
 });
 
+test("selects TODO storage from its toolbar without blocking search", async ({ page }) => {
+  await page.goto("/?test_features=1");
+  const storage = page.locator('[data-block-type="todo-storage"]').first();
+  const toolbar = storage.locator(".rivto-todo-storage-toolbar");
+  await toolbar.click({ position: { x: 1, y: 1 }, modifiers: ["Control"] });
+  await expect(storage).toHaveAttribute("data-block-selected", "true");
+  const search = storage.getByRole("searchbox", { name: "Search TODOs" });
+  await search.fill("task");
+  await expect(search).toHaveValue("task");
+});
+
 test("renders a compact TODO storage summary while collapsed", async ({ page }) => {
   await page.goto("/?test_features=1");
   const storage = page.locator('[data-block-type="todo-storage"]');
   await storage.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`).click();
-  await expect(storage.getByText("TODO storage", { exact: true })).toBeVisible();
+  await expect(storage.getByRole("textbox", { name: "TODO storage name" })).toBeVisible();
   await expect(storage.getByText("3 items", { exact: true })).toBeVisible();
   await expect(storage.locator(":scope > .rivto-block-children")).toBeHidden();
   await expect(storage.locator(":scope > .rivto-block-children > [data-block-id]")).toHaveCount(0);
   expect((await storage.boundingBox())!.height).toBeLessThan(88);
+});
+
+test("gives collapsed container summaries the same appearance", async ({ page }) => {
+  await page.goto("/?test_features=1");
+  const styles = [];
+  for (const type of ["bento", "kanban", "todo-storage", "columns", "table"]) {
+    const block = page.locator(`[data-block-type="${type}"]`).first();
+    await block.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`).click();
+    const summary = block.locator(
+      `:scope > .${ROW_CLASS} > .${CONTENT_FLOW_CLASS} > [data-block-selection-anchor]`,
+    );
+    await expect(summary).not.toBeEmpty();
+    styles.push(
+      await summary.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.backgroundColor, style.borderRadius, style.padding, style.boxShadow];
+      }),
+    );
+  }
+  expect(styles[1]).toEqual(styles[0]);
+  expect(styles[2]).toEqual(styles[0]);
+  expect(styles[3]).toEqual(styles[0]);
+  expect(styles[4]).toEqual(styles[0]);
+});
+
+test("persists editable collapsed container names", async ({ page }) => {
+  await page.goto("/?test_features=1");
+  for (const [type, name] of [
+    ["bento", "Bento"],
+    ["kanban", "Kanban"],
+    ["todo-storage", "TODO storage"],
+  ]) {
+    const block = page.locator(`[data-block-type="${type}"]`).first();
+    const toggle = block.locator(`:scope > .${ROW_CLASS} [data-collapse-toggle]`);
+    await toggle.click();
+    const title = block.getByRole("textbox", { name: `${name} name` });
+    await title.fill(`My ${name}`);
+    await toggle.click();
+    await toggle.click();
+    await expect(block.getByRole("textbox", { name: `${name} name` })).toHaveText(`My ${name}`);
+  }
 });
 
 test("reveals root block handles in their headers and exposed lateral gutters", async ({

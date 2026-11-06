@@ -15,7 +15,6 @@ import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
   insertBlockElementSeparator,
-  nonOverlappingBlockFrame,
 } from "../../elements/block-element-projection";
 
 /** Shared block definitions borrowed for new-card creation. */
@@ -52,13 +51,11 @@ export class EdgelessSurfaceController {
    *
    * @param panel - Receiving document occurrence and mutation managers.
    * @param canvas - Scene supplying live world-coordinate conversion.
-   * @param avoidOverlap - Whether new cards are moved away from existing cards.
    * @param cardWidth - Preferred world width; invalid values use the default card width.
    */
   constructor(
     private readonly panel: EdgelessSurfacePanel,
     private readonly canvas: Pick<Canvas, "toWorld" | "setSnapping">,
-    private readonly avoidOverlap: boolean,
     private readonly cardWidth: number,
   ) {}
 
@@ -148,13 +145,13 @@ export class EdgelessSurfaceController {
   }
 
   /**
-   * Computes the preferred card frame and applies the configured overlap policy.
+   * Computes the card frame at the requested canvas position.
    *
    * @param point - Requested top-left position in world units.
    * @returns Placement frame using a finite positive width or the default width.
    */
   private getCardFrame(point: Point): Rect {
-    const preferred = {
+    return {
       ...EDGELESS_CARD_DEFAULT_FRAME,
       ...point,
       width:
@@ -162,16 +159,6 @@ export class EdgelessSurfaceController {
           ? this.cardWidth
           : EDGELESS_CARD_DEFAULT_FRAME.width,
     };
-    if (!this.avoidOverlap) {
-      return preferred;
-    }
-    return nonOverlappingBlockFrame(
-      preferred,
-      this.panel.elements
-        .getElementNodes()
-        .filter((element) => element.type === EDGELESS_BLOCK_ELEMENT_TYPE)
-        .map((element) => element.frame),
-    );
   }
 
   /**

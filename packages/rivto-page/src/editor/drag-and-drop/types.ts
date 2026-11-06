@@ -43,7 +43,7 @@ export type BlockDropRegion = BlockDropEdgeRegion | BlockDropInsideRegion;
 export interface BlockDropEdgeRegion {
   readonly kind: "edge";
   readonly side: "block-start" | "block-end" | "inline-start" | "inline-end";
-  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 12. Capped to one third of the anchor axis and constrained by the registered own-content middle third, retaining body drops when descendants enlarge the shell. */
+  /** Local CSS pixels; omission reads --rivto-drop-target-size, default 12. Capped to half the anchor axis and constrained by the registered own-content center, retaining body drops when descendants enlarge the shell. */
   readonly size?: number;
   /** Bounds accepts the whole anchor while retaining feedback on the declared edge; defaults to edge. */
   readonly coverage?: "edge" | "bounds";

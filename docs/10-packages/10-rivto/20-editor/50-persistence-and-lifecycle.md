@@ -41,6 +41,29 @@ History отслеживает собранные managers CRDT scopes толь�
 
 Typed manager mutations создают собственные capture steps. `history.batchUpdates()` объединяет несколько mutations в один capture step.
 
+По умолчанию документ хранит до 100 доступных шагов в каждом стеке Undo и Redo.
+Host может задать другой лимит при создании модели; `0` отключает захват истории.
+Для документов, открываемых через `DocumentStorage`, настройка передаётся через
+фабрику модели:
+
+```ts
+import { DocumentModelImpl, DocumentStorage } from "@chulane/document-model";
+import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+
+const storage = new DocumentStorage({
+  registry: new YjsDocumentRegistry("workspace"),
+  createDocumentModel: (crdt) => new DocumentModelImpl(crdt, { maxHistoryEntries: 50 }),
+});
+```
+
+При превышении лимита старые записи удаляются во время browser idle callback с
+таймаутом 1 секунда либо через асинхронный timer, если idle callback недоступен.
+Если Undo или Redo вызван раньше, отложенная обрезка выполняется перед ним.
+Ограничение касается доступных шагов, а не размера памяти: Yjs может удерживать
+данные вытесненных шагов до повторной загрузки документа. После вытеснения
+`history.clear()` не может снять эти удержания: связанные данные могут требоваться
+другим UndoManager, а безопасной частичной очистки Yjs не предоставляет.
+
 ## `destroy()` порядок
 
 1. Вызвать и удалить runtime subscription cleanups.

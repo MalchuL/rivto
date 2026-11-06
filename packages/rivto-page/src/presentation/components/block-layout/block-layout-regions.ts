@@ -1,4 +1,5 @@
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
+import { Listeners } from "@chulane/rivto-utils";
 
 /** Mounted layout roles shared by hover, selection and drop geometry. */
 export type BlockLayoutRegion = "shell" | "row" | "content" | "children" | "body" | "slot" | "item";
@@ -15,6 +16,7 @@ const mounted = new WeakMap<HTMLElement, MountedRegion>();
 /** Owns addressed layout elements for one editor occurrence; refs own their registrations. */
 export class BlockLayoutRegions {
   private readonly owners = new Map<string, Set<HTMLElement>>();
+  private readonly shellListeners = new Listeners<Record<string, void>>();
 
   /**
    * Registers the actual element supplied by a primitive's committed ref.
@@ -33,6 +35,9 @@ export class BlockLayoutRegions {
     elements.add(element);
     this.owners.set(blockId, elements);
     mounted.set(element, entry);
+    if (role === "shell") {
+      this.shellListeners.emit(blockId);
+    }
     return () => {
       if (mounted.get(element) !== entry) {
         return;
@@ -42,7 +47,24 @@ export class BlockLayoutRegions {
       if (!elements.size) {
         this.owners.delete(blockId);
       }
+      if (role === "shell") {
+        this.shellListeners.emit(blockId);
+      }
     };
+  }
+
+  /**
+   * Observes replacements of one block's registered shell in this occurrence.
+   *
+   * Notifications run after the registry changes, allowing borrowers to read
+   * the current shell without retaining a removed element.
+   *
+   * @param blockId - Owner whose shell registrations should be observed.
+   * @param listener - Callback invoked after its shell is attached or released.
+   * @returns An idempotent disposer for this addressed subscription.
+   */
+  subscribeShell(blockId: string, listener: () => void): () => void {
+    return this.shellListeners.subscribe(blockId, listener);
   }
 
   /**
@@ -82,6 +104,7 @@ export class BlockLayoutRegions {
       }
     }
     this.owners.clear();
+    this.shellListeners.clear();
   }
 }
 

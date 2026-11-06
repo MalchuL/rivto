@@ -33,8 +33,8 @@ function KanbanCardItem({ children }: BlockChildrenItemProps) {
  * measured edge thickness (16 local pixels by default) into that background,
  * leaving the remaining area for inside feedback while retaining full-row gutters.
  * Nested card regions and sibling insertion edges keep their own destinations.
- * Card edges share ordinary outline depth placement: the leading band sorts
- * siblings and the indented trailing band appends children without entering content.
+ * Card edges select sibling placement across their full boundary. Card body drops
+ * and the independently configured child lists of expanded cards remain available.
  *
  * @param props - Column identity passed by Page's renderer registration.
  * @param props.blockId - Receiving parent for the footer's insert command.

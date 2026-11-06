@@ -201,9 +201,16 @@ for (const wrapped of [false, true]) {
     }) => {
       await loadBento(page, wrapped, true);
       const upper = (await page.locator('[data-block-id="upper"]').boundingBox())!;
-      const lower = (await page.locator('[data-block-id="lower"]').boundingBox())!;
+      const lowerBlock = page.locator('[data-block-id="lower"]');
+      const lower = (await lowerBlock.boundingBox())!;
+      const content = (await lowerBlock
+        .locator(":scope > .rivto-block-row > .rivto-block-content")
+        .boundingBox())!;
+      const indent = await lowerBlock.evaluate((element) =>
+        parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+      );
       await dragTo(page, {
-        x: lower.x + (nested ? 36 : 12),
+        x: nested ? content.x + indent + 1 : lower.x + 12,
         y: (upper.y + upper.height + lower.y) / 2,
       });
       await expect(

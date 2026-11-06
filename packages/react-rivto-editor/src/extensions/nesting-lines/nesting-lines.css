@@ -1,0 +1,15 @@
+.rivto-nesting-lines {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rivto-nesting-lines path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));
+  stroke-width: 4px;
+}

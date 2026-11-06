@@ -148,6 +148,41 @@ it("owns duplicate subscriptions independently and releases them on controller d
   expect(listener).toHaveBeenCalledTimes(3);
 });
 
+it("releases a subscription if its initial notification destroys the controller", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const controller = new BlockEditorController({ adapter });
+  const node = controller.getNode("a");
+  const release = jest.fn();
+  adapter.blocks.subscribeBlockNode.mockImplementationOnce((_id, listener) => {
+    listener();
+    return release;
+  });
+
+  expect(() => node.subscribe(() => controller.destroy())).toThrow("BlockEditorNode is destroyed");
+  expect(release).toHaveBeenCalledTimes(1);
+});
+
+it("reports cleanup failure when the controller is destroyed during subscription", () => {
+  const adapter = new TestBlockEditorAdapter();
+  const controller = new BlockEditorController({ adapter });
+  const node = controller.getNode("a");
+  const failure = new Error("release failed");
+  adapter.blocks.subscribeBlockNode.mockImplementationOnce((_id, listener) => {
+    listener();
+    return () => {
+      throw failure;
+    };
+  });
+
+  try {
+    node.subscribe(() => controller.destroy());
+    throw new Error("Expected subscription failure");
+  } catch (error) {
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toContain(failure);
+  }
+});
+
 it("attempts every cleanup even when one host disposer fails", () => {
   const adapter = new TestBlockEditorAdapter();
   const controller = new BlockEditorController({ adapter });

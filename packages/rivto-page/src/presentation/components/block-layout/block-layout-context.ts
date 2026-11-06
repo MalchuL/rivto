@@ -20,6 +20,7 @@ export interface BlockChildrenState {
   readonly childIds: readonly string[];
   readonly childrenId: string;
   readonly collapsed: boolean;
+  readonly dropPlacement: BlockEditorNodeSnapshot["dropPlacement"];
 }
 
 /** Structure-only context retains identity during text, color, selection, and slot updates. */

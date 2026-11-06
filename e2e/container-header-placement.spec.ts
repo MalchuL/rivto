@@ -28,6 +28,30 @@ function receivingContainer(type: string): { block: EditorBlockInput; parent: st
 }
 
 /**
+ * Appends to Bento through its visible child-layout background.
+ *
+ * Expanded Bento has no title row; padding exposes its existing background target.
+ *
+ * @param page - Browser containing the mounted fixture.
+ * @param padding - Additional background padding in CSS pixels.
+ * @returns Resolves after the move and undo restore the hierarchy.
+ */
+async function verifyBentoBackground(page: Page, padding: number): Promise<void> {
+  const owner = page.locator('[data-block-id="target"]');
+  const host = owner.locator(":scope > .rivto-block-children");
+  await host.evaluate((element, padding) => {
+    element.style.padding = `${padding + 64}px`;
+  }, padding);
+  const bounds = (await host.boundingBox())!;
+  const first = (await host.locator(":scope > .rivto-block-item").first().boundingBox())!;
+  await dragToHeader(page, { x: bounds.x + 2, y: first.y + first.height / 2 });
+  await expect(owner).toHaveAttribute("data-block-drop-active", "true");
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
+  await page.mouse.up();
+  await verifyHeaderMove(page, "target");
+}
+
+/**
  * Starts the real source handle and moves to the receiving header.
  *
  * @param page - Browser page owning native mouse input.
@@ -109,7 +133,9 @@ async function verifyHeaderMove(page: Page, parent: string): Promise<void> {
 
 for (const type of ["bento", "kanban", "todo-storage"]) {
   for (const mode of ["block", "edgeless"] as const) {
-    test(`declared inside insertion from ${type} receiving header in ${mode}`, async ({ page }) => {
+    test(`declared inside insertion from ${type} receiving ${type === "bento" ? "background" : "header"} in ${mode}`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 1400, height: 1200 });
       await page.goto("/?test_features=1");
       await page.locator(".page-surface").first().waitFor();
@@ -135,7 +161,11 @@ for (const type of ["bento", "kanban", "todo-storage"]) {
       );
       await page.locator(`[data-editor-mode="${mode}"]`).click();
       for (const padding of [4, 100]) {
-        await verifyHeader(page, parent, padding);
+        if (type === "bento") {
+          await verifyBentoBackground(page, padding);
+        } else {
+          await verifyHeader(page, parent, padding);
+        }
       }
     });
   }

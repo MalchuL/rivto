@@ -117,12 +117,9 @@ for (const depth of [0, 1, 2]) {
     await expect(line).toBeVisible();
     const indicator = (await line.boundingBox())!;
     expect(indicator.x).toBeCloseTo(region.x + 12, 0);
-    let boundaryY = region.y + region.height;
-    if (depth >= 1) {
-      const following = (await surface.locator('[data-block-id="following"]').boundingBox())!;
-      // Parent append and root sibling insertion share the same physical seam.
-      boundaryY = (boundaryY + following.y) / 2;
-    }
+    const following = (await surface.locator('[data-block-id="following"]').boundingBox())!;
+    // Terminal descendants, parent append and root sibling insertion share the seam.
+    const boundaryY = (region.y + region.height + following.y) / 2;
     expect(indicator.y + indicator.height / 2).toBeCloseTo(boundaryY, 0);
     expect(indicator.height).toBe(2);
     await page.mouse.up();

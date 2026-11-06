@@ -38,6 +38,21 @@ function behavior(methods: Partial<BlockBehavior> = {}): BlockBehavior {
   return { isAvailable: () => true, ...methods };
 }
 
+test("child boundary placement follows applicable behavior priority and removal", async () => {
+  const { core, panel, block, registry } = await fixture();
+  expect(registry.childDropPlacement(block)).toBeUndefined();
+  const lower = registry.register(behavior({ childDropPlacement: () => "outline" }), 1);
+  const higher = registry.register(behavior({ childDropPlacement: () => "siblings" }), 2);
+  registry.register(behavior({ isAvailable: () => false, childDropPlacement: () => "outline" }), 3);
+  expect(registry.childDropPlacement(block)).toBe("siblings");
+  higher();
+  expect(registry.childDropPlacement(block)).toBe("outline");
+  lower();
+  expect(registry.childDropPlacement(block)).toBeUndefined();
+  panel.editor.destroy();
+  core.destroy();
+});
+
 test.each(["handled", "rejected"] as const)(
   "dispatch preserves priority and tie order, stopping at %s",
   async (outcome) => {

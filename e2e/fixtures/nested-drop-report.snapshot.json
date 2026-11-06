@@ -1,0 +1,105 @@
+{
+  "version": 9,
+  "blocks": [
+    {
+      "id": "23a0f636-0d4a-4b9a-8c7f-f8164889e942",
+      "type": "paragraph",
+      "listProps": {
+        "backgroundColor": "",
+        "type": "continue_numbered_list",
+        "checked": false,
+        "collapsed": false
+      },
+      "props": {},
+      "pluginData": {},
+      "content": "Continue numbering across the ordinary block",
+      "children": []
+    },
+    {
+      "id": "6fbc8120-8d76-4652-ad0a-77a38a0d16d2",
+      "type": "bento",
+      "listProps": {
+        "backgroundColor": "",
+        "type": "list",
+        "checked": false,
+        "collapsed": false
+      },
+      "props": {},
+      "pluginData": {},
+      "content": "",
+      "children": [
+        {
+          "id": "37ee29f4-7d80-46a9-a3c8-72341cd7d39d",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {
+            "bentoWidth": 220
+          },
+          "pluginData": {},
+          "content": "A small idea",
+          "children": []
+        },
+        {
+          "id": "abeae9a4-32b2-447b-95f7-ce46ae375615",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {
+            "bentoWidth": 400
+          },
+          "pluginData": {},
+          "content": "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
+          "children": []
+        },
+        {
+          "id": "8204a41e-c060-4555-ba11-46c7e4f89267",
+          "type": "paragraph",
+          "listProps": {
+            "backgroundColor": "",
+            "type": "list",
+            "checked": false,
+            "collapsed": false
+          },
+          "props": {},
+          "pluginData": {},
+          "content": "Drag blocks between tiles, nest them inside, or move them back into the editor.",
+          "children": [
+            {
+              "id": "8cda00f6-310b-48a6-9a1b-332438e9fea4",
+              "type": "todo-item",
+              "listProps": {
+                "backgroundColor": "",
+                "type": "list",
+                "checked": false,
+                "collapsed": false
+              },
+              "props": {
+                "status": "done",
+                "description": "Core packages and demo are ready.",
+                "createdAt": "2026-11-04T11:42:46.115Z",
+                "updatedAt": "2026-11-04T11:42:46.115Z",
+                "priority": 3,
+                "project": "Rivto"
+              },
+              "pluginData": {},
+              "content": "Set up the workspace",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "elements": [],
+  "rootElementIds": [],
+  "pluginData": {}
+}

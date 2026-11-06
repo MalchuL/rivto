@@ -38,6 +38,8 @@ async function move(
   const region = await blockDropRegion(target, position);
   const to = (await region.boundingBox())!;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
+  const settled = await region.boundingBox();
+  await page.mouse.move(settled.x + settled.width / 2, settled.y + settled.height / 2);
   if (position !== "inside") {
     await expect(page.locator(DROP_INDICATOR_SELECTOR)).toBeVisible();
   }

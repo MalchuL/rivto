@@ -1350,6 +1350,31 @@ it("keeps a padded placement's declared edge size while protecting its body", ()
   });
 });
 
+it("keeps a populated block's configured top edge outside its body center", () => {
+  adapter.setNode("a", { childIds: ["child"] });
+  rect(item, 0, 0, 200, 100);
+  item.style.setProperty("--rivto-drop-target-size", "12px");
+  const row = document.createElement("div");
+  item.append(row);
+  rect(row, 0, 0, 200, 24);
+  editor.regions.register("a", "shell", item);
+  editor.regions.register("a", "row", row);
+  const before = { kind: "between", parentId: "parent", previousId: null, nextId: "a" } as const;
+  register(item, [
+    { kind: "edge", side: "block-start", destination: before },
+    { kind: "inside", destination: { kind: "inside", parentId: "a" } },
+  ]);
+  expect(editor.dropTargets.resolve(100, 10, undefined, row)?.destination).toEqual(before);
+  expect(editor.dropTargets.resolve(100, 12, undefined, row)?.destination).toEqual({
+    kind: "inside",
+    parentId: "a",
+  });
+  expect(editor.dropTargets.resolve(100, 11.5, undefined, row)?.destination).toEqual({
+    kind: "inside",
+    parentId: "a",
+  });
+});
+
 it("retains line geometry for edge-derived child insertion", () => {
   adapter.setNode("a");
   editor.regions.register("a", "shell", item);

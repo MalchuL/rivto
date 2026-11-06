@@ -48,7 +48,11 @@ export function BlockDropItem({ placement, axis, outline, children }: BlockDropI
     () => editor.regions.get(placement.blockId, "shell") ?? null,
     [editor, placement.blockId],
   );
-  useBlockDropRegions(anchor, regions, placement.blockId);
+  const subscribeAnchor = useCallback(
+    (listener: () => void) => editor.regions.subscribeShell(placement.blockId, listener),
+    [editor, placement.blockId],
+  );
+  useBlockDropRegions(anchor, regions, placement.blockId, subscribeAnchor);
   return <BlockDropDepthContext.Provider value={depth}>{children}</BlockDropDepthContext.Provider>;
 }
 

@@ -7,12 +7,17 @@
   --rivto-bento-background: #eceef6;
 }
 .rivto-bento-header {
-  padding: 10px 12px;
+  padding: 0 12px;
+}
+.rivto-bento-header:has(.rivto-bento-summary:not(:empty)) {
+  padding-block: 10px;
 }
 .rivto-bento-summary {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.rivto-bento-summary:not(:empty) {
   min-height: 24px;
 }
 .rivto-bento-count {

@@ -50,6 +50,11 @@ import {
   usePreventTextEditing,
 } from "../../hooks";
 import type { TodoItemProps, TodoItemStatus } from "./todo-item";
+import {
+  CONTAINER_SUMMARY_CLASS,
+  CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
+  ContainerSummaryTitle,
+} from "../containers/container-summary-title";
 import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
 import {
   TODO_STORAGE_CLEAR_CLASS,
@@ -496,9 +501,8 @@ function TodoStorageOrderMenu({ blockId }: TodoStorageComponentProps) {
  */
 function TodoStorageToolbar({ blockId }: TodoStorageComponentProps) {
   const state = useTodoStorageState();
-  const attributes = usePreventTextEditing();
   return (
-    <div {...attributes} className={TODO_STORAGE_TOOLBAR_CLASS}>
+    <div className={TODO_STORAGE_TOOLBAR_CLASS}>
       <Input
         {...editorControlProps}
         className={TODO_STORAGE_SEARCH_CLASS}
@@ -520,7 +524,7 @@ function TodoStorageToolbar({ blockId }: TodoStorageComponentProps) {
  * Renders search, disclosure filter menus, and persisted status-order controls.
  *
  * The layout supplies state and separately places children and the empty field.
- * A collapsed storage replaces its toolbar with the immediate-child summary.
+ * A collapsed storage replaces its toolbar with an editable name and the immediate-child summary.
  *
  * @param props - Identity of the storage represented by this content region.
  * @param props.blockId - Block whose collapse flag and direct-child count are read.
@@ -535,9 +539,12 @@ export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   if (block.listProps.collapsed === true) {
     const count = block.childIds.length;
     return (
-      <div {...attributes} className={TODO_STORAGE_SUMMARY_CLASS}>
-        <strong>TODO storage</strong>
-        <span className={TODO_STORAGE_SUMMARY_STATS_CLASS}>
+      <div {...attributes} className={`${TODO_STORAGE_SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}>
+        <ContainerSummaryTitle blockId={blockId} name="TODO storage" />
+        <span
+          {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES}
+          className={TODO_STORAGE_SUMMARY_STATS_CLASS}
+        >
           {count} {count === 1 ? "item" : "items"}
         </span>
       </div>

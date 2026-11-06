@@ -17,6 +17,7 @@ import {
   BENTO_BLOCK_TYPE,
   BlockHandleContext,
   bulletThreadingExtension,
+  nestingLinesExtension,
   COLUMNS_BLOCK_TYPE,
   createBentoBlockInput,
   createColumnsBlockInput,
@@ -1083,6 +1084,8 @@ function JournalDate({ date }: { readonly date: Date }) {
  * @param props.onShowBlockIdsChange - Receives the requested ID visibility.
  * @param props.showBlockNumbers - Whether gutter numbers are visible.
  * @param props.onShowBlockNumbersChange - Receives the requested number visibility.
+ * @param props.showNestingLines - Whether nesting lines are enabled, when exposed.
+ * @param props.onShowNestingLinesChange - Receives the requested nesting-line visibility.
  * @param props.virtualizePageThreshold - Current page virtualization setting, when exposed.
  * @param props.onVirtualizePageThresholdChange - Receives the requested virtualization setting.
  * @param props.virtualizePageOverscan - Current number of extra page rows to render.
@@ -1095,6 +1098,8 @@ function DemoToolbar({
   onShowBlockIdsChange,
   showBlockNumbers,
   onShowBlockNumbersChange,
+  showNestingLines,
+  onShowNestingLinesChange,
   virtualizePageThreshold,
   onVirtualizePageThresholdChange,
   virtualizePageOverscan,
@@ -1109,6 +1114,14 @@ function DemoToolbar({
    * @returns No value; the host supplies the updated showBlockNumbers prop.
    */
   readonly onShowBlockNumbersChange: (visible: boolean) => void;
+  readonly showNestingLines?: boolean;
+  /**
+   * Requests a change to nesting-line visibility.
+   *
+   * @param visible - Whether the overlay should be installed.
+   * @returns The host receives the requested visibility.
+   */
+  readonly onShowNestingLinesChange?: (visible: boolean) => void;
   readonly showBlockIds: boolean;
   readonly onShowBlockIdsChange: (visible: boolean) => void;
   readonly virtualizePageThreshold?: boolean | number;
@@ -1227,6 +1240,16 @@ function DemoToolbar({
           />
           Block numbers
         </label>
+        {onShowNestingLinesChange && (
+          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+            <input
+              type="checkbox"
+              checked={showNestingLines}
+              onChange={(event) => onShowNestingLinesChange(event.currentTarget.checked)}
+            />
+            Nesting lines
+          </label>
+        )}
         {handleVisibility && (
           <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
             <input
@@ -1337,6 +1360,7 @@ function JournalDemoApp() {
   const [error, setError] = useState<string>();
   const [showBlockIds, setShowBlockIds] = useState(false);
   const [showBlockNumbers, setShowBlockNumbers] = useState(false);
+  const [showNestingLines, setShowNestingLines] = useState(true);
   const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
   const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
   const [dates] = useState(() => {
@@ -1379,6 +1403,12 @@ function JournalDemoApp() {
       created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
     };
   }, []);
+  useEffect(() => {
+    if (!runtime || !showNestingLines) {
+      return;
+    }
+    return runtime.today.reactEditor.extensions.install(nestingLinesExtension());
+  }, [runtime, showNestingLines]);
   if (error) {
     return <p role="alert">{error}</p>;
   }
@@ -1421,6 +1451,8 @@ function JournalDemoApp() {
                       onShowBlockIdsChange={setShowBlockIds}
                       showBlockNumbers={showBlockNumbers}
                       onShowBlockNumbersChange={setShowBlockNumbers}
+                      showNestingLines={showNestingLines}
+                      onShowNestingLinesChange={setShowNestingLines}
                       virtualizePageThreshold={virtualizePageThreshold}
                       onVirtualizePageThresholdChange={setVirtualizePageThreshold}
                       virtualizePageOverscan={virtualizePageOverscan}

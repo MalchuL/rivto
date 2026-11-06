@@ -147,6 +147,9 @@ export class ImageInputEvents {
       }
       const point = { x: raw.clientX, y: raw.clientY };
       const destination = fileDropDestination(event, point);
+      if (!destination) {
+        return true;
+      }
       if (files.length) {
         this.upload(reactPanel, files, destination, point);
       } else if (remote.length) {

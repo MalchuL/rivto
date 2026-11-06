@@ -430,8 +430,8 @@ test("double-clicks empty canvas to append and focus a block at that canvas poin
   const cards = page.locator("[data-edgeless-root]");
   const before = await cards.count();
   const point = await emptyCanvasPoint(page);
-  // Leave enough space for the new card's frame; the embedded outline makes
-  // the existing cards taller, and collision avoidance may otherwise shift it.
+  // Choose a point beyond existing cards, including their embedded outlines,
+  // so the double-click reaches the canvas instead of the card contents.
   point.x =
     Math.max(
       ...(await cards.evaluateAll((items) =>

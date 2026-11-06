@@ -66,26 +66,38 @@ class ContainerOutlineFixture {
    * Drops into the physical gap using horizontal pointer position to choose depth.
    *
    * @param nested - True requests a child of the upper block; false requests its next sibling.
+   * @param allowsNested - Whether the receiving list exposes a child boundary band.
    * @returns Resolves after the model order and the visible indicator agree.
    */
-  async move(nested: boolean): Promise<void> {
+  async move(nested: boolean, allowsNested = true): Promise<void> {
     const source = this.page.locator('[data-block-id="moving"]');
     await source.locator(":scope > .rivto-block-row").hover();
     const handle = source.locator(":scope > .rivto-block-row .block-handle");
     const from = (await handle.boundingBox())!;
     const upper = (await this.page.locator('[data-block-id="upper"]').boundingBox())!;
     const lower = (await this.page.locator('[data-block-id="lower"]').boundingBox())!;
+    const row = this.page.locator('[data-block-id="upper"] > .rivto-block-row');
+    const content = (await row.locator(":scope > .rivto-block-content").boundingBox())!;
+    const inlineControls = (await row.getAttribute("data-controls-placement")) === "inside";
+    const outlineStart = inlineControls && allowsNested ? content.x : upper.x + 12;
+    const indent = await row.evaluate((element) =>
+      parseFloat(getComputedStyle(element).getPropertyValue("--rivto-block-indent")),
+    );
     await this.page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await this.page.mouse.down();
     await this.page.mouse.move(from.x + 8, from.y + 8, { steps: 3 });
     await this.page.mouse.move(
-      upper.x + (nested ? 36 : 12),
+      outlineStart + (nested ? indent : 0) + 1,
       (upper.y + upper.height + lower.y) / 2,
       { steps: 12 },
     );
     const line = this.page.locator(".rivto-block-drop-line:visible");
     await expect(line).toBeVisible();
-    expect((await line.boundingBox())!.x).toBeCloseTo(upper.x + 12 + (nested ? 24 : 0), 0);
+    const childDestination = nested && allowsNested;
+    expect((await line.boundingBox())!.x).toBeCloseTo(
+      outlineStart + (childDestination ? indent : 0),
+      0,
+    );
     await this.page.mouse.up();
     await expect
       .poll(() =>
@@ -99,8 +111,8 @@ class ContainerOutlineFixture {
         }),
       )
       .toEqual({
-        parent: nested ? "upper" : "writing",
-        children: nested ? ["upper", "lower"] : ["upper", "moving", "lower"],
+        parent: childDestination ? "upper" : "writing",
+        children: childDestination ? ["upper", "lower"] : ["upper", "moving", "lower"],
       });
     await expect(line).toHaveCount(0);
   }
@@ -232,7 +244,7 @@ for (const type of containers) {
     test(`default outline placement inside ${type} in ${mode}`, async ({ page }) => {
       const fixture = new ContainerOutlineFixture(page);
       await fixture.load(type, mode);
-      await fixture.move(false);
+      await fixture.move(false, type !== "kanban");
       await page.keyboard.press("ControlOrMeta+z");
       await expect
         .poll(() =>
@@ -243,7 +255,7 @@ for (const type of containers) {
           ),
         )
         .toEqual(["upper", "lower", "moving"]);
-      await fixture.move(true);
+      await fixture.move(true, type !== "kanban");
     });
   }
 }
@@ -268,7 +280,7 @@ for (const repeat of [0, 200]) {
         });
         await fixture.moveFromHeader();
       } else {
-        await fixture.move(false);
+        await fixture.move(false, type !== "kanban");
       }
       await page.keyboard.press("ControlOrMeta+z");
       await fixture.measure();
@@ -276,7 +288,7 @@ for (const repeat of [0, 200]) {
         if (header) {
           await fixture.moveFromHeader();
         } else {
-          await fixture.move(false);
+          await fixture.move(false, type !== "kanban");
         }
         await page.evaluate(
           () =>

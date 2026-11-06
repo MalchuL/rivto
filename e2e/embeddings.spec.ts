@@ -2126,6 +2126,19 @@ for (const repeat of [0, 200]) {
       }
       await page.keyboard.press("Escape");
       const text = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`).first();
+      if (canvas) {
+        // Focusing the original card can pan the embedded occurrence above the viewport.
+        const viewport = today.locator(".edgeless-viewport");
+        const view = (await viewport.boundingBox())!;
+        const target = (await text.boundingBox())!;
+        const offset = Math.max(0, view.y + 40 - target.y);
+        if (offset) {
+          await page.mouse.move(view.x + 20, view.y + 20);
+          await page.mouse.down({ button: "middle" });
+          await page.mouse.move(view.x + 20, view.y + 20 + offset, { steps: 5 });
+          await page.mouse.up({ button: "middle" });
+        }
+      }
       await text.click();
       await expect(today.locator("[data-block-selected]")).toHaveCount(0);
       expect(

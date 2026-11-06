@@ -13,6 +13,11 @@ import {
 } from "../../../hooks";
 import { focusBlock } from "../../../managers";
 import { KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-behavior";
+import {
+  CONTAINER_SUMMARY_CLASS,
+  CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
+  ContainerSummaryTitle,
+} from "../container-summary-title";
 
 /**
  * Reads column and direct-card counts without materializing recursive block trees.
@@ -41,9 +46,10 @@ function useKanbanCounts(boardId: string): string {
 }
 
 /**
- * Renders the board's own selection anchor and live structural summary.
+ * Renders the board's selection anchor and editable collapsed structural summary.
  *
- * The header participates in layout in both expanded and collapsed states;
+ * The summary appears only when collapsed; the selection anchor remains mounted
+ * in both states. The header participates in layout in both states;
  * it never queries a child host or portals controls into the rendered tree.
  *
  * @param props - Identity of the persisted board.
@@ -52,11 +58,16 @@ function useKanbanCounts(boardId: string): string {
  */
 export function Kanban({ blockId }: BlockLayoutProps) {
   const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockNode(blockId);
   const counts = useKanbanCounts(blockId);
   return (
-    <div {...attributes} className="rivto-kanban-summary">
-      <strong>Kanban</strong>
-      <span>{counts}</span>
+    <div {...attributes} className={`rivto-kanban-summary ${CONTAINER_SUMMARY_CLASS}`}>
+      {editing.block?.listProps.collapsed === true && (
+        <>
+          <ContainerSummaryTitle blockId={blockId} name="Kanban" />
+          <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES}>{counts}</span>
+        </>
+      )}
     </div>
   );
 }

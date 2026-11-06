@@ -30,7 +30,7 @@
     "ts-jest": "^29.4.5",
     "tsup": "^8.5.0",
     "typescript": "5.8.3",
-    "yjs": "^13.0.0"
+    "yjs": "^13.6.33"
   },
   "dependencies": {
     "@chulane/document-model": "workspace:*",

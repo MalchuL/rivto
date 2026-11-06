@@ -211,7 +211,11 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(page.getByRole("menu")).toBeVisible();
     await page.keyboard.press("Escape");
     await boardRow.getByRole("button", { name: "Collapse block: columns", exact: true }).click();
-    await expect(boardRow.locator(".rivto-columns")).toHaveText("Columns2 columns");
+    await expect(boardRow.getByRole("textbox", { name: "Columns name" })).toHaveAttribute(
+      "data-placeholder",
+      "Columns",
+    );
+    await expect(boardRow.locator(".rivto-columns")).toHaveText("2 columns");
     await expect(child).toHaveCount(0);
     await boardRow.getByRole("button", { name: "Expand block: columns", exact: true }).click();
     await expect(child).toBeVisible();

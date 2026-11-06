@@ -1,4 +1,5 @@
 import { registeredBlockRegion } from "../../presentation/components/block-layout/block-layout-regions";
+import { BLOCK_EDITOR_CLASSES } from "../../presentation/block-editor-classes";
 import { BLOCK_DROP_EXCLUDE_ATTRIBUTE } from "./block-drop-attributes";
 import type {
   BlockDropEdgeRegion,
@@ -197,8 +198,8 @@ export function containsDropCrossAxisPoint(
  *
  * @param region - Declared side, size and optional terminal outline bands.
  * @param geometry - Current anchor geometry and computed layout tokens.
- * @returns Inset strip capped to one third of the anchor axis and before the owned body
- * middle third, retaining inside placement even when descendants enlarge the shell.
+ * @returns Inset strip capped to half of the anchor axis and before the owned body
+ * center, retaining inside placement even when descendants enlarge the shell.
  * Declared terminal ancestors can extend the strip toward outer indentation levels.
  * @throws If an explicit size is negative or nonfinite.
  */
@@ -237,6 +238,9 @@ export function dropEdgeRect(
 /**
  * Selects a terminal depth band and places feedback on the anchor's physical edge.
  *
+ * The first boundary in an outline uses the same in-flow control offset as
+ * depth-bearing boundaries; sibling-only container layouts keep their own edge.
+ *
  * @param entry - Mounted target supplying canonical declarations.
  * @param region - Edge whose rectangle contains the pointer, or bounds append region.
  * @param geometry - Shared synchronous measurement of the anchor.
@@ -263,10 +267,23 @@ export function dropRegionTarget(
   if (region.depth?.destinations.length) {
     const indent = dropIndent(geometry.style) * geometry.scaleX;
     const rtl = geometry.style.direction === "rtl";
-    const level = dropOutlineLevel(region.depth, geometry, rect, point, indent);
+    const slotOffset = inlineSlotOffset(entry, geometry.scaleX);
+    const level = dropOutlineLevel(region.depth, geometry, rect, point, indent, slotOffset);
     destination = region.depth.destinations[level]!;
-    width = Math.max(0, rect.width - level * indent);
-    left = rtl ? rect.left : rect.left + level * indent;
+    const offset = Math.min(rect.width, level * indent + slotOffset);
+    width = rect.width - offset;
+    left = rtl ? rect.left : rect.left + offset;
+  } else if (
+    region.side === "block-start" &&
+    entry.element.parentElement
+      ?.closest(`.${BLOCK_EDITOR_CLASSES.children}`)
+      ?.classList.contains(BLOCK_EDITOR_CLASSES.outline)
+  ) {
+    const offset = Math.min(width, inlineSlotOffset(entry, geometry.scaleX));
+    width -= offset;
+    if (geometry.style.direction !== "rtl") {
+      left += offset;
+    }
   }
   const horizontal = region.side.startsWith("block");
   const end = region.side.endsWith("end");
@@ -291,6 +308,29 @@ export function dropRegionTarget(
 }
 
 /**
+ * Measures row space consumed by in-flow controls and inherited outline alignment.
+ *
+ * @param entry - Registered block providing the outline boundary.
+ * @param scale - Horizontal local-to-viewport scale.
+ * @returns Viewport distance before the row content, excluding normal row padding.
+ */
+function inlineSlotOffset(entry: BlockDropTargetRegistration, scale: number): number {
+  const row = registeredBlockRegion(entry.element, "row");
+  if (row?.dataset.controlsPlacement !== "inside") {
+    return 0;
+  }
+  const style = row.ownerDocument.defaultView!.getComputedStyle(row);
+  const slot = Array.from(row.children).find(
+    (child) =>
+      child.classList.contains(BLOCK_EDITOR_CLASSES.slot) &&
+      child.getAttribute("data-slot-position") === "left-top",
+  );
+  const margin = Math.max(0, parseFloat(style.marginInlineStart) || 0) * scale;
+  const gap = slot ? Math.max(0, parseFloat(style.columnGap) || 0) * scale : 0;
+  return margin + (slot?.getBoundingClientRect().width ?? 0) + gap;
+}
+
+/**
  * Clamps pointer indentation to the depth choices allowed by the owning layout.
  *
  * A local child scope omits the terminal inside band while retaining sibling and
@@ -304,6 +344,7 @@ export function dropRegionTarget(
  * @param rect - Edge bounds used to measure pointer displacement in viewport CSS pixels, accounting for RTL.
  * @param point - Pointer position used to distinguish the anchor's own content from its descendants.
  * @param indent - Viewport-scaled indentation, which may be zero.
+ * @param slotOffset - Viewport space occupied by in-flow controls.
  * @returns The selected nonnegative index within the eligible destination bands.
  */
 function dropOutlineLevel(
@@ -312,17 +353,23 @@ function dropOutlineLevel(
   rect: BlockDropBounds,
   point: BlockDropPoint,
   indent: number,
+  slotOffset: number,
 ): number {
   const { destinations, ancestors } = depth;
-  const offset = geometry.style.direction === "rtl" ? rect.right - point.x : point.x - rect.left;
+  const rawOffset = geometry.style.direction === "rtl" ? rect.right - point.x : point.x - rect.left;
+  const offset = rawOffset - slotOffset;
   const childInset =
     Math.max(
       0,
       parseFloat(geometry.style.getPropertyValue("--rivto-block-drop-child-offset")) || 0,
     ) * geometry.scaleX;
+  const row = geometry.contentRect;
+  // In-flow controls leave space beside the content for selecting an ancestor.
   const inOwnContent =
-    !geometry.contentRect ||
-    (point.y >= geometry.contentRect.top && point.y <= geometry.contentRect.bottom);
+    !row ||
+    (point.y >= row.top &&
+      point.y <= row.bottom &&
+      (slotOffset === 0 || (point.x >= row.left && point.x <= row.right)));
   let last = destinations.length - 1;
   if (geometry.continuesOutline === false && last > 0 && destinations[last]?.kind === "inside") {
     last -= 1;
@@ -337,7 +384,7 @@ function dropOutlineLevel(
   const depthOffset = (offset - childInset) / indent;
   const level = Math.min(last, Math.max(0, Math.floor(depthOffset)));
   // The anchor's own row keeps its sibling band; descendants retain ancestor outdents.
-  if (inOwnContent && indent > 0 && offset >= ancestors * indent) {
+  if (inOwnContent && indent > 0 && rawOffset >= ancestors * indent) {
     return Math.max(level, Math.min(last, ancestors));
   }
   return level;
@@ -395,10 +442,11 @@ function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
 }
 
 /**
- * Limits an edge so its owner's middle body remains available for inside drops.
+ * Limits an edge so its owner's body center remains available for inside drops.
  *
  * Shell padding retains its sorting area. Child subtree height cannot enlarge an
  * inset edge over the primary content, and inline limits respect RTL direction.
+ * A two-local-pixel central band remains available when opposite edges are large.
  *
  * @param region - Declared logical edge.
  * @param geometry - Shell and optional registered body in viewport coordinates.
@@ -407,7 +455,8 @@ function readContentBounds(element: HTMLElement): BlockDropBounds | undefined {
 function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeometry): number {
   const { rect, contentRect: content } = geometry;
   const block = region.side.startsWith("block");
-  const limit = (block ? rect.height : rect.width) / 3;
+  const centerInset = block ? geometry.scaleY : geometry.scaleX;
+  const limit = Math.max(0, (block ? rect.height : rect.width) / 2 - centerInset);
   if (!content) {
     return limit;
   }
@@ -417,7 +466,9 @@ function contentEdgeLimit(region: BlockDropEdgeRegion, geometry: BlockDropGeomet
   const finish = block ? rect.bottom : rect.right;
   const bodyStart = block ? content.top : content.left;
   const bodyEnd = block ? content.bottom : content.right;
-  const third = (bodyEnd - bodyStart) / 3;
-  const distance = trailing ? finish - (bodyEnd - third) : bodyStart + third - start;
+  const half = (bodyEnd - bodyStart) / 2;
+  const distance = trailing
+    ? finish - (bodyEnd - half) - centerInset
+    : bodyStart + half - start - centerInset;
   return Math.max(0, Math.min(limit, distance));
 }

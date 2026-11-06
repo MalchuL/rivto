@@ -540,3 +540,138 @@ for (const mode of ["block", "edgeless"] as const) {
     }
   }
 }
+
+for (const shortcut of ["[ ] ", "1. "]) {
+  test(`Enter creates a new block after clearing ${shortcut} marker`, async ({ page }) => {
+    const roots = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`);
+    const editor = roots.first().locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+    await editor.click();
+    await replaceContent(page, shortcut);
+    await page.keyboard.press("Enter");
+    await expect(
+      roots
+        .first()
+        .locator(
+          `:scope > ${BLOCK_ROW_SELECTOR} .page-list-checkbox, :scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`,
+        ),
+    ).toHaveCount(0);
+    const count = await roots.count();
+    await page.keyboard.press("Enter");
+    await expect(roots).toHaveCount(count + 1);
+    await expect(
+      roots.nth(1).locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`),
+    ).toBeFocused();
+  });
+}
+
+for (const text of ["-", "1.", "[ ]"]) {
+  test(`space before ${text} does not create a list`, async ({ page }) => {
+    const editor = page
+      .locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)
+      .first()
+      .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+    await editor.click();
+    await replaceContent(page, text);
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Space");
+    await expect.poll(() => editor.evaluate((element) => element.textContent)).toBe(` ${text}`);
+  });
+}
+
+test("ordinary list is selected after clearing a checkbox", async ({ page }) => {
+  const block = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
+  const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+  await editor.click();
+  await replaceContent(page, "[ ] ");
+  await page.keyboard.press("Enter");
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).hover();
+  await block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .block-handle`).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "List style", exact: true }).hover();
+  await expect(
+    page.getByRole("menuitemcheckbox", { name: "Ordinary list", exact: true }),
+  ).toHaveAttribute("data-state", "checked");
+});
+
+test("space replaces selected shortcut text without creating a list", async ({ page }) => {
+  const editor = page
+    .locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`)
+    .first()
+    .locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+  await editor.click();
+  await replaceContent(page, "1.");
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Space");
+  await page.keyboard.type("text");
+  await expect
+    .poll(() => editor.evaluate((element) => element.textContent?.replaceAll("\u00a0", " ")))
+    .toBe(" text");
+});
+
+for (const [prefix, listType] of [
+  ["0.", "start_numbered_list"],
+  ["1.", "start_numbered_list"],
+  ["2.", "continue_numbered_list"],
+  ["42.", "continue_numbered_list"],
+  ["[ ]", "checkbox"],
+  ["-", "list"],
+] as const) {
+  test(`converts ${prefix} before existing text`, async ({ page }) => {
+    const block = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
+    const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+    await editor.click();
+    await replaceContent(page, `${prefix}Task`);
+    await page.keyboard.press("Home");
+    for (let i = 0; i < prefix.length; i++) {
+      await page.keyboard.press("ArrowRight");
+    }
+    await page.keyboard.press("Space");
+    await expect(editor).toHaveText("Task");
+    const type = await block.evaluate((element) => element.getAttribute("data-block-id"));
+    await expect
+      .poll(() =>
+        page.evaluate((id) => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          return editor.blocks.getBlockNode(id!)?.listProps.type;
+        }, type),
+      )
+      .toBe(listType);
+    await expect(editor).toBeFocused();
+    await expect.poll(() => page.evaluate(() => document.getSelection()?.focusOffset)).toBe(0);
+    await page.keyboard.type("X");
+    await expect(editor).toHaveText("XTask");
+  });
+}
+
+test("converts a numbered prefix before existing text in edgeless", async ({ page }) => {
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  const editor = page.locator("[data-edgeless-root] [data-block-content]").first();
+  await editor.click();
+  await replaceContent(page, "42.Task");
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await page.keyboard.press("Space");
+  await expect(editor).toHaveText("Task");
+  await page.keyboard.type("X");
+  await expect(editor).toHaveText("XTask");
+});
+
+for (const [prefix, expected] of [
+  ["0. ", "start_numbered_list"],
+  ["1. ", "start_numbered_list"],
+  ["2. ", "continue_numbered_list"],
+] as const) {
+  test(`numbered shortcut ${prefix} selects ${expected}`, async ({ page }) => {
+    const block = page.locator(`.page-surface ${ROOT_BLOCK_SELECTOR}`).first();
+    const editor = block.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`);
+    await editor.click();
+    await replaceContent(page, prefix);
+    await expect(editor).toHaveText("");
+    await expect(block.locator(`:scope > ${BLOCK_ROW_SELECTOR} .page-list-marker`)).toHaveAttribute(
+      "data-list-type",
+      expected,
+    );
+  });
+}

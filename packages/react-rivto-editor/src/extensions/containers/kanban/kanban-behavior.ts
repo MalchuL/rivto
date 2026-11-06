@@ -6,9 +6,10 @@ import type { BlockBehaviorAvailabilityContext } from "../../../block-behaviors/
  * Kanban board and column views.
  *
  * The board freezes column outline depth so columns cannot Tab-indent into
- * each other. Each column is an outline floor: cards indent and nest freely,
+ * each other. Each column is an outline floor: card keyboard indentation remains available,
  * and Shift+Tab cannot lift past the column. Drag may still relocate a card
- * onto the page or into another parent.
+ * onto the page or into another parent. Card edges offer sibling placement;
+ * inside targets and nested child lists retain their own behavior.
  *
  * @module
  */
@@ -72,6 +73,14 @@ export class KanbanBehavior extends ContainerBlockBehavior {
  * Behavior registered for the `kanban-column` type.
  */
 export class KanbanColumnBehavior extends ContainerBlockBehavior {
+  /**
+   * Keeps card boundary drops at the column's direct-child level.
+   *
+   * @returns Sibling-only boundary placement without restricting inside drops.
+   */
+  childDropPlacement(): "siblings" {
+    return "siblings";
+  }
   /**
    * Keeps direct children within this container during outline outdent.
    *

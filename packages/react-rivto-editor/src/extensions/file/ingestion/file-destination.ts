@@ -254,47 +254,43 @@ export function isFileDestinationCurrent(
 }
 
 /**
- * Resolves a file drop against the same Page gaps used by block dragging.
+ * Resolves a file drop against the same Page targets used by block dragging.
  *
- * Text content retains caret insertion; Page drop targets create a new block
- * at the resolved parent and neighbors, which are validated after preparation.
+ * Page drop targets create a new block at the resolved parent and neighbors,
+ * which are validated after preparation. Canvas drops use canvas coordinates.
  *
  * @param context - Receiving panel and event context.
  * @param point - Drop position in viewport pixels.
- * @returns A captured Page block placement, text, block, or canvas destination.
+ * @returns A captured Page or canvas destination, or undefined without a Page target.
  * @throws If Page geometry resolution or delegated browser hit testing fails.
  */
 export function fileDropDestination(
   context: EditorEvent<"surface", "drop">,
   point: FileIngestionPoint,
-): FileDestination {
-  const target = pageFileDropTarget(context, point);
-  if (target) {
-    return { kind: "block", placement: target.destination };
+): FileDestination | undefined {
+  if (context.mode === "block") {
+    const target = pageFileDropTarget(context, point);
+    return target ? { kind: "block", placement: target.destination } : undefined;
   }
-  return fileDestinationAtPoint(context, point);
+  return fileDestinationAtPoint({ ...context, contentElement: null }, point);
 }
 
 /**
  * Resolves the Page block target shared by file-drop preview and insertion.
  *
- * Text content is excluded because it receives an inline insertion instead.
  * The native event target avoids repeating browser hit testing after feedback
  * changes the DOM; the resolver still checks that the target is connected.
  *
  * @param context - Surface and panel captured for the current drag event.
  * @param point - Pointer position in viewport pixels.
- * @returns The Page target, or undefined for text, canvas, and unresolved points.
+ * @returns The Page target, or undefined for canvas and unresolved points.
  * @throws If the Page resolver fails.
  */
 export function pageFileDropTarget(
-  context: Pick<
-    EditorEvent<"surface", "drop">,
-    "mode" | "contentElement" | "reactPanel" | "root" | "raw"
-  >,
+  context: Pick<EditorEvent<"surface", "drop">, "mode" | "reactPanel" | "root" | "raw">,
   point: FileIngestionPoint,
 ): ResolvedBlockDropTarget | undefined {
-  if (context.mode !== "block" || context.contentElement) {
+  if (context.mode !== "block") {
     return undefined;
   }
   const ElementConstructor = context.root.ownerDocument.defaultView?.Element;

@@ -40,6 +40,7 @@
 /* Optional page interaction extensions. */
 @import "../extensions/block-drag/block-drag.css" layer(components);
 @import "../extensions/bullet-threading/bullet-threading.css" layer(components);
+@import "../extensions/nesting-lines/nesting-lines.css" layer(components);
 @import "../extensions/embedding/embedding.css" layer(components);
 
 /* Edgeless canvas and visual objects. */
@@ -56,6 +57,7 @@
 
 /* TODO item and storage. */
 @import "../extensions/todo-item/todo-item.css" layer(components);
+@import "../extensions/containers/container-summaries.css" layer(components);
 
 /* Chrome shares the utility layer with the primitives it customizes. */
 @import "../components/edgeless/controls.css" layer(utilities);

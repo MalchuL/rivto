@@ -7,6 +7,8 @@ import { ImageView } from "./image-view";
 
 /** Object URL replacements and observed revocations used by the view fixture. */
 interface ObjectUrlFixture {
+  /** Object URLs created while the fixture is active. */
+  readonly created: string[];
   /** Object URLs revoked while the fixture is active. */
   readonly revoked: string[];
   /**
@@ -26,14 +28,19 @@ function mockObjectUrls(): ObjectUrlFixture {
   const originalCreate = URL.createObjectURL;
   const originalRevoke = URL.revokeObjectURL;
   // Give the two fixture blobs distinct object URLs.
-  URL.createObjectURL = (blob) =>
-    blob instanceof Blob && blob.size === 1 ? "blob:first" : "blob:second";
+  const created: string[] = [];
+  URL.createObjectURL = (blob) => {
+    const url = blob instanceof Blob && blob.size === 1 ? "blob:first" : "blob:second";
+    created.push(url);
+    return url;
+  };
   const revoked: string[] = [];
   // Record revocations so the test can distinguish owned and borrowed URLs.
   URL.revokeObjectURL = (url) => {
     revoked.push(url);
   };
   return {
+    created,
     revoked,
     // Restore both URL methods replaced for the test.
     restore: () => {
@@ -90,6 +97,41 @@ test("reloads an existing image when its extension provider is replaced", async 
     });
     expect(urls.revoked).toContain("blob:second");
     expect(urls.revoked).not.toContain("blob:external");
+  } finally {
+    await fixture.dispose(() => remove());
+    urls.restore();
+  }
+});
+
+test("releases a pending image resolution when the view unmounts", async () => {
+  const urls = mockObjectUrls();
+  const fixture = await createTestViewFixture();
+  const { panel, root } = fixture;
+  let finish!: (blob: Blob) => void;
+  let signal: AbortSignal | undefined;
+  const provider = {
+    write: async () => "test:image",
+    read: (_uri: string, context: { signal: AbortSignal }) => {
+      signal = context.signal;
+      return new Promise<Blob>((resolve) => {
+        finish = resolve;
+      });
+    },
+  };
+  const remove = panel.editor.extensions.install(imageExtension({ provider }));
+  try {
+    await act(async () => {
+      root.render(
+        <TestPanel panel={panel}>
+          <ImageView kind="inline" uri="test:image" alt="image" />
+        </TestPanel>,
+      );
+    });
+    expect(signal?.aborted).toBe(false);
+    await act(async () => root.render(null));
+    expect(signal?.aborted).toBe(true);
+    await act(async () => finish(new Blob(["a"])));
+    expect(urls.created).toEqual([]);
   } finally {
     await fixture.dispose(() => remove());
     urls.restore();

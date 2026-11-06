@@ -40,7 +40,7 @@ declares its child layout. Their committed refs register occurrence-local bounds
 content renderers do not provide custom target-search functions.
 
 The geometry resolver uses only those declared regions and canonical neighbors.
-A placement edge cannot consume the middle third of the block's registered content
+A placement edge cannot consume the center of the block's registered content
 (or primary row when content is absent), even when children enlarge the shell or
 a layout inherits a larger target-size token. Shell/item padding remains available
 for sorting without adding any new hitbox DOM or presentation spacing. Missing
@@ -147,13 +147,15 @@ the same position manually and automatically. `BlockBody` remains the convenient
 body-contribution primitive. Moving contributions does not change their owner,
 predicates or registration lifetime.
 
-`BlockChildren.dropPlacement` defaults to `outline`: each physical gap declares
+An owner's `BlockEditorNodeSnapshot.dropPlacement` selects its direct-child boundary
+policy and takes precedence over `BlockChildren.dropPlacement`. With neither set,
+placement defaults to `outline`: each physical gap declares
 separate horizontal sibling and child-append bands. Terminal subtrees additionally
 expose their ancestor insertion bands. Choose `siblings` to keep a list's gaps at
 its own parent. This is independent of `dropAxis`, which describes actual flow.
 Linear lists generate item-owned regions; grid items compose BlockDropWrapper.
 Both use the same canonical edge builder and inherit the list's placement policy.
-Wrapping block-end edges expose ordinary sibling/child depth bands; inline grid
+Wrapping block-end edges use the same configured depth policy; inline grid
 seams insert siblings. Terminal descendants inherit their item's trailing levels,
 so nesting and outdenting do not require entering a card's content.
 `dropGaps` enables physical free gaps independently; `dropBackground` declares append on unoccupied host space.
