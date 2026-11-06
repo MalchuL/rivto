@@ -43,6 +43,7 @@ export class ListBlockBehavior implements BlockBehavior {
       reactPanel.editor.defaultWritingBlockFactory.isEmptyBlock(
         reactPanel.blocks.getBlockNode(block.id)!,
       ) &&
+      block.listProps.type != null &&
       block.listProps.type !== "list"
     ) {
       convertEmptyToList(reactPanel, block.id);

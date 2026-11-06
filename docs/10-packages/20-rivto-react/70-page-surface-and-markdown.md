@@ -79,6 +79,17 @@ List/collapse metadata хранится в canonical `block.listProps`. `listSho
 
 `BLOCK_LIST_TYPES`, `DEFAULT_BLOCK_LIST_PROPS`, `isNumberedListType()` и `resolveBlockListNumbers()` доступны для custom renderers.
 
+В начале writing-блока пробел после сокращения преобразует его в list properties:
+
+- `- ` — обычный список;
+- `[] ` и `[ ] ` — незавершённый checkbox, `[x] ` и `[X] ` — завершённый checkbox;
+- `0. ` и `1. ` — новая нумерованная последовательность (`start_numbered_list`);
+- любое целое число от `2` с точкой и пробелом, например `2. ` или `42. `, — продолжение предыдущей последовательности (`continue_numbered_list`).
+
+Введённое число выбирает режим, а не задаёт отображаемый номер. Продолжение использует последний номер среди предыдущих соседних блоков, в том числе через обычные блоки; если предыдущего номера нет, оно начинается с 1.
+
+Сокращение должно находиться в самом начале блока, а пробел вводится сразу после него при отсутствии выделения. Текст после курсора сохраняется, курсор перемещается к его началу. Пробел перед сокращением не запускает преобразование. После снятия пустого checkbox или номера клавишей Enter следующий Enter создаёт новый блок; для вложенного пустого блока он сначала применяет обычный outdent.
+
 ## Separator
 
 `separatorBlockExtension()` регистрирует type `SEPARATOR_BLOCK_TYPE` (`"separator"`). В page mode он показывает separator; в edgeless root flow он разделяет block cards. Enter/delete behavior создаёт подходящий default writing block через runtime factory.

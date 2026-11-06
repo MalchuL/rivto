@@ -37,6 +37,8 @@ test("list and collapse commands read current panel membership before offering o
   try {
     const commands = (blockId: string) =>
       reactPanel.slashCommands.getAll({ blockId }).map((command) => command.id);
+    document.blocks.deleteListProps("inside", ["type", "checked"]);
+    expect(commands("inside")).not.toContain("list.list");
     expect(commands("inside")).toContain("list.checkbox");
     expect(commands("inside")).toContain("type.custom");
     expect(commands("inside")).toContain("block.collapse");

@@ -15,11 +15,12 @@ import { BLOCK_LIST_TYPES, isNumberedListType, resolveBlockListNumbers } from ".
 import { listShortcutPatch } from "./utils";
 
 /**
- * Installs whole-content Markdown-style list conversions.
+ * Installs Markdown-style list conversions at the beginning of block content.
  *
- * Conversion waits until React's contenteditable input handler has persisted
- * the typed space, then removes the complete shortcut and restores a caret at
- * offset zero in one editor batch.
+ * The beforeinput path recognizes a prefix before the browser inserts the space,
+ * preserves the text after the caret, and replaces the shortcut with list properties.
+ * The input fallback recognizes a complete shortcut after content has been persisted.
+ * Both paths update the block and model caret in one editor batch, then restore focus.
  *
  * @param reactEditor - Runtime receiving delegated content input events.
  * @returns No value.
@@ -41,7 +42,7 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       isAvailable: ({ blockId, reactPanel }) =>
         reactEditor.blockListProps.has("list") &&
         reactPanel.blocks.hasBlock(blockId) &&
-        reactPanel.blocks.getBlockNode(blockId)?.listProps.type !== type,
+        (reactPanel.blocks.getBlockNode(blockId)?.listProps.type ?? "list") !== type,
       execute: ({ blockId, reactPanel }) =>
         reactPanel.blocks.updateBlock(blockId, { listProps: { type, checked: false } }),
     }),
@@ -84,16 +85,33 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       return { plain, markdown: plain, html };
     },
   });
+  /**
+   * Replaces a shortcut with list properties and places the caret before the remaining text.
+   *
+   * The block update and model selection share a batch. Focus is also scheduled
+   * for the next frame only while the selection remains unchanged.
+   *
+   * @param reactPanel - Panel providing block mutations and selection.
+   * @param blockId - Block containing the recognized shortcut.
+   * @param root - Surface containing the block's editable DOM.
+   * @param shortcut - List properties selected by the typed prefix.
+   * @param content - Text after the shortcut to retain in the block.
+   * @returns No value after updating the block and scheduling caret restoration.
+   * @throws If the block update, list-property validation, or DOM focus fails.
+   */
   const convert = (
     reactPanel: ReactPanelApi,
     blockId: string,
     root: HTMLElement,
     shortcut: ListShortcutPatch,
+    content: string,
   ): void => {
     reactPanel.batchUpdates(() => {
-      reactPanel.blocks.updateBlock(blockId, { listProps: shortcut, content: "" });
+      reactPanel.blocks.updateBlock(blockId, { listProps: shortcut, content });
       reactPanel.selection.set(createCaretSelection(blockId, 0));
     });
+    // Move the native caret before reconciliation so the old prefix offset is not retained.
+    focusBlock(root, blockId, 0);
     // Only place the caret and its editing focus; list conversion is already committed.
     reactPanel.selection.scheduleIfSelectionUnchanged(() => focusBlock(root, blockId, 0));
   };
@@ -113,11 +131,36 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       ) {
         return false;
       }
-      const shortcut = listShortcutPatch(`${contentElement?.textContent ?? ""} `);
+      // Before converting a prefix such as "1." when Space is pressed, locate the
+      // native caret so only the text before it is checked for a list shortcut.
+      // Read it from the content's document, including when the editor is in an iframe.
+      // The caret must be inside this block with no text selected: typing over a
+      // selection replaces that text and must not trigger shortcut conversion.
+      const selection: Selection | null | undefined = contentElement?.ownerDocument.getSelection(); // Read the native caret or selection.
+      // A collapsed selection has matching start and end positions: it is a caret,
+      // not a selected range of text that normal typing would replace.
+      if (
+        !contentElement || // The block has no editable content to inspect.
+        !selection?.isCollapsed || // No selection, or text is selected instead of a single caret.
+        !selection.focusNode || // The caret has no DOM node from which to determine its position.
+        !contentElement.contains(selection.focusNode) // The caret belongs to another element.
+      ) {
+        return false;
+      }
+      // Split the current DOM text at the caret: only the prefix can be a shortcut,
+      // and the suffix must survive conversion even when it is in another text node.
+      const remaining = contentElement.ownerDocument.createRange(); // Range for text after the caret.
+      remaining.selectNodeContents(contentElement); // Start with the whole block's content.
+      remaining.setStart(selection.focusNode, selection.focusOffset); // Keep only the suffix.
+      const prefix = contentElement.ownerDocument.createRange(); // Range for text before the caret.
+      prefix.selectNodeContents(contentElement); // Start with the whole block's content.
+      prefix.setEnd(selection.focusNode, selection.focusOffset); // Keep only the prefix.
+      // beforeinput fires before the space is inserted; normalize browser nonbreaking spaces.
+      const shortcut = listShortcutPatch(`${prefix.toString().replaceAll("\u00a0", " ")} `);
       if (!shortcut) {
         return false;
       }
-      convert(reactPanel, blockId, root, shortcut);
+      convert(reactPanel, blockId, root, shortcut, remaining.toString());
       return true;
     },
   );
@@ -132,6 +175,7 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !blockId) {
         return false;
       }
+      // The fallback reads persisted content after the input handler has processed the event.
       queueMicrotask(() => {
         const block = reactPanel.blocks.getBlockNode(blockId);
         const shortcut = block
@@ -140,7 +184,7 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
         if (!shortcut) {
           return;
         }
-        convert(reactPanel, blockId, root, shortcut);
+        convert(reactPanel, blockId, root, shortcut, "");
       });
       return false;
     },
