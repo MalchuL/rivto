@@ -130,7 +130,8 @@ function measureDropFeedback(overlay: SVGSVGElement) {
  * Measures visible ordinary outline rows in one panel occurrence.
  *
  * Custom child layouts do not receive a line, but their nested ordinary
- * outlines remain eligible independently of the containing layout. Inside a
+ * outlines remain eligible independently of the containing layout. An outline
+ * can suppress its own line with data-hide-nesting-line without hiding deeper lines. Inside a
  * custom layout, a line ends at its owner's subtree rather than another item.
  *
  * @param dom - Panel-limited access to rendered blocks.
@@ -165,7 +166,10 @@ function measureLines(dom: PanelDOM, overlay: SVGSVGElement) {
   for (const block of blocks) {
     const first = children.get(block)?.[0];
     const childHost = first?.parentElement?.closest(`.${BLOCK_EDITOR_CLASSES.children}`);
-    if (!childHost?.classList.contains(BLOCK_EDITOR_CLASSES.outline)) {
+    if (
+      !childHost?.classList.contains(BLOCK_EDITOR_CLASSES.outline) ||
+      childHost.getAttribute("data-hide-nesting-line") === "true"
+    ) {
       continue;
     }
     const row = dom.getRow(block);

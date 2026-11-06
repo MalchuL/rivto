@@ -6,6 +6,13 @@
  * @module
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
+import {
+  BLOCK_EDITOR_CLASSES,
+  BlockBody,
+  BlockChildren,
+  BlockContent,
+  BlockRow,
+} from "@chulane/rivto-page";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
@@ -58,6 +65,31 @@ export function SeparatorBlock() {
         <ArrowDownIcon strokeWidth={2.5} />
       </span>
     </div>
+  );
+}
+
+/**
+ * Distinguishes the separator's descendants while retaining the standard outline behavior.
+ *
+ * @returns The separator row and its bordered, collapsible child outline.
+ */
+function SeparatorLayout() {
+  return (
+    <>
+      <BlockRow>
+        <BlockContent />
+      </BlockRow>
+      <BlockBody />
+      <BlockChildren
+        className={`${BLOCK_EDITOR_CLASSES.outline} rivto-separator-children rounded-md border border-dashed border-border p-[var(--rivto-container-padding,16px)] [&>*]:[opacity:var(--rivto-separator-children-opacity,0.5)]`}
+        data-hide-nesting-line="true"
+        dropBackground
+        dropEndGaps={false}
+        dropScope="local"
+        renderEmpty={false}
+        hoverBoundary={false}
+      />
+    </>
   );
 }
 
@@ -141,6 +173,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
           title: "Separator",
         },
         render: SeparatorBlock,
+        layout: SeparatorLayout,
         separatesBlockElements: true,
         clipboard: {
           format: () => ({ plain: "---", markdown: "---", html: "<hr>" }),
