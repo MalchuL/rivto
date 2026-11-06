@@ -473,6 +473,38 @@ describe("edgeless block element reconciliation", () => {
     editor.destroy();
   });
 
+  test("keeps the card when its first root moves inside another block", async () => {
+    const editor = await createDocumentEditor();
+    const reactPanel = createRuntime(editor);
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "First" }).id;
+    const last = editor.blocks.insertBlock(
+      { type: "paragraph", content: "Last" },
+      editor.blocks.getInsertionDestinationAfter(first),
+    ).id;
+    editor.elements.insertElement({
+      id: "card",
+      type: "block",
+      frame: { x: 410, y: 220, width: 360, height: 180 },
+      zIndex: 4,
+      props: { startBlockId: first, endBlockId: last },
+    });
+    reactPanel.editor.blockElements.reconcile();
+
+    editor.blocks.moveBlock(first, last, "inside");
+    await Promise.resolve();
+
+    expect(editor.elements.getElementNodes()).toEqual([
+      expect.objectContaining({
+        id: "card",
+        frame: { x: 410, y: 220, width: 360, height: 180 },
+        props: { startBlockId: last, endBlockId: last },
+      }),
+    ]);
+    expect(editor.blocks.getParentId(first)).toBe(last);
+    reactPanel.editor.destroy();
+    editor.destroy();
+  });
+
   test("keeps element identity and geometry when the first range block moves across a separator", async () => {
     const editor = await createDocumentEditor();
     const reactPanel = createRuntime(editor);

@@ -161,6 +161,11 @@ trailing paragraph-creation affordance. Block drag is opt-in through
 `/Separator` or `Primary+Shift+Enter` inserts a real separator plus a focused
 paragraph below it. Root separators partition edgeless cards; nested separators
 remain ordinary rendered blocks.
+In Page, a separator's children appear inside a collapsible dashed frame at 50%
+opacity by default, configurable with `--rivto-separator-children-opacity`.
+Direct children omit the nesting line, while deeper outlines retain it
+and support ordinary nesting and drag placement. Children of a root separator
+are not shown in Edgeless; a nested separator remains part of its card.
 Individual built-ins are exported from `@chulane/rivto-react/extensions`.
 
 `edgelessPreset()` includes `edgelessVisualsExtension()` and its registered built-in element types. Its categorized

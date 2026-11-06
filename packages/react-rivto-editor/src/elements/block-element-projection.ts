@@ -567,7 +567,11 @@ export class BlockElementProjection {
         return false;
       }
       const parent = blockElementRoot(element, reactEditor.blocks);
-      return parent === undefined || parent === this.rootBlockId;
+      return (
+        parent === undefined || // Neither endpoint exists, so this scope can remove the orphaned card.
+        parent === this.rootBlockId || // The card's endpoint belongs to this block scope.
+        (this.memberships.get(element.id)?.some((id) => rootSet.has(id)) ?? false) // A moved endpoint can temporarily point outside the card's original scope.
+      );
     });
     const currentRanges = new Map(
       existing.map((element) => [element.id, blockIdsOf(element, rootOrder)]),
