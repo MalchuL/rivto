@@ -57,6 +57,32 @@ Managers создаются до setup расширений; extensions уста
 Ошибка setup очищает уже созданные registrations. Дубликаты extension IDs и конфликтующие
 регистрации приводят к исключению. Core и модель остаются у вызывающего владельца.
 
+`animations` задаёт длительности отдельных анимаций в секундах. Отсутствующее значение
+или `0` отключает соответствующую анимацию; без `animations` все перечисленные ниже
+анимации отключены. Настройки принадлежат ReactEditor и используются его панелями.
+
+```ts
+createReactEditor({
+  editor,
+  animations: {
+    blockExpand: 0.3,
+    blockInsert: 0.3,
+    blockIndent: 0.15,
+    blockMove: 0.3,
+    collapseIndicator: 0.3,
+    checkbox: 0.3,
+    todoStatus: 0.3,
+    boardDialog: 0.4,
+    upload: 0.32,
+    canvasProperties: 0.36,
+    imageCopyMenu: 0.25,
+  },
+});
+```
+
+При системной настройке уменьшения движения позиционные переходы отключаются,
+а длительность оставшихся плавных изменений сокращается вдвое.
+
 `defaultWritingBlockFactory.createEmptyBlock()`, `defaultWritingBlockFactory.isBlock()` и
 `defaultWritingBlockFactory.isEmptyBlock()` выбрасывают исключение до установки writing extension.
 `installDefaultWriting(defaultWritingBlockFactory)` возвращает disposer,

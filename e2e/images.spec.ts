@@ -1990,6 +1990,39 @@ test("an older file copy cannot close a newer copy menu", async ({ page }) => {
   await expect(copy).toBeHidden();
 });
 
+for (const duration of [0, 1]) {
+  test(`opens the image copy menu with duration ${duration}`, async ({ page }) => {
+    await page.evaluate((seconds) => {
+      const host = window as unknown as {
+        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      };
+      (host.__rivtoDemo.reactEditor.animations as { imageCopyMenu?: number }).imageCopyMenu =
+        seconds;
+      host.__rivtoDemo.reactEditor.clipboard.registerWriter({
+        id: "animation-test-writer",
+        supports: (mimeType) => mimeType === "image/png",
+        write: async () => {},
+      });
+    }, duration);
+    await sendImage(page.locator(".page-surface").first(), "drop");
+    await page.locator(`${IMAGE_BLOCK_SELECTOR} .rivto-image-frame`).click({ button: "right" });
+    const menu = page
+      .getByRole("menu", { name: "" })
+      .filter({ has: page.getByRole("menuitem", { name: "Copy image" }) });
+    await expect(menu).toBeVisible();
+    const timings = await menu.evaluate((element) =>
+      element.getAnimations().map((animation) => animation.effect?.getTiming().duration),
+    );
+    if (duration) {
+      expect(timings).toContain(duration * 1000);
+    } else {
+      expect(timings).toHaveLength(0);
+    }
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+  });
+}
+
 test("copies an image through a host clipboard writer", async ({ page }) => {
   await page.evaluate(() => {
     const host = window as unknown as {

@@ -63,6 +63,7 @@ import {
 } from "./blocks/custom-blocks";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DocumentsDemo } from "./DocumentsDemo";
+import { DEMO_ANIMATIONS } from "./animation-durations";
 import { DemoEditorSurface } from "./editor-surface";
 import { seedJournalDemo } from "./journal-content";
 import { blockIdExtension, BlockIdsVisibleProvider } from "./extensions/block-id";
@@ -606,6 +607,7 @@ async function createDemoEditor() {
     createEditor: (documentEditor) => {
       return createReactEditor({
         editor: documentEditor,
+        animations: DEMO_ANIMATIONS,
         keymap: alternateKeymap,
         extensions: [
           ...(imageFirst || imageOnly ? [imageExtension({ provider: demoBinaryProvider })] : []),
@@ -1025,6 +1027,7 @@ async function createEmptyDemoEditor() {
   const editor = createDocumentEditor({ document: resources.document });
   const reactEditor = createReactEditor({
     editor,
+    animations: DEMO_ANIMATIONS,
     extensions: [
       fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,
@@ -1475,6 +1478,7 @@ async function createMultiEditor(
   const editor = createDocumentEditor({ document: resources.document });
   const reactEditor = createReactEditor({
     editor,
+    animations: DEMO_ANIMATIONS,
     extensions: [
       fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,
@@ -1733,6 +1737,7 @@ async function createSyncedPeer(
   const editor = createDocumentEditor({ document: document! });
   const reactEditor = createReactEditor({
     editor,
+    animations: DEMO_ANIMATIONS,
     extensions: [
       fileExtension({ provider: demoBinaryProvider }),
       demoLocalFileExtension,

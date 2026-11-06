@@ -1,6 +1,7 @@
 import type { ReactEditorApi } from "../../../../editor/types";
 /** Keyboard registration for outdenting a nested block at its start boundary. */
 import { createBlockBehaviorContext } from "../../../../block-behaviors/utils/context";
+import { captureBlockMove } from "../../../../surfaces/page/block-move-animation";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -43,7 +44,21 @@ export function registerBlockOutdent(reactEditor: ReactEditorApi): void {
       if (!context) {
         return false;
       }
-      return reactPanel.editor.blockBehaviors.dispatch("onOutdentAtStart", context, target);
+      const animateMove = captureBlockMove(
+        root,
+        reactPanel.page.regions,
+        [target.blockId],
+        reactPanel.editor.animations?.blockIndent,
+      );
+      const claimed = reactPanel.editor.blockBehaviors.dispatch(
+        "onOutdentAtStart",
+        context,
+        target,
+      );
+      if (claimed) {
+        animateMove?.(root, reactPanel.page.regions);
+      }
+      return claimed;
     },
   );
 }

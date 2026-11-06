@@ -1,6 +1,8 @@
 import { Listeners } from "@chulane/rivto-utils";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { useSyncExternalStore } from "react";
 import type { FileIngestionStatus } from "./types";
+import { useAnimationDuration } from "../../../hooks/editor/use-animation-duration";
 
 /** One locally displayed upload, including its latest progress or error. */
 interface FileUploadStatus extends FileIngestionStatus {
@@ -123,6 +125,80 @@ interface FileUploadStatusOverlayProps {
   readonly kind: "file" | "image";
 }
 
+/** One status card and its local dismissal operation. */
+interface FileUploadStatusCardProps {
+  /** Current upload data retained through an exit transition. */
+  readonly upload: FileUploadStatus;
+  /** Existing file or image styling. */
+  readonly kind: "file" | "image";
+  /** Configured transition duration in seconds. */
+  readonly duration: number;
+  /** Whether positional motion should be suppressed. */
+  readonly reducedMotion: boolean | null;
+  /**
+   * Removes this upload from its owning store.
+   *
+   * @returns The dismissal has been requested.
+   */
+  readonly onDismiss: () => void;
+}
+
+/**
+ * Displays one pending or failed upload and fades it out after removal.
+ *
+ * Exiting cards immediately leave accessibility and pointer interaction while
+ * their last visible state remains mounted for the transition.
+ *
+ * @param props - Upload status, presentation, and dismissal callback.
+ * @param props.upload - Current upload data, retained during exit.
+ * @param props.kind - Selects the file or image status styles.
+ * @param props.duration - Configured transition duration in seconds; zero disables motion.
+ * @param props.reducedMotion - Whether positional movement should be suppressed.
+ * @param props.onDismiss - Removes this upload from its owning store when Dismiss is pressed.
+ * @returns A positioned status card.
+ */
+function FileUploadStatusCard({
+  upload,
+  kind,
+  duration,
+  reducedMotion,
+  onDismiss,
+}: FileUploadStatusCardProps) {
+  const present = useIsPresent();
+  const role = upload.error ? "alert" : "status";
+  return (
+    <motion.div
+      className={`rivto-${kind}-upload`}
+      role={present ? role : undefined}
+      aria-hidden={!present}
+      inert={!present}
+      style={{ left: upload.x, top: upload.y, pointerEvents: present ? undefined : "none" }}
+      initial={duration ? { opacity: 0, y: reducedMotion ? 0 : 4 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: reducedMotion ? 0 : 4 }}
+      transition={{
+        duration: reducedMotion ? duration / 2 : duration,
+        ease: [0.23, 1, 0.32, 1],
+      }}
+    >
+      <span>
+        {upload.error ??
+          `Uploading ${upload.name}${upload.progress === undefined ? "…" : ` ${Math.round(upload.progress * 100)}%`}`}
+      </span>
+      {upload.error && (
+        <>
+          <button type="button" onClick={upload.retry}>
+            Retry
+          </button>
+          <button type="button" onClick={onDismiss}>
+            Dismiss
+          </button>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 /**
  * Renders accessible pending and error cards near the source interaction.
  *
@@ -134,37 +210,29 @@ interface FileUploadStatusOverlayProps {
  * @returns The local-only live status overlay.
  */
 export function FileUploadStatusOverlay({ store, kind }: FileUploadStatusOverlayProps) {
+  const reducedMotion = useReducedMotion();
+  const duration = useAnimationDuration("upload");
   // Subscribe to a stable revision so React refreshes the current status cards.
   useSyncExternalStore(
     (listener) => store.subscribe(listener),
     () => store.getRevision(),
     () => store.getRevision(),
   );
+  const cards = store
+    .getUploads()
+    .map((upload) => (
+      <FileUploadStatusCard
+        key={upload.id}
+        upload={upload}
+        kind={kind}
+        duration={duration}
+        reducedMotion={reducedMotion}
+        onDismiss={() => store.delete(upload.id)}
+      />
+    ));
   return (
     <div className={`rivto-${kind}-uploads`} aria-live="polite">
-      {store.getUploads().map((upload) => (
-        <div
-          key={upload.id}
-          className={`rivto-${kind}-upload`}
-          role={upload.error ? "alert" : "status"}
-          style={{ left: upload.x, top: upload.y }}
-        >
-          <span>
-            {upload.error ??
-              `Uploading ${upload.name}${upload.progress === undefined ? "…" : ` ${Math.round(upload.progress * 100)}%`}`}
-          </span>
-          {upload.error && (
-            <>
-              <button type="button" onClick={upload.retry}>
-                Retry
-              </button>
-              <button type="button" onClick={() => store.delete(upload.id)}>
-                Dismiss
-              </button>
-            </>
-          )}
-        </div>
-      ))}
+      {duration ? <AnimatePresence initial={false}>{cards}</AnimatePresence> : cards}
     </div>
   );
 }

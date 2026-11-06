@@ -68,6 +68,30 @@ test("toggles an accessible collapsed subtree without exposing hidden rows", asy
   ).toHaveText(childValue ?? "");
 });
 
+test("rotates the collapse indicator and respects reduced motion", async ({ page }) => {
+  const parent = await collapsibleRoot(page);
+  const toggle = parent.locator(":scope > .rivto-block-row [data-collapse-toggle]");
+  const indicator = toggle.locator("span");
+  const angle = () =>
+    indicator.evaluate((element) => {
+      const matrix = new DOMMatrix(getComputedStyle(element).transform);
+      return Math.round((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI);
+    });
+
+  await expect.poll(angle).toBe(90);
+  await toggle.click();
+  await expect.poll(angle).toBe(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  const reducedParent = await collapsibleRoot(page);
+  const reducedToggle = reducedParent.locator(":scope > .rivto-block-row [data-collapse-toggle]");
+  await reducedToggle.click();
+  await expect(reducedToggle).toHaveAttribute("aria-expanded", "false");
+  expect(
+    await reducedToggle.locator("span").evaluate((element) => element.getAnimations().length),
+  ).toBe(0);
+});
+
 test("supports collapse keys for editing and multi-block selection", async ({ page }) => {
   const first = await collapsibleRoot(page, 0);
   const second = await collapsibleRoot(page, 1);

@@ -12,11 +12,13 @@
 import { editorControlProps } from "../../constants";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
+import { animate, useReducedMotion } from "motion/react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
+import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 const DIALOG_CLASS = "rivto-block-modal";
 const EXPAND_CLASS = "rivto-block-modal-expand";
 const ExpandContext = createContext<{
@@ -51,9 +53,12 @@ export function BlockModal({
   label: string;
 }) {
   const inline = useRef<HTMLDivElement>(null);
+  const overlay = useRef<HTMLDivElement>(null);
   const parent = useContext(ExpandContext);
   const panel = useReactPanel();
   const [expanded, setExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const duration = useAnimationDuration("boardDialog");
   if (parent?.expanded && parent.blockId === blockId) {
     return children;
   }
@@ -68,9 +73,26 @@ export function BlockModal({
         {expanded && (
           <DialogContent
             className="rivto-block-modal-content"
+            overlayClassName="!animate-none"
+            overlayRef={overlay}
             showCloseButton={false}
             aria-describedby={undefined}
             aria-modal="true"
+            onOpenAutoFocus={(event) => {
+              if (duration && event.target instanceof HTMLElement) {
+                const targets = [event.target, overlay.current].filter(
+                  (target): target is HTMLElement => target !== null,
+                );
+                animate(
+                  targets,
+                  { opacity: [0, 1] },
+                  {
+                    duration: reducedMotion ? duration / 2 : duration,
+                    ease: [0.23, 1, 0.32, 1],
+                  },
+                );
+              }
+            }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
