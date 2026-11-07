@@ -1,6 +1,7 @@
 packages:
   - .
   - packages/*
+  - vendor/cordis
   - demo
   - docs
   - app/chulane

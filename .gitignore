@@ -1,5 +1,6 @@
 *.tsbuildinfo
 dist/
+/vendor/cordis/lib/
 .pnpm-store/
 .stuff/
 node_modules/
