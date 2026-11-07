@@ -94,6 +94,108 @@ For the TypeScript correction, the compiled-host regression failed before the
 compiler pipeline existed, then passed. Both unit tests, all five smoke tests,
 strict type checks, lint, and the production build passed again.
 
-Current checkpoint: both hosts own a tested Cordis lifecycle. Application domain
+Checkpoint after stage 5: both hosts own a tested Cordis lifecycle. Application domain
 services and third-party plugin installation are subsequent stages. Next:
 local users, workspace ownership, and SQLite-backed application services.
+
+## 6. Local identity, workspace ownership, and password login — 2026-10-09
+
+- Confirmed automatic private personal workspaces, owner/editor/viewer rules,
+  multiple shared-workspace owners, and protection of the last owner.
+- Added storage-independent identity/workspace contracts and pure access rules.
+  Drizzle with a local libSQL/SQLite adapter persists profiles, workspaces, and
+  membership; permission checks and mutations share a transaction.
+- Used Better Auth's CLI to initialize password authentication and generate its
+  SQLite schema, then Drizzle Kit to generate migrations. Drizzle Kit has no
+  configuration initializer. Used shadcn CLI for input, label, and native select.
+- Added local email/password registration, login, logout, persisted sessions,
+  and a device-local signing secret. Email is an unverified local identifier;
+  no mail delivery or remote account is required. Passwordless mode was excluded
+  by the user's final choice.
+- Cordis owns persistence and authentication. The shared Node host exposes
+  authenticated operations to Next.js without database access in UI components.
+  Request actors come from verified sessions; mutation origins and input are
+  validated, and the host controls rate-limit client addresses.
+- Added forms for creating/renaming workspaces and assigning/removing members.
+  Personal membership is immutable; shared settings are owner-only. Both browser
+  and Electron use the same interface and application operations.
+- Verified atomic rollback of partial profile/workspace creation and recovery
+  when authentication commits before application provisioning fails. Repeated
+  provisioning creates no duplicate personal workspace.
+- Corrected the document-storage plan: `DocumentStore` selects either database
+  or ordinary filesystem persistence for a document. It is not implemented in
+  this stage; Markdown interpretation remains a next-stage decision.
+
+Validation: domain, persistence, authentication, and API tests demonstrated
+expected failures before their implementations; the browser workflow initially
+failed because registration controls did not exist. Final validation passed all
+12 unit/integration tests, all 7 Playwright scenarios, strict type checks, lint,
+Drizzle migration checks, production build, and `git diff --check`. Desktop
+checks used `DISPLAY=:1` and exercised registration/login in both development
+and production. Inspected the authenticated workspace screenshot.
+
+Current checkpoint: local users can sign in and manage durable workspaces with
+enforced roles. Next: Rivto hosting, document persistence, and page operations.
+Password reset by email, remote synchronization, and desktop installers remain
+outside this stage.
+
+Profile ownership clarification — 2026-10-09: the existing Chulane user owns its
+name independently of Better Auth. Authentication supplies an initial name only
+when creating the application profile. A regression first failed because an
+empty auth name blocked returning an existing user; validation now runs only
+for new profiles. Integration checks verify that auth renaming does not change
+the application API's user or directory, including after restart and login.
+All 12 unit/integration tests, type checks, lint, and diff checks passed. Browser
+and Electron suites were not rerun for this service-only correction.
+
+
+Class-based implementation refactor — 2026-10-09: split SQLite persistence into
+`SqliteLocalServices`, `SqliteIdentityService`, and `SqliteWorkspaceService`.
+The connection owner now exposes an async `open()` factory and explicit cleanup;
+transactional authorization and profile ownership behavior are unchanged.
+`LocalApi`, `LocalServicesPlugin`, `LocalServer`, and `DesktopApplication` own
+HTTP dispatch, composition, and host lifecycle state. Callback entry points
+retain their instance binding, including Cordis cleanup and shutdown hooks.
+Updated all callers and existing tests. Pure domain checks, React components,
+Better Auth configuration, and generated Drizzle schemas remain idiomatic.
+Validation passed 12 unit/integration tests, all 7 browser/Electron scenarios,
+strict application/runtime type checks, affected-source lint, production build,
+and diff checks. No schema changes or data migrations were needed.
+
+
+Interface review and workspace lifecycle — 2026-10-26: reviewed current contracts
+in `dev_notes/chulane-interface-review.md`. Replaced workspace `rename` with a
+whitelisted, typed `update` returning the persisted entity; added owner-only
+recoverable deletion, owner-filtered deleted listings, and restoration with
+preserved membership. Personal workspaces cannot be deleted separately. Added
+explicit updates to the acting user's Chulane profile. HTTP derives the actor
+from the session; UI provides profile editing, deletion confirmation and restore.
+Per user instruction the initial SQLite schema is regenerated without an upgrade
+path for old development data. Account deletion and new metadata fields are out
+of scope.
+
+Validation: all 21 unit/integration tests and all 10 browser/Electron scenarios
+passed, including canceled/rejected deletion, explicit retry, reload, restore,
+and subsequent password login. Type checks, lint, production build, Drizzle check,
+and diff checks passed. Electron tests used `DISPLAY=:1`.
+
+
+Unified workspaces and user-scoped services — 2026-10-27: removed the separate
+personal workspace model. The initial workspace now follows the same membership,
+sharing, deletion, and restoration rules as every other workspace. Workspace and
+identity services bind the verified user at construction for each request; Cordis
+no longer publishes globally scoped instances. A dedicated provisioning coordinator
+creates a profile and its initial workspace atomically, using the workspace adapter
+for workspace insertion. Public access was deferred at the user's request; all
+workspace access requires membership. The initial development schema was regenerated
+without an upgrade path for earlier data.
+
+Validation: 34 unit/integration tests and 11 browser/Electron scenarios passed,
+including initial-workspace sharing, request identity isolation, concurrent writes,
+rollback and restart. Type checks, lint, production build, Drizzle check, and diff
+checks passed. Browser/Electron and network tests used loopback access outside the
+sandbox; Electron tests used `DISPLAY=:1`.
+
+
+Workspace onboarding — 2026-10-28: profile provisioning no longer creates a
+workspace. Users create workspaces explicitly from the workspace screen.

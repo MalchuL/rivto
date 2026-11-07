@@ -10,9 +10,10 @@ Build a local-first desktop application with third-party plugin installation fro
 
 ## Domain model
 
-- One local database supports multiple users. Personal and shared workspaces unify project ownership; membership roles are owner, editor, and viewer.
+- One local database supports multiple users. Every workspace uses the same ownership and membership model; membership roles are owner, editor, and viewer.
+- Users create workspaces explicitly; each can be shared, deleted, and restored. Workspaces may have multiple owners but cannot lose their last owner. Owners manage settings and members; editors may edit content; viewers may read. Access requires membership. Local authentication uses Better Auth with email and password, without verification email or a remote account. Passwordless mode is not included.
 - Projects and pages support nesting. Each page retains its identity and content while switching between writing and canvas views through Rivto.
-- Each user has a private journal in their personal workspace, outside project hierarchy. Journal pages appear in a vertical daily sequence. A journal day is a date-only value determined from the user's local calendar at creation and does not shift with timezone changes.
+- Each user has a private journal outside project hierarchy. Journal pages appear in a vertical daily sequence. A journal day is a date-only value determined from the user's local calendar at creation and does not shift with timezone changes.
 - All pages can reference pages and projects. References do not grant access.
 - Users can write undefined `#tag` labels. Tag definitions belong to the viewing/invoking user and provide descriptions and parameters, including meaning for agents. Hover shows that user's definition or offers to define the tag.
 - Conversations are private, persisted, and owned by users. Each has a workspace/project context; retrieval may span all accessible knowledge according to settings.
@@ -41,7 +42,7 @@ Local users configure providers and credentials. Future backend adapters define 
 
 ## Persistence, retrieval, and synchronization
 
-Storage-independent application services expose domain operations to UI and AI tools, enforcing validation and access rules without exposing SQL, file operations, or a generic database transaction API. Drizzle with SQLite is the initial record adapter for local users and workspaces; persistence may combine a database and filesystem. Separate page operations (`PageService`), durable document content (`DocumentStore`), and attachment bytes and metadata (`AttachmentStore`) as those features are implemented. Define durability and failure guarantees per operation; hybrid adapters coordinate recovery without assuming one transaction spans SQLite and files. See [ADR 0001](../docs/adr/0001-chulane-local-first-service-boundaries.md).
+Storage-independent application services expose domain operations to UI and AI tools, enforcing validation and access rules without exposing SQL, file operations, or a generic database transaction API. Drizzle with SQLite is the initial record adapter for local users and workspaces; persistence may combine a database and filesystem. `PageService` delegates content persistence to `DocumentStore`, whose selected implementation uses either a database or ordinary filesystem files, not both for the same document. This supersedes the proposed mandatory shared `FileStorage`. Introduce document contracts in the page/document stage and define durability and failure guarantees with the chosen metadata/content layout. See [ADR 0001](../docs/adr/0001-chulane-local-first-service-boundaries.md).
 
 Before document persistence, decide whether Markdown is canonical content or a readable mirror/export, and where metadata and content live. Canonical Markdown requires decisions about stable IDs, external-edit reconciliation, conflicts, and representation of canvas and structured blocks; do not assume a lossless Markdown round trip. Store durable CRDT state/updates for documents rather than using portable JSON import as the synchronization mechanism. Restore persisted CRDT state before editing. Preserve Rivto's stable entity identities and transaction rules; reuse its existing local-tab synchronization.
 

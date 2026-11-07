@@ -1,10 +1,11 @@
 /**
- * Provides the initial Chulane screen shared by the web and Electron hosts.
- * This server component exercises the application-owned shadcn primitives and
- * shared Tailwind theme. Page creation stays disabled until durable application
- * services exist; the shell does not introduce temporary document state.
+ * Provides the Chulane entry screen shared by the web and Electron hosts.
+ * The server-rendered shell hosts password login and workspace management using
+ * application-owned shadcn primitives. Page creation stays disabled until the
+ * document stage; the shell does not introduce temporary document state.
  */
 import { Button } from "@/components/ui/button";
+import { LocalWorkspaces } from "@/components/local-workspaces";
 
 const starterClasses = {
   main: "mx-auto flex min-h-svh max-w-3xl flex-col justify-center gap-6 px-6 py-16 sm:px-12",
@@ -25,6 +26,7 @@ export default function Home() {
       <Button className={starterClasses.button} size="lg" disabled>
         Create a page
       </Button>
+      <LocalWorkspaces />
     </main>
   );
 }

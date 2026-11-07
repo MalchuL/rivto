@@ -11,19 +11,22 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { exerciseLocalIdentity } from "./identity-flow";
 
 const require = createRequire(import.meta.url);
-const applicationPath = fileURLToPath(new URL("..", import.meta.url));
+const applicationPath = fileURLToPath(new URL("../..", import.meta.url));
 
 /**
- * Copies host environment settings without Electron's Node-only execution flag.
- * @returns Environment values suitable for launching the desktop application.
+ * Copies host settings while isolating persistence inside the temporary profile.
+ * @param profile - Temporary Electron user-data directory owned by this test.
+ * @returns Environment values that cannot select the user's application database.
  */
-function desktopEnvironment() {
+function desktopEnvironment(profile: string) {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined && key !== "ELECTRON_RUN_AS_NODE") env[key] = value;
   }
+  env.CHULANE_DATA_DIR = join(profile, "data");
   return env;
 }
 
@@ -77,10 +80,11 @@ test("opens Chulane in the browser", async ({ page }) => {
  * @returns Resolves after a graceful signal shutdown closes the HTTP server.
  */
 test("starts the web runtime and awaits cleanup on SIGTERM", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "chulane-web-runtime-"));
   const server = spawn(process.execPath, ["dist/src/runtime/server.js", "--port", "0"], {
     cwd: applicationPath,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, NODE_ENV: "production" },
+    env: { ...process.env, NODE_ENV: "production", CHULANE_DATA_DIR: directory },
   });
   let output = "";
   /**
@@ -112,6 +116,7 @@ test("starts the web runtime and awaits cleanup on SIGTERM", async () => {
       server.kill("SIGKILL");
       await exited;
     }
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -125,7 +130,7 @@ for (const mode of ["development", "production"]) {
     const desktop = await _electron.launch({
       executablePath: require("electron"),
       args: [applicationPath, ...(mode === "development" ? ["--development"] : []), `--user-data-dir=${profile}`],
-      env: desktopEnvironment(),
+      env: desktopEnvironment(profile),
     });
     let output = "";
     /**
@@ -136,6 +141,7 @@ for (const mode of ["development", "production"]) {
     desktop.process().stdout!.on("data", (chunk: Buffer) => { output += chunk.toString(); });
     let serverUrl = "";
     try {
+      expect(await desktop.evaluate(() => process.env.CHULANE_DATA_DIR)).toBe(join(profile, "data"));
       const page = await desktop.firstWindow();
       await page.waitForLoadState("load");
       await expect(page).toHaveTitle("Chulane");
@@ -144,6 +150,7 @@ for (const mode of ["development", "production"]) {
       expect(new URL(serverUrl).hostname).toBe("127.0.0.1");
       await page.reload();
       await expectStyledStarter(page);
+      await exerciseLocalIdentity(page);
     } finally {
       await desktop.close();
       await rm(profile, { recursive: true, force: true });
@@ -174,7 +181,7 @@ test("quits Electron during runtime startup without opening a late window", asyn
   const desktop = await _electron.launch({
     executablePath: require("electron"),
     args: [applicationPath, "--development", `--user-data-dir=${profile}`],
-    env: desktopEnvironment(),
+    env: desktopEnvironment(profile),
   });
   const processHandle = desktop.process();
   let windows = 0;

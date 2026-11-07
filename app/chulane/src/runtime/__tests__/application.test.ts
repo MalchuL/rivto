@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
 import { test } from "node:test";
 import type { Context } from "@deepseek-ai/cordis";
-import { createApplicationRuntime } from "./application.ts";
+import { createApplicationRuntime } from ".././application.ts";
 
 declare module "@deepseek-ai/cordis" {
   interface Events {

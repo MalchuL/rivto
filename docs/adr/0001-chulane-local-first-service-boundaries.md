@@ -12,14 +12,22 @@ domain-oriented application services, such as `WorkspaceService` and
 application operations, not SQL queries, file paths, or a generic `Database`
 transaction API. Persistence may use a database, filesystem, or both.
 
-Separate page operations from durable document content (`DocumentStore`) and
-attachment bytes and metadata (`AttachmentStore`). Introduce these contracts
-when their features are implemented. Each operation defines its durability and
-failure guarantees; a hybrid adapter coordinates recovery internally rather
-than assuming a transaction spans SQLite and files.
+`PageService` owns page operations and access checks, and delegates durable
+content loading and saving to `DocumentStore`. A document store uses one of two
+alternative implementations: database storage or ordinary filesystem files.
+The same document is not simultaneously persisted to both implementations.
+The service contract hides the selected implementation from its callers; the
+previous proposal for a mandatory shared `FileStorage` is superseded.
 
-The next identity/workspace stage uses Drizzle/SQLite behind storage-independent
-service contracts. Before document persistence, decide whether Markdown files
+Introduce document contracts and adapters during the page/document stage, not
+as speculative scaffolding for identity and workspaces. Define durability and
+failure guarantees with the chosen metadata/content layout.
+
+The identity/workspace stage uses Drizzle/SQLite repositories behind
+storage-independent repository and service contracts. Services own authorization
+and business rules; an atomic storage context binds identity and workspace
+repositories to the same transaction. Better Auth owns authentication behind an
+application service interface and receives its SQLite adapter at composition. Before document persistence, decide whether Markdown files
 are canonical content or readable mirrors/exports, and how a hybrid layout
 stores metadata and content. External-edit reconciliation, stable IDs, conflicts,
 and representation of canvas and structured blocks must be resolved if Markdown
@@ -31,6 +39,14 @@ one application fiber using `@deepseek-ai/cordis` for plugin composition,
 dependencies, services, events, and cleanup. It awaits startup before admitting
 requests and disposes plugins before exiting. Domain rules remain independent
 of Next.js, Electron, Cordis, and concrete storage or transport adapters.
+
+The local-services Cordis plugin owns SQLite, provisioning, and Better Auth.
+The shared host dispatches `/api/auth/*` and `/api/local` before Next.js.
+Authenticated requests construct domain services bound to the verified user. The plugin does
+not publish unscoped identity or workspace service instances in Cordis. Better Auth's CLI initializes its configuration and
+schema; Drizzle Kit generates migrations; shadcn's CLI initializes UI primitives.
+Use initialization/generation CLIs where available and resolve ambiguous product
+behavior with the user before implementing it.
 
 Application sources, including Node hosts, Electron entry points, and owned
 scripts, use strict TypeScript and ES modules. Host entry points compile with

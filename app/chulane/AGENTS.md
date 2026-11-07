@@ -22,3 +22,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   (for example ESLint and PostCSS). This exception does not cover runtime code.
 - Next.js App Router is the UI framework. Cordis owns application composition
   and plugin lifecycle; Electron hosts the same application UI.
+
+# Configuration initialization
+
+- Use the owning tool's CLI to initialize or generate configuration and migrations
+  when it supports that operation. Create configuration by hand only when no
+  suitable CLI command exists; do not replace application source with scaffolding.
+- Ask the user to resolve ambiguous product behavior before implementing it.
