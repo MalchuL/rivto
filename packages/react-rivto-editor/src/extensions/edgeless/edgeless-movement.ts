@@ -2,7 +2,7 @@ import { EDITOR_CONTROL_SELECTOR } from "../../constants";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 
 /** Moves selected canvas roots through eight exact arrow-key bindings. */
 export function registerEdgelessMovement(reactEditor: ReactEditorApi): void {

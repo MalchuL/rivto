@@ -1,5 +1,5 @@
-import type { PreparedFile } from "../../../attachments";
-import type { ReactPanelApi } from "../../../panels/types";
+import type { PreparedFile } from "..";
+import type { ReactPanelApi } from "../../panels/types";
 import type {
   FileDestination,
   FileDestinationEditor,

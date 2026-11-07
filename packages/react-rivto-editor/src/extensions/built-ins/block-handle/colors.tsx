@@ -4,18 +4,7 @@ import { useSyncExternalStore, type CSSProperties } from "react";
 import type { ReactEditorApi } from "../../../editor/types";
 import type { BlockContextMenuRenderContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
-
-/** Stable persisted palette tokens; empty means no background override. */
-export const BLOCK_BACKGROUND_COLORS = [
-  "",
-  "gray",
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-] as const;
+import { BLOCK_BACKGROUND_COLORS } from "../../../blocks/background-colors";
 
 /**
  * Renders inline background swatches for the captured explicit block targets.

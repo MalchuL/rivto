@@ -1,6 +1,6 @@
 import { BlockDropFeedback } from "@chulane/rivto-page";
-import type { EditorEvent } from "../../../managers/events/editor-event";
-import { isInPanel } from "../../../panels/panel-dom";
+import type { EditorEvent } from "../../managers/events/editor-event";
+import { isInPanel } from "../../panels/panel-dom";
 import { pageFileDropTarget } from "./file-destination";
 
 /** Displays the current Page file-drop target without changing the selection. */

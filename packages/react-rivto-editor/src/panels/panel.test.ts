@@ -100,7 +100,7 @@ it("pastes text and structured blocks into an empty Panel without changing docum
 
 it("remaps copied group and connector references into the receiving element subtree", async () => {
   const { ElementPasteStrategy } =
-    await import("../extensions/built-ins/clipboard/element-paste-strategy");
+    await import("../managers/clipboard/element-paste-strategy");
   const core = await createTestCoreEditor();
   const fullPanel = createTestReactEditor({ editor: core, extensions: [...edgelessPreset()] });
   const container = core.elements.insertElement(groupInput);

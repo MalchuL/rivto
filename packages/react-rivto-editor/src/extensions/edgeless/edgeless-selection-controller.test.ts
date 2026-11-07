@@ -1,6 +1,6 @@
 /** @jest-environment ./jest-browser-environment.mjs */
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
-import { EdgelessSelectionRuntime } from "../built-ins/selection/edgeless-runtime";
+import { EdgelessSelectionRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import { EdgelessSelectionController } from "./edgeless-selection-controller";
 
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;

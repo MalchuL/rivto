@@ -4,9 +4,13 @@
  * @module
  */
 import { createStructuralSelection } from "@chulane/rivto";
-import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_SELECTOR } from "../../../../constants";
-import type { ReactPanelApi } from "../../../../panels/types";
-import { findRenderedBlock } from "../../../../blocks/block-dom";
+import { BLOCK_CONTENT_SELECTOR, BLOCK_ID_SELECTOR } from "../constants";
+import type { ReactPanelApi } from "../panels/types";
+import { findRenderedBlock } from "../blocks/block-dom";
+import {
+  PAGE_BLOCK_DECORATIONS_KEY,
+  type PageBlockDecorationAdapter,
+} from "../blocks/page-block-decorations";
 
 /** Returns true when a block shell directly owns an editable content host. */
 function hasOwnedEditableContent(block: HTMLElement): boolean {
@@ -52,11 +56,14 @@ export function removeEmptyBlockAfterStructuralPredecessor(
 ): boolean {
   const { defaultWritingBlockFactory } = reactPanel.editor;
   const block = reactPanel.blocks.getBlockNode(blockId);
+  const decorations = reactPanel.editor.extensions.shared
+    .getValue<PageBlockDecorationAdapter>(PAGE_BLOCK_DECORATIONS_KEY)
+    ?.get();
   if (
     !block ||
     !defaultWritingBlockFactory.isEmptyBlock(block) ||
     !reactPanel.blocks.canRemove(block.id) ||
-    block.listProps.collapsed === true ||
+    decorations?.read(block).collapsed === true ||
     !reactPanel.blocks.getRootIds().includes(block.id)
   ) {
     return false;

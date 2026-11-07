@@ -13,7 +13,7 @@ import {
 } from "../../elements/visuals/utils/creation-geometry";
 import { ElementCreationPreview } from "../../elements/visuals/element-creation-preview";
 import { useEditorRoot } from "../../hooks/editor/use-editor-root";
-import { showSnapGuides } from "../../extensions/edgeless/visuals/utils/snap-guides";
+import { showSnapGuides } from "../../surfaces/edgeless/snap-guides";
 import { EdgelessTool, type EdgelessToolOptions, type EdgelessToolPointer } from "./edgeless-tool";
 
 /** Detached placement shown by toolbar drag; no persisted identity exists yet. */

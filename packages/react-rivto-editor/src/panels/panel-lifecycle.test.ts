@@ -10,7 +10,7 @@ import { registerCollapse } from "../extensions/built-ins/page/collapse/register
 import {
   getEdgelessRuntime,
   installEdgelessRuntime,
-} from "../extensions/built-ins/selection/edgeless-runtime";
+} from "../managers/selection/edgeless/edgeless-runtime";
 import { EdgelessSurfaceRegistration } from "../surfaces/edgeless/register";
 import { ChildrenPanel } from "@chulane/rivto";
 import { EmbeddingPanel } from "@chulane/rivto";
@@ -1237,7 +1237,7 @@ test("retained slash and clipboard APIs keep their surface without changing the 
   pageApi.clipboard.paste({ text: "Unfocused paste", defaultBlockType: "paragraph" });
   expect(f.editor.blocks.getBlockNode("same-id")?.content).toBe("A");
   const { ElementPasteStrategy } =
-    await import("../extensions/built-ins/clipboard/element-paste-strategy");
+    await import("../managers/clipboard/element-paste-strategy");
   const removeStrategy = f.editor.pasteStrategies.register(
     "panel.elements",
     new ElementPasteStrategy(f.editor),

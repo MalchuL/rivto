@@ -1,22 +1,24 @@
 import type { ReactEditorApi } from "../../../editor/types";
 import type { BinaryProvider, PreparedFile } from "../../../attachments";
-import type { FileIngestion } from "../../file/ingestion/file-ingestion";
-import type { FileIngestionPoint, FileInputPanel } from "../../file/ingestion/types";
-import type { FileUploadStatusStore } from "../../file/ingestion/file-upload-status";
-import { FileDropFeedback } from "../../file/ingestion/file-drop-feedback";
+import type { FileIngestion } from "../../../attachments/ingestion/file-ingestion";
+import type { FileIngestionPoint, FileInputPanel } from "../../../attachments/ingestion/types";
+import type { FileUploadStatusStore } from "../../../attachments/ingestion/file-upload-status";
+import { FileDropFeedback } from "../../../attachments/ingestion/file-drop-feedback";
 import {
   fileDropDestination,
   filePasteDestination,
   filePickerPoint,
   type FileDestination,
-} from "../../file/ingestion/file-destination";
+} from "../../../attachments/ingestion/file-destination";
 import {
-  FILE_DROP_EVENT_ID,
-  FILE_PASTE_EVENT_ID,
   hasRedactedUriList,
   getTransferredFiles,
   findLocalFileUris,
-} from "../../file/utils/file-input";
+} from "../../../attachments/ingestion/file-input";
+import {
+  FILE_INPUT_ROUTING_KEY,
+  type FileInputRouting,
+} from "../../../attachments/ingestion/file-input-routing";
 import { prepareImageAsset } from "./image-asset";
 import {
   inspectImage,
@@ -46,8 +48,10 @@ interface ImageInputEditor {
     ReactEditorApi["defaultWritingBlockFactory"],
     "isEmptyBlock"
   >;
-  /** Registers input listeners and checks existing registrations. */
-  readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
+  /** Registers input listeners. */
+  readonly events: Pick<ReactEditorApi["events"], "register">;
+  /** Reads optional shared input-routing capabilities. */
+  readonly extensions: Pick<ReactEditorApi["extensions"], "shared">;
   /** Registers the image picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
 }
@@ -137,7 +141,7 @@ export class ImageInputEvents {
     // Defer to generic file input when it owns the same transfer.
     this.editor.events.register({ id: "image.drop", type: "drop", capture: true }, (event) => {
       const { raw, reactPanel } = event;
-      if (this.hasGenericFileInput(FILE_DROP_EVENT_ID, raw, raw.dataTransfer)) {
+      if (this.hasGenericFileInput(raw, raw.dataTransfer)) {
         return false;
       }
       const files = getTransferredFiles(raw.dataTransfer, isImageFile);
@@ -169,7 +173,7 @@ export class ImageInputEvents {
     // Defer to generic file input before resolving image files or URIs.
     this.editor.events.register({ id: "image.paste", type: "paste", capture: true }, (event) => {
       const { raw, root, reactPanel } = event;
-      if (this.hasGenericFileInput(FILE_PASTE_EVENT_ID, raw, raw.clipboardData)) {
+      if (this.hasGenericFileInput(raw, raw.clipboardData)) {
         return false;
       }
       const files = getTransferredFiles(raw.clipboardData, isImageFile);
@@ -416,7 +420,7 @@ export class ImageInputEvents {
     });
   }
   /**
-   * Checks canvas image support and publishes an error when the renderer is absent.
+   * Checks canvas image support and publishes an error when its element definition is absent.
    *
    * @param destination - Captured insertion destination.
    * @param point - Viewport position for local status feedback.
@@ -437,7 +441,7 @@ export class ImageInputEvents {
       name,
       x: point.x,
       y: point.y,
-      error: "Canvas images require edgelessVisualsExtension()",
+      error: "Canvas images require a registered image element type",
       // Dismiss this status; retrying cannot install the missing renderer.
       retry: () => this.statuses.delete(id),
     });
@@ -450,16 +454,14 @@ export class ImageInputEvents {
    * The event manager uses the dispatch snapshot, so registrations added during
    * this event do not prevent image handling. Removed registrations are ignored.
    *
-   * @param registrationId - Generic paste or drop registration ID.
    * @param event - Native event whose registration snapshot is inspected.
    * @param data - Transferred data, or null when unavailable.
    * @returns True when an active generic handler is registered and files are present.
    */
-  private hasGenericFileInput(
-    registrationId: string,
-    event: Event,
-    data: DataTransfer | null,
-  ): boolean {
-    return this.editor.events.has(registrationId, event) && getTransferredFiles(data).length > 0;
+  private hasGenericFileInput(event: Event, data: DataTransfer | null): boolean {
+    const route = this.editor.extensions.shared
+      .getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)
+      ?.get();
+    return route?.(event, data) === true;
   }
 }

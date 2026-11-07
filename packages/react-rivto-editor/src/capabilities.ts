@@ -15,3 +15,4 @@ export type * from "./managers/surfaces/api";
 export type * from "./managers/selection/api";
 export type * from "./managers/slash/api";
 export type * from "./managers/extensions/api";
+export type * from "./managers/extensions/shared-space";

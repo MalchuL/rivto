@@ -11,13 +11,15 @@ import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useId, type KeyboardEvent, type MouseEvent } from "react";
 import { z } from "zod";
 import { createBlockBehaviorContext } from "../../../block-behaviors/utils/context";
-import { convertLeafToContainer } from "../convert-leaf-to-container";
+import { convertLeafToContainer } from "../../../block-behaviors/convert-leaf-to-container";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
   ContainerSummaryTitle,
-} from "../container-summary-title";
+} from "../../../components/container-summary-title";
 import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
+import { useBlockCollapsed } from "../../../hooks/blocks/use-block-collapsed";
+import { updatePageBlockDecorations } from "../../../blocks/page-block-decorations";
 import { Button } from "../../../components/ui/button";
 import { Checkbox } from "../../../components/ui/checkbox";
 import { Label } from "../../../components/ui/label";
@@ -125,7 +127,7 @@ export function setColumnsCount(
     return true;
   }
   reactPanel.batchUpdates(() => {
-    reactPanel.blocks.updateBlock(board.id, { listProps: { collapsed: false } });
+    updatePageBlockDecorations(reactPanel, board.id, { collapsed: false });
     if (next > columns.length) {
       let afterId = columns.at(-1)?.id ?? board.id;
       for (let index = columns.length; index < next; index += 1) {
@@ -168,6 +170,7 @@ export function Columns({ blockId }: { readonly blockId: string }) {
   const editing = useBlockNode(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
+  const collapsed = useBlockCollapsed(block);
   if (!block) {
     return null;
   }
@@ -178,7 +181,7 @@ export function Columns({ blockId }: { readonly blockId: string }) {
       className={`${COLUMNS_CLASS} ${CONTAINER_SUMMARY_CLASS}`}
       data-show-dividers={block.props.showDividers !== false}
     >
-      {block.listProps.collapsed === true && (
+      {collapsed && (
         <>
           <ContainerSummaryTitle blockId={blockId} name="Columns" />
           <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={COLUMNS_STATS_CLASS}>
@@ -206,6 +209,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
   const { block } = useBlockNode(blockId);
+  const collapsed = useBlockCollapsed(block);
   const empty = block?.childIds.length === 0;
   const attributes = useBlockSelectionAnchor(blockId);
   /**
@@ -238,7 +242,7 @@ function ColumnsColumn({ blockId }: { readonly blockId: string }) {
       onClick={startWriting}
       onKeyDown={startWriting}
     >
-      {block?.listProps.collapsed === true ? `${block.childIds.length} blocks` : null}
+      {collapsed && block ? `${block.childIds.length} blocks` : null}
     </div>
   );
 }

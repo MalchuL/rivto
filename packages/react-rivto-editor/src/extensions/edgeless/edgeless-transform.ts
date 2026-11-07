@@ -24,7 +24,7 @@ import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } fr
 import type { EditorElementFrame } from "@chulane/rivto";
 import { elementContainsBlock } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import {
   attachedConnectorsForTransform,
   isConnectorEndpoint,

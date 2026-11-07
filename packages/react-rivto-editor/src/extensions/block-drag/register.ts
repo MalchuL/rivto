@@ -2,7 +2,7 @@ import type { ReactEditorApi } from "../../editor/types";
 /** Runtime registration for shared Page block dragging in writing pages and canvas cards. */
 import { createElement, type ReactNode } from "react";
 import { PageDragBoundary } from "../../surfaces/page/page-drag-boundary";
-import type { PageDragExtensionOptions } from "./types";
+import type { PageDragExtensionOptions } from "../../surfaces/page/page-drag-types";
 
 /**
  * Installs the occurrence-owned Page drag boundary used by the independent universal handle.

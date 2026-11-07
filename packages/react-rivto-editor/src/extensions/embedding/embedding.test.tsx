@@ -9,7 +9,7 @@ import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestMultiEditor } from "../../test-utils";
 import { standardPreset } from "../built-ins/built-ins";
-import { CrossDocumentBlockTransfer } from "../built-ins/clipboard/cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "../../managers/clipboard/cross-document-block-transfer";
 import { EMBEDDING_BLOCK_TYPE, embeddingExtension } from "./embedding";
 
 test("embedding props validate, snapshots and structured clipboard retain references, and cleanup removes registration", async () => {

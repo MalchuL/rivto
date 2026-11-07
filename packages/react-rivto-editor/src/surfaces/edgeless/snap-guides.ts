@@ -1,5 +1,5 @@
 import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
-import type { SnapGuide } from "../../../../elements/visuals/utils/geometry";
+import type { SnapGuide } from "../../elements/visuals/utils/geometry";
 
 /**
  * Renders the current snap guides into an edgeless plane, removing stale guides.

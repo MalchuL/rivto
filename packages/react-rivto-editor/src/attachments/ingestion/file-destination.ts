@@ -3,8 +3,8 @@ import {
   type BlockDropDestination,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
-import type { ReactPanelApi } from "../../../panels/types";
-import type { EditorEvent } from "../../../managers/events/editor-event";
+import type { ReactPanelApi } from "../../panels/types";
+import type { EditorEvent } from "../../managers/events/editor-event";
 import type { FileIngestionPoint } from "./types";
 
 /** Editor operations borrowed when validating a file destination. */

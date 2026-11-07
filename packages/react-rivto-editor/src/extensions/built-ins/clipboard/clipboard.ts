@@ -1,5 +1,5 @@
 import { BlockSelectionEndpoints } from "@chulane/rivto-page";
-import { registerBlockClipboardActions } from "../block-handle/actions";
+import { registerBlockClipboardActions } from "./actions";
 import {
   browserClipboardFormats,
   readClipboardEnvelope,
@@ -23,9 +23,13 @@ import {
 import type { ReactPanelApi } from "../../../panels/types";
 import { blockIdsOf } from "../../../elements/block-element-projection";
 import { KEYBOARD_BINDING_IDS, matchesShortcut, parseShortcut } from "../../../managers";
-import { findEdgelessRuntime } from "../selection/edgeless-runtime";
+import { findEdgelessRuntime } from "../../../managers/selection/edgeless/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
-import { ElementPasteStrategy } from "./element-paste-strategy";
+import { ElementPasteStrategy } from "../../../managers/clipboard/element-paste-strategy";
+import {
+  BLOCK_PASTE_CHILDREN_KEY,
+  type BlockPasteChildren,
+} from "../../../managers/clipboard/block-paste-children";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
 
@@ -233,8 +237,9 @@ export function registerClipboard(
     const ends = active ? BlockSelectionEndpoints.resolve(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? reactPanel.blocks.getBlockNode(activeId) : undefined;
-    const expanded =
-      reactPanel.editor.blockListProps.has("collapse") && activeBlock?.listProps.collapsed !== true;
+    const pasteIntoChildren = reactPanel.editor.extensions.shared
+      .getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)
+      ?.get();
     // Only whole-block paste needs a parent and sibling insertion position.
     // A native bundle marked `fromTextSelection` is pasted into text instead.
     const structuralSource =
@@ -244,7 +249,7 @@ export function registerClipboard(
     if (activeBlock && structuralSource) {
       if (
         !reactPanel.blocks.canRemove(activeBlock.id) ||
-        (expanded && reactPanel.blocks.hasChildren(activeBlock.id))
+        (pasteIntoChildren?.(activeBlock) && reactPanel.blocks.hasChildren(activeBlock.id))
       ) {
         placement = { parentId: activeBlock.id, afterId: null };
       } else {

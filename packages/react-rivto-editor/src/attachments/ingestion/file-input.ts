@@ -1,9 +1,4 @@
-import type { FileReference } from "../../../attachments";
-
-/** Event registration that claims generic file paste on the receiving surface. */
-export const FILE_PASTE_EVENT_ID = "file.paste";
-/** Event registration that claims generic file drops on the receiving surface. */
-export const FILE_DROP_EVENT_ID = "file.drop";
+import type { FileReference } from "..";
 
 /**
  * Checks whether the browser hides a transferred URI from the paste event.

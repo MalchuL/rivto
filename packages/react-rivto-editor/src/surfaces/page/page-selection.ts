@@ -2,7 +2,7 @@ import { Listeners } from "@chulane/rivto-utils";
 import {
   createEdgelessSelection,
   isEdgelessSelectionActive,
-} from "../../extensions/built-ins/selection/edgeless-runtime";
+} from "../../managers/selection/edgeless/edgeless-runtime";
 import {
   isStructuralSelection,
   type ModeManagerApi,

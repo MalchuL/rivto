@@ -4,6 +4,9 @@ Rivto models collaborative documents as blocks while supporting both text-level 
 
 ## Language
 
+**Shared runtime space**:
+An editor-local space for runtime values shared by extensions independently of their installation. Its values are not stored in the document.
+
 **Text-editable block**:
 A block whose content supports a text caret and character-range selection.
 _Avoid_: Text editing block, editable-text block

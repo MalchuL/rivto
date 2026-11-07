@@ -7,7 +7,7 @@ interface FileProviderRegistration {
   readonly provider: BinaryProvider;
 }
 
-const FILE_PROVIDERS = new WeakMap<ReactEditorApi, FileProviderRegistration>();
+const FILE_PROVIDER_KEY = "rivto.file.provider";
 
 /**
  * Registers the provider owned by the generic file extension.
@@ -21,11 +21,18 @@ export function configureFileProvider(
   provider: BinaryProvider,
 ): () => void {
   const registration = { provider };
-  FILE_PROVIDERS.set(editor, registration);
+  const space = editor.extensions.shared;
+  const release = space.reserve(FILE_PROVIDER_KEY, "value");
+  const shared = space.getValue<FileProviderRegistration>(FILE_PROVIDER_KEY)!;
+  shared.set(registration);
   // An older disposer must not remove a newer registration for the same editor.
   return () => {
-    if (FILE_PROVIDERS.get(editor) === registration) {
-      FILE_PROVIDERS.delete(editor);
+    try {
+      if (space.getValue<FileProviderRegistration>(FILE_PROVIDER_KEY)?.get() === registration) {
+        shared.set(undefined);
+      }
+    } finally {
+      release();
     }
   };
 }
@@ -37,5 +44,6 @@ export function configureFileProvider(
  * @returns Its provider, or undefined when the extension is not installed.
  */
 export function getFileProvider(editor: ReactEditorApi): BinaryProvider | undefined {
-  return FILE_PROVIDERS.get(editor)?.provider;
+  return editor.extensions.shared.getValue<FileProviderRegistration>(FILE_PROVIDER_KEY)?.get()
+    ?.provider;
 }

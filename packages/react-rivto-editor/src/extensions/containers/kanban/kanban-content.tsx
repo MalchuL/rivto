@@ -12,12 +12,14 @@ import {
   useReactPanel,
 } from "../../../hooks";
 import { focusBlock } from "../../../managers";
+import { useBlockCollapsed } from "../../../hooks/blocks/use-block-collapsed";
+import { updatePageBlockDecorations } from "../../../blocks/page-block-decorations";
 import { KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-behavior";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
   ContainerSummaryTitle,
-} from "../container-summary-title";
+} from "../../../components/container-summary-title";
 
 /**
  * Reads column and direct-card counts without materializing recursive block trees.
@@ -59,10 +61,11 @@ function useKanbanCounts(boardId: string): string {
 export function Kanban({ blockId }: BlockLayoutProps) {
   const attributes = useBlockSelectionAnchor(blockId);
   const editing = useBlockNode(blockId);
+  const collapsed = useBlockCollapsed(editing.block);
   const counts = useKanbanCounts(blockId);
   return (
     <div {...attributes} className={`rivto-kanban-summary ${CONTAINER_SUMMARY_CLASS}`}>
-      {editing.block?.listProps.collapsed === true && (
+      {collapsed && (
         <>
           <ContainerSummaryTitle blockId={blockId} name="Kanban" />
           <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES}>{counts}</span>
@@ -119,7 +122,7 @@ export function KanbanAddColumn({ blockId }: BlockLayoutProps) {
   const add = () => {
     let id = "";
     panel.batchUpdates(() => {
-      panel.blocks.updateBlock(blockId, { listProps: { collapsed: false } });
+      updatePageBlockDecorations(panel, blockId, { collapsed: false });
       id = panel.blocks.insertBlock(
         { type: KANBAN_COLUMN_BLOCK_TYPE, content: "New column" },
         { parentId: blockId },

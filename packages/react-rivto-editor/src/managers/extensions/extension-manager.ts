@@ -1,5 +1,6 @@
 import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
+import { SharedSpace } from "./shared-space";
 import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
@@ -16,6 +17,8 @@ import type {
  * SurfaceManager.
  */
 export class ExtensionManager implements ExtensionsApi {
+  /** Named runtime values owned by this editor's extension lifecycle. */
+  readonly shared = new SharedSpace((release) => this.registerCleanup(release));
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];
@@ -152,6 +155,7 @@ export class ExtensionManager implements ExtensionsApi {
     try {
       this.releaseAll([...this.registrations, ...this.extensionDisposers]);
     } finally {
+      this.shared.destroy();
       this.components.length = 0;
       this.store.clear();
     }

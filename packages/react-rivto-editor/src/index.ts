@@ -9,7 +9,39 @@ export { BLOCK_TEXT_METADATA_KEY } from "./managers/selection/block-text-metadat
  * @module
  */
 export * from "./blocks";
+export {
+  PAGE_BLOCK_DECORATIONS_KEY,
+  updatePageBlockDecorations,
+} from "./blocks/page-block-decorations";
+export type {
+  PageBlockDecorationAdapter,
+  PageBlockDecorationDocument,
+  PageBlockDecorationEditor,
+  PageBlockDecorationExtensions,
+  PageBlockDecorationPanel,
+  PageBlockDecorations,
+  PageBlockDecorationUpdate,
+} from "./blocks/page-block-decorations";
+export { FILE_INPUT_ROUTING_KEY } from "./attachments/ingestion/file-input-routing";
+export type { FileInputRouting } from "./attachments/ingestion/file-input-routing";
+export { BLOCK_PASTE_CHILDREN_KEY } from "./managers/clipboard/block-paste-children";
+export type { BlockPasteChildren } from "./managers/clipboard/block-paste-children";
+export { CLIPBOARD_LIST_PROPERTIES_KEY } from "./managers/clipboard/clipboard-list-properties";
+export type { ClipboardListProperties } from "./managers/clipboard/clipboard-list-properties";
+export {
+  BLOCK_CONVERSION_DEFAULTS_KEY,
+  registerBlockConversionDefaults,
+} from "./blocks/block-conversion-defaults";
+export type { BlockConversionDefaults } from "./blocks/block-conversion-defaults";
 export { MarkdownContent } from "./blocks/markdown/markdown";
+export {
+  MARKDOWN_EXTENSIONS_KEY,
+  registerMarkdownExtension,
+} from "./blocks/markdown/markdown-extensions";
+export type {
+  MarkdownExtension,
+  MarkdownRenderContext,
+} from "./blocks/markdown/markdown-extensions";
 export * from "./capabilities";
 export * from "./components";
 export * from "./constants";
@@ -48,7 +80,7 @@ export {
   resolveBlockListNumbers,
   type BlockListType,
 } from "./extensions/built-ins/page/list";
-export type { EdgelessSelectionSnapshot } from "./extensions/built-ins/selection/types";
+export type { EdgelessSelectionSnapshot } from "./managers/selection/edgeless/types";
 export {
   SEPARATOR_BLOCK_TYPE,
   SeparatorBlock,

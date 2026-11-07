@@ -19,7 +19,7 @@ import { registerBlockMerge } from "./page/block-merge";
 import { registerBlockOutdent } from "./page/block-outdent";
 import { registerCollapse } from "./page/collapse";
 import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
-import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
+import type { DefaultWritingBlockOptions } from "../../blocks/default-writing/types";
 import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";

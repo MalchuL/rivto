@@ -8,11 +8,11 @@
  * @module
  */
 import { escapeHtml } from "../../utils/escape-html";
-import { FileIngestion } from "../file/ingestion/file-ingestion";
+import { FileIngestion } from "../../attachments/ingestion/file-ingestion";
 import {
   FileUploadStatusOverlay,
   FileUploadStatusStore,
-} from "../file/ingestion/file-upload-status";
+} from "../../attachments/ingestion/file-upload-status";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ReactEditorExtension } from "../../managers";
@@ -21,6 +21,8 @@ import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard
 import type { BinaryProvider } from "../../attachments";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import { configureImageViews, ImageView, type ImageViewCustomizations } from "./view/image-view";
+import { registerMarkdownExtension } from "../../blocks/markdown/markdown-extensions";
+import { imageMarkdownExtension } from "./macro/markdown";
 import { serializeImageMacro } from "./macro/image-macro";
 import { IMAGE_BLOCK_TYPE, prepareImageAsset } from "./ingestion/image-asset";
 export { IMAGE_BLOCK_TYPE } from "./ingestion/image-asset";
@@ -330,6 +332,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
     id: "image",
     // Keep image configuration and ingestion scoped to this extension installation.
     setup: (reactEditor) => {
+      registerMarkdownExtension(reactEditor.extensions, imageMarkdownExtension);
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);
       const disposeImageViews = configureImageViews(

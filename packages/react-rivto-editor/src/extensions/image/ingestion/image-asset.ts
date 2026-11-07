@@ -1,5 +1,5 @@
 import type { FileReference, PreparedFile } from "../../../attachments";
-import type { FileDestination } from "../../file/ingestion/file-destination";
+import type { FileDestination } from "../../../attachments/ingestion/file-destination";
 import { serializeImageMacro } from "../macro/image-macro";
 import { MIN_IMAGE_SIZE } from "../image-constants";
 

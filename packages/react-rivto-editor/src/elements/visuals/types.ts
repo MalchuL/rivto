@@ -1,7 +1,7 @@
 import type { EditorElementNode } from "@chulane/rivto";
-import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
+import type { EdgelessSelectionRef } from "../../managers/selection/edgeless/types";
 
-export type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
+export type { EdgelessSelectionRef } from "../../managers/selection/edgeless/types";
 
 /** Axis-aligned canvas geometry shared by every visual leaf. */
 export interface VisualFrame {

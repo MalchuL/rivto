@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { DocumentEditorAPI, EditorBlock } from "@chulane/rivto";
 import type { ReactEditor } from "@chulane/rivto-react";
+import type { ClipboardListProperties } from "@chulane/rivto-react";
 
 type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor } };
 
@@ -63,6 +64,24 @@ test("HTML type converters preserve neighboring paragraphs and nested lists", as
   ).toBeUndefined();
   await page.keyboard.press("Control+z");
   expect((await blocks(page)).filter((block) => !before.has(block.id))).toHaveLength(0);
+});
+
+test("uses shared list-item translation when parsing external HTML", async ({ page }) => {
+  const before = new Set((await blocks(page)).map((block) => block.id));
+  await page.evaluate(() => {
+    const { reactEditor } = (window as unknown as DemoWindow).__rivtoDemo;
+    reactEditor.extensions.shared
+      .getFunction<ClipboardListProperties>("rivto.clipboard.list-properties")!
+      .set(() => ({ type: "list", checked: false, hostMarker: "custom" }));
+  });
+  await paste(page, {
+    "text/html": "<ol><li>Custom list item</li></ol>",
+    "text/plain": "fallback",
+  });
+  const inserted = (await blocks(page)).filter((block) => !before.has(block.id));
+  expect(inserted).toHaveLength(1);
+  expect(inserted[0]!.content).toBe("Custom list item");
+  expect(inserted[0]!.listProps).toMatchObject({ type: "list", hostMarker: "custom" });
 });
 
 test("text converters recognize Counter while plain-text paste bypasses them", async ({ page }) => {

@@ -7,7 +7,7 @@ import type { EdgelessCreationTool } from "../../../../managers/edgeless-tools/e
 import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
 import { toolPointer } from "./use-tool-gesture";
 import type { VisualFrame } from "../../../../elements/visuals/types";
-import { showSnapGuides } from "../utils/snap-guides";
+import { showSnapGuides } from "../../../../surfaces/edgeless/snap-guides";
 
 interface PresetDrag {
   pointerId: number;

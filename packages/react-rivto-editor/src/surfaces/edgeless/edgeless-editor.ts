@@ -1,7 +1,7 @@
 import { CanvasEditor } from "@chulane/rivto-edgeless";
 import type { ReactPanelApi } from "../../panels/types";
 import { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
-import { getEdgelessRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import { EdgelessCanvasAdapter } from "./canvas-adapter";
 
 /** Composes one Rivto occurrence's scene, document projection, tools and creation settings. */

@@ -4,6 +4,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from "rea
 import type { EditorBlockNode } from "@chulane/rivto";
 import type { BlockSlotProps } from "../../managers";
 import { useReactPanel } from "../../hooks";
+import { useBlockCollapsed } from "../../hooks/blocks/use-block-collapsed";
 import { editorControlProps } from "../../constants";
 import { PageDragContext } from "../../surfaces/page/page-drag-context";
 import { blockMenuTargets } from "../../managers/block-context-menu/targets";
@@ -32,7 +33,7 @@ export interface BlockHandleOptions extends Pick<DragHandleProps, "clickMovement
    * rendered inside an aria-hidden wrapper; it must not contain interactive controls.
    *
    * @param block - Current detached block snapshot supplied by the rendered slot.
-   * @param collapsed - Whether the block's collapsed list property is true.
+   * @param collapsed - Whether the shared decoration adapter reports the block as collapsed.
    * @returns Decorative React content, or null/undefined to use the default grip.
    */
   readonly renderIcon?: (block: EditorBlockNode, collapsed: boolean) => ReactNode;
@@ -88,7 +89,7 @@ export function BlockHandle({
   const openMenu = (x: number, y: number) => {
     setMenu({ context: blockMenuTargets(reactPanel, block.id), x, y });
   };
-  const collapsed = block.listProps.collapsed === true;
+  const collapsed = useBlockCollapsed(block);
   return (
     <>
       <DragHandle

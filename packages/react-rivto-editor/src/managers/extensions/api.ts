@@ -1,7 +1,10 @@
 import type { ExtensionComponent, ExtensionMountPosition, ReactEditorExtension } from "./types";
+import type { SharedSpaceApi } from "./shared-space";
 
 /** Extension installation, mounted components, and revision subscriptions. */
 export interface ExtensionsApi {
+  /** Editor-local named runtime values shared by extensions. */
+  readonly shared: SharedSpaceApi;
   /**
    * Adds cleanup to the runtime and, during setup, to the active extension.
    * Extension cleanup runs before its registrations; remaining registrations

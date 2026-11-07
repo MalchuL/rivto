@@ -7,9 +7,9 @@
  * @module
  */
 import type { EditorBlock, EditorElementNode, DocumentEditorAPI } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../../../../panels/types";
-import { blockIdsOf } from "../../../../../elements/block-element-projection";
-import { findRenderedBlock } from "../../../../../blocks/block-dom";
+import type { ReactPanelApi } from "../../panels/types";
+import { blockIdsOf } from "../../elements/block-element-projection";
+import { findRenderedBlock } from "../../blocks/block-dom";
 
 const EDGELESS_ROOT_SELECTOR = "[data-edgeless-root]";
 

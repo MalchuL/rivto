@@ -80,7 +80,7 @@ interface ImageViewConfiguration {
   readonly provider: BinaryProvider;
 }
 
-const CUSTOMIZATIONS = new WeakMap<ReactEditorApi, ImageViewConfiguration>();
+const IMAGE_VIEW_CONFIGURATION_KEY = "rivto.image.view-configuration";
 
 /**
  * Installs per-kind image presentation options and a storage provider for one editor.
@@ -96,11 +96,21 @@ export function configureImageViews(
   provider: BinaryProvider,
 ): () => void {
   const configuration = { customizations, provider };
-  CUSTOMIZATIONS.set(editor, configuration);
+  const space = editor.extensions.shared;
+  const release = space.reserve(IMAGE_VIEW_CONFIGURATION_KEY, "value");
+  const shared = space.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)!;
+  shared.set(configuration);
   // An older disposer must not remove a newer configuration for the same editor.
   return () => {
-    if (CUSTOMIZATIONS.get(editor) === configuration) {
-      CUSTOMIZATIONS.delete(editor);
+    try {
+      if (
+        space.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get() ===
+        configuration
+      ) {
+        shared.set(undefined);
+      }
+    } finally {
+      release();
     }
   };
 }
@@ -114,8 +124,8 @@ export function configureImageViews(
  */
 export function imageResizeMode(editor: ReactEditorApi, kind: ImageViewKind): ImageResizeMode {
   return (
-    CUSTOMIZATIONS.get(editor)?.customizations[kind]?.resizeMode ??
-    (kind === "element" ? "stretch" : "letterbox")
+    editor.extensions.shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get()
+      ?.customizations[kind]?.resizeMode ?? (kind === "element" ? "stretch" : "letterbox")
   );
 }
 
@@ -288,11 +298,12 @@ function useImageView({
 }: ImageViewStateProps) {
   const reactPanel = useReactPanel();
   const reactEditor = reactPanel.editor;
+  const shared = reactEditor.extensions.shared;
   // Refresh provider and presentation when extension registrations change.
   const configuration = useSyncExternalStore(
-    (listener) => reactEditor.extensions.subscribe(listener),
-    () => CUSTOMIZATIONS.get(reactEditor),
-    () => CUSTOMIZATIONS.get(reactEditor),
+    (listener) => shared.subscribe(IMAGE_VIEW_CONFIGURATION_KEY, listener),
+    () => shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get(),
+    () => shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get(),
   );
   const provider = configuration?.provider;
   const registered = configuration?.customizations[kind];

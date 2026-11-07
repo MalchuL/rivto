@@ -1,9 +1,9 @@
-import type { ReactEditorApi } from "../../../editor/types";
-import { restoreElementChildren } from "../../../elements/clipboard-element-props";
+import type { ReactEditorApi } from "../../editor/types";
+import { restoreElementChildren } from "../../elements/clipboard-element-props";
 import type {
   ConvertedClipboardElements,
   CreatedClipboardRecords,
-} from "../../../managers/clipboard/types";
+} from "./types";
 /**
  * Recreates first-class canvas elements after core has pasted referenced blocks.
  *
@@ -19,13 +19,13 @@ import type {
   Selection,
 } from "@chulane/rivto";
 import { createStructuralSelection } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../../panels/types";
+import type { ReactPanelApi } from "../../panels/types";
 import {
   blockIdsOf,
   blockRangeProps,
   insertBlockElementSeparator,
-} from "../../../elements/block-element-projection";
-import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless-runtime";
+} from "../../elements/block-element-projection";
+import { createEdgelessSelection, findEdgelessRuntime } from "../selection/edgeless/edgeless-runtime";
 
 /** Canvas-specific clipboard paste strategy. */
 export class ElementPasteStrategy implements PasteStrategy {

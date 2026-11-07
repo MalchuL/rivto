@@ -4,8 +4,8 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 /** Element paste recreates visual-only clipboard bundles in edgeless mode. */
 
 import { createTestCoreEditor } from "../../../test-utils";
-import { findEdgelessRuntime, installEdgelessRuntime } from "../selection/edgeless-runtime";
-import { ElementPasteStrategy } from "./element-paste-strategy";
+import { findEdgelessRuntime, installEdgelessRuntime } from "../../../managers/selection/edgeless/edgeless-runtime";
+import { ElementPasteStrategy } from "../../../managers/clipboard/element-paste-strategy";
 
 describe("ElementPasteStrategy", () => {
   it("clones selected visual elements with fresh IDs and offset geometry", async () => {

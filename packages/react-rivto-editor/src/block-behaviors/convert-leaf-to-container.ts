@@ -1,5 +1,5 @@
 import type { EditorBlockInput } from "@chulane/rivto";
-import type { ReactPanelApi } from "../../panels/types";
+import type { ReactPanelApi } from "../panels/types";
 
 /**
  * Converts an existing leaf block into a container while preserving its ID and text.

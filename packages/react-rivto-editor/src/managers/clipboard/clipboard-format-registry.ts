@@ -14,6 +14,11 @@ import type {
   PortableBlockFormats,
 } from "./types";
 import type { ClipboardConverters } from "./clipboard-converters";
+import type { SharedSpace } from "../extensions/shared-space";
+import {
+  CLIPBOARD_LIST_PROPERTIES_KEY,
+  type ClipboardListProperties,
+} from "./clipboard-list-properties";
 
 /** Escapes text before including it in exported clipboard HTML. */
 export const escapeClipboardHTML = (value: string): string =>
@@ -38,10 +43,12 @@ export class ClipboardFormatRegistry {
    * Creates the React-owned formatter and parser registry.
    * @param registrations - Extension lifecycle owning registered contributions.
    * @param converters - Optional runtime type converters applied before general formatting.
+   * @param shared - Borrowed runtime values used for optional list-item translation.
    */
   constructor(
     private readonly registrations: RegistrationOwner,
-    private readonly converters?: ClipboardConverters,
+    private readonly converters: ClipboardConverters | undefined,
+    private readonly shared: Pick<SharedSpace, "getFunction">,
   ) {}
 
   /**
@@ -231,6 +238,7 @@ export class ClipboardFormatRegistry {
    * Parses portable clipboard content without mounting external markup.
    * Whole-buffer parsers run first; type parsers then claim individual HTML subtrees.
    * Unclaimed containers preserve their children, while scripts and embedded documents are ignored.
+   * The shared list-item translator is captured once for each HTML parse.
    * @param data - Available HTML and plain-text flavors.
    * @param context - Receiving surface and writing-block fallback.
    * @returns Detached block/element inputs, or undefined when only ordinary plain text remains.
@@ -245,6 +253,9 @@ export class ClipboardFormatRegistry {
     }
     const converters = this.converters?.getParsers() ?? [];
     if (data.html && typeof DOMParser !== "undefined") {
+      const listProperties = this.shared
+        .getFunction<ClipboardListProperties>(CLIPBOARD_LIST_PROPERTIES_KEY)
+        ?.get();
       const document = new DOMParser().parseFromString(data.html, "text/html");
       const blocks: EditorBlockInput[] = [];
       const elements: EditorElementInput[] = [];
@@ -286,10 +297,7 @@ export class ClipboardFormatRegistry {
               visit(child, children);
             }
           }
-          const checkbox = element.querySelector('input[type="checkbox"]');
-          const listProps = checkbox
-            ? { type: "checkbox", checked: checkbox.hasAttribute("checked") }
-            : { type: element.parentElement?.tagName === "OL" ? "numbered_list" : "list" };
+          const listProps = listProperties?.(element);
           destination.push({ type: context.defaultBlockType, content, children, listProps });
           return;
         }

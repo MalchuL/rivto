@@ -20,7 +20,7 @@ import {
   KEYBOARD_BINDING_IDS,
   verticalCaretPosition,
 } from "../../../../../managers";
-import { navigationDomRoot } from "../utils/scope";
+import { navigationDomRoot } from "../../../../../surfaces/page/navigation-scope";
 import {
   currentNavigationSelection,
   focusAdjacentEditor,

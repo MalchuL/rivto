@@ -1,4 +1,4 @@
-import { registerBlockListActions } from "../../../block-handle/actions";
+import { registerBlockListActions } from "../actions";
 import { CheckboxBlockBehavior } from "../checkbox-block-behavior";
 import { NumberedListBlockBehavior } from "../numbered-list-block-behavior";
 import { ListBlockBehavior } from "../list-block-behavior";
@@ -7,12 +7,13 @@ import type { ReactEditorApi } from "../../../../../editor/types";
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
 import { createCaretSelection } from "@chulane/rivto";
-import { BlockListSlot } from "../../../../../blocks/block-slot-controls/block-slot-controls";
+import { BlockListSlot } from "../block-list-slot";
 import type { ReactPanelApi } from "../../../../../panels/types";
 import { focusBlock } from "../../../../../managers";
 import type { BlockListType, ListShortcutPatch } from "../types";
 import { BLOCK_LIST_TYPES, isNumberedListType, resolveBlockListNumbers } from "../utils";
 import { listShortcutPatch } from "./utils";
+import { registerBlockConversionDefaults } from "../../../../../blocks/block-conversion-defaults";
 
 /**
  * Installs Markdown-style list conversions at the beginning of block content.
@@ -55,6 +56,7 @@ export function registerListShortcuts(reactEditor: ReactEditorApi): void {
       BLOCK_LIST_TYPES.includes(candidate.type as BlockListType) &&
       typeof candidate.checked === "boolean",
   });
+  registerBlockConversionDefaults(reactEditor.extensions, { type: "list", checked: false });
   reactEditor.blockBehaviors.register(new CheckboxBlockBehavior(), -100);
   reactEditor.blockBehaviors.register(new NumberedListBlockBehavior(), -100);
   reactEditor.blockBehaviors.register(new ListBlockBehavior(), -100);

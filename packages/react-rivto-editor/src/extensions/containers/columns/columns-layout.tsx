@@ -9,6 +9,7 @@ import {
   type BlockLayoutProps,
 } from "@chulane/rivto-page";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
+import { useBlockCollapsed } from "../../../hooks/blocks/use-block-collapsed";
 
 /**
  * Composes a management row and equal-width, headerless content lanes.
@@ -22,12 +23,10 @@ import { useBlockNode } from "../../../hooks/blocks/use-block";
  */
 export function ColumnsLayout({ blockId }: BlockLayoutProps) {
   const { block } = useBlockNode(blockId);
+  const collapsed = useBlockCollapsed(block);
   return (
     <>
-      <BlockRow
-        className="rivto-columns-header"
-        data-collapsed={block?.listProps.collapsed === true}
-      >
+      <BlockRow className="rivto-columns-header" data-collapsed={collapsed}>
         <BlockContent />
       </BlockRow>
       <BlockBody />
@@ -70,7 +69,8 @@ function ColumnBlockItem({ children }: BlockChildrenItemProps) {
  */
 export function ColumnsColumnLayout({ blockId }: BlockLayoutProps) {
   const { block } = useBlockNode(blockId);
-  const showRow = block?.listProps.collapsed === true || block?.childIds.length === 0;
+  const collapsed = useBlockCollapsed(block);
+  const showRow = collapsed || block?.childIds.length === 0;
   return (
     <>
       {showRow && (

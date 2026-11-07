@@ -1,4 +1,4 @@
-import { firstUriListEntry, isLocalFileUri } from "../../file/utils/file-input";
+import { firstUriListEntry, isLocalFileUri } from "../../../attachments/ingestion/file-input";
 
 /** Image filename extensions accepted for local references and browser files. */
 const IMAGE_FILE_EXTENSION = /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i;

@@ -6,27 +6,33 @@ import type {
   FileReference,
   PreparedFile,
 } from "../../../attachments";
-import type { FileIngestion } from "./file-ingestion";
-import type { FileIngestionPoint, FileInputPanel } from "./types";
-import { FileDropFeedback } from "./file-drop-feedback";
+import type { FileIngestion } from "../../../attachments/ingestion/file-ingestion";
+import type { FileIngestionPoint, FileInputPanel } from "../../../attachments/ingestion/types";
+import { FileDropFeedback } from "../../../attachments/ingestion/file-drop-feedback";
 import {
   fileDropDestination,
   filePasteDestination,
   filePickerPoint,
   type FileDestination,
-} from "./file-destination";
+} from "../../../attachments/ingestion/file-destination";
 import {
-  FILE_DROP_EVENT_ID,
-  FILE_PASTE_EVENT_ID,
   hasRedactedUriList,
   getTransferredFiles,
   findLocalFileUri,
   findLocalFileUris,
   findTransferredLocalFileUris,
   createFileReferenceFromUri,
-} from "../utils/file-input";
+} from "../../../attachments/ingestion/file-input";
+import {
+  FILE_INPUT_ROUTING_KEY,
+  type FileInputRouting,
+} from "../../../attachments/ingestion/file-input-routing";
 
 const FILE_INPUT_CLASS = "rivto-file-input";
+/** Event registration that claims generic file paste on the receiving surface. */
+const FILE_PASTE_EVENT_ID = "file.paste";
+/** Event registration that claims generic file drops on the receiving surface. */
+const FILE_DROP_EVENT_ID = "file.drop";
 
 /** Editor operations borrowed while routing generic file input. */
 interface FileInputEditor {
@@ -40,7 +46,9 @@ interface FileInputEditor {
     "createEmptyBlock" | "isEmptyBlock"
   >;
   /** Registers file input listeners. */
-  readonly events: Pick<ReactEditorApi["events"], "register">;
+  readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
+  /** Shared routing capabilities and extension-owned cleanup. */
+  readonly extensions: Pick<ReactEditorApi["extensions"], "shared" | "registerCleanup">;
   /** Registers the file picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
 }
@@ -79,6 +87,40 @@ export class FileInputEvents {
     this.registerDrop();
     this.registerPaste();
     this.registerPicker();
+    this.registerSharedRouting();
+  }
+
+  /**
+   * Publishes this router's event-snapshot ownership to other input extensions.
+   *
+   * @returns The shared function is registered for this extension lifecycle.
+   * @throws If the shared reservation or cleanup registration fails.
+   */
+  private registerSharedRouting(): void {
+    const { shared } = this.editor.extensions;
+    const release = shared.reserve(FILE_INPUT_ROUTING_KEY, "function");
+    const routing = shared.getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)!;
+    const ownsTransfer: FileInputRouting = (event, data) => {
+      let registrationId: string;
+      if (event.type === "drop") {
+        registrationId = FILE_DROP_EVENT_ID;
+      } else if (event.type === "paste") {
+        registrationId = FILE_PASTE_EVENT_ID;
+      } else {
+        return false;
+      }
+      return this.editor.events.has(registrationId, event) && getTransferredFiles(data).length > 0;
+    };
+    routing.set(ownsTransfer);
+    this.editor.extensions.registerCleanup(() => {
+      try {
+        if (shared.getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)?.get() === ownsTransfer) {
+          routing.set(undefined);
+        }
+      } finally {
+        release();
+      }
+    });
   }
 
   /**

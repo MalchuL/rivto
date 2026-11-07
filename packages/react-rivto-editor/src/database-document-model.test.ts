@@ -5,7 +5,7 @@ import { DBDocumentModel, DemoDatabase } from "../../../demo/src/database";
 import { createReactEditor } from "./editor/react-editor";
 import { EditorStorage } from "./editor/editor-storage";
 import { standardPreset } from "./extensions/built-ins/built-ins";
-import { CrossDocumentBlockTransfer } from "./extensions/built-ins/clipboard/cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "./managers/clipboard/cross-document-block-transfer";
 
 const element = {
   childIds: [],

@@ -11,6 +11,7 @@
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { scheduleBlockFocus } from "./utils/focus-ops";
+import { updatePageBlockDecorations } from "../blocks/page-block-decorations";
 import type {
   BlockBehavior,
   BlockBehaviorAvailabilityContext,
@@ -64,7 +65,7 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
     const { reactPanel, block, root } = context;
     let child: EditorBlock | undefined;
     reactPanel.batchUpdates(() => {
-      reactPanel.blocks.updateBlock(block.id, { listProps: { collapsed: false } });
+      updatePageBlockDecorations(reactPanel, block.id, { collapsed: false });
       child = reactPanel.blocks.insertBlock(
         reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
         { parentId: block.id },

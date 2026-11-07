@@ -1,5 +1,5 @@
 import { createCaretSelection, type PanelDestination } from "@chulane/rivto";
-import { validateBinaryUri, type BinaryProvider, type PreparedFile } from "../../../attachments";
+import { validateBinaryUri, type BinaryProvider, type PreparedFile } from "..";
 import {
   isFileDestinationCurrent,
   retryFileDestination,

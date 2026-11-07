@@ -2,8 +2,8 @@ import { createTestCoreEditor, createTestReactEditor } from "../../../test-utils
 import { paragraphBlockFactory } from "../../../block-factories";
 import { fileExtension } from "../file";
 import { kanbanExtension } from "../../containers/kanban/kanban";
-import { FileIngestion } from "./file-ingestion";
-import type { FileIngestionStatus, FileIngestionStatuses } from "./types";
+import { FileIngestion } from "../../../attachments/ingestion/file-ingestion";
+import type { FileIngestionStatus, FileIngestionStatuses } from "../../../attachments/ingestion/types";
 
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 

@@ -5,7 +5,7 @@ import { EdgelessControlsAdapter } from "./edgeless-controls-adapter";
 import { useEditorRoot, useReactPanel, useElements } from "../../hooks";
 import { SurfaceContext } from "../../surfaces/surface";
 import { useEdgelessCanvas } from "../../surfaces/edgeless/edgeless-tools-context";
-import { useEdgelessSelection } from "../built-ins/selection/edgeless-runtime";
+import { useEdgelessSelection } from "../../managers/selection/edgeless/edgeless-runtime";
 import type { EdgelessTransformController } from "./edgeless-transform";
 
 /**

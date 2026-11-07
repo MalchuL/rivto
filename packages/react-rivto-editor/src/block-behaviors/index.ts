@@ -12,7 +12,6 @@ export { createBlockBehaviorContext } from "./utils/context";
 export { DefaultBlockBehavior } from "./default-block-behavior";
 export { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 export {
-  convertEmptyToList,
   mergeBlocks,
   resetToWritingType,
   splitBlockAt,

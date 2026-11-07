@@ -1,7 +1,7 @@
 import type { PanelEventsApi } from "../../managers/events/api";
 import { CanvasMarquee, CanvasViewport } from "@chulane/rivto-edgeless/browser";
 import type { ReactPanelApi } from "../../panels/types";
-import type { EdgelessSelectionRuntime } from "../built-ins/selection/edgeless-runtime";
+import type { EdgelessSelectionRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
 import { groupParentByChild, outermostGroupId } from "./edgeless-geometry";
 

@@ -8,7 +8,7 @@ import {
   inlineDestination,
   isFileDestinationCurrent,
   retryFileDestination,
-} from "./file-destination";
+} from "../../../attachments/ingestion/file-destination";
 
 test("rejects a captured block gap when its neighbors change", async () => {
   const core = await createTestCoreEditor();

@@ -21,7 +21,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useEditorRoot, useReactPanel } from "../../../hooks";
-import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
+import { useEdgelessSelection } from "../../../managers/selection/edgeless/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
 import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";

@@ -10,7 +10,7 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../../managers";
 import { blockSelection } from "../utils/block-selection";
 import { keyboardMovePlacement } from "../utils/move-placement";
 import { selectedMoveRoots } from "../utils/move-roots";
-import { navigationOutlineBlocks } from "../utils/scope";
+import { navigationOutlineBlocks } from "../../../../../surfaces/page/navigation-scope";
 import {
   currentNavigationSelection,
   focusBlockSelection,

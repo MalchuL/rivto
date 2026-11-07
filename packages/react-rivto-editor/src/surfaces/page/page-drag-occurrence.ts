@@ -5,9 +5,9 @@ import {
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
 import type { EditorBlock } from "@chulane/rivto";
-import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
-import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
-import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
+import type { CrossDocumentPageRootController } from "./page-drag-types";
+import type { CrossDocumentBlockPanel } from "./cross-document/panel";
+import { crossDocumentPageRootControllers } from "./cross-document/target";
 
 /** One registered Page receiving attachment, shared by writing-page and canvas sources. */
 export class PageDragOccurrence implements CrossDocumentPageRootController {

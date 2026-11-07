@@ -12,7 +12,7 @@ import { SurfaceContext } from "../../surfaces/surface";
 import { useEffect, useMemo } from "react";
 import { useEditorRoot, useKeyboardEvent, useReactPanel } from "../../hooks";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 /**
  * Owns whole-block selection on the edgeless canvas.
  *

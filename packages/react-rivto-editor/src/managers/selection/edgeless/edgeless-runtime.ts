@@ -11,6 +11,7 @@ import { isStructuralSelection, type Selection } from "@chulane/rivto";
 import { useSyncExternalStore } from "react";
 import { useReactPanelContext } from "../../../hooks/editor/use-react-panel-context";
 import type { ReactPanelApi } from "../../../panels/types";
+import { EDGELESS_SELECTION_RUNTIMES_KEY, type EdgelessSelectionRuntimes } from "./shared";
 
 const EDGELESS_SELECTION_PLUGIN_KEY = "edgelessSelection";
 
@@ -177,64 +178,74 @@ export class EdgelessSelectionRuntime {
   }
 }
 
-// Installation belongs to the shared editor; adapters read through each panel's
-// bound selection API so identical element IDs in other panels stay unselected.
-const runtimes = new WeakMap<
-  ReactEditorApi["extensions"],
-  WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>
->();
+/** Tracks the optional extension's ownership of selection cleanup. */
+const EDGELESS_SELECTION_INSTALLATION_KEY = "rivto.edgeless.selection-installation";
 
 /**
- * Installs the core-backed canvas selection adapter for one React editor.
- * @param editor - Owning React editor instance.
- * @returns Disposer that removes the adapter.
+ * Installs optional selection cleanup for one React editor or panel.
+ *
+ * Adapters remain editor-owned and available independently of this installation.
+ * Removing the installation clears its selection data without destroying the
+ * shared adapters used by other consumers.
+ *
+ * @param editor - Owning React editor instance or panel occurrence.
+ * @returns Idempotent disposer that clears this installation's selection state.
+ * @throws If selection cleanup is already installed or the editor is destroyed.
  */
 export function installEdgelessRuntime(editor: ReactPanelApi | ReactEditorApi): () => void {
   const documentEditor = "editor" in editor ? editor.editor : editor;
-  if (runtimes.has(documentEditor.extensions)) {
+  const space = documentEditor.extensions.shared;
+  if (space.getValue<symbol>(EDGELESS_SELECTION_INSTALLATION_KEY)?.get()) {
     throw new Error("Edgeless selection runtime is already installed");
   }
-  const runtime = new EdgelessSelectionRuntime(editor);
-  const adapters = new WeakMap<ReactPanelApi | ReactEditorApi, EdgelessSelectionRuntime>();
-  adapters.set(editor, runtime);
-  runtimes.set(documentEditor.extensions, adapters);
+  const runtime = getEdgelessRuntime(editor);
+  const release = space.reserve(EDGELESS_SELECTION_INSTALLATION_KEY, "value");
+  const installation = space.getValue<symbol>(EDGELESS_SELECTION_INSTALLATION_KEY)!;
+  const token = Symbol("edgeless selection installation");
+  installation.set(token);
   return () => {
-    if (runtimes.get(documentEditor.extensions) !== adapters) {
-      return;
+    try {
+      if (space.getValue<symbol>(EDGELESS_SELECTION_INSTALLATION_KEY)?.get() === token) {
+        installation.set(undefined);
+        runtime.destroy();
+      }
+    } finally {
+      release();
     }
-    runtimes.delete(documentEditor.extensions);
-    runtime.destroy();
   };
 }
 
 /**
- * Returns the installed canvas selection adapter.
+ * Returns the editor-owned canvas selection adapter.
  * Panel-bound APIs receive a cached adapter that reads their local selection;
- * installation and cleanup remain owned by the shared extension runtime.
+ * adapters remain available independently of optional extension installation.
  * @param editor - Owning React editor instance or its document-bound panel API.
- * @returns Installed adapter.
+ * @returns The adapter for this editor or panel occurrence.
+ * @throws If the owning editor's shared space has been destroyed.
  */
 export function getEdgelessRuntime(
   editor: ReactPanelApi | ReactEditorApi,
 ): EdgelessSelectionRuntime {
   const runtime = findEdgelessRuntime(editor);
   if (!runtime) {
-    throw new Error("Install edgelessSelectionExtension before edgeless interactions");
+    throw new Error("Edgeless selection runtime is unavailable after editor destruction");
   }
   return runtime;
 }
 
 /**
- * Returns the optional installed adapter.
- * Panel-bound APIs receive a cached adapter while the shared extension is installed.
+ * Returns the editor-owned adapter while the shared runtime is active.
+ * Panel-bound APIs receive a cached adapter independently of optional extensions.
  * @param editor - Owning React editor instance or its document-bound panel API.
- * @returns Installed adapter, or undefined.
+ * @returns The adapter, or undefined after its editor's shared space is destroyed.
  */
 export function findEdgelessRuntime(
   editor: ReactPanelApi | ReactEditorApi,
 ): EdgelessSelectionRuntime | undefined {
   const documentEditor = "editor" in editor ? editor.editor : editor;
-  const adapters = runtimes.get(documentEditor.extensions);
+  const adapters = documentEditor.extensions.shared
+    .getValue<EdgelessSelectionRuntimes>(EDGELESS_SELECTION_RUNTIMES_KEY)
+    ?.get();
   if (!adapters) {
     return undefined;
   }

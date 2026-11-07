@@ -15,7 +15,7 @@ import { TestPanel } from "../../test-utils";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { createTestCoreEditor as createEditor, createTestMultiEditor } from "../../test-utils";
 
-import { BlockCollapseSlot } from "../../blocks/block-slot-controls/block-slot-controls";
+import { BlockCollapseSlot } from "../../extensions/built-ins/page/collapse/block-collapse-slot";
 import { bentoExtension, createBentoBlockInput } from "../../extensions/containers/bento/bento";
 import {
   columnsExtension,

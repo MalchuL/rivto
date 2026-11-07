@@ -1,5 +1,5 @@
-import { useBlockEditing } from "../../hooks";
-import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE, editorControlProps } from "../../constants";
+import { useBlockEditing } from "../hooks";
+import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE, editorControlProps } from "../constants";
 
 /** Shared collapsed summary surface; empty expanded anchors remain unstyled. */
 export const CONTAINER_SUMMARY_CLASS = "rivto-container-summary";

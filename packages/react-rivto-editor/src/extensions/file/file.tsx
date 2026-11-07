@@ -9,6 +9,7 @@
  * @module
  */
 import { escapeHtml } from "../../utils/escape-html";
+import { registerMarkdownExtension } from "../../blocks/markdown/markdown-extensions";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
 import type { ReactEditorApi } from "../../editor/types";
@@ -19,9 +20,10 @@ import type { BinaryProvider, FileReference } from "../../attachments";
 import { FileView, RegisteredFileView } from "./view/file-view";
 import { configureFileProvider } from "./view/file-configuration";
 import { serializeFileMacro } from "./macro/file-macro";
-import { FileIngestion } from "./ingestion/file-ingestion";
+import { fileMarkdownExtension } from "./macro/markdown";
+import { FileIngestion } from "../../attachments/ingestion/file-ingestion";
 import { FileInputEvents } from "./ingestion/file-input-events";
-import { FileUploadStatusOverlay, FileUploadStatusStore } from "./ingestion/file-upload-status";
+import { FileUploadStatusOverlay, FileUploadStatusStore } from "../../attachments/ingestion/file-upload-status";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
@@ -206,6 +208,7 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
     id: "file",
     // Keep provider configuration, pending uploads, and registrations extension-owned.
     setup: (reactEditor) => {
+      registerMarkdownExtension(reactEditor.extensions, fileMarkdownExtension);
       const disposeFileViews = configureFileProvider(reactEditor, options.provider);
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);

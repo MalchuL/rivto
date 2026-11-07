@@ -1,6 +1,6 @@
-import type { BlockFactory } from "../../../../block-factories";
-import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
-import type { MarkdownLinkClick } from "../../../../types";
+import type { BlockFactory } from "../../block-factories";
+import type { BlockRenderer, ReactBlockSlashCommand } from "../../managers";
+import type { MarkdownLinkClick } from "../../types";
 
 /** Minimal block shape used by empty-block keyboard predicates. */
 export interface EmptyBlockCandidate {

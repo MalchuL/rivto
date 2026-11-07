@@ -3,8 +3,33 @@ import { ChildrenPanel } from "@chulane/rivto";
 import { YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import { createCaretSelection } from "@chulane/rivto";
-import { createTestMultiEditor } from "../../../../test-utils";
+import {
+  createTestCoreEditor,
+  createTestMultiEditor,
+  createTestReactEditor,
+} from "../../../../test-utils";
+import {
+  BLOCK_PASTE_CHILDREN_KEY,
+  type BlockPasteChildren,
+} from "../../../../managers/clipboard/block-paste-children";
 import { registerCollapse } from "./register";
+
+test("exposes and releases structural paste placement with collapse installation", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  const shared = panel.editor.extensions.shared;
+  expect(shared.getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)).toBeUndefined();
+  const remove = panel.editor.extensions.install({ id: "collapse", setup: registerCollapse });
+  const canPaste = shared.getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)?.get();
+  const parent = core.blocks.insertBlock({ type: "paragraph", children: [{ type: "paragraph" }] });
+  expect(canPaste?.(core.blocks.getBlockNode(parent.id)!)).toBe(true);
+  core.blocks.updateBlock(parent.id, { listProps: { collapsed: true } });
+  expect(canPaste?.(core.blocks.getBlockNode(parent.id)!)).toBe(false);
+  remove();
+  expect(shared.getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)).toBeUndefined();
+  await panel.editor.destroy();
+  await core.destroy();
+});
 
 test.each([
   ["block", 10],

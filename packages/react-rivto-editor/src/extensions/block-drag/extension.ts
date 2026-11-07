@@ -8,7 +8,7 @@
  */
 import type { ReactEditorExtension } from "../../managers";
 import { registerPageDrag } from "./register";
-import type { PageDragExtensionOptions } from "./types";
+import type { PageDragExtensionOptions } from "../../surfaces/page/page-drag-types";
 
 /** Page drag configuration excluding the wrapper-owned React children slot. */
 export type PageDragOptions = Omit<PageDragExtensionOptions, "children">;
