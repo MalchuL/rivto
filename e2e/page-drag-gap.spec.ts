@@ -665,20 +665,45 @@ test("hovering a row body still puts the drop inside that block", async ({ page 
   await expect.poll(readParent).toBeNull();
 });
 
+/**
+ * Checks child and sibling depth choices on both sides of the first child seam.
+ *
+ * @param page - Page with an active drag.
+ * @param parentRow - Parent row above the seam.
+ * @param sourceRow - First child row below the seam.
+ * @returns Resolves after both depth choices retain their shared line.
+ */
+async function sweepFirstChildBoundary(page: Page, parentRow: Locator, sourceRow: Locator) {
+  const parent = (await parentRow.boundingBox())!;
+  const source = (await sourceRow.boundingBox())!;
+  const line = page.locator(DROP_LINE_SELECTOR);
+  const sibling = (await line.boundingBox())!;
+  for (const y of [parent.y + parent.height - 1, source.y + 1]) {
+    await page.mouse.move(source.x + 50, y);
+    await expect(line).toBeVisible();
+    const child = (await line.boundingBox())!;
+    expect(child.x).toBeGreaterThan(sibling.x);
+    expect(child.y).toBeCloseTo(sibling.y, 0);
+    await page.mouse.move(parent.x + CHILD_DROP_INDENT / 2, y);
+    await expect(line).toBeVisible();
+    const current = (await line.boundingBox())!;
+    expect(current.x).toBeCloseTo(sibling.x, 0);
+    expect(current.y).toBeCloseTo(sibling.y, 0);
+  }
+}
+
 test("shows the only-child outdent line on its parent's bottom edge", async ({ page }) => {
   await page.setViewportSize({ width: 635, height: 360 });
   const cases = [
     {
       parentId: REPORT_PARENT_ID,
       sourceId: REPORT_LEVEL_2_ID,
-      nextId: REPORT_NEXT_ID,
       expectedParentId: null,
       expectedSiblings: [REPORT_PARENT_ID, REPORT_LEVEL_2_ID, REPORT_NEXT_ID, REPORT_ANOTHER_ID],
     },
     {
       parentId: REPORT_LEVEL_3_ID,
       sourceId: REPORT_LEVEL_4_ID,
-      nextId: REPORT_LEVEL_3_NEXT_ID,
       expectedParentId: REPORT_LEVEL_2_ID,
       expectedSiblings: [REPORT_LEVEL_3_ID, REPORT_LEVEL_4_ID, REPORT_LEVEL_3_NEXT_ID],
     },
@@ -688,24 +713,20 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
     await loadSingleChildReport(page);
     const parent = page.locator(`[data-block-id="${scenario.parentId}"]`).first();
     const source = page.locator(`[data-block-id="${scenario.sourceId}"]`).first();
+    const parentRow = parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
+    const sourceRow = source.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
     await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
     await holdDragAt(page, source, async () => {
       await parent.evaluate((element) => element.scrollIntoView({ block: "center" }));
-      const box = (await parent.boundingBox())!;
+      const box = (await parentRow.boundingBox())!;
       return { x: box.x + CHILD_DROP_INDENT / 2, y: box.y + box.height - 2 };
     });
-    const parentRowBox = (await parent.boundingBox())!;
+    const parentRowBox = (await parentRow.boundingBox())!;
     const line = page.locator(DROP_LINE_SELECTOR);
     await expect(line).toBeVisible();
     const lineBox = (await line.boundingBox())!;
-    const nextBox = (await page
-      .locator(`[data-block-id="${scenario.nextId}"]`)
-      .first()
-      .boundingBox())!;
-    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(
-      (parentRowBox.y + parentRowBox.height + nextBox.y) / 2,
-      0,
-    );
+    expect(lineBox.y + lineBox.height / 2).toBeCloseTo(parentRowBox.y + parentRowBox.height, 0);
+    await sweepFirstChildBoundary(page, parentRow, sourceRow);
     await page.mouse.up();
     await expect
       .poll(() =>
@@ -726,6 +747,55 @@ test("shows the only-child outdent line on its parent's bottom edge", async ({ p
         siblings: [...scenario.expectedSiblings],
       });
   }
+});
+
+test("selects ancestor depths at the first child boundary", async ({ page }) => {
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+    editor.blocks.insertBlock({
+      id: "outer",
+      type: "paragraph",
+      content: "Outer",
+      children: [
+        {
+          id: "parent",
+          type: "paragraph",
+          content: "Parent",
+          children: [{ id: "source", type: "paragraph", content: "Source" }],
+        },
+      ],
+    });
+    editor.blocks.insertBlock({ id: "tail", type: "paragraph", content: "Tail" });
+  });
+  const outer = (await page.locator('[data-block-id="outer"] > .rivto-block-row').boundingBox())!;
+  const parent = (await page.locator('[data-block-id="parent"] > .rivto-block-row').boundingBox())!;
+  const source = page.locator('[data-block-id="source"]');
+  const sourceRow = (await source.locator(":scope > .rivto-block-row").boundingBox())!;
+  await holdDragAt(page, source, parent.x + 12, parent.y + parent.height - 1);
+  const line = page.locator(DROP_LINE_SELECTOR);
+  const positions: number[] = [];
+  for (const x of [outer.x + 12, parent.x + 12, sourceRow.x + 50]) {
+    await page.mouse.move(x, sourceRow.y + 1);
+    await expect(line).toBeVisible();
+    const box = (await line.boundingBox())!;
+    positions.push(box.x);
+    expect(box.y + box.height / 2).toBeCloseTo(parent.y + parent.height, 0);
+  }
+  expect(positions[0]!).toBeLessThan(positions[1]!);
+  expect(positions[1]!).toBeLessThan(positions[2]!);
+  await page.mouse.move(outer.x + 12, sourceRow.y + 1);
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
+        ).__rivtoDemo.editor.blocks.getParentId("source"),
+      ),
+    )
+    .toBeNull();
 });
 
 test("keeps the report's parent body and next-block top edge drop zones", async ({ page }) => {

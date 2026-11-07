@@ -117,8 +117,15 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       nativeHit?.isConnected && nativeHit.ownerDocument === root.ownerDocument
         ? nativeHit
         : root.ownerDocument.elementFromPoint(clientX, clientY);
-    // Geometry chooses exactly one candidate before model and source policy run.
-    const candidate = this.resolvePoint(hit, { x: clientX, y: clientY }, excluded);
+    const point = { x: clientX, y: clientY };
+    // When all children move, the first-child seam also exposes the parent's
+    // trailing depth choices. Otherwise resolve the ordinary hit geometry.
+    // Both paths choose one candidate before destination and source validation.
+    const candidate =
+      (hit &&
+        this.isEditorHit(root, hit) &&
+        this.resolveFirstChildBoundaryForMovingChildren(hit, point, excluded)) ??
+      this.resolvePoint(hit, point, excluded);
     if (!candidate) {
       return undefined;
     }
@@ -778,5 +785,111 @@ export class BlockDropTargets implements BlockDropTargetsApi {
       ...target,
       outlineElement: parentId === null ? undefined : this.regions.get(parentId, "shell"),
     };
+  }
+
+  /**
+   * Exposes the parent's row boundary when all its children are being moved.
+   *
+   * Only an ordinary outline participates. The live child list prevents hidden
+   * or stationary children from being bypassed. Both sides of the first child
+   * boundary share the parent's existing trailing depth choices and line.
+   *
+   * @param hit - Native hit inside the editor.
+   * @param point - Current viewport pointer coordinates.
+   * @param excluded - Captured moving root IDs.
+   * @returns Parent row boundary at the chosen outline depth, otherwise undefined.
+   */
+  private resolveFirstChildBoundaryForMovingChildren(
+    hit: Element,
+    point: BlockDropPoint,
+    excluded?: ReadonlySet<string>,
+  ): ResolvedBlockDropTarget | undefined {
+    const hitShell = hit.closest<HTMLElement>("[data-block-id]");
+    const hitId = hitShell?.dataset.blockId;
+    // The pointer can be in an ancestor gutter outside the moving child's shell.
+    const onlySource = excluded?.size === 1 ? excluded.values().next().value : undefined;
+    const id = onlySource ? this.blocks.getParentId(onlySource) : hitId;
+    const shell = id ? this.regions.get(id, "shell") : undefined;
+    // A gutter hit may belong to an ancestor, but an unrelated block, excluded
+    // control, or self-contained child layout must keep its own drop behavior.
+    if (
+      !shell ||
+      !id ||
+      !hitShell ||
+      (!shell.contains(hitShell) && !hitShell.contains(shell)) ||
+      !excluded?.size ||
+      hit.closest(`[${BLOCK_DROP_EXCLUDE_ATTRIBUTE}]`) ||
+      !continuesDropOutline(shell)
+    ) {
+      return;
+    }
+    const children = this.blocks.getBlockNode(id)?.childIds;
+    const row = this.regions.get(id, "row", shell);
+    // Use canonical children, including unmounted ones: a stationary child
+    // must not be crossed by a sibling drop on the parent's row.
+    if (!row || !children?.length || !children.every((child) => excluded.has(child))) {
+      return;
+    }
+    return this.resolveFirstChildBoundaryDepth(shell, row, children[0]!, hit, point);
+  }
+
+  /**
+   * Applies the parent's declared trailing depth choices at its first child boundary.
+   *
+   * @param shell - Registered parent shell containing the child layout.
+   * @param row - Parent's registered own row.
+   * @param childId - First canonical child, already known to be moving.
+   * @param hit - Native hit inside this editor occurrence.
+   * @param point - Viewport pointer coordinates.
+   * @returns The shared depth choice at the row boundary, or undefined outside it.
+   */
+  private resolveFirstChildBoundaryDepth(
+    shell: HTMLElement,
+    row: HTMLElement,
+    childId: string,
+    hit: Element,
+    point: BlockDropPoint,
+  ): ResolvedBlockDropTarget | undefined {
+    const id = shell.dataset.blockId!;
+    const geometry = readDropGeometry(shell);
+    const rowRect = row.getBoundingClientRect();
+    // The shell includes descendants; substitute only the row bounds so the
+    // existing trailing edge paints and resolves depth at the first-child seam.
+    const rowGeometry = { ...geometry, rect: rowRect };
+    for (const entry of this.targets.get(shell) ?? []) {
+      for (const region of entry.getRegions()) {
+        if (region.kind !== "edge" || region.side !== "block-end" || !region.depth) {
+          continue;
+        }
+        const edge = dropEdgeRect(region, rowGeometry);
+        const first = this.regions.get(childId, "row", shell)?.getBoundingClientRect();
+        // Extend the same edge through the adjacent first-child strip, but do
+        // not bridge a larger layout gap or target an unmounted first child.
+        if (
+          !first ||
+          first.top - rowRect.bottom > edge.height ||
+          point.y < edge.top ||
+          point.y > first.top + edge.height
+        ) {
+          continue;
+        }
+        // Clamp only Y: the shared trailing-edge resolver still uses the actual
+        // horizontal pointer position to choose sibling and ancestor depths.
+        const edgePoint = { x: point.x, y: Math.min(point.y, rowRect.bottom) };
+        if (!containsDropRegion(shell, region, rowGeometry, edgePoint, hit)) {
+          continue;
+        }
+        const target = dropRegionTarget(entry, region, rowGeometry, edgePoint);
+        if (target.destination.kind === "inside" && target.destination.parentId === id) {
+          // The child-depth choice here inserts before the first child, not after it.
+          return {
+            ...target,
+            destination: { kind: "between", parentId: id, previousId: null, nextId: childId },
+          };
+        }
+        return target;
+      }
+    }
+    return;
   }
 }
