@@ -1,0 +1,69 @@
+.rivto-canvas-comments {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rivto-side-block-width, min(280px, 35vw));
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.rivto-canvas-comments-content {
+  min-width: 0;
+  min-height: 0;
+}
+
+.rivto-canvas-comments-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--rivto-background);
+  border-inline-start: 1px solid var(--rivto-border);
+}
+
+.rivto-comment {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rivto-border);
+  border-radius: var(--rivto-radius, 8px);
+  background: var(--rivto-background);
+  color: var(--rivto-foreground);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+.rivto-comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rivto-comment-message p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rivto-comment textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--rivto-border);
+  background: transparent;
+  color: inherit;
+}
+
+.rivto-comment button {
+  padding: 3px 6px;
+  border: 1px solid var(--rivto-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rivto-comment button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -167,6 +167,226 @@ body {
   background: var(--rivto-background);
 }
 
+/* Flow notes sit outside the paper without changing its width or block spacing. */
+.journal-stack:has(.rivto-side-blocks) {
+  overflow: visible;
+  --rivto-side-block-width: min(220px, max(120px, calc((100vw - 720px) / 2 - 24px)));
+}
+
+.demo-side-note {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  color: var(--rivto-foreground);
+  padding: 34px 12px 12px;
+  border: 1px solid var(--side-note-border);
+  border-radius: 14px;
+  background: var(--side-note-fill);
+  box-shadow: 0 3px 12px rgb(20 25 40 / 6%);
+}
+
+.demo-side-note[data-appearance="editor"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.demo-side-note[data-border-style="dashed"] {
+  border-color: transparent;
+}
+
+.demo-side-note-border {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--side-note-border);
+  stroke-width: 1px;
+  stroke-dasharray: 6 4;
+}
+
+.demo-side-note[data-border-animated="true"] .demo-side-note-border rect {
+  animation: demo-side-note-dashes 1s linear infinite;
+}
+
+@keyframes demo-side-note-dashes {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-side-note[data-border-animated="true"] .demo-side-note-border rect {
+    animation: none;
+  }
+}
+
+.demo-side-note-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  z-index: 2;
+}
+
+@media (hover: hover) {
+  .demo-side-note-controls {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .demo-side-note:hover .demo-side-note-controls,
+  .demo-side-note:focus-within .demo-side-note-controls,
+  .demo-side-note-controls:has([aria-expanded="true"]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.demo-side-note-settings,
+.demo-side-note-settings label {
+  display: grid;
+  gap: 6px;
+}
+.demo-side-note-color-field {
+  display: grid;
+  gap: 6px;
+  color: var(--rivto-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.demo-side-note-color-field .block-color-swatches {
+  flex-wrap: wrap;
+  padding: 3px 0;
+}
+
+.demo-side-note-settings {
+  gap: 14px;
+  color: var(--rivto-foreground);
+  font-size: 13px;
+}
+.demo-side-note-settings-heading {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rivto-border);
+}
+.demo-side-note-settings-heading span {
+  color: var(--rivto-muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.demo-side-note-settings-heading strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.demo-side-note-settings label {
+  color: var(--rivto-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.demo-side-note-settings select {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--rivto-border);
+  border-radius: 8px;
+  background: var(--rivto-background);
+  color: var(--rivto-foreground);
+}
+.demo-side-note-settings select:focus-visible {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 2px;
+}
+.demo-side-note-settings .demo-side-note-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.demo-side-note-settings input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--rivto-accent);
+}
+.demo-side-note-settings .demo-side-note-toggle {
+  padding-top: 10px;
+  border-top: 1px solid var(--rivto-border);
+  color: var(--rivto-foreground);
+}
+
+.demo-side-note .rivto-virtual-tree {
+  display: grid;
+  gap: 8px;
+}
+
+.rivto-side-block-card {
+  padding: 4px;
+}
+
+.rivto-side-block-card,
+.demo-side-note-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.rivto-side-block-card > .rivto-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.demo-side-note-actions {
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.demo-side-note button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--demo-chrome-muted);
+  cursor: pointer;
+}
+
+.demo-side-note button:hover,
+.demo-side-note button:focus-visible {
+  background: var(--demo-chrome-hover);
+  color: var(--demo-chrome-ink);
+}
+
+.demo-side-note:focus-within {
+  outline: 2px solid var(--rivto-accent);
+  outline-offset: 2px;
+}
+
+/* On narrow screens the flow notes follow the page instead of covering it. */
+@media (max-width: 1000px) {
+  .journal-stack .rivto-side-blocks-layer {
+    display: grid;
+    gap: 8px;
+  }
+
+  .journal-stack
+    .rivto-side-block[data-side-block-spacing="flow"]:has([data-side-note])
+    .rivto-side-block-connector {
+    display: none;
+  }
+
+  .journal-stack .rivto-side-block[data-side-block-spacing="flow"]:has([data-side-note]) {
+    position: static;
+    width: 100%;
+  }
+}
+
 .journal-document + .journal-document {
   border-top: 1px solid var(--rivto-border);
 }
@@ -206,7 +426,8 @@ body {
 }
 
 /* Full document pages keep writing space; embedded subtrees fit their content. */
-.journal-document > .page-surface {
+.journal-document > .page-surface,
+.journal-document > .rivto-side-blocks > .rivto-side-blocks-content > .page-surface {
   min-height: 160px;
 }
 

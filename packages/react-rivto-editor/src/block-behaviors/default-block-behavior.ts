@@ -119,7 +119,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
     if (parentId === null) {
       return "handled";
     }
-    const destination = reactPanel.document.blocks.getInsertionDestinationAfter(parentId);
+    const localDestination = reactPanel.blocks.getInsertionDestinationAfter(parentId);
+    const destination =
+      "root" in localDestination
+        ? { parentId: reactPanel.rootBlockId ?? null, beforeId: localDestination.beforeId }
+        : localDestination;
     const boundary = roots.findIndex(
       (id) => reactPanel.blocks.getParentId(id) === destination.parentId,
     );
@@ -319,9 +323,15 @@ export class DefaultBlockBehavior implements BlockBehavior {
       const node = reactPanel.blocks.getBlockNode(id);
       return node ? [node] : [];
     });
+    const blocks =
+      reactPanel.rootBlockId &&
+      destination.parentId === reactPanel.rootBlockId &&
+      !reactPanel.blocks.hasBlock(reactPanel.rootBlockId)
+        ? reactPanel.document.blocks
+        : reactPanel.blocks;
     return (
       sources.length === ids.length &&
-      reactPanel.editor.blockBehaviors.canMove({ sources, destination })
+      reactPanel.editor.blockBehaviors.canMove({ sources, destination }, blocks)
     );
   }
 }

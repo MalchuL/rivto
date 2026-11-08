@@ -63,6 +63,9 @@ describe("DocumentPluginDataManager", () => {
     document.pluginData.setField("visual", "one", { x: 1 });
 
     expect(document.pluginData.get("neighbor")).toEqual({ retained: true });
+    const ids = document.pluginData.getIds();
+    expect(ids).toEqual(expect.arrayContaining(["neighbor", "visual"]));
+    expect(ids).toHaveLength(2);
     expect(document.getSnapshot().pluginData).toEqual({
       neighbor: { retained: true },
       visual: { one: { x: 1 } },

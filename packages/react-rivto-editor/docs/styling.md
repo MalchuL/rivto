@@ -120,6 +120,9 @@ their existing `24px` inline-start control reservation. Headers, card interiors
 and gaps between siblings retain their own styling. Kanban card lists retain
 zero padding inside the lane's existing chrome. This is presentation space,
 independent of `--rivto-drop-target-size` and `dropGutterSize` interaction geometry.
+Columns stack their lanes when the available local width, after padding and gaps,
+cannot accommodate them side by side. Their drop axis and dividers follow the
+displayed flow. Side-block surfaces use compact container spacing by default.
 
 ## Scoped reset
 

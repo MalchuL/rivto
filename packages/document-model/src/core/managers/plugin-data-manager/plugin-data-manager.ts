@@ -37,6 +37,15 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   }
 
   /**
+   * Lists plugin namespace IDs without reading or cloning their values.
+   *
+   * @returns A detached array in the adapter's current iteration order.
+   */
+  getIds(): readonly string[] {
+    return [...this.root.keys()];
+  }
+
+  /**
    * Reads a detached plugin namespace.
    *
    * @param pluginId - Stable plugin namespace identifier.

@@ -5,7 +5,9 @@ test("composition keeps DOM ownership and commits the final text through bound o
   const core = await createTestCoreEditor();
   const editor = createTestReactEditor({ editor: core });
   const block = core.blocks.insertBlock({ type: "paragraph", content: "Before" });
+  const commits: string[] = [];
   const controller = new BlockEditingController((content) => {
+    commits.push(content);
     editor.editor.blocks.updateBlock(block.id, { content });
   });
   const element = {
@@ -24,6 +26,8 @@ test("composition keeps DOM ownership and commits the final text through bound o
   controller.onCompositionEnd({ currentTarget: element } as Parameters<
     typeof controller.onCompositionEnd
   >[0]);
+  controller.onInput({ currentTarget: element } as Parameters<typeof controller.onInput>[0]);
+  expect(commits).toEqual(["入力"]);
   expect(editor.editor.blocks.getBlockNode(block.id)?.content).toBe("入力");
   controller.synchronize("After");
   expect(element.textContent).toBe("After");

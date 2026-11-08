@@ -52,6 +52,7 @@ type BlockListenerEvents = Record<
 >;
 
 const ROOTS_KEY = "rivto.editor.roots";
+const ADDITIONAL_ROOTS_KEY = "rivto.editor.additional-block-roots";
 const BLOCKS_KEY = "rivto.editor.blocks";
 /** One subtree placement in an ordered batch of block moves. */
 interface BlockMove {
@@ -98,6 +99,8 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   private lastStructureTransaction?: unknown;
   /** Root blocks. */
   private readonly roots: CRDTArray<IDBlock>;
+  /** Roots owned by document collections outside the page's root list. */
+  private readonly additionalRoots: CRDTArray<IDBlock>;
   /** Block storage. */
   private readonly storage: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
   /** Adapter roots tracked by document-owned history. */
@@ -109,8 +112,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    */
   constructor(private readonly crdt: CRDTDoc) {
     this.roots = crdt.getArray<IDBlock>(ROOTS_KEY);
+    this.additionalRoots = crdt.getArray<IDBlock>(ADDITIONAL_ROOTS_KEY);
     this.storage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
-    this.historyScopes = [this.storage, this.roots];
+    this.historyScopes = [this.storage, this.roots, this.additionalRoots];
     this.cache = new BlockCache(
       (parentId) => {
         if (parentId === null) {
@@ -120,6 +124,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         return isCRDTMap(block) ? strings(this.requiredArray(block, "children")) : undefined;
       },
       (id) => this.storage.has(id),
+      () => strings(this.additionalRoots),
     );
     this.cache.refreshParents();
     // Nested maps name the owning block in `path` / `keys`. Child-list
@@ -129,6 +134,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     // The roots array is not a field on any block, so these events have an
     // empty path and cannot name a parent for `invalidateBlocks`.
     this.roots.observe((events, transaction) => this.onRootsChanged(transaction));
+    this.additionalRoots.observe((events, transaction) => this.onRootsChanged(transaction));
   }
 
   /** @returns Monotonic revision incremented by block data or hierarchy changes. */
@@ -202,6 +208,27 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       const block = this.readBlock(id, new Set());
       return block ? [block] : [];
     });
+  }
+
+  /**
+   * Materializes root trees stored outside the page's root list.
+   *
+   * @returns Detached additional root blocks with their descendants.
+   */
+  getAdditionalBlocks(): Block[] {
+    return strings(this.additionalRoots).flatMap((id) => {
+      const block = this.readBlock(id, new Set());
+      return block ? [block] : [];
+    });
+  }
+
+  /**
+   * Reads the ordered roots stored outside the page without materializing their trees.
+   *
+   * @returns Additional root IDs in collaborative array order.
+   */
+  getAdditionalRootIds(): readonly string[] {
+    return strings(this.additionalRoots);
   }
 
   /**
@@ -312,10 +339,15 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     if (!block.type) {
       throw new Error("Block type is required");
     }
-    const container =
-      destination.parentId === null
-        ? this.roots
-        : this.requiredArray(this.requiredBlock(destination.parentId), "children");
+    if (destination.additional && destination.parentId !== null) {
+      throw new Error("Additional root placement cannot specify a parent");
+    }
+    let container: CRDTArray<string>;
+    if (destination.parentId !== null) {
+      container = this.requiredArray(this.requiredBlock(destination.parentId), "children");
+    } else {
+      container = destination.additional ? this.additionalRoots : this.roots;
+    }
     let afterId: string | null | undefined;
     // Appending needs only the container length; do not materialize all existing siblings.
     if (destination.beforeId !== undefined) {
@@ -435,7 +467,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       ? this.cache.snapshotParents()
       : undefined;
     const oldRoots = new Set(this.cache.getIndexedChildren(null));
-    const newRoots = new Set(strings(this.roots));
+    const newRoots = new Set([...strings(this.roots), ...strings(this.additionalRoots)]);
     const changedRoots = new Set(
       [...oldRoots, ...newRoots].filter((id) => oldRoots.has(id) !== newRoots.has(id)),
     );
@@ -806,21 +838,32 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Replaces the complete block tree inside the caller's snapshot transaction.
+   * Replaces supplied block forests inside the caller's snapshot transaction.
    *
    * Every supplied block is validated before existing collaborative state is
    * cleared, preventing malformed snapshots from partially replacing data.
    *
-   * @param blocks - Portable root block trees that become the stored document.
+   * @param blocks - Portable page root trees, or undefined to preserve them.
+   * @param additionalBlocks - Portable root trees outside the page, or undefined to preserve them.
    * @returns No value.
    * @throws {Error} When list properties or child collections are malformed.
    */
-  loadBlocks(blocks: readonly Block[]): void {
-    this.validateBlocks(blocks);
+  loadBlocks(blocks?: readonly Block[], additionalBlocks?: readonly Block[]): void {
+    this.validateBlocks([
+      ...(blocks ?? this.getBlocks()),
+      ...(additionalBlocks ?? this.getAdditionalBlocks()),
+    ]);
     this.cache.clearPaths();
-    this.roots.delete(0, this.roots.length);
-    this.storage.clear();
-    blocks.forEach((block) => this.insertInto(block, this.roots));
+    if (blocks) {
+      strings(this.roots).forEach((id) => this.removeTree(id));
+      this.roots.delete(0, this.roots.length);
+    }
+    if (additionalBlocks) {
+      strings(this.additionalRoots).forEach((id) => this.removeTree(id));
+      this.additionalRoots.delete(0, this.additionalRoots.length);
+    }
+    blocks?.forEach((block) => this.insertInto(block, this.roots));
+    additionalBlocks?.forEach((block) => this.insertInto(block, this.additionalRoots));
   }
 
   /**
@@ -842,8 +885,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * Repair duplicate, missing, and orphaned tree references deterministically.
    * Block payloads are retained even when a concurrent move leaves an orphan.
    *
-   * Orphaned blocks are appended to the root list, while duplicate and missing
-   * references are removed.
+   * Both root lists and all child lists count as placements. Orphaned blocks
+   * are appended to the page root list, while duplicate and missing references
+   * are removed.
    * @returns No value.
    */
   normalize(): void {
@@ -860,6 +904,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         }
       };
       clean(this.roots);
+      clean(this.additionalRoots);
       for (const value of Array.from(this.storage.values())) {
         if (isCRDTMap(value)) {
           clean(this.requiredArray(value, "children"));
@@ -928,6 +973,15 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     if (parentId === undefined) {
       throw new Error(`Target block ${afterId} not found`);
     }
+    const location = parentId === null ? this.findContainer(afterId) : undefined;
+    if (location && location.path[0]! < 0) {
+      const siblings = strings(this.additionalRoots);
+      return {
+        parentId: null,
+        additional: true,
+        beforeId: siblings[siblings.indexOf(afterId) + 1],
+      };
+    }
     const siblings = parentId === null ? this.getRootIds() : this.getChildIds(parentId);
     return { parentId, beforeId: siblings[siblings.indexOf(afterId) + 1] };
   }
@@ -966,6 +1020,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
         });
       };
       visit(this.roots, null);
+      visit(this.additionalRoots, null);
     }
     const simulatedParents = new Map<string, string | null>();
     /**
@@ -1392,10 +1447,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     if (!path.length) {
       return undefined;
     }
-    let array = this.roots;
+    // A negative first index addresses the additional root list; later indexes
+    // always address ordinary child lists.
+    let array = path[0]! < 0 ? this.additionalRoots : this.roots;
     let parentId: string | undefined;
     for (let depth = 0; depth < path.length; depth += 1) {
-      const index = path[depth]!;
+      const index = depth === 0 && path[depth]! < 0 ? -path[depth]! - 1 : path[depth]!;
       if (!Number.isInteger(index) || index < 0 || index >= array.length) {
         return undefined;
       }
@@ -1417,7 +1474,7 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
-   * Finds one identifier by walking only root and child arrays.
+   * Finds one identifier by walking the root lists and child arrays.
    *
    * @param id - Block identifier to search for.
    * @returns Root-to-block sibling indexes, or undefined when unplaced.
@@ -1452,7 +1509,12 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
       }
       return undefined;
     };
-    return visit(this.roots, []);
+    const pagePath = visit(this.roots, []);
+    if (pagePath) {
+      return pagePath;
+    }
+    const additionalPath = visit(this.additionalRoots, []);
+    return additionalPath ? [-additionalPath[0]! - 1, ...additionalPath.slice(1)] : undefined;
   }
 
   /**

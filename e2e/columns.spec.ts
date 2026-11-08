@@ -1,6 +1,6 @@
 import { blockDropRegion } from "./drop-regions";
 /** Browser regression for headerless columns layout and column-count settings. */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 /**
@@ -41,6 +41,51 @@ async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
   await page.locator(`[data-editor-mode="${mode}"]`).click();
 }
 
+/**
+ * Moves the first writing block into the next lane using its registered after region.
+ *
+ * @param page - Browser containing the board and pointer interaction.
+ * @param lanes - Ordered canonical lane locators.
+ * @returns The moved block ID after the destination and feedback are verified.
+ */
+async function moveFirstWritingBetweenLanes(page: Page, lanes: Locator): Promise<string> {
+  const source = lanes.first().locator('[data-block-type="paragraph"]').first();
+  const target = lanes.nth(1).locator('[data-block-type="paragraph"]').first();
+  const sourceId = (await source.getAttribute("data-block-id"))!;
+  const targetId = (await target.getAttribute("data-block-id"))!;
+  const laneId = (await lanes.nth(1).getAttribute("data-block-id"))!;
+  const row = source.locator(":scope > .rivto-block-row");
+  await row.hover();
+  const handle = row.locator(".block-handle");
+  await handle.hover();
+  const from = (await handle.boundingBox())!;
+  const to = (await (await blockDropRegion(target, "after")).boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
+  // The board's declared outer region inserts before the complete board.
+  // Use the child's registered after region inside the receiving lane.
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+  await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        ({ sourceId, targetId, laneId }) => {
+          const blocks = window.__rivtoDemo.editor.blocks;
+          const children = blocks.getBlockNode(laneId)!.childIds;
+          return (
+            blocks.getParentId(sourceId) === laneId &&
+            children.indexOf(sourceId) === children.indexOf(targetId) + 1
+          );
+        },
+        { sourceId, targetId, laneId },
+      ),
+    )
+    .toBe(true);
+  return sourceId;
+}
+
 for (const mode of ["block", "edgeless"] as const) {
   for (const key of ["Enter", "Space"] as const) {
     test(`restores the empty writing target after deleting the last child with ${key} in ${mode}`, async ({
@@ -71,41 +116,54 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`moves writing between populated headerless columns in ${mode}`, async ({ page }) => {
     await openUnequalColumns(page, mode);
     const lanes = page.locator('[data-block-type="columns-column"]');
-    const source = lanes.first().locator('[data-block-type="paragraph"]').first();
-    const target = lanes.nth(1).locator('[data-block-type="paragraph"]').first();
-    const sourceId = (await source.getAttribute("data-block-id"))!;
-    const targetId = (await target.getAttribute("data-block-id"))!;
+    await moveFirstWritingBetweenLanes(page, lanes);
+  });
+  test(`stacks narrow columns and moves writing between them in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await openUnequalColumns(page, mode);
+    const board = page.locator('[data-block-type="columns"]').first();
+    const host = board.locator(":scope > .rivto-block-children");
+    await expect(host).toHaveAttribute("data-block-drop-axis", "horizontal");
+    await board.evaluate((element) => {
+      (element as HTMLElement).style.width = "300px";
+    });
+    await expect(host).toHaveAttribute("data-block-drop-axis", "vertical");
+    const lanes = board.locator('[data-block-type="columns-column"]');
+    const first = (await lanes.nth(0).boundingBox())!;
+    const second = (await lanes.nth(1).boundingBox())!;
+    expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+    const divider = await host
+      .locator(":scope > .rivto-block-item")
+      .nth(1)
+      .evaluate((element) => {
+        const style = getComputedStyle(element, "::after");
+        return { width: parseFloat(style.width), height: parseFloat(style.height) };
+      });
+    expect(divider.width).toBeGreaterThan(100);
+    expect(divider.height).toBe(1);
     const laneId = (await lanes.nth(1).getAttribute("data-block-id"))!;
-    const row = source.locator(":scope > .rivto-block-row");
-    await row.hover();
-    const handle = row.locator(".block-handle");
-    await handle.hover();
-    const from = (await handle.boundingBox())!;
-    const to = (await (await blockDropRegion(target, "after")).boundingBox())!;
-    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
-    // The board's declared outer region inserts before the complete board.
-    // Use the child's registered after region inside the receiving lane.
-    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
-    await expect(page.locator(".rivto-block-drop-line:visible")).toHaveCount(1);
-    await page.mouse.up();
+    await page.evaluate(() => window.__rivtoDemo.editor.history.clear());
+    const sourceId = await moveFirstWritingBetweenLanes(page, lanes);
+    await page.evaluate(() => window.__rivtoDemo.editor.history.undo());
     await expect
-      .poll(() =>
-        page.evaluate(
-          ({ sourceId, targetId, laneId }) => {
-            const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-              .__rivtoDemo.editor;
-            const children = editor.blocks.getBlockNode(laneId)!.childIds;
-            return (
-              editor.blocks.getParentId(sourceId) === laneId &&
-              children.indexOf(sourceId) === children.indexOf(targetId) + 1
-            );
-          },
-          { sourceId, targetId, laneId },
-        ),
-      )
-      .toBe(true);
+      .poll(() => page.evaluate((id) => window.__rivtoDemo.editor.blocks.getParentId(id), sourceId))
+      .not.toBe(laneId);
+    await board.evaluate((element) => {
+      (element as HTMLElement).style.width = "";
+    });
+    await expect(host).toHaveAttribute("data-block-drop-axis", "horizontal");
+    await board.evaluate((element) => {
+      (element as HTMLElement).style.width = "500px";
+    });
+    await expect(host).toHaveAttribute("data-block-drop-axis", "horizontal");
+    await host.evaluate((element) => {
+      (element as HTMLElement).style.setProperty("--rivto-container-padding", "40px");
+    });
+    await expect(host).toHaveAttribute("data-block-drop-axis", "vertical");
+    await host.evaluate((element) => {
+      (element as HTMLElement).style.removeProperty("--rivto-container-padding");
+    });
+    await expect(host).toHaveAttribute("data-block-drop-axis", "horizontal");
   });
   test(`extends every divider to the tallest column in ${mode} mode`, async ({ page }) => {
     await openUnequalColumns(page, mode);

@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import type { DocumentModel } from "@chulane/document-model";
+import type { PanelAPI } from "@chulane/rivto";
 import type {
   BlockContextMenuContext,
   BlockContextMenuEntry,
@@ -15,43 +17,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal,
 } from "../ui/dropdown-menu";
-import {
-  CopyIcon,
-  ScissorsIcon,
-  Trash2Icon,
-  ListIcon,
-  ListTodoIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  LinkIcon,
-} from "lucide-react";
 
 const MENU_CLASS = "block-context-menu rounded-xl border-border/80 p-1.5 shadow-xl";
 const ITEM_CLASS = "block-context-menu-item rounded-md text-[13px]";
-
-const actionIcons = {
-  "clipboard.copy": CopyIcon,
-  "clipboard.cut": ScissorsIcon,
-  "block.delete": Trash2Icon,
-  list: ListIcon,
-  "type.todo-item": ListTodoIcon,
-  "block.collapse": ChevronsDownUpIcon,
-  "block.expand": ChevronsUpDownIcon,
-  "embedding.copy": LinkIcon,
-};
-
-/**
- * Renders decorative artwork for a known built-in menu entry.
- *
- * @param props - Identity of the entry whose artwork is requested.
- * @param props.id - Registration ID used to look up the built-in icon.
- * @returns An aria-hidden icon, or null when no artwork is mapped; the caller
- * still renders the entry's text label.
- */
-function ActionIcon({ id }: { id: string }) {
-  const Icon = actionIcons[id as keyof typeof actionIcons];
-  return Icon ? <Icon aria-hidden="true" /> : null;
-}
 
 /**
  * Renders available entries at one level of the block context menu.
@@ -112,14 +80,18 @@ function MenuEntries({
       return (
         <Item
           checked={entry.isChecked?.(context)}
-          variant={entry.id === "block.delete" ? "destructive" : "default"}
+          variant={entry.variant}
           key={entry.id}
           className={ITEM_CLASS}
           onSelect={() => {
             void context.reactPanel.blockContextMenu.execute(entry.id, context);
           }}
         >
-          {!entry.isChecked && <ActionIcon id={entry.id} />}
+          {!entry.isChecked && entry.icon && (
+            <span aria-hidden="true">
+              <entry.icon />
+            </span>
+          )}
           {entry.title}
         </Item>
       );
@@ -147,10 +119,10 @@ interface BlockContextMenuProps {
 /**
  * Mounts an open, nonmodal menu at the captured pointer or keyboard anchor.
  *
- * Registry revisions refresh the available entries. A zero-size fixed trigger
- * anchors the portaled content; collision handling keeps it within the viewport.
+ * Registry revisions and document updates refresh the available entries, including
+ * actions whose availability depends on children or other document data. A zero-size fixed trigger anchors the portaled content; collision
+ * handling keeps it within the viewport.
  * Dismissal notifies the owning handle and restores focus to its button when present.
- * Document edits do not independently trigger a registry subscription update.
  *
  * @param props - Captured invocation context and focus ownership.
  * @param props.context - Invoking panel and document-local target IDs.
@@ -166,6 +138,12 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
     (listener) => registry.subscribe(listener),
     () => registry.revision,
   );
+  const sources = context.reactPanel.editor.blockSources;
+  useSyncExternalStore(
+    (listener) => sources.subscribe(listener),
+    () => sources.revision,
+  );
+  useMenuUpdates(context.reactPanel.editor.getDocument(), context.reactPanel.blocks);
   return (
     <DropdownMenu
       open
@@ -202,6 +180,95 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
 }
 
 /**
+ * Refreshes a mounted menu when its borrowed document or panel collection changes.
+ *
+ * A local revision avoids traversing selected blocks and advances on subscription
+ * so an update between render and subscription cannot leave the menu stale.
+ * Both subscriptions are removed when the menu unmounts or its inputs change.
+ *
+ * @param document - Borrowed document publishing local and remote updates.
+ * @param blocks - Invoking panel's structural collection and its change subscription.
+ * @returns Schedules menu rendering after document or panel collection updates.
+ * @throws If a subscription cannot be established.
+ */
+function useMenuUpdates(
+  document: Pick<DocumentModel, "subscribe">,
+  blocks: Pick<PanelAPI["blocks"], "subscribeStructure">,
+): void {
+  const source = useMemo(() => {
+    let revision = 0;
+    return {
+      /**
+       * Observes both sources and advances the local snapshot for each update.
+       *
+       * @param listener - Callback asking React to read the new revision.
+       * @returns Disposer releasing the document and block subscriptions.
+       * @throws If either subscription cannot be established.
+       */
+      subscribe(listener: () => void) {
+        const notify = () => {
+          revision += 1;
+          listener();
+        };
+        const release = subscribeMenuUpdates(document, blocks, notify);
+        revision += 1;
+        return release;
+      },
+      /**
+       * Reads the current local document-update revision.
+       *
+       * @returns Revision captured by the current mounted menu.
+       */
+      getSnapshot() {
+        return revision;
+      },
+    };
+  }, [document, blocks]);
+  useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot);
+}
+
+/**
+ * Observes document and panel changes for one open menu.
+ *
+ * @param document - Document change stream borrowed by the menu.
+ * @param blocks - Panel collection change stream borrowed by the menu.
+ * @param listener - Callback notified by either stream.
+ * @returns Disposer that attempts both releases.
+ * @throws If setup or cleanup fails, including errors from either source.
+ */
+function subscribeMenuUpdates(
+  document: Pick<DocumentModel, "subscribe">,
+  blocks: Pick<PanelAPI["blocks"], "subscribeStructure">,
+  listener: () => void,
+): () => void {
+  const releaseDocument = document.subscribe(listener);
+  let releaseBlocks: () => void;
+  try {
+    releaseBlocks = blocks.subscribeStructure(listener);
+  } catch (error) {
+    try {
+      releaseDocument();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Menu subscription setup failed");
+    }
+    throw error;
+  }
+  return () => {
+    const errors: unknown[] = [];
+    for (const release of [releaseBlocks, releaseDocument]) {
+      try {
+        release();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length) {
+      throw new AggregateError(errors, "Menu subscription cleanup failed");
+    }
+  };
+}
+
+/**
  * Renders a submenu trigger and its nested extension contributions.
  *
  * The shared menu primitives own keyboard navigation and focus. Child entries are
@@ -229,7 +296,11 @@ function BlockSubmenu({
   return (
     <DropdownMenuSub key={entry.id}>
       <DropdownMenuSubTrigger className={ITEM_CLASS}>
-        <ActionIcon id={entry.id} />
+        {entry.icon && (
+          <span aria-hidden="true">
+            <entry.icon />
+          </span>
+        )}
         {entry.title}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>

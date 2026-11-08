@@ -1,0 +1,70 @@
+.rivto-side-blocks {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.rivto-side-blocks[data-reserve-right="true"] {
+  grid-template-columns: minmax(0, 1fr) var(--rivto-side-block-width, min(280px, 35vw));
+  column-gap: var(--rivto-side-block-gap, 16px);
+}
+
+.rivto-side-blocks-content {
+  min-width: 0;
+}
+
+.rivto-side-block-content {
+  /* Compact shared container spacing keeps nested controls usable in side cards. */
+  --rivto-container-padding: var(--rivto-slot-gap, 4px);
+}
+
+.rivto-side-block-content [data-block-selection-anchor]:empty:not([data-block-content]) {
+  min-height: var(--rivto-default-block-height, 24px);
+}
+
+.rivto-side-block-content
+  .rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty) {
+  position: relative;
+  pointer-events: auto;
+}
+
+.rivto-side-blocks-layer {
+  position: static;
+}
+
+.rivto-side-block {
+  position: absolute;
+  inset-inline-end: 0;
+  width: var(--rivto-side-block-width, min(280px, 35vw));
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.rivto-side-block[data-side-block-placement="left"] {
+  inset-inline: auto;
+  right: calc(100% + var(--rivto-side-block-gap, 16px));
+}
+
+.rivto-side-blocks[data-reserve-right="false"]
+  .rivto-side-block[data-side-block-placement="right"] {
+  inset-inline: auto;
+  left: calc(100% + var(--rivto-side-block-gap, 16px));
+}
+
+.rivto-side-block[data-side-block-placement="full"] {
+  inset-inline-start: 0;
+  width: 100%;
+}
+
+.rivto-side-block-connector {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--rivto-border);
+  stroke-width: 1.5px;
+}

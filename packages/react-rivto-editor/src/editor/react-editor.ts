@@ -1,5 +1,6 @@
 import { AttachmentManager } from "../attachments/attachment-manager";
 import { BlockContextMenuRegistry } from "../managers/block-context-menu/registry";
+import { BlockSourceRegistry } from "../managers/blocks/block-source-registry";
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
@@ -184,6 +185,8 @@ export class ReactEditor implements ReactEditorApi {
   readonly keyboard: KeyboardManager;
   /** Dedicated extension-owned block menu contributions. */
   readonly blockContextMenu: BlockContextMenuRegistry;
+  /** Persistent block collections registered by installed extensions. */
+  readonly blockSources: BlockSourceRegistry;
   /** React-owned slash-command registry. */
   readonly slashCommands: SlashCommandRegistry;
   private destroyed = false;
@@ -222,6 +225,7 @@ export class ReactEditor implements ReactEditorApi {
     const slashCommands = new SlashCommandRegistry(extensions);
     this.slashCommands = slashCommands;
     this.blockContextMenu = new BlockContextMenuRegistry(extensions);
+    this.blockSources = new BlockSourceRegistry(extensions);
     // Release shared registrations after extension cleanup has finished using them.
     // Reverse registration order preserves teardown order; each failure is isolated.
     extensions.registerCleanup(() => this.panels.destroy());

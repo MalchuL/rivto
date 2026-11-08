@@ -13,6 +13,40 @@ const BENTO_TILES_SELECTOR =
 // Page owns the tile placement in both writing pages and canvas cards.
 const BENTO_ITEMS_SELECTOR = ":scope > .rivto-block-children > .rivto-bento-tile";
 
+for (const mode of ["block", "edgeless"]) {
+  test(`Enter adds a child to a structurally selected empty Bento in ${mode}`, async ({ page }) => {
+    await page.goto("/?test_features=1");
+    await page.evaluate((view) => {
+      const editor = window.__rivtoDemo.editor;
+      const board = editor.blocks.getBlocks().find((block) => block.type === "bento")!;
+      editor.load({
+        ...editor.dump(),
+        blocks: [{ ...board, children: [] }],
+        elements: [],
+        rootElementIds: [],
+      });
+      if (view === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 800, height: 600 },
+          props: { startBlockId: board.id, endBlockId: board.id },
+        });
+      }
+    }, mode);
+    if (mode === "edgeless") {
+      await page.locator('[data-editor-mode="edgeless"]').click();
+    }
+    const board = page.locator('[data-block-type="bento"]');
+    await board.locator(".block-handle").click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await board.locator("xpath=ancestor::*[@data-rivto-surface][1]").focus();
+    await page.keyboard.press("Enter");
+    await expect(board.locator(BENTO_ITEMS_SELECTOR)).toHaveCount(1);
+  });
+}
+
 /**
  * Drags one Bento edge handle by a horizontal pixel delta.
  *

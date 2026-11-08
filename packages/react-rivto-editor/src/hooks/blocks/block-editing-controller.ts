@@ -6,12 +6,24 @@ export class BlockEditingController {
   readonly elementRef: RefObject<HTMLDivElement | null> = { current: null };
   private syncedElement: HTMLDivElement | null = null;
   private composing = false;
+  private content: string | undefined;
 
   /** Creates local state only; React attaches the ref and runs synchronization after commit. */
   constructor(private readonly setContent: (content: string) => void) {}
 
-  /** Reconciles command or remote text before paint; an active IME retains ownership. */
+  /**
+   * Reconciles command or remote text before paint while preserving an active text selection.
+   *
+   * A selection can remain inside an editable after focus moves to a menu or
+   * another control. Restoring that stale selection would move focus back into
+   * the editor, so only an active editable retains its browser selection.
+   * An active IME retains DOM ownership until composition finishes.
+   *
+   * @param content - Current document text to display outside composition.
+   * @returns Updates the editable text and, when applicable, its native selection.
+   */
   synchronize(content: string): void {
+    this.content = content;
     const element = this.elementRef.current;
     if (!element || this.composing) {
       return;
@@ -22,7 +34,11 @@ export class BlockEditingController {
     const wasMounted = this.syncedElement === element;
     this.syncedElement = element;
     if (element.textContent !== content) {
-      const selection = wasMounted ? saveDOMSelection(element) : null;
+      const active = element.ownerDocument.activeElement;
+      const selection =
+        wasMounted && active && "isContentEditable" in active && active.isContentEditable === true
+          ? saveDOMSelection(element)
+          : null;
       element.textContent = content;
       restoreDOMSelection(element, selection);
     }
@@ -54,6 +70,10 @@ export class BlockEditingController {
   private commit(element: HTMLDivElement): void {
     // ponytail: composition commits whole plain text; use beforeinput deltas if
     // concurrent character-level IME merging becomes a demonstrated need.
-    this.setContent(element.textContent ?? "");
+    const content = element.textContent ?? "";
+    if (content !== this.content) {
+      this.setContent(content);
+      this.content = content;
+    }
   }
 }

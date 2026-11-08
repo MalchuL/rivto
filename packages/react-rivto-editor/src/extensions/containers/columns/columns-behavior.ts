@@ -27,7 +27,7 @@ export const COLUMNS_COLUMN_BLOCK_TYPE = "columns-column";
  * When every column of a board is removed, children are placed after the board
  * so they stay in the document instead of being deleted with the shells.
  *
- * @param editor - Core editor owning the block tree.
+ * @param editor - Invoking panel or core editor owning the block tree.
  * @param columnIds - Column identifiers whose children must survive.
  * @returns Nothing; callers delete the empty shells afterwards.
  */
@@ -35,28 +35,28 @@ export function relocateColumnContents(
   editor: ReactPanelApi | DocumentEditorAPI,
   columnIds: readonly string[],
 ): void {
-  const documentEditor = "editor" in editor ? editor.document : editor;
+  const { blocks } = editor;
   const unique = [...new Set(columnIds)].filter(
-    (id) => documentEditor.blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
+    (id) => blocks.getBlockNode(id)?.type === COLUMNS_COLUMN_BLOCK_TYPE,
   );
   unique.forEach((id) => {
-    const parentId = documentEditor.blocks.getParentId(id);
-    if (!parentId || documentEditor.blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) {
+    const parentId = blocks.getParentId(id);
+    if (!parentId || blocks.getBlockNode(parentId)?.type !== COLUMNS_BLOCK_TYPE) {
       return;
     }
-    const keep = (documentEditor.blocks.getBlockNode(parentId)?.childIds ?? []).filter(
+    const keep = (blocks.getBlockNode(parentId)?.childIds ?? []).filter(
       (childId) =>
-        documentEditor.blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE &&
+        blocks.getBlockNode(childId)?.type === COLUMNS_COLUMN_BLOCK_TYPE &&
         !unique.includes(childId),
     );
-    const childIds = documentEditor.blocks.getBlockNode(id)?.childIds ?? [];
+    const childIds = blocks.getBlockNode(id)?.childIds ?? [];
     if (!childIds.length) {
       return;
     }
     if (keep.length) {
-      documentEditor.blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
+      blocks.moveBlocks([...childIds], keep.at(-1)!, "inside");
     } else {
-      documentEditor.blocks.moveBlocks([...childIds], parentId, "after");
+      blocks.moveBlocks([...childIds], parentId, "after");
     }
   });
 }

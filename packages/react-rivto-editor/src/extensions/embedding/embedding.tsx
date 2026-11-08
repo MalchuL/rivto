@@ -1,16 +1,29 @@
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
-import { Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link2Icon, LinkIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { z } from "zod";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { editorControlProps } from "../../constants";
 import { EditorEmbed } from "../../components/editor-embed/editor-embed";
+import { ReactPanelProvider } from "../../components/editor-panel/react-panel-provider";
+import type { ReactEditorApi } from "../../editor/types";
+import type { BlockSourceAddress } from "../../managers/blocks/block-source-registry";
 import type { BlockResolution } from "../../editor/editor-storage";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
-import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";
+import { useBlockNode, useBlockSelectionAnchor, usePanel, useReactPanel } from "../../hooks";
 import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 import { PageSurface } from "../../surfaces/page";
@@ -61,6 +74,10 @@ export interface EmbeddingProps extends Record<string, unknown> {
   /** Empty means search the containing document before other documents. */
   readonly targetDocumentId: string;
   readonly targetBlockId: string;
+  /** Optional registered collection source containing the target block. */
+  readonly targetSourceId?: string;
+  /** Stable collection identity within the registered source. */
+  readonly targetCollectionId?: string;
 }
 
 /** Renders the selectable reference anchor without adding a header above the source editor. */
@@ -114,10 +131,16 @@ function EmbeddingControls({ block }: BlockSlotProps) {
           onSubmit={(event) => {
             event.preventDefault();
             const fields = new FormData(event.currentTarget);
+            const documentId = String(fields.get("targetDocumentId") ?? "").trim();
+            const blockId = String(fields.get("targetBlockId") ?? "").trim();
+            const unchanged =
+              documentId === props.targetDocumentId && blockId === props.targetBlockId;
             panel.blocks.updateBlock(block.id, {
               props: {
-                targetDocumentId: String(fields.get("targetDocumentId") ?? "").trim(),
-                targetBlockId: String(fields.get("targetBlockId") ?? "").trim(),
+                targetDocumentId: documentId,
+                targetBlockId: blockId,
+                targetSourceId: unchanged ? props.targetSourceId : undefined,
+                targetCollectionId: unchanged ? props.targetCollectionId : undefined,
               },
             });
             setOpen(false);
@@ -191,19 +214,42 @@ function EmbeddingControls({ block }: BlockSlotProps) {
  */
 function EmbeddingBody({ block }: BlockSlotProps) {
   const blockId = block.id;
-  const panel = usePanel();
+  const panel = useReactPanel();
   const ancestors = useContext(ancestryContext);
-  const { targetDocumentId, targetBlockId } = block.props as EmbeddingProps;
+  const { targetDocumentId, targetBlockId, targetSourceId, targetCollectionId } =
+    block.props as EmbeddingProps;
+  const collection =
+    targetSourceId && targetCollectionId
+      ? { sourceId: targetSourceId, collectionId: targetCollectionId }
+      : undefined;
   const preferredDocumentId = targetDocumentId || panel.document.getDocument().id;
-  const targetAddress = JSON.stringify([preferredDocumentId, targetBlockId]);
-  const ownAddress = JSON.stringify([panel.document.getDocument().id, blockId]);
+  const targetAddress = JSON.stringify([
+    preferredDocumentId,
+    targetSourceId ?? "",
+    targetCollectionId ?? "",
+    targetBlockId,
+  ]);
+  const ownSource = panel.editor.blocks.hasBlock(blockId)
+    ? undefined
+    : panel.editor.blockSources.find(blockId);
+  const ownAddress = JSON.stringify([
+    panel.document.getDocument().id,
+    ownSource?.sourceId ?? "",
+    ownSource?.collectionId ?? "",
+    blockId,
+  ]);
   const references = useContext(EditorStorageContext);
   const refreshEvents = useContext(refreshEventsContext);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [location, setLocation] = useState<
     BlockResolution & { targetAddress: string; settled: boolean; error?: unknown }
   >({ targetAddress: "", settled: false, ambiguous: false });
-  const resolvedAddress = JSON.stringify([location.documentId, targetBlockId]);
+  const resolvedAddress = JSON.stringify([
+    location.documentId,
+    targetSourceId ?? "",
+    targetCollectionId ?? "",
+    targetBlockId,
+  ]);
   const locationIsCurrent = location.targetAddress === targetAddress;
   const cycle =
     locationIsCurrent && (ancestors.includes(resolvedAddress) || resolvedAddress === ownAddress);
@@ -219,6 +265,15 @@ function EmbeddingBody({ block }: BlockSlotProps) {
       return { targetAddress, settled: false, ambiguous: false };
     });
     if (!targetBlockId || !references) {
+      return;
+    }
+    if (collection) {
+      setLocation({
+        targetAddress,
+        settled: true,
+        ambiguous: false,
+        documentId: preferredDocumentId,
+      });
       return;
     }
     return references.blockReferences.subscribeBlockLocation(
@@ -302,9 +357,18 @@ function EmbeddingBody({ block }: BlockSlotProps) {
             </div>
           )}
           <div className={`${EMBEDDED_SURFACE_CLASS} min-w-0 max-w-full`} hidden={Boolean(error)}>
-            <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}>
-              <PageSurface />
-            </EditorEmbed>
+            {collection ? (
+              <CollectionEmbedding
+                editor={source}
+                address={collection}
+                blockId={targetBlockId}
+                active={!error}
+              />
+            ) : (
+              <EditorEmbed editor={source} rootBlockId={targetBlockId} active={!error}>
+                <PageSurface />
+              </EditorEmbed>
+            )}
           </div>
         </ancestryContext.Provider>
       ) : (
@@ -319,6 +383,108 @@ function EmbeddingBody({ block }: BlockSlotProps) {
         </div>
       )}
     </>
+  );
+}
+
+/** Source editor and persisted address for a collection-backed reference. */
+interface CollectionEmbeddingProps {
+  /** Acquired editor owning the source and its lifecycle. */
+  readonly editor: ReactEditorApi;
+  /** Persistent source and collection identity. */
+  readonly address: BlockSourceAddress;
+  /** Referenced block root. */
+  readonly blockId: string;
+  /** Whether this occurrence may receive interaction. */
+  readonly active: boolean;
+}
+
+/**
+ * Renders a protected reference panel through a registered persistent source.
+ *
+ * @param props - Acquired editor, collection address and target identity.
+ * @param props.editor - Acquired source editor retained by the parent reference.
+ * @param props.address - Persistent source and collection identity.
+ * @param props.blockId - Referenced block root.
+ * @param props.active - Whether the panel may receive interaction.
+ * @returns Editable source subtree or an unavailable status.
+ * A source disappearing before its panel mounts leaves creation pending until
+ * its subscription publishes the unavailable state.
+ */
+function CollectionEmbedding({ editor, address, blockId, active }: CollectionEmbeddingProps) {
+  const { sourceId, collectionId } = address;
+  const identity = JSON.stringify([sourceId, collectionId, blockId]);
+  const seen = useRef<{ identity: string; present: boolean }>({ identity, present: false });
+  if (seen.current.identity !== identity) {
+    seen.current = { identity, present: false };
+  }
+  const availability = useCollectionAvailability(editor, address, blockId);
+  const createPanel = useCallback(
+    (runtime: ReactEditorApi) =>
+      runtime.blockSources.createPanel({ sourceId, collectionId }, blockId),
+    [sourceId, collectionId, blockId],
+  );
+  if (availability === "available") {
+    seen.current.present = true;
+  } else {
+    const message =
+      availability === "block-missing" && seen.current.present
+        ? "Referenced block was deleted."
+        : "Referenced block is unavailable.";
+    return (
+      <div role="status" className={EMBEDDING_STATUS_CLASS}>
+        {message}
+      </div>
+    );
+  }
+  return (
+    <ReactPanelProvider
+      editor={editor}
+      rootBlockId={blockId}
+      active={active}
+      createPanel={createPanel}
+    >
+      <PageSurface />
+    </ReactPanelProvider>
+  );
+}
+
+/**
+ * Observes a collection source and its addressed block without retaining the source editor.
+ *
+ * Registration changes rebind the collection subscription, including after a source
+ * is removed and later installed again. The caller owns the editor acquisition.
+ *
+ * @param editor - Borrowed editor owning the source registry.
+ * @param address - Persistent source and collection identity.
+ * @param blockId - Block identity whose presence is observed.
+ * @returns Current source and block availability, or collection-missing during server rendering.
+ */
+function useCollectionAvailability(
+  editor: ReactEditorApi,
+  address: BlockSourceAddress,
+  blockId: string,
+): "available" | "block-missing" | "collection-missing" {
+  const { sourceId, collectionId } = address;
+  const revision = useSyncExternalStore(
+    (listener) => editor.blockSources.subscribe(listener),
+    () => editor.blockSources.revision,
+    () => editor.blockSources.revision,
+  );
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      editor.blockSources.subscribeCollection({ sourceId, collectionId }, listener),
+    [editor, sourceId, collectionId, revision],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => {
+      const current = { sourceId, collectionId };
+      if (!editor.blockSources.has(current)) {
+        return "collection-missing";
+      }
+      return editor.blockSources.hasBlock(current, blockId) ? "available" : "block-missing";
+    },
+    () => "collection-missing",
   );
 }
 
@@ -344,7 +510,21 @@ export function embeddingExtension(): ReactEditorExtension {
       reactEditor.blockContextMenu.register({
         id: "embedding.copy",
         title: "Copy block embedding",
+        icon: LinkIcon,
         order: 70,
+        /**
+         * Allows references to document blocks and registered persistent collection blocks.
+         *
+         * @param context - Invoking panel and captured root identities.
+         * @returns True when every root belongs to the document or one unambiguous source.
+         */
+        isAvailable: ({ reactPanel, rootIds }) =>
+          rootIds.length > 0 &&
+          rootIds.every(
+            (id) =>
+              reactPanel.editor.getDocument().blocks.hasBlock(id) ||
+              Boolean(reactPanel.editor.blockSources.find(id)),
+          ),
         /**
          * Copies live embedding references for the captured root blocks.
          *
@@ -357,10 +537,24 @@ export function embeddingExtension(): ReactEditorExtension {
          */
         execute: async ({ reactPanel, rootIds }) => {
           const bundle = clipboardContentBundle({
-            blocks: rootIds.map((id) => ({
-              type: EMBEDDING_BLOCK_TYPE,
-              props: { targetDocumentId: reactPanel.editor.getDocument().id, targetBlockId: id },
-            })),
+            blocks: rootIds.map((id) => {
+              const source = reactPanel.editor.getDocument().blocks.hasBlock(id)
+                ? undefined
+                : reactPanel.editor.blockSources.find(id);
+              if (!source && !reactPanel.editor.getDocument().blocks.hasBlock(id)) {
+                throw new Error(`Block ${id} is not available for embedding`);
+              }
+              return {
+                type: EMBEDDING_BLOCK_TYPE,
+                props: {
+                  targetDocumentId: reactPanel.editor.getDocument().id,
+                  targetBlockId: id,
+                  ...(source
+                    ? { targetSourceId: source.sourceId, targetCollectionId: source.collectionId }
+                    : {}),
+                },
+              };
+            }),
           });
           bundle.sourceDocumentId = reactPanel.editor.getDocument().id;
           await writeClipboardBundle(reactPanel.editor.clipboardFormats, bundle);
@@ -371,7 +565,17 @@ export function embeddingExtension(): ReactEditorExtension {
           type: EMBEDDING_BLOCK_TYPE,
           title: "Embedded block",
           defaultProps: { targetDocumentId: "", targetBlockId: "" },
-          propSchema: z.object({ targetDocumentId: z.string(), targetBlockId: z.string() }),
+          propSchema: z
+            .object({
+              targetDocumentId: z.string(),
+              targetBlockId: z.string(),
+              targetSourceId: z.string().optional(),
+              targetCollectionId: z.string().optional(),
+            })
+            .refine(
+              ({ targetSourceId, targetCollectionId }) =>
+                Boolean(targetSourceId) === Boolean(targetCollectionId),
+            ),
         },
         render: (props) => <EmbeddingBlock {...props} />,
         slashCommand: { title: "Embedded block" },
@@ -405,6 +609,9 @@ export function embeddingExtension(): ReactEditorExtension {
          * @returns Reference property patch, or an empty patch for external or unmapped targets.
          */
         paste(block, context) {
+          if (block.props.targetSourceId || block.props.targetCollectionId) {
+            return {};
+          }
           if (
             block.props.targetDocumentId &&
             block.props.targetDocumentId !== context.sourceDocumentId

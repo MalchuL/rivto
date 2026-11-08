@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from "react";
 import { DBDocumentModel, DemoDatabase } from "./database";
 import { DemoEditorSurface } from "./editor-surface";
+import { demoSideBlockExtensions } from "./extensions/side-blocks";
 
 interface Pane {
   readonly mode: ModeManager;
@@ -97,6 +98,7 @@ export function DocumentsDemo() {
             pageDragExtension(),
             ...edgelessPreset(),
             embeddingExtension(),
+            ...(params.has("sideBlocks") ? demoSideBlockExtensions(false) : []),
           ],
         }),
     });

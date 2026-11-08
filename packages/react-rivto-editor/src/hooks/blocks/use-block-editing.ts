@@ -40,8 +40,10 @@ export interface UseBlockEditingResult<
  *
  * External commands, undo/redo, and remote CRDT updates reconcile into the
  * contenteditable before paint. DOM selection offsets are saved and restored
- * when replacement is necessary, while IME composition owns the DOM until
- * composition end. Do not render the content as React children of the editable.
+ * when replacement is necessary and an editable has focus, while IME composition
+ * owns the DOM until composition end. A stale native selection does not move focus
+ * back from a menu or another control. Do not render the content as React children
+ * of the editable.
  *
  * The presence marker explicitly opts the spread region into selection
  * anchoring. Enter/Tab behavior, clipboard policy, block selection, and slash

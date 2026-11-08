@@ -8,7 +8,8 @@
  * by writing pages and block cards inside the canvas.
  */
 .page-surface,
-.edgeless-viewport {
+.edgeless-viewport,
+.rivto-side-block-content {
   /* Host controls occupy perimeter slots; ordinary content needs no empty start gutter. */
   --rivto-block-start-width: 0px;
   --rivto-block-padding: 2px 8px;

@@ -41,6 +41,8 @@
 @import "../extensions/block-drag/block-drag.css" layer(components);
 @import "../extensions/bullet-threading/bullet-threading.css" layer(components);
 @import "../extensions/nesting-lines/nesting-lines.css" layer(components);
+@import "../extensions/side-blocks/side-blocks.css" layer(components);
+@import "../extensions/comments/comments.css" layer(components);
 @import "../extensions/embedding/embedding.css" layer(components);
 
 /* Edgeless canvas and visual objects. */

@@ -23,7 +23,7 @@ import type { EditorPanelProps } from "./types";
 /** Internal provider properties with the core panel factory supplied by its owning component. */
 interface ReactPanelProviderProps extends EditorPanelProps {
   /** Creates core panel boundaries after commit; keep this factory stable across renders. */
-  readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI;
+  readonly createPanel: (editor: ReactEditorApi, options: PanelOptions) => PanelAPI | undefined;
 }
 
 const LOADING_PANEL_SNAPSHOT: PanelSnapshot = { status: "loading" };
@@ -96,6 +96,9 @@ export function ReactPanelProvider({
   useEffect(() => {
     const { hostEditor, rootBlockId, rootElementId, createPanel, mode } = configuration;
     const corePanel = createPanel(hostEditor, { rootBlockId, rootElementId });
+    if (!corePanel) {
+      return;
+    }
     const instance = new ReactPanel(hostEditor, corePanel, { mode });
     setCurrent({ configuration, instance });
     return instance.destroy;

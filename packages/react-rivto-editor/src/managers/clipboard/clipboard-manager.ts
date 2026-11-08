@@ -375,7 +375,10 @@ export class ClipboardManager {
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle | undefined {
     const current = selection ?? reactPanel?.selection.get() ?? this.document.selection.get();
-    let bundle = this.document.clipboard.copy(current);
+    const clipboard = reactPanel
+      ? new CoreClipboardManager(panelClipboardDocument(reactPanel))
+      : this.document.clipboard;
+    let bundle = clipboard.copy(current);
     if (current?.elements?.length) {
       const elements = this.collectElements(current.elements, reactPanel ?? this.editor);
       const included = new Set(elements.blocks.map((block) => block.id));
@@ -392,7 +395,10 @@ export class ClipboardManager {
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
    */
   copyText(selection: Selection, reactPanel?: ReactPanelApi): ClipboardBundle | undefined {
-    const bundle = this.document.clipboard.copyText(selection);
+    const clipboard = reactPanel
+      ? new CoreClipboardManager(panelClipboardDocument(reactPanel))
+      : this.document.clipboard;
+    const bundle = clipboard.copyText(selection);
     return bundle ? this.convertCopy(bundle, reactPanel) : undefined;
   }
 
@@ -688,13 +694,31 @@ export class ClipboardManager {
     };
     bundle.blocks.forEach(collect);
     const blockIdMap = new Map(this.document.getDocument().blocks.createImportIdMap(sourceIds));
+    const allocatedIds = new Set(blockIdMap.values());
+    for (const [sourceId, id] of blockIdMap) {
+      if (!reactPanel.blocks.hasBlock(id)) {
+        continue;
+      }
+      let replacement: string;
+      do {
+        replacement = crypto.randomUUID();
+      } while (
+        allocatedIds.has(replacement) ||
+        reactPanel.blocks.hasBlock(replacement) ||
+        this.document.blocks.hasBlock(replacement)
+      );
+      allocatedIds.add(replacement);
+      blockIdMap.set(sourceId, replacement);
+    }
     if (
       bundle.fromTextSelection &&
       input.placement?.mergeText !== false &&
       hasBlockRanges(selection) &&
       !isStructuralSelection(selection)
     ) {
-      const target = this.document.selection.resolveBlockSelection(selection)?.blocks[0];
+      const target = (
+        "editor" in reactPanel ? reactPanel.document.selection : this.document.selection
+      ).resolveBlockSelection(selection)?.blocks[0];
       if (target && bundle.blocks[0]) {
         blockIdMap.set(bundle.blocks[0].id, target.id);
       }

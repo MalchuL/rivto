@@ -1,21 +1,14 @@
 import { DropdownMenuItem, DropdownMenuLabel } from "../../../components/ui/dropdown-menu";
-import { CheckIcon, SlashIcon } from "lucide-react";
-import { useSyncExternalStore, type CSSProperties } from "react";
+import { useSyncExternalStore } from "react";
+import {
+  BlockColorPalette,
+  BLOCK_BACKGROUND_COLORS,
+} from "../../../components/block-handle/block-color-palette";
+
+export { BLOCK_BACKGROUND_COLORS } from "../../../components/block-handle/block-color-palette";
 import type { ReactEditorApi } from "../../../editor/types";
 import type { BlockContextMenuRenderContext } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
-
-/** Stable persisted palette tokens; empty means no background override. */
-export const BLOCK_BACKGROUND_COLORS = [
-  "",
-  "gray",
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-] as const;
 
 /**
  * Renders inline background swatches for the captured explicit block targets.
@@ -40,52 +33,36 @@ function BlockBackgroundColors(context: BlockContextMenuRenderContext) {
       .map((id) => String(reactPanel.blocks.getBlockNode(id)?.listProps.backgroundColor ?? ""))
       .join(",");
   useSyncExternalStore((listener) => reactPanel.editor.subscribe(listener), snapshot, snapshot);
+  const selectedColors = blockIds.map((id) =>
+    String(reactPanel.blocks.getBlockNode(id)?.listProps.backgroundColor ?? ""),
+  );
+  const firstColor = selectedColors[0];
+  const selectedColor = selectedColors.every((color) => color === firstColor)
+    ? firstColor
+    : undefined;
   return (
     <div role="group" aria-label="Block background">
       <DropdownMenuLabel className="text-muted-foreground text-xs font-medium">
         Background
       </DropdownMenuLabel>
-      <div className="block-color-swatches">
-        {BLOCK_BACKGROUND_COLORS.map((color) => (
-          <DropdownMenuItem key={color} asChild className="block-color-swatch rounded-full p-0">
-            <button
-              type="button"
-              aria-label={color || "Default"}
-              title={color || "Default"}
-              aria-pressed={blockIds.every(
-                (id) =>
-                  (reactPanel.blocks.getBlockNode(id)?.listProps.backgroundColor ?? "") === color,
-              )}
-              style={
-                {
-                  backgroundColor: "var(--block-background)",
-                  "--block-background": color ? `var(--rivto-block-${color})` : "transparent",
-                } as CSSProperties
+      <BlockColorPalette
+        label="Colors"
+        value={selectedColor}
+        onChange={(color) => {
+          assertBlockMenuTargets(context);
+          reactPanel.batchUpdates(() => {
+            for (const id of blockIds) {
+              if (color) {
+                reactPanel.blocks.updateBlock(id, { listProps: { backgroundColor: color } });
+              } else {
+                reactPanel.blocks.deleteListProps(id, ["backgroundColor"]);
               }
-              onClick={() => {
-                assertBlockMenuTargets(context);
-                reactPanel.batchUpdates(() => {
-                  for (const id of blockIds) {
-                    if (color) {
-                      reactPanel.blocks.updateBlock(id, { listProps: { backgroundColor: color } });
-                    } else {
-                      reactPanel.blocks.deleteListProps(id, ["backgroundColor"]);
-                    }
-                  }
-                });
-                close();
-              }}
-            >
-              {!color && <SlashIcon aria-hidden="true" />}
-              {color &&
-                blockIds.every(
-                  (id) =>
-                    (reactPanel.blocks.getBlockNode(id)?.listProps.backgroundColor ?? "") === color,
-                ) && <CheckIcon aria-hidden="true" />}
-            </button>
-          </DropdownMenuItem>
-        ))}
-      </div>
+            }
+          });
+          close();
+        }}
+        renderItem={(_color, button) => <DropdownMenuItem asChild>{button}</DropdownMenuItem>}
+      />
     </div>
   );
 }

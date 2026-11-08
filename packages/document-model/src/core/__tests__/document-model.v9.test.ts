@@ -17,6 +17,71 @@ const exchangeUpdates = (left: YjsDoc, right: YjsDoc): void => {
 };
 
 describe("DocumentModelImpl schema v9 Markdown storage", () => {
+  it("merges independent edits to additional-root children across peers", async () => {
+    const leftDoc = new YjsDoc("additional-peer-left");
+    const rightDoc = new YjsDoc("additional-peer-right");
+    const left = new DocumentModelImpl(leftDoc);
+    const right = new DocumentModelImpl(rightDoc);
+    left.blocks.insertBlock({ id: "page", type: "paragraph" });
+    left.blocks.insertBlock(
+      {
+        id: "collection",
+        type: "paragraph",
+        children: [
+          { id: "first", type: "paragraph", content: "One" },
+          { id: "second", type: "paragraph", content: "Two" },
+        ],
+      },
+      { parentId: null, additional: true },
+    );
+    exchangeUpdates(leftDoc, rightDoc);
+    left.blocks.insertText("first", 3, " left");
+    right.blocks.insertText("second", 3, " right");
+    exchangeUpdates(leftDoc, rightDoc);
+
+    expect(left.getSnapshot()).toEqual(right.getSnapshot());
+    expect(left.blocks.getRootIds()).toEqual(["page"]);
+    expect(left.blocks.getBlockNode("first")?.content).toBe("One left");
+    expect(left.blocks.getBlockNode("second")?.content).toBe("Two right");
+    await left.destroy();
+    await right.destroy();
+  });
+
+  it("indexes and repairs an additional root without exposing it as a page root", async () => {
+    const doc = new YjsDoc("additional-roots");
+    const model = new DocumentModelImpl(doc);
+    model.blocks.insertBlock({ id: "page", type: "paragraph" });
+    model.blocks.insertBlock(
+      { id: "extra", type: "paragraph", children: [{ id: "child", type: "paragraph" }] },
+      { parentId: null, additional: true },
+    );
+
+    expect(model.blocks.getRootIds()).toEqual(["page"]);
+    expect(model.blocks.getBlock("extra")?.children[0]?.id).toBe("child");
+    expect(model.blocks.getParentId("child")).toBe("extra");
+    expect(model.blocks.getInsertionDestinationAfter("extra")).toEqual({
+      parentId: null,
+      additional: true,
+      beforeId: undefined,
+    });
+    model.blocks.normalize();
+    expect(model.blocks.getRootIds()).toEqual(["page"]);
+    expect(model.blocks.getBlockNode("child")?.id).toBe("child");
+    const snapshot = model.getSnapshot();
+    const copy = new DocumentModelImpl(new YjsDoc("additional-roots-copy"));
+    copy.loadSnapshot(snapshot);
+    expect(copy.blocks.getRootIds()).toEqual(["page"]);
+    expect(copy.blocks.getBlock("extra")?.children[0]?.id).toBe("child");
+    copy.loadSnapshot({ version: 9, blocks: [] });
+    expect(copy.blocks.getBlockNode("child")?.id).toBe("child");
+    expect(() => copy.loadSnapshot({ version: 9, blocks: snapshot.additionalBlocks })).toThrow(
+      "Duplicate block extra",
+    );
+    expect(copy.blocks.getBlockNode("child")?.id).toBe("child");
+    await copy.destroy();
+    await model.destroy();
+  });
+
   it("includes subclass-created block and element managers in snapshots and undo history", async () => {
     class ApplicationBlocks extends DocumentBlockManager {
       /**

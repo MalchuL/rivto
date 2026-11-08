@@ -6,6 +6,7 @@ import type {
   BlockMoveContext,
 } from "../../block-behaviors/types";
 import type { BlockDropPlacement } from "@chulane/rivto-page";
+import type { PanelAPI } from "@chulane/rivto";
 
 /** Outline, split, and movement behavior selected from current detached block data. */
 export interface BlockBehaviorsApi {
@@ -79,7 +80,11 @@ export interface BlockBehaviorsApi {
    * All applicable hooks must permit the move. This does not
    * replace core hierarchy validation or mutate the document.
    * @param request - Nonempty moved roots and a core insertion destination.
+   * @param blocks - Receiving panel's block view; defaults to the editor's document view.
    * @returns False for empty sources, a missing parent or insertion neighbor, or a hook veto.
    */
-  canMove(request: Pick<BlockMoveContext, "sources" | "destination">): boolean;
+  canMove(
+    request: Pick<BlockMoveContext, "sources" | "destination">,
+    blocks?: Pick<PanelAPI["blocks"], "getBlockNode" | "getParentId">,
+  ): boolean;
 }

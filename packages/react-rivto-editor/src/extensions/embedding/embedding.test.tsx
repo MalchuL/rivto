@@ -29,6 +29,7 @@ test("embedding props validate, snapshots and structured clipboard retain refere
   });
   expect(reference.content).toBe("");
   expect(() => reactEditor.blocks.setBlockProp(reference.id, "targetBlockId", 12)).toThrow();
+  expect(() => reactEditor.blocks.setBlockProp(reference.id, "targetSourceId", "test.source")).toThrow();
   editor.selection.set(createStructuralSelection([reference.id], reference.id));
   const copied = editor.clipboard.copy();
   expect(copied?.blocks[0]?.props).toEqual({ targetDocumentId: "source", targetBlockId: "target" });
@@ -112,6 +113,16 @@ test.each(["A", ""])(
           type: EMBEDDING_BLOCK_TYPE,
           props: { targetDocumentId: "other", targetBlockId: "target" },
         },
+        {
+          id: "collection-reference",
+          type: EMBEDDING_BLOCK_TYPE,
+          props: {
+            targetDocumentId: "A",
+            targetBlockId: "target",
+            targetSourceId: "test.source",
+            targetCollectionId: "collection",
+          },
+        },
       ],
     });
     b.blocks.insertBlock({ id: "target", type: "paragraph", content: "Existing target" });
@@ -128,6 +139,12 @@ test.each(["A", ""])(
     expect(branch.children[2]!.props).toEqual({
       targetDocumentId: "other",
       targetBlockId: "target",
+    });
+    expect(branch.children[3]!.props).toEqual({
+      targetDocumentId: "A",
+      targetBlockId: "target",
+      targetSourceId: "test.source",
+      targetCollectionId: "collection",
     });
     expect(bundle.blocks[0]!.children[1]!.props).toEqual({
       targetDocumentId: documentId,

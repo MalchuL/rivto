@@ -262,7 +262,9 @@ export class BlockPasteStrategy implements PasteStrategy {
       target?.id === active.blocks[0]?.id &&
       this.isEmptyBlock?.(target) &&
       target.childIds.length === 0 &&
-      destination.parentId === this.editor.blocks.getParentId(target.id)
+      // The insertion destination uses document parents even when panel reads
+      // expose their top-level blocks with a panel-relative null parent.
+      destination.parentId === this.editor.blocks.getInsertionDestinationAfter(target.id).parentId
     ) {
       this.editor.blocks.removeBlock(target.id);
     }

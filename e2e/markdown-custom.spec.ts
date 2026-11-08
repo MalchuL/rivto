@@ -42,6 +42,30 @@ test("renders plain writing text and keeps Markdown list syntax", async ({ page 
   ).toHaveText("item");
 });
 
+for (const mode of ["block", "edgeless"]) {
+  test(`wraps long words in the Markdown editor on ${mode}`, async ({ page }) => {
+    await page.locator(`[data-editor-mode="${mode}"]`).first().click();
+    const id = await page.evaluate(
+      () =>
+        window.__rivtoDemo.editor.blocks.insertBlock({ type: "paragraph", content: "Start" }).id,
+    );
+    const block = page.locator(blockIdSelector(id)).first();
+    const content = block.locator(".markdown-content");
+    await content.evaluate((element) => {
+      (element as HTMLElement).style.width = "80px";
+    });
+    const editor = block.locator(".markdown-editor");
+    await editor.click();
+    await editor.fill("UnbrokenTextThatMustWrapAcrossSeveralLines");
+    await expect
+      .poll(() => editor.evaluate((element) => element.scrollWidth - element.clientWidth))
+      .toBeLessThanOrEqual(1);
+    await expect
+      .poll(() => editor.evaluate((element) => element.scrollHeight - element.clientHeight))
+      .toBeLessThanOrEqual(1);
+  });
+}
+
 test("shows single line breaks in the idle Markdown preview", async ({ page }) => {
   const id = await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

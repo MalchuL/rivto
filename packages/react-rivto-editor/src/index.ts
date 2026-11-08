@@ -56,6 +56,43 @@ export {
 } from "./extensions/built-ins/separator/separator-block";
 export { bulletThreadingExtension } from "./extensions/bullet-threading/bullet-threading";
 export { nestingLinesExtension } from "./extensions/nesting-lines/nesting-lines";
+export { sideBlocksExtension } from "./extensions/side-blocks/side-blocks";
+export { SideBlockCard } from "./extensions/side-blocks/side-block-card";
+export { SideBlockContent } from "./extensions/side-blocks/side-block-content";
+export { SideBlockEditor } from "./extensions/side-blocks/side-block-editor";
+export {
+  BlockColorPalette,
+  BLOCK_BACKGROUND_COLORS,
+} from "./components/block-handle/block-color-palette";
+export type { BlockColorPaletteProps } from "./components/block-handle/block-color-palette";
+export type { BlockSource, BlockSourceAddress } from "./managers/blocks/block-source-registry";
+export {
+  COMMENT_SIDE_BLOCK_TYPE,
+  commentsExtension,
+  createCommentSideBlockRenderer,
+} from "./extensions/comments/comments";
+export type {
+  CommentAuthor,
+  CommentMessage,
+  CommentsOptions,
+} from "./extensions/comments/comments";
+export type {
+  SideBlockRendererProps,
+  SideBlocksOptions,
+} from "./extensions/side-blocks/side-blocks";
+export {
+  createSideBlock,
+  deleteSideBlock,
+  getSideBlock,
+  getSideBlocks,
+  updateSideBlockData,
+} from "./extensions/side-blocks/side-blocks-store";
+export type {
+  CreateSideBlockInput,
+  SideBlock,
+  SideBlockPlacement,
+  SideBlockSpacing,
+} from "./extensions/side-blocks/side-blocks-store";
 export type {
   BulletThreadingAnchor,
   BulletThreadingOptions,

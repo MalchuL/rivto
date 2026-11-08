@@ -17,6 +17,7 @@ import type {
 import type { ReactEditorApi } from "../../editor/types";
 import type { RegistrationOwner } from "../extensions/types";
 import type { BlockBehaviorsApi } from "./block-behaviors-api";
+import type { PanelAPI } from "@chulane/rivto";
 
 /**
  * Stores ordered interaction behaviors selected by current detached block data.
@@ -236,21 +237,22 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
    * All applicable hooks must permit the move. This does not
    * replace core hierarchy validation or mutate the document.
    * @param request - Nonempty moved roots and a core insertion destination.
+   * @param blocks - Receiving panel's block view; defaults to the editor's document view.
    * @returns False for empty sources, a missing parent or insertion neighbor, or a hook veto.
    */
-  canMove(request: Pick<BlockMoveContext, "sources" | "destination">): boolean {
+  canMove(
+    request: Pick<BlockMoveContext, "sources" | "destination">,
+    blocks: Pick<PanelAPI["blocks"], "getBlockNode" | "getParentId"> = this.reactEditor.blocks,
+  ): boolean {
     const { sources, destination } = request;
-    const parent =
-      destination.parentId === null
-        ? null
-        : this.reactEditor.blocks.getBlockNode(destination.parentId);
+    const parent = destination.parentId === null ? null : blocks.getBlockNode(destination.parentId);
     if (!sources.length || (destination.parentId !== null && !parent)) {
       return false;
     }
     if (
       destination.beforeId !== undefined &&
-      (!this.reactEditor.blocks.getBlockNode(destination.beforeId) ||
-        this.reactEditor.blocks.getParentId(destination.beforeId) !== destination.parentId)
+      (!blocks.getBlockNode(destination.beforeId) ||
+        blocks.getParentId(destination.beforeId) !== destination.parentId)
     ) {
       return false;
     }
@@ -259,8 +261,8 @@ export class BlockBehaviorRegistry implements BlockBehaviorsApi {
       editor: this.reactEditor,
       parent: parent ?? null,
     };
-    const blocks = parent ? [...sources, parent] : sources;
-    const availabilityContexts = blocks.map((block) => ({ editor: this.reactEditor, block }));
+    const candidates = parent ? [...sources, parent] : sources;
+    const availabilityContexts = candidates.map((block) => ({ editor: this.reactEditor, block }));
     return this.behaviors.every(
       (behavior) =>
         !behavior.canMove ||

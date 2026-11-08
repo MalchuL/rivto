@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("keeps canvas card top padding equal to its bottom padding", async ({ page }) => {
   await page.goto("/");
   const today = page.locator('[data-journal-document="today"]');
-  await expect(today.locator(":scope > .page-surface")).toHaveCSS("padding-top", "12px");
+  await expect(today.locator(".page-surface").first()).toHaveCSS("padding-top", "12px");
   await page.getByRole("button", { name: "Edgeless", exact: true }).click();
   const content = today.locator(".edgeless-card-content").first();
   await expect(content).toHaveCSS("padding-top", "56px");
@@ -28,6 +28,6 @@ test("keeps canvas card top padding equal to its bottom padding", async ({ page 
   await expect(content).toHaveCSS("padding-bottom", "24px");
   await expect(content).toHaveCSS("padding-left", "32px");
   await page.getByRole("button", { name: "Page", exact: true }).click();
-  await expect(today.locator(":scope > .page-surface")).toHaveCSS("padding-top", "12px");
-  await expect(today.locator(":scope > .page-surface")).toHaveCSS("padding-bottom", "56px");
+  await expect(today.locator(".page-surface").first()).toHaveCSS("padding-top", "12px");
+  await expect(today.locator(".page-surface").first()).toHaveCSS("padding-bottom", "56px");
 });
