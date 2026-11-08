@@ -13,7 +13,6 @@ interface PageBlockHost {
   readonly blocks: Pick<
     PanelAPI["blocks"],
     | "getBlockNode"
-    | "getParentId"
     | "getRootIds"
     | "subscribeRootIds"
     | "subscribeBlockNode"
@@ -27,7 +26,7 @@ interface PageBlockHost {
     >;
     readonly blockListProps: Pick<PanelAPI["document"]["blockListProps"], "prepare">;
   };
-  readonly rootBlockId?: string | undefined;
+  readonly rootBlockId: string | undefined;
   readonly batchUpdates: PanelAPI["batchUpdates"];
 }
 
@@ -77,11 +76,7 @@ export class PageBlocks implements BlockEditorBlocks {
     if (!this.panel.blocks.getBlockNode(blockId)) {
       return undefined;
     }
-    return (
-      this.panel.document.blocks.getParentId(blockId) ??
-      this.panel.blocks.getParentId(blockId) ??
-      undefined
-    );
+    return this.panel.document.blocks.getParentId(blockId) ?? undefined;
   }
 
   /**
@@ -153,9 +148,7 @@ export class PageBlocks implements BlockEditorBlocks {
    */
   subscribeBlockNode(blockId: string, listener: () => void): () => void {
     const source =
-      blockId === this.panel.rootBlockId && !this.panel.blocks.getBlockNode(blockId)
-        ? this.panel.document.blocks
-        : this.panel.blocks;
+      blockId === this.panel.rootBlockId ? this.panel.document.blocks : this.panel.blocks;
     const releaseNode = source.subscribeBlockNode(blockId, listener);
     let releaseBehavior: () => void;
     try {

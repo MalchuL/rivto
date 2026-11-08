@@ -23,7 +23,7 @@ import type {
   EditorBlockUpdate,
 } from "../../editor/model";
 import type { DocumentEditorAPI } from "../../editor/types";
-import type { BlockManagerApi, ImportedBlockForest, PreparedBlockUpdate } from "../types";
+import type { BlockManagerApi, ImportedBlockForest } from "../types";
 import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
 
@@ -316,51 +316,6 @@ export class BlockManager implements BlockManagerApi {
   }
 
   /**
-   * Prepares a patch against detached current block fields without writing.
-   *
-   * @param block - Current node fields, including earlier simulated updates.
-   * @param patch - Requested field and property changes.
-   * @returns Processed state and the patch containing normalized changed properties.
-   * @throws If list-property validation or a registered processor rejects the update.
-   */
-  prepareUpdate(block: EditorBlockInput, patch: EditorBlockPatch): PreparedBlockUpdate {
-    const candidate: BlockInput = {
-      ...block,
-      children: undefined,
-      listProps: patch.listProps ? { ...block.listProps, ...patch.listProps } : block.listProps,
-      props: patch.props ? { ...block.props, ...patch.props } : block.props,
-      pluginData: patch.pluginData
-        ? { ...block.pluginData, ...patch.pluginData }
-        : block.pluginData,
-      content: patch.content ?? block.content,
-    };
-    if (patch.listProps) {
-      this.editor.blockListProps.prepare(candidate.listProps ?? {});
-    }
-    const processed = patch.props ? this.runProcessors(candidate) : candidate;
-    const processedProps = patch.props
-      ? Object.fromEntries(Object.keys(patch.props).map((key) => [key, processed.props?.[key]]))
-      : undefined;
-    return {
-      block: processed,
-      patch: processedProps ? { ...patch, props: processedProps } : patch,
-    };
-  }
-
-  /**
-   * Prepares the properties for converting detached block fields to a registered type.
-   *
-   * @param block - Current node fields before conversion.
-   * @param type - Registered destination type.
-   * @returns Destination properties after defaults and registered processors.
-   * @throws If the type, its properties, or a processor rejects the conversion.
-   */
-  prepareTypeChange(block: EditorBlockInput, type: string): Record<string, unknown> {
-    const props = this.editor.blockRegistry.prepareTypeChange(type, block.props ?? {});
-    return this.runProcessors({ ...block, type, props, children: undefined }).props ?? {};
-  }
-
-  /**
    * Reports whether one placed block currently has direct children.
    *
    * @param id - Parent block identifier to inspect.
@@ -547,10 +502,13 @@ export class BlockManager implements BlockManagerApi {
     if (!current) {
       throw new Error(`Block ${id} not found`);
     }
-    const props = this.prepareTypeChange(current, type);
+    const props = this.editor.blockRegistry.prepareTypeChange(type, current.props);
+    const processed = this.runProcessors({ ...current, type, props, children: undefined });
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    this.editor.history.batchUpdates(() => this.document.blocks.setBlockType(id, type, props));
+    this.editor.history.batchUpdates(() =>
+      this.document.blocks.setBlockType(id, type, processed.props),
+    );
   }
 
   /**
@@ -902,9 +860,31 @@ export class BlockManager implements BlockManagerApi {
       if (!stored) {
         throw new Error(`Block ${id} not found`);
       }
-      const prepared = this.prepareUpdate(simulated.get(id) ?? stored, patch);
-      simulated.set(id, prepared.block);
-      return { id, patch: prepared.patch };
+      const current = simulated.get(id) ?? stored;
+      const candidate: BlockInput = {
+        ...current,
+        children: undefined,
+        listProps: patch.listProps
+          ? { ...current.listProps, ...patch.listProps }
+          : current.listProps,
+        props: patch.props ? { ...current.props, ...patch.props } : current.props,
+        pluginData: patch.pluginData
+          ? { ...current.pluginData, ...patch.pluginData }
+          : current.pluginData,
+        content: patch.content ?? current.content,
+      };
+      if (patch.listProps) {
+        this.editor.blockListProps.prepare(candidate.listProps ?? {});
+      }
+      const processed = patch.props ? this.runProcessors(candidate) : candidate;
+      simulated.set(id, processed);
+      const processedProps = patch.props
+        ? Object.fromEntries(Object.keys(patch.props).map((key) => [key, processed.props?.[key]]))
+        : undefined;
+      return {
+        id,
+        patch: processedProps ? { ...patch, props: processedProps } : patch,
+      };
     });
   }
 

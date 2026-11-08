@@ -143,11 +143,9 @@ export class ReactPanel implements ReactPanelApi {
       this.updateSnapshot(this.corePanel.document.getDocument(), true);
       // A subtree root can disappear and return through undo while its document remains retained.
       if (this.corePanel.rootBlockId) {
-        const blocks = this.corePanel.blocks.includeRoot
-          ? this.corePanel.blocks
-          : this.corePanel.document.blocks;
-        this.unsubscribeBlock = blocks.subscribeBlockNode(this.corePanel.rootBlockId, () =>
-          this.updateSnapshot(this.corePanel.document.getDocument(), true),
+        this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(
+          this.corePanel.rootBlockId,
+          () => this.updateSnapshot(this.corePanel.document.getDocument(), true),
         );
       }
       // Keep edits made in different presentation modes out of the same undo capture.
@@ -445,8 +443,7 @@ export class ReactPanel implements ReactPanelApi {
     const sameDocument = this.snapshot.document === document;
     let status: PanelSnapshot["status"] = "available";
     if (this.corePanel.rootBlockId) {
-      const blocks = this.corePanel.blocks.includeRoot ? this.corePanel.blocks : document.blocks;
-      if (blocks.hasBlock(this.corePanel.rootBlockId)) {
+      if (document.blocks.hasBlock(this.corePanel.rootBlockId)) {
         this.hasSeenRootBlock = true;
       } else {
         status = this.hasSeenRootBlock ? "missing" : "loading";

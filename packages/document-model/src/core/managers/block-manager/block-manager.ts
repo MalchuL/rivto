@@ -116,15 +116,20 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     this.storage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
     this.historyScopes = [this.storage, this.roots, this.additionalRoots];
     this.cache = new BlockCache(
+      /**
+       * Reads hierarchy members from every root list without changing the page root list.
+       *
+       * @param parentId - Parent block ID, or null for all indexed roots.
+       * @returns Indexed children, or undefined when their parent is missing.
+       */
       (parentId) => {
         if (parentId === null) {
-          return strings(this.roots);
+          return [...strings(this.roots), ...strings(this.additionalRoots)];
         }
         const block = this.storage.get(parentId);
         return isCRDTMap(block) ? strings(this.requiredArray(block, "children")) : undefined;
       },
       (id) => this.storage.has(id),
-      () => strings(this.additionalRoots),
     );
     this.cache.refreshParents();
     // Nested maps name the owning block in `path` / `keys`. Child-list

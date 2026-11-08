@@ -138,11 +138,6 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
     (listener) => registry.subscribe(listener),
     () => registry.revision,
   );
-  const sources = context.reactPanel.editor.blockSources;
-  useSyncExternalStore(
-    (listener) => sources.subscribe(listener),
-    () => sources.revision,
-  );
   useMenuUpdates(context.reactPanel.editor.getDocument(), context.reactPanel.blocks);
   return (
     <DropdownMenu

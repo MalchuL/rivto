@@ -189,9 +189,9 @@ export class DocumentModelImpl implements DocumentModel {
       throw new Error("Unsupported Rivto document snapshot");
     }
     const rootElementIds = snapshot.rootElementIds ?? this.elements.getRootIds();
-    const blocks = snapshot.blocks ?? this.blocks.getBlocks();
-    const additionalBlocks = snapshot.additionalBlocks ?? this.blocks.getAdditionalBlocks();
     if (snapshot.blocks || snapshot.additionalBlocks) {
+      const blocks = snapshot.blocks ?? this.blocks.getBlocks();
+      const additionalBlocks = snapshot.additionalBlocks ?? this.blocks.getAdditionalBlocks();
       this.blocks.validateBlocks([...blocks, ...additionalBlocks]);
     }
     if (snapshot.elements) {

@@ -92,25 +92,13 @@ collection, including nested blocks; Backspace at the start of a nested block
 can also outdent it within the side panel.
 Columns stack their lanes when their available width cannot accommodate them
 side by side; their drop axis follows the displayed layout.
-The shared expanded-container dialog borrows the invoking panel's block source,
-so Bento, Kanban, and Table blocks in a side note retain their editable children.
+The shared expanded-container dialog opens the document-owned subtree, so Bento,
+Kanban, and Table blocks in a side note retain their editable children.
 When the host installs `pageDragExtension`, side panels use the same drag handles,
 drop feedback, and block movement policies as other Page occurrences. Blocks can
 be reordered or nested within a note and moved between eligible panels; these
 moves use document history and can be undone. Without that extension, the side
 editor retains its non-drag interactions.
-An extension can register a persistent block source with `editor.blockSources`.
-Its source ID and collection ID are stored alongside
-the document and block IDs in copied embeddings, allowing a source editor to reopen
-the collection even when its original side card is not mounted. Missing sources or
-collections display an unavailable status and become available when restored.
-Document-owned note blocks use ordinary document and block IDs in embeddings;
-other collection owners can register their own lookup and opening operations
-without changing the embedding extension.
-The source must use a stable ID in every editor that can open the data, locate
-blocks unambiguously, and observe collection creation, edits, deletion, and
-restoration even when the collection is currently missing. Its opener borrows
-the source document and must not depend on a mounted side-card component.
 The block context menu can also be opened from a focused side block with
 Shift+F10 or the Context Menu key; dismissing it restores keyboard focus.
 While the menu remains open, document updates refresh registered actions and

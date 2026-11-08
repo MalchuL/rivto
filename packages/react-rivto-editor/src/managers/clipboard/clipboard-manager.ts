@@ -694,31 +694,13 @@ export class ClipboardManager {
     };
     bundle.blocks.forEach(collect);
     const blockIdMap = new Map(this.document.getDocument().blocks.createImportIdMap(sourceIds));
-    const allocatedIds = new Set(blockIdMap.values());
-    for (const [sourceId, id] of blockIdMap) {
-      if (!reactPanel.blocks.hasBlock(id)) {
-        continue;
-      }
-      let replacement: string;
-      do {
-        replacement = crypto.randomUUID();
-      } while (
-        allocatedIds.has(replacement) ||
-        reactPanel.blocks.hasBlock(replacement) ||
-        this.document.blocks.hasBlock(replacement)
-      );
-      allocatedIds.add(replacement);
-      blockIdMap.set(sourceId, replacement);
-    }
     if (
       bundle.fromTextSelection &&
       input.placement?.mergeText !== false &&
       hasBlockRanges(selection) &&
       !isStructuralSelection(selection)
     ) {
-      const target = (
-        "editor" in reactPanel ? reactPanel.document.selection : this.document.selection
-      ).resolveBlockSelection(selection)?.blocks[0];
+      const target = this.document.selection.resolveBlockSelection(selection)?.blocks[0];
       if (target && bundle.blocks[0]) {
         blockIdMap.set(bundle.blocks[0].id, target.id);
       }

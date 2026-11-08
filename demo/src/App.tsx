@@ -9,7 +9,6 @@ import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc
 import { DocumentStorage } from "@chulane/document-model";
 import {
   createDocumentEditor,
-  EmbeddingPanel,
   type DocumentEditorAPI,
   type EditorElementNode,
   type EditorMode,
@@ -673,8 +672,6 @@ async function createDemoEditor() {
       token: demoToken,
       editor,
       reactEditor,
-      createEmbeddingPanel: (blockId: string) =>
-        new EmbeddingPanel(editor, { rootBlockId: blockId }),
     },
   });
   if (new URLSearchParams(window.location.search).get("test_features") === "1") {

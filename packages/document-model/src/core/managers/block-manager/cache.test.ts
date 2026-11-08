@@ -9,9 +9,8 @@ it("indexes additional roots and their descendants alongside page roots", () => 
   ]);
   const extraRoots = ["side"];
   const cache = new BlockCache(
-    (id) => children.get(id),
+    (id) => (id === null ? [...children.get(null)!, ...extraRoots] : children.get(id)),
     (id) => children.has(id),
-    () => extraRoots,
   );
 
   cache.refreshParents();

@@ -2,10 +2,42 @@ import { edgelessPreset } from "../extensions/edgeless";
 import { ReactPanel } from "./react-panel";
 import { outdentBlocks, createTestCoreEditor, createTestReactEditor } from "../test-utils";
 
-import { ChildrenPanel } from "@chulane/rivto";
+import { ChildrenPanel, EmbeddingPanel } from "@chulane/rivto";
 import { PanelElements } from "@chulane/rivto";
+import { panelClipboardDocument } from "../managers/clipboard/panel-clipboard-document";
 
 const groupInput = { type: "group", frame: { x: 0, y: 0, width: 100, height: 100 }, zIndex: 0 };
+
+it("uses document-relative parents for bounded clipboard destinations without escaping the panel", async () => {
+  const core = await createTestCoreEditor();
+  const fullPanel = createTestReactEditor({ editor: core });
+  const root = core.blocks.insertBlock({
+    type: "paragraph",
+    children: [{ type: "paragraph", children: [{ type: "paragraph" }] }],
+  });
+  const child = root.children[0]!;
+  const grandchild = child.children[0]!;
+  const children = new ReactPanel(
+    fullPanel.editor,
+    new ChildrenPanel(fullPanel.editor, { rootBlockId: root.id }),
+    {},
+  );
+  const embedding = new ReactPanel(
+    fullPanel.editor,
+    new EmbeddingPanel(fullPanel.editor, { rootBlockId: child.id }),
+    {},
+  );
+  const childClipboard = panelClipboardDocument(children);
+  const embeddingClipboard = panelClipboardDocument(embedding);
+  expect(childClipboard.blocks.getParentId(child.id)).toBe(root.id);
+  expect(childClipboard.blocks.getParentId(grandchild.id)).toBe(child.id);
+  expect(childClipboard.blocks.getParentId("missing")).toBeUndefined();
+  expect(embeddingClipboard.blocks.getParentId(child.id)).toBeNull();
+  expect(embeddingClipboard.blocks.getParentId(grandchild.id)).toBe(child.id);
+  expect(embeddingClipboard.blocks.getInsertionDestinationAfter(child.id).parentId).toBe(child.id);
+  fullPanel.editor.destroy();
+  await core.destroy();
+});
 
 it("reconciles separate element groups of one subtree without resetting their geometry", async () => {
   const core = await createTestCoreEditor();

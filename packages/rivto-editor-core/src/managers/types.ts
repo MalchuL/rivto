@@ -65,14 +65,6 @@ export interface ImportedBlockForest {
   readonly idMap: ReadonlyMap<string, string>;
 }
 
-/** Processed state and the corresponding patch to persist for one block update. */
-export interface PreparedBlockUpdate {
-  /** Node-level processed state used when preparing a later update in the same batch. */
-  readonly block: EditorBlockInput;
-  /** Original patch with its changed property values normalized by registered processors. */
-  readonly patch: EditorBlockPatch;
-}
-
 /** Public typed block-operation contract. */
 export interface BlockManagerApi {
   /** Monotonic active-document block revision. */
@@ -104,26 +96,6 @@ export interface BlockManagerApi {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ): EditorBlockInput[];
-  /**
-   * Prepares a patch against detached current fields without writing to a document.
-   *
-   * Registered processors run only for property patches, as in document updates.
-   *
-   * @param block - Current node fields, including any earlier simulated updates.
-   * @param patch - Requested field and property changes.
-   * @returns Processed state for batch preparation and the normalized patch to persist.
-   * @throws If list-property validation or a registered processor rejects the update.
-   */
-  prepareUpdate(block: EditorBlockInput, patch: EditorBlockPatch): PreparedBlockUpdate;
-  /**
-   * Prepares properties for converting detached block fields to a registered type.
-   *
-   * @param block - Current node fields before conversion.
-   * @param type - Registered destination type.
-   * @returns Destination properties after type defaults and registered processors.
-   * @throws If the type, its properties, or a registered processor rejects the conversion.
-   */
-  prepareTypeChange(block: EditorBlockInput, type: string): Record<string, unknown>;
   /** @param id - Parent ID. @returns True when the block has at least one child. */
   hasChildren(id: string): boolean;
   /** @param id - Block ID. @returns Parent ID, null, or undefined. */

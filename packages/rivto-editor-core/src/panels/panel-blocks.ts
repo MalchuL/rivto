@@ -8,22 +8,8 @@ import type {
   EditorBlockUpdate,
 } from "..";
 import type { PanelBlocksAPI, PanelDestination } from "./types";
-import type { BlockManagerApi } from "../managers/types";
 
 const EMPTY_IDS: readonly string[] = [];
-
-/**
- * Converts a document destination into the equivalent source-panel destination.
- *
- * @param destination - Parent and optional following sibling in the source view.
- * @returns A panel root destination for a null parent, otherwise the explicit parent.
- */
-function sourcePanelDestination(destination: BlockDestination): PanelDestination {
-  if (destination.parentId === null) {
-    return { root: true, beforeId: destination.beforeId };
-  }
-  return { parentId: destination.parentId, beforeId: destination.beforeId };
-}
 
 /**
  * Block operations bound to one panel; actual writes retain the document's
@@ -43,13 +29,11 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param document - Shared document commands.
    * @param rootBlockId - Fixed boundary or null for document roots.
    * @param includeRoot - Whether the boundary block itself is displayed and protected; ignored for a null boundary.
-   * @param source - Block view supplying the subtree, defaulting to the document's block manager.
    */
   constructor(
-    document: DocumentEditorAPI,
+    private readonly document: DocumentEditorAPI,
     readonly rootBlockId: string | null,
     readonly includeRoot: boolean,
-    private readonly source: BlockManagerApi | PanelBlocksAPI = document.blocks,
   ) {}
 
   /**
@@ -58,7 +42,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Document block revision, used to invalidate panel membership checks.
    */
   get revision() {
-    return this.source.revision;
+    return this.document.blocks.revision;
   }
   /**
    * Checks current document ancestry against the fixed panel boundary.
@@ -67,7 +51,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Whether it is currently inside the panel.
    */
   hasBlock(id: string): boolean {
-    const blocks = this.source;
+    const blocks = this.document.blocks;
     if (!blocks.hasBlock(id)) {
       return false;
     }
@@ -93,7 +77,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Own fields or undefined outside the panel.
    */
   getBlockNode(id: string) {
-    return this.hasBlock(id) ? this.source.getBlockNode(id) : undefined;
+    return this.hasBlock(id) ? this.document.blocks.getBlockNode(id) : undefined;
   }
   /**
    * Reads a block and its complete recursive subtree.
@@ -102,7 +86,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Recursive snapshot or undefined outside the panel.
    */
   getBlock(id: string) {
-    return this.hasBlock(id) ? this.source.getBlock(id) : undefined;
+    return this.hasBlock(id) ? this.document.blocks.getBlock(id) : undefined;
   }
   private rootIds: readonly string[] = EMPTY_IDS;
   /**
@@ -115,13 +99,13 @@ export class PanelBlocks implements PanelBlocksAPI {
   getRootIds(): readonly string[] {
     let ids: readonly string[];
     if (this.rootBlockId === null) {
-      ids = this.source.getRootIds();
-    } else if (!this.source.hasBlock(this.rootBlockId)) {
+      ids = this.document.blocks.getRootIds();
+    } else if (!this.document.blocks.hasBlock(this.rootBlockId)) {
       ids = EMPTY_IDS;
     } else if (this.includeRoot) {
       ids = [this.rootBlockId];
     } else {
-      ids = this.source.getChildIds(this.rootBlockId);
+      ids = this.document.blocks.getChildIds(this.rootBlockId);
     }
     if (ids === this.rootIds) {
       return ids;
@@ -137,7 +121,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Recursive snapshots of this panel's current roots.
    */
   getBlocks(): EditorBlock[] {
-    return this.getRootIds().flatMap((id) => this.source.getBlock(id) ?? []);
+    return this.getRootIds().flatMap((id) => this.document.blocks.getBlock(id) ?? []);
   }
   /**
    * Reads direct children of an included block without recursive snapshots.
@@ -170,7 +154,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     if (this.includeRoot && id === this.rootBlockId) {
       return null;
     }
-    const parent = this.source.getParentId(id);
+    const parent = this.document.blocks.getParentId(id);
     return !this.includeRoot && parent === this.rootBlockId ? null : parent;
   }
   /**
@@ -189,7 +173,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Local IDs in document order.
    */
   getOrderedIds(ids: Iterable<string>): string[] {
-    return this.source.getOrderedIds([...ids].filter((id) => this.hasBlock(id)));
+    return this.document.blocks.getOrderedIds([...ids].filter((id) => this.hasBlock(id)));
   }
   /**
    * Observes changes to the displayed root ID list.
@@ -210,9 +194,9 @@ export class PanelBlocks implements PanelBlocksAPI {
       }
     };
     if (this.rootBlockId === null) {
-      return this.source.subscribeRootIds(notify);
+      return this.document.blocks.subscribeRootIds(notify);
     }
-    return this.source.subscribeBlockNode(this.rootBlockId, notify);
+    return this.document.blocks.subscribeBlockNode(this.rootBlockId, notify);
   }
   /**
    * Observes shared document structure changes.
@@ -223,7 +207,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @returns Cleanup for document placement changes affecting membership.
    */
   subscribeStructure(listener: () => void): () => void {
-    return this.source.subscribeStructure(listener);
+    return this.document.blocks.subscribeStructure(listener);
   }
   /**
    * Observes a recursive subtree while tracking its panel membership.
@@ -269,7 +253,7 @@ export class PanelBlocks implements PanelBlocksAPI {
   canOutdent(id: string): boolean {
     return (
       this.canRemove(id) &&
-      this.source.getParentId(id) !== this.rootBlockId &&
+      this.document.blocks.getParentId(id) !== this.rootBlockId &&
       this.getParentId(id) !== null
     );
   }
@@ -290,14 +274,11 @@ export class PanelBlocks implements PanelBlocksAPI {
         beforeId:
           this.rootBlockId === null
             ? this.getRootIds()[0]
-            : this.source.getChildIds(this.rootBlockId)[0],
+            : this.document.blocks.getChildIds(this.rootBlockId)[0],
       };
     }
     this.require(afterId, true);
-    const result = this.source.getInsertionDestinationAfter(afterId);
-    if ("root" in result) {
-      return result;
-    }
+    const result = this.document.blocks.getInsertionDestinationAfter(afterId);
     if (result.parentId === this.rootBlockId) {
       return { root: true, beforeId: result.beforeId };
     }
@@ -318,11 +299,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     input: EditorBlockInput,
     destination: PanelDestination = { root: true },
   ): EditorBlock {
-    const target = this.destination(destination);
-    if ("canRemove" in this.source) {
-      return this.source.insertBlock(input, sourcePanelDestination(target));
-    }
-    return this.source.insertBlock(input, target);
+    return this.document.blocks.insertBlock(input, this.destination(destination));
   }
   /**
    * Imports copied subtrees at a panel-relative destination.
@@ -343,11 +320,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     onError?: BlockPrepareErrorHandler,
     ids?: ReadonlyMap<string, string>,
   ) {
-    const target = this.destination(destination);
-    if ("canRemove" in this.source) {
-      return this.source.importForest(input, sourcePanelDestination(target), onError, ids);
-    }
-    return this.source.importForest(input, target, onError, ids);
+    return this.document.blocks.importForest(input, this.destination(destination), onError, ids);
   }
   /**
    * Prepares detached block inputs through the document processing pipeline.
@@ -360,7 +333,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     input: readonly (EditorBlock | EditorBlockInput)[],
     onError?: BlockPrepareErrorHandler,
   ) {
-    return this.source.prepareInput(input, onError);
+    return this.document.blocks.prepareInput(input, onError);
   }
   /**
    * Patches one included block through the document commands.
@@ -372,7 +345,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   updateBlock(id: string, patch: EditorBlockPatch) {
     this.require(id);
-    return this.source.updateBlock(id, patch);
+    return this.document.blocks.updateBlock(id, patch);
   }
   /**
    * Checks every target before delegating the ordered patch batch.
@@ -383,7 +356,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   updateBlocks(updates: readonly EditorBlockUpdate[]) {
     updates.forEach(({ id }) => this.require(id));
-    return this.source.updateBlocks(updates);
+    return this.document.blocks.updateBlocks(updates);
   }
   /**
    * Removes selected list-property keys from an included block.
@@ -395,7 +368,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   deleteListProps(id: string, keys: readonly string[]) {
     this.require(id);
-    return this.source.deleteListProps(id, keys);
+    return this.document.blocks.deleteListProps(id, keys);
   }
   /**
    * Checks every target before removing list-property keys in a batch.
@@ -405,7 +378,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   deleteListPropsBatch(updates: readonly { id: string; keys: readonly string[] }[]) {
     updates.forEach(({ id }) => this.require(id));
-    this.source.deleteListPropsBatch(updates);
+    this.document.blocks.deleteListPropsBatch(updates);
   }
   /**
    * Clears an included block through the document commands, preserving its ID.
@@ -415,7 +388,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   clearBlock(id: string) {
     this.require(id);
-    this.source.clearBlock(id);
+    this.document.blocks.clearBlock(id);
   }
   /**
    * Changes the type of an included block through the document commands.
@@ -426,7 +399,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   setBlockType(id: string, type: string) {
     this.require(id);
-    this.source.setBlockType(id, type);
+    this.document.blocks.setBlockType(id, type);
   }
   /**
    * Sets or removes one property on an included block.
@@ -438,7 +411,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   setBlockProp(id: string, key: string, value: unknown) {
     this.require(id);
-    this.source.setBlockProp(id, key, value);
+    this.document.blocks.setBlockProp(id, key, value);
   }
   /**
    * Writes plugin data in one namespace on an included block.
@@ -450,7 +423,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   setBlockPluginData(id: string, pluginId: string, value: unknown) {
     this.require(id);
-    this.source.setBlockPluginData(id, pluginId, value);
+    this.document.blocks.setBlockPluginData(id, pluginId, value);
   }
   /**
    * Deletes an included subtree while protecting the displayed embedding root.
@@ -469,7 +442,7 @@ export class PanelBlocks implements PanelBlocksAPI {
    */
   removeBlocks(ids: readonly string[]) {
     ids.forEach((id) => this.require(id, true));
-    this.source.removeBlocks([...ids]);
+    this.document.blocks.removeBlocks([...ids]);
   }
   /**
    * Merges a removable source block into an included surviving block.
@@ -482,7 +455,7 @@ export class PanelBlocks implements PanelBlocksAPI {
   mergeBlocks(targetId: string, sourceId: string) {
     this.require(targetId);
     this.require(sourceId, true);
-    return this.source.mergeBlocks(targetId, sourceId);
+    return this.document.blocks.mergeBlocks(targetId, sourceId);
   }
   /**
    * Moves one subtree relative to an included target.
@@ -526,7 +499,7 @@ export class PanelBlocks implements PanelBlocksAPI {
         this.require(targetId, true);
       }
     }
-    this.source.moveBlocks([...ids], targetId, position);
+    this.document.blocks.moveBlocks([...ids], targetId, position);
   }
   /**
    * Indents one removable subtree under its preceding sibling.
@@ -548,14 +521,15 @@ export class PanelBlocks implements PanelBlocksAPI {
     if (!ids.length) {
       return;
     }
-    const ordered = this.source.getOrderedIds(ids);
-    const parent = this.source.getParentId(ordered[0]!);
-    const siblings = parent == null ? this.source.getRootIds() : this.source.getChildIds(parent);
+    const ordered = this.document.blocks.getOrderedIds(ids);
+    const parent = this.document.blocks.getParentId(ordered[0]!);
+    const siblings =
+      parent == null ? this.document.blocks.getRootIds() : this.document.blocks.getChildIds(parent);
     const previous = siblings[siblings.indexOf(ordered[0]!) - 1];
     if (previous) {
       this.require(previous);
     }
-    this.source.indentBlocks([...ids]);
+    this.document.blocks.indentBlocks([...ids]);
   }
   /**
    * Moves one subtree up a level while enforcing the panel boundary.
@@ -579,7 +553,7 @@ export class PanelBlocks implements PanelBlocksAPI {
         throw new Error("Cannot outdent outside panel");
       }
     });
-    this.source.outdentBlocks([...ids]);
+    this.document.blocks.outdentBlocks([...ids]);
   }
   /**
    * Observes a block and its membership in the panel, notifying when the block changes or enters or leaves scope.
@@ -600,9 +574,9 @@ export class PanelBlocks implements PanelBlocksAPI {
       }
     };
     const dispose = node
-      ? this.source.subscribeBlockNode(id, notify)
-      : this.source.subscribeBlock(id, notify);
-    const structure = this.source.subscribeStructure(() => {
+      ? this.document.blocks.subscribeBlockNode(id, notify)
+      : this.document.blocks.subscribeBlock(id, notify);
+    const structure = this.document.blocks.subscribeStructure(() => {
       const next = this.hasBlock(id);
       if (next !== present) {
         present = next;
@@ -645,7 +619,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     const parentId = "root" in destination ? this.rootBlockId : destination.parentId;
     if (parentId !== null) {
       if (parentId === this.rootBlockId) {
-        if (!this.source.hasBlock(parentId)) {
+        if (!this.document.blocks.hasBlock(parentId)) {
           throw new Error(`Panel root ${parentId} not found`);
         }
       } else {
@@ -654,7 +628,7 @@ export class PanelBlocks implements PanelBlocksAPI {
     }
     if (destination.beforeId !== undefined) {
       this.require(destination.beforeId);
-      if (this.source.getParentId(destination.beforeId) !== parentId) {
+      if (this.document.blocks.getParentId(destination.beforeId) !== parentId) {
         throw new Error("Insertion anchor belongs to another parent");
       }
     }

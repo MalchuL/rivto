@@ -82,6 +82,16 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     await model.destroy();
   });
 
+  it("does not materialize block forests for an element-only snapshot update", async () => {
+    const model = new DocumentModelImpl(new YjsDoc("element-only-snapshot"));
+    const roots = jest.spyOn(model.blocks, "getBlocks");
+    const additional = jest.spyOn(model.blocks, "getAdditionalBlocks");
+    model.loadSnapshot({ version: 9, elements: [] });
+    expect(roots).not.toHaveBeenCalled();
+    expect(additional).not.toHaveBeenCalled();
+    await model.destroy();
+  });
+
   it("includes subclass-created block and element managers in snapshots and undo history", async () => {
     class ApplicationBlocks extends DocumentBlockManager {
       /**

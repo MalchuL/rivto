@@ -3,6 +3,16 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactPanelApi } from "../../panels/types";
 import type { PanelDestination } from "@chulane/rivto";
 
+/** Panel operations borrowed by the synchronous clipboard adapter. */
+interface PanelClipboardHost {
+  /** Document that owns the clipboard operations. */
+  readonly document: ReactPanelApi["document"];
+  /** Block operations constrained to this panel. */
+  readonly blocks: ReactPanelApi["blocks"];
+  /** Panel root, when the panel has a protected boundary. */
+  readonly rootBlockId?: ReactPanelApi["rootBlockId"];
+}
+
 /**
  * Supplies the existing core paste algorithms with panel-bound mutations and real document destinations.
  * The adapter is private to one synchronous paste; definitions, transactions and selection resolution
@@ -10,7 +20,7 @@ import type { PanelDestination } from "@chulane/rivto";
  * @param reactPanel - Receiving panel, retained throughout this paste.
  * @returns Document contract whose block reads and writes respect the receiving panel.
  */
-export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEditorAPI {
+export function panelClipboardDocument(reactPanel: PanelClipboardHost): DocumentEditorAPI {
   const document = reactPanel.document;
   const destination = (target?: BlockDestination): PanelDestination => {
     if (!target || target.parentId === (reactPanel.rootBlockId ?? null)) {
@@ -21,6 +31,20 @@ export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEdito
     }
     return { parentId: target.parentId, beforeId: target.beforeId };
   };
+  /**
+   * Resolves a visible block's parent in the coordinate system used by paste destinations.
+   *
+   * A protected panel root stays parentless so pasting inside it cannot delete it.
+   *
+   * @param id - Block whose parent is requested.
+   * @returns The destination parent, null for a protected or document root, or undefined outside the panel.
+   */
+  const getParentId: DocumentEditorAPI["blocks"]["getParentId"] = (id) => {
+    const parent = reactPanel.blocks.getParentId(id);
+    return parent === null && id !== reactPanel.rootBlockId
+      ? (reactPanel.rootBlockId ?? null)
+      : parent;
+  };
   const blocks = new Proxy(document.blocks, {
     /**
      * Routes clipboard block operations through panel boundaries and binds other methods to their original owners.
@@ -30,6 +54,9 @@ export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEdito
      * @returns Panel-aware operation or bound document block member.
      */
     get(target, key) {
+      if (key === "getParentId") {
+        return getParentId;
+      }
       if (key === "getInsertionDestinationAfter") {
         return (afterId?: string | null): BlockDestination => {
           if (

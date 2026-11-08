@@ -19,7 +19,6 @@ import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
 import type { BlockTypesApi } from "../managers/blocks/block-types-api";
-import type { BlockSourcesApi } from "../managers/blocks/block-source-registry";
 import type { RenderersApi } from "../managers/blocks/renderers-api";
 import type { PanelRegistry } from "../panels/panel-registry";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
@@ -92,8 +91,6 @@ export interface Entry {
  * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
  */
 export interface ReactEditorApi extends DocumentEditorAPI {
-  /** Extension-owned persistent block collection sources. */
-  readonly blockSources: BlockSourcesApi;
   /**
    * Adds synchronous runtime cleanup without replacing destroy.
    * Remaining callbacks run in reverse registration order even if another fails.

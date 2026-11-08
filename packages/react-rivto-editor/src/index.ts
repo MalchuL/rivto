@@ -65,7 +65,6 @@ export {
   BLOCK_BACKGROUND_COLORS,
 } from "./components/block-handle/block-color-palette";
 export type { BlockColorPaletteProps } from "./components/block-handle/block-color-palette";
-export type { BlockSource, BlockSourceAddress } from "./managers/blocks/block-source-registry";
 export {
   COMMENT_SIDE_BLOCK_TYPE,
   commentsExtension,

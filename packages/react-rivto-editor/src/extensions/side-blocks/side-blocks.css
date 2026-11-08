@@ -1,3 +1,27 @@
+.rivto-side-block-content {
+  /* Host controls occupy perimeter slots; ordinary content needs no empty start gutter. */
+  --rivto-block-start-width: 0px;
+  --rivto-block-padding: 2px 8px;
+  --rivto-block-gap: 4px;
+  /* Drop calculation: sets depth-band spacing for parent and sibling placements.
+   * Highlight: positions each depth's insertion line; also indents child blocks. */
+  --rivto-block-indent: 24px;
+  /* Drop calculation: none. Highlight: insets the start of horizontal insertion lines. */
+  --rivto-block-drop-line-inset: 12px;
+  /* Drop calculation: adds pointer distance before a gap selects a child, expanding
+   * the sibling band. Set to 0 to select a child at --rivto-block-indent from the
+   * drop region's start; positive values are added to that distance. Highlight: none;
+   * the child line stays at its indentation level. Setting this to the same value
+   * as --rivto-block-drop-line-inset aligns the child-placement threshold with the
+   * start of the child insertion line when the gap offers child placement. */
+  --rivto-block-drop-child-offset: 12px;
+  /* --rivto-drop-target-size defaults to 12px when omitted. Drop calculation:
+   * sets edge target thickness, bounded by the block's size and content area.
+   * Highlight: none; line thickness uses --rivto-drop-indicator-thickness. */
+  --rivto-drop-target-size: 12px;
+}
+
+
 .rivto-side-blocks {
   position: relative;
   display: grid;

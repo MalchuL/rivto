@@ -38,12 +38,10 @@ export class BlockCache {
    * Creates a cache backed by read-only access to current plain IDs.
    * @param readChildren - Reads root or block child IDs without exposing storage.
    * @param hasRecord - Reports whether a block record still exists.
-   * @param readAdditionalRoots - Reads other root lists included in hierarchy indexing.
    */
   constructor(
     private readonly readChildren: ReadChildren,
     private readonly hasRecord: (id: IDBlock) => boolean,
-    private readonly readAdditionalRoots: () => readonly IDBlock[] = () => [],
   ) {}
 
   /** @param id - Block identity. @returns Last known tree path, if any. */
@@ -159,7 +157,7 @@ export class BlockCache {
       });
       this.indexedChildren.set(parentId, children);
     };
-    visit(this.readIndexedChildren(null) ?? [], null);
+    visit(this.readChildren(null) ?? [], null);
   }
 
   /**
@@ -304,7 +302,7 @@ export class BlockCache {
     const previousChildren = new Set<IDBlock>();
     let currentCount = 0;
     for (const parentId of changedParents) {
-      const ids = this.readIndexedChildren(parentId);
+      const ids = this.readChildren(parentId);
       if (!ids || (parentId !== null && !this.parents.has(parentId))) {
         return false;
       }
@@ -398,20 +396,6 @@ export class BlockCache {
       }
     }
     return true;
-  }
-
-  /**
-   * Reads hierarchy members from every root list without changing the page root list.
-   *
-   * @param parentId - Parent block ID, or null for all indexed roots.
-   * @returns Indexed children, or undefined when their parent is missing.
-   */
-  private readIndexedChildren(parentId: ParentId): readonly IDBlock[] | undefined {
-    const children = this.readChildren(parentId);
-    if (parentId !== null || !children) {
-      return children;
-    }
-    return [...children, ...this.readAdditionalRoots()];
   }
 
   /**

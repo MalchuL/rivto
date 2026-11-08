@@ -2,24 +2,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { EditorStorage, ReactEditorApi } from "@chulane/rivto-react";
 
-/** Browser hooks for testing independently registered block sources. */
-interface ExternalSourceTestWindow extends Window {
-  /** Installs the fixture source. */
-  installExternalSource: () => void;
-  /** Changes target availability and publishes the change. */
-  setExternalSourceAvailable: (value: boolean) => void;
-  /** Removes the fixture source. */
-  releaseExternalSource: () => void;
-  /** Counts active source listeners. */
-  externalSourceListeners: () => number;
-}
-
-/** Demo instrumentation for creating protected reference panels. */
-interface EmbeddingPanelTestApi {
-  /** Creates a panel for the specified document block. */
-  createEmbeddingPanel: (id: string) => import("@chulane/rivto").PanelAPI;
-}
-
 /**
  * Adds a writing block through the empty control or the editor's Enter command.
  *
@@ -194,6 +176,41 @@ test("styles a side note and restores its empty state and deleted container", as
   await page.keyboard.press("ControlOrMeta+z");
   await expect(side).toHaveCount(1);
   await expect(note).toHaveAttribute("data-border-animated", "true");
+});
+
+test("replaces an empty side block with pasted content and restores it on undo", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const side = page.locator('[data-journal-document="today"] [data-side-block-placement="left"]');
+  const input = side.getByRole("textbox", { name: "Markdown block content" }).first();
+  const id = await input
+    .locator("xpath=ancestor::*[@data-block-id][1]")
+    .getAttribute("data-block-id");
+  await page.evaluate((blockId) => {
+    window.__rivtoDemo.editor.blocks.updateBlock(blockId!, { content: "" });
+    window.__rivtoDemo.editor.history.clear();
+  }, id);
+  await input.click();
+  await input.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData("text/html", "<p>Side clipboard content</p>");
+    data.setData("text/plain", "Side clipboard content");
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: data });
+    element.dispatchEvent(event);
+  });
+  await expect(side.getByRole("textbox", { name: "Markdown block content" })).toHaveText(
+    "Side clipboard content",
+  );
+  await expect
+    .poll(() => page.evaluate((blockId) => window.__rivtoDemo.editor.blocks.hasBlock(blockId!), id))
+    .toBe(false);
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect
+    .poll(() => page.evaluate((blockId) => window.__rivtoDemo.editor.blocks.hasBlock(blockId!), id))
+    .toBe(true);
+  await expect(input).toHaveText("");
 });
 
 test("stores each side note in its own document container", async ({ page }) => {
@@ -748,183 +765,6 @@ test("reports a missing side reference and renders it when its target appears", 
       .locator(".rivto-embedded-surface")
       .getByRole("textbox", { name: "Markdown block content" }),
   ).toHaveText("Restored target");
-});
-
-test("observes a registered block source that changes independently of its document", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const side = page.locator('[data-journal-document="today"] [data-side-block-placement="left"]');
-  const noteId = await side.getAttribute("data-side-block-id");
-  const referenceId = await page.evaluate((id) => {
-    const editor = window.__rivtoDemo.reactEditor;
-    const document = editor.getDocument();
-    const note = document.pluginData.get<{ data: { rootBlockId: string } }>(
-      `rivto.side-blocks.${id}`,
-    )!;
-    const blockId = document.blocks.getChildIds(note.data.rootBlockId)[0]!;
-    const listeners = new Set<() => void>();
-    let available = false;
-    let release: (() => void) | undefined;
-    const source = {
-      id: "test.external-source",
-      find: () => undefined,
-      has: () => true,
-      hasBlock: () => available,
-      subscribe: (_collectionId: string, listener: () => void) => {
-        listeners.add(listener);
-        return () => {
-          listeners.delete(listener);
-        };
-      },
-      createPanel: (_collectionId: string, target: string) =>
-        (
-          window.__rivtoDemo as typeof window.__rivtoDemo & EmbeddingPanelTestApi
-        ).createEmbeddingPanel(target),
-    };
-    Object.assign(window, {
-      installExternalSource: () => {
-        release = editor.blockSources.register(source);
-      },
-      setExternalSourceAvailable: (value: boolean) => {
-        available = value;
-        listeners.forEach((listener) => listener());
-      },
-      releaseExternalSource: () => release?.(),
-      externalSourceListeners: () => listeners.size,
-    });
-    return editor.blocks.insertBlock({
-      type: "embedding",
-      props: {
-        targetDocumentId: editor.getDocument().id,
-        targetBlockId: blockId,
-        targetSourceId: "test.external-source",
-        targetCollectionId: id,
-      },
-    }).id;
-  }, noteId);
-  const reference = page.locator(
-    `[data-journal-document="today"] .page-surface [data-block-id="${referenceId}"]`,
-  );
-  await expect(reference.getByRole("status")).toHaveText("Referenced block is unavailable.");
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).installExternalSource(),
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (window as unknown as ExternalSourceTestWindow).externalSourceListeners(),
-      ),
-    )
-    .toBe(1);
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).setExternalSourceAvailable(true),
-  );
-  await expect(
-    reference
-      .locator(".rivto-embedded-surface")
-      .getByRole("textbox", { name: "Markdown block content" }),
-  ).toHaveText("A note on the left.");
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).setExternalSourceAvailable(false),
-  );
-  await expect(reference.getByRole("status")).toHaveText("Referenced block was deleted.");
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).releaseExternalSource(),
-  );
-  await expect(reference.getByRole("status")).toHaveText("Referenced block is unavailable.");
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (window as unknown as ExternalSourceTestWindow).externalSourceListeners(),
-      ),
-    )
-    .toBe(0);
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).installExternalSource(),
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (window as unknown as ExternalSourceTestWindow).externalSourceListeners(),
-      ),
-    )
-    .toBe(1);
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).setExternalSourceAvailable(true),
-  );
-  await expect(
-    reference
-      .locator(".rivto-embedded-surface")
-      .getByRole("textbox", { name: "Markdown block content" }),
-  ).toHaveText("A note on the left.");
-  await page.evaluate(() =>
-    (window as unknown as ExternalSourceTestWindow).releaseExternalSource(),
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (window as unknown as ExternalSourceTestWindow).externalSourceListeners(),
-      ),
-    )
-    .toBe(0);
-});
-
-test("clears the collection address when embedding settings select a different block", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const side = page.locator('[data-journal-document="today"] [data-side-block-placement="left"]');
-  const noteId = await side.getAttribute("data-side-block-id");
-  const { referenceId, documentBlockId } = await page.evaluate((id) => {
-    const editor = window.__rivtoDemo.editor;
-    const doc = editor.getDocument();
-    const note = doc.pluginData.get<{ data: { rootBlockId: string } }>(`rivto.side-blocks.${id}`)!;
-    const targetBlockId = doc.blocks.getChildIds(note.data.rootBlockId)[0]!;
-    const panel = (window.__rivtoDemo as typeof window.__rivtoDemo & EmbeddingPanelTestApi)
-      .createEmbeddingPanel;
-    window.__rivtoDemo.reactEditor.blockSources.register({
-      id: "test.settings-source",
-      find: () => undefined,
-      has: () => true,
-      hasBlock: (_collectionId, blockId) => blockId === targetBlockId,
-      subscribe: (_collectionId, listener) => doc.subscribe(listener),
-      createPanel: (_collectionId, blockId) => panel(blockId),
-    });
-    const documentBlockId = editor.blocks.getRootIds()[0]!;
-    const referenceId = editor.blocks.insertBlock({
-      type: "embedding",
-      props: {
-        targetDocumentId: editor.getDocument().id,
-        targetBlockId,
-        targetSourceId: "test.settings-source",
-        targetCollectionId: id,
-      },
-    }).id;
-    return { referenceId, documentBlockId };
-  }, noteId);
-  const reference = page.locator(
-    `[data-journal-document="today"] .page-surface [data-block-id="${referenceId}"]`,
-  );
-  await expect(
-    reference
-      .locator(".rivto-embedded-surface")
-      .getByRole("textbox", { name: "Markdown block content" }),
-  ).toHaveText("A note on the left.");
-  await reference.hover();
-  await reference.getByRole("button", { name: "Edit embedding" }).click();
-  const settings = page.getByRole("dialog", { name: "Embedding settings" });
-  await settings.getByLabel("Target block ID").fill(documentBlockId);
-  await settings.getByRole("button", { name: "Save embedding" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate((id) => window.__rivtoDemo.editor.blocks.getBlockNode(id)?.props, referenceId),
-    )
-    .toEqual({
-      targetDocumentId: await page.evaluate(() => window.__rivtoDemo.editor.getDocument().id),
-      targetBlockId: documentBlockId,
-    });
-  await expect(reference.getByRole("status")).toHaveCount(0);
 });
 
 test("converts a side block to a TODO from the shared context menu", async ({ page }) => {

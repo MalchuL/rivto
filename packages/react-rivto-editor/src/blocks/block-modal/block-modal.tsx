@@ -2,7 +2,7 @@
  * Shared shadcn dialog presentation for container blocks. An expanded board uses
  * its own panel while both presentations edit the same persisted document.
  *
- * The dialog owns an embedding panel and page surface, so selection, keyboard input
+ * The dialog owns an EditorEmbed and page surface, so selection, keyboard input
  * and drag registrations belong to that occurrence instead of its parent panel.
  * Radix owns outside dismissal, Escape, focus trapping and scroll locking. The
  * toggle button uses the shared shadcn `Button` primitive. Structural rules for
@@ -10,21 +10,11 @@
  * @module
  */
 import { editorControlProps } from "../../constants";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
-import { EmbeddingPanel, type PanelOptions } from "@chulane/rivto";
-import type { ReactEditorApi } from "../../editor/types";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
-import { ReactPanelProvider } from "../../components/editor-panel/react-panel-provider";
+import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 const DIALOG_CLASS = "rivto-block-modal";
@@ -62,6 +52,7 @@ export function BlockModal({
 }) {
   const inline = useRef<HTMLDivElement>(null);
   const parent = useContext(ExpandContext);
+  const panel = useReactPanel();
   const [expanded, setExpanded] = useState(false);
   if (parent?.expanded && parent.blockId === blockId) {
     return children;
@@ -74,63 +65,25 @@ export function BlockModal({
         <div ref={inline} className={DIALOG_CLASS} role="group" aria-label={`${label} board`}>
           {!expanded && children}
         </div>
-        {expanded && <ExpandedBlockContent blockId={blockId} label={label} inline={inline} />}
+        {expanded && (
+          <DialogContent
+            className="rivto-block-modal-content"
+            showCloseButton={false}
+            aria-describedby={undefined}
+            aria-modal="true"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
+            }}
+          >
+            <DialogTitle className="sr-only">Expanded {label}</DialogTitle>
+            <EditorEmbed editor={panel.editor} rootBlockId={blockId}>
+              <PageSurface />
+            </EditorEmbed>
+          </DialogContent>
+        )}
       </Dialog>
     </ExpandContext.Provider>
-  );
-}
-
-/** Properties of the dialog's independently mounted subtree panel. */
-interface ExpandedBlockContentProps {
-  /** Block displayed and protected inside the modal. */
-  readonly blockId: string;
-  /** Board name used for the dialog's accessible title. */
-  readonly label: string;
-  /** Inline host used to restore focus when the dialog closes. */
-  readonly inline: RefObject<HTMLDivElement | null>;
-}
-
-/**
- * Mounts a protected panel borrowing the invoking panel's subtree and transaction boundary.
- *
- * @param props - Expanded subtree and its inline focus target.
- * @param props.blockId - Root displayed and protected inside the panel.
- * @param props.label - Board name used in the dialog title.
- * @param props.inline - Original host receiving focus after the dialog closes.
- * @returns Dialog content with an independent page surface.
- * @throws If the enclosing panel is unavailable or the root is missing from the panel options.
- */
-function ExpandedBlockContent({ blockId, label, inline }: ExpandedBlockContentProps) {
-  const panel = useReactPanel();
-  const createPanel = useCallback(
-    (_editor: ReactEditorApi, options: PanelOptions) => {
-      if (!options.rootBlockId) {
-        throw new Error("Expanded block requires a root");
-      }
-      return new EmbeddingPanel(
-        panel.document,
-        { ...options, rootBlockId: options.rootBlockId },
-        panel,
-      );
-    },
-    [panel],
-  );
-  return (
-    <DialogContent
-      className="rivto-block-modal-content"
-      showCloseButton={false}
-      aria-describedby={undefined}
-      aria-modal="true"
-      onCloseAutoFocus={(event) => {
-        event.preventDefault();
-        inline.current?.querySelector<HTMLButtonElement>(`.${EXPAND_CLASS}`)?.focus();
-      }}
-    >
-      <DialogTitle className="sr-only">Expanded {label}</DialogTitle>
-      <ReactPanelProvider editor={panel.editor} rootBlockId={blockId} createPanel={createPanel}>
-        <PageSurface />
-      </ReactPanelProvider>
-    </DialogContent>
   );
 }
 

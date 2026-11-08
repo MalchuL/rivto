@@ -120,14 +120,8 @@ function canMoveKeyboardBlocks(
     const block = reactPanel.blocks.getBlockNode(id);
     return block ? [block] : [];
   });
-  const destinationBlocks =
-    reactPanel.rootBlockId &&
-    destination.parentId === reactPanel.rootBlockId &&
-    !reactPanel.blocks.hasBlock(reactPanel.rootBlockId)
-      ? reactPanel.document.blocks
-      : reactPanel.blocks;
   return (
     sources.length === ids.length &&
-    reactPanel.editor.blockBehaviors.canMove({ sources, destination }, destinationBlocks)
+    reactPanel.editor.blockBehaviors.canMove({ sources, destination })
   );
 }
