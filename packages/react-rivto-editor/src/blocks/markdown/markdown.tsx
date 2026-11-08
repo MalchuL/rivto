@@ -15,6 +15,7 @@ import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { editorControlProps } from "../../constants";
 import { useBlockEditing, usePanel } from "../../hooks";
+import { restoreDOMSelection } from "../../managers/selection/dom-text-selection";
 import type { MarkdownExtension } from "./markdown-extensions";
 import { MARKDOWN_EDITOR_CLASS } from "./constants";
 import { useMarkdownExtensions } from "./use-markdown-extensions";
@@ -123,6 +124,21 @@ export function MarkdownContent({
     },
     [panel, blockId, operations],
   );
+  const openMarkdownAtCodeEdge = useCallback(
+    (node: PositionedNode, direction: "up" | "down") => {
+      const editor = editing.attributes.ref.current;
+      const offset = direction === "up" ? node.position?.start.offset : node.position?.end.offset;
+      if (!editor || offset === undefined) {
+        return;
+      }
+      editor.focus();
+      restoreDOMSelection(editor, {
+        anchor: { textOffset: offset },
+        focus: { textOffset: offset },
+      });
+    },
+    [editing.attributes.ref],
+  );
   const transformUrl = useCallback<UrlTransform>(
     (url) => {
       const safe = defaultUrlTransform(url);
@@ -148,11 +164,22 @@ export function MarkdownContent({
         <MarkdownCodeBlock
           {...props}
           onCodeChange={updateCode}
+          onCodeEdge={openMarkdownAtCodeEdge}
+          onEditMarkdown={() => editing.attributes.ref.current?.focus()}
           preventTextEditingAttributes={editing.preventTextEditingAttributes}
         />
       ),
     }),
-    [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode, panel, operations],
+    [
+      blockId,
+      editing.preventTextEditingAttributes,
+      editing.attributes.ref,
+      onLinkClick,
+      updateCode,
+      openMarkdownAtCodeEdge,
+      panel,
+      operations,
+    ],
   );
 
   const extendedComponents = useMemo(

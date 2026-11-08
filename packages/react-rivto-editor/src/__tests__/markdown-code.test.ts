@@ -27,6 +27,28 @@ describe("resolveCodeFenceInfo", () => {
 });
 
 describe("replaceMarkdownCode", () => {
+  it("keeps an empty fenced block when code is inserted", () => {
+    const source = "```text\n```";
+    expect(
+      replaceMarkdownCode(
+        source,
+        { position: { start: { offset: 0 }, end: { offset: source.length } } },
+        "hello",
+      ),
+    ).toBe("```text\nhello\n```");
+  });
+
+  it("preserves a trailing newline entered within a fenced code block", () => {
+    const source = "```text\nabc\n```";
+    expect(
+      replaceMarkdownCode(
+        source,
+        { position: { start: { offset: 0 }, end: { offset: source.length } } },
+        "abc\n",
+      ),
+    ).toBe("```text\nabc\n\n```");
+  });
+
   it("updates fenced code while preserving its fence and language", () => {
     const source = "Before\n\n```ts\nconst old = true;\n```\n\nAfter";
     const start = source.indexOf("```ts");

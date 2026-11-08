@@ -242,6 +242,157 @@ test("renders plain writing text and keeps Markdown list syntax", async ({ page 
   ).toHaveText("item");
 });
 
+test("copies code and opens block editing from icon buttons", async ({ page }) => {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => sessionStorage.setItem("copied-code", text) },
+    });
+  });
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "```\nfirst\nsecond\n```",
+    }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  await expect(block.getByRole("button", { name: "Copy code" })).toBeVisible({ timeout: 3000 });
+  await block.getByRole("button", { name: "Copy code" }).click();
+  expect(await page.evaluate(() => sessionStorage.getItem("copied-code"))).toBe("first\nsecond");
+  await block.getByRole("button", { name: "Edit block" }).click();
+  await expect(block.locator(".markdown-editor")).toBeFocused();
+  await expect(block.locator(".markdown-preview")).toHaveCount(0);
+});
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const direction of ["ArrowUp", "ArrowDown"] as const) {
+    test(`${direction} into a code block opens raw Markdown (${mode})`, async ({ page }) => {
+      await page.locator(`[data-editor-mode="${mode}"]`).click();
+      const ids = await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return [
+          editor.blocks.insertBlock({ type: "paragraph", content: "before" }).id,
+          editor.blocks.insertBlock({ type: "paragraph", content: "```\nfirst\nsecond\n```" }).id,
+          editor.blocks.insertBlock({ type: "paragraph", content: "after" }).id,
+        ];
+      });
+      const adjacent = page.locator(blockIdSelector(direction === "ArrowDown" ? ids[0]! : ids[2]!));
+      const target = page.locator(blockIdSelector(ids[1]!));
+      await adjacent.locator(".markdown-editor").click();
+      await page.keyboard.press(direction === "ArrowDown" ? "Control+End" : "Control+Home");
+      await page.keyboard.press(direction);
+      await expect(target.locator(".markdown-editor")).toBeFocused();
+      await expect(target.locator(".markdown-preview")).toHaveCount(0);
+      await expect(target.locator(".markdown-editor")).toContainText("```\nfirst\nsecond\n```");
+    });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  for (const direction of ["ArrowUp", "ArrowDown"] as const) {
+    test(`${direction} at a code edge opens Markdown editing (${mode})`, async ({ page }) => {
+      await page.locator(`[data-editor-mode="${mode}"]`).click();
+      const id = await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return editor.blocks.insertBlock({
+          type: "paragraph",
+          content: "before\n\n```\nfirst\nsecond\n```\n\nafter",
+        }).id;
+      });
+      const block = page.locator(blockIdSelector(id));
+      await block.locator(".markdown-code-editor").click();
+      await page.keyboard.press(direction === "ArrowUp" ? "Control+Home" : "Control+End");
+      await expect(block.locator(".markdown-code-editor")).toBeFocused();
+      await page.keyboard.press(direction === "ArrowUp" ? "ArrowDown" : "ArrowUp");
+      await expect(block.locator(".markdown-code-editor")).toBeFocused();
+      await page.keyboard.press(direction === "ArrowUp" ? "Control+Home" : "Control+End");
+      if (direction === "ArrowUp") {
+        await expect.poll(() => page.evaluate(() => document.getSelection()?.anchorOffset)).toBe(0);
+      }
+      await page.keyboard.press(direction);
+      await expect(block.locator(".markdown-editor")).toBeFocused();
+      const offset = await block.locator(".markdown-editor").evaluate((element) => {
+        const selection = document.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection!.anchorNode!, selection!.anchorOffset);
+        return range.toString().length;
+      });
+      expect(offset).toBe(direction === "ArrowUp" ? 8 : 28);
+    });
+  }
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`keeps the caret after inserting a new line at the end of code (${mode})`, async ({
+    page,
+  }) => {
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const id = await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      return editor.blocks.insertBlock({ type: "paragraph", content: "```text\nabc\ndef\n```" }).id;
+    });
+    const block = page.locator(blockIdSelector(id));
+    const code = block.locator(".markdown-code-editor");
+    await code.click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => block.locator(".markdown-editor").textContent())
+      .toBe("```text\nabc\ndef\n\n```");
+    await page.keyboard.type("x");
+    await expect.poll(() => code.textContent()).toBe("abc\ndef\nx");
+    await expect
+      .poll(() => block.locator(".markdown-editor").textContent())
+      .toBe("```text\nabc\ndef\nx\n```");
+    await expect(code).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("y");
+    await expect
+      .poll(() => block.locator(".markdown-editor").textContent())
+      .toBe("```text\nabc\ndef\nx\n\ny\n```");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("z");
+    await expect
+      .poll(() => block.locator(".markdown-editor").textContent())
+      .toBe("```text\nabc\ndef\nx\n\nz\n```");
+  });
+}
+
+test("renders and edits multiple lines of code", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "```javascript\nconst first = 1;\nconst second = 2;\n```",
+    }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const preview = block.locator(".markdown-code-preview");
+  const editor = block.locator(".markdown-code-editor");
+  await expect(preview).toContainText("const second = 2;");
+  await expect
+    .poll(() =>
+      preview.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return element.getBoundingClientRect().height / parseFloat(style.fontSize);
+      }),
+    )
+    .toBeGreaterThanOrEqual(2);
+  await editor.click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" // edited");
+  await expect(editor).toContainText("const second = 2; // edited");
+});
+
 test("highlights separate blocks independently when one source changes", async ({ page }) => {
   const ids = await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo

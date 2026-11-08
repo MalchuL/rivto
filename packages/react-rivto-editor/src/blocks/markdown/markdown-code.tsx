@@ -7,7 +7,10 @@ import {
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
+  type KeyboardEvent,
 } from "react";
+import { CopyIcon, PencilIcon } from "lucide-react";
+import { restoreDOMSelection, saveDOMSelection } from "../../managers/selection/dom-text-selection";
 
 /** Minimal HAST shape needed by the fenced-code metadata transform. */
 interface SyntaxNode {
@@ -192,10 +195,10 @@ export function replaceMarkdownCode(source: string, node: PositionedNode, value:
   }
   const block = source.slice(start, end);
   const opening = block.match(/^([ \t]*)(`{3,}|~{3,})[^\r\n]*(\r?\n)/);
-  const normalized = value.replace(/\r\n?/g, "\n").replace(/\n$/, "");
+  const normalized = value.replace(/\r\n?/g, "\n");
   const closingStart = opening ? block.lastIndexOf("\n") : -1;
   let result: string;
-  if (opening && closingStart >= opening[0].length) {
+  if (opening && closingStart >= opening[0].length - 1) {
     result =
       source.slice(0, start) +
       block.slice(0, opening[0].length) +
@@ -224,6 +227,20 @@ export function replaceMarkdownCode(source: string, node: PositionedNode, value:
 export interface MarkdownCodeBlockProps extends HTMLAttributes<HTMLPreElement> {
   readonly node?: PositionedNode;
   readonly onCodeChange?: (node: PositionedNode, value: string) => void;
+  /**
+   * Opens the complete Markdown block for editing.
+   *
+   * @returns The completed focus request.
+   */
+  readonly onEditMarkdown?: () => void;
+  /**
+   * Requests focus in the surrounding Markdown editor at a code edge.
+   *
+   * @param node - Rendered code block with its Markdown source positions.
+   * @param direction - Edge reached by the caret, either up or down.
+   * @returns The completed focus request.
+   */
+  readonly onCodeEdge?: (node: PositionedNode, direction: "up" | "down") => void;
   readonly preventTextEditingAttributes?: HTMLAttributes<HTMLElement>;
 }
 
@@ -244,43 +261,109 @@ function textContent(node: ReactNode): string {
 function EditableCode({
   children,
   onChange,
+  onEdge,
   preventTextEditingAttributes,
 }: {
   readonly children: ReactNode;
   readonly onChange: (value: string) => void;
+  readonly onEdge?: (direction: "up" | "down") => void;
   readonly preventTextEditingAttributes?: HTMLAttributes<HTMLElement>;
 }) {
-  const ref = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLElement>(null);
   const value = textContent(children).replace(/\n$/, "");
 
   // React owns the highlighted layer, while the browser owns this plaintext
   // editor. Only reconcile external changes; local input already matches value.
   useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element || element.textContent === value) {
+    const element = editorRef.current;
+    if (
+      !element ||
+      element.textContent === value ||
+      (element.textContent === `${value}\n` && hasTrailingCaretPlaceholder(element))
+    ) {
       return;
     }
+    const selection = saveDOMSelection(element);
     element.textContent = value;
-  }, [value]);
+    restoreDOMSelection(element, selection);
+  }, [editorRef, value]);
 
   return (
     <code
       {...preventTextEditingAttributes}
-      ref={ref}
+      ref={editorRef}
       className="markdown-code-editor"
       aria-label="Code block content"
       contentEditable="plaintext-only"
       suppressContentEditableWarning
       spellCheck={false}
       tabIndex={0}
-      onInput={(event) => onChange(event.currentTarget.textContent ?? "")}
+      onInput={(event) => onChange(codeInputText(event.currentTarget, event.nativeEvent))}
+      onKeyDown={onEdge ? (event) => moveFromCodeEdge(event, onEdge) : undefined}
     />
+  );
+}
+
+/**
+ * Reads code input and preserves the browser caret at a trailing empty line.
+ *
+ * Removes Chromium's extra placeholder newline from the saved text and supplies
+ * a trailing break when deletion leaves the caret without a visible empty line.
+ *
+ * @param element - The browser-owned code editor after its input event.
+ * @param event - Native input event describing the browser edit.
+ * @returns Plain code text, including intentional trailing newlines.
+ */
+function codeInputText(element: HTMLElement, event: Event): string {
+  const text = element.textContent ?? "";
+  const selection = element.ownerDocument.getSelection();
+  const last = element.lastChild;
+  if (
+    event instanceof InputEvent &&
+    event.inputType === "deleteContentBackward" &&
+    text.endsWith("\n") &&
+    last?.nodeType === Node.TEXT_NODE &&
+    selection?.isCollapsed &&
+    selection.anchorNode === last &&
+    selection.anchorOffset === last.textContent?.length
+  ) {
+    element.append(element.ownerDocument.createElement("br"));
+    selection.setPosition(element, element.childNodes.length - 1);
+  }
+  if (
+    event instanceof InputEvent &&
+    event.inputType === "insertLineBreak" &&
+    hasTrailingCaretPlaceholder(element)
+  ) {
+    return text.slice(0, -1);
+  }
+  return text;
+}
+
+/**
+ * Identifies Chromium's extra newline needed to place a caret on the last empty line.
+ *
+ * @param element - Browser-owned code editor containing the current caret.
+ * @returns Whether the final text node is the browser's caret placeholder.
+ */
+function hasTrailingCaretPlaceholder(element: HTMLElement): boolean {
+  const selection = element.ownerDocument.getSelection();
+  const last = element.lastChild;
+  return Boolean(
+    selection?.isCollapsed &&
+    selection.anchorNode === last &&
+    selection.anchorOffset === 0 &&
+    last?.nodeType === Node.TEXT_NODE &&
+    last.textContent === "\n" &&
+    last.previousSibling?.textContent?.endsWith("\n"),
   );
 }
 
 export function MarkdownCodeBlock({
   node,
   onCodeChange,
+  onCodeEdge,
+  onEditMarkdown,
   preventTextEditingAttributes,
   children,
   ...attributes
@@ -306,6 +389,7 @@ export function MarkdownCodeBlock({
         <EditableCode
           preventTextEditingAttributes={preventTextEditingAttributes}
           onChange={(value) => onCodeChange(node, value)}
+          onEdge={onCodeEdge ? (direction) => onCodeEdge(node, direction) : undefined}
         >
           {codeElement.props.children}
         </EditableCode>
@@ -316,13 +400,77 @@ export function MarkdownCodeBlock({
 
   return (
     <figure className="markdown-code-block">
-      {(label || showLanguage) && (
-        <figcaption className="markdown-code-header">
+      <figcaption className="markdown-code-header">
+        <span className="markdown-code-labels">
           {label && <span className="markdown-code-label">{label}</span>}
           {showLanguage && <span className="markdown-code-language">{languageTitle}</span>}
-        </figcaption>
-      )}
+        </span>
+        <span className="markdown-code-actions" {...preventTextEditingAttributes}>
+          <button
+            type="button"
+            title="Copy code"
+            aria-label="Copy code"
+            onClick={() =>
+              void navigator.clipboard.writeText(
+                textContent(codeElement?.props.children).replace(/\n$/, ""),
+              )
+            }
+          >
+            <CopyIcon aria-hidden="true" />
+          </button>
+          {onEditMarkdown && (
+            <button
+              type="button"
+              title="Edit block"
+              aria-label="Edit block"
+              onClick={onEditMarkdown}
+            >
+              <PencilIcon aria-hidden="true" />
+            </button>
+          )}
+        </span>
+      </figcaption>
       <pre {...attributes}>{codeContent}</pre>
     </figure>
   );
+}
+
+/**
+ * Opens the surrounding editor when an unmodified vertical arrow reaches a code edge.
+ *
+ * @param event - Key event from the editable code element.
+ * @param onEdge - Receives the edge reached by the collapsed caret.
+ * @returns Nothing when the caret can move within the code; otherwise requests the handoff.
+ */
+function moveFromCodeEdge(
+  event: KeyboardEvent<HTMLElement>,
+  onEdge: (direction: "up" | "down") => void,
+): void {
+  if (
+    (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
+    event.shiftKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  ) {
+    return;
+  }
+  const element = event.currentTarget;
+  const selection = element.ownerDocument.getSelection();
+  if (!selection?.isCollapsed || !selection.anchorNode || !element.contains(selection.anchorNode)) {
+    return;
+  }
+  const range = element.ownerDocument.createRange();
+  range.selectNodeContents(element);
+  if (event.key === "ArrowUp") {
+    range.setEnd(selection.anchorNode, selection.anchorOffset);
+  } else {
+    range.setStart(selection.anchorNode, selection.anchorOffset);
+  }
+  if (range.toString().includes("\n")) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  onEdge(event.key === "ArrowUp" ? "up" : "down");
 }

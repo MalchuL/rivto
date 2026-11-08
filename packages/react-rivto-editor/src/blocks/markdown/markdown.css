@@ -76,7 +76,7 @@
 }
 
 /* Inline monospace font metrics must not enlarge the surrounding text line. */
-.markdown-preview :not(pre) > code {
+.markdown-preview :not(pre):not(.markdown-code-content) > code {
   line-height: 0;
 }
 
@@ -114,6 +114,35 @@
 
 .markdown-code-language {
   color: var(--rivto-code-language-color);
+}
+
+.markdown-code-labels,
+.markdown-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.markdown-code-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.markdown-code-actions button:hover,
+.markdown-code-actions button:focus-visible {
+  background: var(--rivto-muted);
+}
+
+.markdown-code-actions svg {
+  width: 16px;
+  height: 16px;
 }
 
 .markdown-code-block pre {
