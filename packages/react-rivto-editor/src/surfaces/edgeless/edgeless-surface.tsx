@@ -198,6 +198,9 @@ const EdgelessCards = memo(function EdgelessCards({ canvas }: EdgelessCardsProps
   const visible = useCanvasVisible(canvas);
   const visibleIds = useMemo(() => new Set(visible), [visible]);
   const rootIds = useRootBlockIds();
+  // Only card ranges whose block parent is the panel's top level are rendered.
+  // In an included-root panel, cards for that root's children remain nested and
+  // do not substitute for a card whose range contains the root itself.
   const blockElements = useElements().filter(
     (element) =>
       visibleIds.has(element.id) &&

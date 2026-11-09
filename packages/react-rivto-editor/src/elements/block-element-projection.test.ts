@@ -18,8 +18,59 @@ import {
 } from "./block-element-projection";
 import { rotatedFrameBounds } from "./visuals/utils/geometry";
 import { ElementGeometry } from "./element-geometry";
+import { Panel, PanelBlocks, type DocumentEditorAPI } from "@chulane/rivto";
+import { ReactPanel } from "../panels/react-panel";
+
+class IncludedRootPanel extends Panel {
+  /**
+   * Creates a panel that displays and protects the selected root.
+   *
+   * @param editor - Borrowed document editor.
+   * @param rootBlockId - Displayed block root.
+   * @param rootElementId - Container for projected cards.
+   */
+  constructor(editor: DocumentEditorAPI, rootBlockId: string, rootElementId: string | null) {
+    super(editor, { rootBlockId, rootElementId }, new PanelBlocks(editor, rootBlockId, true));
+  }
+}
 
 describe("edgeless block element reconciliation", () => {
+  test.each([false, true])(
+    "included roots use document card scope with container=%s",
+    async (containerEnabled) => {
+      const core = await createDocumentEditor();
+      const runtime = createReactEditor({ editor: core });
+      const root = core.blocks.insertBlock({
+        type: "paragraph",
+        children: [{ type: "paragraph" }],
+      });
+      const container = containerEnabled
+        ? core.elements.insertElement({
+            type: "group",
+            frame: { x: 0, y: 0, width: 10, height: 10 },
+            zIndex: 0,
+          }).id
+        : null;
+      const maintain = jestApi.spyOn(runtime.editor.blockElements, "maintainBlockCards");
+      const panel = new ReactPanel(runtime.editor, new IncludedRootPanel(core, root.id, container));
+      try {
+        expect(maintain).toHaveBeenCalledWith(null, container);
+        if (container) {
+          const cards = core.elements
+            .getElementNodes()
+            .filter((element) => core.elements.getParentId(element.id) === container);
+          expect(cards.some((card) => card.props.startBlockId === root.id)).toBe(true);
+          expect(cards.some((card) => card.props.startBlockId === root.children[0]!.id)).toBe(
+            false,
+          );
+        }
+      } finally {
+        panel.destroy();
+        await runtime.editor.destroy();
+        await core.destroy();
+      }
+    },
+  );
   test("shares block-card maintenance and releases it once on final disconnect or owner destruction", async () => {
     const core = await createDocumentEditor();
     const panel = createReactEditor({ editor: core });

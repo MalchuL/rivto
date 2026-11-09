@@ -3,7 +3,7 @@ import {
   EmbeddedEditorAcquisition,
   type SourceEditorProvider,
   type EmbeddedEditorSnapshot,
-} from "@chulane/rivto-page";
+} from "../../editor/embedded-editor-acquisition";
 import type { ReactEditorApi } from "../../editor/types";
 
 /**

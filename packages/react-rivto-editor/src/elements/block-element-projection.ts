@@ -400,6 +400,11 @@ export class BlockElementProjection {
    * when the last view disconnects; the null/null projection follows runtime lifetime.
    * For null/null this call returns a no-op cleanup: the editor already maintains
    * document-root cards, so this consumer adds no subscriptions or reconciliation.
+   * The block argument is a parent, not a block to include: its direct children
+   * form the ordered roots, and separator blocks among those roots split card ranges.
+   * A null block parent selects all document roots, even for a panel whose own
+   * displayed root is nested. A non-null element root still maintains those cards
+   * inside that container; null does not mean that card maintenance is disabled.
    * @param rootBlockId - Block whose direct children are displayed, or null for document roots.
    * @param rootElementId - Element container whose descendants are displayed, or null for all elements.
    * @returns Idempotent function that stops this consumer’s maintenance; it is harmless after owner destruction.
