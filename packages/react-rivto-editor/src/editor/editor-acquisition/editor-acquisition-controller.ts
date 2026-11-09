@@ -27,13 +27,13 @@ export interface SourceEditorProvider<Editor> {
 }
 
 /** Detached acquisition result; both fields are absent before loading completes. */
-export interface EmbeddedEditorSnapshot<Editor> {
+export interface AcquiredEditorSnapshot<Editor> {
   readonly editor?: Editor;
   readonly error?: unknown;
 }
 
 /** Owns the asynchronous lease of one embedded occurrence without creating a document model. */
-export class EmbeddedEditorAcquisition<Editor> {
+export class EditorAcquisitionController<Editor> {
   private readonly abort = new AbortController();
   private lease: SourceEditorLease<Editor> | undefined;
   private started = false;
@@ -54,7 +54,7 @@ export class EmbeddedEditorAcquisition<Editor> {
   constructor(
     private readonly provider: SourceEditorProvider<Editor>,
     private readonly documentId: string,
-    private readonly publish: (snapshot: EmbeddedEditorSnapshot<Editor>) => void,
+    private readonly publish: (snapshot: AcquiredEditorSnapshot<Editor>) => void,
     private readonly reportError: (error: unknown) => void,
   ) {}
 

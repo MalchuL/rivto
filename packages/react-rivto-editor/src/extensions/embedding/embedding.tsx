@@ -11,7 +11,7 @@ import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import type { BlockResolution } from "../../editor/editor-storage";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
 import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";
-import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
+import { useAcquiredEditor } from "../../editor/editor-acquisition/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 import { PageSurface } from "../../surfaces/page";
 import type { BlockWrapperProps } from "../../blocks";

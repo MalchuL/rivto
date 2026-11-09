@@ -1,4 +1,7 @@
-import { EmbeddedEditorAcquisition, type SourceEditorLease } from "./embedded-editor-acquisition";
+import {
+  EditorAcquisitionController,
+  type SourceEditorLease,
+} from "./editor-acquisition-controller";
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 test("releases a late acquisition once without publishing after destruction", async () => {
@@ -10,7 +13,7 @@ test("releases a late acquisition once without publishing after destruction", as
   const publish = jestApi.fn();
   const report = jestApi.fn();
   const release = jestApi.fn(async () => {});
-  const acquisition = new EmbeddedEditorAcquisition(provider, "source", publish, report);
+  const acquisition = new EditorAcquisitionController(provider, "source", publish, report);
   acquisition.start();
   acquisition.start();
   acquisition.destroy();
@@ -32,7 +35,7 @@ test("publishes one load error without retrying", async () => {
     }),
   };
   const publish = jestApi.fn();
-  const acquisition = new EmbeddedEditorAcquisition(provider, "source", publish, jestApi.fn());
+  const acquisition = new EditorAcquisitionController(provider, "source", publish, jestApi.fn());
   acquisition.start();
   await Promise.resolve();
   await Promise.resolve();
@@ -51,8 +54,8 @@ test("keeps independent occurrences leased and reports asynchronous release fail
   const provider = { acquireEditor: jestApi.fn(async () => ({ editor, release })) };
   const publish = jestApi.fn();
   const report = jestApi.fn();
-  const first = new EmbeddedEditorAcquisition(provider, "source", publish, report);
-  const second = new EmbeddedEditorAcquisition(provider, "source", publish, report);
+  const first = new EditorAcquisitionController(provider, "source", publish, report);
+  const second = new EditorAcquisitionController(provider, "source", publish, report);
   first.start();
   second.start();
   await Promise.resolve();
