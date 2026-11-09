@@ -154,7 +154,7 @@ one compiled stylesheet.
 
 ## Geometry parameters
 
-| Theme CSS variable | Default                     | Purpose                                              |
+| Theme CSS variable             | Default                     | Purpose                                              |
 | ------------------------------ | --------------------------- | ---------------------------------------------------- |
 | `--rivto-block-padding`        | `16px`                      | Shared row padding for content and controls          |
 | `--rivto-block-gap`            | `4px`                       | Shared gap between roots, above and between children |
