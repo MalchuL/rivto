@@ -13,7 +13,7 @@ import {
   BlockContent,
   BlockRow,
 } from "@chulane/rivto-page";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from "lucide-react";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
 import {
@@ -193,6 +193,7 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
       reactEditor.blockContextMenu.register({
         id: "block.insert-separator",
         title: "Insert separator",
+        icon: MinusIcon,
         order: 13,
         /**
          * Keeps insertion within the invoking panel's block scope.

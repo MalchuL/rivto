@@ -90,7 +90,9 @@ test("recursive collapse includes hidden descendants and expands in one undo ste
 
 test("multi-block list and todo conversion preserve identity, descendants, and colors", async () => {
   const f = await fixture();
-  f.panel.blocks.updateBlock(f.parent.id, { listProps: { backgroundColor: "blue" } });
+  f.panel.blocks.updateBlock(f.parent.id, {
+    listProps: { style: { background: { color: "#dce9fd" } } },
+  });
   f.panel.selection.set(createStructuralSelection([f.parent.id, f.other.id]));
   const context = blockMenuTargets(f.panel, f.parent.id);
   await executeBlockMenuEntry("list.checkbox", context);
@@ -99,14 +101,17 @@ test("multi-block list and todo conversion preserve identity, descendants, and c
   expect(parent.type).toBe("todo-item");
   expect(parent.content).toBe("Parent");
   expect(parent.children[0]?.id).toBe(f.child.id);
-  expect(parent.listProps).toMatchObject({ backgroundColor: "blue", type: "checkbox" });
+  expect(parent.listProps).toMatchObject({
+    style: { background: { color: "#dce9fd" } },
+    type: "checkbox",
+  });
   const bundle = f.panel.clipboard.copy(createStructuralSelection([f.parent.id]))!;
-  expect(bundle.blocks[0]?.listProps.backgroundColor).toBe("blue");
-  expect(
-    f.core.dump().blocks.find((block) => block.id === f.parent.id)?.listProps.backgroundColor,
-  ).toBe("blue");
+  expect(bundle.blocks[0]?.listProps.style).toEqual({ background: { color: "#dce9fd" } });
+  expect(f.core.dump().blocks.find((block) => block.id === f.parent.id)?.listProps.style).toEqual({
+    background: { color: "#dce9fd" },
+  });
   expect(() =>
-    f.panel.blocks.updateBlock(f.parent.id, { listProps: { backgroundColor: "invalid" } }),
+    f.panel.blocks.updateBlock(f.parent.id, { listProps: { style: { opacity: Infinity } } }),
   ).toThrow();
   f.panel.editor.destroy();
   await f.core.destroy();

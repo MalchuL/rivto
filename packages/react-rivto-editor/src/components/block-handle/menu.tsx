@@ -16,47 +16,20 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal,
 } from "../ui/dropdown-menu";
-import {
-  CopyIcon,
-  ScissorsIcon,
-  Trash2Icon,
-  ListIcon,
-  ListTodoIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  LinkIcon,
-  ArrowUpToLineIcon,
-  ArrowDownToLineIcon,
-  MinusIcon,
-} from "lucide-react";
 
 const MENU_CLASS = "block-context-menu rounded-xl border-border/80 p-1.5 shadow-xl";
 const ITEM_CLASS = "block-context-menu-item rounded-md text-[13px]";
 
-const actionIcons = {
-  "clipboard.copy": CopyIcon,
-  "clipboard.cut": ScissorsIcon,
-  "block.delete": Trash2Icon,
-  list: ListIcon,
-  "type.todo-item": ListTodoIcon,
-  "block.collapse": ChevronsDownUpIcon,
-  "block.expand": ChevronsUpDownIcon,
-  "embedding.copy": LinkIcon,
-  "block.insert-above": ArrowUpToLineIcon,
-  "block.insert-below": ArrowDownToLineIcon,
-  "block.insert-separator": MinusIcon,
-};
-
 /**
- * Renders decorative artwork for a known built-in menu entry.
+ * Renders decorative artwork supplied by a menu entry's extension.
  *
- * @param props - Identity of the entry whose artwork is requested.
- * @param props.id - Registration ID used to look up the built-in icon.
- * @returns An aria-hidden icon, or null when no artwork is mapped; the caller
+ * @param props - Entry whose artwork is requested.
+ * @param props.entry - Registered entry containing an optional icon component.
+ * @returns An aria-hidden icon, or null when no artwork is supplied; the caller
  * still renders the entry's text label.
  */
-function ActionIcon({ id }: { id: string }) {
-  const Icon = actionIcons[id as keyof typeof actionIcons];
+function ActionIcon({ entry }: { entry: BlockContextMenuEntry }) {
+  const Icon = entry.icon;
   return Icon ? <Icon aria-hidden="true" /> : null;
 }
 
@@ -119,14 +92,14 @@ function MenuEntries({
       return (
         <Item
           checked={entry.isChecked?.(context)}
-          variant={entry.id === "block.delete" ? "destructive" : "default"}
+          variant={entry.destructive ? "destructive" : "default"}
           key={entry.id}
           className={ITEM_CLASS}
           onSelect={() => {
             void context.reactPanel.blockContextMenu.execute(entry.id, context);
           }}
         >
-          {!entry.isChecked && <ActionIcon id={entry.id} />}
+          <ActionIcon entry={entry} />
           {entry.title}
         </Item>
       );
@@ -147,7 +120,7 @@ interface BlockContextMenuProps {
    * @returns No value after the owning handle has been notified.
    */
   close: () => void;
-  /** Button receiving focus on dismissal, or null if it is no longer mounted. */
+  /** Button receiving focus when dismissal does not restore a caret, or null if unmounted. */
   handle: HTMLButtonElement | null;
 }
 
@@ -156,7 +129,7 @@ interface BlockContextMenuProps {
  *
  * Registry revisions refresh the available entries. A zero-size fixed trigger
  * anchors the portaled content; collision handling keeps it within the viewport.
- * Dismissal notifies the owning handle and restores focus to its button when present.
+ * Dismissal notifies the owning handle and restores a current caret or the handle button.
  * Document edits do not independently trigger a registry subscription update.
  *
  * @param props - Captured invocation context and focus ownership.
@@ -164,7 +137,7 @@ interface BlockContextMenuProps {
  * @param props.x - Horizontal viewport anchor coordinate in CSS pixels.
  * @param props.y - Vertical viewport anchor coordinate in CSS pixels.
  * @param props.close - Callback asking the owning handle to unmount the menu.
- * @param props.handle - Button to refocus on close, or null when unavailable.
+ * @param props.handle - Fallback button to refocus on close, or null when unavailable.
  * @returns The controlled shadcn/ui menu and its portaled contents.
  */
 export function BlockContextMenu({ context, x, y, close, handle }: BlockContextMenuProps) {
@@ -244,7 +217,7 @@ function BlockSubmenu({
   return (
     <DropdownMenuSub key={entry.id}>
       <DropdownMenuSubTrigger className={ITEM_CLASS}>
-        <ActionIcon id={entry.id} />
+        <ActionIcon entry={entry} />
         {entry.title}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>

@@ -1,6 +1,6 @@
 import type { BlockEditorNodeSnapshot, BlockListType } from "../../../adapter/types";
 import { useBlockRegion } from "./use-block-region";
-import type { BlockEditorTheme } from "../../block-editor-theme";
+import type { BlockCssProperties } from "./block-css-properties";
 import {
   BlockChildPlacementContext,
   BlockItemIdentityContext,
@@ -13,7 +13,7 @@ import { forwardRef, useContext, useMemo, type ReactNode, type HTMLAttributes } 
 /** Native placement styles and controls around one already-rendered child block. */
 export interface BlockItemProps extends HTMLAttributes<HTMLDivElement> {
   /** Native styles and the existing shared geometry/theme tokens. */
-  readonly style?: BlockEditorTheme;
+  readonly style?: BlockCssProperties;
   /** Borrowed own-node snapshot for a decorator; omission observes the enclosing child placement. */
   readonly block?: BlockEditorNodeSnapshot;
   /** Places this block's left-top controls in row flow or outside it; omission inherits the child layout, or outside at the editor root. Descendants keep their own placement. */

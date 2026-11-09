@@ -1,4 +1,5 @@
 import type { BlockSelectionSnapshot } from "../editor/selection/types";
+import type { BlockStyle } from "./block-style";
 /** Built-in list modes interpreted by Page, independent of the host's storage schema. */
 export type BlockListType =
   "list" | "checkbox" | "numbered_list" | "start_numbered_list" | "continue_numbered_list";
@@ -34,8 +35,8 @@ export interface BlockEditorNodeSnapshot {
   readonly collapsed?: boolean;
   /** Direct-child boundary placement; omitted defaults to outline. */
   readonly dropPlacement?: BlockDropPlacement;
-  /** Resolved CSS background color or expression supplied by the host; omitted for the default background. */
-  readonly color?: string;
+  /** Portable appearance owned by this block; omitted for editor defaults. */
+  readonly style?: BlockStyle;
 }
 
 /** Presentation changes delegated to the host's validation and transaction policy. */
@@ -46,8 +47,8 @@ export interface BlockEditorNodePatch {
   readonly checked?: boolean;
   /** New collapse state; omission preserves its current value. */
   readonly collapsed?: boolean;
-  /** Resolved CSS background color or expression, null to remove the override; omission preserves the value. */
-  readonly color?: string | null;
+  /** Complete replacement appearance, null to remove it; omission preserves the value. */
+  readonly style?: BlockStyle | null;
 }
 
 /** Host-selected display list and addressed, nonrecursive node access. */

@@ -485,6 +485,9 @@ export class BlockManager implements BlockManagerApi {
   /**
    * Converts one block to another registered native type.
    *
+   * Processor changes to list properties are validated and committed with the
+   * type change; unrelated existing properties remain intact.
+   *
    * @param id - Block identifier to convert.
    * @param type - Registered destination type.
    * @returns No value.
@@ -496,11 +499,20 @@ export class BlockManager implements BlockManagerApi {
     }
     const props = this.editor.blockRegistry.prepareTypeChange(type, current.props);
     const processed = this.runProcessors({ ...current, type, props, children: undefined });
+    const listProps = processed.listProps;
+    const changedListProps = listProps !== current.listProps;
+    if (changedListProps) {
+      this.editor.blockListProps.prepare({ ...current.listProps, ...listProps });
+    }
     // Storage insertion is already transactional; this wrapper creates undo
     // capture breakpoints so the following action does not merge with creation.
-    this.editor.history.batchUpdates(() =>
-      this.document.blocks.setBlockType(id, type, processed.props),
-    );
+    // Type and its processor-supplied list properties belong to the same undo step.
+    this.editor.history.batchUpdates(() => {
+      this.document.blocks.setBlockType(id, type, processed.props);
+      if (changedListProps && listProps) {
+        this.document.blocks.updateBlock(id, { listProps });
+      }
+    });
   }
 
   /**

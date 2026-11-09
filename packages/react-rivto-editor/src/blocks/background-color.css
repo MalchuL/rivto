@@ -1,0 +1,33 @@
+:root {
+  --rivto-block-gray: color-mix(in srgb, #64748b 18%, var(--rivto-background));
+  --rivto-block-red: color-mix(in srgb, #ef4444 18%, var(--rivto-background));
+  --rivto-block-orange: color-mix(in srgb, #f97316 18%, var(--rivto-background));
+  --rivto-block-yellow: color-mix(in srgb, #eab308 18%, var(--rivto-background));
+  --rivto-block-green: color-mix(in srgb, #22c55e 18%, var(--rivto-background));
+  --rivto-block-blue: color-mix(in srgb, #3b82f6 18%, var(--rivto-background));
+  --rivto-block-purple: color-mix(in srgb, #a855f7 18%, var(--rivto-background));
+}
+[data-block-id][data-block-background] {
+  border-radius: var(--rivto-block-radius, 8px);
+}
+[data-block-background="gray"] {
+  background-color: var(--rivto-block-gray);
+}
+[data-block-background="red"] {
+  background-color: var(--rivto-block-red);
+}
+[data-block-background="orange"] {
+  background-color: var(--rivto-block-orange);
+}
+[data-block-background="yellow"] {
+  background-color: var(--rivto-block-yellow);
+}
+[data-block-background="green"] {
+  background-color: var(--rivto-block-green);
+}
+[data-block-background="blue"] {
+  background-color: var(--rivto-block-blue);
+}
+[data-block-background="purple"] {
+  background-color: var(--rivto-block-purple);
+}

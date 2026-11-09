@@ -1,4 +1,5 @@
 import { createCaretSelection } from "@chulane/rivto";
+import { ArrowUpToLineIcon, ArrowDownToLineIcon } from "lucide-react";
 import { focusBlock } from "../../../managers";
 import type { BlockContextMenuEntry } from "../../../managers/block-context-menu/types";
 
@@ -25,13 +26,14 @@ interface InsertionMenu {
  * @throws If a registration is rejected by the registry.
  */
 export function registerBlockInsertionActions(menu: InsertionMenu): void {
-  for (const [position, title, order] of [
-    ["above", "Insert block above", 11],
-    ["below", "Insert block below", 12],
+  for (const [position, title, order, icon] of [
+    ["above", "Insert block above", 11, ArrowUpToLineIcon],
+    ["below", "Insert block below", 12, ArrowDownToLineIcon],
   ] as const) {
     menu.register({
       id: `block.insert-${position}`,
       title,
+      icon,
       order,
       /**
        * Checks whether the clicked block permits a sibling in this panel.

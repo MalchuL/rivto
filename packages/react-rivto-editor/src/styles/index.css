@@ -28,6 +28,7 @@
 
 /* Page surface and recursive block tree. */
 @import "../surfaces/page/page-surface.css" layer(components);
+@import "../blocks/background-color.css" layer(components);
 @import "../blocks/owner-slots/owner-slots.css" layer(components);
 @import "../blocks/block-slot-controls/block-slot-controls.css" layer(components);
 @import "../blocks/block-modal/block-modal.css" layer(utilities);

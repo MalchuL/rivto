@@ -192,12 +192,13 @@ and behavior, and retain named prop types. Mark their DOM roots with
 `data-rivto-page-ui` so the package's scoped reset applies. Do not enable global
 Preflight or introduce global shadcn color variables that overwrite a host theme.
 
-Use `--rivto-block-background` as the common public block background override.
-Page receives resolved CSS colors/expressions in node.color. Palette names and their
-conversion belong entirely to the host; do not add a palette registry, per-color
-index signature, token validation, or package-specific color-variable protocol.
-Example color choices belong in the demo. Own-node colors must not leak into child
-blocks; inherited theme overrides remain separate.
+Use `--rivto-block-background` as the common public block background override;
+it is a CSS theme variable inherited by the editor subtree.
+Page receives semantic appearance in node.style; translate its explicit colors and
+lengths to CSS only during presentation. Palette choices belong to the host; do not
+add a Page palette registry or store CSS variables and expressions in block data.
+Example color choices belong in the demo. Own-node styles must not leak into child
+blocks; inherited editor theme overrides remain separate.
 
 ## Performance measurements
 

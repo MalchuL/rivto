@@ -57,7 +57,7 @@ function DemoListType({ node }: DemoControlsProps) {
  * @returns List, checked, collapsed, and color controls without adding editor behavior.
  */
 function DemoControls({ node }: DemoControlsProps) {
-  const background = node.color;
+  const background = node.getStyle().background?.color;
   return (
     <div className="demo-controls">
       <DemoListType node={node} />
@@ -66,11 +66,13 @@ function DemoControls({ node }: DemoControlsProps) {
         <NativeSelect
           value={BACKGROUND_COLORS.find((color) => color.value === background)?.name ?? ""}
           aria-label={`Background ${node.id}`}
-          onChange={(event) =>
-            node.setColor(
-              BACKGROUND_COLORS.find((color) => color.name === event.target.value)?.value ?? null,
-            )
-          }
+          onChange={(event) => {
+            const color = BACKGROUND_COLORS.find((item) => item.name === event.target.value)?.value;
+            const remaining = Object.fromEntries(
+              Object.entries(node.getStyle()).filter(([key]) => key !== "background"),
+            );
+            node.setStyle(color ? { ...remaining, background: { color } } : remaining);
+          }}
         >
           <NativeSelectOption value="">Default</NativeSelectOption>
           {BACKGROUND_COLORS.map((color) => (
@@ -115,7 +117,7 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
   const adapter = useContext(DemoAdapterContext);
   const node = useBlockNode(blockId);
   const original = useRef(node);
-  const color = node.color;
+  const color = node.getStyle().background?.color;
   const content = useRef<HTMLDivElement>(null);
   const text = adapter?.getText(blockId) ?? "";
   useLayoutEffect(() => {
@@ -159,7 +161,7 @@ export function DemoBlock({ blockId }: BlockRendererProps) {
           listType: node.listType ?? null,
           checked: node.checked ?? null,
           collapsed: node.collapsed ?? null,
-          color: color ?? null,
+          backgroundColor: color ?? null,
         })}
       </output>
       <small data-node-identity={original.current === node ? "stable" : "changed"}>

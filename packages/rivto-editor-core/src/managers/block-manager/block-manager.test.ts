@@ -6,6 +6,31 @@
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("block feature ownership independent of presentation", () => {
+  it("persists processor list-property changes on conversion as one undo step", async () => {
+    const editor = await createTestEditor();
+    editor.blockRegistry.defineBlock({ type: "tinted" });
+    editor.blocks.registerProcessor({
+      id: "tinted-processor",
+      priority: 0,
+      processor: (block) =>
+        block.type === "tinted"
+          ? { ...block, listProps: { ...block.listProps, processorFlag: "processed" } }
+          : block,
+    });
+    const block = editor.blocks.insertBlock({ type: "paragraph" });
+    editor.history.clear();
+    editor.blocks.setBlockType(block.id, "tinted");
+    expect(editor.blocks.getBlockNode(block.id)?.listProps.processorFlag).toBe("processed");
+    editor.history.undo();
+    expect(editor.blocks.getBlockNode(block.id)).toMatchObject({
+      type: "paragraph",
+      listProps: {},
+    });
+    editor.history.redo();
+    expect(editor.blocks.getBlockNode(block.id)?.listProps.processorFlag).toBe("processed");
+    editor.destroy();
+  });
+
   it("orders selected IDs through their ancestors and follows moves and undo", async () => {
     const editor = await createTestEditor();
     editor.blocks.importForest([

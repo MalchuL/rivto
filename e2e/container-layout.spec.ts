@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { DocumentEditorAPI, EditorBlockInput } from "@chulane/rivto";
 
-type ContainerType = "bento" | "kanban" | "columns" | "todo-storage";
+type ContainerType = "bento" | "kanban" | "columns" | "todo-storage" | "table";
 
 /**
  * Builds the same writing subtrees under each container's native hierarchy.
@@ -21,9 +21,16 @@ function containerInput(type: ContainerType): EditorBlockInput {
       id: "layout-card-two",
       type: "paragraph",
       content: "Second card",
-      listProps: { backgroundColor: "red" },
+      listProps: { style: { background: { color: "#fcdddd" } } },
     },
   ];
+  if (type === "table") {
+    return {
+      id: "layout-board",
+      type,
+      children: [{ type: "table-row", children: [{ type: "table-cell", children: cards }] }],
+    };
+  }
   if (type === "kanban" || type === "columns") {
     return {
       id: "layout-board",
@@ -112,6 +119,106 @@ async function loadContainer(page: Page, type: ContainerType, mode: "block" | "e
     { input: containerInput(type), mode },
   );
   await page.locator(`[data-editor-mode="${mode}"]`).click();
+}
+
+test("default container color supports the opacity slider", async ({ page }) => {
+  await loadContainer(page, "bento", "block");
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.updateBlock("layout-board", { listProps: { collapsed: true } });
+  });
+  const board = page.locator('[data-block-id="layout-board"]').first();
+  const row = board.locator(":scope > .rivto-block-row");
+  await row.hover();
+  await row
+    .locator(":scope > :is(.rivto-slot, .rivto-block-slot) > .block-handle")
+    .click({ button: "right" });
+  const opacity = page.getByRole("slider", { name: "Background opacity" });
+  await expect(opacity).toHaveAttribute("aria-valuenow", "100");
+  await opacity.focus();
+  await page.keyboard.press("Home");
+  await expect(board).toHaveAttribute("data-block-background", "#eceef600");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        return (
+          editor.blocks.getBlockNode("layout-board")?.listProps.style as
+            { background?: { color?: string } } | undefined
+        )?.background?.color;
+      }),
+    )
+    .toBe("#eceef600");
+  await page.keyboard.press("End");
+  await expect(board).toHaveAttribute("data-block-background", "#eceef6");
+});
+
+for (const type of ["bento", "kanban", "columns", "todo-storage", "table"] as const) {
+  for (const mode of ["block", "edgeless"] as const) {
+    test(`${type} renders its own background in ${mode}`, async ({ page }) => {
+      await loadContainer(page, type, mode);
+      const board = page.locator('[data-block-id="layout-board"]').first();
+      let surface = board;
+      if (type === "bento") {
+        surface = board.locator(":scope > .rivto-bento-tiles");
+      } else if (type === "kanban") {
+        surface = board.locator(":scope > .rivto-kanban-columns");
+      } else if (type === "todo-storage") {
+        surface = board.locator(":scope > .rivto-todo-storage-children");
+      }
+      const original = await surface.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.updateBlock("layout-board", {
+          listProps: { style: { background: { color: "#123456" } } },
+        });
+      });
+      await expect(surface).toHaveCSS("background-color", "rgb(18, 52, 86)");
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.updateBlock("layout-board", {
+          listProps: { style: { background: { color: "#12345680" } } },
+        });
+      });
+      await expect(surface).toHaveCSS("background-color", "rgba(18, 52, 86, 0.5)");
+      if (type === "bento" || type === "kanban" || type === "todo-storage") {
+        await expect(board).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      }
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.updateBlock("layout-board", {
+          listProps: { style: { background: { color: "#00000000" } } },
+        });
+      });
+      await expect(surface).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+      if (type === "kanban" || type === "columns") {
+        const lane = page.locator('[data-block-id="layout-lane-0"]').first();
+        await page.evaluate(() => {
+          const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor;
+          editor.blocks.updateBlock("layout-lane-0", {
+            listProps: { style: { background: { color: "#654321" } } },
+          });
+        });
+        await expect(lane).toHaveCSS("background-color", "rgb(101, 67, 33)");
+      }
+
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.deleteListProps("layout-board", ["style"]);
+      });
+      await expect(surface).toHaveCSS("background-color", original);
+    });
+  }
 }
 
 for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
@@ -249,6 +356,47 @@ for (const type of ["bento", "kanban", "columns", "todo-storage"] as const) {
         await expect(card.locator(":scope > .rivto-block-row")).toHaveCSS("padding", "2px 8px");
       }
       await expect(card.locator("[data-block-id]")).toHaveCount(1);
+    });
+  }
+}
+
+for (const type of ["bento", "kanban", "todo-storage"] as const) {
+  for (const mode of ["block", "edgeless"] as const) {
+    test(`${type} palette reflects the saved default background in ${mode}`, async ({ page }) => {
+      await loadContainer(page, type, mode);
+      await page.evaluate(() => {
+        const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor;
+        editor.blocks.updateBlock("layout-board", { listProps: { collapsed: true } });
+      });
+      const board = page.locator('[data-block-id="layout-board"]').first();
+      await board.evaluate(
+        (element, { blockType, surface }) => {
+          const tokens = {
+            bento: "--rivto-bento-background",
+            kanban: "--rivto-kanban-board-background",
+            "todo-storage": "--rivto-todo-storage-background",
+          };
+          element.style.setProperty(
+            tokens[blockType],
+            surface === "block" ? "#a1b2c3" : "rgb(161, 178, 195)",
+          );
+        },
+        { blockType: type, surface: mode },
+      );
+      const row = board.locator(":scope > .rivto-block-row");
+      await row.hover();
+      await row
+        .locator(":scope > :is(.rivto-slot, .rivto-block-slot) > .block-handle")
+        .click({ button: "right" });
+      const picker = page.getByLabel("Custom background color");
+      const custom = page.locator(".block-color-custom");
+      await expect(picker).toHaveValue("#eceef6");
+      await expect(custom).toHaveAttribute("data-selected", "true");
+      await expect(page.locator(".block-color-custom-palette")).toBeVisible();
+      await page.getByRole("button", { name: "red", exact: true }).click();
+      await expect(picker).toHaveValue("#d1d5db");
+      await expect(custom).not.toHaveAttribute("data-selected", "true");
     });
   }
 }

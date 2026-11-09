@@ -1,6 +1,6 @@
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
-import { Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
+import { LinkIcon, Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { Button } from "../../components/ui/button";
@@ -344,6 +344,7 @@ export function embeddingExtension(): ReactEditorExtension {
       reactEditor.blockContextMenu.register({
         id: "embedding.copy",
         title: "Copy block embedding",
+        icon: LinkIcon,
         order: 70,
         /**
          * Copies live embedding references for the captured root blocks.

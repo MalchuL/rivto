@@ -1,4 +1,5 @@
 import type { BlockEditorNodeSnapshot, BlockListType } from "../../adapter/types";
+import type { BlockStyle } from "../../adapter/block-style";
 
 /** Borrowed live node access; the controller preserves held identity and owns teardown. */
 export interface BlockEditorNodeApi {
@@ -43,14 +44,6 @@ export interface BlockEditorNodeApi {
    * @throws Propagates host read failures.
    */
   readonly collapsed: boolean | undefined;
-
-  /**
-   * Reads the resolved CSS background color or expression supplied by the host.
-   *
-   * @returns Current CSS background value, or undefined for a default background or an unavailable node.
-   * @throws Propagates host read failures.
-   */
-  readonly color: string | undefined;
 
   /**
    * Reads the immutable host snapshot for React external-store comparison.
@@ -110,11 +103,22 @@ export interface BlockEditorNodeApi {
   setCollapsed(collapsed: boolean): void;
 
   /**
-   * Changes the block background through the host's supported presentation fields.
+   * Replaces this block's local appearance through the host.
    *
-   * @param color - Host-supported CSS background value, or null to remove the local background override.
-   * @returns The host update has completed without changing other presentation fields.
-   * @throws If destroyed/unavailable or the host rejects the color or update.
+   * @param style - Complete style, or null to remove it.
+   * @returns The host update has completed.
+   * @throws If the node is unavailable or the host rejects the update.
    */
-  setColor(color: string | null): void;
+  setStyle(style: BlockStyle | null): void;
+
+  /**
+   * Copies the current block appearance without exposing the host snapshot.
+   *
+   * The host may contain malformed persisted fields; their values are preserved,
+   * so consumers reading untrusted documents must check individual fields.
+   *
+   * @returns A detached style, or an empty object when absent.
+   * @throws If the host read or cloning fails.
+   */
+  getStyle(): BlockStyle;
 }

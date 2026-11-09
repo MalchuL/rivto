@@ -609,14 +609,22 @@ it("keeps the hook's node object while React observes its changing host snapshot
   expect(container.textContent).toBe("true:continue_numbered_list");
   act(() => node.setListType(null));
   expect(container.textContent).toBe("true:none");
-  act(() => node.setColor("red"));
+  act(() => node.setStyle({ background: { color: "#ff0000" } }));
   expect(
     container.querySelector('[data-block-id="a"]')?.getAttribute("data-block-background"),
-  ).toBe("red");
-  act(() => node.setColor(null));
+  ).toBe("#ff0000");
+  act(() => node.setStyle(null));
   expect(
     container.querySelector('[data-block-id="a"]')?.hasAttribute("data-block-background"),
   ).toBe(false);
+  act(() => node.setStyle({ text: { color: "#ff0000" }, border: { radius: "21px" } }));
+  const shell = container.querySelector<HTMLElement>('[data-block-id="a"]')!;
+  expect(shell.style.getPropertyValue("--rivto-own-text-color")).toBe("#ff0000");
+  expect(shell.style.borderRadius).toBe("21px");
+  expect(node.getStyle().text?.color).toBe("#ff0000");
+  act(() => node.setStyle(null));
+  expect(shell.style.getPropertyValue("--rivto-own-text-color")).toBe("");
+  expect(shell.style.borderRadius).toBe("");
   expect(nodes.size).toBe(1);
   expect(adapter.blocks.updateBlockNode).toHaveBeenCalledWith("a", { checked: true });
   act(() => adapter.select(["a"]));
@@ -706,12 +714,12 @@ it("uses borrowed node commands in controls and restores collapsed descendants w
   expect(container.querySelector('[data-block-id="child"]')).toBeNull();
   expect(adapter.subscriberCount).toBeLessThan(subscriptions);
   expect(collapse.getAttribute("aria-expanded")).toBe("false");
-  act(() => child.setColor("red"));
+  act(() => child.setStyle({ background: { color: "#ff0000" } }));
   act(() => collapse.click());
   expect(controller.getNode("child")).toBe(child);
   expect(
     container.querySelector('[data-block-id="child"]')?.getAttribute("data-block-background"),
-  ).toBe("red");
+  ).toBe("#ff0000");
   expect(adapter.subscriberCount).toBe(subscriptions);
 });
 
@@ -825,7 +833,7 @@ it("lets JSX choose region order without rerendering layout during chrome or chi
   expect(compose).toHaveBeenCalledTimes(1);
   act(() => adapter.select(["parent"]));
   act(() => adapter.setNode("child", { content: "Changed" }));
-  act(() => editor.getNode("parent").setColor("red"));
+  act(() => editor.getNode("parent").setStyle({ background: { color: "#ff0000" } }));
   expect(owner.textContent).toContain("Changed");
   expect(owner.getAttribute("data-block-selected")).toBe("true");
   expect(compose).toHaveBeenCalledTimes(1);
@@ -950,7 +958,7 @@ it("does not rebuild child gaps for text, color, selection, or slot publications
   register.mockClear();
   act(() => adapter.setNode("parent", { content: "Parent text" }));
   act(() => adapter.setNode("a", { content: "Child text" }));
-  act(() => editor.getNode("parent").setColor("red"));
+  act(() => editor.getNode("parent").setStyle({ background: { color: "#ff0000" } }));
   act(() => adapter.select(["parent"]));
   act(() => {
     editor.slots.register({ position: "end", component: () => <span>Slot</span> });

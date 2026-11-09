@@ -21,34 +21,30 @@ export interface DemoBackground {
 export const BACKGROUND_COLORS: readonly DemoBackground[] = [
   {
     name: "gray",
-    value: "var(--demo-color-gray, color-mix(in srgb, #64748b 18%, var(--rivto-background, #fff)))",
+    value: "#e3e6ea",
   },
   {
     name: "red",
-    value: "var(--demo-color-red, color-mix(in srgb, #ef4444 18%, var(--rivto-background, #fff)))",
+    value: "#fcdddd",
   },
   {
     name: "orange",
-    value:
-      "var(--demo-color-orange, color-mix(in srgb, #f97316 18%, var(--rivto-background, #fff)))",
+    value: "#fee6d5",
   },
   {
     name: "yellow",
-    value:
-      "var(--demo-color-yellow, color-mix(in srgb, #eab308 18%, var(--rivto-background, #fff)))",
+    value: "#fbf1d3",
   },
   {
     name: "green",
-    value:
-      "var(--demo-color-green, color-mix(in srgb, #22c55e 18%, var(--rivto-background, #fff)))",
+    value: "#d7f5e2",
   },
   {
     name: "blue",
-    value: "var(--demo-color-blue, color-mix(in srgb, #3b82f6 18%, var(--rivto-background, #fff)))",
+    value: "#dce9fd",
   },
   {
     name: "purple",
-    value:
-      "var(--demo-color-purple, color-mix(in srgb, #a855f7 18%, var(--rivto-background, #fff)))",
+    value: "#efe0fe",
   },
 ];
