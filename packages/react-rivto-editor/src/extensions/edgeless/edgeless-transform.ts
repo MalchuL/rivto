@@ -1056,7 +1056,9 @@ export class EdgelessTransformController {
                 frame: this.groupChildren(id).length ? undefined : frame,
                 props: {
                   ...(this.elements.getElementNode(id)?.type === "connector" ? {} : { rotation }),
-                  ...(active.kind === "resize" && this.elements.getElementNode(id)?.type === "block"
+                  ...(active.kind === "resize" &&
+                  this.elements.getElementNode(id)?.type === "block" &&
+                  active.frames.get(id)?.height !== frame.height  // Specific case to keep autoHeight if we adjust width only
                     ? { autoHeight: false }
                     : {}),
                   ...this.connectorControlProps(id, frame, rotation),

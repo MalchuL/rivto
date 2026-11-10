@@ -3043,6 +3043,20 @@ test("toggles root selection and moves or resizes layouts atomically", async ({ 
   await expect
     .poll(() => second.evaluate((element) => Number.parseFloat(getComputedStyle(element).width)))
     .toBe(before[1]!.width + 30);
+  await expect(second).toHaveAttribute("data-auto-height", "true");
+  const verticalResize = page.locator(
+    '[data-edgeless-controls-for] [data-edgeless-resize-handle="n"]',
+  );
+  const verticalBox = await verticalResize.boundingBox();
+  if (!verticalBox) {
+    throw new Error("Expected vertical resize handle geometry");
+  }
+  await page.mouse.move(verticalBox.x + 5, verticalBox.y + 5);
+  await page.keyboard.down("Alt");
+  await page.mouse.down();
+  await page.mouse.move(verticalBox.x + 5, verticalBox.y - 25, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
   await expect(second).toHaveAttribute("data-auto-height", "false");
 });
 
