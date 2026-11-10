@@ -155,9 +155,6 @@ function SideBlocksView({ renderers, children }: SideBlocksViewProps) {
       className="rivto-side-blocks"
       data-side-blocks-editor
       data-has-side-blocks={blocks.length > 0}
-      data-reserve-right={blocks.some(
-        (block) => block.placement === "right" && block.spacing === "reserve",
-      )}
     >
       <div className="rivto-side-blocks-content">{children}</div>
       <div className="rivto-side-blocks-layer">
@@ -538,7 +535,12 @@ function positionSideBlocks(
     }
     // Full-width items start below their row; each side stacks independently.
     const height = item.getBoundingClientRect().height;
-    const anchorTop = block.placement === "full" ? bottom : (top + bottom - height) / 2;
+    let anchorTop = top;
+    if (block.placement === "full") {
+      anchorTop = bottom;
+    } else if (block.spacing === "flow") {
+      anchorTop = (top + bottom - height) / 2;
+    }
     const itemTop = Math.max(anchorTop, previousBottom);
     const itemBottom = itemTop + height;
     const rowBounds = row.getBoundingClientRect();

@@ -1,5 +1,13 @@
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import type { DocumentModel } from "@chulane/document-model";
+import { Check, MessageSquare, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { useReactPanel } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
 import {
@@ -90,6 +98,8 @@ export interface CommentMessage {
 export interface CommentsOptions {
   /** Optional author for messages created by this editor. */
   readonly author?: CommentAuthor;
+  /** Optional thread renderer used in page and canvas views; defaults to the built-in thread. */
+  readonly component?: ComponentType<SideBlockRendererProps>;
 }
 
 /**
@@ -98,10 +108,13 @@ export interface CommentsOptions {
  * Thread and message records use separate plugin-data fields. Concurrent edits to
  * distinct messages therefore do not replace the whole thread's message list.
  *
- * @param options - Optional author for newly submitted messages.
+ * @param options - Optional author and replacement thread component.
  * @returns A renderer to register under COMMENT_SIDE_BLOCK_TYPE.
  */
 export function createCommentSideBlockRenderer(options: CommentsOptions = {}) {
+  if (options.component) {
+    return options.component;
+  }
   /**
    * Renders a comment thread using this installation's author identity.
    *
@@ -120,10 +133,11 @@ export function createCommentSideBlockRenderer(options: CommentsOptions = {}) {
  * The host also registers a renderer under COMMENT_SIDE_BLOCK_TYPE with
  * sideBlocksExtension; the command uses the invoking panel's document.
  *
- * @param options - Optional author for canvas messages.
+ * @param options - Optional author for default messages and replacement thread component.
  * @returns An extension registering the comment command and canvas sidebar.
  */
 export function commentsExtension(options: CommentsOptions = {}): ReactEditorExtension {
+  const CommentComponent = createCommentSideBlockRenderer(options);
   /**
    * Keeps canvas comments outside the transformed canvas and its selection root.
    *
@@ -136,7 +150,7 @@ export function commentsExtension(options: CommentsOptions = {}): ReactEditorExt
     if (panel.blocks.includeRoot) {
       return children;
     }
-    return <CanvasComments author={options.author}>{children}</CanvasComments>;
+    return <CanvasComments component={CommentComponent}>{children}</CanvasComments>;
   }
   return {
     id: "comments",
@@ -167,20 +181,22 @@ export function commentsExtension(options: CommentsOptions = {}): ReactEditorExt
 }
 
 /** Props for the independent canvas comments sidebar. */
-interface CanvasCommentsProps extends CommentsOptions {
+interface CanvasCommentsProps {
   /** Existing canvas subtree. */
   readonly children?: ReactNode;
+  /** Thread renderer selected when the extension was created. */
+  readonly component: ComponentType<SideBlockRendererProps>;
 }
 
 /**
  * Renders comment threads alongside the canvas and can anchor one to its selection.
  *
- * @param props - Canvas content and optional comment author.
+ * @param props - Canvas content and selected thread renderer.
  * @param props.children - Existing canvas subtree.
- * @param props.author - Author copied to new messages.
+ * @param props.component - Component rendering each persisted thread.
  * @returns Canvas and independently interactive comments sidebar.
  */
-function CanvasComments({ children, author }: CanvasCommentsProps) {
+function CanvasComments({ children, component: CommentComponent }: CanvasCommentsProps) {
   const { editor } = useReactPanel();
   const document = editor.getDocument();
   const selection = useEdgelessSelection();
@@ -213,10 +229,9 @@ function CanvasComments({ children, author }: CanvasCommentsProps) {
           </button>
         </div>
         {threads.map((block) => (
-          <CommentThread
+          <CommentComponent
             key={block.id}
             block={block}
-            author={author}
             update={(data) => updateSideBlockData(document, block.id, data)}
             remove={() => deleteSideBlock(document, block.id)}
           />
@@ -229,13 +244,16 @@ function CanvasComments({ children, author }: CanvasCommentsProps) {
 /**
  * Creates a thread and its shared message map as one history operation.
  *
+ * The thread is placed on the right and reserves vertical space in page views.
+ * The caller retains ownership of the document.
+ *
  * @param document - Document owning the anchor and comments.
  * @param anchorId - Existing block or element ID.
  * @param anchorType - Family of the anchored object.
  * @returns The newly persisted thread record.
  * @throws If the anchor does not exist or plugin data cannot be stored.
  */
-function createCommentThread(
+export function createCommentThread(
   document: CommentThreadCreator,
   anchorId: string,
   anchorType: "block" | "element",
@@ -295,15 +313,11 @@ function CommentThread({ block, update, remove, author }: CommentThreadProps) {
       data-comment-resolved={resolved}
       aria-label="Comment thread"
     >
-      <header className="rivto-comment-actions">
-        <strong>Comment</strong>
-        <button type="button" onClick={() => update({ ...thread, resolved: !resolved })}>
-          {resolved ? "Reopen" : "Resolve"}
-        </button>
-        <button type="button" onClick={deleteThread}>
-          Delete thread
-        </button>
-      </header>
+      <CommentHeader
+        resolved={resolved}
+        onToggle={() => update({ ...thread, resolved: !resolved })}
+        onDelete={deleteThread}
+      />
       <CommentMessages
         document={document}
         messagesId={messagesId}
@@ -322,6 +336,51 @@ function CommentThread({ block, update, remove, author }: CommentThreadProps) {
         />
       )}
     </section>
+  );
+}
+
+/** Actions and state shown in a comment thread's header. */
+interface CommentHeaderProps {
+  /** Whether the thread is resolved. */
+  readonly resolved: boolean;
+  /**
+   * Toggles the thread's resolved state.
+   *
+   * @returns Completes the state update.
+   */
+  readonly onToggle: () => void;
+  /**
+   * Deletes the thread and its messages.
+   *
+   * @returns Completes thread deletion.
+   */
+  readonly onDelete: () => void;
+}
+
+/**
+ * Shows the thread state and its resolve and delete actions.
+ *
+ * @param props - Current state and thread actions.
+ * @param props.resolved - Whether the thread is resolved.
+ * @param props.onToggle - Toggles the resolved state.
+ * @param props.onDelete - Deletes the thread.
+ * @returns A compact header with labeled icon controls.
+ */
+function CommentHeader({ resolved, onToggle, onDelete }: CommentHeaderProps) {
+  const toggleLabel = resolved ? "Reopen" : "Resolve";
+  const ToggleIcon = resolved ? RotateCcw : Check;
+  return (
+    <header className="rivto-comment-actions">
+      <strong>
+        <MessageSquare size={14} aria-hidden="true" /> {resolved ? "Resolved" : "Comment"}
+      </strong>
+      <button type="button" aria-label={toggleLabel} title={toggleLabel} onClick={onToggle}>
+        <ToggleIcon size={15} aria-hidden="true" />
+      </button>
+      <button type="button" aria-label="Delete thread" title="Delete thread" onClick={onDelete}>
+        <Trash2 size={15} aria-hidden="true" />
+      </button>
+    </header>
   );
 }
 
@@ -487,14 +546,21 @@ function CommentMessageView({
       ) : (
         <>
           <p>{message.content}</p>
-          {!resolved && (
-            <button type="button" onClick={() => setEditing(true)}>
-              Edit
+          <div className="rivto-comment-message-actions">
+            {!resolved && (
+              <button type="button" aria-label="Edit" title="Edit" onClick={() => setEditing(true)}>
+                <Pencil size={14} aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Delete message"
+              title="Delete message"
+              onClick={onDelete}
+            >
+              <Trash2 size={14} aria-hidden="true" />
             </button>
-          )}
-          <button type="button" onClick={onDelete}>
-            Delete message
-          </button>
+          </div>
         </>
       )}
     </div>
@@ -563,7 +629,7 @@ function CommentMessageEditor({
 }
 
 /** Props for the new-message composer. */
-interface CommentComposerProps extends CommentsOptions {
+interface CommentComposerProps extends Pick<CommentsOptions, "author"> {
   /** Document receiving the message. */
   readonly document: CommentMessageWriter;
   /** Thread-specific message namespace. */
@@ -607,6 +673,7 @@ function CommentComposer(props: CommentComposerProps) {
     >
       <textarea
         aria-label={hasMessages ? "Reply to comment" : "New comment"}
+        placeholder={hasMessages ? "Write a reply..." : "Write a comment..."}
         value={text}
         onChange={(event) => setText(event.target.value)}
       />

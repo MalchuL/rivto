@@ -2,6 +2,7 @@ import {
   COMMENT_SIDE_BLOCK_TYPE,
   commentsExtension,
   createCommentSideBlockRenderer,
+  createCommentThread,
   createSideBlock,
   ContainerBlockBehavior,
   BlockColorPalette,
@@ -373,7 +374,45 @@ export function demoSideBlockExtensions(includeComments: boolean): ReactEditorEx
       ? [commentsExtension({ author: { id: "demo-user", name: "Demo User" } })]
       : []),
     demoSideNoteCommands(),
+    demoCommentMenu(),
   ];
+}
+
+/**
+ * Registers comment creation in the demo's page block menu.
+ *
+ * @returns The extension that owns the menu registration.
+ */
+function demoCommentMenu(): ReactEditorExtension {
+  return {
+    id: "demo.comment-menu",
+    setup: (editor) =>
+      editor.blockContextMenu.register({
+        id: "demo.add-comment",
+        title: "Add comment",
+        order: 18,
+        /**
+         * Limits comments to document blocks in the main page panel.
+         *
+         * @param context - Clicked block and its panel.
+         * @returns Whether the block can anchor a visible comment.
+         */
+        isAvailable: ({ reactPanel, blockId }) =>
+          reactPanel.getSurfaceType() === "block" &&
+          !reactPanel.blocks.includeRoot &&
+          reactPanel.editor.getDocument().blocks.hasBlock(blockId),
+        /**
+         * Creates a right-side comment that reserves space for its thread.
+         *
+         * @param context - Clicked block and its owning panel.
+         * @returns Creates the persisted comment thread.
+         * @throws If the anchor or comment data cannot be stored.
+         */
+        execute: ({ reactPanel, blockId }) => {
+          createCommentThread(reactPanel.editor.getDocument(), blockId, "block");
+        },
+      }),
+  };
 }
 
 /**

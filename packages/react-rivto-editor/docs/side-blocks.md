@@ -40,12 +40,13 @@ createSideBlock(editor.getDocument(), {
 `spacing: "reserve"` is the default and reserves enough vertical room for the
 component; `"flow"` lets the component extend beside following document rows.
 `placement: "right"` is the default; `"left"` places a component on the other
-side. Flowing side components sit outside the page column and do not narrow it
-or add vertical space. The host must allow overflow where those components
+side. Left and right components sit outside the page column and do not narrow it;
+flowing components also do not add vertical space. The host must allow overflow where those components
 should be visible. `"full"` places the component across the editor width below
 the anchor row. Full-width content with `"flow"` can cover
 subsequent document content; use `"reserve"` when it must push content down.
-Side components are vertically centered on their anchor row and show a curved
+Flowing side components are vertically centered on their anchor row; reserved
+side components start at the row's top. Both show a curved
 connector to the center of the nearest side of its anchor row. Each `SideBlockCard` has its own connector;
 other side content uses one connector for the component. Components are ordered
 by anchor position and creation time, and are moved down
@@ -68,7 +69,10 @@ its side blocks as hidden orphan records so undo can restore them without data
 loss. Applications can explicitly delete unwanted records.
 
 The comments example registers `createCommentSideBlockRenderer` under
-`COMMENT_SIDE_BLOCK_TYPE` and installs `commentsExtension`. Messages are stored
+`COMMENT_SIDE_BLOCK_TYPE` and installs `commentsExtension`. Pass the same
+`{ component: MyComment }` option to both to replace the default thread in page
+and canvas views. The component receives `SideBlockRendererProps`; it owns its
+own presentation and message behavior. Messages in the default component are stored
 as separate collaborative fields per thread; editing the same message
 concurrently uses conflict resolution for that field. The default demo shows a
 flow note on each side. Each demo note stores a document block ID under
@@ -125,7 +129,9 @@ notes stack after the document. Note associations are plugin data; their block
 subtrees are stored and synchronized by the document manager, so independent
 block edits do not replace the entire note. Open
 `/?sideBlocks=1` and use `/comment`, `/side`, or `/full` to create additional examples. The block
-context menu also adds notes to the left or right of the clicked block.
+context menu also adds notes to the left or right of the clicked block, or creates
+a right-side comment thread. Comment threads use the same side layout with
+reserved spacing, so the following block moves down as replies are added.
 
 The demo note's top-right controls delete the whole note or open its appearance
 settings. Appearance, fill, border color, dashed style, and dash animation are

@@ -1242,14 +1242,14 @@ test("converts a side paragraph with a slash command and undoes the conversion",
  *
  * @param anchor - Rendered document block containing the row.
  * @param side - Rendered side item.
- * @returns Resolves after the two vertical centers are within two CSS pixels.
+ * @returns Resolves after the two top edges are within two CSS pixels.
  */
 async function expectAligned(anchor: Locator, side: Locator): Promise<void> {
   await expect
     .poll(async () => {
       const row = await anchor.locator(":scope > .rivto-block-row").boundingBox();
       const item = await side.boundingBox();
-      return row && item ? Math.abs(row.y + row.height / 2 - item.y - item.height / 2) : Infinity;
+      return row && item ? Math.abs(row.y - item.y) : Infinity;
     })
     .toBeLessThan(2);
 }
@@ -2123,6 +2123,7 @@ test("edits a comment alongside its anchor and keeps it outside the page surface
   await thread.getByRole("textbox", { name: "Reply to comment" }).fill("A reply");
   await thread.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(thread).toContainText("A reply");
+  await expectAligned(anchor, side);
   await thread.getByRole("button", { name: "Edit", exact: true }).last().click();
   await thread.getByRole("textbox", { name: "Edit comment" }).fill("Edited reply");
   await thread.getByRole("button", { name: "Save" }).click();
@@ -2157,6 +2158,49 @@ test("reserves space for multiple comments on the same block", async ({ page }) 
       return first && second && following
         ? Math.min(second.y - first.y - first.height, following.y - second.y - second.height)
         : -Infinity;
+    })
+    .toBeGreaterThanOrEqual(-1);
+});
+
+test("adds a right-side comment from the demo block menu and reserves its full height", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  const today = page.locator('[data-journal-document="today"]');
+  const pageContent = today.locator(".page-surface [data-block-content]");
+  const surface = today.locator(".page-surface").first();
+  await expect
+    .poll(async () => (await pageContent.first().boundingBox())?.height)
+    .toBeGreaterThan(30);
+  const before = (await surface.boundingBox())!;
+  const anchor = pageContent.first().locator("xpath=ancestor::*[@data-block-id][1]");
+  await anchor.locator(":scope > .rivto-block-row .block-handle").dispatchEvent("contextmenu", {
+    button: 2,
+  });
+  await page.getByRole("menuitem", { name: "Add comment", exact: true }).click();
+  const side = today.locator("[data-side-block-id]").filter({
+    has: page.locator("[data-comment-thread-id]"),
+  });
+  await expect(side).toHaveAttribute("data-side-block-placement", "right");
+  await expect(side).toHaveAttribute("data-side-block-spacing", "reserve");
+  const after = (await surface.boundingBox())!;
+  expect({ x: after.x, width: after.width }).toEqual({ x: before.x, width: before.width });
+  const commentBounds = (await side.boundingBox())!;
+  expect(commentBounds.x).toBeGreaterThanOrEqual(after.x + after.width);
+  const thread = side.locator("[data-comment-thread-id]");
+  await thread.getByRole("textbox", { name: "New comment" }).fill("First comment");
+  await thread.getByRole("button", { name: "Comment", exact: true }).click();
+  for (const text of ["First reply", "Second reply", "Third reply"]) {
+    await thread.getByRole("textbox", { name: "Reply to comment" }).fill(text);
+    await thread.getByRole("button", { name: "Reply", exact: true }).click();
+  }
+  await expect(thread).toContainText("Third reply");
+  await expect
+    .poll(async () => {
+      const comment = await side.boundingBox();
+      const next = await pageContent.nth(1).boundingBox();
+      return comment && next ? next.y - comment.y - comment.height : -Infinity;
     })
     .toBeGreaterThanOrEqual(-1);
 });

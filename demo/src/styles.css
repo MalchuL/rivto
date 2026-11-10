@@ -182,7 +182,7 @@ body {
   border: 1px solid var(--side-note-border);
   border-radius: 14px;
   background: var(--side-note-fill);
-  box-shadow: 0 3px 12px rgb(20 25 40 / 6%);
+  box-shadow: 0 4px 16px rgb(20 25 40 / 8%);
 }
 
 .demo-side-note[data-appearance="editor"] {

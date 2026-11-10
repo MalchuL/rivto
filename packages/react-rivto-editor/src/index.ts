@@ -69,6 +69,7 @@ export {
   COMMENT_SIDE_BLOCK_TYPE,
   commentsExtension,
   createCommentSideBlockRenderer,
+  createCommentThread,
 } from "./extensions/comments/comments";
 export type {
   CommentAuthor,
