@@ -178,27 +178,26 @@
 }
 
 .markdown-code-content {
-  position: relative;
   display: block;
   width: max-content;
   min-width: 100%;
 }
 
-.markdown-code-editor {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  min-width: 100%;
-  color: transparent;
-  caret-color: transparent;
-  outline: none;
-  pointer-events: auto;
+.markdown-code-content .cm-editor {
+  font: inherit;
 }
 
-.markdown-code-editor:focus {
-  color: inherit;
-  caret-color: currentColor;
-  background: var(--rivto-code-background);
+.markdown-code-content .cm-editor.cm-focused {
+  outline: none;
+}
+
+.markdown-code-content .cm-content {
+  padding: 0;
+  font: inherit;
+}
+
+.markdown-code-content .cm-line {
+  padding: 0;
 }
 
 .markdown-code-block .hljs-keyword,

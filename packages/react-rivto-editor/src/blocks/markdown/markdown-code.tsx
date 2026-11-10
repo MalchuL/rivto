@@ -1,16 +1,18 @@
 import {
   Children,
-  cloneElement,
   isValidElement,
   useLayoutEffect,
   useRef,
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
-  type KeyboardEvent,
 } from "react";
 import { CopyIcon, PencilIcon } from "lucide-react";
-import { restoreDOMSelection, saveDOMSelection } from "../../managers/selection/dom-text-selection";
+import { Annotation, Compartment, EditorState } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 
 /** Minimal HAST shape needed by the fenced-code metadata transform. */
 interface SyntaxNode {
@@ -258,104 +260,146 @@ function textContent(node: ReactNode): string {
     .join("");
 }
 
-function EditableCode({
-  children,
-  onChange,
-  onEdge,
-  preventTextEditingAttributes,
-}: {
+/** Marks document changes received from the surrounding Markdown source. */
+const externalUpdate = Annotation.define<boolean>();
+
+/** Props for the CodeMirror editor embedded in a Markdown preview. */
+interface EditableCodeProps {
   readonly children: ReactNode;
+  readonly language?: string;
+  readonly label?: string;
   readonly onChange: (value: string) => void;
   readonly onEdge?: (direction: "up" | "down") => void;
   readonly preventTextEditingAttributes?: HTMLAttributes<HTMLElement>;
-}) {
-  const editorRef = useRef<HTMLElement>(null);
-  const value = textContent(children).replace(/\n$/, "");
+}
 
-  // React owns the highlighted layer, while the browser owns this plaintext
-  // editor. Only reconcile external changes; local input already matches value.
+/**
+ * Keeps a CodeMirror document synchronized with the surrounding Markdown block.
+ *
+ * Local edits are persisted by the parent; external updates replace the editor
+ * document without emitting another change. The editor is destroyed on unmount.
+ *
+ * @param props - Code text, language, and callbacks owned by the Markdown block.
+ * @returns The host element for the embedded editor.
+ */
+function EditableCode({
+  children,
+  language,
+  label,
+  onChange,
+  onEdge,
+  preventTextEditingAttributes,
+}: EditableCodeProps) {
+  const host = useRef<HTMLSpanElement>(null);
+  const view = useRef<EditorView | null>(null);
+  const callbacks = useRef({ onChange, onEdge });
+  callbacks.current = { onChange, onEdge };
+  const value = textContent(children).replace(/\n$/, "");
+  const languageCompartment = useRef(new Compartment());
+
   useLayoutEffect(() => {
-    const element = editorRef.current;
-    if (
-      !element ||
-      element.textContent === value ||
-      (element.textContent === `${value}\n` && hasTrailingCaretPlaceholder(element))
-    ) {
+    if (!host.current) {
       return;
     }
-    const selection = saveDOMSelection(element);
-    element.textContent = value;
-    restoreDOMSelection(element, selection);
-  }, [editorRef, value]);
+    const editor = new EditorView({
+      parent: host.current,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          history(),
+          syntaxHighlighting(defaultHighlightStyle),
+          languageCompartment.current.of([]),
+          EditorView.contentAttributes.of({
+            "aria-label": "Code block content",
+            class: "markdown-code-editor",
+            spellcheck: "false",
+          }),
+          keymap.of([
+            ...(["ArrowUp", "ArrowDown"] as const).map((key) => ({
+              key,
+              run: (current: EditorView) => {
+                const selection = current.state.selection.main;
+                const line = current.state.doc.lineAt(selection.head);
+                if (
+                  !selection.empty ||
+                  (key === "ArrowUp"
+                    ? line.number !== 1
+                    : line.number !== current.state.doc.lines) ||
+                  !callbacks.current.onEdge
+                ) {
+                  return false;
+                }
+                callbacks.current.onEdge(key === "ArrowUp" ? "up" : "down");
+                return true;
+              },
+            })),
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
+          EditorView.updateListener.of((update) => {
+            if (
+              update.docChanged &&
+              !update.transactions.some((transaction) => transaction.annotation(externalUpdate))
+            ) {
+              callbacks.current.onChange(update.state.doc.toString());
+            }
+          }),
+        ],
+      }),
+    });
+    view.current = editor;
+    return () => {
+      view.current = null;
+      editor.destroy();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const editor = view.current;
+    if (editor && editor.state.doc.toString() !== value) {
+      editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: value },
+        annotations: externalUpdate.of(true),
+      });
+    }
+  }, [value]);
+
+  useLayoutEffect(() => {
+    const editor = view.current;
+    const description =
+      languages.find(
+        (item) =>
+          item.name.toLowerCase() === language?.toLowerCase() ||
+          item.alias.some((alias) => alias.toLowerCase() === language?.toLowerCase()),
+      ) ??
+      (label
+        ? languages.find((item) => item.extensions.includes(label.split(".").pop() ?? ""))
+        : undefined);
+    let active = true;
+    if (editor && description) {
+      void description.load().then((support) => {
+        if (active) {
+          editor.dispatch({ effects: languageCompartment.current.reconfigure(support) });
+        }
+      });
+    } else if (editor) {
+      editor.dispatch({ effects: languageCompartment.current.reconfigure([]) });
+    }
+    return () => {
+      active = false;
+    };
+  }, [language, label]);
 
   return (
-    <code
+    <span
       {...preventTextEditingAttributes}
-      ref={editorRef}
-      className="markdown-code-editor"
-      aria-label="Code block content"
-      contentEditable="plaintext-only"
-      suppressContentEditableWarning
-      spellCheck={false}
-      tabIndex={0}
-      onInput={(event) => onChange(codeInputText(event.currentTarget, event.nativeEvent))}
-      onKeyDown={onEdge ? (event) => moveFromCodeEdge(event, onEdge) : undefined}
+      ref={host}
+      className="markdown-code-content"
+      onPointerDown={(event) => {
+        preventTextEditingAttributes?.onPointerDown?.(event);
+        view.current?.focus();
+      }}
     />
-  );
-}
-
-/**
- * Reads code input and preserves the browser caret at a trailing empty line.
- *
- * Removes Chromium's extra placeholder newline from the saved text and supplies
- * a trailing break when deletion leaves the caret without a visible empty line.
- *
- * @param element - The browser-owned code editor after its input event.
- * @param event - Native input event describing the browser edit.
- * @returns Plain code text, including intentional trailing newlines.
- */
-function codeInputText(element: HTMLElement, event: Event): string {
-  const text = element.textContent ?? "";
-  const selection = element.ownerDocument.getSelection();
-  const last = element.lastChild;
-  if (
-    event instanceof InputEvent &&
-    event.inputType === "deleteContentBackward" &&
-    text.endsWith("\n") &&
-    last?.nodeType === Node.TEXT_NODE &&
-    selection?.isCollapsed &&
-    selection.anchorNode === last &&
-    selection.anchorOffset === last.textContent?.length
-  ) {
-    element.append(element.ownerDocument.createElement("br"));
-    selection.setPosition(element, element.childNodes.length - 1);
-  }
-  if (
-    event instanceof InputEvent &&
-    event.inputType === "insertLineBreak" &&
-    hasTrailingCaretPlaceholder(element)
-  ) {
-    return text.slice(0, -1);
-  }
-  return text;
-}
-
-/**
- * Identifies Chromium's extra newline needed to place a caret on the last empty line.
- *
- * @param element - Browser-owned code editor containing the current caret.
- * @returns Whether the final text node is the browser's caret placeholder.
- */
-function hasTrailingCaretPlaceholder(element: HTMLElement): boolean {
-  const selection = element.ownerDocument.getSelection();
-  const last = element.lastChild;
-  return Boolean(
-    selection?.isCollapsed &&
-    selection.anchorNode === last &&
-    selection.anchorOffset === 0 &&
-    last?.nodeType === Node.TEXT_NODE &&
-    last.textContent === "\n" &&
-    last.previousSibling?.textContent?.endsWith("\n"),
   );
 }
 
@@ -381,19 +425,15 @@ export function MarkdownCodeBlock({
   );
   const codeContent =
     codeElement && node && onCodeChange ? (
-      <span className="markdown-code-content">
-        {cloneElement(codeElement, {
-          "aria-hidden": true,
-          className: `${codeElement.props.className ?? ""} markdown-code-preview`.trim(),
-        })}
-        <EditableCode
-          preventTextEditingAttributes={preventTextEditingAttributes}
-          onChange={(value) => onCodeChange(node, value)}
-          onEdge={onCodeEdge ? (direction) => onCodeEdge(node, direction) : undefined}
-        >
-          {codeElement.props.children}
-        </EditableCode>
-      </span>
+      <EditableCode
+        language={language}
+        label={label}
+        preventTextEditingAttributes={preventTextEditingAttributes}
+        onChange={(value) => onCodeChange(node, value)}
+        onEdge={onCodeEdge ? (direction) => onCodeEdge(node, direction) : undefined}
+      >
+        {codeElement.props.children}
+      </EditableCode>
     ) : (
       code
     );
@@ -433,44 +473,4 @@ export function MarkdownCodeBlock({
       <pre {...attributes}>{codeContent}</pre>
     </figure>
   );
-}
-
-/**
- * Opens the surrounding editor when an unmodified vertical arrow reaches a code edge.
- *
- * @param event - Key event from the editable code element.
- * @param onEdge - Receives the edge reached by the collapsed caret.
- * @returns Nothing when the caret can move within the code; otherwise requests the handoff.
- */
-function moveFromCodeEdge(
-  event: KeyboardEvent<HTMLElement>,
-  onEdge: (direction: "up" | "down") => void,
-): void {
-  if (
-    (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
-    event.shiftKey ||
-    event.altKey ||
-    event.ctrlKey ||
-    event.metaKey
-  ) {
-    return;
-  }
-  const element = event.currentTarget;
-  const selection = element.ownerDocument.getSelection();
-  if (!selection?.isCollapsed || !selection.anchorNode || !element.contains(selection.anchorNode)) {
-    return;
-  }
-  const range = element.ownerDocument.createRange();
-  range.selectNodeContents(element);
-  if (event.key === "ArrowUp") {
-    range.setEnd(selection.anchorNode, selection.anchorOffset);
-  } else {
-    range.setStart(selection.anchorNode, selection.anchorOffset);
-  }
-  if (range.toString().includes("\n")) {
-    return;
-  }
-  event.preventDefault();
-  event.stopPropagation();
-  onEdge(event.key === "ArrowUp" ? "up" : "down");
 }

@@ -346,7 +346,7 @@ for (const mode of ["block", "edgeless"] as const) {
       .poll(() => block.locator(".markdown-editor").textContent())
       .toBe("```text\nabc\ndef\n\n```");
     await page.keyboard.type("x");
-    await expect.poll(() => code.textContent()).toBe("abc\ndef\nx");
+    await expect.poll(() => code.innerText()).toBe("abc\ndef\nx");
     await expect
       .poll(() => block.locator(".markdown-editor").textContent())
       .toBe("```text\nabc\ndef\nx\n```");
@@ -375,7 +375,7 @@ test("renders and edits multiple lines of code", async ({ page }) => {
     }).id;
   });
   const block = page.locator(blockIdSelector(id));
-  const preview = block.locator(".markdown-code-preview");
+  const preview = block.locator(".cm-content");
   const editor = block.locator(".markdown-code-editor");
   await expect(preview).toContainText("const second = 2;");
   await expect
@@ -410,15 +410,15 @@ test("highlights separate blocks independently when one source changes", async (
   });
   const first = page.locator(blockIdSelector(ids[0]!));
   const second = page.locator(blockIdSelector(ids[1]!));
-  await expect(first.locator("code.language-javascript .hljs-keyword")).toContainText("const");
-  await expect(second.locator("code.language-python .hljs-keyword").first()).toHaveText("def");
+  await expect(first.locator(".cm-content .cm-line span").first()).toContainText("const");
+  await expect(second.locator(".cm-content .cm-line span").first()).toHaveText("def");
   await page.evaluate((id) => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
     editor.blocks.updateBlock(id, { content: "```javascript\nlet changed = 3;\n```" });
   }, ids[0]!);
-  await expect(first.locator("code.language-javascript .hljs-keyword")).toContainText("let");
-  await expect(second.locator("code.language-python .hljs-keyword").first()).toHaveText("def");
+  await expect(first.locator(".cm-content .cm-line span").first()).toContainText("let");
+  await expect(second.locator(".cm-content .cm-line span").first()).toHaveText("def");
 });
 
 for (const mode of ["block", "edgeless"]) {
@@ -558,10 +558,12 @@ test("shows full GFM at rest and raw source while editing", async ({ page }) => 
   await expect(preview.locator("table")).toBeVisible();
   await expect(preview.locator("del")).toHaveText("done");
   await expect(preview.locator(".markdown-code-label").nth(0)).toHaveText("bash");
-  await expect(preview.locator("code.language-bash")).toContainText('echo "hello"');
+  await expect(preview.locator(".cm-content").nth(0)).toContainText('echo "hello"');
   await expect(preview.locator(".markdown-code-label").nth(1)).toHaveText("src/example.js");
   await expect(preview.locator(".markdown-code-language").nth(0)).toHaveText("JavaScript");
-  await expect(preview.locator("code.language-javascript .hljs-keyword")).toHaveText("const");
+  await expect(preview.locator(".cm-content").nth(1).locator(".cm-line span").first()).toHaveText(
+    "const",
+  );
 });
 
 test("opens ordinary Markdown links and delegates custom protocols", async ({ page }) => {
