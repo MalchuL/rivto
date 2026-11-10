@@ -1,7 +1,7 @@
 import { BlockDropLayoutContext } from "../../drag-and-drop/block-drop-layout";
 import { BlockRootPlacements } from "../../drag-and-drop/block-root-placements";
 import { BlockDropDepthContext } from "../../drag-and-drop/block-drop-item";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
 import type { BlockEditorApi } from "../../../editor/block-editor-api";
 import type { BlockEditorController } from "../../../editor/block-editor-controller";
 import { BlockRowHover } from "../block-layout/block-row-hover";
@@ -40,6 +40,22 @@ export interface BlockEditorScopeProps {
  * @throws Propagates attachment and cleanup failures.
  */
 export function BlockEditorScope({ editor, root, children }: BlockEditorScopeProps) {
+  useLayoutEffect(() => {
+    if (!root) {
+      return;
+    }
+    const property = "--rivto-block-selection-duration";
+    const previous = root.style.getPropertyValue(property);
+    const priority = root.style.getPropertyPriority(property);
+    root.style.setProperty(property, `${editor.animations?.blockSelection ?? 0}s`);
+    return () => {
+      if (previous) {
+        root.style.setProperty(property, previous, priority);
+      } else {
+        root.style.removeProperty(property);
+      }
+    };
+  }, [editor, root]);
   useEffect(() => (root ? editor.attach(root) : undefined), [editor, root]);
   useEffect(() => {
     if (!root) {

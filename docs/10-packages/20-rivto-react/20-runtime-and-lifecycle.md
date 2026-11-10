@@ -67,6 +67,7 @@ createReactEditor({
   animations: {
     blockExpand: 0.3,
     blockInsert: 0.3,
+    blockSelection: 0.15,
     blockIndent: 0.15,
     blockMove: 0.3,
     collapseIndicator: 0.3,

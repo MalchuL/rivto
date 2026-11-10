@@ -12,6 +12,20 @@
   --rivto-kanban-accent: var(--rivto-accent);
   --rivto-kanban-add-column-background: rgb(255 255 255 / 45%);
 }
+.rivto-kanban-columns,
+.rivto-kanban-card,
+.rivto-kanban-add-card[data-slot],
+.rivto-kanban-add-column[data-slot] {
+  transition: background-color var(--rivto-block-selection-duration, 0s) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rivto-kanban-columns,
+  .rivto-kanban-card,
+  .rivto-kanban-add-card[data-slot],
+  .rivto-kanban-add-column[data-slot] {
+    transition-duration: 0s;
+  }
+}
 .rivto-kanban-board-header {
   padding: 10px 12px;
 }

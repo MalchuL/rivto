@@ -4,6 +4,7 @@ import type { AnimationDurations } from "@chulane/rivto-react";
 export const DEMO_ANIMATIONS: AnimationDurations = {
   blockExpand: 0.3,
   blockInsert: 0.6,
+  blockSelection: 0.15,
   blockIndent: 0.3,
   blockMove: 0.15,
   collapseIndicator: 0.3,

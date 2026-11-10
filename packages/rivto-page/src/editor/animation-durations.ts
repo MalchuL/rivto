@@ -4,4 +4,6 @@ export interface BlockAnimationDurations {
   readonly blockExpand?: number;
   /** Fade applied to mounted block subtrees added to a root or child list. */
   readonly blockInsert?: number;
+  /** Background and outline transition for whole-block selection changes. */
+  readonly blockSelection?: number;
 }
