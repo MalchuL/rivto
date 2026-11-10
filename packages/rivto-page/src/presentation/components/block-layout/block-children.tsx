@@ -5,21 +5,16 @@ import type {
 import { BlockDropLayoutContext, useBlockDropLayout } from "../../drag-and-drop/block-drop-layout";
 import {
   forwardRef,
-  useCallback,
   useContext,
-  useRef,
   type ComponentType,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
 import { BLOCK_EDITOR_CLASSES } from "../../block-editor-classes";
 import { useBlockChildrenState } from "./block-layout-context";
-import { useAnimateAddedBlocks } from "../../hooks/use-animate-added-blocks";
-import { useBlockChildrenAnimation } from "../../hooks/use-block-children-animation";
 import { BlockList, type BlockChildrenItemProps } from "./block-list";
 import { BlockChildrenControlsContext } from "./block-item-context";
 import { useBlockRegion } from "./use-block-region";
-import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
 import type { BlockEditorTheme } from "../../block-editor-theme";
 
 /** Child host geometry and optional layout-owned item/control composition. */
@@ -61,12 +56,10 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
  * Places actual child blocks with shared identity, collapse, and addressed subscriptions.
  *
  * The host is retained while collapsed, and descendants and their subscriptions
- * unmount after any configured collapse transition. Empty groups remain available for layout-owned controls and drop areas;
+ * unmount immediately when collapsed. Empty groups remain available for layout-owned controls and drop areas;
  * package spacing applies only when the group has content. No indentation is forced.
  * The memoized list compares childIds and item identities before mapping nodes.
- * Expanding an existing collapsed group reveals its mounted descendants; collapsing
- * closes its height before unmounting them. Initial rendering remains immediate,
- * and reduced motion shortens these transitions.
+ * Expanding an existing collapsed group mounts its descendants immediately.
  *
  * @param props - Native host attributes and optional item components and region policies.
  * @param props.item - Stable host wrapper for each already-rendered child.
@@ -113,8 +106,6 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
   ref,
 ) {
   const { blockId, childIds, childrenId, collapsed } = useBlockChildrenState();
-  const duration = useBlockEditorController().animations?.blockExpand ?? 0;
-  useAnimateAddedBlocks(childIds, !collapsed);
   const childrenRef = useBlockRegion(blockId, "children", ref);
   const dropLayout = useBlockDropLayout(
     {
@@ -137,15 +128,6 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
     },
     childrenRef,
   );
-  const elementRef = useRef<HTMLDivElement | null>(null);
-  const retained = useBlockChildrenAnimation(elementRef, collapsed, duration);
-  const setElement = useCallback(
-    (element: HTMLDivElement | null) => {
-      elementRef.current = element;
-      dropLayout.ref(element);
-    },
-    [dropLayout.ref],
-  );
   const inheritedControls = useContext(BlockChildrenControlsContext);
   if (!renderEmpty && childIds.length === 0) {
     return null;
@@ -153,7 +135,7 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
   const host = (
     <div
       {...attributes}
-      ref={setElement}
+      ref={dropLayout.ref}
       id={childrenId}
       data-block-drop-axis={dropAxis}
       data-block-drop-placement={dropPlacement}
@@ -164,16 +146,15 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
           ? undefined
           : { "--rivto-drop-target-size": `${targetSize}px` }),
         ...style,
-        ...(collapsed && retained ? { overflow: "hidden" } : undefined),
-        ...(collapsed && !retained ? { display: "none" } : undefined),
+        ...(collapsed ? { display: "none" } : undefined),
       }}
       className={[BLOCK_EDITOR_CLASSES.children, className].filter(Boolean).join(" ")}
-      hidden={collapsed && !retained}
+      hidden={collapsed}
       aria-hidden={collapsed || undefined}
       inert={collapsed || undefined}
     >
       <BlockDropLayoutContext.Provider value={dropLayout.items}>
-        {(!collapsed || retained) && (
+        {!collapsed && (
           <BlockChildrenControlsContext.Provider value={controlsPlacement ?? inheritedControls}>
             <BlockList
               blockIds={childIds}

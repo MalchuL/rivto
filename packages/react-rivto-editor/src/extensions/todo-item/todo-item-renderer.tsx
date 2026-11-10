@@ -1,5 +1,5 @@
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -45,7 +45,6 @@ export function TodoItem({
   const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("todoStatus");
   const priorityDuration = useAnimationDuration("todoPriority");
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) {
@@ -98,20 +97,7 @@ export function TodoItem({
         aria-label={`Status: ${block.props.status}. Change status`}
         onClick={actions.cycleStatus}
       >
-        <AnimatePresence initial={false}>
-          <motion.span
-            key={block.props.status}
-            className="inline-flex"
-            initial={duration ? { opacity: 0, scale: reducedMotion ? 1 : 0.85 } : false}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{
-              duration: reducedMotion ? duration / 2 : duration,
-              ease: [0.23, 1, 0.32, 1],
-            }}
-          >
-            {statusIcon}
-          </motion.span>
-        </AnimatePresence>
+        {statusIcon}
       </Button>
       <div className={TODO_BODY_CLASS}>
         <div

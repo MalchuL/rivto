@@ -12,7 +12,6 @@ import { BlockRendererRegistry } from "../presentation/renderers/block-renderer-
 import type { BlockEditorAdapter } from "../adapter/types";
 import type { BlockEditorNodeApi } from "./blocks/block-editor-node-api";
 import type { BlockAnimationDurations } from "./animation-durations";
-import { BlockMoveTracker } from "./block-move-tracker";
 import { BlockEditorNode } from "./blocks/block-editor-node";
 
 /** Identity token for one mounted root, independent of later attachments. */
@@ -34,8 +33,6 @@ export interface BlockEditorOptions {
 
 /** Owns block nodes, feature registrations, and one replaceable DOM attachment. */
 export class BlockEditorController implements BlockEditorApi {
-  /** Structural moves currently being committed by this occurrence. */
-  readonly movingBlocks = new BlockMoveTracker();
   /** Borrowed immutable animation settings for this occurrence. */
   readonly animations: BlockAnimationDurations | undefined;
   /** Mounted layout ownership, released by refs and finally by this controller. */
@@ -208,7 +205,6 @@ export class BlockEditorController implements BlockEditorApi {
       }
     }
     this.nodes.clear();
-    this.movingBlocks.clear();
     this.regions.destroy();
     if (errors.length) {
       throw new AggregateError(errors, "Failed to destroy block editor resources");

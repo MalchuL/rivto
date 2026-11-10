@@ -2,116 +2,17 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { blockDropRegion } from "./drop-regions";
 
-for (const { duration, reduced } of [
-  { duration: 0, reduced: false },
-  { duration: 1.2, reduced: false },
-  { duration: 1.2, reduced: true },
-]) {
-  test(`animates indentation and outdentation with duration ${duration}, reduced=${reduced}`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
-    await page.goto("/?test_features=1");
-    const surface = page.locator('[data-journal-document="today"] > .page-surface');
-    await page.evaluate((seconds) => {
-      const runtime = window as unknown as {
-        __rivtoDemo: {
-          editor: DocumentEditorAPI;
-          reactEditor: { animations: Record<string, number> };
-        };
-      };
-      runtime.__rivtoDemo.reactEditor.animations.blockIndent = seconds;
-      runtime.__rivtoDemo.reactEditor.animations.blockInsert = 0;
-      const editor = runtime.__rivtoDemo.editor;
-      editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
-      editor.blocks.insertBlock({ id: "move-parent", type: "paragraph", content: "Parent" });
-      editor.blocks.insertBlock({ id: "move-child", type: "paragraph", content: "Child" });
-    }, duration);
-    await page.evaluate(() => {
-      const runtime = window as unknown as {
-        __rivtoDemo: { reactEditor: { animations: Record<string, number> } };
-      };
-      runtime.__rivtoDemo.reactEditor.animations.blockInsert = 1.2;
-    });
-    const child = surface.locator('[data-block-id="move-child"]');
-    await child.locator("[data-block-content]").click();
-    await page.keyboard.press("Tab");
-    await expect(
-      surface.locator(
-        '[data-block-id="move-parent"] > .rivto-block-children > [data-block-id="move-child"]',
-      ),
-    ).toHaveCount(1);
-    const row = child.locator(":scope > .rivto-block-row");
-    expect(
-      await row.evaluate((element) =>
-        element
-          .getAnimations()
-          .some((animation) =>
-            (animation.effect as KeyframeEffect | null)
-              ?.getKeyframes()
-              .some((frame) => "opacity" in frame),
-          ),
-      ),
-    ).toBe(false);
-    if (duration && !reduced) {
-      await expect
-        .poll(() => child.evaluate((element) => element.getAnimations().length))
-        .toBeGreaterThan(0);
-      expect(
-        await child.evaluate((element) =>
-          (element.getAnimations()[0]?.effect as KeyframeEffect)
-            .getKeyframes()
-            .slice(-3)
-            .map((frame) => new DOMMatrix(String(frame.transform)).m41),
-        ),
-      ).toEqual([0, -3, 0]);
-    } else {
-      expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
-    }
-    await page.keyboard.press("Shift+Tab");
-    await expect(
-      surface.locator('[data-virtual-block-id="move-child"] > [data-block-id="move-child"]'),
-    ).toHaveCount(1);
-    expect(
-      await row.evaluate((element) =>
-        element
-          .getAnimations()
-          .some((animation) =>
-            (animation.effect as KeyframeEffect | null)
-              ?.getKeyframes()
-              .some((frame) => "opacity" in frame),
-          ),
-      ),
-    ).toBe(false);
-    if (duration && !reduced) {
-      await expect
-        .poll(() => child.evaluate((element) => element.getAnimations().length))
-        .toBeGreaterThan(0);
-      expect(
-        await child.evaluate((element) =>
-          (element.getAnimations()[0]?.effect as KeyframeEffect)
-            .getKeyframes()
-            .slice(-3)
-            .map((frame) => new DOMMatrix(String(frame.transform)).m41),
-        ),
-      ).toEqual([0, 3, 0]);
-    }
-  });
-}
-
 test("moves a nested subtree together when indenting", async ({ page }) => {
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
-    const { editor, reactEditor } = (
+    const { editor } = (
       window as unknown as {
         __rivtoDemo: {
           editor: DocumentEditorAPI;
-          reactEditor: { animations: Record<string, number> };
         };
       }
     ).__rivtoDemo;
-    reactEditor.animations.blockInsert = 0;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     editor.blocks.insertBlock({ id: "tree-parent", type: "paragraph", content: "Parent" });
     editor.blocks.insertBlock({
@@ -129,13 +30,13 @@ test("moves a nested subtree together when indenting", async ({ page }) => {
       '[data-block-id="tree-parent"] > .rivto-block-children > [data-block-id="tree-root"]',
     ),
   ).toHaveCount(1);
-  await expect
-    .poll(() => root.evaluate((element) => element.getAnimations().length))
-    .toBeGreaterThan(0);
-  expect(
-    await root.evaluate((element) => element.getAnimations()[0]?.effect?.getTiming().duration),
-  ).toBe(300);
+  expect(await root.evaluate((element) => element.getAnimations().length)).toBe(0);
   await expect(root.locator('[data-block-id="tree-child"]')).toBeVisible();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    surface.locator('[data-virtual-block-id="tree-root"] > [data-block-id="tree-root"]'),
+  ).toHaveCount(1);
+  expect(await root.evaluate((element) => element.getAnimations().length)).toBe(0);
 });
 
 test("animates a dropped block after its document order changes", async ({ page }) => {
@@ -145,10 +46,8 @@ test("animates a dropped block after its document order changes", async ({ page 
     const runtime = window as unknown as {
       __rivtoDemo: {
         editor: DocumentEditorAPI;
-        reactEditor: { animations: Record<string, number> };
       };
     };
-    runtime.__rivtoDemo.reactEditor.animations.blockInsert = 0;
     const editor = runtime.__rivtoDemo.editor;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     editor.blocks.insertBlock({
@@ -160,11 +59,6 @@ test("animates a dropped block after its document order changes", async ({ page 
     for (const id of ["move-two", "move-three"]) {
       editor.blocks.insertBlock({ id, type: "paragraph", content: id });
     }
-  });
-  await page.evaluate(() => {
-    (
-      window as unknown as { __rivtoDemo: { reactEditor: { animations: Record<string, number> } } }
-    ).__rivtoDemo.reactEditor.animations.blockInsert = 1.2;
   });
   const source = surface.locator('[data-block-id="move-one"]');
   await source.locator(":scope > .rivto-block-row").hover();
@@ -211,15 +105,13 @@ test("restarts the jiggle when the same block is dropped again", async ({ page }
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
-    const { editor, reactEditor } = (
+    const { editor } = (
       window as unknown as {
         __rivtoDemo: {
           editor: DocumentEditorAPI;
-          reactEditor: { animations: Record<string, number> };
         };
       }
     ).__rivtoDemo;
-    reactEditor.animations.blockInsert = 0;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     for (const id of ["repeat-one", "repeat-two", "repeat-three"]) {
       editor.blocks.insertBlock({ id, type: "paragraph", content: id });
@@ -275,10 +167,8 @@ test("jiggles a block dropped into another block without fading", async ({ page 
     const runtime = window as unknown as {
       __rivtoDemo: {
         editor: DocumentEditorAPI;
-        reactEditor: { animations: Record<string, number> };
       };
     };
-    runtime.__rivtoDemo.reactEditor.animations.blockInsert = 0;
     const editor = runtime.__rivtoDemo.editor;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     for (const id of ["drop-child", "drop-parent"]) {
@@ -291,11 +181,6 @@ test("jiggles a block dropped into another block without fading", async ({ page 
   const target = (await (
     await blockDropRegion(surface.locator('[data-block-id="drop-parent"]'), "inside")
   ).boundingBox())!;
-  await page.evaluate(() => {
-    (
-      window as unknown as { __rivtoDemo: { reactEditor: { animations: Record<string, number> } } }
-    ).__rivtoDemo.reactEditor.animations.blockInsert = 1.2;
-  });
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
@@ -343,10 +228,8 @@ test("outdents with Backspace without an insertion fade", async ({ page }) => {
     const runtime = window as unknown as {
       __rivtoDemo: {
         editor: DocumentEditorAPI;
-        reactEditor: { animations: Record<string, number> };
       };
     };
-    runtime.__rivtoDemo.reactEditor.animations.blockInsert = 0;
     const editor = runtime.__rivtoDemo.editor;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     editor.blocks.insertBlock({
@@ -359,12 +242,6 @@ test("outdents with Backspace without an insertion fade", async ({ page }) => {
   const child = surface.locator('[data-block-id="backspace-child"]');
   await child.locator("[data-block-content]").click();
   await page.keyboard.press("Home");
-  await page.evaluate(() => {
-    const runtime = window as unknown as {
-      __rivtoDemo: { reactEditor: { animations: Record<string, number> } };
-    };
-    runtime.__rivtoDemo.reactEditor.animations.blockInsert = 1.2;
-  });
   await page.keyboard.press("Backspace");
   await expect(
     surface.locator(
@@ -383,22 +260,18 @@ test("outdents with Backspace without an insertion fade", async ({ page }) => {
         ),
     ),
   ).toBe(false);
-  await expect
-    .poll(() => child.evaluate((element) => element.getAnimations().length))
-    .toBeGreaterThan(0);
+  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
 });
 
-test("animates outdent of an empty nested block on Enter without fading", async ({ page }) => {
+test("outdents an empty nested block on Enter without animation", async ({ page }) => {
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
     const runtime = window as unknown as {
       __rivtoDemo: {
         editor: DocumentEditorAPI;
-        reactEditor: { animations: Record<string, number> };
       };
     };
-    runtime.__rivtoDemo.reactEditor.animations.blockInsert = 0;
     const editor = runtime.__rivtoDemo.editor;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
     editor.blocks.insertBlock({
@@ -410,19 +283,12 @@ test("animates outdent of an empty nested block on Enter without fading", async 
   });
   const child = surface.locator('[data-block-id="enter-child"]');
   await child.locator("[data-block-content]").click();
-  await page.evaluate(() => {
-    (
-      window as unknown as { __rivtoDemo: { reactEditor: { animations: Record<string, number> } } }
-    ).__rivtoDemo.reactEditor.animations.blockInsert = 1.2;
-  });
   await page.keyboard.press("Enter");
   await expect(
     surface.locator('[data-virtual-block-id="enter-child"] > [data-block-id="enter-child"]'),
   ).toHaveCount(1);
   const row = child.locator(":scope > .rivto-block-row");
-  await expect
-    .poll(() => child.evaluate((element) => element.getAnimations().length))
-    .toBeGreaterThan(0);
+  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
   expect(
     await row.evaluate((element) =>
       element
@@ -434,7 +300,7 @@ test("animates outdent of an empty nested block on Enter without fading", async 
   ).toBe(false);
 });
 
-test("animates an indented row inside a zoomed canvas card", async ({ page }) => {
+test("indents a row inside a zoomed canvas card without animation", async ({ page }) => {
   await page.goto("/?test_features=1");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await page.getByRole("button", { name: "Zoom out" }).click();
@@ -458,7 +324,5 @@ test("animates an indented row inside a zoomed canvas card", async ({ page }) =>
       `:scope > .rivto-block-children > [data-block-id="${parentId}"] > .rivto-block-children > [data-block-id="${childId}"]`,
     ),
   ).toHaveCount(1);
-  await expect
-    .poll(() => child.evaluate((element) => element.getAnimations().length))
-    .toBeGreaterThan(0);
+  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
 });

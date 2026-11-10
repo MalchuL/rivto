@@ -29,24 +29,16 @@ import type { BlockAnimationDurations } from "@chulane/rivto-page";
 
 /** Animation durations in seconds; zero or omission disables the corresponding animation. */
 export interface AnimationDurations extends BlockAnimationDurations {
-  /** Movement of mounted block subtrees after indenting or outdenting. */
-  readonly blockIndent?: number;
   /** Rightward movement and rebound after dropping mounted block subtrees. */
   readonly blockMove?: number;
   /** Rotation of a block's collapse indicator. */
   readonly collapseIndicator?: number;
-  /** Transition of a checkbox checkmark. */
-  readonly checkbox?: number;
-  /** Transition of a TODO status icon. */
-  readonly todoStatus?: number;
   /** Background color transition when a TODO priority changes. */
   readonly todoPriority?: number;
   /** Fade of an expanded board dialog. */
   readonly boardDialog?: number;
   /** Entrance of an upload status card. */
   readonly upload?: number;
-  /** Expansion and collapse of canvas properties. */
-  readonly canvasProperties?: number;
   /** Entrance of the image copy menu. */
   readonly imageCopyMenu?: number;
 }

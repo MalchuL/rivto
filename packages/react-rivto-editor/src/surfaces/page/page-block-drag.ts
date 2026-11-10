@@ -203,16 +203,6 @@ export class PageBlockDrag implements BlockDragAdapter {
     const receiver = move.receiver;
     const occurrence = this.occurrence;
     const sourceRoot = occurrence?.root;
-    const view = (scope?.root ?? sourceRoot)?.ownerDocument.defaultView;
-    if (view && receiver.editor.animations?.blockInsert) {
-      const release = receiver.page.movingBlocks.mark(ids);
-      try {
-        view.requestAnimationFrame(release);
-      } catch (error) {
-        release();
-        throw error;
-      }
-    }
     if (receiver === this.panel) {
       this.panel.blocks.moveBlocks(ids, move.targetId, move.position);
     } else if (receiver.document.getDocument() === this.panel.document.getDocument()) {

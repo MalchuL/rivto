@@ -21,7 +21,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useBlockEditorController } from "../../hooks/use-block-editor-controller";
-import { useAnimateAddedBlocks } from "../../hooks/use-animate-added-blocks";
 import {
   BlockVirtualizationController,
   type BlockVirtualizationOptions,
@@ -79,7 +78,6 @@ interface BlockTreeContentProps extends BlockTreeProps {
  */
 function BlockTreeContent({ blockIds, virtualization }: BlockTreeContentProps) {
   const { blocks, selection } = useBlockEditorController().adapter;
-  useAnimateAddedBlocks(blockIds);
   const host = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
   const [revision, invalidate] = useReducer((value: number) => value + 1, 0);

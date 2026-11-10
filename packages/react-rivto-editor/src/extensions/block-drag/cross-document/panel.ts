@@ -34,16 +34,13 @@ interface BlockDragDocument {
 interface BlockDragEditor {
   readonly blockBehaviors: Pick<BlockBehaviorsApi, "canMove" | "childrenVisible">;
   /** Optional motion duration for moved rows. */
-  readonly animations?: Pick<
-    NonNullable<ReactPanelApi["editor"]["animations"]>,
-    "blockMove" | "blockInsert"
-  >;
+  readonly animations?: Pick<NonNullable<ReactPanelApi["editor"]["animations"]>, "blockMove">;
 }
 
 /** Addressed source and receiving commands; excludes panel registration and destruction. */
 export interface CrossDocumentBlockPanel {
   /** Reads mounted regions for this receiving occurrence. */
-  readonly page: Pick<ReactPanelApi["page"], "regions" | "movingBlocks">;
+  readonly page: Pick<ReactPanelApi["page"], "regions">;
   readonly rootBlockId?: string;
   readonly blocks: Pick<
     ReactPanelApi["blocks"],

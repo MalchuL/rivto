@@ -17,7 +17,6 @@ import {
 } from "../../../../managers";
 import type { PanelSelectionApi } from "../../../../managers/selection/api";
 import { PageNavigationController } from "../../../../surfaces/page/page-navigation-controller";
-import { captureBlockMove } from "../../../../surfaces/page/block-move-animation";
 
 /** Active viewport settlement for one page surface. */
 interface ViewportSettlement {
@@ -244,20 +243,11 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const animateMove = captureBlockMove(
-    root,
-    reactPanel.page.regions,
-    targetIds,
-    reactPanel.editor.animations?.blockIndent,
-  );
   const claimed = reactPanel.editor.blockBehaviors.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,
   );
-  if (claimed) {
-    animateMove?.(root, reactPanel.page.regions);
-  }
   // Selection state remains model-backed. Keep only the selected blocks that
   // were already in the virtual window mounted across the reparent; this
   // preserves local measurements without rendering the complete selection.

@@ -16,8 +16,6 @@ import type {
 
 /** Page placement lookup borrowed by panel interaction handlers. */
 export interface PanelPageApi {
-  /** Marks block IDs during a structural move until the returned release is called. */
-  readonly movingBlocks: Pick<BlockEditorController["movingBlocks"], "mark">;
   /** Reads mounted Page regions without owning their registration lifecycle. */
   readonly regions: Pick<BlockEditorApi["regions"], "get">;
   /** Resolves a point using the mounted Page drop regions. */

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("fades a newly created block without animating the initial document", async ({ page }) => {
+test("creates a block from Enter without animation", async ({ page }) => {
   await page.goto("/?test_features=1");
   const editor = page.locator('[data-journal-document="today"] > .page-surface');
   const content = editor.locator("[data-block-content]").first();
@@ -14,24 +14,8 @@ test("fades a newly created block without animating the initial document", async
     .locator("[data-block-content]:focus")
     .locator("xpath=ancestor::*[@data-block-id][1]");
   await expect(created).not.toHaveAttribute("data-block-id", originalId!);
-  expect(await created.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(0);
+  expect(await created.evaluate((element) => element.getAnimations().length)).toBe(0);
   await expect
     .poll(() => created.evaluate((element) => getComputedStyle(element).opacity))
     .toBe("1");
-});
-
-test("fades new Kanban cards and columns including their backgrounds", async ({ page }) => {
-  await page.goto("/?test_features=1");
-  const board = page.locator('[data-block-type="kanban"]').first();
-  const column = board.locator('[data-block-type="kanban-column"]').first();
-  await column.getByRole("button", { name: /Add card to/ }).click();
-  const card = column.locator(".rivto-kanban-card").last();
-  await expect(card).toBeVisible();
-  expect(await card.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(0);
-  await board.getByRole("button", { name: "Add Kanban column" }).click();
-  const addedColumn = board.locator('[data-block-type="kanban-column"]').last();
-  await expect(addedColumn).toBeVisible();
-  expect(await addedColumn.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(
-    0,
-  );
 });

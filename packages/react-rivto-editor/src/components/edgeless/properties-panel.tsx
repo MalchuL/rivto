@@ -8,11 +8,9 @@
  * treat interaction with a control as a click on the canvas.
  */
 import { useState, type ReactNode, type RefObject } from "react";
-import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { UI_SCOPE_CLASS } from "../ui-scope";
 import { EdgelessToolButton } from "./tool-button";
-import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 
 /** Right-side floating panel; `edgeless-visual-properties` is a stable hook. */
 const PANEL_CLASS = `${UI_SCOPE_CLASS} edgeless-visual-properties group/panel`;
@@ -30,38 +28,6 @@ const ROW_CLASS = "edgeless-properties-panel-row";
 const ROW_LABEL_CLASS = "edgeless-properties-panel-row-label";
 /* Selects share the remaining row width; swatches and toggles keep their size. */
 const ROW_CONTROLS_CLASS = "edgeless-properties-panel-row-controls";
-
-/**
- * Animates the property controls while Radix owns their disclosure state.
- *
- * Exiting controls become inert immediately and unmount after the transition.
- *
- * @param props - Property controls belonging to the current panel.
- * @returns The animated disclosure content.
- */
-function PropertiesContent({ children }: { readonly children: ReactNode }) {
-  const present = useIsPresent();
-  const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("canvasProperties");
-  return (
-    <CollapsibleContent forceMount asChild>
-      <motion.div
-        inert={!present}
-        aria-hidden={!present}
-        style={{ overflow: "hidden" }}
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
-        exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-        transition={{
-          height: { duration: reducedMotion ? 0 : duration, ease: [0.23, 1, 0.32, 1] },
-          opacity: { duration: reducedMotion ? duration / 2 : duration, ease: [0.23, 1, 0.32, 1] },
-        }}
-      >
-        {children}
-      </motion.div>
-    </CollapsibleContent>
-  );
-}
 
 /**
  * Renders a titled group inside an edgeless properties panel.
@@ -127,7 +93,6 @@ export function EdgelessPropertiesPanel({
   readonly children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const duration = useAnimationDuration("canvasProperties");
   return (
     <Collapsible
       open={!collapsed}
@@ -162,13 +127,7 @@ export function EdgelessPropertiesPanel({
           />
         </div>
       </header>
-      {duration ? (
-        <AnimatePresence initial={false}>
-          {!collapsed && <PropertiesContent key="properties">{children}</PropertiesContent>}
-        </AnimatePresence>
-      ) : (
-        <CollapsibleContent>{children}</CollapsibleContent>
-      )}
+      <CollapsibleContent>{children}</CollapsibleContent>
     </Collapsible>
   );
 }

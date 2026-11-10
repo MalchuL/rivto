@@ -65,19 +65,13 @@ Managers создаются до setup расширений; extensions уста
 createReactEditor({
   editor,
   animations: {
-    blockExpand: 0.3,
-    blockInsert: 0.3,
     blockSelection: 0.15,
-    blockIndent: 0.15,
-    blockMove: 0.3,
-    collapseIndicator: 0.3,
-    checkbox: 0.3,
-    todoStatus: 0.3,
+    blockMove: 0.15,
+    collapseIndicator: 0.2,
     todoPriority: 0.2,
-    boardDialog: 0.4,
-    upload: 0.32,
-    canvasProperties: 0.36,
-    imageCopyMenu: 0.25,
+    boardDialog: 0.2,
+    upload: 0.2,
+    imageCopyMenu: 0.2,
   },
 });
 ```

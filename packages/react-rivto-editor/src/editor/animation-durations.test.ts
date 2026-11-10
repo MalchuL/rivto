@@ -3,7 +3,7 @@ import { createTestCoreEditor } from "../test-utils";
 import { ReactPanel } from "../panels/react-panel";
 import { createReactEditor } from "./react-editor";
 
-test.each([undefined, { blockExpand: 0, blockInsert: 0 }, { blockExpand: 0.8 }])(
+test.each([undefined, { blockSelection: 0 }, { blockSelection: 0.8 }])(
   "passes animation settings %p to the owned Page controller",
   async (animations) => {
     const core = await createTestCoreEditor();
