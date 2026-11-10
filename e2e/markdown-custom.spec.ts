@@ -577,3 +577,72 @@ test("Slider commits a drag as one history step", async ({ page }) => {
   await page.keyboard.press("Control+z");
   await expect(slider).toHaveValue("35");
 });
+
+test("aligns the drag handle with the first rendered Markdown line after changes", async ({
+  page,
+}) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "paragraph", content: "# Heading\n\nMore text" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const handle = block.locator(":scope > .rivto-block-row .block-handle");
+  const check = async () => {
+    await block.locator(":scope > .rivto-block-row").hover();
+    await expect
+      .poll(() =>
+        block.evaluate((element) => {
+          const handle = element.querySelector<HTMLElement>(
+            ":scope > .rivto-block-row .block-handle",
+          )!;
+          const text = element.querySelector<HTMLElement>(".markdown-preview > :first-child")!;
+          const handleBox = handle.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(text.firstChild!);
+          const textBox = range.getClientRects()[0]!;
+          return Math.abs(
+            handleBox.top + handleBox.height / 2 - (textBox.top + textBox.height / 2),
+          );
+        }),
+      )
+      .toBeLessThan(2);
+  };
+  await expect(handle).toHaveCount(1);
+  await check();
+  await page.evaluate((blockId) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    editor.blocks.updateBlock(blockId, { content: "Small text" });
+  }, id);
+  await expect(block.locator(".markdown-preview p")).toHaveText("Small text");
+  await check();
+});
+
+test("aligns the drag handle with text from a custom block", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    return editor.blocks.insertBlock({ type: "demo.counter", content: "" }).id;
+  });
+  const block = page.locator(blockIdSelector(id));
+  const text = block.locator(".custom-counter-block");
+  await text.evaluate((element) => {
+    element.style.fontSize = "36px";
+  });
+  await block.locator(":scope > .rivto-block-row").hover();
+  await expect
+    .poll(() =>
+      block.evaluate((element) => {
+        const handle = element
+          .querySelector<HTMLElement>(":scope > .rivto-block-row .block-handle")!
+          .getBoundingClientRect();
+        const text = element.querySelector(".custom-counter-block")!.firstChild!;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const line = range.getBoundingClientRect();
+        return Math.abs(handle.top + handle.height / 2 - line.top - line.height / 2);
+      }),
+    )
+    .toBeLessThan(2);
+});
