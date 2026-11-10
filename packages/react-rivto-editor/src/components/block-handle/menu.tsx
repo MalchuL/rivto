@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { firstKeyboardTarget, focusSelectionCaret } from "../../managers";
 import type {
   BlockContextMenuContext,
@@ -128,7 +129,8 @@ interface BlockContextMenuProps {
  * Mounts an open, nonmodal menu at the captured pointer or keyboard anchor.
  *
  * Registry revisions refresh the available entries. A zero-size fixed trigger
- * anchors the portaled content; collision handling keeps it within the viewport.
+ * is portaled outside transformed editor surfaces so its coordinates remain in
+ * viewport space; collision handling keeps the portaled content within the viewport.
  * Dismissal notifies the owning handle and restores a current caret or the handle button.
  * Document edits do not independently trigger a registry subscription update.
  *
@@ -156,11 +158,15 @@ export function BlockContextMenu({ context, x, y, close, handle }: BlockContextM
       }}
       modal={false}
     >
-      <DropdownMenuTrigger
-        aria-hidden="true"
-        tabIndex={-1}
-        style={{ position: "fixed", left: x, top: y, width: 0, height: 0, opacity: 0 }}
-      />
+      {/* A transformed canvas would otherwise make this fixed anchor use canvas coordinates. */}
+      {createPortal(
+        <DropdownMenuTrigger
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ position: "fixed", left: x, top: y, width: 0, height: 0, opacity: 0 }}
+        />,
+        (handle?.ownerDocument ?? document).body,
+      )}
       <DropdownMenuContent
         className={MENU_CLASS}
         align="start"
