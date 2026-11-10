@@ -39,6 +39,8 @@ export interface AnimationDurations extends BlockAnimationDurations {
   readonly checkbox?: number;
   /** Transition of a TODO status icon. */
   readonly todoStatus?: number;
+  /** Background color transition when a TODO priority changes. */
+  readonly todoPriority?: number;
   /** Fade of an expanded board dialog. */
   readonly boardDialog?: number;
   /** Entrance of an upload status card. */

@@ -27,7 +27,7 @@ export function useAnimateAddedBlocks(blockIds: readonly string[], visible = tru
       if (oldSet.has(id) || movingBlocks.has(id)) {
         return [];
       }
-      return ([regions.get(id, "row"), regions.get(id, "children")] as const).flatMap((element) => {
+      return ([regions.get(id, "item") ?? regions.get(id, "shell")] as const).flatMap((element) => {
         if (!element) {
           return [];
         }

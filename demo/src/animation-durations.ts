@@ -9,6 +9,7 @@ export const DEMO_ANIMATIONS: AnimationDurations = {
   collapseIndicator: 0.3,
   checkbox: 0.6,
   todoStatus: 0.6,
+  todoPriority: 0.2,
   boardDialog: 0.8,
   upload: 0.64,
   canvasProperties: 0.72,

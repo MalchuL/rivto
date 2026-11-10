@@ -46,6 +46,7 @@ export function TodoItem({
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   const duration = useAnimationDuration("todoStatus");
+  const priorityDuration = useAnimationDuration("todoPriority");
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) {
     return null;
@@ -83,6 +84,9 @@ export function TodoItem({
       className={TODO_ITEM_CLASS}
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
+      style={{
+        transition: `background-color ${reducedMotion ? priorityDuration / 2 : priorityDuration}s ease`,
+      }}
     >
       <Button
         {...editorControlProps}

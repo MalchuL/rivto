@@ -72,6 +72,7 @@ createReactEditor({
     collapseIndicator: 0.3,
     checkbox: 0.3,
     todoStatus: 0.3,
+    todoPriority: 0.2,
     boardDialog: 0.4,
     upload: 0.32,
     canvasProperties: 0.36,
