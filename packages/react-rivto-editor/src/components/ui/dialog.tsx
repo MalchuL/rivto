@@ -41,13 +41,19 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
+  overlayRef,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  /** Additional styles for the matching dialog backdrop. */
+  overlayClassName?: string;
+  /** Optional reference to this dialog's backdrop element. */
+  overlayRef?: React.Ref<React.ElementRef<typeof DialogPrimitive.Overlay>>;
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} ref={overlayRef} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

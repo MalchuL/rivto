@@ -8,10 +8,16 @@ import type { PanelEventsApi } from "../managers/events/api";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { PanelSelectionApi } from "../managers/selection/api";
 import type { PanelSlashCommandsApi } from "../managers/slash/api";
-import type { BlockDropTargetsApi } from "@chulane/rivto-page";
+import type {
+  BlockDropTargetsApi,
+  BlockEditorApi,
+  BlockEditorController,
+} from "@chulane/rivto-page";
 
 /** Page placement lookup borrowed by panel interaction handlers. */
 export interface PanelPageApi {
+  /** Reads mounted Page regions without owning their registration lifecycle. */
+  readonly regions: Pick<BlockEditorApi["regions"], "get">;
   /** Resolves a point using the mounted Page drop regions. */
   readonly dropTargets: Pick<BlockDropTargetsApi, "resolve">;
 }

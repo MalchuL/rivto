@@ -6,6 +6,16 @@
 :root {
   --rivto-bento-background: #eceef6;
 }
+.rivto-bento-tiles,
+.rivto-bento-tile > .rivto-block-drop-wrapper-content {
+  transition: background-color var(--rivto-block-selection-duration, 0s) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rivto-bento-tiles,
+  .rivto-bento-tile > .rivto-block-drop-wrapper-content {
+    transition-duration: 0s;
+  }
+}
 .rivto-bento-header {
   padding: 0 12px;
 }

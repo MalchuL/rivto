@@ -55,10 +55,11 @@ export interface BlockChildrenProps extends HTMLAttributes<HTMLDivElement> {
 /**
  * Places actual child blocks with shared identity, collapse, and addressed subscriptions.
  *
- * The host is retained while collapsed, but descendants and their subscriptions
- * unmount. Empty groups remain available for layout-owned controls and drop areas;
+ * The host is retained while collapsed, and descendants and their subscriptions
+ * unmount immediately when collapsed. Empty groups remain available for layout-owned controls and drop areas;
  * package spacing applies only when the group has content. No indentation is forced.
  * The memoized list compares childIds and item identities before mapping nodes.
+ * Expanding an existing collapsed group mounts its descendants immediately.
  *
  * @param props - Native host attributes and optional item components and region policies.
  * @param props.item - Stable host wrapper for each already-rendered child.
@@ -156,6 +157,8 @@ export const BlockChildren = forwardRef<HTMLDivElement, BlockChildrenProps>(func
       }}
       className={[BLOCK_EDITOR_CLASSES.children, className].filter(Boolean).join(" ")}
       hidden={collapsed}
+      aria-hidden={collapsed || undefined}
+      inert={collapsed || undefined}
     >
       <BlockDropLayoutContext.Provider value={dropLayout.items}>
         {!collapsed && (

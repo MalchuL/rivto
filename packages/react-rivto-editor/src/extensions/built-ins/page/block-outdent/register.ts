@@ -43,7 +43,12 @@ export function registerBlockOutdent(reactEditor: ReactEditorApi): void {
       if (!context) {
         return false;
       }
-      return reactPanel.editor.blockBehaviors.dispatch("onOutdentAtStart", context, target);
+      const claimed = reactPanel.editor.blockBehaviors.dispatch(
+        "onOutdentAtStart",
+        context,
+        target,
+      );
+      return claimed;
     },
   );
 }

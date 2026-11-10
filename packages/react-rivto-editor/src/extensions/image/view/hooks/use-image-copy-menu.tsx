@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Copy } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
 import type { BinaryProvider } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
 import { mimeTypeFromExtension } from "../../../file/utils/file-input";
+import { useAnimationDuration } from "../../../../hooks/editor/use-animation-duration";
 
 const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
 
@@ -191,11 +193,16 @@ function useImageCopy(
  * @returns The accessible image copy menu.
  */
 function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps) {
+  const reducedMotion = useReducedMotion();
+  const duration = useAnimationDuration("imageCopyMenu");
   return (
-    <span
+    <motion.span
       className={IMAGE_CONTEXT_MENU_CLASS}
       role="menu"
       style={{ left: position.x, top: position.y }}
+      initial={duration ? { opacity: 0, scale: reducedMotion ? 1 : 0.98 } : false}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: reducedMotion ? duration / 2 : duration, ease: [0.23, 1, 0.32, 1] }}
       onBlur={(event) => {
         // Moving focus within the menu does not dismiss it.
         if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -219,6 +226,6 @@ function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps)
         Copy image
       </button>
       {error && <span role="alert">{error}</span>}
-    </span>
+    </motion.span>
   );
 }

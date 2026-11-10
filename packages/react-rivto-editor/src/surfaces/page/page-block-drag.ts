@@ -13,6 +13,7 @@ import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
+import { animateDroppedBlocks } from "./block-move-animation";
 
 /** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */
 interface PagePreviewCursor {
@@ -200,6 +201,8 @@ export class PageBlockDrag implements BlockDragAdapter {
       return false;
     }
     const receiver = move.receiver;
+    const occurrence = this.occurrence;
+    const sourceRoot = occurrence?.root;
     if (receiver === this.panel) {
       this.panel.blocks.moveBlocks(ids, move.targetId, move.position);
     } else if (receiver.document.getDocument() === this.panel.document.getDocument()) {
@@ -216,6 +219,17 @@ export class PageBlockDrag implements BlockDragAdapter {
         ? receiver.blocks.getRootIds()
         : receiver.document.blocks.getChildIds(destination.parentId);
     receiver.selection.set(createStructuralSelection(siblings.filter((id) => selected.has(id))));
+    if (sourceRoot) {
+      animateDroppedBlocks(
+        scope?.root ?? sourceRoot,
+        receiver.page.regions,
+        ids,
+        this.panel.editor.animations?.blockMove,
+        () =>
+          this.occurrence === occurrence &&
+          (!scope || crossDocumentPageRootControllers.get(scope.root) === scope),
+      );
+    }
     return true;
   }
 

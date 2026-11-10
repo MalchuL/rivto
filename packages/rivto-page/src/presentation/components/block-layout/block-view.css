@@ -3,6 +3,8 @@
 .rivto-block {
   @apply page:relative page:min-w-0 page:box-border;
   border: var(--rivto-block-border, none);
+  outline: 2px solid transparent;
+  transition: background-color var(--rivto-block-selection-duration, 0s) ease;
   @apply page:rounded-[var(--rivto-block-radius,10px)];
 }
 
@@ -13,7 +15,17 @@
  * each surface's own background without persisting presentation state. */
 .rivto-block[data-block-selected="true"] {
   --rivto-block-selection-fill: var(--rivto-block-selection-background);
-  @apply page:outline-2 page:outline-solid page:outline-[color:var(--rivto-block-selection,#4868d8)];
+  outline-color: var(--rivto-block-selection, #4868d8);
+  transition:
+    background-color var(--rivto-block-selection-duration, 0s) ease,
+    outline-color var(--rivto-block-selection-duration, 0s) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rivto-block,
+  .rivto-block[data-block-selected="true"] {
+    transition-duration: 0s;
+  }
 }
 
 /* A selected ancestor already outlines the complete subtree. */

@@ -3,6 +3,14 @@ import { cn } from "cn";
 import { CheckIcon } from "lucide-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
 
+/**
+ * Renders a Radix checkbox with an immediate check indicator.
+ *
+ * Controlled and uncontrolled values follow Radix's change callbacks.
+ *
+ * @param props - Radix checkbox properties and optional styling.
+ * @returns An accessible checkbox with immediate state and focus updates.
+ */
 function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
     <CheckboxPrimitive.Root
@@ -15,7 +23,7 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
     >
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"
-        className="grid place-content-center text-current transition-none"
+        className="grid place-content-center text-current"
       >
         <CheckIcon className="size-3.5" />
       </CheckboxPrimitive.Indicator>

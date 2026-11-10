@@ -25,6 +25,23 @@ import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import type { AttachmentApi, AttachmentOptions } from "../attachments";
 import type { SurfacesApi } from "../managers/surfaces/api";
+import type { BlockAnimationDurations } from "@chulane/rivto-page";
+
+/** Animation durations in seconds; zero or omission disables the corresponding animation. */
+export interface AnimationDurations extends BlockAnimationDurations {
+  /** Rightward movement and rebound after dropping mounted block subtrees. */
+  readonly blockMove?: number;
+  /** Rotation of a block's collapse indicator. */
+  readonly collapseIndicator?: number;
+  /** Background color transition when a TODO priority changes. */
+  readonly todoPriority?: number;
+  /** Fade of an expanded board dialog. */
+  readonly boardDialog?: number;
+  /** Entrance of an upload status card. */
+  readonly upload?: number;
+  /** Entrance of the image copy menu. */
+  readonly imageCopyMenu?: number;
+}
 
 /** Creation options for the React presentation runtime. */
 export interface CreateReactEditorOptions {
@@ -38,6 +55,8 @@ export interface CreateReactEditorOptions {
   readonly attachments?: AttachmentOptions;
   /** Renderer used for persisted block types unknown to this React runtime. */
   readonly unknownBlockRenderer?: BlockRenderer;
+  /** Animation durations in seconds; each omitted or zero value disables that animation. */
+  readonly animations?: AnimationDurations;
 }
 
 /** Loading and construction policies; returned models become storage-owned. */
@@ -91,6 +110,8 @@ export interface Entry {
  * Model selection shared by occurrences; DOM adapters belong to each ReactPanelApi.
  */
 export interface ReactEditorApi extends DocumentEditorAPI {
+  /** Immutable settings shared by the editor's mounted views. */
+  readonly animations?: AnimationDurations;
   /**
    * Adds synchronous runtime cleanup without replacing destroy.
    * Remaining callbacks run in reverse registration order even if another fails.

@@ -1,4 +1,5 @@
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
+import { useReducedMotion } from "motion/react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -27,6 +28,7 @@ import type {
   TodoItemProps,
 } from "./todo-item-model";
 import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
+import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 
 /**
  * Renders one compact, editable TODO row and its selected properties modal.
@@ -42,6 +44,8 @@ export function TodoItem({
   const editing = useBlockEditing<TodoItemProps>(blockId);
   const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const priorityDuration = useAnimationDuration("todoPriority");
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) {
     return null;
@@ -79,6 +83,9 @@ export function TodoItem({
       className={TODO_ITEM_CLASS}
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
+      style={{
+        transition: `background-color ${reducedMotion ? priorityDuration / 2 : priorityDuration}s ease`,
+      }}
     >
       <Button
         {...editorControlProps}

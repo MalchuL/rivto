@@ -69,6 +69,12 @@
   min-height: 64px;
   background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));
   border-radius: 0 0 16px 16px;
+  transition: background-color var(--rivto-block-selection-duration, 0s) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rivto-todo-storage-children {
+    transition-duration: 0s;
+  }
 }
 /* The empty field remains a native control inside Page's measured drop host. */
 .rivto-todo-storage-children .rivto-todo-storage-drop-field[data-slot] {
