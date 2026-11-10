@@ -168,9 +168,10 @@ export class BlockPointerSelection {
    */
   private installStart(feature: "pointer" | "range"): void {
     const events = this.editor.events;
+    // Gaps and gutters belong to the occurrence root but may have no owning block.
     events.register(
       `selection.${feature}.start`,
-      { type: "pointerdown", scope: "block", priority: feature === "range" ? 20 : 0 },
+      { type: "pointerdown", scope: "root", priority: feature === "range" ? 20 : 0 },
       (event) => {
         if (
           feature === "range" &&
@@ -593,6 +594,8 @@ export class BlockPointerSelection {
    * `readDOMSelectionPoint` intentionally falls back to the nearest
    * editable host. Explicit structural anchors bypass that fallback so
    * they retain their own block ID before movement begins.
+   * Whitespace starts a structural gesture anchored to the nearest block;
+   * controls remain excluded and no selection is published until movement.
    *
    * @param input - Primary pointer input inside this occurrence.
    * @returns Fixed gesture origin, or undefined for excluded controls or missing caret geometry.
@@ -601,8 +604,31 @@ export class BlockPointerSelection {
     const { raw, root, blockId } = input;
     const target = this.isElement(raw.target) ? raw.target : null;
     const region = target?.closest<HTMLElement>(BLOCK_SELECTION_ANCHOR_SELECTOR);
-    if (!target || !region || !root.contains(region)) {
+    if (!target || (region && !root.contains(region))) {
       return;
+    }
+    if (!region) {
+      if (this.isExcluded(target)) {
+        return;
+      }
+      // A nested gap can hit its wrapping parent, so resolve its nearest row first.
+      let blockId = this.dom.readBlockIdAtPoint(root, raw.clientX, raw.clientY);
+      if (!blockId) {
+        // Surface whitespace has no block ancestor; include contentless rows too.
+        blockId = this.dom.readNearestBlockId(root, raw.clientX, raw.clientY);
+      }
+      if (!blockId) {
+        return;
+      }
+      // Without a native caret, movement selects whole blocks from this anchor.
+      return {
+        root,
+        startX: raw.clientX,
+        startY: raw.clientY,
+        anchorPosition: { blockId, offset: 0 },
+        crossBlock: false,
+        wholeBlocks: false,
+      };
     }
     const optedControl =
       target.closest(STRUCTURAL_SELECTION_EXCLUDED_TARGET_SELECTOR) === region &&

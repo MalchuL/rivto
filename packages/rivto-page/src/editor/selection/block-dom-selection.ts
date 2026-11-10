@@ -224,6 +224,18 @@ export class BlockDOMSelection {
   }
 
   /**
+   * Finds the nearest mounted block when the pointer starts in surface whitespace.
+   *
+   * @param root - Editor occurrence that owns the selectable blocks.
+   * @param x - Horizontal viewport coordinate.
+   * @param y - Vertical viewport coordinate.
+   * @returns The nearest block ID, or undefined when no block is mounted.
+   */
+  readNearestBlockId(root: HTMLElement, x: number, y: number): string | undefined {
+    return this.nearestNestedBlock(root, x, y)?.getAttribute(BLOCK_ID_ATTRIBUTE) ?? undefined;
+  }
+
+  /**
    * Builds a portable {@link Selection} from two editor positions, using
    * the host's selectable order, including unmounted blocks.
    *
