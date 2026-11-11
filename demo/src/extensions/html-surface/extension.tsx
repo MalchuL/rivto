@@ -4,7 +4,7 @@
  * @module
  */
 import type { ReactEditorExtension } from "@chulane/rivto-react";
-import { HtmlBlock, HtmlBlockBodySlot, HtmlBlockEditSlot } from "./html-block";
+import { HtmlBlock, HtmlBlockEditSlot } from "./html-block";
 import { HtmlElement, HtmlElementEditSlot } from "./html-element";
 import "./html-surface.css";
 import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, validateHtmlElementProps } from "./protocol";
@@ -62,7 +62,7 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
  * Registers the page HTML block, including its slash command and clipboard text.
  *
  * @param editor - Editor whose block registry receives the type.
- * @returns Disposer that removes the block, its body, and its right-slot control.
+ * @returns Disposer that removes the block and its right-slot control.
  */
 function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0]) {
   const removeType = editor.blockTypes.register({
@@ -93,11 +93,6 @@ function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0])
       },
     },
   });
-  const removeBody = editor.surfaces.registerBlockSlot({
-    position: "body",
-    component: HtmlBlockBodySlot,
-    when: ({ block }) => block.type === HTML_BLOCK_TYPE,
-  });
   const removeEdit = editor.surfaces.registerBlockSlot({
     position: "right",
     component: HtmlBlockEditSlot,
@@ -105,7 +100,6 @@ function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0])
   });
   return () => {
     removeEdit();
-    removeBody();
     removeType();
   };
 }
