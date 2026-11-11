@@ -1,6 +1,7 @@
 import type { BlockInput } from "@chulane/document-model";
 import type { DocumentEditorAPI, EditorElementNode, HistoryBatch } from "@chulane/rivto";
 import { separatorBlockFactory } from "@chulane/rivto-react/block-factories";
+import { appendHtmlBlockSection, seedHtmlElements } from "./extensions/html-surface/seed";
 import {
   createBentoBlockInput,
   TODO_ITEM_BLOCK_TYPE,
@@ -208,7 +209,7 @@ const JOURNAL_SECTIONS: BlockInput[][] = [
  * @throws If a delegated block or element operation fails.
  */
 export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number): void {
-  let afterId: string | undefined;
+  let afterId: string | undefined = appendHtmlBlockSection(editor);
   for (const [index, section] of JOURNAL_SECTIONS.entries()) {
     if (index > 0) {
       afterId = editor.blocks.insertBlock(
@@ -254,6 +255,18 @@ export function seedJournalDemo(editor: JournalSeedEditor, repeatCount: number):
       });
     }
   });
+  seedCanvasPlans(editor);
+  seedHtmlElements(editor);
+}
+
+/**
+ * Creates the diagrams, notes, and drawings with no initial canvas selection.
+ *
+ * @param editor - Editor whose registered visual commands create the plans.
+ * @returns Canvas content has been inserted and the selection cleared.
+ * @throws If a registered canvas command fails.
+ */
+function seedCanvasPlans(editor: JournalSeedEditor): void {
   const morning = seedWeekendPlan(editor);
   seedRainPlan(editor, morning);
   seedPicnicPlan(editor);

@@ -10,7 +10,7 @@ test("opens a readable notebook with matching canvas cards", async ({ page }) =>
   await expect(today.getByRole("heading", { name: "What to bring" })).toBeVisible();
   await expect(today.getByRole("heading", { name: "A little something sweet" })).toBeVisible();
   await expect(today.getByRole("heading", { name: "A few ideas" })).toBeVisible();
-  await expect(today.locator('[data-block-type="separator"]')).toHaveCount(2);
+  await expect(today.locator('[data-block-type="separator"]')).toHaveCount(3);
   await expect(today.getByRole("button", { name: /Status: doing/ })).toHaveCount(1);
   await expect(today.locator('[data-block-type="bento"]')).toHaveCount(1);
   await page.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -146,7 +146,7 @@ test("repeats the notebook section without selecting the feature showcase", asyn
   await page.goto("/?repeat=2");
   const today = page.locator('[data-journal-document="today"]');
   await expect(today.getByRole("heading", { name: "Games for a quiet evening" })).toHaveCount(3);
-  await expect(today.locator('[data-block-type="separator"]')).toHaveCount(4);
+  await expect(today.locator('[data-block-type="separator"]')).toHaveCount(5);
   await expect(today.locator('[data-block-type="demo.counter"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Edgeless", exact: true }).click();
   const frames = await page.evaluate(() =>
@@ -157,6 +157,8 @@ test("repeats the notebook section without selecting the feature showcase", asyn
       .filter((element) => element.type === "block")
       .map((element) => element.frame),
   );
-  expect(frames).toHaveLength(5);
-  expect(frames[3].x).toBeGreaterThan(frames[0].x + frames[0].width);
+  expect(frames).toHaveLength(6);
+  const xs = frames.map((frame) => frame.x);
+  expect(xs).toContain(2370);
+  expect(xs).toContain(2370 + 540);
 });
