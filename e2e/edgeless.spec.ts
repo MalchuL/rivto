@@ -1,11 +1,14 @@
 import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { DocumentEditorAPI } from "@chulane/rivto";
 import {
   BLOCK_ID_ATTRIBUTE,
   HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
   hostBlockIdSelector as blockIdSelector,
   blockTypeSelector,
 } from "./dom-markers";
+
+type DemoWindow = Window & { __rivtoDemo: { editor: DocumentEditorAPI } };
 
 const switchMode = async (page: Page, mode: "block" | "edgeless") => {
   await page.locator(`[data-editor-mode="${mode}"]`).click();
@@ -2675,7 +2678,7 @@ test("maps a zoomed cross-card drop to the block under the pointer", async ({ pa
   ).toHaveCount(1);
 });
 
-test("does not choose a structural drop target over blank canvas", async ({ page }) => {
+test("creates a new card when a block is dropped onto blank canvas", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page
     .locator("[data-edgeless-root]")
@@ -2689,20 +2692,109 @@ test("does not choose a structural drop target over blank canvas", async ({ page
   if (!sourceId || !parentId || !handleBox || !viewportBox) {
     throw new Error("Expected blank-canvas drag geometry");
   }
+  await page.evaluate(() => {
+    (window as unknown as DemoWindow).__rivtoDemo.editor.history.stopCapturing();
+  });
+  const dropPoint = await emptyCanvasPoint(page);
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(
-    viewportBox.x + viewportBox.width - 30,
-    viewportBox.y + viewportBox.height - 30,
-    { steps: 8 },
-  );
+  await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 8 });
   await expect(
     page.locator("[data-block-drop-active], .rivto-block-drop-line:visible"),
   ).toHaveCount(0);
   await page.mouse.up();
 
+  await expect(cardChild(card, sourceId)).toHaveCount(0);
+  const newCard = page.locator("[data-edgeless-root]").filter({
+    has: page.locator(`:scope > .edgeless-card-content > ${blockIdSelector(sourceId)}`),
+  });
+  await expect(newCard).toHaveCount(1);
+  await expect(newCard).not.toHaveAttribute("data-edgeless-root", parentId);
+  const bounds = await newCard.boundingBox();
+  expect(Math.abs(bounds!.x - dropPoint.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(bounds!.y - dropPoint.y)).toBeLessThanOrEqual(2);
+  await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.undo());
   await expect(cardChild(card, sourceId)).toHaveCount(1);
+  await expect(newCard).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.redo());
+  await expect(newCard).toHaveCount(1);
+});
+
+test("moves a card root to a new card on blank canvas", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page
+    .locator("[data-edgeless-root]")
+    .filter({ has: page.locator(".rivto-block-children") })
+    .first();
+  const root = cardRoot(card);
+  const sourceId = await root.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const originalId = await card.getAttribute("data-edgeless-root");
+  const handle = await root.locator(":scope > .rivto-block-row .block-handle").boundingBox();
+  if (!sourceId || !originalId || !handle) {
+    throw new Error("Expected a draggable root");
+  }
+  const point = await emptyCanvasPoint(page);
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
+  const moved = page.locator("[data-edgeless-root]").filter({
+    has: page.locator(`:scope > .edgeless-card-content > ${blockIdSelector(sourceId)}`),
+  });
+  await expect(moved).toHaveCount(1);
+  await expect(moved).not.toHaveAttribute("data-edgeless-root", originalId);
+});
+
+test("moves selected sibling blocks together onto blank canvas", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const card = page
+    .locator("[data-edgeless-root]")
+    .filter({ has: page.locator(".rivto-block-children") })
+    .first();
+  const children = cardChildren(card);
+  const first = children.nth(0);
+  const second = children.nth(1);
+  const firstId = await first.getAttribute(BLOCK_ID_ATTRIBUTE);
+  const secondId = await second.getAttribute(BLOCK_ID_ATTRIBUTE);
+  if (!firstId || !secondId) {
+    throw new Error("Expected two sibling blocks");
+  }
+  await first
+    .locator(":scope > .rivto-block-row [data-block-content]")
+    .click({ modifiers: ["Control"] });
+  await second
+    .locator(":scope > .rivto-block-row [data-block-content]")
+    .dispatchEvent("pointerdown", { button: 0, ctrlKey: true });
+  await expect(first).toHaveAttribute("data-block-selected", "true");
+  await expect(second).toHaveAttribute("data-block-selected", "true");
+  await page.evaluate(() =>
+    (window as unknown as DemoWindow).__rivtoDemo.editor.history.stopCapturing(),
+  );
+  const handle = first.locator(":scope > .rivto-block-row .block-handle");
+  await handle.hover();
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("Expected drag handle");
+  }
+  const point = await emptyCanvasPoint(page);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
+  const newCard = page
+    .locator("[data-edgeless-root]")
+    .filter({ has: page.locator(`:scope > .edgeless-card-content > ${blockIdSelector(firstId)}`) });
+  await expect(newCard).toHaveCount(1);
+  await expect(cardRoots(newCard)).toHaveCount(2);
+  await expect(cardRoots(newCard).nth(0)).toHaveAttribute(BLOCK_ID_ATTRIBUTE, firstId);
+  await expect(cardRoots(newCard).nth(1)).toHaveAttribute(BLOCK_ID_ATTRIBUTE, secondId);
+  await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.undo());
+  await expect(cardChild(card, firstId)).toHaveCount(1);
+  await expect(cardChild(card, secondId)).toHaveCount(1);
+  await expect(newCard).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.redo());
+  await expect(cardRoots(newCard)).toHaveCount(2);
 });
 
 test("Enter on an edgeless leaf root creates the next root in the same card", async ({ page }) => {

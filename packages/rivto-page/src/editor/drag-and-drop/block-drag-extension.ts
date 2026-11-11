@@ -24,6 +24,20 @@ export interface BlockDragPreviewRow {
 /** Host-owned transactional move; Page never writes hierarchy directly. */
 export interface BlockDragAdapter {
   /**
+   * Offers an unclaimed pointer release to the host surface and reports acceptance.
+   *
+   * The drag controller calls this only for a pointerup with captured roots and
+   * no accepted structural target. An implementation may mutate the document
+   * before returning; this method is not a read-only eligibility check.
+   *
+   * @param ids - Captured block roots from the active drag gesture.
+   * @param x - Release client X coordinate in CSS pixels.
+   * @param y - Release client Y coordinate in CSS pixels.
+   * @returns True when the host accepted the release; false when it did not.
+   * @throws Propagates host mutation failures after gesture cleanup.
+   */
+  isDropOutsideTargets?(ids: readonly string[], x: number, y: number): boolean;
+  /**
    * Captures a bounded text preview once when a pointer gesture activates.
    *
    * Read only the requested prefix of visible addressed nodes; do not materialize
@@ -446,6 +460,8 @@ class BlockDragController {
         if (this.adapter.moveBlocks(gesture.ids, target.destination, target.scope)) {
           focusRoot = target.scope?.root ?? gesture.root;
         }
+      } else if (gesture.ids && target === undefined && event.type === "pointerup") {
+        this.adapter.isDropOutsideTargets?.(gesture.ids, event.clientX, event.clientY);
       }
     } catch (error) {
       errors.push(error);

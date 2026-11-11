@@ -6,6 +6,7 @@ import { useEdgelessCanvas } from "./edgeless-tools-context";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessSurfaceController } from "./edgeless-surface-controller";
+import { registerBlockCanvasDrop } from "./block-canvas-drop";
 import { SurfaceBoundary } from "../surface";
 import { EdgelessSurfaceRegistration } from "./register";
 /**
@@ -111,6 +112,12 @@ function EdgelessSurfaceContent({
     [controller, spotlight, registerRoot],
   );
   useEffect(() => spotlight.observeViewport(), [spotlight]);
+  useEffect(() => {
+    if (!root) {
+      return;
+    }
+    return registerBlockCanvasDrop(root, panel, canvas, blockElementWidth);
+  }, [root, panel, canvas, blockElementWidth]);
   useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (
     <BlockEditorScope editor={reactPanel.page} root={root}>

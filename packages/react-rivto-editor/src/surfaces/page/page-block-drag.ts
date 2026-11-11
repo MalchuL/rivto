@@ -13,6 +13,7 @@ import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
+import { isDispatchBlockSurfaceDrop } from "../block-surface-drop";
 
 /** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */
 interface PagePreviewCursor {
@@ -38,6 +39,22 @@ export class PageBlockDrag implements BlockDragAdapter {
    * @param panel - Source occurrence and bounded grouped commands.
    */
   constructor(private readonly panel: CrossDocumentBlockPanel) {}
+
+  /**
+   * Offers an unclaimed release to a surface in this occurrence and reports acceptance.
+   *
+   * The selected surface handler may move blocks and create elements before this
+   * method returns. No handler is called after this occurrence is detached.
+   *
+   * @param ids - Captured source roots from the active drag gesture.
+   * @param x - Release client X coordinate in CSS pixels.
+   * @param y - Release client Y coordinate in CSS pixels.
+   * @returns The surface handler's result, or false when the occurrence is detached or no surface accepts the release.
+   * @throws Propagates hit-testing or surface handler failures.
+   */
+  isDropOutsideTargets(ids: readonly string[], x: number, y: number): boolean {
+    return this.occurrence ? isDispatchBlockSurfaceDrop(this.occurrence.root, ids, x, y) : false;
+  }
 
   /**
    * Registers one receiving Page attachment shared by both surface implementations.
