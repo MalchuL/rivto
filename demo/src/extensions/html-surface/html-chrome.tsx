@@ -7,7 +7,7 @@
  * @module
  */
 import { editorControlProps } from "@chulane/rivto-react";
-import { CodeXmlIcon, Maximize2Icon, Minimize2Icon } from "lucide-react";
+import { CheckIcon, CodeXmlIcon, Maximize2Icon, Minimize2Icon, XIcon } from "lucide-react";
 import {
   useState,
   type ClipboardEvent,
@@ -47,15 +47,19 @@ export interface HtmlSlotEditButtonProps {
 /**
  * Shows the embedding-style edit control in the owner's right slot.
  *
- * The button stays hidden until the owner is hovered, focused, or already editing.
+ * The button stays hidden until the owner is hovered or focused. Opening the
+ * editor removes it; Close and Done live in the editor instead.
  *
  * @param props - Edit flag and toggle handler.
- * @param props.editing - Whether the source editor is open. An open editor keeps the button visible.
- * @param props.onToggle - Opens or closes the source editor.
+ * @param props.editing - Whether the source editor is open. The button is omitted then.
+ * @param props.onToggle - Opens the source editor.
  * @param props.onPointerDown - Optional pointer-down hook for selection.
- * @returns The icon button placed in the right slot.
+ * @returns The icon button placed in the right slot, or nothing while editing.
  */
 export function HtmlSlotEditButton({ editing, onToggle, onPointerDown }: HtmlSlotEditButtonProps) {
+  if (editing) {
+    return null;
+  }
   return (
     <Button
       {...editorControlProps}
@@ -64,7 +68,6 @@ export function HtmlSlotEditButton({ editing, onToggle, onPointerDown }: HtmlSlo
       size="icon-xs"
       aria-label="Edit HTML"
       title="Edit HTML"
-      data-state={editing ? "open" : "closed"}
       data-edgeless-ui="true"
       onPointerDown={onPointerDown}
       onClick={(event) => {
@@ -172,7 +175,7 @@ export interface HtmlSourceEditorProps {
  * @param props.propsText - JSON loaded into the props editor.
  * @param props.listPropsText - Read-only list props, when this node is a block.
  * @param props.onSave - Called with a parsed draft after Done.
- * @param props.onCancel - Called when Cancel is pressed.
+ * @param props.onCancel - Called when Close is pressed.
  * @returns The inline editor, or the same editor inside the fullscreen dialog.
  */
 export function HtmlSourceEditor({
@@ -341,12 +344,28 @@ function HtmlEditorPane({
         >
           {expanded ? <Minimize2Icon aria-hidden="true" /> : <Maximize2Icon aria-hidden="true" />}
         </Button>
-        <button {...editorControlProps} type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button {...editorControlProps} type="button" onClick={onSave}>
-          Done
-        </button>
+        <Button
+          {...editorControlProps}
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          aria-label="Close"
+          title="Close"
+          onClick={onCancel}
+        >
+          <XIcon aria-hidden="true" />
+        </Button>
+        <Button
+          {...editorControlProps}
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          aria-label="Done"
+          title="Done"
+          onClick={onSave}
+        >
+          <CheckIcon aria-hidden="true" />
+        </Button>
       </div>
       {children}
     </>

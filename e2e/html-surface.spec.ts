@@ -80,6 +80,7 @@ test("html blocks expose the node and render pasted markup", async ({ page }) =>
   const pomodoroBlock = page.locator('[data-block-type="demo.html"]').filter({ has: pomodoroHost });
   await pomodoroBlock.hover();
   await pomodoroBlock.getByRole("button", { name: "Edit HTML", exact: true }).click();
+  await expect(pomodoroBlock.getByRole("button", { name: "Edit HTML" })).toHaveCount(0);
   await pomodoroBlock.getByRole("button", { name: "Expand HTML editor", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "HTML source" })).toBeVisible();
   const props = page.getByRole("textbox", { name: "Widget props" });
