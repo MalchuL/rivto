@@ -37,3 +37,11 @@ test("collects image-only HTML and URI lists without consuming mixed text", () =
   ]);
   expect(findTransferredImageUris(transfer(`${first}\nordinary text`))).toEqual([]);
 });
+
+test("leaves a plain local image path as text", () => {
+  const data = {
+    files: [],
+    getData: (type: string) => (type === "text/plain" ? "/tmp/photo.png" : ""),
+  } as unknown as DataTransfer;
+  expect(findTransferredImageUris(data)).toEqual([]);
+});

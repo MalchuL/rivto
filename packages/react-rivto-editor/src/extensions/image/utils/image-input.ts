@@ -83,8 +83,8 @@ export function findImageUri(text: string): string | undefined {
 /**
  * Selects image URIs from transferable HTML or plain data.
  *
- * HTML must contain images and no other text. Plain text and URI lists must
- * contain only supported local image paths. Files take precedence over URIs.
+ * HTML must contain images and no other text. URI lists must contain only
+ * supported local image paths. Files take precedence over URIs.
  *
  * @param data - Browser clipboard or drag data, if available.
  * @returns Image URIs and alternative text in source order, or an empty array
@@ -111,7 +111,7 @@ export function findTransferredImageUris(data: DataTransfer | null): {
     }
     return [];
   }
-  const text = data.getData("text/uri-list") || data.getData("text/plain");
+  const text = data.getData("text/uri-list");
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())

@@ -696,6 +696,34 @@ test("pastes an image file as an inline macro at a text caret", async ({ page })
 });
 
 for (const repeat of [0, 200]) {
+  test(`pastes a filesystem path as text, repeat=${repeat}`, async ({ page }) => {
+    if (repeat) {
+      await page.goto(`/?repeat=${repeat}`);
+    }
+    const path = "/tmp/missing-image.png";
+    const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+    await content.click();
+    await content.evaluate((element, value) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", value);
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    }, path);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          };
+          return host.__rivtoDemo.editor.blocks.getBlocks()[0]?.content ?? "";
+        }),
+      )
+      .toContain(path);
+    await expect(page.locator(IMAGE_BLOCK_SELECTOR)).toHaveCount(0);
+    await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(0);
+  });
+
   test(`pastes an ordinary link as text, repeat=${repeat}`, async ({ page }) => {
     if (repeat) {
       await page.goto(`/?repeat=${repeat}`);

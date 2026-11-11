@@ -20,6 +20,11 @@ test("collects every selected local path without consuming mixed text", () => {
       getData: (type) => (type === "text/uri-list" ? "file:///a.png\nfile:///b.png" : ""),
     }),
   ).toEqual(["file:///a.png", "file:///b.png"]);
+  expect(
+    findTransferredLocalFileUris({
+      getData: (type) => (type === "text/plain" ? "/a.png" : ""),
+    }),
+  ).toEqual([]);
 });
 
 test("only treats an empty URI list as redacted", () => {
