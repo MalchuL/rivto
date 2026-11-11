@@ -77,7 +77,6 @@ available.
 | Paste/drop on an edgeless viewport       | First-class `image` element                 |
 | `/Image` slash command                   | Native multi-file picker and image block(s) |
 | One image-only HTML `<img>`              | Referenced remote image                     |
-| HTTP(S) image URL                        | Referenced remote image                     |
 | Host-resolvable absolute/file path       | Referenced local image                      |
 
 PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, and SVG filenames are recognized. Every
@@ -91,7 +90,7 @@ redacted URI list it reads the path with the asynchronous Clipboard API; local
 paths still require a provider that can read them because the browser cannot read
 the filesystem directly.
 
-Mixed HTML is left to the normal clipboard pipeline. Non-image files are not
+Plain HTTP(S) links and mixed HTML are left to the normal clipboard pipeline. Non-image files are not
 claimed by this extension.
 
 ## Persistence
