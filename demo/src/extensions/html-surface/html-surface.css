@@ -1,0 +1,268 @@
+.html-surface-block,
+.html-surface-canvas,
+.html-surface-paste,
+.html-source-editor,
+.html-source-editor textarea,
+.html-code-field {
+  box-sizing: border-box;
+}
+
+/* Same body highlight an embedding uses for its referenced document. */
+.rivto-block:where([data-block-type="demo.html"]) > .rivto-block-slot[data-slot-position="body"] {
+  background: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));
+  border: 1px solid var(--rivto-border);
+  border-radius: var(--rivto-radius);
+}
+
+.rivto-block:where([data-block-type="demo.html"][data-block-selected])
+  > .rivto-block-slot[data-slot-position="body"],
+.rivto-block[data-block-selected]
+  .rivto-block:where([data-block-type="demo.html"])
+  > .rivto-block-slot[data-slot-position="body"] {
+  background: transparent;
+}
+
+/* Keep the row from adding a blank band above the highlighted body. */
+.rivto-block[data-block-type="demo.html"] > .rivto-block-row {
+  min-height: 0;
+  padding: 0;
+}
+
+.html-surface-anchor {
+  height: 0;
+  overflow: hidden;
+}
+
+[data-block-type="demo.html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"],
+.edgeless-visual[data-edgeless-visual-kind="html"] > .rivto-slot[data-slot-position="right"] {
+  top: 8px;
+  right: 8px;
+  left: auto;
+  transform: none;
+}
+
+[data-block-type="demo.html"]
+  > .rivto-block-row
+  > .rivto-block-slot[data-slot-position="right"]
+  > button,
+.edgeless-visual[data-edgeless-visual-kind="html"]
+  > .rivto-slot[data-slot-position="right"]
+  > button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-block-type="demo.html"]:hover
+  > .rivto-block-row
+  > .rivto-block-slot[data-slot-position="right"]
+  > button,
+[data-block-type="demo.html"]
+  > .rivto-block-row
+  > .rivto-block-slot[data-slot-position="right"]
+  > button:focus,
+[data-block-type="demo.html"]
+  > .rivto-block-row
+  > .rivto-block-slot[data-slot-position="right"]
+  > button[data-state="open"],
+.edgeless-visual[data-edgeless-visual-kind="html"]:hover
+  > .rivto-slot[data-slot-position="right"]
+  > button,
+.edgeless-visual[data-edgeless-visual-kind="html"]
+  > .rivto-slot[data-slot-position="right"]
+  > button:focus,
+.edgeless-visual[data-edgeless-visual-kind="html"]
+  > .rivto-slot[data-slot-position="right"]
+  > button[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.html-surface-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+
+.html-surface-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.html-surface-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.html-surface-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--rivto-foreground, #1c2348);
+}
+
+.html-surface-paste button,
+.html-source-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--rivto-accent, #3d4ed8);
+  color: white;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.html-surface-paste button:focus-visible,
+.html-source-actions button:focus-visible,
+.html-source-editor textarea:focus-visible,
+.html-surface-paste textarea:focus-visible {
+  outline: 2px solid var(--rivto-ring, #3d4ed8);
+  outline-offset: 2px;
+}
+
+.html-surface-frame {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  display: block;
+}
+
+.html-surface-frame-fill {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  border-radius: 16px;
+}
+
+.html-surface-paste,
+.html-source-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 18px;
+  background: #f6f4ef;
+  color: #1c2348;
+  box-shadow: inset 0 0 0 1px rgba(28, 35, 72, 0.12);
+}
+
+.html-surface-canvas > .html-source-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.html-surface-paste p,
+.html-source-editor p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #505268;
+}
+
+.html-surface-paste textarea,
+.html-source-editor textarea {
+  width: 100%;
+  min-height: 88px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(28, 35, 72, 0.16);
+  border-radius: 12px;
+  background: white;
+  color: #1c2348;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  resize: vertical;
+}
+
+.html-source-editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.html-source-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.html-code-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.html-code-label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.html-code-field .cm-editor {
+  width: 100%;
+  border: 1px solid rgba(28, 35, 72, 0.16);
+  border-radius: 12px;
+  background: white;
+  font-size: 12px;
+}
+
+.html-code-field .cm-scroller {
+  max-height: 220px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.html-code-field-fill .cm-scroller {
+  max-height: none;
+  min-height: 22vh;
+}
+
+.html-code-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.html-code-modal .html-source-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.html-source-actions button:first-child {
+  background: #e4e2ea;
+  color: #1c2348;
+}
+
+.html-source-editor [role="alert"] {
+  color: #9a3412;
+}
