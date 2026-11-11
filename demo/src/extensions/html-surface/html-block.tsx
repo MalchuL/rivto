@@ -3,7 +3,12 @@
  *
  * @module
  */
-import { useBlockSelectionAnchor, usePanel, type BlockSlotProps } from "@chulane/rivto-react";
+import {
+  useBlockNode,
+  useBlockSelectionAnchor,
+  usePanel,
+  type BlockSlotProps,
+} from "@chulane/rivto-react";
 import type { EditorBlockNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
 import { useHtmlEditing } from "./html-edit-session";
@@ -20,77 +25,66 @@ import {
 } from "./protocol";
 
 /**
- * Marks the HTML block row so selection can start there.
+ * Renders one HTML block inside its row.
  *
- * The preview and editor live in the body slot, with the same highlight an
- * embedding uses. The edit control lives in the right slot.
+ * The iframe receives the block node: content, props, list props, plugin data,
+ * and child ids. The edit control is the right slot and sits inside the block.
+ * It appears when the block is hovered or selected.
  *
  * @param props - Renderer props from the block host.
  * @param props.blockId - Stable id of the HTML block.
- * @returns An empty selection anchor for the block row.
+ * @returns The sandbox, the editor, or the paste target. Nothing after deletion.
  */
 export function HtmlBlock({ blockId }: { readonly blockId: string }) {
-  const anchor = useBlockSelectionAnchor(blockId);
-  return <div {...anchor} className="html-surface-anchor" />;
-}
-
-/**
- * Opens the source editor from the block's right slot.
- *
- * @param props - Slot context for the HTML block.
- * @param props.block - Block whose edit flag this button toggles.
- * @returns The embedding-style edit button.
- */
-export function HtmlBlockEditSlot({ block }: BlockSlotProps) {
-  const [editing, setEditing] = useHtmlEditing(block.id);
-  return <HtmlSlotEditButton editing={editing} onToggle={() => setEditing(!editing)} />;
-}
-
-/**
- * Renders the highlighted HTML body: preview, paste target, or source editor.
- *
- * The iframe receives the block node: content, props, list props, plugin data,
- * and child ids. Opening the editor replaces that preview until Done or Cancel.
- *
- * @param props - Slot context for the HTML block.
- * @param props.block - Current block snapshot.
- * @returns The body shown under the block row.
- */
-export function HtmlBlockBodySlot({ block }: BlockSlotProps) {
+  const { block } = useBlockNode(blockId);
   const panel = usePanel();
-  const [editing, setEditing] = useHtmlEditing(block.id);
+  const anchor = useBlockSelectionAnchor(blockId);
+  const [editing, setEditing] = useHtmlEditing(blockId);
   const onCommand = useCallback(
-    (command: HtmlFrameCommand) => applyBlockCommand(panel, block.id, command),
-    [panel, block.id],
+    (command: HtmlFrameCommand) => applyBlockCommand(panel, blockId, command),
+    [panel, blockId],
   );
-  const node = useMemo(() => toBlockView(block), [block]);
+  const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
+  if (!block || !node) {
+    return null;
+  }
   const label = readLabel(block.props, "HTML");
   const sample = readSample(block.props);
   return (
     <div
+      {...anchor}
       className="html-surface-block"
       data-html-surface="block"
       data-html-label={label}
       {...(sample ? { "data-html-sample": sample } : {})}
     >
-      <div className="html-surface-bar">
-        <span className="html-surface-title">{label}</span>
-      </div>
       <HtmlBlockBody
         block={block}
         node={node}
         label={label}
         editing={editing}
         onCommand={onCommand}
-        onCommit={(source) => panel.blocks.updateBlock(block.id, { content: source })}
+        onCommit={(source) => panel.blocks.updateBlock(blockId, { content: source })}
         onCancel={() => setEditing(false)}
         onSave={(draft) => {
-          commitBlockDraft(panel, block.id, draft);
+          commitBlockDraft(panel, blockId, draft);
           setEditing(false);
         }}
       />
     </div>
   );
+}
+
+/**
+ * Opens the source editor from inside the block's right slot.
+ *
+ * @param props - Slot context for the HTML block.
+ * @param props.block - Block whose edit flag this button toggles.
+ * @returns The edit button overlaid on the block.
+ */
+export function HtmlBlockEditSlot({ block }: BlockSlotProps) {
+  const [editing, setEditing] = useHtmlEditing(block.id);
+  return <HtmlSlotEditButton editing={editing} onToggle={() => setEditing(!editing)} />;
 }
 
 /** Props for the preview, editor, or empty paste target. */

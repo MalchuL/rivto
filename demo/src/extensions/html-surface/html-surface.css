@@ -7,37 +7,22 @@
   box-sizing: border-box;
 }
 
-/* Same body highlight an embedding uses for its referenced document. */
-.rivto-block:where([data-block-type="demo.html"]) > .rivto-block-slot[data-slot-position="body"] {
-  background: color-mix(in srgb, var(--rivto-muted) 65%, var(--rivto-background));
-  border: 1px solid var(--rivto-border);
-  border-radius: var(--rivto-radius);
+/* The edit control sits inside the block or element, not on a surrounding frame. */
+[data-block-type="demo.html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
+  /* Inset past the row padding so the control sits on the widget, not in the gutter. */
+  top: 22px;
+  right: 24px;
+  bottom: auto;
+  left: auto;
+  z-index: 2;
+  transform: none;
 }
 
-.rivto-block:where([data-block-type="demo.html"][data-block-selected])
-  > .rivto-block-slot[data-slot-position="body"],
-.rivto-block[data-block-selected]
-  .rivto-block:where([data-block-type="demo.html"])
-  > .rivto-block-slot[data-slot-position="body"] {
-  background: transparent;
-}
-
-/* Keep the row from adding a blank band above the highlighted body. */
-.rivto-block[data-block-type="demo.html"] > .rivto-block-row {
-  min-height: 0;
-  padding: 0;
-}
-
-.html-surface-anchor {
-  height: 0;
-  overflow: hidden;
-}
-
-[data-block-type="demo.html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"],
 .edgeless-visual[data-edgeless-visual-kind="html"] > .rivto-slot[data-slot-position="right"] {
   top: 8px;
   right: 8px;
   left: auto;
+  z-index: 2;
   transform: none;
 }
 
@@ -50,9 +35,14 @@
   > button {
   opacity: 0;
   pointer-events: none;
+  background: var(--rivto-background, #fff);
 }
 
 [data-block-type="demo.html"]:hover
+  > .rivto-block-row
+  > .rivto-block-slot[data-slot-position="right"]
+  > button,
+[data-block-type="demo.html"][data-block-selected="true"]
   > .rivto-block-row
   > .rivto-block-slot[data-slot-position="right"]
   > button,
@@ -65,6 +55,9 @@
   > .rivto-block-slot[data-slot-position="right"]
   > button[data-state="open"],
 .edgeless-visual[data-edgeless-visual-kind="html"]:hover
+  > .rivto-slot[data-slot-position="right"]
+  > button,
+.edgeless-visual[data-edgeless-visual-kind="html"][data-selected]
   > .rivto-slot[data-slot-position="right"]
   > button,
 .edgeless-visual[data-edgeless-visual-kind="html"]
@@ -94,24 +87,6 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.html-surface-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.html-surface-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--rivto-foreground, #1c2348);
 }
 
 .html-surface-paste button,
@@ -155,11 +130,12 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 12px;
-  border-radius: 18px;
-  background: #f6f4ef;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #1c2348;
-  box-shadow: inset 0 0 0 1px rgba(28, 35, 72, 0.12);
+  box-shadow: none;
 }
 
 .html-surface-canvas > .html-source-editor {
