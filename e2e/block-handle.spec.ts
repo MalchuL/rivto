@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { ReactEditorApi } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
@@ -57,13 +57,28 @@ async function menu(page: Page, id: string) {
   await expect(page.getByRole("menu").first()).toBeVisible();
 }
 
+/**
+ * Reads an icon's computed dimensions without including menu animation transforms.
+ *
+ * @param icon - Rendered icon in the context menu.
+ * @returns Width and height as CSS values.
+ */
+async function iconSize(icon: Locator): Promise<string[]> {
+  return icon.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return [style.width, style.height];
+  });
+}
+
 test("menu colors selected subtrees, retains child colors, and supports keyboard actions", async ({
   page,
 }) => {
   const ids = await seed(page);
   await page.evaluate(({ parent, child, other }) => {
     const { editor } = (window as unknown as Demo).__rivtoDemo;
-    editor.blocks.updateBlock(child, { listProps: { backgroundColor: "red" } });
+    editor.blocks.updateBlock(child, {
+      listProps: { style: { background: { color: "#fcdddd" } } },
+    });
     editor.selection.set({
       type: "selection",
       blocks: [parent, other].map((id) => ({ id, start: 0, end: -1 })),
@@ -75,38 +90,179 @@ test("menu colors selected subtrees, retains child colors, and supports keyboard
   await expect(page.getByRole("group", { name: "Block background" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Background", exact: true })).toHaveCount(0);
   await expect(page.getByRole("menu").getByRole("separator")).toHaveCount(4);
-  await page.getByRole("menuitem", { name: "blue", exact: true }).click();
+  await page.getByRole("button", { name: "blue", exact: true }).click();
+  await expect(page.getByRole("menu").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "blue", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   for (const id of [ids.parent, ids.other]) {
-    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveCSS(
-      "border-radius",
-      "12px",
-    );
-    await expect(page.locator(`[data-block-id="${id}"]`).first()).toHaveAttribute(
-      "data-block-background",
-      "var(--rivto-block-blue)",
-    );
+    const block = page.locator(`[data-block-id="${id}"]`).first();
+    await expect(block).toHaveCSS("border-radius", "12px");
+    await expect(block).toHaveAttribute("data-block-background", "#dce9fd");
   }
   await expect(page.locator(`[data-block-id="${ids.child}"]`).first()).toHaveAttribute(
     "data-block-background",
-    "var(--rivto-block-red)",
+    "#fcdddd",
   );
   const handle = page
     .locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`)
     .first();
-  await handle.focus();
-  await handle.click({ button: "right" });
-  await expect(page.getByRole("menu").first()).toBeVisible();
-  const defaultColor = page.getByRole("menuitem", { name: "Default", exact: true });
-  await defaultColor.focus();
+  const noColor = page.getByRole("button", { name: "No color", exact: true });
+  await noColor.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(`[data-block-id="${ids.parent}"]`).first()).not.toHaveAttribute(
     "data-block-background",
-    "var(--rivto-block-blue)",
+    "#dce9fd",
   );
-  await handle.focus();
-  await handle.click({ button: "right" });
+  await expect(page.getByRole("menu").first()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(handle).toBeFocused();
+});
+
+test("custom background uses the centered preset check and keeps the menu open", async ({
+  page,
+}) => {
+  const ids = await seed(page);
+  await menu(page, ids.parent);
+  const picker = page.getByLabel("Custom background color");
+  await expect(picker).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Default", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "No color", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(picker).toBeFocused();
+  await expect(page.getByRole("menuitem", { name: "gray", exact: true })).toHaveCount(0);
+  await picker.fill("#123456");
+  await expect(page.locator(`[data-block-id="${ids.parent}"]`).first()).toHaveAttribute(
+    "data-block-background",
+    "#123456",
+  );
+  await expect(picker).toHaveValue("#123456");
+  await expect(page.locator(".block-color-custom")).toHaveAttribute("data-selected", "true");
+  const mark = page.locator(".block-color-custom-check");
+  await expect(mark).toBeVisible();
+  await expect(mark).toHaveClass(/lucide-check/);
+  await expect(page.locator(".block-color-custom-palette")).toBeVisible();
+  await page
+    .getByRole("menu")
+    .first()
+    .evaluate((menu) => {
+      for (const animation of menu.getAnimations({ subtree: true })) {
+        animation.finish();
+      }
+    });
+  const circleBounds = (await page.locator(".block-color-custom").boundingBox())!;
+  const markBounds = (await mark.boundingBox())!;
+  expect(
+    Math.abs(markBounds.x + markBounds.width / 2 - circleBounds.x - circleBounds.width / 2),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(markBounds.y + markBounds.height / 2 - circleBounds.y - circleBounds.height / 2),
+  ).toBeLessThanOrEqual(1);
+  const customSize = await iconSize(mark);
+  await page.getByRole("button", { name: "red", exact: true }).click();
+  await expect(page.getByRole("menu").first()).toBeVisible();
+  const presetMark = page
+    .getByRole("button", { name: "red", exact: true })
+    .locator("svg.lucide-check");
+  const presetSize = await iconSize(presetMark);
+  expect(customSize).toEqual(presetSize);
+  await picker.fill("#123456");
+  await expect(mark).toBeVisible();
+});
+
+test("matching custom backgrounds are selected by their color and alpha", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate(({ parent, other }) => {
+    const { editor } = (window as unknown as Demo).__rivtoDemo;
+    editor.blocks.updateBlock(parent, {
+      listProps: { style: { background: { color: "#a1b2c3" } } },
+    });
+    editor.blocks.updateBlock(other, {
+      listProps: { style: { background: { color: "#A1B2C3" } } },
+    });
+    editor.selection.set({
+      type: "selection",
+      blocks: [parent, other].map((id) => ({ id, start: 0, end: -1 })),
+      anchorBlockId: parent,
+      focusBlockId: other,
+    });
+  }, ids);
+  await menu(page, ids.parent);
+  await expect(page.getByLabel("Custom background color")).toHaveValue("#a1b2c3");
+  await expect(page.locator(".block-color-custom")).toHaveAttribute("data-selected", "true");
+  await page.evaluate(({ other }) => {
+    const { editor } = (window as unknown as Demo).__rivtoDemo;
+    editor.blocks.updateBlock(other, {
+      listProps: { style: { background: { color: "#a1b2c380" } } },
+    });
+  }, ids);
+  await expect(page.locator(".block-color-custom")).not.toHaveAttribute("data-selected", "true");
+});
+
+test("custom background opacity and no color keep the menu open", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate((id) => {
+    const { editor } = (window as unknown as Demo).__rivtoDemo;
+    editor.blocks.updateBlock(id, {
+      listProps: { style: { text: { color: "#18436c" }, future: { value: "kept" } } },
+    });
+  }, ids.parent);
+  await menu(page, ids.parent);
+  const picker = page.getByLabel("Custom background color");
+  const block = page.locator(`[data-block-id="${ids.parent}"]`).first();
+  await picker.fill("#123456");
+  await expect(block).toHaveAttribute("data-block-background", "#123456");
+  await expect(block.locator(".rivto-block-content").first()).toHaveCSS(
+    "color",
+    "rgb(24, 67, 108)",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const { editor } = (window as unknown as Demo).__rivtoDemo;
+        return editor.blocks.getBlockNode(id)?.listProps.style;
+      }, ids.parent),
+    )
+    .toMatchObject({ future: { value: "kept" } });
+  const opacity = page.getByRole("slider", { name: "Background opacity" });
+  await expect(opacity).toHaveAttribute("aria-valuenow", "100");
+  await expect(page.locator('.block-color-alpha [data-slot="slider-range"]')).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await page.getByRole("button", { name: "purple", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(opacity).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(block).toHaveAttribute("data-block-background", "#12345600");
+  await page.keyboard.press("ArrowRight");
+  await expect(opacity).toHaveAttribute("aria-valuenow", "1");
+  await page.keyboard.press("End");
+  await expect(block).toHaveAttribute("data-block-background", "#123456");
+  const track = page.locator(".block-color-alpha [data-slot=slider-track]");
+  const bounds = (await track.boundingBox())!;
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await expect(opacity).toHaveAttribute("aria-valuenow", /^(49|50)$/);
+  const alpha = Math.round((Number(await opacity.getAttribute("aria-valuenow")) / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  await expect(block).toHaveAttribute("data-block-background", `#123456${alpha}`);
+  await picker.fill("#654321");
+  await expect(block).toHaveAttribute("data-block-background", `#654321${alpha}`);
+  await page.getByRole("button", { name: "No color", exact: true }).click();
+  await expect(block).toHaveAttribute("data-block-background", "#00000000");
+  await expect(block.locator(".rivto-block-content").first()).toHaveCSS(
+    "color",
+    "rgb(24, 67, 108)",
+  );
+  await expect(page.getByRole("menu").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "No color", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator(".block-color-custom-check")).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Default", exact: true })).toHaveCount(0);
 });
 
 test("recursive collapse keeps a visible halo and expand restores hidden descendants", async ({
@@ -243,6 +399,18 @@ test("the same context actions work inside an edgeless card", async ({ page }) =
   const ids = await seed(page);
   await page.getByRole("button", { name: "Edgeless", exact: true }).first().click();
   await expect(page.locator(".edgeless-card").first()).toBeVisible();
+  await menu(page, ids.parent);
+  await page.getByLabel("Custom background color").fill("#123456");
+  const opacity = page.getByRole("slider", { name: "Background opacity" });
+  await expect(opacity).toHaveAttribute("aria-valuenow", "100");
+  await expect(opacity).not.toHaveAttribute("data-disabled");
+  await opacity.focus();
+  await page.keyboard.press("Home");
+  await expect(page.locator(`[data-block-id="${ids.parent}"]`).first()).toHaveAttribute(
+    "data-block-background",
+    "#12345600",
+  );
+  await page.keyboard.press("Escape");
   await menu(page, ids.parent);
   await page.getByRole("menuitem", { name: "Collapse subtree", exact: true }).click();
   await expect(

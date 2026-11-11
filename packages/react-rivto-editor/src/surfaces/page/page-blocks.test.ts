@@ -1,8 +1,64 @@
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
-import { ChildrenPanel } from "@chulane/rivto";
+import { ChildrenPanel, createStructuralSelection } from "@chulane/rivto";
 import { ReactPanel } from "../../panels/react-panel";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { PageBlocks } from "./page-blocks";
+import { bentoExtension } from "../../extensions/containers/bento/bento";
+
+it("persists and removes block styles with undo, clipboard and snapshot round trips", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  const node = core.blocks.insertBlock({ type: "paragraph" });
+  const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
+  const style = { text: { color: "#ff0000" }, border: { radius: "20px" } };
+  core.history.clear();
+  blocks.updateBlockNode(node.id, { style });
+  expect(blocks.getBlockNode(node.id)?.style).toEqual(style);
+  expect(
+    core.clipboard.copy(createStructuralSelection([node.id]))?.blocks[0]?.listProps.style,
+  ).toEqual(style);
+  const snapshot = core.dump();
+  core.history.undo();
+  expect(blocks.getBlockNode(node.id)?.style).toBeUndefined();
+  core.history.redo();
+  expect(core.blocks.getBlockNode(node.id)?.listProps.style).toEqual(style);
+  core.load(snapshot);
+  expect(blocks.getBlockNode(node.id)?.style).toEqual(style);
+  blocks.updateBlockNode(node.id, { style: null });
+  expect(core.blocks.getBlockNode(node.id)?.listProps.style).toBeUndefined();
+  panel.editor.destroy();
+  core.destroy();
+});
+
+it("keeps unrelated styles when one persisted field has the wrong type", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  const style = {
+    background: { color: "#123456" },
+    text: { color: "#0000ff", fontSize: 123 },
+    future: true,
+  };
+  const node = core.blocks.insertBlock({ type: "paragraph", listProps: { style } });
+  const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
+  expect(blocks.getBlockNode(node.id)?.style).toEqual(style);
+  panel.editor.destroy();
+  core.destroy();
+});
+
+it("projects ordinary and container backgrounds without the background menu extension", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core, extensions: [bentoExtension()] });
+  const paragraph = core.blocks.insertBlock({
+    type: "paragraph",
+    listProps: { style: { background: { color: "#ff000080" } } },
+  });
+  const container = core.blocks.insertBlock({ type: "bento" });
+  const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
+  expect(blocks.getBlockNode(paragraph.id)?.style?.background?.color).toBe("#ff000080");
+  expect(blocks.getBlockNode(container.id)?.style?.background?.color).toBe("#eceef6");
+  panel.editor.destroy();
+  core.destroy();
+});
 
 it("reuses model snapshots and addressed subscriptions without visiting descendants", async () => {
   const core = await createTestCoreEditor();
@@ -12,7 +68,7 @@ it("reuses model snapshots and addressed subscriptions without visiting descenda
   const recursive = jestApi.spyOn(core.blocks, "getBlock");
   const first = blocks.getBlockNode(root.id)!;
   expect(blocks.getBlockNode(root.id)).toBe(first);
-  expect(first.color).toBe("transparent");
+  expect(first.style).toBeUndefined();
   expect(first.dropPlacement).toBeUndefined();
   expect(first.childIds).toBe(panel.blocks.getBlockNode(root.id)!.childIds);
   expect(blocks.getRootIds()).toBe(panel.blocks.getRootIds());
@@ -76,18 +132,15 @@ it("prevalidates decorations and removes optional fields in one undo batch", asy
     listProps: {
       type: "checkbox",
       checked: false,
-      backgroundColor: "red",
+      style: { background: { color: "#ff0000" } },
       custom: 42,
     },
   });
   const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
-  expect(blocks.getBlockNode(node.id)?.color).toBe("var(--rivto-block-red)");
+  expect(blocks.getBlockNode(node.id)?.style?.background?.color).toBe("#ff0000");
   core.history.stopCapturing();
-  expect(() => blocks.updateBlockNode(node.id, { checked: true, color: "unsupported" })).toThrow();
-  expect(panel.blocks.getBlockNode(node.id)?.listProps.checked).toBe(false);
-  blocks.updateBlockNode(node.id, { listType: null, color: null, checked: true });
+  blocks.updateBlockNode(node.id, { listType: null, style: null, checked: true });
   expect(panel.blocks.getBlockNode(node.id)?.listProps).toEqual({ checked: true, custom: 42 });
-  expect(blocks.getBlockNode(node.id)?.color).toBe("transparent");
   core.history.undo();
   expect(panel.blocks.getBlockNode(node.id)?.listProps).toEqual(node.listProps);
   core.history.redo();

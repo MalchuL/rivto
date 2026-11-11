@@ -86,7 +86,7 @@ export class TestBlockEditorAdapter implements BlockEditorAdapter {
         listType: patch.listType === null ? undefined : (patch.listType ?? node.listType),
         checked: patch.checked ?? node.checked,
         collapsed: patch.collapsed ?? node.collapsed,
-        color: patch.color === null ? undefined : (patch.color ?? node.color),
+        style: patch.style === null ? undefined : (patch.style ?? node.style),
       });
     }),
   };

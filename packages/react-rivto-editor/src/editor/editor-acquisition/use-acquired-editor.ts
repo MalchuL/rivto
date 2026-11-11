@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  EmbeddedEditorAcquisition,
+  EditorAcquisitionController,
   type SourceEditorProvider,
-  type EmbeddedEditorSnapshot,
-} from "@chulane/rivto-page";
-import type { ReactEditorApi } from "../../editor/types";
+  type AcquiredEditorSnapshot,
+} from "./editor-acquisition-controller";
+import type { ReactEditorApi } from "../types";
 
 /**
  * Retains one source editor while a React consumer needs it.
@@ -24,14 +24,14 @@ import type { ReactEditorApi } from "../../editor/types";
 export function useAcquiredEditor(
   storage: SourceEditorProvider<ReactEditorApi> | undefined,
   documentId: string | undefined,
-): EmbeddedEditorSnapshot<ReactEditorApi> {
-  const [result, setResult] = useState<EmbeddedEditorSnapshot<ReactEditorApi>>({});
+): AcquiredEditorSnapshot<ReactEditorApi> {
+  const [result, setResult] = useState<AcquiredEditorSnapshot<ReactEditorApi>>({});
   useEffect(() => {
     setResult({});
     if (!storage || !documentId) {
       return;
     }
-    const acquisition = new EmbeddedEditorAcquisition(
+    const acquisition = new EditorAcquisitionController(
       storage,
       documentId,
       setResult,

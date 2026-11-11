@@ -5,11 +5,14 @@
  * persisting layout behavior through their existing opaque element props.
  */
 import type { EditorElementNode } from "@chulane/rivto";
-import { useId } from "react";
+import { useCallback, useId, useSyncExternalStore } from "react";
 import { Checkbox } from "../../../../components/ui/checkbox";
 import { Label } from "../../../../components/ui/label";
 import { editorControlProps } from "../../../../constants";
 import type { EdgelessOperations } from "../../../../managers/elements/edgeless-operations";
+import { blockIdsOf } from "../../../../elements/block-element-projection";
+import { useRootBlockIds } from "../../../../hooks";
+import { useHasSingleNonDefaultWritingRoot } from "../../../../surfaces/edgeless/use-single-non-default-writing-root";
 import {
   EdgelessPropertiesPanel,
   PropertyGroup,
@@ -36,6 +39,21 @@ export function BlockProperties({
   const ids = elements.map((element) => element.id);
   const autoHeight = elements.every((element) => element.props.autoHeight !== false);
   const autoHeightId = useId();
+  const borderlessId = useId();
+  const selectedId = elements.length === 1 ? elements[0]?.id : undefined;
+  const subscribe = useCallback(
+    (listener: () => void) => edgelessOperation.elements.subscribe(listener),
+    [edgelessOperation],
+  );
+  const getElement = useCallback(
+    () => (selectedId ? edgelessOperation.elements.getElementNode(selectedId) : undefined),
+    [edgelessOperation, selectedId],
+  );
+  const selected = useSyncExternalStore(subscribe, getElement, getElement);
+  const rootIds = useRootBlockIds();
+  const blockIds = selected ? blockIdsOf(selected, rootIds) : [];
+  const defaultBorderless = useHasSingleNonDefaultWritingRoot(blockIds);
+  const borderless = (selected?.props.borderless ?? defaultBorderless) === true;
   return (
     <EdgelessPropertiesPanel
       title="Block card"
@@ -44,6 +62,26 @@ export function BlockProperties({
       onClose={() => edgelessOperation.clearSelection()}
     >
       <PropertyGroup title="Layout">
+        {selected && blockIds.length === 1 && (
+          <PropertyRow label="Border">
+            <div className={AUTO_HEIGHT_FIELD_CLASS}>
+              <Checkbox
+                {...editorControlProps}
+                id={borderlessId}
+                aria-label="Borderless card"
+                checked={borderless}
+                onCheckedChange={(checked) =>
+                  edgelessOperation.elements.updateElement(selected.id, {
+                    props: { borderless: checked === true },
+                  })
+                }
+              />
+              <Label htmlFor={borderlessId} className={AUTO_HEIGHT_LABEL_CLASS}>
+                Borderless
+              </Label>
+            </div>
+          </PropertyRow>
+        )}
         <PropertyRow label="Height">
           <div className={AUTO_HEIGHT_FIELD_CLASS}>
             <Checkbox

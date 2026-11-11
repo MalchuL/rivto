@@ -21,11 +21,12 @@ export type { BlockReference, BlockResolution } from "@chulane/rivto";
  * A document closes when its final consumer releases it, or on destroy().
  * Concurrent opens share the same pending load, and a failed load can be retried.
  *
- * blockReferences resolves embedding sources from loaded documents and application
+ * blockReferences resolves block references from loaded documents and application
  * metadata without opening candidate documents or incrementing their consumer count.
+ * It is shared by consumers of this storage and destroyed with the storage.
  */
 export class EditorStorage {
-  /** Resolves embedding sources without acquiring candidate documents. */
+  /** Resolves block references without acquiring candidate documents. */
   readonly blockReferences: BlockReferenceResolver<DocumentModel, ReactEditorApi>;
   private readonly entries = new Map<string, Entry>();
   private readonly documentListeners = new Listeners<{ changed: void }>();
@@ -35,7 +36,7 @@ export class EditorStorage {
   private readonly createEditor: NonNullable<EditorStorageOptions["createEditor"]>;
   private readonly unsubscribeRegistry?: () => void;
 
-  /** @param options - Optional document loader, editor factory, and embedding lookup policy. */
+  /** @param options - Optional document loader, editor factory, and block reference lookup policy. */
   constructor(private readonly options: EditorStorageOptions = {}) {
     this.blockReferences = new BlockReferenceResolver(this, options);
     this.openDocument =

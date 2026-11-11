@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 
 /** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
@@ -29,6 +29,10 @@ export interface BlockContextMenuEntry {
   readonly id: string;
   /** Nonempty label; required for every kind, even when a custom renderer supplies its own content. */
   readonly title: string;
+  /** Optional decorative icon supplied by the registering extension. */
+  readonly icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Whether this action uses destructive styling. */
+  readonly destructive?: boolean;
   /** Parent submenu ID; omitted places the contribution at the top level. */
   readonly parentId?: string;
   /** Lower values appear first; equal values retain registration order. */

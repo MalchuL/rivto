@@ -68,7 +68,7 @@ function isLocalImageUri(uri: string): boolean {
 }
 
 /**
- * Extracts one supported remote or local image URI from clipboard text.
+ * Extracts one supported local image URI from clipboard text.
  *
  * URI lists may contain comments; only the first non-comment line is considered.
  *
@@ -77,15 +77,14 @@ function isLocalImageUri(uri: string): boolean {
  */
 export function findImageUri(text: string): string | undefined {
   const uri = firstUriListEntry(text);
-  return uri && (/^https?:\/\//i.test(uri) || isLocalImageUri(uri)) ? uri : undefined;
+  return uri && isLocalImageUri(uri) ? uri : undefined;
 }
 
 /**
  * Selects image URIs from transferable HTML or plain data.
  *
- * HTML must contain images and no other text, or one link whose text and
- * target are the same image URL. Plain text and URI lists must contain only
- * supported image references. Files take precedence over URIs.
+ * HTML must contain images and no other text. URI lists must contain only
+ * supported local image paths. Files take precedence over URIs.
  *
  * @param data - Browser clipboard or drag data, if available.
  * @returns Image URIs and alternative text in source order, or an empty array
@@ -110,22 +109,9 @@ export function findTransferredImageUris(data: DataTransfer | null): {
     if (images.length > 0 && !remaining.textContent?.trim()) {
       return images.map((image) => ({ uri: image.src, alt: image.alt }));
     }
-    const links = [...document.body.querySelectorAll("a")];
-    const uri =
-      findImageUri(data.getData("text/uri-list")) ?? findImageUri(data.getData("text/plain"));
-    if (
-      uri &&
-      images.length === 0 &&
-      links.length === 1 &&
-      links[0]!.href === uri &&
-      document.body.textContent?.trim() === uri &&
-      IMAGE_FILE_EXTENSION.test(links[0]!.pathname)
-    ) {
-      return [{ uri, alt: "" }];
-    }
     return [];
   }
-  const text = data.getData("text/uri-list") || data.getData("text/plain");
+  const text = data.getData("text/uri-list");
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())

@@ -1,6 +1,7 @@
 import type { ReactEditorExtension } from "../../../managers";
 import { BlockHandle } from "../../../components/block-handle/block-handle";
 import { registerBlockBackground } from "./colors";
+import { registerBlockInsertionActions } from "./insertion";
 
 /**
  * Creates the extension installing universal block handles and background colors.
@@ -29,6 +30,7 @@ export function blockHandleExtension(): ReactEditorExtension {
         component: BlockHandle,
       });
       registerBlockBackground(editor);
+      registerBlockInsertionActions(editor.blockContextMenu);
       for (const [id, order] of [
         ["format", 15],
         ["outline", 50],

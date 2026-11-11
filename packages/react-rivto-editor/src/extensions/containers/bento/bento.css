@@ -35,7 +35,10 @@
   margin: 0;
   min-height: 96px;
   border-radius: 16px;
-  background: var(--rivto-block-selection-fill, var(--rivto-bento-background));
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-bento-background))
+  );
 }
 /* The declared width includes Page's insertion strips, so adjacent strips alone
  * supply tile spacing. Neither an extra flex gap nor padding enlarges the item. */
@@ -87,4 +90,8 @@
  * the rest of the strip still resizes without shifting either control. */
 .rivto-bento-tile .rivto-block-slot:has(> .block-handle) {
   z-index: 5;
+}
+
+.rivto-block[data-block-type="bento"] {
+  --rivto-block-shell-background: transparent;
 }

@@ -24,7 +24,7 @@ test("updates all list modes and node fields without changing node identity", as
         listType: mode || null,
         checked: true,
         collapsed: true,
-        color: BACKGROUND_COLORS.find((color) => color.name === "red")!.value,
+        backgroundColor: BACKGROUND_COLORS.find((color) => color.name === "red")!.value,
       }),
     );
   }
@@ -37,7 +37,7 @@ test("updates all list modes and node fields without changing node identity", as
   await page.getByRole("button", { name: "Expand block-1", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Text child-0", exact: true })).toBeVisible();
   await page.getByLabel("Background block-1", { exact: true }).selectOption("");
-  await expect(state).toContainText('"color":null');
+  await expect(state).toContainText('"backgroundColor":null');
   await expect(row).not.toHaveAttribute("data-block-background");
 });
 
@@ -76,7 +76,7 @@ test("uses the base background when the host clears the resolved color", async (
   );
 });
 
-test("applies host CSS expressions and the common background override independently", async ({
+test("keeps explicit block colors stable while the common background override changes", async ({
   page,
 }) => {
   await page.goto("/");
@@ -86,14 +86,14 @@ test("applies host CSS expressions and the common background override independen
   await page.locator("[data-rivto-block-editor]").evaluate((element) => {
     element.style.setProperty("--demo-color-red", "rgb(10, 20, 30)");
   });
-  await expect(block).toHaveCSS("background-color", "rgb(10, 20, 30)");
+  await expect(block).toHaveCSS("background-color", "rgb(252, 221, 221)");
   await expect(child).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.getByLabel("Background child-0", { exact: true }).selectOption("red");
   await child.evaluate((element) =>
     element.style.setProperty("--demo-color-red", "rgb(40, 50, 60)"),
   );
-  await expect(child).toHaveCSS("background-color", "rgb(40, 50, 60)");
-  await expect(block).toHaveCSS("background-color", "rgb(10, 20, 30)");
+  await expect(child).toHaveCSS("background-color", "rgb(252, 221, 221)");
+  await expect(block).toHaveCSS("background-color", "rgb(252, 221, 221)");
   await page.locator("[data-rivto-block-editor]").evaluate((element) => {
     element.style.setProperty("--rivto-block-background", "rgb(70, 80, 90)");
   });
@@ -102,8 +102,8 @@ test("applies host CSS expressions and the common background override independen
   await page.locator("[data-rivto-block-editor]").evaluate((element) => {
     element.style.removeProperty("--rivto-block-background");
   });
-  await expect(block).toHaveCSS("background-color", "rgb(10, 20, 30)");
-  await expect(child).toHaveCSS("background-color", "rgb(40, 50, 60)");
+  await expect(block).toHaveCSS("background-color", "rgb(252, 221, 221)");
+  await expect(child).toHaveCSS("background-color", "rgb(252, 221, 221)");
   await expect(page.locator('[data-node-identity="changed"]')).toHaveCount(0);
 });
 

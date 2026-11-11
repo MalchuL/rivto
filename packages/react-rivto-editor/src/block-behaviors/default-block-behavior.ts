@@ -12,7 +12,10 @@ import type { ReactPanelApi } from "../panels/types";
  * @module
  */
 import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
-import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
+import {
+  navigationDomRoot,
+  owningBlockElement,
+} from "../extensions/built-ins/page/navigation/utils/scope";
 import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
 import {
   findNextEditableBlock,
@@ -20,7 +23,7 @@ import {
   findPreviousEditableBlock,
   findRenderedBlock,
 } from "../blocks/block-dom";
-import { scheduleBlockFocus } from "./utils/focus-ops";
+import { focusCaret, scheduleBlockFocus } from "./utils/focus-ops";
 import { createBlockOutlineContext } from "./utils/context";
 import { mergeBlocks, resetToWritingType, splitBlock } from "./utils/text-ops";
 import type {
@@ -155,6 +158,9 @@ export class DefaultBlockBehavior implements BlockBehavior {
     context: BlockBehaviorContext,
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
+    if (this.removeFirstEmptyBlock(context)) {
+      return "handled";
+    }
     const rendered = findRenderedBlock(context.root, target.blockId);
     if (!rendered || !findParentBlock(rendered)) {
       return "unhandled";
@@ -186,6 +192,9 @@ export class DefaultBlockBehavior implements BlockBehavior {
     target: KeyboardSelectionTarget,
   ): BlockBehaviorOutcome {
     const { reactPanel, root } = context;
+    if (this.removeFirstEmptyBlock(context)) {
+      return "handled";
+    }
     const rendered = findRenderedBlock(root, target.blockId);
     if (rendered && findParentBlock(rendered)) {
       return "unhandled";
@@ -272,6 +281,124 @@ export class DefaultBlockBehavior implements BlockBehavior {
    */
   onStructuralDelete(context: BlockBehaviorContext, ids: readonly string[]): BlockBehaviorOutcome {
     return "unhandled";
+  }
+
+  /**
+   * Removes a first empty writing block or the only block in its surface.
+   *
+   * Leaves child-bearing blocks intact. An empty surface retains keyboard focus
+   * so undo remains available after its last block is removed.
+   *
+   * @param context - Block and surface receiving Backspace.
+   * @returns Whether the block was removed and focus moved to its next sibling or surface.
+   */
+  private removeFirstEmptyBlock(context: BlockBehaviorContext): boolean {
+    const { reactPanel, block, root } = context;
+    const node = reactPanel.blocks.getBlockNode(block.id);
+    // Keep subtrees, panel boundary roots, and semantically nonempty writing blocks intact.
+    if (
+      !node ||
+      node.childIds.length ||
+      !reactPanel.blocks.canRemove(block.id) ||
+      !reactPanel.editor.defaultWritingBlockFactory.isEmptyBlock(node)
+    ) {
+      return false;
+    }
+    const parentId = reactPanel.blocks.getParentId(block.id);
+    const siblings =
+      parentId == null ? reactPanel.blocks.getRootIds() : reactPanel.blocks.getChildIds(parentId);
+    const index = siblings.indexOf(block.id);
+    // A card can start after the first document root; nested blocks use their own sibling list.
+    const card =
+      parentId == null && reactPanel.getSurfaceType() === "edgeless"
+        ? owningBlockElement(reactPanel, block.id)
+        : undefined;
+    if (index < 0 || (index !== 0 && card?.props.startBlockId !== block.id)) {
+      return false;
+    }
+    const nextSibling = siblings[index + 1];
+    // A single-block card has no next block in its surface, even if document roots follow it.
+    if (siblings.length === 1 || (card && card.props.endBlockId === block.id)) {
+      return this.removeOnlyEmptyBlock(context);
+    }
+    if (!nextSibling) {
+      return false;
+    }
+    const scope = navigationDomRoot(root, block.id);
+    const next = findNextEditableBlock(scope, block.id);
+    // Do not skip a structural block or move focus into another card or descendant.
+    if (!next || next.blockId !== nextSibling) {
+      return false;
+    }
+    // Keep card ranges and block deletion in the same undo item; publish focus after removal.
+    reactPanel.batchUpdates(() => {
+      this.replaceCardEndpoints(reactPanel, block.id, next.blockId);
+      reactPanel.blocks.removeBlock(block.id);
+      focusCaret(reactPanel, root, next.blockId, 0);
+    });
+    return true;
+  }
+
+  /**
+   * Retargets card endpoints before removing their referenced block.
+   *
+   * @param reactPanel - Panel owning the affected card elements.
+   * @param blockId - Block being removed.
+   * @param nextId - Surviving sibling receiving the caret.
+   * @returns After updating all matching endpoints within the caller's batch.
+   */
+  private replaceCardEndpoints(reactPanel: ReactPanelApi, blockId: string, nextId: string): void {
+    for (const element of reactPanel.elements.getElementNodes()) {
+      if (element.type !== "block") {
+        continue;
+      }
+      const { startBlockId, endBlockId } = element.props;
+      if (startBlockId === blockId || endBlockId === blockId) {
+        reactPanel.elements.updateElement(element.id, {
+          props: {
+            startBlockId: startBlockId === blockId ? nextId : startBlockId,
+            endBlockId: endBlockId === blockId ? nextId : endBlockId,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Removes the only empty block and any now-empty cards in one history batch.
+   *
+   * Cards with element children or another endpoint remain intact because their
+   * contents cannot be discarded as a consequence of deleting a writing block.
+   *
+   * @param context - Block and surface receiving Backspace.
+   * @returns Whether the block was removed and keyboard focus retained.
+   */
+  private removeOnlyEmptyBlock(context: BlockBehaviorContext): boolean {
+    const { reactPanel, block, root } = context;
+    const cards = reactPanel.elements
+      .getElementNodes()
+      .filter(
+        (element) =>
+          element.type === "block" &&
+          (element.props.startBlockId === block.id || element.props.endBlockId === block.id),
+      );
+    if (
+      cards.some(
+        (element) =>
+          element.childIds.length ||
+          element.props.startBlockId !== block.id ||
+          element.props.endBlockId !== block.id,
+      )
+    ) {
+      return false;
+    }
+    reactPanel.batchUpdates(() => {
+      cards.forEach((element) => reactPanel.elements.removeElement(element.id));
+      reactPanel.blocks.removeBlock(block.id);
+      reactPanel.selection.clear();
+    });
+    root.focus({ preventScroll: true });
+    return true;
   }
 
   /**

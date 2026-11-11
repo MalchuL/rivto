@@ -84,6 +84,24 @@ export const EDITOR_CONTROL_ATTRIBUTE = "data-editor-control";
 /** Matches marked controls without depending on their HTML tag or component. */
 export const EDITOR_CONTROL_SELECTOR = `[${EDITOR_CONTROL_ATTRIBUTE}]`;
 
+/** Marks the positioned host for an edgeless block card. */
+export const EDGELESS_ROOT_ATTRIBUTE = "data-edgeless-root";
+
+/** Matches an edgeless block card host. */
+export const EDGELESS_ROOT_SELECTOR = `[${EDGELESS_ROOT_ATTRIBUTE}]`;
+
+/** Identifies the kind of a selectable edgeless object. */
+export const EDGELESS_OBJECT_KIND_ATTRIBUTE = "data-edgeless-object-kind";
+
+/** Matches an edgeless object with a declared kind. */
+export const EDGELESS_OBJECT_KIND_SELECTOR = `[${EDGELESS_OBJECT_KIND_ATTRIBUTE}]`;
+
+/** Marks interactive edgeless controls and chrome. */
+export const EDGELESS_UI_ATTRIBUTE = "data-edgeless-ui";
+
+/** Matches edgeless controls and chrome. */
+export const EDGELESS_UI_SELECTOR = `[${EDGELESS_UI_ATTRIBUTE}]`;
+
 /**
  * Props for a control that owns clicks and pointer input inside the editor.
  * Spread these onto the control in its extension or renderer; shared UI

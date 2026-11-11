@@ -117,9 +117,10 @@ immutable array before notifying listeners. Individual node edits use separate
 The theme provider is optional. Importing the package CSS is sufficient; demo styles
 are not required. All spacing and dimensions affecting structural layout belong to
 the package and can be customized through public parameters. The provider applies
-the typed `BlockEditorTheme` through CSS inheritance; a host theme container also
-works. Supply CSS lengths as strings with units or `calc`/`clamp` expressions valid
-for the corresponding property. The provider does not bridge variables into detached portals.
+the `BlockEditorTheme` CSS properties through ordinary CSS inheritance; a host theme
+container also works. Supply CSS lengths with units or CSS expressions. CSS custom
+properties are presentation details, not persisted block data. The provider does not
+bridge variables into detached portals.
 
 ## Tailwind CSS and shadcn/ui
 
@@ -153,7 +154,7 @@ one compiled stylesheet.
 
 ## Geometry parameters
 
-| CSS parameter                  | Default                     | Purpose                                              |
+| Theme CSS variable             | Default                     | Purpose                                              |
 | ------------------------------ | --------------------------- | ---------------------------------------------------- |
 | `--rivto-block-padding`        | `16px`                      | Shared row padding for content and controls          |
 | `--rivto-block-gap`            | `4px`                       | Shared gap between roots, above and between children |
@@ -170,22 +171,27 @@ The start gutter preserves content alignment when built-in controls appear or
 disappear. Wider custom contributions can expand it; its minimum width is configurable.
 Renderers do not need compensating padding or translations relative to slots.
 
-`--rivto-background`, `--rivto-block-foreground`, and `--rivto-block-selection` define
-the base background, text, and selection. Each node's `color` is a ready-to-use CSS
-color or expression, such as `#3366ff`, `rgb(10, 20, 30)`, or a host-defined `var(...)`.
-The host resolves persisted palette names before supplying a snapshot and handles
-any reverse mapping when applying color commands. Page has no palette registry,
-reserved color names, token syntax rules, or per-color theme properties. Omit the
-color to use the base background. The demo's named choices are resolved in its own
-controls before calling node.setColor; those names are not part of the Page API.
+The editor theme exposes CSS variables for base colors, selection, block layout,
+control dimensions and drag-and-drop geometry. `--rivto-background`,
+`--rivto-block-foreground`, and `--rivto-block-selection` set the base background,
+text, and selection colors. A semantic `BlockStyle` defines one
+node's own background, text and border. Color and length fields are strings; the
+background palette stores explicit hexadecimal colors. Unitless lengths are
+interpreted as pixels. Page checks individual field types during rendering, so a
+malformed field does not suppress other styles. Unknown and malformed fields stay in
+the document; consumers reading untrusted styles must check the fields they use.
 
-`--rivto-block-background` is the common block background override and takes priority
-over node.color. Like other theme parameters, it inherits through the subtree. It can
-also be supplied through style on an individual BlockView. Each node uses its own
-resolved color: a parent's selected color does not color its children. BlockView applies
-the selected color as the non-inherited backgroundColor property; it does not create
-a separate inherited CSS variable for that node color. Parameters also inherit between
-nested providers; one provider can serve multiple editors.
+The editor's `--rivto-block-background` override takes priority over the node's own
+background, while selection fill takes priority over both. A layout can also supply
+the override through an individual `BlockView`'s DOM style. Each node uses its own
+style and must not inherit another block's local typography. Transparent blocks can
+still reveal the background of their enclosing surface. Nested editor providers
+inherit editor theme values; a provider does not bridge detached portals.
+
+An individual node's `setStyle(style)` replaces its complete local style, and
+`setStyle(null)` removes it. `getStyle()` returns a deep copy or an empty object when
+absent. The host adapter owns validation, persistence and undo. Text styles supply inherited defaults for the block content; a renderer can override
+them for specific elements. Descendant blocks remain independently styled.
 
 ## Slots and current limitations
 

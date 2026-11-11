@@ -39,6 +39,38 @@ test("preserves selected groups, excludes covered roots, and retargets an outsid
   await f.core.destroy();
 });
 
+test("inserts blocks and a separator next to the clicked block", async () => {
+  const f = await fixture();
+  const context = blockMenuTargets(f.panel, f.child.id);
+  const entries = f.panel.blockContextMenu.getAll(context).map((entry) => entry.id);
+  expect(
+    entries.slice(entries.indexOf("block.background"), entries.indexOf("separator.format")),
+  ).toEqual([
+    "block.background",
+    "block.insert-above",
+    "block.insert-below",
+    "block.insert-separator",
+  ]);
+  await executeBlockMenuEntry("block.insert-above", context);
+  await executeBlockMenuEntry("block.insert-below", context);
+  await executeBlockMenuEntry("block.insert-separator", context);
+  const children = f.core.blocks.getBlock(f.parent.id)!.children;
+  expect(children.map((block) => block.type)).toEqual([
+    "paragraph",
+    "paragraph",
+    "separator",
+    "paragraph",
+  ]);
+  expect(children[1]!.id).toBe(f.child.id);
+  expect(children[1]!.children[0]!.content).toBe("Leaf");
+  f.core.history.undo();
+  expect(
+    f.core.blocks.getBlock(f.parent.id)!.children.some((block) => block.type === "separator"),
+  ).toBe(false);
+  f.panel.editor.destroy();
+  await f.core.destroy();
+});
+
 test("recursive collapse includes hidden descendants and expands in one undo step", async () => {
   const f = await fixture();
   const context = blockMenuTargets(f.panel, f.parent.id);
@@ -58,7 +90,9 @@ test("recursive collapse includes hidden descendants and expands in one undo ste
 
 test("multi-block list and todo conversion preserve identity, descendants, and colors", async () => {
   const f = await fixture();
-  f.panel.blocks.updateBlock(f.parent.id, { listProps: { backgroundColor: "blue" } });
+  f.panel.blocks.updateBlock(f.parent.id, {
+    listProps: { style: { background: { color: "#dce9fd" } } },
+  });
   f.panel.selection.set(createStructuralSelection([f.parent.id, f.other.id]));
   const context = blockMenuTargets(f.panel, f.parent.id);
   await executeBlockMenuEntry("list.checkbox", context);
@@ -67,14 +101,17 @@ test("multi-block list and todo conversion preserve identity, descendants, and c
   expect(parent.type).toBe("todo-item");
   expect(parent.content).toBe("Parent");
   expect(parent.children[0]?.id).toBe(f.child.id);
-  expect(parent.listProps).toMatchObject({ backgroundColor: "blue", type: "checkbox" });
+  expect(parent.listProps).toMatchObject({
+    style: { background: { color: "#dce9fd" } },
+    type: "checkbox",
+  });
   const bundle = f.panel.clipboard.copy(createStructuralSelection([f.parent.id]))!;
-  expect(bundle.blocks[0]?.listProps.backgroundColor).toBe("blue");
-  expect(
-    f.core.dump().blocks.find((block) => block.id === f.parent.id)?.listProps.backgroundColor,
-  ).toBe("blue");
+  expect(bundle.blocks[0]?.listProps.style).toEqual({ background: { color: "#dce9fd" } });
+  expect(f.core.dump().blocks.find((block) => block.id === f.parent.id)?.listProps.style).toEqual({
+    background: { color: "#dce9fd" },
+  });
   expect(() =>
-    f.panel.blocks.updateBlock(f.parent.id, { listProps: { backgroundColor: "invalid" } }),
+    f.panel.blocks.updateBlock(f.parent.id, { listProps: { style: { opacity: Infinity } } }),
   ).toThrow();
   f.panel.editor.destroy();
   await f.core.destroy();

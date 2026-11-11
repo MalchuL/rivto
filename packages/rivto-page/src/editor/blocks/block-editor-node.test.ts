@@ -2,9 +2,33 @@ import type { BlockListType } from "../../adapter/types";
 import { BlockEditorController } from "../block-editor-controller";
 import { TestBlockEditorAdapter } from "../../test-utils/test-block-editor-adapter";
 
+it("replaces block style and returns a deeply detached copy", () => {
+  const adapter = new TestBlockEditorAdapter();
+  adapter.setNode("a");
+  const controller = new BlockEditorController({ adapter });
+  const node = controller.getNode("a");
+  expect(node.getStyle()).toEqual({});
+  node.setStyle({ text: { color: "#ff0000" }, border: { radius: "12" } });
+  const copy = node.getStyle();
+  expect(copy).toEqual({ text: { color: "#ff0000" }, border: { radius: "12" } });
+  expect(copy.text).not.toBe(node.getStyle().text);
+  Object.assign(copy.text!, { color: "#00ff00" });
+  expect(node.getStyle().text?.color).toBe("#ff0000");
+  node.setStyle({ background: { color: "#123456" } });
+  expect(node.getStyle()).toEqual({ background: { color: "#123456" } });
+  node.setStyle(null);
+  expect(node.getStyle()).toEqual({});
+  controller.destroy();
+});
+
 it("keeps node identity separate from live snapshots and delegates presentation commands", () => {
   const adapter = new TestBlockEditorAdapter();
-  adapter.setNode("a", { childIds: ["child"], checked: false, collapsed: false, color: "red" });
+  adapter.setNode("a", {
+    childIds: ["child"],
+    checked: false,
+    collapsed: false,
+    style: { background: { color: "#ff0000" } },
+  });
   adapter.setBlockIds(["a"]);
   const controller = new BlockEditorController({ adapter });
   const node = controller.getNode("a");
@@ -18,26 +42,26 @@ it("keeps node identity separate from live snapshots and delegates presentation 
   node.setChecked(true);
   expect(node.checked).toBe(true);
   expect(node.collapsed).toBe(false);
-  expect(node.color).toBe("red");
+  expect(node.getStyle().background?.color).toBe("#ff0000");
   node.setCollapsed(true);
-  node.setColor("blue");
+  node.setStyle({ background: { color: "#0000ff" } });
   expect(node.checked).toBe(true);
   expect(node.collapsed).toBe(true);
-  expect(node.color).toBe("blue");
-  node.setColor(null);
-  expect(node.color).toBeUndefined();
+  expect(node.getStyle().background?.color).toBe("#0000ff");
+  node.setStyle(null);
+  expect(node.getStyle().background?.color).toBeUndefined();
   expect(changed).toHaveBeenCalledTimes(4);
   expect(adapter.blocks.updateBlockNode.mock.calls).toEqual([
     ["a", { checked: true }],
     ["a", { collapsed: true }],
-    ["a", { color: "blue" }],
-    ["a", { color: null }],
+    ["a", { style: { background: { color: "#0000ff" } } }],
+    ["a", { style: null }],
   ]);
   expect(controller.getNode("a")).toBe(node);
   expect(node.getSnapshot()).not.toBe(snapshot);
   expect(snapshot?.checked).toBe(false);
   expect(snapshot?.collapsed).toBe(false);
-  expect(snapshot?.color).toBe("red");
+  expect(snapshot?.style?.background?.color).toBe("#ff0000");
   dispose();
   dispose();
   expect(adapter.subscriberCount).toBe(0);
@@ -109,7 +133,7 @@ it("observes missing IDs and preserves their objects across deletion and restora
   adapter.blocks.updateBlockNode.mockImplementationOnce(() => {
     throw rejected;
   });
-  expect(() => node.setColor("invalid")).toThrow(rejected);
+  expect(() => node.setStyle({ background: { color: "invalid" } })).toThrow(rejected);
   expect(node.getSnapshot()).toBe(snapshot);
   adapter.blocks.updateBlockNode.mockImplementationOnce(() => {
     throw rejected;
@@ -239,7 +263,12 @@ it.each<BlockListType>([
   "delegates %s without changing renderer type or checkbox state and clears it explicitly",
   (type) => {
     const adapter = new TestBlockEditorAdapter();
-    adapter.setNode("a", { type: "markdown", checked: true, color: "red", collapsed: true });
+    adapter.setNode("a", {
+      type: "markdown",
+      checked: true,
+      style: { background: { color: "#ff0000" } },
+      collapsed: true,
+    });
     const controller = new BlockEditorController({ adapter });
     const node = controller.getNode("a");
     const before = node.getSnapshot();
@@ -251,7 +280,7 @@ it.each<BlockListType>([
     expect(node.getSnapshot()).toMatchObject({
       type: "markdown",
       checked: true,
-      color: "red",
+      style: { background: { color: "#ff0000" } },
       collapsed: true,
       listType: type,
     });
@@ -286,8 +315,8 @@ it.each([5, 2000])("updates background independently of %i cached nodes", (count
   node.subscribe(changed);
   adapter.blocks.getBlockIds.mockClear();
   adapter.blocks.getBlockNode.mockClear();
-  node.setColor("red");
-  expect(node.color).toBe("red");
+  node.setStyle({ background: { color: "#ff0000" } });
+  expect(node.getStyle().background?.color).toBe("#ff0000");
   expect(changed).toHaveBeenCalledTimes(1);
   expect(adapter.blocks.getBlockNode.mock.calls.map(([id]) => id)).toEqual([ids[0], ids[0]]);
   expect(adapter.blocks.getBlockIds).not.toHaveBeenCalled();
@@ -295,7 +324,7 @@ it.each([5, 2000])("updates background independently of %i cached nodes", (count
   for (const id of ids.slice(1)) {
     expect(adapter.nodes.get(id)).toBe(snapshots.get(id));
   }
-  node.setColor(null);
-  expect(node.color).toBeUndefined();
+  node.setStyle(null);
+  expect(node.getStyle().background?.color).toBeUndefined();
   controller.destroy();
 });

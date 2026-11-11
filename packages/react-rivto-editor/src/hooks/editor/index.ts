@@ -1,5 +1,5 @@
 export * from "./use-react-panel";
-export { useAcquiredEditor } from "./use-acquired-editor";
+export { useAcquiredEditor } from "../../editor/editor-acquisition/use-acquired-editor";
 export * from "./use-dom-event";
 export * from "./use-editor-mode";
 export * from "./use-editor-root";

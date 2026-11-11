@@ -19,9 +19,27 @@ for (const mode of ["Page", "Edgeless"] as const) {
     await expect(today.locator("[data-block-row-hover]")).toHaveCount(1);
     const handle = row.locator(":scope > .rivto-block-slot > .block-handle");
     await expect(handle).toHaveCSS("opacity", "1");
+    const handleBox = (await handle.boundingBox())!;
     await handle.click({ button: "right" });
     await expect(row.locator("..")).toHaveAttribute("data-block-selected", "true");
     await expect(page.getByRole("menu")).toBeVisible();
+    // The fixed anchor must stay at the pointer even inside the transformed Edgeless canvas.
+    const anchor = page.locator('[data-slot="dropdown-menu-trigger"][aria-hidden="true"]');
+    await expect
+      .poll(async () => {
+        const box = (await anchor.boundingBox())!;
+        return Math.hypot(
+          box.x - (handleBox.x + handleBox.width / 2),
+          box.y - (handleBox.y + handleBox.height / 2),
+        );
+      })
+      .toBeLessThan(2);
+    // Collision handling may flip the menu, but it must still touch the click position.
+    const menuBox = (await page.getByRole("menu").boundingBox())!;
+    const x = handleBox.x + handleBox.width / 2;
+    const y = handleBox.y + handleBox.height / 2;
+    expect(Math.max(menuBox.x - x, x - menuBox.x - menuBox.width, 0)).toBeLessThan(10);
+    expect(Math.max(menuBox.y - y, y - menuBox.y - menuBox.height, 0)).toBeLessThan(10);
     await page.keyboard.press("Escape");
   });
 }

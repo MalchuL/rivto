@@ -8,12 +8,20 @@ import type { PanelEventsApi } from "../managers/events/api";
 import type { KeyboardApi } from "../managers/keyboard/keyboard-api";
 import type { PanelSelectionApi } from "../managers/selection/api";
 import type { PanelSlashCommandsApi } from "../managers/slash/api";
-import type { BlockDropTargetsApi } from "@chulane/rivto-page";
+import type { BlockDropTargetsApi, BlockEditorNodeApi } from "@chulane/rivto-page";
 
 /** Page placement lookup borrowed by panel interaction handlers. */
 export interface PanelPageApi {
   /** Resolves a point using the mounted Page drop regions. */
   readonly dropTargets: Pick<BlockDropTargetsApi, "resolve">;
+  /**
+   * Borrows the occurrence's ID-bound theme operations without lifecycle ownership.
+   *
+   * @param id - Persisted block ID in the panel's accessible boundary.
+   * @returns Stable node providing current theme reads and updates.
+   * @throws If the page controller has been destroyed.
+   */
+  getNode(id: string): Pick<BlockEditorNodeApi, "getStyle" | "setStyle">;
 }
 
 /**

@@ -67,7 +67,10 @@
   padding-inline-start: calc(var(--rivto-container-padding) + 24px);
   gap: 8px;
   min-height: 64px;
-  background: var(--rivto-block-selection-fill, var(--rivto-todo-storage-background));
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-todo-storage-background))
+  );
   border-radius: 0 0 16px 16px;
 }
 /* The empty field remains a native control inside Page's measured drop host. */
@@ -103,4 +106,8 @@
 .rivto-block-row:has(> .rivto-block-content > .rivto-todo-item) {
   padding: 0;
   column-gap: 0;
+}
+
+.rivto-block[data-block-type="todo-storage"] {
+  --rivto-block-shell-background: transparent;
 }

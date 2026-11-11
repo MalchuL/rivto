@@ -7,6 +7,14 @@ import type {
 } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
+import {
+  CopyIcon,
+  ScissorsIcon,
+  Trash2Icon,
+  ListIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+} from "lucide-react";
 
 /** Registration capability borrowed from the block context menu. */
 interface BlockContextMenuRegistration {
@@ -63,13 +71,14 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockClipboardActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, cut] of [
-    ["copy", "Copy", false],
-    ["cut", "Cut", true],
+  for (const [id, title, cut, icon] of [
+    ["copy", "Copy", false, CopyIcon],
+    ["cut", "Cut", true, ScissorsIcon],
   ] as const) {
     menu.register({
       id: `clipboard.${id}`,
       title,
+      icon,
       order: 80,
       /**
        * Copies or cuts the captured root subtrees through browser clipboard writing.
@@ -84,6 +93,8 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
   menu.register({
     id: "block.delete",
     title: "Delete",
+    icon: Trash2Icon,
+    destructive: true,
     order: 100,
     execute: deleteMenuBlocks,
   });
@@ -102,7 +113,7 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockListActions(menu: BlockContextMenuRegistration): void {
-  menu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
+  menu.register({ id: "list", title: "List style", icon: ListIcon, kind: "submenu", order: 20 });
   for (const [type, title] of [
     ["list", "Ordinary list"],
     ["numbered_list", "Numbered list"],
@@ -183,13 +194,14 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockCollapseActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, collapsed] of [
-    ["collapse", "Collapse subtree", true],
-    ["expand", "Expand whole subtree", false],
+  for (const [id, title, collapsed, icon] of [
+    ["collapse", "Collapse subtree", true, ChevronsDownUpIcon],
+    ["expand", "Expand whole subtree", false, ChevronsUpDownIcon],
   ] as const) {
     menu.register({
       id: `block.${id}`,
       title,
+      icon,
       order: 60,
       /**
        * Applies this entry's collapse state to all parent blocks in the selected subtrees.

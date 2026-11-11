@@ -96,6 +96,10 @@ Token groups:
 Canvas cards no longer inherit `--rivto-block-surface-padding`; hosts that used
 it to customize cards should set `--rivto-edgeless-card-padding` instead.
 
+`--rivto-separator-children-opacity` controls the opacity of content inside a
+separator's child frame. It defaults to `0.5` and accepts CSS opacity values;
+set it on the editor or a separator ancestor to customize the presentation.
+
 Add a token when a feature introduces a color or dimension a host should be
 able to change; reference it from utilities with the Tailwind variable
 shorthand (`text-(--rivto-todo-accent)`, `shadow-(--rivto-edgeless-chrome-shadow)`,

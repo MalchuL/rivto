@@ -67,3 +67,20 @@ test("Bento preserves tile identity and width through moves, undo and serializat
   reactPanel.editor.destroy();
   editor.destroy();
 });
+
+test("new and converted Bento blocks persist their default background", async () => {
+  const editor = await createTestCoreEditor({ registerWritingBlock: false });
+  const panel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), bentoExtension()],
+  });
+  const created = editor.blocks.insertBlock({ type: "bento" });
+  expect(created.listProps.style).toEqual({ background: { color: "#eceef6" } });
+  const original = editor.blocks.insertBlock({ type: "paragraph" });
+  panel.slashCommands.execute("block.bento.insert", { blockId: original.id });
+  expect(editor.blocks.getBlockNode(original.id)?.listProps.style).toEqual({
+    background: { color: "#eceef6" },
+  });
+  panel.editor.destroy();
+  editor.destroy();
+});

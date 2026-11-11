@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { findTransferredImageUris } from "./image-input";
 
-test("recognizes copied image links without claiming ordinary HTML links", () => {
+test("leaves copied links to the normal clipboard pipeline", () => {
   const transfer = (uri: string, html: string) =>
     ({
       files: [],
@@ -9,12 +9,8 @@ test("recognizes copied image links without claiming ordinary HTML links", () =>
     }) as unknown as DataTransfer;
 
   const image = "https://example.test/photo.png?size=large";
-  expect(findTransferredImageUris(transfer(image, `<a href="${image}">${image}</a>`))).toEqual([
-    {
-      uri: image,
-      alt: "",
-    },
-  ]);
+  expect(findTransferredImageUris(transfer(image, `<a href="${image}">${image}</a>`))).toEqual([]);
+  expect(findTransferredImageUris(transfer(image, ""))).toEqual([]);
   const page = "https://example.test/article";
   expect(findTransferredImageUris(transfer(page, `<a href="${page}">${page}</a>`))).toEqual([]);
   expect(
@@ -30,10 +26,7 @@ test("collects image-only HTML and URI lists without consuming mixed text", () =
     }) as unknown as DataTransfer;
   const first = "https://example.test/first.png";
   const second = "https://example.test/second.png";
-  expect(findTransferredImageUris(transfer(`${first}\n${second}`))).toEqual([
-    { uri: first, alt: "" },
-    { uri: second, alt: "" },
-  ]);
+  expect(findTransferredImageUris(transfer(`${first}\n${second}`))).toEqual([]);
   expect(
     findTransferredImageUris(
       transfer("", `<img src="${first}" alt="first"><img src="${second}" alt="second">`),
@@ -43,4 +36,12 @@ test("collects image-only HTML and URI lists without consuming mixed text", () =
     { uri: second, alt: "second" },
   ]);
   expect(findTransferredImageUris(transfer(`${first}\nordinary text`))).toEqual([]);
+});
+
+test("leaves a plain local image path as text", () => {
+  const data = {
+    files: [],
+    getData: (type: string) => (type === "text/plain" ? "/tmp/photo.png" : ""),
+  } as unknown as DataTransfer;
+  expect(findTransferredImageUris(data)).toEqual([]);
 });

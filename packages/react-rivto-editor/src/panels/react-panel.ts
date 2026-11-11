@@ -8,13 +8,7 @@ import { PageSelection } from "../surfaces/page/page-selection";
 import { PageSurfaceRegistrations } from "../surfaces/page/page-surface-registrations";
 import { UnknownBlock } from "../blocks/unknown-block/unknown-block";
 import type { DocumentModel } from "@chulane/document-model";
-import {
-  ModeManager,
-  EmbeddingPanel,
-  type PanelAPI,
-  type ModeManagerApi,
-  type EditorMode,
-} from "@chulane/rivto";
+import { ModeManager, type PanelAPI, type ModeManagerApi, type EditorMode } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
 import { PanelClipboardManager } from "../managers/clipboard/panel-clipboard-manager";
 import { PANEL_ATTRIBUTE } from "./panel-dom";
@@ -133,12 +127,27 @@ export class ReactPanel implements ReactPanelApi {
         this.blocks,
         this.mode,
       );
+      // Every React panel retains card maintenance, including Page-only views.
+      // The block parent below selects a card projection scope; it does not change
+      // which blocks the panel displays or whether its root is protected.
+      let blockCardParentId: string | null;
+      if (corePanel.blocks.includeRoot) {
+        // The projection accepts a parent ID, not an included root: passing this root
+        // would create cards for its children and exclude the root itself. It cannot
+        // express a single included root, so use the existing document-wide scope.
+        // null selects all document roots, not only the panel root, and does not disable
+        // maintenance. With a null element root it reuses the editor's projection;
+        // with an element container it reconciles document-root cards in that container.
+        // Edgeless only renders cards at the panel's top level, so child cards created
+        // by passing this root would not represent the panel's included root there.
+        blockCardParentId = null;
+      } else {
+        // Project the selected parent's children, or document roots when no parent is selected.
+        blockCardParentId = corePanel.rootBlockId ?? null;
+      }
       /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
       this.registrations.add(
-        editor.blockElements.maintainBlockCards(
-          corePanel instanceof EmbeddingPanel ? null : (corePanel.rootBlockId ?? null),
-          corePanel.rootElementId,
-        ),
+        editor.blockElements.maintainBlockCards(blockCardParentId, corePanel.rootElementId),
       );
       this.updateSnapshot(this.corePanel.document.getDocument(), true);
       // A subtree root can disappear and return through undo while its document remains retained.

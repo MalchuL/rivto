@@ -1,3 +1,9 @@
+export type {
+  BlockStyle,
+  BlockBackgroundStyle,
+  BlockTextStyle,
+  BlockBorderStyle,
+} from "./adapter/block-style";
 /**
  * Autonomous block presentation contracts, controller, component, and limited hooks.
  *
@@ -139,12 +145,6 @@ export {
 export { BlockDragHandle } from "./presentation/drag-and-drop/block-drag-handle";
 
 export { BlockDropFeedback } from "./editor/drag-and-drop/block-drop-feedback";
-export { EmbeddedEditorAcquisition } from "./editor/embedding/embedded-editor-acquisition";
-export type {
-  SourceEditorProvider,
-  SourceEditorLease,
-  EmbeddedEditorSnapshot,
-} from "./editor/embedding/embedded-editor-acquisition";
 export {
   DropSurfaceRegistry,
   DROP_SURFACE_ATTRIBUTE,

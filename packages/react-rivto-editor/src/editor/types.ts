@@ -50,7 +50,7 @@ export interface EditorStorageOptions extends BlockReferenceOptions {
    * Storage creates and disposes the core; this callback must not replace it.
    */
   readonly createEditor?: (editor: DocumentEditorAPI) => ReactEditorApi;
-  /** Optional registry metadata notifications used to retry unresolved embedding locations. */
+  /** Optional registry metadata notifications used to retry unresolved block locations. */
   readonly subscribeDocumentIds?: (listener: () => void) => () => void;
   /** Reports asynchronous release failures from view cleanup. */
   readonly onError?: (error: unknown) => void;

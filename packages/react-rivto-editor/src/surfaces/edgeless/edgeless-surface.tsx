@@ -6,6 +6,7 @@ import { useEdgelessCanvas } from "./edgeless-tools-context";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessSurfaceController } from "./edgeless-surface-controller";
+import { registerBlockCanvasDrop } from "./block-canvas-drop";
 import { SurfaceBoundary } from "../surface";
 import { EdgelessSurfaceRegistration } from "./register";
 /**
@@ -111,6 +112,12 @@ function EdgelessSurfaceContent({
     [controller, spotlight, registerRoot],
   );
   useEffect(() => spotlight.observeViewport(), [spotlight]);
+  useEffect(() => {
+    if (!root) {
+      return;
+    }
+    return registerBlockCanvasDrop(root, panel, canvas, blockElementWidth);
+  }, [root, panel, canvas, blockElementWidth]);
   useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (
     <BlockEditorScope editor={reactPanel.page} root={root}>
@@ -198,6 +205,9 @@ const EdgelessCards = memo(function EdgelessCards({ canvas }: EdgelessCardsProps
   const visible = useCanvasVisible(canvas);
   const visibleIds = useMemo(() => new Set(visible), [visible]);
   const rootIds = useRootBlockIds();
+  // Only card ranges whose block parent is the panel's top level are rendered.
+  // In an included-root panel, cards for that root's children remain nested and
+  // do not substitute for a card whose range contains the root itself.
   const blockElements = useElements().filter(
     (element) =>
       visibleIds.has(element.id) &&

@@ -99,15 +99,12 @@ export class DemoAdapter implements BlockEditorAdapter {
       if (patch.listType != null && !LIST_TYPES.includes(patch.listType)) {
         throw new Error("Unsupported list type");
       }
-      if (patch.color && !BACKGROUND_COLORS.some((color) => color.value === patch.color)) {
-        throw new Error("Unsupported block background");
-      }
       const node = this.requiredNode(id);
       this.publish(id, {
         listType: patch.listType === null ? undefined : (patch.listType ?? node.listType),
         checked: patch.checked ?? node.checked,
         collapsed: patch.collapsed ?? node.collapsed,
-        color: patch.color === null ? undefined : (patch.color ?? node.color),
+        style: patch.style === null ? undefined : (patch.style ?? node.style),
       });
     },
   };

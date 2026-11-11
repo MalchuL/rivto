@@ -43,7 +43,10 @@
   min-height: 192px;
   overflow-x: auto;
   border-radius: 16px;
-  background: var(--rivto-block-selection-fill, var(--rivto-kanban-board-background));
+  background: var(
+    --rivto-block-selection-fill,
+    var(--rivto-block-own-background, var(--rivto-kanban-board-background))
+  );
   scrollbar-width: thin;
 }
 .rivto-kanban-columns > .rivto-block {
@@ -118,4 +121,8 @@
 .rivto-kanban-add-column > svg {
   width: 28px;
   height: 28px;
+}
+
+.rivto-block[data-block-type="kanban"] {
+  --rivto-block-shell-background: transparent;
 }

@@ -696,23 +696,39 @@ test("pastes an image file as an inline macro at a text caret", async ({ page })
 });
 
 for (const repeat of [0, 200]) {
-  test(`renders a pasted image address with query parameters in a text block, repeat=${repeat}`, async ({
-    page,
-  }) => {
+  test(`pastes a filesystem path as text, repeat=${repeat}`, async ({ page }) => {
     if (repeat) {
       await page.goto(`/?repeat=${repeat}`);
     }
-    const uri =
-      "https://upload.wikimedia.org/wikipedia/commons/8/8c/Olga_alexandrovna_com_marida.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled";
-    await page.route("https://upload.wikimedia.org/**", async (route) => {
-      await route.fulfill({
-        contentType: "image/png",
-        body: Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-          "base64",
-        ),
-      });
-    });
+    const path = "/tmp/missing-image.png";
+    const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
+    await content.click();
+    await content.evaluate((element, value) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", value);
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    }, path);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = window as unknown as {
+            __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI };
+          };
+          return host.__rivtoDemo.editor.blocks.getBlocks()[0]?.content ?? "";
+        }),
+      )
+      .toContain(path);
+    await expect(page.locator(IMAGE_BLOCK_SELECTOR)).toHaveCount(0);
+    await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(0);
+  });
+
+  test(`pastes an ordinary link as text, repeat=${repeat}`, async ({ page }) => {
+    if (repeat) {
+      await page.goto(`/?repeat=${repeat}`);
+    }
+    const uri = "https://example.com/photo.jpg?size=large";
     const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
     await content.click();
     await page.keyboard.press("End");
@@ -733,11 +749,8 @@ for (const repeat of [0, 200]) {
         }),
       )
       .toContain(uri);
-    await page.locator("h1").first().click();
-    await expect(page.locator(".markdown-preview .rivto-image").first()).toBeVisible();
-    await expect(page.locator(".markdown-preview .rivto-image").first()).toHaveAttribute(
-      "src",
-      uri,
+    await expect(page.getByRole("alert").filter({ hasText: "not a decodable image" })).toHaveCount(
+      0,
     );
   });
 }
@@ -975,7 +988,7 @@ test("pastes multiple selected desktop files in page and canvas modes", async ({
   }
 });
 
-for (const payload of ["addresses", "html", "files"] as const) {
+for (const payload of ["html", "files"] as const) {
   for (const repeat of [0, 200]) {
     test(`pastes multiple images in page and canvas modes, ${payload}, repeat=${repeat}`, async ({
       page,
@@ -1034,55 +1047,6 @@ for (const payload of ["addresses", "html", "files"] as const) {
           await expect(images.nth(0)).toHaveAttribute("src", uris[0]!);
           await expect(images.nth(1)).toHaveAttribute("src", uris[1]!);
         }
-      }
-    });
-  }
-}
-
-for (const payload of ["uri-list", "plain", "html"] as const) {
-  for (const repeat of [0, 200]) {
-    test(`pastes a copied image address in page and canvas modes, ${payload}, repeat=${repeat}`, async ({
-      page,
-    }) => {
-      if (repeat) {
-        await page.goto(`/?repeat=${repeat}`);
-      }
-      const imageUrl = new URL("/copied-image.png", page.url()).href;
-      await page.route("**/copied-image.png", async (route) => {
-        await route.fulfill({
-          contentType: "image/png",
-          body: Buffer.from(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-            "base64",
-          ),
-        });
-      });
-      for (const mode of ["page", "canvas"] as const) {
-        if (mode === "canvas") {
-          await page.locator('[data-editor-mode="edgeless"]').click();
-        }
-        const target = page
-          .locator(mode === "page" ? ".page-surface" : ".edgeless-viewport")
-          .first();
-        await target.evaluate(
-          (element, { uri, payloadType }) => {
-            const data = new DataTransfer();
-            if (payloadType === "uri-list") {
-              data.setData("text/uri-list", uri);
-            }
-            data.setData("text/plain", uri);
-            if (payloadType === "html") {
-              data.setData("text/html", `<a href="${uri}">${uri}</a>`);
-            }
-            const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
-            Object.defineProperty(event, "clipboardData", { value: data });
-            element.dispatchEvent(event);
-          },
-          { uri: imageUrl, payloadType: payload },
-        );
-        const image = page.locator(mode === "page" ? IMAGE_BLOCK_SELECTOR : IMAGE_ELEMENT_SELECTOR);
-        await expect(image.locator(".rivto-image")).toBeVisible();
-        await expect(image.locator(".rivto-image")).toHaveAttribute("src", imageUrl);
       }
     });
   }
