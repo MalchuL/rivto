@@ -11,13 +11,15 @@
 import {
   BLOCK_ID_ATTRIBUTE,
   MarkdownContent,
-  blockExtension,
   useBlockEditing,
-  useReactEditor,
+  useReactPanel,
+  useBlockNode,
+  useBlockSelectionAnchor,
   type ClipboardFormatter,
   type PortableBlockFormats,
   type ReactBlockRegistration,
-  type ReactEditor,
+  type ReactEditorApi,
+  type ReactPanelApi,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import { Link2Icon, PencilIcon } from "lucide-react";
@@ -145,7 +147,7 @@ function isClaimedSelectionClick(event: Pick<MouseEvent, "defaultPrevented" | "c
 }
 
 /** Reads the block tree through the public editor API. */
-function tocDocumentView(reactEditor: ReactEditor): TocDocumentView {
+function tocDocumentView(reactEditor: Pick<ReactEditorApi, "blocks">): TocDocumentView {
   return {
     getBlock: (id) => {
       const block = reactEditor.blocks.getBlockNode(id);
@@ -171,7 +173,7 @@ function tocDocumentView(reactEditor: ReactEditor): TocDocumentView {
  * @returns Monotonic document block revision, or zero when no document is bound.
  */
 function useDocumentBlockRevision(): number {
-  const reactEditor = useReactEditor();
+  const reactEditor = useReactPanel().document;
   const subscribe = useCallback(
     (listener: () => void) => reactEditor.subscribe(listener),
     [reactEditor],
@@ -193,7 +195,8 @@ function useDocumentBlockRevision(): number {
  * @param blockId - Heading block to reveal.
  * @returns Nothing.
  */
-function navigateToTocEntry(reactEditor: ReactEditor, blockId: string): void {
+function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
+  const reactEditor = panel.document;
   const collapsedAncestorIds: string[] = [];
   let parentId = reactEditor.blocks.getParentId(blockId);
   while (typeof parentId === "string") {
@@ -210,10 +213,10 @@ function navigateToTocEntry(reactEditor: ReactEditor, blockId: string): void {
       }
     });
   }
-  if (reactEditor.mode.get() !== "block") return;
+  if (panel.getSurfaceType() !== "block") return;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const surface = reactEditor.events.getRoot();
+      const surface = panel.getRoot();
       const target = surface?.querySelector<HTMLElement>(
         `[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`,
       );
@@ -282,12 +285,12 @@ function mathMarkdown(content: string): string {
  * @returns Nothing. Both registrations dispose with the editor extension lifecycle.
  */
 function registerHostBlock(
-  reactEditor: ReactEditor,
+  reactEditor: ReactEditorApi,
   registration: ReactBlockRegistration,
   formatter: ClipboardFormatter,
 ): void {
-  blockExtension(registration).setup(reactEditor);
-  reactEditor.clipboard.registerFormatter(formatter);
+  reactEditor.blockTypes.register(registration);
+  reactEditor.clipboardFormats.registerFormatter(formatter);
 }
 
 /**
@@ -302,7 +305,7 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<AdmonitionProps>(blockId);
   const emojiId = useId();
   const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
-  const committedEmoji = editing.getProp("emoji") ?? ADMONITION_DEFAULT_EMOJI[tone];
+  const committedEmoji = editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone];
   const [emojiDraft, setEmojiDraft] = useState<string | null>(null);
   if (!editing.block) return null;
   const emoji = emojiDraft ?? committedEmoji;
@@ -327,8 +330,8 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
         onBlur={() => {
           const next = (emojiDraft ?? committedEmoji).trim();
           setEmojiDraft(null);
-          if (!next || next === (editing.getProp("emoji") ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
-          editing.setProp("emoji", next);
+          if (!next || next === (editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
+          editing.operations.setProp("emoji", next);
         }}
       />
       <div className={ADMONITION_BODY_CLASS}>
@@ -352,8 +355,8 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
  */
 function BookmarkBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<BookmarkProps>(blockId);
-  const committedUrl = editing.getProp("url") ?? "";
-  const committedDescription = editing.getProp("description") ?? "";
+  const committedUrl = editing.block?.props.url ?? "";
+  const committedDescription = editing.block?.props.description ?? "";
   const [trackedUrl, setTrackedUrl] = useState(committedUrl);
   const [urlDraft, setUrlDraft] = useState(committedUrl);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -380,7 +383,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
       return;
     }
     setUrlError(null);
-    if (next !== (editing.getProp("url") ?? "")) editing.setProp("url", next);
+    if (next !== (editing.block?.props.url ?? "")) editing.operations.setProp("url", next);
     setEditingUrl(false);
   };
 
@@ -396,12 +399,12 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
         rows={1}
         value={description}
         placeholder="Add a description"
-        onFocus={() => setDescriptionDraft(editing.getProp("description") ?? "")}
+        onFocus={() => setDescriptionDraft(editing.block?.props.description ?? "")}
         onChange={(event) => setDescriptionDraft(event.target.value)}
         onBlur={() => {
-          const next = descriptionDraft ?? (editing.getProp("description") ?? "");
+          const next = descriptionDraft ?? (editing.block?.props.description ?? "");
           setDescriptionDraft(null);
-          if (next !== (editing.getProp("description") ?? "")) editing.setProp("description", next);
+          if (next !== (editing.block?.props.description ?? "")) editing.operations.setProp("description", next);
         }}
       />
       {showUrlForm ? (
@@ -438,7 +441,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
               onClick={(event) => {
                 if (isClaimedSelectionClick(event)) return;
                 setEditingUrl(false);
-                setUrlDraft(editing.getProp("url") ?? "");
+                setUrlDraft(editing.block?.props.url ?? "");
                 setUrlError(null);
               }}
             >
@@ -471,7 +474,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             aria-label="Change URL"
             onClick={(event) => {
               if (isClaimedSelectionClick(event)) return;
-              setUrlDraft(editing.getProp("url") ?? "");
+              setUrlDraft(editing.block?.props.url ?? "");
               setUrlError(null);
               setEditingUrl(true);
             }}
@@ -494,8 +497,10 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
  * @returns A structural selection region containing the heading list.
  */
 function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing(blockId, { textEdit: false });
-  const reactEditor = useReactEditor();
+  const editing = useBlockNode(blockId);
+  const attributes = useBlockSelectionAnchor(blockId);
+  const panel = useReactPanel();
+  const reactEditor = panel.document;
   const revision = useDocumentBlockRevision();
   const entries = useMemo(
     () => collectTocEntries(tocDocumentView(reactEditor), blockId),
@@ -504,7 +509,7 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
   if (!editing.block) return null;
   return (
     <div
-      {...editing.attributes}
+      {...attributes}
       className={TOC_CLASS}
       style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftStyle: "solid", borderLeftColor: "var(--rivto-primary)" }}
     >
@@ -525,7 +530,7 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
                     style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
                     onClick={(event) => {
                       if (isClaimedSelectionClick(event)) return;
-                      navigateToTocEntry(reactEditor, entry.blockId);
+                      navigateToTocEntry(panel, entry.blockId);
                     }}
                   >
                     {label}
