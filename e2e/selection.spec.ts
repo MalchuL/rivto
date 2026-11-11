@@ -146,6 +146,27 @@ test("Shift+Alt drag keeps partial text across blocks", async ({ page }) => {
   );
 });
 
+test("preserves a cross-block text selection when the first block changes", async ({ page }) => {
+  const contents = selectionTextContents(page);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await dragText(page, contents.nth(0), 2, contents.nth(2), 8);
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBeTruthy();
+  const selected = await page.evaluate(() => getSelection()?.toString());
+  const blockId = await contents
+    .nth(0)
+    .locator(BLOCK_ANCESTOR_XPATH)
+    .getAttribute(BLOCK_ID_ATTRIBUTE);
+  await page.evaluate((id) => {
+    const blocks = window.__rivtoDemo.editor.blocks;
+    const block = blocks.getBlockNode(id!);
+    blocks.updateBlock(id!, { content: `X${block!.content.slice(1)}` });
+  }, blockId);
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe(selected);
+});
+
 test("Alt drag selects complete blocks", async ({ page }) => {
   const contents = textContents(page);
   await page.keyboard.down("Alt");

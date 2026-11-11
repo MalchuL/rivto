@@ -4,6 +4,7 @@ import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
 import { DemoEditorPanels } from "./editor-panels";
+import { demoSideBlockExtensions, seedDemoSideBlocks } from "./extensions/side-blocks";
 import { BroadcastChannelProvider, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage } from "@chulane/document-model";
 import {
@@ -79,6 +80,20 @@ import { RevisionsPanel } from "./RevisionsPanel";
 const DEMO_LOCAL_FILE_ROUTE = "/__rivto_demo_local_file";
 const DEMO_CLIPBOARD_FILE_ROUTE = "/__rivto_demo_clipboard_file";
 const DEMO_OPEN_FILE_ROUTE = "/__rivto_demo_open_file";
+
+/**
+ * Enables the optional comments example when requested in the demo URL.
+ *
+ * @param showExamples - Whether the default journal displays side-note examples.
+ * @returns Side-block extensions for the demo, or an empty list.
+ */
+function demoCommentsExtensions(showExamples = false): ReactEditorExtension[] {
+  const includeComments = new URLSearchParams(window.location.search).has("sideBlocks");
+  if (!includeComments && !showExamples) {
+    return [];
+  }
+  return demoSideBlockExtensions(includeComments);
+}
 /** Maximum image size retained briefly for immediate display, in bytes. */
 const DEMO_PREVIEW_MAX_BYTES = 1024 * 1024;
 /** Maximum number of recently uploaded image previews retained. */
@@ -590,6 +605,12 @@ async function createDemoEditor() {
   const imageFirst = demoParams.has("imageFirst");
   const imageOnly = demoParams.has("imageOnly");
   const fileOnly = demoParams.has("fileOnly");
+  const showSideExamples =
+    !demoParams.has("test_features") &&
+    !demoParams.has("sideBlocks") &&
+    !imageFirst &&
+    !imageOnly &&
+    !fileOnly;
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -616,6 +637,7 @@ async function createDemoEditor() {
             ? []
             : [imageExtension({ provider: demoBinaryProvider })]),
           standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+          ...demoCommentsExtensions(showSideExamples),
           todoItemExtension({ prompts: { todo: ["task"] } }),
           pageDragExtension(),
           bulletThreadingExtension({
@@ -646,12 +668,19 @@ async function createDemoEditor() {
   // The token changes on each create so a stale handle cannot be mistaken for a remount.
   const demoToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   Object.assign(window, {
-    __rivtoDemo: { token: demoToken, editor, reactEditor },
+    __rivtoDemo: {
+      token: demoToken,
+      editor,
+      reactEditor,
+    },
   });
   if (new URLSearchParams(window.location.search).get("test_features") === "1") {
     seedFeatureDemo(editor, resources.document.id);
   } else {
     seedJournalDemo(editor, demoRepeatCount());
+    if (showSideExamples) {
+      seedDemoSideBlocks(editor);
+    }
   }
   editor.history.clear();
 
@@ -1031,6 +1060,7 @@ async function createEmptyDemoEditor() {
       demoLocalFileExtension,
       imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      ...demoCommentsExtensions(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),
@@ -1512,6 +1542,7 @@ async function createMultiEditor(
       demoLocalFileExtension,
       imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      ...demoCommentsExtensions(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),
@@ -1770,6 +1801,7 @@ async function createSyncedPeer(
       demoLocalFileExtension,
       imageExtension({ provider: demoBinaryProvider }),
       standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      ...demoCommentsExtensions(),
       pageDragExtension(),
       ...edgelessPreset({ visuals: edgelessOptions }),
       mindmapExtension(),

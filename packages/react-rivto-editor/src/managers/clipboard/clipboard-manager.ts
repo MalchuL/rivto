@@ -375,7 +375,10 @@ export class ClipboardManager {
     operation: ClipboardCopyContext["operation"] = "copy",
   ): ClipboardBundle | undefined {
     const current = selection ?? reactPanel?.selection.get() ?? this.document.selection.get();
-    let bundle = this.document.clipboard.copy(current);
+    const clipboard = reactPanel
+      ? new CoreClipboardManager(panelClipboardDocument(reactPanel))
+      : this.document.clipboard;
+    let bundle = clipboard.copy(current);
     if (current?.elements?.length) {
       const elements = this.collectElements(current.elements, reactPanel ?? this.editor);
       const included = new Set(elements.blocks.map((block) => block.id));
@@ -392,7 +395,10 @@ export class ClipboardManager {
    * @returns Detached partial-text bundle, or undefined when there is no text to copy.
    */
   copyText(selection: Selection, reactPanel?: ReactPanelApi): ClipboardBundle | undefined {
-    const bundle = this.document.clipboard.copyText(selection);
+    const clipboard = reactPanel
+      ? new CoreClipboardManager(panelClipboardDocument(reactPanel))
+      : this.document.clipboard;
+    const bundle = clipboard.copyText(selection);
     return bundle ? this.convertCopy(bundle, reactPanel) : undefined;
   }
 

@@ -15,6 +15,9 @@ export type { DefaultWritingBlockOptions } from "./extensions/built-ins/page/def
 export * from "./extensions/built-ins/separator/separator-block";
 export * from "./extensions/bullet-threading/bullet-threading";
 export * from "./extensions/nesting-lines/nesting-lines";
+export * from "./extensions/side-blocks/side-blocks";
+export * from "./extensions/side-blocks/side-blocks-store";
+export * from "./extensions/comments/comments";
 export * from "./extensions/edgeless";
 export * from "./extensions/todo-item/todo-item";
 export type {

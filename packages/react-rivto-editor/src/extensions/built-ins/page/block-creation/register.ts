@@ -1,4 +1,6 @@
 import type { ReactEditorApi } from "../../../../editor/types";
+import { isStructuralSelection } from "@chulane/rivto";
+import type { ReactPanelApi } from "../../../../panels/types";
 /**
  * Enter dispatch for outline block splitting and creation.
  *
@@ -36,7 +38,7 @@ export function registerBlockCreation(reactEditor: ReactEditorApi): void {
     },
     ({ reactPanel, raw: event, root }) => {
       if (!isEditableKeyboardEvent(event)) {
-        return false;
+        return splitSelectedBlock(reactPanel, root);
       }
       // Read the key event's native caret synchronously. A newly focused editor
       // can receive Enter before the browser's deferred selectionchange event.
@@ -76,5 +78,37 @@ export function registerBlockCreation(reactEditor: ReactEditorApi): void {
       });
       return claimed;
     },
+  );
+}
+
+/**
+ * Dispatches Enter to one structurally selected block when its surface owns focus.
+ *
+ * The selection remains intact until the registered block behavior chooses an
+ * operation; selected blocks are not deleted before dispatch.
+ *
+ * @param reactPanel - Active panel providing selection and block behaviors.
+ * @param root - Mounted surface receiving the keyboard event.
+ * @returns Whether a registered behavior claimed the key.
+ * @throws If a behavior or its delegated mutation fails.
+ */
+function splitSelectedBlock(reactPanel: ReactPanelApi, root: HTMLElement): boolean {
+  const selection = reactPanel.selection.get();
+  if (
+    root.ownerDocument.activeElement !== root ||
+    !selection ||
+    !isStructuralSelection(selection) ||
+    selection.blocks.length !== 1 ||
+    selection.elements?.length
+  ) {
+    return false;
+  }
+  const target = firstKeyboardTarget(selection);
+  const context = target && createBlockBehaviorContext(reactPanel, target.blockId, root, selection);
+  if (!target || !context) {
+    return false;
+  }
+  return reactPanel.batchUpdates(() =>
+    reactPanel.editor.blockBehaviors.dispatch("onSplit", context, target),
   );
 }

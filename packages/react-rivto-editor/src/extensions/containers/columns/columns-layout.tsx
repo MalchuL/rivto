@@ -8,20 +8,92 @@ import {
   BlockRow,
   type BlockLayoutProps,
 } from "@chulane/rivto-page";
+import { useLayoutEffect, useState, type RefCallback } from "react";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
+
+/** Minimum lane width excluding the container's own inline padding. */
+const MIN_COLUMN_CONTENT_WIDTH = 112;
+
+/** Current child-host ref and its matching placement axis. */
+interface ColumnsAxisState {
+  /** Registers the child host whose width determines lane layout. */
+  readonly ref: RefCallback<HTMLDivElement>;
+  /** Axis used by both the layout and Page's drop regions. */
+  readonly axis: "vertical" | "horizontal";
+}
+
+/**
+ * Observes available lane width and keeps the drop axis aligned with lane flow.
+ *
+ * The observer belongs to the mounted child host and is released on replacement
+ * or unmount. Widths are measured in local pixels, independent of canvas zoom.
+ *
+ * @param count - Current number of direct child lanes.
+ * @returns Child-host ref and the axis appropriate for its available width.
+ */
+function useColumnsAxis(count: number): ColumnsAxisState {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const [axis, setAxis] = useState<"vertical" | "horizontal">("horizontal");
+  useLayoutEffect(() => {
+    if (!host) {
+      return;
+    }
+    /**
+     * Reconciles lane flow with the host's current local content width.
+     *
+     * @param width - Child-host content width in local CSS pixels.
+     * @returns Updates the drop axis when the available width changes its layout.
+     */
+    const updateAxis = (width: number) => {
+      const style = host.ownerDocument.defaultView?.getComputedStyle(host);
+      if (!style) {
+        return;
+      }
+      const gap = parseFloat(style.columnGap) || 0;
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const minimumLaneWidth = MIN_COLUMN_CONTENT_WIDTH + padding;
+      setAxis(
+        count > 1 && width < count * minimumLaneWidth + (count - 1) * gap
+          ? "vertical"
+          : "horizontal",
+      );
+    };
+    const style = host.ownerDocument.defaultView?.getComputedStyle(host);
+    let observedWidth = style
+      ? host.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      : 0;
+    updateAxis(observedWidth);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(([entry]) => {
+            const width = entry?.contentRect.width;
+            if (width !== undefined && width !== observedWidth) {
+              observedWidth = width;
+              updateAxis(width);
+            }
+          });
+    observer?.observe(host);
+    return () => observer?.disconnect();
+  }, [host, count]);
+  return { ref: setHost, axis };
+}
 
 /**
  * Composes a management row and equal-width, headerless content lanes.
  *
  * The preference belongs to the child host: dividers occupy the real gaps,
  * not either column's content or selection area. Page traverses each lane once.
+ * The lanes stack when the available width cannot accommodate their controls;
+ * the registered drop axis follows the displayed flow.
  *
  * @param props - Board identity supplied by Page.
  * @param props.blockId - Board whose divider preference and children are observed.
- * @returns Management row, body contributions and one horizontal child group.
+ * @returns Management row, body contributions and one responsive child group.
  */
 export function ColumnsLayout({ blockId }: BlockLayoutProps) {
   const { block } = useBlockNode(blockId);
+  const { ref, axis } = useColumnsAxis(block?.childIds.length ?? 0);
   return (
     <>
       <BlockRow
@@ -32,9 +104,10 @@ export function ColumnsLayout({ blockId }: BlockLayoutProps) {
       </BlockRow>
       <BlockBody />
       <BlockChildren
+        ref={ref}
         className="rivto-columns-children"
         item={ColumnBlockItem}
-        dropAxis="horizontal"
+        dropAxis={axis}
         dropPlacement="siblings"
         emptyDropTarget
         data-show-dividers={block?.props.showDividers !== false}

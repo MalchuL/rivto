@@ -27,6 +27,7 @@
   line-height: 1.5;
   outline: none;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .markdown-content {

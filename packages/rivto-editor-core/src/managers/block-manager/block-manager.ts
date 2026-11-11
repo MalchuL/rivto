@@ -160,6 +160,14 @@ export class BlockManager implements BlockManagerApi {
         positions = new Map(children.map((child, index) => [child, index]));
         siblings.set(parent, positions);
       }
+      if (parent === null && !positions.has(id)) {
+        // Additional roots share the hierarchy but are not page roots.
+        for (const rootId of this.document.blocks.getAdditionalRootIds()) {
+          if (!positions.has(rootId)) {
+            positions.set(rootId, positions.size);
+          }
+        }
+      }
       // For example, [2, 0] is the first child of the third root.
       const path = [...(parent === null ? [] : pathOf(parent)), positions.get(id)!];
       paths.set(id, path);

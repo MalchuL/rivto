@@ -57,6 +57,60 @@ async function menu(page: Page, id: string) {
   await expect(page.getByRole("menu").first()).toBeVisible();
 }
 
+test("an open block menu reflects changes to its target", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate(() => {
+    window.__rivtoDemo.reactEditor.blockContextMenu.register({
+      id: "test.live-target",
+      title: "Target is ready",
+      isAvailable: ({ reactPanel, blockId }) =>
+        reactPanel.blocks.getBlockNode(blockId)?.content === "Ready",
+      execute: () => {},
+    });
+  });
+  await page.locator(`[data-block-id="${ids.other}"] [data-block-content]`).first().click();
+  await menu(page, ids.other);
+  await expect(page.getByRole("menuitem", { name: "Target is ready" })).toHaveCount(0);
+  await page.evaluate(
+    (id) => window.__rivtoDemo.editor.blocks.updateBlock(id, { content: "Ready" }),
+    ids.other,
+  );
+  await expect(page.getByRole("menuitem", { name: "Target is ready" })).toBeVisible();
+});
+
+test("an open block menu reflects changes to a nested block", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate(() => {
+    window.__rivtoDemo.reactEditor.blockContextMenu.register({
+      id: "test.live-child",
+      title: "Child is ready",
+      isAvailable: ({ reactPanel, blockId }) => {
+        const child = reactPanel.blocks.getChildIds(blockId)[0];
+        return !!child && reactPanel.blocks.getBlockNode(child)?.content === "Ready";
+      },
+      execute: () => {},
+    });
+  });
+  await menu(page, ids.parent);
+  const action = page.getByRole("menuitem", { name: "Child is ready" });
+  await expect(action).toHaveCount(0);
+  await page.evaluate(
+    (id) => window.__rivtoDemo.editor.blocks.updateBlock(id, { content: "Ready" }),
+    ids.child,
+  );
+  await expect(action).toBeVisible();
+});
+
+test("deleting a nested block from its menu keeps undo available", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate(() => window.__rivtoDemo.editor.history.clear());
+  await menu(page, ids.child);
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await expect(page.locator(`[data-block-id="${ids.child}"]`)).toHaveCount(0);
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.locator(`[data-block-id="${ids.child}"]`).first()).toBeVisible();
+});
+
 test("menu colors selected subtrees, retains child colors, and supports keyboard actions", async ({
   page,
 }) => {
@@ -248,6 +302,30 @@ test("the same context actions work inside an edgeless card", async ({ page }) =
   await expect(
     page.locator(`[data-block-id="${ids.parent}"] > .rivto-block-row .block-handle`).first(),
   ).toHaveAttribute("data-collapsed", "true");
+});
+
+test("an open edgeless block menu reflects changes to a nested block", async ({ page }) => {
+  const ids = await seed(page);
+  await page.getByRole("button", { name: "Edgeless", exact: true }).first().click();
+  await page.evaluate(() => {
+    window.__rivtoDemo.reactEditor.blockContextMenu.register({
+      id: "test.edgeless-live-child",
+      title: "Child is ready",
+      isAvailable: ({ reactPanel, blockId }) => {
+        const child = reactPanel.blocks.getChildIds(blockId)[0];
+        return !!child && reactPanel.blocks.getBlockNode(child)?.content === "Ready";
+      },
+      execute: () => {},
+    });
+  });
+  await menu(page, ids.parent);
+  const action = page.getByRole("menuitem", { name: "Child is ready" });
+  await expect(action).toHaveCount(0);
+  await page.evaluate(
+    (id) => window.__rivtoDemo.editor.blocks.updateBlock(id, { content: "Ready" }),
+    ids.child,
+  );
+  await expect(action).toBeVisible();
 });
 
 for (const [repeat, edgeless] of [

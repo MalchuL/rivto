@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { ReactPanelApi } from "../../panels/types";
 
 /** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
@@ -35,6 +35,10 @@ export interface BlockContextMenuEntry {
   readonly order?: number;
   /** Presentation and callback requirements; omitted means action. */
   readonly kind?: "action" | "submenu" | "separator" | "custom";
+  /** Optional decorative, aria-hidden icon for an action or submenu; the text label remains visible without one, and checked actions use their checkbox indicator instead. */
+  readonly icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Action appearance; defaults to the ordinary menu style. */
+  readonly variant?: "default" | "destructive";
   /**
    * Determines whether the entry is available for the captured menu targets.
    *

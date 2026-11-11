@@ -35,6 +35,12 @@
   min-width: 0;
   max-width: 100%;
 }
+.rivto-columns-children[data-block-drop-axis="vertical"] {
+  flex-direction: column;
+}
+.rivto-columns-children[data-block-drop-axis="vertical"] > .rivto-block-item {
+  flex: 0 0 auto;
+}
 /* Each existing lane bounds its divider to the stretched layout height.
  * The divider occupies the physical layout gap and never creates a drop element. */
 .rivto-columns-children > .rivto-block-item {
@@ -48,6 +54,14 @@
   width: 1px;
   background: var(--rivto-border);
   pointer-events: none;
+}
+.rivto-columns-children[data-block-drop-axis="vertical"][data-show-dividers="true"]
+  > .rivto-block-item
+  + .rivto-block-item::after {
+  inset-inline: 12px;
+  inset-block: -2px auto;
+  width: auto;
+  height: 1px;
 }
 .rivto-columns-lane-header {
   min-height: 24px;

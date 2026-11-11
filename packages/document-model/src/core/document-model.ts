@@ -151,6 +151,7 @@ export class DocumentModelImpl implements DocumentModel {
     return {
       version: 9,
       blocks: clone(this.blocks.getBlocks()),
+      additionalBlocks: clone(this.blocks.getAdditionalBlocks()),
       elements: this.elements
         .getElementNodes()
         .map(({ id, type, childIds, frame, zIndex, props }) =>
@@ -182,13 +183,16 @@ export class DocumentModelImpl implements DocumentModel {
     }
     if (
       (snapshot.blocks !== undefined && !Array.isArray(snapshot.blocks)) ||
+      (snapshot.additionalBlocks !== undefined && !Array.isArray(snapshot.additionalBlocks)) ||
       (snapshot.elements !== undefined && !Array.isArray(snapshot.elements))
     ) {
       throw new Error("Unsupported Rivto document snapshot");
     }
     const rootElementIds = snapshot.rootElementIds ?? this.elements.getRootIds();
-    if (snapshot.blocks) {
-      this.blocks.validateBlocks(snapshot.blocks);
+    if (snapshot.blocks || snapshot.additionalBlocks) {
+      const blocks = snapshot.blocks ?? this.blocks.getBlocks();
+      const additionalBlocks = snapshot.additionalBlocks ?? this.blocks.getAdditionalBlocks();
+      this.blocks.validateBlocks([...blocks, ...additionalBlocks]);
     }
     if (snapshot.elements) {
       this.elements.validateElements(snapshot.elements);
@@ -205,8 +209,8 @@ export class DocumentModelImpl implements DocumentModel {
       if (snapshot.rootElementIds) {
         this.elements.loadRootIds(snapshot.rootElementIds);
       }
-      if (snapshot.blocks) {
-        this.blocks.loadBlocks(snapshot.blocks);
+      if (snapshot.blocks || snapshot.additionalBlocks) {
+        this.blocks.loadBlocks(snapshot.blocks, snapshot.additionalBlocks);
       }
       if (snapshot.elements) {
         this.elements.loadElements(snapshot.elements);

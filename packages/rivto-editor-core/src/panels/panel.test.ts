@@ -2,6 +2,28 @@ import { ChildrenPanel } from "./children-panel";
 import { EmbeddingPanel } from "./embedding-panel";
 import { createTestEditor } from "../editor/test-utils";
 
+it("edits an additional-root subtree through a document-backed children panel", async () => {
+  const editor = await createTestEditor();
+  editor.blocks.insertBlock({ id: "page", type: "paragraph" });
+  editor.blocks.insertBlock(
+    { id: "collection", type: "paragraph", children: [{ id: "item", type: "paragraph" }] },
+    { parentId: null, additional: true },
+  );
+  const panel = new ChildrenPanel(editor, { rootBlockId: "collection" });
+  expect(editor.blocks.getRootIds()).toEqual(["page"]);
+  expect(panel.blocks.getRootIds()).toEqual(["item"]);
+  const readForests = jest.spyOn(editor.getDocument().blocks, "getAdditionalBlocks");
+  expect(editor.blocks.getOrderedIds(["item", "page"])).toEqual(["page", "item"]);
+  expect(readForests).not.toHaveBeenCalled();
+  readForests.mockRestore();
+  editor.history.clear();
+  panel.blocks.updateBlock("item", { content: "Updated" });
+  expect(editor.blocks.getBlockNode("item")?.content).toBe("Updated");
+  editor.history.undo();
+  expect(panel.blocks.getBlockNode("item")?.content).toBe("");
+  await editor.destroy();
+});
+
 it("edits independent block and element subtrees without React and preserves root protection", async () => {
   const editor = await createTestEditor();
   editor.blocks.insertBlock({

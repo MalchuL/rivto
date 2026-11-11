@@ -1,0 +1,87 @@
+.rivto-side-block-content {
+  /* Host controls occupy perimeter slots; ordinary content needs no empty start gutter. */
+  --rivto-block-start-width: 0px;
+  --rivto-block-padding: 2px 8px;
+  --rivto-block-gap: 4px;
+  /* Drop calculation: sets depth-band spacing for parent and sibling placements.
+   * Highlight: positions each depth's insertion line; also indents child blocks. */
+  --rivto-block-indent: 24px;
+  /* Drop calculation: none. Highlight: insets the start of horizontal insertion lines. */
+  --rivto-block-drop-line-inset: 12px;
+  /* Drop calculation: adds pointer distance before a gap selects a child, expanding
+   * the sibling band. Set to 0 to select a child at --rivto-block-indent from the
+   * drop region's start; positive values are added to that distance. Highlight: none;
+   * the child line stays at its indentation level. Setting this to the same value
+   * as --rivto-block-drop-line-inset aligns the child-placement threshold with the
+   * start of the child insertion line when the gap offers child placement. */
+  --rivto-block-drop-child-offset: 12px;
+  /* --rivto-drop-target-size defaults to 12px when omitted. Drop calculation:
+   * sets edge target thickness, bounded by the block's size and content area.
+   * Highlight: none; line thickness uses --rivto-drop-indicator-thickness. */
+  --rivto-drop-target-size: 12px;
+}
+
+.rivto-side-blocks {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.rivto-side-blocks-content {
+  min-width: 0;
+}
+
+.rivto-side-block-content {
+  /* Compact shared container spacing keeps nested controls usable in side cards. */
+  --rivto-container-padding: var(--rivto-slot-gap, 4px);
+}
+
+.rivto-side-block-content [data-block-selection-anchor]:empty:not([data-block-content]) {
+  min-height: var(--rivto-default-block-height, 24px);
+}
+
+.rivto-side-block-content
+  .rivto-block-row:has(> .rivto-block-content > [data-block-selection-anchor]:empty) {
+  position: relative;
+  pointer-events: auto;
+}
+
+.rivto-side-blocks-layer {
+  position: static;
+}
+
+.rivto-side-block {
+  position: absolute;
+  inset-inline-end: 0;
+  width: var(--rivto-side-block-width, min(280px, 35vw));
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.rivto-side-block[data-side-block-placement="left"] {
+  inset-inline: auto;
+  right: calc(100% + var(--rivto-side-block-gap, 16px));
+}
+
+.rivto-side-block[data-side-block-placement="right"] {
+  inset-inline: auto;
+  left: calc(100% + var(--rivto-side-block-gap, 16px));
+}
+
+.rivto-side-block[data-side-block-placement="full"] {
+  inset-inline-start: 0;
+  width: 100%;
+}
+
+.rivto-side-block-connector {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--rivto-border);
+  stroke-width: 1.5px;
+}

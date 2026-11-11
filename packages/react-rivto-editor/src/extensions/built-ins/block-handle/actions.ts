@@ -7,6 +7,14 @@ import type {
 } from "../../../managers/block-context-menu/types";
 import { assertBlockMenuTargets } from "../../../managers/block-context-menu/targets";
 import { writeClipboardBundle } from "../../../managers/clipboard/browser-clipboard";
+import {
+  CopyIcon,
+  ScissorsIcon,
+  Trash2Icon,
+  ListIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+} from "lucide-react";
 
 /** Registration capability borrowed from the block context menu. */
 interface BlockContextMenuRegistration {
@@ -19,6 +27,9 @@ interface BlockContextMenuRegistration {
    */
   register(entry: BlockContextMenuEntry): () => void;
 }
+
+/** Panel and root subtrees requested for structural deletion. */
+type BlockDeletionTargets = Pick<BlockContextMenuContext, "reactPanel" | "rootIds">;
 
 /**
  * Copies selected root subtrees, optionally deleting them after a successful write.
@@ -48,7 +59,7 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
     if (JSON.stringify(current) !== JSON.stringify(bundle)) {
       throw new Error("Blocks changed while copying; copied content was kept and nothing was cut");
     }
-    deleteMenuBlocks(context);
+    deleteBlockTargets(context);
   }
 }
 
@@ -63,13 +74,14 @@ async function copyBlocks(context: BlockContextMenuContext, cut: boolean): Promi
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockClipboardActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, cut] of [
-    ["copy", "Copy", false],
-    ["cut", "Cut", true],
+  for (const [id, title, cut, icon] of [
+    ["copy", "Copy", false, CopyIcon],
+    ["cut", "Cut", true, ScissorsIcon],
   ] as const) {
     menu.register({
       id: `clipboard.${id}`,
       title,
+      icon,
       order: 80,
       /**
        * Copies or cuts the captured root subtrees through browser clipboard writing.
@@ -84,8 +96,10 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
   menu.register({
     id: "block.delete",
     title: "Delete",
+    icon: Trash2Icon,
+    variant: "destructive",
     order: 100,
-    execute: deleteMenuBlocks,
+    execute: deleteBlockTargets,
   });
 }
 
@@ -102,7 +116,7 @@ export function registerBlockClipboardActions(menu: BlockContextMenuRegistration
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockListActions(menu: BlockContextMenuRegistration): void {
-  menu.register({ id: "list", title: "List style", kind: "submenu", order: 20 });
+  menu.register({ id: "list", title: "List style", icon: ListIcon, kind: "submenu", order: 20 });
   for (const [type, title] of [
     ["list", "Ordinary list"],
     ["numbered_list", "Numbered list"],
@@ -183,13 +197,14 @@ export function setSubtreesCollapsed(context: BlockContextMenuContext, collapsed
  * @throws If the registry is inactive or a contribution ID is already registered.
  */
 export function registerBlockCollapseActions(menu: BlockContextMenuRegistration): void {
-  for (const [id, title, collapsed] of [
-    ["collapse", "Collapse subtree", true],
-    ["expand", "Expand whole subtree", false],
+  for (const [id, title, collapsed, icon] of [
+    ["collapse", "Collapse subtree", true, ChevronsDownUpIcon],
+    ["expand", "Expand whole subtree", false, ChevronsUpDownIcon],
   ] as const) {
     menu.register({
       id: `block.${id}`,
       title,
+      icon,
       order: 60,
       /**
        * Applies this entry's collapse state to all parent blocks in the selected subtrees.
@@ -208,13 +223,15 @@ export function registerBlockCollapseActions(menu: BlockContextMenuRegistration)
  * The captured roots replace the current selection before container policies run.
  * After deletion, caret focus is restored when possible, otherwise the surface
  * root receives focus. A second caret restoration is scheduled only while the
- * resulting selection remains unchanged.
+ * resulting selection remains unchanged. If removing the selected block also
+ * removes the focused menu trigger, the root regains focus when no other target
+ * has taken it, keeping keyboard commands available.
  *
  * @param context - Invoking panel and ancestor-deduplicated roots to delete.
  * @returns No value after deletion and deferred focus restoration are scheduled.
  * @throws If the panel has no mounted surface root or its deletion operations fail.
  */
-function deleteMenuBlocks(context: BlockContextMenuContext): void {
+export function deleteBlockTargets(context: BlockDeletionTargets): void {
   const { reactPanel, rootIds } = context;
   const root = reactPanel.getRoot();
   if (!root) {
@@ -225,7 +242,12 @@ function deleteMenuBlocks(context: BlockContextMenuContext): void {
   if (!focusSelectionCaret(root, reactPanel.selection)) {
     root.focus({ preventScroll: true });
   }
-  reactPanel.selection.scheduleIfSelectionUnchanged(() =>
-    focusSelectionCaret(root, reactPanel.selection),
-  );
+  reactPanel.selection.scheduleIfSelectionUnchanged(() => {
+    if (
+      !focusSelectionCaret(root, reactPanel.selection) &&
+      root.ownerDocument.activeElement === root.ownerDocument.body
+    ) {
+      root.focus({ preventScroll: true });
+    }
+  });
 }

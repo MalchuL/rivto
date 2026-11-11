@@ -171,6 +171,8 @@ export interface BlockUpdate {
 export interface BlockDestination {
   /** Actual parent block, or null for document roots. */
   readonly parentId: string | null;
+  /** Selects the additional root list when parentId is null. */
+  readonly additional?: boolean;
   /** Immediate child of that parent before which to insert. */
   readonly beforeId?: string;
 }
@@ -266,8 +268,27 @@ export interface DocumentBlockManagerApi {
   moveFollowingSiblingsInside(id: string): void;
   /** @param blocks - Complete portable block forest to validate. @returns No value. */
   validateBlocks(blocks: readonly Block[]): void;
-  /** @param blocks - Complete portable block forest replacing stored blocks. @returns No value. */
-  loadBlocks(blocks: readonly Block[]): void;
+  /**
+   * Reads blocks stored outside the page root list.
+   *
+   * @returns Detached root trees in their collaborative order.
+   */
+  getAdditionalBlocks(): Block[];
+  /**
+   * Reads the ordered roots stored outside the page root list.
+   *
+   * @returns Additional root IDs without reading their descendants.
+   */
+  getAdditionalRootIds(): readonly string[];
+  /**
+   * Replaces supplied root forests after validating both resulting collections.
+   *
+   * @param blocks - Page roots, or undefined to preserve them.
+   * @param additionalBlocks - Other roots, or undefined to preserve them.
+   * @returns Updates the supplied forests.
+   * @throws If the resulting forests contain invalid or duplicate blocks.
+   */
+  loadBlocks(blocks?: readonly Block[], additionalBlocks?: readonly Block[]): void;
   /** @returns No value after repairing invalid hierarchy references. */
   normalize(): void;
 }
@@ -560,6 +581,12 @@ export interface DocumentElementManagerApi {
 
 /** Public namespaced plugin-data store. */
 export interface DocumentPluginDataManagerApi {
+  /**
+   * Lists the namespace IDs currently present in the document.
+   *
+   * @returns A detached array of namespace IDs in the adapter's iteration order.
+   */
+  getIds(): readonly string[];
   /** @param pluginId - Plugin namespace. @returns Detached namespace data when present. */
   get<Value = unknown>(pluginId: string): Value | undefined;
   /** @param pluginId - Plugin namespace. @param value - Portable namespace value. @returns No value. */
@@ -600,6 +627,8 @@ export interface DocumentHistoryManagerApi {
 export interface Snapshot {
   version: 9;
   blocks: Block[];
+  /** Root trees owned by document collections outside the page. */
+  additionalBlocks?: Block[];
   elements: ElementSnapshot[];
   /** Ordered document element roots; every other element is reachable through childIds. */
   rootElementIds: string[];
@@ -610,6 +639,8 @@ export interface Snapshot {
 export interface SnapshotUpdate {
   version: 9;
   blocks?: Block[];
+  /** Replacement root trees outside the page; omitted preserves the current collection. */
+  additionalBlocks?: Block[];
   elements?: ElementSnapshot[];
   /** Complete replacement root list; omitted preserves current roots, including their order. */
   rootElementIds?: string[];
