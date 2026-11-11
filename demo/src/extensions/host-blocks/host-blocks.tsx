@@ -59,11 +59,7 @@ import {
   type BookmarkProps,
 } from "./definitions";
 import { evaluateMathSource, type MathEvaluation } from "./math-value";
-import {
-  collectTocEntries,
-  type TocDocumentView,
-  type TocEntry,
-} from "./toc-entries";
+import { collectTocEntries, type TocDocumentView, type TocEntry } from "./toc-entries";
 
 const BLOCK_FRAME_CLASS = "box-border w-full min-w-0 max-w-full";
 const SCREEN_READER_CLASS = "sr-only";
@@ -82,7 +78,8 @@ const ADMONITION_SURFACE_CLASS: Record<AdmonitionTone, string> = {
   tip: "bg-accent/60",
   warning: "bg-destructive/10",
 };
-const ADMONITION_EMOJI_CLASS = "demo-callout-emoji size-8 shrink-0 rounded-md border-0 bg-transparent px-0 text-center text-base shadow-none";
+const ADMONITION_EMOJI_CLASS =
+  "demo-callout-emoji size-8 shrink-0 rounded-md border-0 bg-transparent px-0 text-center text-base shadow-none";
 const ADMONITION_BODY_CLASS = "demo-callout-body min-w-0 flex-1 text-foreground";
 const ADMONITION_DEFINITION = {
   note: noteBlockDefinition,
@@ -95,19 +92,23 @@ const ADMONITION_KEYWORDS: Record<AdmonitionTone, readonly string[]> = {
   warning: ["warning", "caution", "alert"],
 };
 const BOOKMARK_CLASS = `demo-bookmark ${BLOCK_FRAME_CLASS} flex flex-col gap-1 rounded-lg border border-solid border-border bg-card px-3 py-2.5 shadow-xs`;
-const BOOKMARK_TITLE_CLASS = "demo-bookmark-title min-w-0 text-sm font-semibold leading-snug text-foreground";
-const BOOKMARK_DESCRIPTION_CLASS = "demo-bookmark-description field-sizing-content min-h-5 resize-none border-transparent bg-transparent px-0 py-0 text-xs leading-5 text-muted-foreground shadow-none placeholder:text-muted-foreground/70 md:text-xs";
+const BOOKMARK_TITLE_CLASS =
+  "demo-bookmark-title min-w-0 text-sm font-semibold leading-snug text-foreground";
+const BOOKMARK_DESCRIPTION_CLASS =
+  "demo-bookmark-description field-sizing-content min-h-5 resize-none border-transparent bg-transparent px-0 py-0 text-xs leading-5 text-muted-foreground shadow-none placeholder:text-muted-foreground/70 md:text-xs";
 const BOOKMARK_META_CLASS = "demo-bookmark-meta mt-1 flex min-w-0 items-center gap-2";
 const BOOKMARK_FORM_CLASS = "demo-bookmark-form mt-1 flex min-w-0 flex-wrap items-center gap-2";
 const BOOKMARK_URL_CLASS = "demo-bookmark-url h-8 min-w-0 flex-1 basis-40";
-const BOOKMARK_LINK_CLASS = "demo-bookmark-link inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-primary";
+const BOOKMARK_LINK_CLASS =
+  "demo-bookmark-link inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-primary";
 const BOOKMARK_HOST_CLASS = "truncate";
 const MESSAGE_CLASS = "m-0 text-sm text-destructive";
 const QUIET_CLASS = "m-0 text-sm text-muted-foreground";
 const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-height) rounded-r-md bg-muted/40 py-1 pr-1 pl-3`;
 const TOC_LIST_CLASS = "demo-toc-list m-0 list-none p-0";
 const TOC_ENTRY_CLASS = "demo-toc-entry";
-const TOC_BUTTON_CLASS = "h-auto w-full justify-start rounded-md px-1.5 py-1 text-left text-sm font-normal text-foreground";
+const TOC_BUTTON_CLASS =
+  "h-auto w-full justify-start rounded-md px-1.5 py-1 text-left text-sm font-normal text-foreground";
 const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS}`;
 const MATH_SOURCE_CLASS = "demo-math-source";
 const MATH_VALUE_CLASS = "demo-math-value";
@@ -115,26 +116,37 @@ const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
 
 /** Escapes text that will be placed in a portable HTML clipboard flavor. */
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#039;",
-  })[character] ?? character);
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[character] ?? character,
+  );
 }
 
 /** Joins a block's own portable text with its already formatted descendants. */
 function joinPortableText(own: string, children: string): string {
-  if (!own) return children;
-  if (!children) return own;
+  if (!own) {
+    return children;
+  }
+  if (!children) {
+    return own;
+  }
   return `${own}\n${children}`;
 }
 
 /** Indents every line so nested clipboard text keeps its depth. */
 function indentLines(value: string, depth: number): string {
   const indent = "  ".repeat(depth);
-  return value.split("\n").map((line) => `${indent}${line}`).join("\n");
+  return value
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
 }
 
 /**
@@ -143,7 +155,9 @@ function indentLines(value: string, depth: number): string {
  * @param event - Click on a native control inside a block.
  * @returns True when the control should not perform its own action.
  */
-function isClaimedSelectionClick(event: Pick<MouseEvent, "defaultPrevented" | "ctrlKey" | "metaKey">): boolean {
+function isClaimedSelectionClick(
+  event: Pick<MouseEvent, "defaultPrevented" | "ctrlKey" | "metaKey">,
+): boolean {
   return event.defaultPrevented || event.ctrlKey || event.metaKey;
 }
 
@@ -152,7 +166,9 @@ function tocDocumentView(reactEditor: Pick<ReactEditorApi, "blocks">): TocDocume
   return {
     getBlock: (id) => {
       const block = reactEditor.blocks.getBlockNode(id);
-      if (!block) return undefined;
+      if (!block) {
+        return undefined;
+      }
       return {
         id: block.id,
         type: block.type,
@@ -202,9 +218,13 @@ function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
   let parentId = reactEditor.blocks.getParentId(blockId);
   while (typeof parentId === "string") {
     const parent = reactEditor.blocks.getBlockNode(parentId);
-    if (parent?.listProps.collapsed === true) collapsedAncestorIds.push(parentId);
+    if (parent?.listProps.collapsed === true) {
+      collapsedAncestorIds.push(parentId);
+    }
     const next = reactEditor.blocks.getParentId(parentId);
-    if (typeof next !== "string") break;
+    if (typeof next !== "string") {
+      break;
+    }
     parentId = next;
   }
   if (collapsedAncestorIds.length > 0) {
@@ -214,7 +234,9 @@ function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
       }
     });
   }
-  if (panel.getSurfaceType() !== "block") return;
+  if (panel.getSurfaceType() !== "block") {
+    return;
+  }
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const surface = panel.getRoot();
@@ -238,9 +260,9 @@ function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
 function admonitionMarkdown(tone: AdmonitionTone, emoji: string, content: string): string {
   const label = tone.toUpperCase();
   const lines = content.length > 0 ? content.split("\n") : [""];
-  const quoted = lines.map((line, index) => (
-    index === 0 ? `> ${emoji} ${line}`.trimEnd() : `> ${line}`
-  ));
+  const quoted = lines.map((line, index) =>
+    index === 0 ? `> ${emoji} ${line}`.trimEnd() : `> ${line}`,
+  );
   return [`> [!${label}]`, ...quoted].join("\n");
 }
 
@@ -264,17 +286,23 @@ function bookmarkHost(url: string): string {
 function bookmarkMarkdown(title: string, url: string, description: string): string {
   const label = title || url;
   const link = url ? `[${label.replaceAll("\n", " ")}](${url})` : title;
-  if (!description) return link;
-  if (!link) return description;
+  if (!description) {
+    return link;
+  }
+  if (!link) {
+    return description;
+  }
   return `${link}\n\n${description}`;
 }
 
 /** Renders generated headings as a nested-looking Markdown list. */
 function tocMarkdown(entries: readonly TocEntry[]): string {
-  return entries.map((entry) => {
-    const text = entry.text.replaceAll("\n", " ");
-    return `${"  ".repeat(Math.max(0, entry.depth - 1))}- ${text}`;
-  }).join("\n");
+  return entries
+    .map((entry) => {
+      const text = entry.text.replaceAll("\n", " ");
+      return `${"  ".repeat(Math.max(0, entry.depth - 1))}- ${text}`;
+    })
+    .join("\n");
 }
 
 /**
@@ -285,10 +313,13 @@ function tocMarkdown(entries: readonly TocEntry[]): string {
  * @returns Source lines and their values, preserving blank and invalid lines.
  */
 function mathMarkdown(content: string, evaluated: readonly MathEvaluation[]): string {
-  return content.split(/\r?\n/).map((line, index) => {
-    const value = evaluated[index]?.value;
-    return value ? `${line}\n= ${value}` : line;
-  }).join("\n");
+  return content
+    .split(/\r?\n/)
+    .map((line, index) => {
+      const value = evaluated[index]?.value;
+      return value ? `${line}\n= ${value}` : line;
+    })
+    .join("\n");
 }
 
 /**
@@ -323,17 +354,25 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
   const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
   const committedEmoji = editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone];
   const [emojiDraft, setEmojiDraft] = useState<string | null>(null);
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   const emoji = emojiDraft ?? committedEmoji;
   return (
     <div
       className={`${ADMONITION_CLASS} ${ADMONITION_SURFACE_CLASS[tone]}`}
       data-callout-tone={tone}
-      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftStyle: "solid", borderLeftColor: ADMONITION_ACCENT[tone] }}
+      style={{
+        borderLeftWidth: ACCENT_RULE_WIDTH,
+        borderLeftStyle: "solid",
+        borderLeftColor: ADMONITION_ACCENT[tone],
+      }}
       role="group"
       aria-label={ADMONITION_LABELS[tone]}
     >
-      <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>Emoji</Label>
+      <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>
+        Emoji
+      </Label>
       <Input
         id={emojiId}
         className={ADMONITION_EMOJI_CLASS}
@@ -342,13 +381,21 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
         maxLength={32}
         spellCheck={false}
         onMouseDown={(event) => {
-          if (isClaimedSelectionClick(event)) event.preventDefault();
+          if (isClaimedSelectionClick(event)) {
+            event.preventDefault();
+          }
         }}
         onChange={(event) => setEmojiDraft(event.target.value)}
         onBlur={() => {
           const next = (emojiDraft ?? committedEmoji).trim();
           setEmojiDraft(null);
-          if (!next || next === (panel.blocks.getBlockNode(blockId)?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
+          if (
+            !next ||
+            next ===
+              (panel.blocks.getBlockNode(blockId)?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone])
+          ) {
+            return;
+          }
           editing.operations.setProp("emoji", next);
         }}
       />
@@ -394,7 +441,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
     setEditingUrl(false);
     setUrlError(null);
   }
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   const description = descriptionDraft ?? committedDescription;
   const showUrlForm = committedUrl === "" || editingUrl;
 
@@ -406,7 +455,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
       return;
     }
     setUrlError(null);
-    if (next !== currentProp("url")) editing.operations.setProp("url", next);
+    if (next !== currentProp("url")) {
+      editing.operations.setProp("url", next);
+    }
     setEditingUrl(false);
   };
 
@@ -415,7 +466,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
       <div className={BOOKMARK_TITLE_CLASS}>
         <MarkdownContent blockId={blockId} />
       </div>
-      <Label className={SCREEN_READER_CLASS} htmlFor={descriptionId}>Description</Label>
+      <Label className={SCREEN_READER_CLASS} htmlFor={descriptionId}>
+        Description
+      </Label>
       <Textarea
         id={descriptionId}
         className={BOOKMARK_DESCRIPTION_CLASS}
@@ -427,12 +480,16 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
         onBlur={() => {
           const next = descriptionDraft ?? currentProp("description");
           setDescriptionDraft(null);
-          if (next !== currentProp("description")) editing.operations.setProp("description", next);
+          if (next !== currentProp("description")) {
+            editing.operations.setProp("description", next);
+          }
         }}
       />
       {showUrlForm ? (
         <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
-          <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>URL</Label>
+          <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>
+            URL
+          </Label>
           <Input
             id={urlId}
             className={BOOKMARK_URL_CLASS}
@@ -444,14 +501,18 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             aria-describedby={urlError ? urlErrorId : undefined}
             onChange={(event) => {
               setUrlDraft(event.target.value);
-              if (urlError) setUrlError(null);
+              if (urlError) {
+                setUrlError(null);
+              }
             }}
           />
           <Button
             type="submit"
             size="sm"
             onClick={(event) => {
-              if (isClaimedSelectionClick(event)) event.preventDefault();
+              if (isClaimedSelectionClick(event)) {
+                event.preventDefault();
+              }
             }}
           >
             Save link
@@ -462,7 +523,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
               variant="ghost"
               size="sm"
               onClick={(event) => {
-                if (isClaimedSelectionClick(event)) return;
+                if (isClaimedSelectionClick(event)) {
+                  return;
+                }
                 setEditingUrl(false);
                 setUrlDraft(currentProp("url"));
                 setUrlError(null);
@@ -471,7 +534,11 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
               Cancel
             </Button>
           ) : null}
-          {urlError ? <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">{urlError}</p> : null}
+          {urlError ? (
+            <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">
+              {urlError}
+            </p>
+          ) : null}
         </form>
       ) : (
         <div className={BOOKMARK_META_CLASS}>
@@ -483,7 +550,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             target="_blank"
             rel="noreferrer"
             onClick={(event) => {
-              if (isClaimedSelectionClick(event)) event.preventDefault();
+              if (isClaimedSelectionClick(event)) {
+                event.preventDefault();
+              }
             }}
           >
             <Link2Icon className="size-3 shrink-0 pointer-events-none" aria-hidden="true" />
@@ -496,7 +565,9 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             className="ml-auto text-muted-foreground"
             aria-label="Change URL"
             onClick={(event) => {
-              if (isClaimedSelectionClick(event)) return;
+              if (isClaimedSelectionClick(event)) {
+                return;
+              }
               setUrlDraft(currentProp("url"));
               setUrlError(null);
               setEditingUrl(true);
@@ -529,15 +600,23 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
     () => collectTocEntries(tocDocumentView(reactEditor), blockId),
     [blockId, reactEditor, revision],
   );
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   return (
     <div
       {...attributes}
       className={TOC_CLASS}
-      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftStyle: "solid", borderLeftColor: "var(--rivto-primary)" }}
+      style={{
+        borderLeftWidth: ACCENT_RULE_WIDTH,
+        borderLeftStyle: "solid",
+        borderLeftColor: "var(--rivto-primary)",
+      }}
     >
       <nav aria-label="Table of contents">
-        {entries.length === 0 ? <p className={QUIET_CLASS}>No headings</p> : (
+        {entries.length === 0 ? (
+          <p className={QUIET_CLASS}>No headings</p>
+        ) : (
           <ol className={TOC_LIST_CLASS}>
             {entries.map((entry, index) => {
               const label = entry.text.trim() || "Empty heading";
@@ -553,7 +632,9 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
                     data-toc-target={entry.blockId}
                     style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
                     onClick={(event) => {
-                      if (isClaimedSelectionClick(event)) return;
+                      if (isClaimedSelectionClick(event)) {
+                        return;
+                      }
                       navigateToTocEntry(panel, entry.blockId);
                     }}
                   >
@@ -603,8 +684,12 @@ function MathBlock({ blockId }: { readonly blockId: string }) {
         {evaluated.map((result, index) => (
           <div className="demo-math-result" data-math-line={index + 1} key={index}>
             {result.error ? (
-              <span className={MESSAGE_CLASS} role="alert" title={result.error}>{result.error}</span>
-            ) : result.value}
+              <span className={MESSAGE_CLASS} role="alert" title={result.error}>
+                {result.error}
+              </span>
+            ) : (
+              result.value
+            )}
           </div>
         ))}
       </div>
@@ -623,31 +708,39 @@ function admonitionBlockExtension(tone: AdmonitionTone): ReactEditorExtension {
   return {
     id: type,
     setup: (reactEditor) => {
-      registerHostBlock(reactEditor, {
-        definition: { ...ADMONITION_DEFINITION[tone], metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
-        render: AdmonitionBlock,
-        slashCommand: {
-          title: ADMONITION_LABELS[tone],
-          group: "Turn into",
-          keywords: [...ADMONITION_KEYWORDS[tone]],
+      registerHostBlock(
+        reactEditor,
+        {
+          definition: {
+            ...ADMONITION_DEFINITION[tone],
+            metadata: { [BLOCK_TEXT_METADATA_KEY]: true },
+          },
+          render: AdmonitionBlock,
+          slashCommand: {
+            title: ADMONITION_LABELS[tone],
+            group: "Turn into",
+            keywords: [...ADMONITION_KEYWORDS[tone]],
+          },
         },
-      }, {
-        id: type,
-        matches: ({ block }) => block.type === type,
-        format: ({ block, depth, children }): PortableBlockFormats => {
-          const emoji = typeof block.props.emoji === "string" && block.props.emoji
-            ? block.props.emoji
-            : ADMONITION_DEFAULT_EMOJI[tone];
-          const markdown = indentLines(admonitionMarkdown(tone, emoji, block.content), depth);
-          const plain = indentLines(`${emoji} ${block.content}`.trimEnd(), depth);
-          const body = escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>");
-          return {
-            plain: joinPortableText(plain, children.plain),
-            markdown: joinPortableText(markdown, children.markdown),
-            html: `<blockquote>${escapeHtml(emoji)} ${body}</blockquote>${children.html}`,
-          };
+        {
+          id: type,
+          matches: ({ block }) => block.type === type,
+          format: ({ block, depth, children }): PortableBlockFormats => {
+            const emoji =
+              typeof block.props.emoji === "string" && block.props.emoji
+                ? block.props.emoji
+                : ADMONITION_DEFAULT_EMOJI[tone];
+            const markdown = indentLines(admonitionMarkdown(tone, emoji, block.content), depth);
+            const plain = indentLines(`${emoji} ${block.content}`.trimEnd(), depth);
+            const body = escapeHtml(block.content).replace(/\r\n?|\n/g, "<br>");
+            return {
+              plain: joinPortableText(plain, children.plain),
+              markdown: joinPortableText(markdown, children.markdown),
+              html: `<blockquote>${escapeHtml(emoji)} ${body}</blockquote>${children.html}`,
+            };
+          },
         },
-      });
+      );
     },
   };
 }
@@ -676,38 +769,44 @@ export function bookmarkBlockExtension(): ReactEditorExtension {
   return {
     id: "demo.bookmark",
     setup: (reactEditor) => {
-      registerHostBlock(reactEditor, {
-        definition: { ...bookmarkBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
-        render: BookmarkBlock,
-        slashCommand: {
-          title: "Bookmark",
-          group: "Turn into",
-          keywords: ["link", "url", "hyperlink"],
+      registerHostBlock(
+        reactEditor,
+        {
+          definition: { ...bookmarkBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
+          render: BookmarkBlock,
+          slashCommand: {
+            title: "Bookmark",
+            group: "Turn into",
+            keywords: ["link", "url", "hyperlink"],
+          },
         },
-      }, {
-        id: "demo.bookmark",
-        matches: ({ block }) => block.type === BOOKMARK_BLOCK_TYPE,
-        format: ({ block, depth, children }): PortableBlockFormats => {
-          const url = typeof block.props.url === "string" ? block.props.url : "";
-          const description = typeof block.props.description === "string" ? block.props.description : "";
-          const safeUrl = isHttpUrl(url) ? url : "";
-          const markdown = indentLines(bookmarkMarkdown(block.content, safeUrl, description), depth);
-          const plain = indentLines(
-            [block.content, safeUrl, description].filter((line) => line.length > 0).join("\n"),
-            depth,
-          );
-          const title = escapeHtml(block.content || safeUrl);
-          const link = safeUrl
-            ? `<a href="${escapeHtml(safeUrl)}">${title}</a>`
-            : title;
-          const descriptionHtml = description ? `<p>${escapeHtml(description)}</p>` : "";
-          return {
-            plain: joinPortableText(plain, children.plain),
-            markdown: joinPortableText(markdown, children.markdown),
-            html: `<p>${link}</p>${descriptionHtml}${children.html}`,
-          };
+        {
+          id: "demo.bookmark",
+          matches: ({ block }) => block.type === BOOKMARK_BLOCK_TYPE,
+          format: ({ block, depth, children }): PortableBlockFormats => {
+            const url = typeof block.props.url === "string" ? block.props.url : "";
+            const description =
+              typeof block.props.description === "string" ? block.props.description : "";
+            const safeUrl = isHttpUrl(url) ? url : "";
+            const markdown = indentLines(
+              bookmarkMarkdown(block.content, safeUrl, description),
+              depth,
+            );
+            const plain = indentLines(
+              [block.content, safeUrl, description].filter((line) => line.length > 0).join("\n"),
+              depth,
+            );
+            const title = escapeHtml(block.content || safeUrl);
+            const link = safeUrl ? `<a href="${escapeHtml(safeUrl)}">${title}</a>` : title;
+            const descriptionHtml = description ? `<p>${escapeHtml(description)}</p>` : "";
+            return {
+              plain: joinPortableText(plain, children.plain),
+              markdown: joinPortableText(markdown, children.markdown),
+              html: `<p>${link}</p>${descriptionHtml}${children.html}`,
+            };
+          },
         },
-      });
+      );
     },
   };
 }
@@ -725,28 +824,32 @@ export function tableOfContentsBlockExtension(): ReactEditorExtension {
   return {
     id: "demo.table-of-contents",
     setup: (reactEditor) => {
-      registerHostBlock(reactEditor, {
-        definition: tableOfContentsBlockDefinition,
-        render: TableOfContentsBlock,
-        slashCommand: {
-          title: "Table of contents",
-          group: "Turn into",
-          keywords: ["toc", "outline", "contents", "headings"],
+      registerHostBlock(
+        reactEditor,
+        {
+          definition: tableOfContentsBlockDefinition,
+          render: TableOfContentsBlock,
+          slashCommand: {
+            title: "Table of contents",
+            group: "Turn into",
+            keywords: ["toc", "outline", "contents", "headings"],
+          },
         },
-      }, {
-        id: "demo.table-of-contents",
-        matches: ({ block }) => block.type === TABLE_OF_CONTENTS_BLOCK_TYPE,
-        format: ({ block, depth, children }): PortableBlockFormats => {
-          const entries = collectTocEntries(tocDocumentView(reactEditor), block.id);
-          const markdown = indentLines(tocMarkdown(entries), depth);
-          const items = entries.map((entry) => `<li>${escapeHtml(entry.text)}</li>`).join("");
-          return {
-            plain: joinPortableText(markdown, children.plain),
-            markdown: joinPortableText(markdown, children.markdown),
-            html: `<ul>${items}</ul>${children.html}`,
-          };
+        {
+          id: "demo.table-of-contents",
+          matches: ({ block }) => block.type === TABLE_OF_CONTENTS_BLOCK_TYPE,
+          format: ({ block, depth, children }): PortableBlockFormats => {
+            const entries = collectTocEntries(tocDocumentView(reactEditor), block.id);
+            const markdown = indentLines(tocMarkdown(entries), depth);
+            const items = entries.map((entry) => `<li>${escapeHtml(entry.text)}</li>`).join("");
+            return {
+              plain: joinPortableText(markdown, children.plain),
+              markdown: joinPortableText(markdown, children.markdown),
+              html: `<ul>${items}</ul>${children.html}`,
+            };
+          },
         },
-      });
+      );
     },
   };
 }
@@ -760,82 +863,89 @@ export function mathBlockExtension(): ReactEditorExtension {
   return {
     id: "demo.math",
     setup: (reactEditor) => {
-      registerHostBlock(reactEditor, {
-        definition: { ...mathBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
-        render: MathBlock,
-        behavior: {
-          /**
-           * Selects only math blocks for this editing behavior.
-           *
-           * @param context - Current block and owning editor.
-           * @returns Whether the block contains math source.
-           */
-          isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
-          /**
-           * Inserts a line break at the current caret within the caller's transaction.
-           *
-           * Expanded text selections are removed by the keyboard dispatcher first.
-           * A structural target is left to the ordinary block behavior.
-           *
-           * @param context - Current block and panel that owns the selection.
-           * @param target - Caret position after any selected text was removed.
-           * @returns Handled after inserting a line break, or unhandled for structural selection.
-           * @throws If the block update or browser selection operation fails.
-           */
-          onSplit: ({ block, reactPanel, root }, target) => {
-            if (!target.collapsed) {
-              return "unhandled";
-            }
-            const offset = Math.min(target.offset ?? 0, block.content.length);
-            const content = `${block.content.slice(0, offset)}\n${block.content.slice(offset)}`;
-            reactPanel.blocks.updateBlock(block.id, { content });
-            const editable = root.ownerDocument.activeElement;
-            if (
-              editable instanceof HTMLElement &&
-              editable.hasAttribute("data-block-content") &&
-              editable.closest(`[${BLOCK_ID_ATTRIBUTE}]`)?.getAttribute(BLOCK_ID_ATTRIBUTE) === block.id
-            ) {
-              // Put the caret after the new line before the next keystroke arrives.
-              editable.textContent = content;
-              // A trailing line break needs a placeholder so the browser retains its caret position.
-              if (content.endsWith("\n")) {
-                editable.appendChild(root.ownerDocument.createElement("br"));
+      registerHostBlock(
+        reactEditor,
+        {
+          definition: { ...mathBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
+          render: MathBlock,
+          behavior: {
+            /**
+             * Selects only math blocks for this editing behavior.
+             *
+             * @param context - Current block and owning editor.
+             * @returns Whether the block contains math source.
+             */
+            isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
+            /**
+             * Inserts a line break at the current caret within the caller's transaction.
+             *
+             * Expanded text selections are removed by the keyboard dispatcher first.
+             * A structural target is left to the ordinary block behavior.
+             *
+             * @param context - Current block and panel that owns the selection.
+             * @param target - Caret position after any selected text was removed.
+             * @returns Handled after inserting a line break, or unhandled for structural selection.
+             * @throws If the block update or browser selection operation fails.
+             */
+            onSplit: ({ block, reactPanel, root }, target) => {
+              if (!target.collapsed) {
+                return "unhandled";
               }
-              const range = root.ownerDocument.createRange();
-              range.setStart(editable.firstChild!, offset + 1);
-              range.collapse(true);
-              const selection = root.ownerDocument.getSelection();
-              selection?.removeAllRanges();
-              selection?.addRange(range);
-            }
-            reactPanel.selection.set(createCaretSelection(block.id, offset + 1));
-            reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
-            return "handled";
+              const offset = Math.min(target.offset ?? 0, block.content.length);
+              const content = `${block.content.slice(0, offset)}\n${block.content.slice(offset)}`;
+              reactPanel.blocks.updateBlock(block.id, { content });
+              const editable = root.ownerDocument.activeElement;
+              if (
+                editable instanceof HTMLElement &&
+                editable.hasAttribute("data-block-content") &&
+                editable.closest(`[${BLOCK_ID_ATTRIBUTE}]`)?.getAttribute(BLOCK_ID_ATTRIBUTE) ===
+                  block.id
+              ) {
+                // Put the caret after the new line before the next keystroke arrives.
+                editable.textContent = content;
+                // A trailing line break needs a placeholder so the browser retains its caret position.
+                if (content.endsWith("\n")) {
+                  editable.appendChild(root.ownerDocument.createElement("br"));
+                }
+                const range = root.ownerDocument.createRange();
+                range.setStart(editable.firstChild!, offset + 1);
+                range.collapse(true);
+                const selection = root.ownerDocument.getSelection();
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+              }
+              reactPanel.selection.set(createCaretSelection(block.id, offset + 1));
+              reactPanel.selection.scheduleIfSelectionUnchanged(() =>
+                reactPanel.selection.restoreDOM(),
+              );
+              return "handled";
+            },
+          },
+          slashCommand: {
+            title: "Math",
+            group: "Turn into",
+            keywords: ["math", "calculate", "evaluate", "expression"],
           },
         },
-        slashCommand: {
-          title: "Math",
-          group: "Turn into",
-          keywords: ["math", "calculate", "evaluate", "expression"],
+        {
+          id: "demo.math",
+          matches: ({ block }) => block.type === MATH_BLOCK_TYPE,
+          format: ({ block, depth, children }): PortableBlockFormats => {
+            const evaluated = evaluateMathSource(block.content);
+            const text = mathMarkdown(block.content, evaluated);
+            const markdown = indentLines(text, depth);
+            const errors = evaluated
+              .filter((result) => result.error)
+              .map((result) => `<p>${escapeHtml(result.error ?? "")}</p>`)
+              .join("");
+            return {
+              plain: joinPortableText(markdown, children.plain),
+              markdown: joinPortableText(markdown, children.markdown),
+              html: `<pre>${escapeHtml(text)}</pre>${errors}${children.html}`,
+            };
+          },
         },
-      }, {
-        id: "demo.math",
-        matches: ({ block }) => block.type === MATH_BLOCK_TYPE,
-        format: ({ block, depth, children }): PortableBlockFormats => {
-          const evaluated = evaluateMathSource(block.content);
-          const text = mathMarkdown(block.content, evaluated);
-          const markdown = indentLines(text, depth);
-          const errors = evaluated
-            .filter((result) => result.error)
-            .map((result) => `<p>${escapeHtml(result.error ?? "")}</p>`)
-            .join("");
-          return {
-            plain: joinPortableText(markdown, children.plain),
-            markdown: joinPortableText(markdown, children.markdown),
-            html: `<pre>${escapeHtml(text)}</pre>${errors}${children.html}`,
-          };
-        },
-      });
+      );
     },
   };
 }

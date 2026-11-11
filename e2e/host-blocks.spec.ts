@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { blockIdSelector } from "./dom-markers";
 
-const TODAY = "[data-journal-document=\"today\"]";
+const TODAY = '[data-journal-document="today"]';
 
 interface InsertedBlock {
   id: string;
@@ -15,23 +15,22 @@ interface ClipboardFlavors {
   text: string;
 }
 
-async function insertBlock(
-  page: Page,
-  input: Record<string, unknown>,
-): Promise<InsertedBlock> {
+async function insertBlock(page: Page, input: Record<string, unknown>): Promise<InsertedBlock> {
   return page.evaluate((block) => {
-    const editor = (window as unknown as {
-      __rivtoDemo: {
-        editor: {
-          blocks: {
-            insertBlock: (value: Record<string, unknown>) => {
-              id: string;
-              children: { id: string }[];
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              insertBlock: (value: Record<string, unknown>) => {
+                id: string;
+                children: { id: string }[];
+              };
             };
           };
         };
-      };
-    }).__rivtoDemo.editor;
+      }
+    ).__rivtoDemo.editor;
     const inserted = editor.blocks.insertBlock(block);
     return { id: inserted.id, childIds: inserted.children.map((child) => child.id) };
   }, input);
@@ -39,54 +38,75 @@ async function insertBlock(
 
 async function blockProps(page: Page, id: string): Promise<Record<string, unknown>> {
   return page.evaluate((blockId) => {
-    const props = (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { getBlockNode: (value: string) => { props: Record<string, unknown> } | undefined } } };
-    }).__rivtoDemo.editor.blocks.getBlockNode(blockId)?.props;
-    if (!props) throw new Error(`Missing block ${blockId}`);
+    const props = (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              getBlockNode: (value: string) => { props: Record<string, unknown> } | undefined;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks.getBlockNode(blockId)?.props;
+    if (!props) {
+      throw new Error(`Missing block ${blockId}`);
+    }
     return props;
   }, id);
 }
 
 async function undo(page: Page): Promise<void> {
-  await page.locator("[data-editor-action=\"undo\"]").click();
+  await page.locator('[data-editor-action="undo"]').click();
 }
 
 /** Ends the current Yjs capture so the next edit is its own undo step. */
 async function stopCapturing(page: Page): Promise<void> {
   await page.evaluate(() => {
-    (window as unknown as {
-      __rivtoDemo: { editor: { history: { stopCapturing: () => void } } };
-    }).__rivtoDemo.editor.history.stopCapturing();
+    (
+      window as unknown as {
+        __rivtoDemo: { editor: { history: { stopCapturing: () => void } } };
+      }
+    ).__rivtoDemo.editor.history.stopCapturing();
   });
 }
 
 async function copySelection(page: Page): Promise<ClipboardFlavors> {
   await page.evaluate(() => {
-    document.addEventListener("copy", (event) => {
-      (window as unknown as { hostCopy?: ClipboardFlavors }).hostCopy = {
-        html: event.clipboardData?.getData("text/html") ?? "",
-        markdown: event.clipboardData?.getData("text/markdown") ?? "",
-        structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
-        text: event.clipboardData?.getData("text/plain") ?? "",
-      };
-    }, { once: true });
+    document.addEventListener(
+      "copy",
+      (event) => {
+        (window as unknown as { hostCopy?: ClipboardFlavors }).hostCopy = {
+          html: event.clipboardData?.getData("text/html") ?? "",
+          markdown: event.clipboardData?.getData("text/markdown") ?? "",
+          structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
+          text: event.clipboardData?.getData("text/plain") ?? "",
+        };
+      },
+      { once: true },
+    );
   });
   await page.keyboard.press("Control+c");
-  await expect.poll(() => page.evaluate(() => (
-    window as unknown as { hostCopy?: ClipboardFlavors }
-  ).hostCopy)).toBeTruthy();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { hostCopy?: ClipboardFlavors }).hostCopy),
+    )
+    .toBeTruthy();
   return page.evaluate(() => (window as unknown as { hostCopy: ClipboardFlavors }).hostCopy);
 }
 
 async function pasteStructured(content: Locator, structured: string, plain: string): Promise<void> {
-  await content.evaluate((element, payload) => {
-    const data = new DataTransfer();
-    data.setData("application/x-rivto+json", payload.structured);
-    data.setData("text/plain", payload.plain);
-    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "clipboardData", { value: data });
-    element.dispatchEvent(event);
-  }, { structured, plain });
+  await content.evaluate(
+    (element, payload) => {
+      const data = new DataTransfer();
+      data.setData("application/x-rivto+json", payload.structured);
+      data.setData("text/plain", payload.plain);
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    },
+    { structured, plain },
+  );
 }
 
 function block(page: Page, id: string): Locator {
@@ -108,7 +128,7 @@ test("slash conversion adds the host blocks and preserves unrelated content", as
   const blankRow = block(page, blank.id);
   await blankRow.locator("[data-block-content]").click();
   await page.keyboard.type("/toc");
-  const tocCommand = page.locator("[data-slash-command=\"type.demo.table-of-contents\"]");
+  const tocCommand = page.locator('[data-slash-command="type.demo.table-of-contents"]');
   await expect(tocCommand).toBeVisible();
   await tocCommand.click();
   await expect(blankRow).toHaveAttribute("data-block-type", "demo.table-of-contents");
@@ -129,12 +149,17 @@ test("slash conversion adds the host blocks and preserves unrelated content", as
   await savedContent.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/note");
-  await page.locator("[data-slash-command=\"type.demo.note\"]").click();
+  await page.locator('[data-slash-command="type.demo.note"]').click();
   await expect(savedRow).toHaveAttribute("data-block-type", "demo.note");
   await expect(savedRow).toHaveAttribute("data-block-id", saved.id);
-  await expect(savedRow.locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "note");
+  await expect(savedRow.locator("[data-callout-tone]")).toHaveAttribute(
+    "data-callout-tone",
+    "note",
+  );
   await expect(savedContent).toHaveText("Saved title");
-  await expect(block(page, saved.childIds[0]!).locator("[data-block-content]")).toHaveText("Kept child");
+  await expect(block(page, saved.childIds[0]!).locator("[data-block-content]")).toHaveText(
+    "Kept child",
+  );
 
   const tip = await insertBlock(page, { type: "paragraph", content: "" });
   const warning = await insertBlock(page, { type: "paragraph", content: "" });
@@ -142,21 +167,27 @@ test("slash conversion adds the host blocks and preserves unrelated content", as
   const equation = await insertBlock(page, { type: "paragraph", content: "" });
   await block(page, tip.id).locator("[data-block-content]").click();
   await page.keyboard.type("/tip");
-  await page.locator("[data-slash-command=\"type.demo.tip\"]").click();
+  await page.locator('[data-slash-command="type.demo.tip"]').click();
   await expect(block(page, tip.id)).toHaveAttribute("data-block-type", "demo.tip");
-  await expect(block(page, tip.id).locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "tip");
+  await expect(block(page, tip.id).locator("[data-callout-tone]")).toHaveAttribute(
+    "data-callout-tone",
+    "tip",
+  );
   await block(page, warning.id).locator("[data-block-content]").click();
   await page.keyboard.type("/warning");
-  await page.locator("[data-slash-command=\"type.demo.warning\"]").click();
+  await page.locator('[data-slash-command="type.demo.warning"]').click();
   await expect(block(page, warning.id)).toHaveAttribute("data-block-type", "demo.warning");
-  await expect(block(page, warning.id).locator("[data-callout-tone]")).toHaveAttribute("data-callout-tone", "warning");
+  await expect(block(page, warning.id).locator("[data-callout-tone]")).toHaveAttribute(
+    "data-callout-tone",
+    "warning",
+  );
   await block(page, bookmark.id).locator("[data-block-content]").click();
   await page.keyboard.type("/bookmark");
-  await page.locator("[data-slash-command=\"type.demo.bookmark\"]").click();
+  await page.locator('[data-slash-command="type.demo.bookmark"]').click();
   await expect(block(page, bookmark.id)).toHaveAttribute("data-block-type", "demo.bookmark");
   await block(page, equation.id).locator("[data-block-content]").click();
   await page.keyboard.type("/math");
-  await page.locator("[data-slash-command=\"type.demo.math\"]").click();
+  await page.locator('[data-slash-command="type.demo.math"]').click();
   await expect(block(page, equation.id)).toHaveAttribute("data-block-type", "demo.math");
 });
 
@@ -209,17 +240,21 @@ test("submits bookmark links and keeps invalid or partial URLs uncommitted", asy
   await row.getByRole("button", { name: "Save link" }).click();
   const link = row.getByRole("link", { name: "https://rivto.example/docs" });
   await expect(link).toHaveAttribute("href", "https://rivto.example/docs");
-  await expect.poll(() => blockProps(page, bookmark.id)).toMatchObject({
-    url: "https://rivto.example/docs",
-  });
+  await expect
+    .poll(() => blockProps(page, bookmark.id))
+    .toMatchObject({
+      url: "https://rivto.example/docs",
+    });
   await stopCapturing(page);
 
   const description = row.getByLabel("Description");
   await description.fill("A manual note");
   await description.blur();
-  await expect.poll(() => blockProps(page, bookmark.id)).toMatchObject({
-    description: "A manual note",
-  });
+  await expect
+    .poll(() => blockProps(page, bookmark.id))
+    .toMatchObject({
+      description: "A manual note",
+    });
   await undo(page);
   await expect(description).toHaveValue("");
   await undo(page);
@@ -249,20 +284,32 @@ test("updates a table of contents and navigates to its heading", async ({ page }
   await expect(toc.getByRole("button", { name: "Outside" })).toHaveCount(0);
 
   await page.evaluate((id) => {
-    (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { updateBlock: (blockId: string, patch: { content: string }) => void } } };
-    }).__rivtoDemo.editor.blocks.updateBlock(id, { content: "## Renamed" });
+    (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: { updateBlock: (blockId: string, patch: { content: string }) => void };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks.updateBlock(id, { content: "## Renamed" });
   }, alphaId);
   await expect(toc.getByRole("button", { name: "Renamed" })).toBeVisible();
   await expect(toc.getByRole("button", { name: "Alpha" })).toHaveCount(0);
 
   await page.evaluate((id) => {
-    const blocks = (window as unknown as {
-      __rivtoDemo: { editor: { blocks: {
-        getRootIds: () => string[];
-        moveBlock: (blockId: string, targetId: string, position: "before") => void;
-      } } };
-    }).__rivtoDemo.editor.blocks;
+    const blocks = (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              getRootIds: () => string[];
+              moveBlock: (blockId: string, targetId: string, position: "before") => void;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks;
     blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
   }, tocId);
   await expect(block(page, tocId).getByRole("button", { name: "Outside" })).toBeVisible();
@@ -273,9 +320,17 @@ test("updates a table of contents and navigates to its heading", async ({ page }
     children: [{ type: "paragraph", content: "# Scroll target heading" }],
   });
   await page.evaluate((id) => {
-    (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { updateBlock: (blockId: string, patch: { listProps: { collapsed: boolean } }) => void } } };
-    }).__rivtoDemo.editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
+    (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              updateBlock: (blockId: string, patch: { listProps: { collapsed: boolean } }) => void;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
   }, collapsed.id);
   const heading = block(page, collapsed.childIds[0]!);
   await expect(heading).toHaveCount(0);
@@ -283,25 +338,39 @@ test("updates a table of contents and navigates to its heading", async ({ page }
   const scrollY = await page.evaluate(() => window.scrollY);
   await block(page, tocId).getByRole("button", { name: "Scroll target heading" }).click();
   await expect(heading).toBeVisible();
-  await expect.poll(async () => {
-    const box = await heading.boundingBox();
-    const viewport = page.viewportSize();
-    if (!box || !viewport) return false;
-    return box.y >= 0 && box.y < viewport.height;
-  }).toBe(true);
+  await expect
+    .poll(async () => {
+      const box = await heading.boundingBox();
+      const viewport = page.viewportSize();
+      if (!box || !viewport) {
+        return false;
+      }
+      return box.y >= 0 && box.y < viewport.height;
+    })
+    .toBe(true);
   expect(scrollY).toBe(0);
 
   await page.evaluate((id) => {
-    (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { updateBlock: (blockId: string, patch: { listProps: { collapsed: boolean } }) => void } } };
-    }).__rivtoDemo.editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
+    (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              updateBlock: (blockId: string, patch: { listProps: { collapsed: boolean } }) => void;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks.updateBlock(id, { listProps: { collapsed: true } });
   }, collapsed.id);
-  await page.locator("[data-editor-mode=\"edgeless\"]").click();
+  await page.locator('[data-editor-mode="edgeless"]').click();
   const viewport = page.locator(".edgeless-viewport");
   const panX = await viewport.getAttribute("data-edgeless-pan-x");
   const panY = await viewport.getAttribute("data-edgeless-pan-y");
   const zoom = await viewport.getAttribute("data-edgeless-zoom");
-  await block(page, tocId).getByRole("button", { name: "Scroll target heading" }).click({ force: true });
+  await block(page, tocId)
+    .getByRole("button", { name: "Scroll target heading" })
+    .click({ force: true });
   await expect(heading).toHaveCount(1);
   await expect(viewport).toHaveAttribute("data-edgeless-pan-x", panX ?? "");
   await expect(viewport).toHaveAttribute("data-edgeless-pan-y", panY ?? "");
@@ -397,7 +466,10 @@ test("copies host blocks as structured data and portable text", async ({ page })
   for (const item of cases) {
     const row = block(page, item.id);
     const content = row.locator("[data-block-content]");
-    await (await content.count() ? content : row.locator(".demo-toc")).click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
+    await ((await content.count()) ? content : row.locator(".demo-toc")).click({
+      modifiers: ["Control"],
+      position: { x: 4, y: 4 },
+    });
     await expect(row).toHaveAttribute("data-block-selected", "true");
     const flavors = await copySelection(page);
     const bundle = JSON.parse(flavors.structured) as { blocks: Array<Record<string, unknown>> };
@@ -437,15 +509,21 @@ test("selects host blocks on the page and the canvas", async ({ page }) => {
   for (const mode of ["block", "edgeless"] as const) {
     await page.locator(`[data-editor-mode="${mode}"]`).click();
     await page.evaluate(() => {
-      (window as unknown as {
-        __rivtoDemo: { editor: { selection: { clear: () => void } } };
-      }).__rivtoDemo.editor.selection.clear();
+      (
+        window as unknown as {
+          __rivtoDemo: { editor: { selection: { clear: () => void } } };
+        }
+      ).__rivtoDemo.editor.selection.clear();
     });
     for (const id of ids) {
       const row = block(page, id);
       const content = row.locator(":scope > .rivto-block-row [data-block-content]");
       const anchor = (await content.count()) > 0 ? content : row.locator(".demo-toc");
-      await anchor.click({ modifiers: ["Control"], force: mode === "edgeless", position: { x: 4, y: 4 } });
+      await anchor.click({
+        modifiers: ["Control"],
+        force: mode === "edgeless",
+        position: { x: 4, y: 4 },
+      });
       await expect(row).toHaveAttribute("data-block-selected", "true");
     }
   }
@@ -459,28 +537,43 @@ test("text host blocks accept a caret and paste into their own content", async (
     await content.click();
     await expect(row).not.toHaveAttribute("data-block-selected", "true");
     const rootCount = await page.evaluate(() => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: { blocks: { getRootIds: () => string[] } } };
-      }).__rivtoDemo.editor;
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: { editor: { blocks: { getRootIds: () => string[] } } };
+        }
+      ).__rivtoDemo.editor;
       return editor.blocks.getRootIds().length;
     });
     await pasteStructured(content, "", "Pasted text");
     await expect(content).toHaveText("Pasted text");
     const state = await page.evaluate((id) => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: { blocks: {
-          getBlockNode: (id: string) => { content: string } | undefined;
-          getRootIds: () => string[];
-        } } };
-      }).__rivtoDemo.editor;
-      return { content: editor.blocks.getBlockNode(id)?.content, count: editor.blocks.getRootIds().length };
+      const editor = (
+        window as unknown as {
+          __rivtoDemo: {
+            editor: {
+              blocks: {
+                getBlockNode: (id: string) => { content: string } | undefined;
+                getRootIds: () => string[];
+              };
+            };
+          };
+        }
+      ).__rivtoDemo.editor;
+      return {
+        content: editor.blocks.getBlockNode(id)?.content,
+        count: editor.blocks.getRootIds().length,
+      };
     }, inserted.id);
     expect(state).toEqual({ content: "Pasted text", count: rootCount });
   }
 });
 
 test("host block surfaces follow editor theme tokens and selection", async ({ page }) => {
-  const note = await insertBlock(page, { type: "demo.note", content: "Note", props: { emoji: "💡" } });
+  const note = await insertBlock(page, {
+    type: "demo.note",
+    content: "Note",
+    props: { emoji: "💡" },
+  });
   const bookmark = await insertBlock(page, { type: "demo.bookmark", content: "Link" });
   const math = await insertBlock(page, { type: "demo.math", content: "1 + 1" });
   const toc = await insertBlock(page, { type: "demo.table-of-contents", content: "" });
@@ -504,7 +597,9 @@ test("host block surfaces follow editor theme tokens and selection", async ({ pa
 });
 
 test("table of contents shows a distinct text size for each heading level", async ({ page }) => {
-  const headings = [1, 2, 3, 4, 5, 6].map((depth) => `${"#".repeat(depth)} Level ${depth}`).join("\n\n");
+  const headings = [1, 2, 3, 4, 5, 6]
+    .map((depth) => `${"#".repeat(depth)} Level ${depth}`)
+    .join("\n\n");
   const section = await insertBlock(page, {
     type: "paragraph",
     content: headings,
@@ -523,7 +618,9 @@ test("table of contents shows a distinct text size for each heading level", asyn
   expect(sizes[0]!).toBeGreaterThanOrEqual(sizes[3]! * 1.4);
 });
 
-test("table of contents slash command is available after existing text and a second slash", async ({ page }) => {
+test("table of contents slash command is available after existing text and a second slash", async ({
+  page,
+}) => {
   for (const initial of ["Keep this text", "/"]) {
     const inserted = await insertBlock(page, { type: "paragraph", content: initial });
     const row = block(page, inserted.id);
@@ -535,12 +632,22 @@ test("table of contents slash command is available after existing text and a sec
     await expect(command).toBeVisible();
     await command.click();
     await expect(row).toHaveAttribute("data-block-type", "demo.table-of-contents");
-    await expect.poll(() => page.evaluate((id) => {
-      const editor = (window as unknown as {
-        __rivtoDemo: { editor: { blocks: { getBlockNode: (id: string) => { content: string } | undefined } } };
-      }).__rivtoDemo.editor;
-      return editor.blocks.getBlockNode(id)?.content;
-    }, inserted.id)).toBe(initial);
+    await expect
+      .poll(() =>
+        page.evaluate((id) => {
+          const editor = (
+            window as unknown as {
+              __rivtoDemo: {
+                editor: {
+                  blocks: { getBlockNode: (id: string) => { content: string } | undefined };
+                };
+              };
+            }
+          ).__rivtoDemo.editor;
+          return editor.blocks.getBlockNode(id)?.content;
+        }, inserted.id),
+      )
+      .toBe(initial);
     await undo(page);
     await expect(row).toHaveAttribute("data-block-type", "paragraph");
     await expect(row.locator("[data-block-content]")).toHaveText(`${initial}/toc`);
@@ -550,15 +657,27 @@ test("table of contents slash command is available after existing text and a sec
 test("table of contents aligns the chosen heading with the top of the page", async ({ page }) => {
   const children = [
     { type: "demo.table-of-contents", content: "" },
-    ...Array.from({ length: 25 }, (_, index) => ({ type: "paragraph", content: `Before ${index}` })),
+    ...Array.from({ length: 25 }, (_, index) => ({
+      type: "paragraph",
+      content: `Before ${index}`,
+    })),
     { type: "paragraph", content: "# Destination heading" },
     ...Array.from({ length: 35 }, (_, index) => ({ type: "paragraph", content: `After ${index}` })),
   ];
   const section = await insertBlock(page, { type: "paragraph", content: "Section", children });
   await page.evaluate((id) => {
-    const blocks = (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
-    }).__rivtoDemo.editor.blocks;
+    const blocks = (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              getRootIds: () => string[];
+              moveBlock: (id: string, target: string, position: "before") => void;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks;
     blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
   }, section.id);
   const toc = block(page, section.childIds[0]!);
@@ -585,7 +704,9 @@ test("math results stay aligned with unwrapped source lines", async ({ page }) =
   expect(await source.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   const alignment = await source.evaluate((element) => {
     const text = element.firstChild;
-    if (!text) return null;
+    if (!text) {
+      return null;
+    }
     const range = document.createRange();
     range.setStart(text, element.textContent!.indexOf("a * 4"));
     range.setEnd(text, element.textContent!.indexOf("a * 4") + 5);
@@ -609,9 +730,18 @@ test("math results stay aligned with unwrapped source lines", async ({ page }) =
 test("math line results remain editable on the canvas", async ({ page }) => {
   const equation = await insertBlock(page, { type: "demo.math", content: "a = 2\na * 3" });
   await page.evaluate((id) => {
-    const blocks = (window as unknown as {
-      __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
-    }).__rivtoDemo.editor.blocks;
+    const blocks = (
+      window as unknown as {
+        __rivtoDemo: {
+          editor: {
+            blocks: {
+              getRootIds: () => string[];
+              moveBlock: (id: string, target: string, position: "before") => void;
+            };
+          };
+        };
+      }
+    ).__rivtoDemo.editor.blocks;
     blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
   }, equation.id);
   await page.locator('[data-editor-mode="edgeless"]').click();
@@ -632,13 +762,24 @@ test("math line results remain editable on the canvas", async ({ page }) => {
   await expect(row.locator("[data-math-line]").last()).toHaveText("9");
 });
 
-test("math Enter replaces selected text and preserves caret and undo in both surfaces", async ({ page }) => {
+test("math Enter replaces selected text and preserves caret and undo in both surfaces", async ({
+  page,
+}) => {
   for (const mode of ["block", "edgeless"] as const) {
     const equation = await insertBlock(page, { type: "demo.math", content: "12 + 34" });
     await page.evaluate((id) => {
-      const blocks = (window as unknown as {
-        __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
-      }).__rivtoDemo.editor.blocks;
+      const blocks = (
+        window as unknown as {
+          __rivtoDemo: {
+            editor: {
+              blocks: {
+                getRootIds: () => string[];
+                moveBlock: (id: string, target: string, position: "before") => void;
+              };
+            };
+          };
+        }
+      ).__rivtoDemo.editor.blocks;
       blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
     }, equation.id);
     await page.locator(`[data-editor-mode="${mode}"]`).click();

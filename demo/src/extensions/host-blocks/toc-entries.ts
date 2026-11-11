@@ -77,10 +77,18 @@ interface MarkdownNode {
 
 /** Reads the plain text of one inline Markdown node. */
 function inlineText(node: MarkdownNode): string {
-  if (node.type === "text" || node.type === "inlineCode") return node.value ?? "";
-  if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
-  if (node.type === "break") return " ";
-  if (!node.children) return "";
+  if (node.type === "text" || node.type === "inlineCode") {
+    return node.value ?? "";
+  }
+  if (node.type === "image" || node.type === "imageReference") {
+    return node.alt ?? "";
+  }
+  if (node.type === "break") {
+    return " ";
+  }
+  if (!node.children) {
+    return "";
+  }
   return node.children.map(inlineText).join("");
 }
 
@@ -94,11 +102,15 @@ function inlineText(node: MarkdownNode): string {
  * @param markdown - Raw Markdown stored on one writing or admonition block.
  * @returns Headings in the order they appear in that body.
  */
-export function extractMarkdownHeadings(markdown: string): readonly { depth: number; text: string }[] {
+export function extractMarkdownHeadings(
+  markdown: string,
+): readonly { depth: number; text: string }[] {
   const tree = fromMarkdown(markdown) as MarkdownNode;
   const headings: { depth: number; text: string }[] = [];
   const visit = (node: MarkdownNode): void => {
-    if (node.type === "code") return;
+    if (node.type === "code") {
+      return;
+    }
     if (node.type === "heading" && node.depth && node.depth >= 1 && node.depth <= 6) {
       headings.push({
         depth: node.depth,
@@ -126,19 +138,27 @@ export function extractMarkdownHeadings(markdown: string): readonly { depth: num
  */
 export function collectTocEntries(document: TocDocumentView, tocId: string): readonly TocEntry[] {
   const parentId = document.getParentId(tocId);
-  if (parentId === undefined) return [];
+  if (parentId === undefined) {
+    return [];
+  }
   const roots = parentId === null ? document.getRootIds() : [parentId];
   const entries: TocEntry[] = [];
   const visit = (id: string): void => {
     const block = document.getBlock(id);
-    if (!block) return;
+    if (!block) {
+      return;
+    }
     if (HEADING_BLOCK_TYPES.has(block.type)) {
       for (const heading of extractMarkdownHeadings(block.content)) {
         entries.push({ blockId: block.id, depth: heading.depth, text: heading.text });
       }
     }
-    for (const childId of block.childIds) visit(childId);
+    for (const childId of block.childIds) {
+      visit(childId);
+    }
   };
-  for (const rootId of roots) visit(rootId);
+  for (const rootId of roots) {
+    visit(rootId);
+  }
   return entries;
 }

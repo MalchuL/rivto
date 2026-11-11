@@ -66,9 +66,11 @@ export interface BookmarkProps {
   description: string;
 }
 
-const admonitionPropSchema = z.object({
-  emoji: z.string().min(1),
-}).strict();
+const admonitionPropSchema = z
+  .object({
+    emoji: z.string().min(1),
+  })
+  .strict();
 
 /**
  * Returns the admonition tone encoded by a block type.
@@ -77,9 +79,15 @@ const admonitionPropSchema = z.object({
  * @returns The tone, or undefined when the type is not an admonition.
  */
 export function admonitionTone(type: string): AdmonitionTone | undefined {
-  if (type === NOTE_BLOCK_TYPE) return "note";
-  if (type === TIP_BLOCK_TYPE) return "tip";
-  if (type === WARNING_BLOCK_TYPE) return "warning";
+  if (type === NOTE_BLOCK_TYPE) {
+    return "note";
+  }
+  if (type === TIP_BLOCK_TYPE) {
+    return "tip";
+  }
+  if (type === WARNING_BLOCK_TYPE) {
+    return "warning";
+  }
   return undefined;
 }
 
@@ -112,7 +120,9 @@ export const warningBlockDefinition = admonitionDefinition("warning");
  * @returns True when the value has an HTTP(S) protocol and a host.
  */
 export function isHttpUrl(value: string): boolean {
-  if (!value || /\s/.test(value)) return false;
+  if (!value || /\s/.test(value)) {
+    return false;
+  }
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0;
@@ -126,10 +136,12 @@ export const bookmarkBlockDefinition: BlockDefinition = {
   type: BOOKMARK_BLOCK_TYPE,
   title: "Bookmark",
   defaultProps: { url: "", description: "" },
-  propSchema: z.object({
-    url: z.string().refine((value) => value === "" || isHttpUrl(value)),
-    description: z.string(),
-  }).strict(),
+  propSchema: z
+    .object({
+      url: z.string().refine((value) => value === "" || isHttpUrl(value)),
+      description: z.string(),
+    })
+    .strict(),
 };
 
 /** Contentless table-of-contents contract. Entries are derived at render time. */
