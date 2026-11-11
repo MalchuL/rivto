@@ -24,6 +24,7 @@ import {
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
 import "./host-blocks.css";
+import { createCaretSelection } from "@chulane/rivto";
 import { Link2Icon, PencilIcon } from "lucide-react";
 import {
   useCallback,
@@ -57,7 +58,7 @@ import {
   type AdmonitionTone,
   type BookmarkProps,
 } from "./definitions";
-import { evaluateMathSource } from "./math-value";
+import { evaluateMathSource, type MathEvaluation } from "./math-value";
 import {
   collectTocEntries,
   type TocDocumentView,
@@ -107,9 +108,9 @@ const TOC_CLASS = `demo-toc ${BLOCK_FRAME_CLASS} min-h-(--rivto-default-block-he
 const TOC_LIST_CLASS = "demo-toc-list m-0 list-none p-0";
 const TOC_ENTRY_CLASS = "demo-toc-entry";
 const TOC_BUTTON_CLASS = "h-auto w-full justify-start rounded-md px-1.5 py-1 text-left text-sm font-normal text-foreground";
-const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS} flex items-stretch overflow-hidden rounded-lg border border-solid border-border bg-card`;
-const MATH_SOURCE_CLASS = "demo-math-source min-h-[4.5em] min-w-0 flex-1 border-r border-solid border-border bg-background px-3 py-2 font-mono text-sm";
-const MATH_VALUE_CLASS = "demo-math-value flex w-40 max-w-[40%] shrink-0 items-center justify-end bg-muted/50 px-3 py-2 text-right font-mono text-sm break-words";
+const MATH_CLASS = `demo-math ${BLOCK_FRAME_CLASS}`;
+const MATH_SOURCE_CLASS = "demo-math-source";
+const MATH_VALUE_CLASS = "demo-math-value";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
 
 /** Escapes text that will be placed in a portable HTML clipboard flavor. */
@@ -276,12 +277,18 @@ function tocMarkdown(entries: readonly TocEntry[]): string {
   }).join("\n");
 }
 
-/** Renders a math source plus its evaluated value when evaluation succeeds. */
-function mathMarkdown(content: string): string {
-  const evaluated = evaluateMathSource(content);
-  if (!evaluated.value) return content;
-  if (!content) return `= ${evaluated.value}`;
-  return `${content}\n\n= ${evaluated.value}`;
+/**
+ * Pairs each source line with its successfully evaluated value for clipboard text.
+ *
+ * @param content - Original multiline source.
+ * @param evaluated - Results in the same order as the source lines.
+ * @returns Source lines and their values, preserving blank and invalid lines.
+ */
+function mathMarkdown(content: string, evaluated: readonly MathEvaluation[]): string {
+  return content.split(/\r?\n/).map((line, index) => {
+    const value = evaluated[index]?.value;
+    return value ? `${line}\n= ${value}` : line;
+  }).join("\n");
 }
 
 /**
@@ -563,21 +570,27 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
 }
 
 /**
- * Multiline mathjs source with the evaluated value on the right.
+ * Renders a horizontally scrollable math source and a result for each line.
  *
  * Lines share one scope, so a later line can use a name assigned above.
- * Invalid lines stay in the editor and show the library message in the value column.
+ * Invalid lines stay editable and display their error beside the source line.
  *
  * @param blockId - Stable math block ID.
- * @returns The source editor and result, or null after deletion.
+ * @returns The source editor and aligned results, or null after deletion.
  */
 function MathBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing(blockId);
   const source = editing.block?.content ?? "";
   const evaluated = useMemo(() => evaluateMathSource(source), [source]);
-  if (!editing.block) return null;
+  if (!editing.block) {
+    return null;
+  }
   return (
     <div className={MATH_CLASS}>
+      <div className="demo-math-header" aria-hidden="true">
+        <span>Expressions</span>
+        <span>Results</span>
+      </div>
       <div
         {...editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
@@ -586,12 +599,14 @@ function MathBlock({ blockId }: { readonly blockId: string }) {
         aria-multiline="true"
         spellCheck={false}
       />
-      <div className={MATH_VALUE_CLASS} data-math-value="" aria-label="Math result">
-        {evaluated.error ? (
-          <p className={MESSAGE_CLASS} role="alert">{evaluated.error}</p>
-        ) : (
-          <p className="m-0 font-medium text-foreground">{evaluated.value}</p>
-        )}
+      <div className={MATH_VALUE_CLASS} data-math-value="" aria-label="Math results">
+        {evaluated.map((result, index) => (
+          <div className="demo-math-result" data-math-line={index + 1} key={index}>
+            {result.error ? (
+              <span className={MESSAGE_CLASS} role="alert" title={result.error}>{result.error}</span>
+            ) : result.value}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -737,7 +752,7 @@ export function tableOfContentsBlockExtension(): ReactEditorExtension {
 }
 
 /**
- * Registers the math block and a clipboard form that includes the evaluated value.
+ * Registers the math block and clipboard forms that include each evaluated value.
  *
  * @returns An extension that installs the block wherever it is set up.
  */
@@ -748,6 +763,56 @@ export function mathBlockExtension(): ReactEditorExtension {
       registerHostBlock(reactEditor, {
         definition: { ...mathBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
         render: MathBlock,
+        behavior: {
+          /**
+           * Selects only math blocks for this editing behavior.
+           *
+           * @param context - Current block and owning editor.
+           * @returns Whether the block contains math source.
+           */
+          isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
+          /**
+           * Inserts a line break at the current caret within the caller's transaction.
+           *
+           * Expanded text selections are removed by the keyboard dispatcher first.
+           * A structural target is left to the ordinary block behavior.
+           *
+           * @param context - Current block and panel that owns the selection.
+           * @param target - Caret position after any selected text was removed.
+           * @returns Handled after inserting a line break, or unhandled for structural selection.
+           * @throws If the block update or browser selection operation fails.
+           */
+          onSplit: ({ block, reactPanel, root }, target) => {
+            if (!target.collapsed) {
+              return "unhandled";
+            }
+            const offset = Math.min(target.offset ?? 0, block.content.length);
+            const content = `${block.content.slice(0, offset)}\n${block.content.slice(offset)}`;
+            reactPanel.blocks.updateBlock(block.id, { content });
+            const editable = root.ownerDocument.activeElement;
+            if (
+              editable instanceof HTMLElement &&
+              editable.hasAttribute("data-block-content") &&
+              editable.closest(`[${BLOCK_ID_ATTRIBUTE}]`)?.getAttribute(BLOCK_ID_ATTRIBUTE) === block.id
+            ) {
+              // Put the caret after the new line before the next keystroke arrives.
+              editable.textContent = content;
+              // A trailing line break needs a placeholder so the browser retains its caret position.
+              if (content.endsWith("\n")) {
+                editable.appendChild(root.ownerDocument.createElement("br"));
+              }
+              const range = root.ownerDocument.createRange();
+              range.setStart(editable.firstChild!, offset + 1);
+              range.collapse(true);
+              const selection = root.ownerDocument.getSelection();
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+            }
+            reactPanel.selection.set(createCaretSelection(block.id, offset + 1));
+            reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
+            return "handled";
+          },
+        },
         slashCommand: {
           title: "Math",
           group: "Turn into",
@@ -758,20 +823,16 @@ export function mathBlockExtension(): ReactEditorExtension {
         matches: ({ block }) => block.type === MATH_BLOCK_TYPE,
         format: ({ block, depth, children }): PortableBlockFormats => {
           const evaluated = evaluateMathSource(block.content);
-          const markdown = indentLines(mathMarkdown(block.content), depth);
-          const plain = indentLines(
-            evaluated.value ? `${block.content}\n= ${evaluated.value}` : block.content,
-            depth,
-          );
-          const valueHtml = evaluated.value
-            ? `<p>= ${escapeHtml(evaluated.value)}</p>`
-            : evaluated.error
-              ? `<p>${escapeHtml(evaluated.error)}</p>`
-              : "";
+          const text = mathMarkdown(block.content, evaluated);
+          const markdown = indentLines(text, depth);
+          const errors = evaluated
+            .filter((result) => result.error)
+            .map((result) => `<p>${escapeHtml(result.error ?? "")}</p>`)
+            .join("");
           return {
-            plain: joinPortableText(plain, children.plain),
+            plain: joinPortableText(markdown, children.plain),
             markdown: joinPortableText(markdown, children.markdown),
-            html: `<pre>${escapeHtml(block.content)}</pre>${valueHtml}${children.html}`,
+            html: `<pre>${escapeHtml(text)}</pre>${errors}${children.html}`,
           };
         },
       });

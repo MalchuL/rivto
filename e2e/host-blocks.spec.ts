@@ -318,11 +318,15 @@ test("evaluates multiline math and keeps an invalid expression editable", async 
 
   const source = row.getByRole("textbox", { name: "Math source" });
   await source.click();
+  await source.press("End");
+  await source.press("Enter");
+  await page.keyboard.type("2 + 2");
+  await expect(result.locator("[data-math-line]")).toHaveText(["2", "4"]);
   await source.evaluate((element) => {
     element.textContent = "a = 2\na + 3";
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
   });
-  await expect(result).toHaveText("5");
+  await expect(result.locator("[data-math-line]")).toHaveText(["2", "5"]);
   await expect.poll(() => source.textContent()).toBe("a = 2\na + 3");
   await stopCapturing(page);
   await source.evaluate((element) => {
@@ -338,7 +342,7 @@ test("evaluates multiline math and keeps an invalid expression editable", async 
   await undo(page);
   await undo(page);
   await expect.poll(() => source.textContent()).toBe("a = 2\na + 3");
-  await expect(result).toHaveText("5");
+  await expect(result.locator("[data-math-line]")).toHaveText(["2", "5"]);
   await expect(row.getByRole("alert")).toHaveCount(0);
 });
 
@@ -562,4 +566,116 @@ test("table of contents aligns the chosen heading with the top of the page", asy
   await toc.getByRole("button", { name: "Destination heading" }).click();
   await expect.poll(async () => (await target.boundingBox())?.y).toBeLessThan(5);
   await expect.poll(async () => (await target.boundingBox())?.y).toBeGreaterThanOrEqual(-1);
+});
+
+test("math results stay aligned with unwrapped source lines", async ({ page }) => {
+  const expression = "a = 2\n\na + 3\n1 +\na * 4\n" + "1 + ".repeat(80) + "1";
+  const equation = await insertBlock(page, { type: "demo.math", content: expression });
+  const row = block(page, equation.id);
+  const source = row.getByRole("textbox", { name: "Math source" });
+  const results = row.locator("[data-math-line]");
+  await expect(results).toHaveCount(6);
+  await expect(results.nth(0)).toHaveText("2");
+  await expect(results.nth(1)).toHaveText("");
+  await expect(results.nth(2)).toHaveText("5");
+  await expect(results.nth(3).getByRole("alert")).toBeVisible();
+  await expect(results.nth(4)).toHaveText("8");
+  await expect(results.nth(5)).toHaveText("81");
+  await expect(source).toHaveCSS("white-space", "pre");
+  expect(await source.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  const alignment = await source.evaluate((element) => {
+    const text = element.firstChild;
+    if (!text) return null;
+    const range = document.createRange();
+    range.setStart(text, element.textContent!.indexOf("a * 4"));
+    range.setEnd(text, element.textContent!.indexOf("a * 4") + 5);
+    return range.getBoundingClientRect().top;
+  });
+  const resultTop = (await results.nth(4).boundingBox())!.y;
+  expect(Math.abs(alignment! - resultTop)).toBeLessThan(5);
+  await source.click();
+  await source.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.keyboard.type(" + 1");
+  await expect(results.nth(5)).toHaveText("82");
+});
+
+test("math line results remain editable on the canvas", async ({ page }) => {
+  const equation = await insertBlock(page, { type: "demo.math", content: "a = 2\na * 3" });
+  await page.evaluate((id) => {
+    const blocks = (window as unknown as {
+      __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
+    }).__rivtoDemo.editor.blocks;
+    blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
+  }, equation.id);
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  const row = block(page, equation.id);
+  await expect(row.locator("[data-math-line]")).toHaveText(["2", "6"]);
+  const source = row.getByRole("textbox", { name: "Math source" });
+  await source.click();
+  await source.evaluate((element) => {
+    const range = document.createRange();
+    range.setStart(element.firstChild!, 5);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await page.keyboard.type(" + 1");
+  await expect(row.locator("[data-math-line]").first()).toHaveText("3");
+  await expect(row.locator("[data-math-line]").last()).toHaveText("9");
+});
+
+test("math Enter replaces selected text and preserves caret and undo in both surfaces", async ({ page }) => {
+  for (const mode of ["block", "edgeless"] as const) {
+    const equation = await insertBlock(page, { type: "demo.math", content: "12 + 34" });
+    await page.evaluate((id) => {
+      const blocks = (window as unknown as {
+        __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
+      }).__rivtoDemo.editor.blocks;
+      blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
+    }, equation.id);
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const row = block(page, equation.id);
+    const source = row.getByRole("textbox", { name: "Math source" });
+    await source.click();
+    await source.evaluate((element) => {
+      const range = document.createRange();
+      range.setStart(element.firstChild!, 2);
+      range.setEnd(element.firstChild!, 5);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+    await stopCapturing(page);
+    await source.press("Enter");
+    await expect.poll(() => source.textContent()).toBe("12\n34");
+    await stopCapturing(page);
+    await page.keyboard.type("7");
+    await expect.poll(() => source.textContent()).toBe("12\n734");
+    await expect(row.locator("[data-math-line]")).toHaveText(["12", "734"]);
+    await undo(page);
+    await expect.poll(() => source.textContent()).toBe("12\n34");
+    await undo(page);
+    await expect.poll(() => source.textContent()).toBe("12 + 34");
+  }
+});
+
+test("repeated Enter in an empty math block keeps the caret in that block", async ({ page }) => {
+  const equation = await insertBlock(page, { type: "demo.math", content: "" });
+  const row = block(page, equation.id);
+  const source = row.getByRole("textbox", { name: "Math source" });
+  await source.click();
+  await source.press("Enter");
+  await source.press("Enter");
+  await page.keyboard.type("1 + 1");
+  await expect(source).toHaveText("\n\n1 + 1");
+  await expect(row.locator("[data-math-line]")).toHaveText(["", "", "2"]);
+  await expect(row).toHaveAttribute("data-block-type", "demo.math");
 });

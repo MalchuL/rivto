@@ -2,21 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { evaluateMathSource } from "../src/extensions/host-blocks/math-value.ts";
 
-test("mathjs evaluates a multiline scope and reports invalid lines", () => {
-  assert.deepEqual(evaluateMathSource("1 + 1"), { value: "2", error: null });
-  assert.deepEqual(evaluateMathSource("2 ^ 8"), { value: "256", error: null });
-  assert.deepEqual(evaluateMathSource("sin(pi / 2)"), { value: "1", error: null });
-  assert.deepEqual(evaluateMathSource("a = 2\na + 3"), { value: "5", error: null });
-  assert.deepEqual(evaluateMathSource("a = 2\n\na * 4"), { value: "8", error: null });
-  assert.deepEqual(evaluateMathSource(""), { value: "", error: null });
-  assert.deepEqual(evaluateMathSource("   \n"), { value: "", error: null });
+test("evaluates each line in one scope and preserves blank lines", () => {
+  assert.deepEqual(evaluateMathSource("a = 2\n\na * 4\nsin(pi / 2)"), [
+    { value: "2", error: null },
+    { value: "", error: null },
+    { value: "8", error: null },
+    { value: "1", error: null },
+  ]);
+  assert.deepEqual(evaluateMathSource(""), [{ value: "", error: null }]);
+  assert.deepEqual(evaluateMathSource("   \n"), [
+    { value: "", error: null },
+    { value: "", error: null },
+  ]);
+});
 
-  const invalid = evaluateMathSource("1 +");
-  assert.equal(invalid.value, "");
-  assert.equal(typeof invalid.error, "string");
-  assert.ok(invalid.error.length > 0);
-
-  const undefinedSymbol = evaluateMathSource("missing + 1");
-  assert.equal(undefinedSymbol.value, "");
-  assert.match(undefinedSymbol.error ?? "", /Undefined symbol/);
+test("reports errors on their own lines and continues with the existing scope", () => {
+  const results = evaluateMathSource("a = 2\n1 +\na + 3\nmissing + 1");
+  assert.equal(results[0].value, "2");
+  assert.ok(results[1].error);
+  assert.deepEqual(results[2], { value: "5", error: null });
+  assert.match(results[3].error ?? "", /Undefined symbol/);
 });
