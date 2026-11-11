@@ -23,7 +23,7 @@ interface Pane {
   readonly mode: ModeManager;
   id: string;
   instanceId: string;
-  readonly reactEditor: ReactEditorApi;
+  reactEditor: ReactEditorApi | undefined;
   /**
    * Releases the pane's editor and document resources asynchronously.
    */
@@ -33,6 +33,72 @@ interface Runtime {
   storage: DocumentStorage;
   editor: EditorStorage;
   seeded: Map<string, EditorAcquisition>;
+}
+
+/** State needed to render and release one document pane. */
+interface DocumentPaneProps {
+  /** Pane and its current editor acquisition. */
+  pane: Pane;
+  /** Whether this pane is the active tab. */
+  active: boolean;
+  /** Whether inactive panes are hidden. */
+  tabs: boolean;
+  /** Runtime holding seed acquisitions. */
+  runtime: Runtime;
+  /**
+   * Removes a pane and releases its editor acquisition.
+   *
+   * @param pane - Pane to close.
+   * @returns The pane is removed and its release is started.
+   */
+  close: (pane: Pane) => void;
+}
+
+/**
+ * Renders one acquired editor inside its own React subtree.
+ *
+ * Keeping the editor in this subtree allows React to release its element props
+ * when the pane unmounts, even if the parent retains an earlier render.
+ *
+ * @param props - Pane state, runtime, visibility, and close operation.
+ * @param props.pane - Document pane holding the current editor acquisition.
+ * @param props.active - Whether the editor panel is active.
+ * @param props.tabs - Whether inactive panels are hidden.
+ * @param props.runtime - Runtime holding seed acquisitions.
+ * @param props.close - Callback that removes and releases a pane.
+ * @returns The editor pane, or null after its acquisition has been released.
+ */
+function DocumentPane({ pane, active, tabs, runtime, close }: DocumentPaneProps) {
+  if (!pane.reactEditor) {
+    return null;
+  }
+  return (
+    <section className="multi-editor-pane" data-document-pane={pane.id} hidden={tabs && !active}>
+      <button type="button" onClick={() => close(pane)}>
+        Close {pane.id}
+      </button>
+      <button
+        type="button"
+        onClick={() => pane.mode.set(pane.mode.get() === "block" ? "edgeless" : "block")}
+      >
+        Toggle mode
+      </button>
+      <EditorPanel
+        mode={pane.mode}
+        editor={pane.reactEditor}
+        active={active}
+        onReady={() => {
+          const seed = runtime.seeded.get(pane.id);
+          if (seed) {
+            runtime.seeded.delete(pane.id);
+            void seed.release().catch(console.error);
+          }
+        }}
+      >
+        <DemoEditorSurface />
+      </EditorPanel>
+    </section>
+  );
 }
 
 /** Session-only demo: document views acquire models and all tabs share one runtime. */
@@ -210,7 +276,8 @@ export function DocumentsDemo() {
       void editor
         .destroy()
         .then(() => storage.destroy())
-        .catch(console.error);
+        .catch(console.error)
+        .finally(() => database.destroy());
     };
     // Route options are fixed for this demo mount.
   }, []);
@@ -241,6 +308,8 @@ export function DocumentsDemo() {
     (window as unknown as { __rivtoDocuments: { panes: Set<Pane> } }).__rivtoDocuments.panes.delete(
       pane,
     );
+    // React may retain the previous pane state after the pane is removed.
+    pane.reactEditor = undefined;
     void pane.release().catch(console.error);
     const seed = runtime?.seeded.get(pane.id);
     if (seed && !panes.some((other) => other !== pane && other.id === pane.id)) {
@@ -279,36 +348,14 @@ export function DocumentsDemo() {
         <div className="multi-editor-page">
           {runtime &&
             panes.map((pane) => (
-              <section
-                className="multi-editor-pane"
+              <DocumentPane
                 key={pane.instanceId}
-                data-document-pane={pane.id}
-                hidden={tabs && activeTab !== pane.instanceId}
-              >
-                <button type="button" onClick={() => close(pane)}>
-                  Close {pane.id}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => pane.mode.set(pane.mode.get() === "block" ? "edgeless" : "block")}
-                >
-                  Toggle mode
-                </button>
-                <EditorPanel
-                  mode={pane.mode}
-                  editor={pane.reactEditor}
-                  active={!tabs || activeTab === pane.instanceId}
-                  onReady={() => {
-                    const seed = runtime.seeded.get(pane.id);
-                    if (seed) {
-                      runtime.seeded.delete(pane.id);
-                      void seed.release().catch(console.error);
-                    }
-                  }}
-                >
-                  <DemoEditorSurface />
-                </EditorPanel>
-              </section>
+                pane={pane}
+                runtime={runtime}
+                tabs={tabs}
+                active={!tabs || activeTab === pane.instanceId}
+                close={close}
+              />
             ))}
         </div>
       </div>

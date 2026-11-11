@@ -43,6 +43,9 @@ function feedbackStore() {
     delete: (id) => {
       statuses.delete(id);
     },
+    clear: () => {
+      statuses.clear();
+    },
   };
   return { statuses, feedback };
 }
@@ -508,7 +511,7 @@ test("ignores provider progress after destruction", async () => {
     reportProgress!(0.5);
     finishWrite!("test:file");
     await expect(result).rejects.toBeDefined();
-    expect(statuses.get("upload")).not.toHaveProperty("progress");
+    expect(statuses.has("upload")).toBe(false);
   } finally {
     await panel.editor.destroy();
     await editor.destroy();
@@ -542,7 +545,7 @@ test("does not report preparation failures after destruction", async () => {
     ingestion.destroy();
     rejectPreparation!(new Error("cancelled"));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(statuses.get("1")).not.toHaveProperty("error");
+    expect(statuses.has("1")).toBe(false);
     expect(errors).toEqual([]);
     expect(panel.elements.getElements()).toHaveLength(0);
   } finally {

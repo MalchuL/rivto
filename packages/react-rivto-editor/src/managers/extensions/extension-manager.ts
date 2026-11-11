@@ -1,5 +1,6 @@
 import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
+import { releaseAfterCall } from "../../utils/release-after-call";
 import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
@@ -109,20 +110,17 @@ export class ExtensionManager implements ExtensionsApi {
   /**
    * Gives a manager registration runtime and active-extension ownership.
    *
+   * The callback reference is released before invoking it, including when it throws.
+   *
    * @param release - Exact underlying resource cleanup.
    * @returns Idempotent disposer safe for callers and repeated teardown.
    */
   registerCleanup(release: RegistrationDisposer): RegistrationDisposer {
     this.assertActive();
-    let active = true;
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const dispose = releaseAfterCall(() => {
       this.registrations.delete(dispose);
       release();
-    };
+    });
     this.registrations.add(dispose);
     this.activeExtensionRegistrations?.push(dispose);
     return dispose;
@@ -206,7 +204,8 @@ export class ExtensionManager implements ExtensionsApi {
    *
    * Identity is released before invoking user cleanup, so reentrant removal and
    * later ID reuse cannot remove another installation. Custom cleanup runs first;
-   * owned registrations must still release after a throwing cleanup.
+   * owned registrations must still release after a throwing cleanup. Callback and
+   * registration references are released before invoking cleanup.
    *
    * @param id - Installation identity reserved by the completed setup.
    * @param cleanup - Optional synchronous cleanup returned by setup.
@@ -219,12 +218,7 @@ export class ExtensionManager implements ExtensionsApi {
     cleanup: void | RegistrationDisposer,
     owned: readonly RegistrationDisposer[],
   ): RegistrationDisposer {
-    let active = true;
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const dispose = releaseAfterCall(() => {
       this.extensionIds.delete(id);
       const index = this.extensionDisposers.indexOf(dispose);
       if (index >= 0) {
@@ -235,7 +229,7 @@ export class ExtensionManager implements ExtensionsApi {
         releases.push(cleanup);
       }
       this.releaseAll(releases);
-    };
+    });
     return dispose;
   }
 

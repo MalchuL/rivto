@@ -22,9 +22,7 @@ const PLUGINS_KEY = "rivto.editor.plugins";
  * through the active CRDT adapter instead of replacing the whole document.
  */
 export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
-  private readonly root: CRDTMap<Record<string, CRDTType>>;
-  /** Adapter roots tracked by document-owned history. */
-  readonly historyScopes: readonly CRDTUndoScope[];
+  private rootMap?: CRDTMap<Record<string, CRDTType>>;
 
   /**
    * Creates a generic plugin-data owner for one document.
@@ -32,8 +30,17 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
    * @param crdt - Collaborative storage adapter.
    */
   constructor(private readonly crdt: CRDTDoc) {
-    this.root = crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
-    this.historyScopes = [this.root];
+    this.rootMap = crdt.getMap<Record<string, CRDTType>>(PLUGINS_KEY);
+  }
+
+  /**
+   * Exposes the collaborative root for document-owned undo history.
+   *
+   * @returns The plugin-data scope while this manager is active.
+   * @throws If the manager has been destroyed.
+   */
+  get historyScopes(): readonly CRDTUndoScope[] {
+    return [this.root];
   }
 
   /**
@@ -142,6 +149,30 @@ export class DocumentPluginDataManager implements DocumentPluginDataManagerApi {
   load(values: Record<string, unknown>): void {
     assertPortableRecord(values, "pluginData");
     this.crdt.transact(() => this.mergeMap(this.root, values));
+  }
+
+  /**
+   * Releases the borrowed collaborative root after document teardown.
+   *
+   * Call only after the underlying CRDT has stopped publishing updates.
+   *
+   * @returns The manager no longer retains its CRDT root.
+   */
+  destroy(): void {
+    this.rootMap = undefined;
+  }
+
+  /**
+   * Reads the collaborative root while the manager remains active.
+   *
+   * @returns The root map used by plugin data operations.
+   * @throws If the manager has been destroyed.
+   */
+  private get root(): CRDTMap<Record<string, CRDTType>> {
+    if (!this.rootMap) {
+      throw new Error("Plugin data manager is destroyed");
+    }
+    return this.rootMap;
   }
 
   /**

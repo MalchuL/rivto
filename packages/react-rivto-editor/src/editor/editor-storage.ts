@@ -9,6 +9,38 @@ import { waitWithAbort } from "@chulane/rivto";
 export type { BlockReference, BlockResolution } from "@chulane/rivto";
 
 /**
+ * Runs an acquisition cleanup once without retaining it after invocation.
+ *
+ * Repeated and reentrant calls share the same completion promise.
+ *
+ * @param cleanup - Releases one consumer and possibly closes its editor.
+ * @returns An idempotent release that drops the cleanup closure before running it;
+ * its promise rejects if cleanup fails.
+ */
+function createAcquisitionRelease(cleanup: () => Promise<void>): () => Promise<void> {
+  let pending: (() => Promise<void>) | undefined = cleanup;
+  let released: Promise<void> | undefined;
+  return () => {
+    if (!released) {
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      released = new Promise<void>((onResolve, onReject) => {
+        resolve = onResolve;
+        reject = onReject;
+      });
+      const current = pending;
+      pending = undefined;
+      try {
+        current?.().then(resolve, reject);
+      } catch (error) {
+        reject(error);
+      }
+    }
+    return released;
+  };
+}
+
+/**
  * Loads documents and shares one React runtime and core editor for each document ID.
  *
  * Storage owns each loaded model, its core editor, and the React runtime created by
@@ -31,13 +63,15 @@ export class EditorStorage {
   private readonly documentListeners = new Listeners<{ changed: void }>();
   private destroyed = false;
   private destruction?: Promise<void>;
-  private readonly openDocument: NonNullable<EditorStorageOptions["openDocument"]>;
-  private readonly createEditor: NonNullable<EditorStorageOptions["createEditor"]>;
-  private readonly unsubscribeRegistry?: () => void;
+  private openDocument?: NonNullable<EditorStorageOptions["openDocument"]>;
+  private createEditor?: NonNullable<EditorStorageOptions["createEditor"]>;
+  private onError?: EditorStorageOptions["onError"];
+  private unsubscribeRegistry?: () => void;
 
   /** @param options - Optional document loader, editor factory, and embedding lookup policy. */
-  constructor(private readonly options: EditorStorageOptions = {}) {
+  constructor(options: EditorStorageOptions = {}) {
     this.blockReferences = new BlockReferenceResolver(this, options);
+    this.onError = options.onError;
     this.openDocument =
       options.openDocument ?? (async (id) => new DocumentModelImpl(new YjsDoc(id)));
     this.createEditor = options.createEditor ?? ((editor) => createReactEditor({ editor }));
@@ -83,50 +117,65 @@ export class EditorStorage {
     options: { readonly signal?: AbortSignal } = {},
   ): Promise<EditorAcquisition> {
     options.signal?.throwIfAborted();
+    const onError = this.onError;
     const entry = await this.getEntry(documentId);
     if (entry.closing) {
       return this.acquireEditor(documentId, options);
     }
     entry.consumers += 1;
-    let released: Promise<void> | undefined;
-    const release = () => {
-      if (!released) {
-        entry.consumers -= 1;
-        released = entry.consumers === 0 ? this.close(documentId, entry) : Promise.resolve();
-      }
-      return released;
-    };
+    const release = createAcquisitionRelease(() => {
+      entry.consumers -= 1;
+      return entry.consumers === 0 ? this.close(documentId, entry) : Promise.resolve();
+    });
     try {
       const editor = await waitWithAbort(entry.pending, options.signal);
       options.signal?.throwIfAborted();
       this.assertActive();
       return { editor, document: editor.getDocument(), release };
     } catch (error) {
-      void release().catch((failure) => this.reportError(failure));
+      void release().catch((failure) => (onError ?? console.error)(failure));
       throw error;
     }
   }
 
-  /** @returns Idempotent shutdown promise; all models are disposed even if one cleanup fails. */
+  /**
+   * Disposes the registry subscription, resolver, and all owned editor models.
+   *
+   * All cleanup is attempted even when a registry or resolver disposer fails.
+   * Host callbacks are released after document cleanup settles.
+   *
+   * @returns Idempotent shutdown promise; all models are disposed even if one model cleanup fails.
+   * @throws AggregateError if any cleanup fails.
+   */
   destroy(): Promise<void> {
     if (this.destruction) {
       return this.destruction;
     }
     this.destroyed = true;
-    this.unsubscribeRegistry?.();
-    this.blockReferences.destroy();
-    this.destruction = (async () => {
+    this.destruction = Promise.resolve().then(async () => {
+      const errors: unknown[] = [];
+      for (const cleanup of [this.unsubscribeRegistry, () => this.blockReferences.destroy()]) {
+        try {
+          cleanup?.();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      this.unsubscribeRegistry = undefined;
       const results = await Promise.allSettled(
         [...this.entries].map(([id, entry]) => this.close(id, entry)),
       );
       this.documentListeners.clear();
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : [],
+      this.onError = undefined;
+      this.openDocument = undefined;
+      this.createEditor = undefined;
+      errors.push(
+        ...results.flatMap((result) => (result.status === "rejected" ? [result.reason] : [])),
       );
       if (errors.length) {
         throw new AggregateError(errors, "Editor storage teardown failed");
       }
-    })();
+    });
     return this.destruction;
   }
 
@@ -158,13 +207,18 @@ export class EditorStorage {
     let document: DocumentModel | undefined;
     let editor: ReactEditorApi | undefined;
     try {
-      document = await this.openDocument(id);
+      const openDocument = this.openDocument;
+      const createEditor = this.createEditor;
+      if (!openDocument || !createEditor) {
+        throw new Error("Editor storage is destroyed");
+      }
+      document = await openDocument(id);
       if (document.id !== id) {
         throw new Error(`Expected document ${id}, received ${document.id}`);
       }
       this.assertActive();
       entry.core = createDocumentEditor({ document });
-      editor = this.createEditor(entry.core);
+      editor = createEditor(entry.core);
       entry.editor = editor;
       if (editor.getDocument() !== document || editor.blocks !== entry.core.blocks) {
         throw new Error("Editor factory must bind the supplied core");
@@ -239,9 +293,5 @@ export class EditorStorage {
     if (this.destroyed) {
       throw new Error("Editor storage is destroyed");
     }
-  }
-  /** Reports asynchronous view release failures. */
-  private reportError(error: unknown): void {
-    (this.options.onError ?? console.error)(error);
   }
 }

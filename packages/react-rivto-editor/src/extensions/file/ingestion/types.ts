@@ -142,6 +142,12 @@ export interface FileIngestionStatuses {
    * @returns Removes the status when present.
    */
   delete(id: string): void;
+  /**
+   * Removes all upload feedback and its retry callbacks.
+   *
+   * @returns Publishes the empty state when statuses existed.
+   */
+  clear(): void;
 }
 
 /** Inputs and callbacks for one asynchronous file ingestion batch. */

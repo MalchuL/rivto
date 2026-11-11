@@ -329,7 +329,7 @@ export class ImageInputEvents {
         "The destination changed while the image was uploading. Select a location and retry.",
       // Decode before storage, then prepare the requested representation.
       prepare: async (file, id, currentDestination): Promise<PreparedFile> => {
-        const dimensions = await inspectImage(file);
+        const dimensions = await inspectImage(file, this.ingestion.signal);
         this.ingestion.signal.throwIfAborted();
         const uri = await this.ingestion.storeFile(this.provider, file, {
           panel: reactPanel,
@@ -388,7 +388,7 @@ export class ImageInputEvents {
         const resolved = await this.editor.attachments.resolveBinary(this.provider, item.uri, {
           signal: this.ingestion.signal,
         });
-        const dimensions = await inspectImage(resolved);
+        const dimensions = await inspectImage(resolved, this.ingestion.signal);
         this.ingestion.signal.throwIfAborted();
         let name = "image";
         try {

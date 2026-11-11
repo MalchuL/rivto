@@ -538,7 +538,7 @@ async function createDemoDocument() {
   });
   storage.registerDocument("journal");
   const document = await storage.openDocument("journal");
-  return { storage, document };
+  return { storage, document, database };
 }
 
 /**
@@ -548,18 +548,23 @@ async function createDemoDocument() {
  */
 async function destroyDemoEditor(runtime: {
   readonly storage: DocumentStorage;
+  readonly database: DemoDatabase;
   readonly editor: DocumentEditorAPI;
   readonly reactEditor: ReactEditorApi;
   readonly editorStorage?: EditorStorage;
 }): Promise<void> {
-  if (runtime.editorStorage) {
-    await runtime.editorStorage.destroy();
-  } else {
-    runtime.reactEditor.destroy();
-    runtime.editor.destroy();
-    await runtime.editor.getDocument().destroy();
+  try {
+    if (runtime.editorStorage) {
+      await runtime.editorStorage.destroy();
+    } else {
+      runtime.reactEditor.destroy();
+      runtime.editor.destroy();
+      await runtime.editor.getDocument().destroy();
+    }
+    await runtime.storage.destroy();
+  } finally {
+    runtime.database.destroy();
   }
-  await runtime.storage.destroy();
 }
 
 /**
@@ -1759,7 +1764,11 @@ async function createSyncedPeer(
     signal.throwIfAborted();
   } catch (failure) {
     await document?.destroy();
-    await storage.destroy();
+    try {
+      await storage.destroy();
+    } finally {
+      database.destroy();
+    }
     throw failure;
   }
   const editor = createDocumentEditor({ document: document! });
@@ -1805,7 +1814,7 @@ async function createSyncedPeer(
     });
     editor.history.clear();
   }
-  return { storage, editor, reactEditor };
+  return { storage, database, editor, reactEditor };
 }
 
 /**

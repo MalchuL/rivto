@@ -27,7 +27,7 @@ export class DocumentStorage {
   private destruction?: Promise<void>;
 
   /** @param options - Registry, application source lookup, fresh provider factory, and optional asynchronous error reporting. */
-  constructor(private readonly options: DocumentStorageOptions) {
+  constructor(private options: DocumentStorageOptions) {
     this.ready = this.connect(options.registry.root, options.registry.root.id).catch(
       async (error) => {
         await options.registry.root
@@ -57,6 +57,7 @@ export class DocumentStorage {
     await this.ready;
     this.assertActive();
     const crdt = this.options.registry.openDocument(documentId);
+    const onError = this.options.onError;
     let document: DocumentModel | undefined;
     try {
       document = this.options.createDocumentModel?.(crdt) ?? new DocumentModelImpl(crdt);
@@ -67,9 +68,9 @@ export class DocumentStorage {
       this.assertActive();
       return document;
     } catch (error) {
-      await (document ?? crdt).destroy().catch((failure) => this.reportError(failure));
+      await (document ?? crdt).destroy().catch((failure) => (onError ?? console.error)(failure));
       if (document && document.id !== documentId) {
-        await crdt.destroy().catch((failure) => this.reportError(failure));
+        await crdt.destroy().catch((failure) => (onError ?? console.error)(failure));
       }
       throw error;
     }
@@ -133,6 +134,10 @@ export class DocumentStorage {
 
   /**
    * Destroys registry metadata and its providers after the caller has closed all owned content models.
+   *
+   * Host callbacks are released after registry teardown, including when teardown fails.
+   * Pending document opens retain their error callback until their cleanup finishes.
+   *
    * @returns Idempotent cleanup promise. Content-model lifetime is managed by the caller, including failed or cancelled editor acquisitions.
    */
   destroy(): Promise<void> {
@@ -141,8 +146,12 @@ export class DocumentStorage {
     }
     this.destroyed = true;
     this.destruction = (async () => {
-      await this.ready.catch(() => undefined);
-      await this.options.registry.root.destroy();
+      try {
+        await this.ready.catch(() => undefined);
+        await this.options.registry.root.destroy();
+      } finally {
+        this.options = { registry: this.options.registry };
+      }
     })();
     return this.destruction;
   }

@@ -43,6 +43,31 @@ for (const name of ["editor", "extensions", "panel"] as const) {
   });
 }
 
+test.each(["runtime", "panel"] as const)(
+  "%s cleanup stays idempotent when it reenters or throws",
+  async (name) => {
+    const core = await createTestCoreEditor();
+    const editor = createReactEditor({ editor: core });
+    const panel = new ReactPanel(editor, new ChildrenPanel(core));
+    const owner = name === "runtime" ? editor : panel;
+    let calls = 0;
+    const release = owner.registerCleanup(() => {
+      calls++;
+      release();
+      throw new Error("cleanup failed");
+    });
+    try {
+      expect(release).toThrow("cleanup failed");
+      expect(release).not.toThrow();
+      expect(calls).toBe(1);
+    } finally {
+      panel.destroy();
+      await editor.destroy();
+      await core.destroy();
+    }
+  },
+);
+
 test("extension removal releases its callbacks while other consumers remain registered", async () => {
   const core = await createTestCoreEditor();
   const editor = createReactEditor({ editor: core });

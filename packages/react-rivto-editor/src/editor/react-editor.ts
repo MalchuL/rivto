@@ -17,6 +17,7 @@ import type { ReactEditorApi } from "./types";
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
+import { releaseAfterCall } from "../utils/release-after-call";
 import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
@@ -280,6 +281,7 @@ export class ReactEditor implements ReactEditorApi {
    *
    * Remaining callbacks run synchronously in reverse registration order during
    * destruction. One failure does not prevent the other callbacks from running.
+   * A completed disposer releases its callback before invoking it.
    * @param release - Synchronous cleanup for a resource owned by this runtime.
    * @returns Idempotent disposer that runs cleanup immediately and removes it from the list.
    * @throws If destruction has started, or if the returned disposer's cleanup fails.
@@ -288,18 +290,13 @@ export class ReactEditor implements ReactEditorApi {
     if (this.destroyed) {
       throw new Error("React editor is destroyed");
     }
-    let active = true;
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const dispose = releaseAfterCall(() => {
       const index = this.disposers.indexOf(dispose);
       if (index >= 0) {
         this.disposers.splice(index, 1);
       }
       release();
-    };
+    });
     this.disposers.push(dispose);
     return dispose;
   }

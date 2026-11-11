@@ -1,4 +1,4 @@
-import { createCaretSelection, type PanelDestination } from "@chulane/rivto";
+import { createCaretSelection, waitWithAbort, type PanelDestination } from "@chulane/rivto";
 import { validateBinaryUri, type BinaryProvider, type PreparedFile } from "../../../attachments";
 import {
   isFileDestinationCurrent,
@@ -34,7 +34,7 @@ export class FileIngestion {
     /** Extension-owned feedback for active and failed operations. */
     private readonly statuses: FileIngestionStatuses,
     /** Optional host notification for failed operations. */
-    private readonly onError?: (error: unknown) => void,
+    private onError?: (error: unknown) => void,
   ) {}
 
   /**
@@ -58,17 +58,19 @@ export class FileIngestion {
   /**
    * Cancels pending work when the owning extension is destroyed.
    *
-   * @returns Signals cancellation to in-flight operations.
+   * @returns Signals cancellation and releases upload feedback, retry callbacks, and error notification.
    */
   destroy(): void {
     this.abort.abort();
+    this.statuses.clear();
+    this.onError = undefined;
   }
 
   /**
    * Stores a file and validates the URI while publishing bounded progress.
    *
-   * Cancellation is checked before and after the provider's asynchronous write. Progress
-   * reported after cancellation is ignored.
+   * Cancellation stops waiting for the provider's asynchronous write; it cannot
+   * stop a provider that ignores the signal. Progress after cancellation is ignored.
    *
    * @param provider - Storage provider selected for this file.
    * @param file - Browser file to store.
@@ -82,21 +84,26 @@ export class FileIngestion {
     context: FileUploadContext,
   ): Promise<string> {
     this.signal.throwIfAborted();
+    // A provider may retain its progress callback after the upload completes.
+    const { statusId } = context;
     const uri = validateBinaryUri(
-      await provider.write(file, {
-        documentId: context.panel.editor.getDocument().id,
-        name: context.name,
-        mimeType: file.type || "application/octet-stream",
-        signal: this.signal,
-        // Clamp provider progress and ignore updates after cancellation.
-        reportProgress: (progress) => {
-          if (!this.signal.aborted) {
-            this.statuses.update(context.statusId, {
-              progress: Math.max(0, Math.min(1, progress)),
-            });
-          }
-        },
-      }),
+      await waitWithAbort(
+        provider.write(file, {
+          documentId: context.panel.editor.getDocument().id,
+          name: context.name,
+          mimeType: file.type || "application/octet-stream",
+          signal: this.signal,
+          // Clamp provider progress and ignore updates after cancellation.
+          reportProgress: (progress) => {
+            if (!this.signal.aborted) {
+              this.statuses.update(statusId, {
+                progress: Math.max(0, Math.min(1, progress)),
+              });
+            }
+          },
+        }),
+        this.signal,
+      ),
     );
     this.signal.throwIfAborted();
     return uri;

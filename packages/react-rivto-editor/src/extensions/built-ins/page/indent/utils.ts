@@ -215,6 +215,9 @@ export function applyIndentShortcut(
   const view = root.ownerDocument.defaultView;
   let settlementActive = true;
   let adjustmentsReleased = false;
+  let releasePanel: (() => void) | undefined;
+  let unsubscribeDeactivation: (() => void) | undefined;
+  let settlementFrame: number | undefined;
   /** Applies deliberate wheel movement to the retained visual position. */
   const onWheel = (wheelEvent: WheelEvent): void => {
     if (settlement.expectedTop !== undefined) {
@@ -237,10 +240,29 @@ export function applyIndentShortcut(
         return;
       }
       settlementActive = false;
+      if (settlementFrame !== undefined) {
+        view?.cancelAnimationFrame(settlementFrame);
+        settlementFrame = undefined;
+      }
       view?.removeEventListener("wheel", onWheel);
-      releaseAdjustments();
+      const release = releasePanel;
+      releasePanel = undefined;
+      try {
+        releaseAdjustments();
+      } finally {
+        unsubscribeDeactivation?.();
+        unsubscribeDeactivation = undefined;
+        release?.();
+      }
     },
   };
+  try {
+    releasePanel = reactPanel.registerCleanup(() => settlement.cancel());
+    unsubscribeDeactivation = reactPanel.subscribeDeactivation(() => settlement.cancel());
+  } catch (error) {
+    settlement.cancel();
+    throw error;
+  }
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
   const claimed = reactPanel.editor.blockBehaviors.dispatch(
@@ -304,13 +326,13 @@ export function applyIndentShortcut(
           restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
         }
         if (view && view.performance.now() < deadline) {
-          view.requestAnimationFrame(stabilize);
+          settlementFrame = view.requestAnimationFrame(stabilize);
         } else {
           // Re-enabling ordinary virtual measurement behavior can itself apply
           // one deferred offset. Correct that final frame unless a newer command
           // has superseded this settlement.
           releaseAdjustments();
-          view?.requestAnimationFrame(() => {
+          settlementFrame = view?.requestAnimationFrame(() => {
             if (!settlementActive) {
               return;
             }
@@ -318,8 +340,7 @@ export function applyIndentShortcut(
             if (expectedTop !== undefined) {
               restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
             }
-            settlementActive = false;
-            view.removeEventListener("wheel", onWheel);
+            settlement.cancel();
             if (viewportSettlements.get(root) === settlement) {
               viewportSettlements.delete(root);
             }

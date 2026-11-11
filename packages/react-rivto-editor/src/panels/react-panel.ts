@@ -23,6 +23,7 @@ import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manage
 import type { PanelSelectionApi } from "../managers/selection/api";
 import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
 import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
+import { releaseAfterCall } from "../utils/release-after-call";
 import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
 
 /**
@@ -273,6 +274,7 @@ export class ReactPanel implements ReactPanelApi {
 
   /**
    * Retains cleanup for an event or keyboard registration made by this panel.
+   * Completed cleanup releases its callback reference before invocation.
    * @param dispose - Removes one local registration without destroying the shared manager.
    * @returns An idempotent disposer; destroy() also calls it if it is still retained.
    * @throws If panel destruction has started, or if the returned disposer's cleanup fails.
@@ -281,15 +283,10 @@ export class ReactPanel implements ReactPanelApi {
     if (this.destroyed) {
       throw new Error("React panel is destroyed");
     }
-    let active = true;
-    const release = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const release = releaseAfterCall(() => {
       this.registrations.delete(release);
       dispose();
-    };
+    });
     this.registrations.add(release);
     return release;
   };

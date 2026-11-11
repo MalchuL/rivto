@@ -89,6 +89,7 @@ describe("edgeless outline scope", () => {
       first,
       second,
     ]);
+    reactPanel.editor.destroy();
     editor.destroy();
   });
 

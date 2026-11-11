@@ -5,6 +5,7 @@
  */
 import type { Block, BlockNode } from "../../types";
 import type { IDBlock } from "../../types/storage";
+import { TransactionIdentity } from "./transaction-identity";
 
 type ParentId = IDBlock | null;
 type ReadChildren = (parentId: ParentId) => readonly IDBlock[] | undefined;
@@ -32,7 +33,7 @@ export class BlockCache {
   /** Duplicate placements require a full traversal in tree order. */
   private hasDuplicates = false;
   /** Last transaction that rebuilt the complete parent index. */
-  private lastParentTransaction?: unknown;
+  private readonly lastParentTransaction = new TransactionIdentity();
 
   /**
    * Creates a cache backed by read-only access to current plain IDs.
@@ -123,14 +124,14 @@ export class BlockCache {
    * @returns No value.
    */
   refreshParents(changedParents?: ReadonlySet<ParentId>, transaction?: unknown): void {
-    if (transaction !== undefined && this.lastParentTransaction === transaction) {
+    if (transaction !== undefined && this.lastParentTransaction.matches(transaction)) {
       return;
     }
     if (changedParents && this.refreshChangedParents(changedParents)) {
       return;
     }
 
-    this.lastParentTransaction = transaction;
+    this.lastParentTransaction.remember(transaction);
     this.parents.clear();
     this.indexedChildren.clear();
     this.hasDuplicates = false;

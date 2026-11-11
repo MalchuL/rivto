@@ -37,14 +37,10 @@ export class DocumentModelImpl implements DocumentModel {
   readonly id: string;
   /** Adapter-neutral collaborative document containing canonical shared state. */
   private readonly crdt: CRDTDoc;
-  /** Block records, text, hierarchy, and block snapshot behavior. */
-  readonly blocks: DocumentBlockManagerApi;
-  /** Generic first-class canvas elements and their geometry. */
-  readonly elements: DocumentElementManagerApi;
-  /** Generic namespaced collaborative document plugin data. */
-  readonly pluginData: DocumentPluginDataManagerApi;
-  /** Local history and batching configured from every document manager's roots. */
-  readonly history: DocumentHistoryManagerApi;
+  private blockManager?: DocumentBlockManager;
+  private elementManager?: DocumentElementManager;
+  private pluginDataManager?: DocumentPluginDataManager;
+  private historyManager?: DocumentHistoryManagerApi;
   /** Removes the foreign-update normalization listener during destruction. */
   private readonly unsubscribeFromUpdates: () => void;
   /**
@@ -81,10 +77,10 @@ export class DocumentModelImpl implements DocumentModel {
       ...pluginData.historyScopes,
     ];
     const history = new DocumentHistoryManager(crdt, undoScopes, maxEntries);
-    this.blocks = blocks;
-    this.elements = elements;
-    this.pluginData = pluginData;
-    this.history = history;
+    this.blockManager = blocks;
+    this.elementManager = elements;
+    this.pluginDataManager = pluginData;
+    this.historyManager = history;
     // Yjs `"update"` carries the transaction origin: the adapter's local token,
     // a provider instance, undo, or `null`/`undefined` from `applyUpdate`.
     // Skip local origin so we do not open a
@@ -106,6 +102,58 @@ export class DocumentModelImpl implements DocumentModel {
         elements.normalize();
       },
     );
+  }
+
+  /**
+   * Provides this document's block records and hierarchy operations.
+   *
+   * @returns The document-owned block manager until teardown completes.
+   * @throws If document teardown has completed.
+   */
+  get blocks(): DocumentBlockManagerApi {
+    if (!this.blockManager) {
+      throw new Error("Document model is destroyed");
+    }
+    return this.blockManager;
+  }
+
+  /**
+   * Provides this document's canvas elements and geometry operations.
+   *
+   * @returns The document-owned element manager until teardown completes.
+   * @throws If document teardown has completed.
+   */
+  get elements(): DocumentElementManagerApi {
+    if (!this.elementManager) {
+      throw new Error("Document model is destroyed");
+    }
+    return this.elementManager;
+  }
+
+  /**
+   * Provides this document's namespaced plugin data operations.
+   *
+   * @returns The document-owned plugin data manager until teardown completes.
+   * @throws If document teardown has completed.
+   */
+  get pluginData(): DocumentPluginDataManagerApi {
+    if (!this.pluginDataManager) {
+      throw new Error("Document model is destroyed");
+    }
+    return this.pluginDataManager;
+  }
+
+  /**
+   * Provides local history and transaction batching for this document.
+   *
+   * @returns The document-owned history manager until teardown completes.
+   * @throws If document teardown has completed.
+   */
+  get history(): DocumentHistoryManagerApi {
+    if (!this.historyManager) {
+      throw new Error("Document model is destroyed");
+    }
+    return this.historyManager;
   }
 
   /**
@@ -221,8 +269,11 @@ export class DocumentModelImpl implements DocumentModel {
    * Releases document-owned history, subscriptions, and collaborative storage.
    *
    * Cleanup continues after individual failures so CRDT providers are not leaked.
+   * Managers remain available during provider disconnection and are released
+   * after it settles, including when teardown fails.
    *
    * @returns Promise resolved after asynchronous CRDT cleanup.
+   * @throws A cleanup error, or an AggregateError when multiple cleanups fail.
    */
   async destroy(): Promise<void> {
     const errors: unknown[] = [];
@@ -232,7 +283,7 @@ export class DocumentModelImpl implements DocumentModel {
       errors.push(error);
     }
     try {
-      this.history.destroy();
+      this.historyManager?.destroy();
     } catch (error) {
       errors.push(error);
     }
@@ -241,6 +292,17 @@ export class DocumentModelImpl implements DocumentModel {
     } catch (error) {
       errors.push(error);
     }
+    for (const manager of [this.blockManager, this.elementManager, this.pluginDataManager]) {
+      try {
+        manager?.destroy();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.blockManager = undefined;
+    this.elementManager = undefined;
+    this.pluginDataManager = undefined;
+    this.historyManager = undefined;
     if (errors.length === 1) {
       throw errors[0];
     }

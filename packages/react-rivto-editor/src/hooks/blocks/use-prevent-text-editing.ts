@@ -15,7 +15,11 @@ export interface PreventTextEditingAttributes {
 
 /**
  * Gives nested controls their own pointer gestures without activating raw block editing.
- * @returns Stable opt-out attributes; temporary window listeners are removed on unmount.
+ *
+ * Temporary window listeners are removed when the gesture ends, the window loses
+ * focus, or the component unmounts.
+ *
+ * @returns Stable opt-out attributes for the nested control.
  */
 export function usePreventTextEditing(): PreventTextEditingAttributes {
   const interaction = useMemo(() => {
@@ -68,6 +72,7 @@ export function usePreventTextEditing(): PreventTextEditingAttributes {
         view.removeEventListener("pointermove", extend);
         view.removeEventListener("pointerup", finish);
         view.removeEventListener("pointercancel", finish);
+        view.removeEventListener("blur", cleanup);
         if (pointerCleanup === cleanup) {
           pointerCleanup = undefined;
         }
@@ -89,6 +94,7 @@ export function usePreventTextEditing(): PreventTextEditingAttributes {
       view.addEventListener("pointermove", extend);
       view.addEventListener("pointerup", finish);
       view.addEventListener("pointercancel", finish);
+      view.addEventListener("blur", cleanup);
     };
 
     return {

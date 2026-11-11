@@ -19,14 +19,48 @@ import { YjsArray, YjsMap, YjsText } from "./structures";
 import { YjsUndoManager } from "./yjs-undo-manager";
 import type { YJSType } from "./structures/utils/types";
 
+/** One provider connection and its shared, possibly pending disconnection. */
+interface ProviderAttachment {
+  readonly id: string;
+  readonly provider: Provider;
+  readonly connecting: Promise<void>;
+  disconnecting?: Promise<void>;
+  releaseCleanup?: () => void;
+}
+
+/**
+ * Creates a provider cleanup and a way for its owner to release it on detach.
+ *
+ * The operation remains available after a failed disconnect so it can be retried.
+ *
+ * @param disconnect - Disconnects the exact provider attachment.
+ * @returns The caller's cleanup and the owner's reference-release operation.
+ */
+function createProviderCleanup(
+  disconnect: () => Promise<void>,
+): readonly [ProviderCleanup, () => void] {
+  let operation: (() => Promise<void>) | undefined = disconnect;
+  return [
+    async () => {
+      if (operation) {
+        await operation();
+      }
+    },
+    () => {
+      operation = undefined;
+    },
+  ];
+}
+
 export class YjsDoc implements CRDTDoc {
-  public readonly doc: Y.Doc;
+  private nativeDocument: Y.Doc | undefined;
+  private destruction?: Promise<void>;
   private transactionDepth = 0;
   private readonly localOrigin = Symbol("yjs-doc-local");
   /**
    * The storage of the providers.
    */
-  private providersStorage: Storage<Provider> = new Storage<Provider>();
+  private providersStorage: Storage<ProviderAttachment> = new Storage<ProviderAttachment>();
   /**
    * Creates a new YjsDoc.
    * @param id - The id of the YjsDoc.
@@ -36,7 +70,22 @@ export class YjsDoc implements CRDTDoc {
     private readonly _id: string,
     doc?: Y.Doc,
   ) {
-    this.doc = doc || new Y.Doc();
+    this.nativeDocument = doc || new Y.Doc();
+  }
+
+  /**
+   * Exposes the native document until provider disconnection completes.
+   *
+   * A caller retaining the returned document owns that reference independently.
+   *
+   * @returns The native Yjs document owned by this adapter.
+   * @throws If adapter destruction has completed.
+   */
+  get doc(): Y.Doc {
+    if (!this.nativeDocument) {
+      throw new Error("Yjs document is destroyed");
+    }
+    return this.nativeDocument;
   }
 
   /**
@@ -106,38 +155,66 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Attaches a provider to the YjsDoc.
+   *
+   * The returned cleanup belongs to this attachment even if its ID is reused.
+   * Disconnecting or destroying waits for an in-flight connection to settle.
+   *
    * @param provider - The provider to attach.
-   * @returns Cleanup that disconnects this exact provider attachment.
+   * @returns A promise resolving to cleanup that disconnects this exact attachment.
+   * @throws If destruction has started, the ID is in use, or connection fails.
    */
   async attachProvider(provider: Provider): Promise<ProviderCleanup> {
+    if (this.destruction) {
+      throw new Error("YjsDoc is destroyed");
+    }
     const id = provider.id;
     if (this.providersStorage.hasItem(id)) {
       throw new Error(`Provider with id ${id} is already attached`);
     }
-    this.providersStorage.setItem(id, provider);
+    let resolveConnection!: () => void;
+    let rejectConnection!: (error: unknown) => void;
+    const connecting = new Promise<void>((resolve, reject) => {
+      resolveConnection = resolve;
+      rejectConnection = reject;
+    });
+    const attachment: ProviderAttachment = { id, provider, connecting };
+    this.providersStorage.setItem(id, attachment);
+    // Register first so reentrant teardown can wait for this connection.
     try {
-      await provider.connect(this);
+      Promise.resolve(provider.connect(this)).then(resolveConnection, rejectConnection);
     } catch (error) {
-      this.providersStorage.removeItem(id);
+      rejectConnection(error);
+    }
+    try {
+      await attachment.connecting;
+    } catch (error) {
+      if (this.providersStorage.hasItem(id) && this.providersStorage.getItem(id) === attachment) {
+        this.providersStorage.removeItem(id);
+      }
       throw error;
     }
-    return async () => {
-      if (this.providersStorage.hasItem(id)) {
-        await this.detachProvider(id);
+    if (!this.providersStorage.hasItem(id) || this.providersStorage.getItem(id) !== attachment) {
+      return async () => {};
+    }
+    const [cleanup, release] = createProviderCleanup(async () => {
+      if (this.providersStorage.hasItem(id) && this.providersStorage.getItem(id) === attachment) {
+        await this.disconnectProvider(attachment);
       }
-    };
+    });
+    attachment.releaseCleanup = release;
+    return cleanup;
   }
 
   /**
    * Detaches a provider from the YjsDoc.
    * @param id - Optional provider ID, required when multiple providers are attached.
-   * @returns A Promise that resolves when the provider is detached.
+   * @returns A promise resolving when the provider is disconnected and unregistered.
+   * @throws If the ID is missing or ambiguous, or disconnection fails.
    */
   async detachProvider(id?: string): Promise<void> {
-    const provider =
+    const attachment =
       id === undefined ? this.providersStorage.getOne() : this.providersStorage.getItem(id);
-    await provider.disconnect(this);
-    this.providersStorage.removeItem(provider.id);
+    await this.disconnectProvider(attachment);
   }
 
   /**
@@ -166,6 +243,8 @@ export class YjsDoc implements CRDTDoc {
    * A positive limit schedules eviction during browser idle time, or with a timer
    * when idle callbacks are unavailable. Pending eviction is completed before
    * undo or redo. Evicted content can remain in the Yjs document until reload.
+   * Destroying the history or document releases this adapter's native manager;
+   * subsequent history operations throw.
    *
    * @param scopes - The list of CRDT scopes to track for undo/redo operations.
    * @param trackedOrigins - Optional origin objects to track instead of the private local origin.
@@ -192,6 +271,10 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Gets (and creates if not exists) an array from the YjsDoc.
+   *
+   * The returned wrapper retains its native shared type and document independently
+   * of this adapter. Release the wrapper when it is no longer needed.
+   *
    * @param path - The path to the array.
    * @returns The array.
    */
@@ -201,6 +284,10 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Gets (and creates if not exists) a map from the YjsDoc.
+   *
+   * The returned wrapper retains its native shared type and document independently
+   * of this adapter. Release the wrapper when it is no longer needed.
+   *
    * @param path - The path to the map.
    * @returns The map.
    */
@@ -210,6 +297,10 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Gets (and creates if not exists) a text from the YjsDoc.
+   *
+   * The returned wrapper retains its native shared type and document independently
+   * of this adapter. Release the wrapper when it is no longer needed.
+   *
    * @param path - The path to the text.
    * @returns The text.
    */
@@ -221,12 +312,17 @@ export class YjsDoc implements CRDTDoc {
    * Subscribes to a document event.
    * @param event - The event to subscribe to.
    * @param handler - The function to execute when the event is triggered.
-   * @returns A function to unsubscribe from the event.
+   * @returns An idempotent unsubscribe that releases its document and listener references.
    */
   on(event: "update" | "sync", handler: (event: any) => void): Unsubscribe {
     this.doc.on(event, handler);
+    let subscription: [YjsDoc, typeof handler] | undefined = [this, handler];
     return () => {
-      this.doc.off(event, handler);
+      if (subscription) {
+        const [adapter, listener] = subscription;
+        subscription = undefined;
+        adapter.nativeDocument?.off(event, listener);
+      }
     };
   }
 
@@ -247,20 +343,34 @@ export class YjsDoc implements CRDTDoc {
   }
 
   /**
-   * Disconnects every attached provider before destroying the Yjs document.
-   * @returns A Promise that resolves after all lifecycle cleanup completes.
+   * Disconnects attached providers before destroying the native document.
+   *
+   * Pending connections settle before disconnection. Repeated calls share one
+   * teardown, and the document remains available to providers during cleanup.
+   *
+   * @returns A promise resolving after all provider and document cleanup completes.
+   * @throws If a provider disconnection fails after cleanup is attempted.
    */
   destroy(): Promise<void> {
-    const providers = this.providersStorage.values();
-    this.providersStorage.clear();
-    if (providers.length === 0) {
-      this.doc.destroy();
-      return Promise.resolve();
+    if (this.destruction) {
+      return this.destruction;
     }
-    return Promise.allSettled(
-      providers.map((provider) => Promise.resolve().then(() => provider.disconnect(this))),
-    ).then((results) => {
-      this.doc.destroy();
+    this.destruction = Promise.resolve().then(async () => {
+      const document = this.doc;
+      const attachments = this.providersStorage.values();
+      const results = await Promise.allSettled(
+        attachments.map((attachment) => this.disconnectProvider(attachment)),
+      );
+      for (const attachment of attachments) {
+        attachment.releaseCleanup?.();
+        attachment.releaseCleanup = undefined;
+      }
+      this.providersStorage.clear();
+      try {
+        document.destroy();
+      } finally {
+        this.nativeDocument = undefined;
+      }
       const failure = results.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",
       );
@@ -268,6 +378,7 @@ export class YjsDoc implements CRDTDoc {
         throw failure.reason;
       }
     });
+    return this.destruction;
   }
 
   /**
@@ -360,6 +471,43 @@ export class YjsDoc implements CRDTDoc {
    */
   get id(): string {
     return this._id;
+  }
+
+  /**
+   * Shares one disconnection for an attachment after its connection settles.
+   *
+   * Failed connections require no disconnection. A failed disconnection keeps
+   * the attachment registered so an explicit later attempt can retry it.
+   *
+   * @param attachment - Exact provider attachment owned by this document.
+   * @returns A promise resolving once the provider is disconnected or failed to connect.
+   * @throws If the provider's disconnection rejects.
+   */
+  private disconnectProvider(attachment: ProviderAttachment): Promise<void> {
+    if (attachment.disconnecting) {
+      return attachment.disconnecting;
+    }
+    const disconnecting = (async () => {
+      try {
+        await attachment.connecting;
+      } catch {
+        return;
+      }
+      await attachment.provider.disconnect(this);
+      if (
+        this.providersStorage.hasItem(attachment.id) &&
+        this.providersStorage.getItem(attachment.id) === attachment
+      ) {
+        this.providersStorage.removeItem(attachment.id);
+      }
+      attachment.releaseCleanup?.();
+      attachment.releaseCleanup = undefined;
+    })();
+    attachment.disconnecting = disconnecting.catch((error: unknown) => {
+      attachment.disconnecting = undefined;
+      throw error;
+    });
+    return attachment.disconnecting;
   }
 
   /**

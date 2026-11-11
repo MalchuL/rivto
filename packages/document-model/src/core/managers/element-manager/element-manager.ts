@@ -53,13 +53,13 @@ export class DocumentElementManager implements DocumentElementManagerApi {
   protected generateId(): string {
     return crypto.randomUUID();
   }
-  private readonly storage: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
-  /** Adapter roots tracked by document-owned history. */
-  readonly historyScopes: readonly CRDTUndoScope[];
+  private elementStorage?: CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>>;
   /** Detached element and collection snapshot identities. */
-  private readonly cache = new ElementCache();
-  private readonly hierarchy: ElementHierarchy;
-  private readonly rootIds: CRDTArray<string>;
+  private elementCache?: ElementCache = new ElementCache();
+  private elementHierarchy?: ElementHierarchy;
+  private rootArray?: CRDTArray<string>;
+  /** Subscriptions owned by this manager until document teardown. */
+  private readonly observers: Array<() => void> = [];
   private readonly pendingNodes = new Set<string>();
   private readonly pendingTrees = new Set<string>();
   private pendingStructure = false;
@@ -78,18 +78,29 @@ export class DocumentElementManager implements DocumentElementManagerApi {
    * @param crdt - Collaborative storage adapter.
    */
   constructor(private readonly crdt: CRDTDoc) {
-    this.storage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
-    this.rootIds = crdt.getArray<string>("rivto.editor.rootElementIds");
-    this.hierarchy = new ElementHierarchy(crdt, this.storage, this.rootIds);
+    this.elementStorage = crdt.getMap<Record<IDElement, CRDTMap<ElementStorage>>>(ELEMENTS_KEY);
+    this.rootArray = crdt.getArray<string>("rivto.editor.rootElementIds");
+    this.elementHierarchy = new ElementHierarchy(crdt, this.storage, this.rootIds);
     // Valid preloaded trees need parent links even when normalization makes no writes.
     this.cache.invalidateTrees(new Set(), this.hierarchy.getLocations());
-    this.historyScopes = [this.storage, this.rootIds];
-    this.rootIds.observe(() => this.publishChanges(new Set(), true));
-    this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction));
+    this.observers.push(this.rootIds.observe(() => this.publishChanges(new Set(), true)));
+    this.observers.push(
+      this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction)),
+    );
     // Root and record observers can run in either order. The update event fires
     // after both, while still inside the synchronous commit, so no subscriber
     // reads a tree whose payload caches have not yet been invalidated.
-    crdt.on("update", () => this.notifyChanges());
+    this.observers.push(crdt.on("update", () => this.notifyChanges()));
+  }
+
+  /**
+   * Exposes collaborative roots for document-owned undo history.
+   *
+   * @returns Element record and root-order scopes while this manager is active.
+   * @throws If the manager has been destroyed.
+   */
+  get historyScopes(): readonly CRDTUndoScope[] {
+    return [this.storage, this.rootIds];
   }
 
   /**
@@ -632,11 +643,12 @@ export class DocumentElementManager implements DocumentElementManagerApi {
     this.crdt.transact(() =>
       prepared.forEach(({ element, patch, validated }) => {
         if (patch.frame) {
-          assignMap(
-            this.requiredMap<ElementFrameStorage>(element, "frame"),
-            validated.frame as ElementFrameStorage,
-            false,
-          );
+          const frame = this.requiredMap<ElementFrameStorage>(element, "frame");
+          for (const key of ["x", "y", "width", "height"] as const) {
+            if (frame.get(key) !== validated.frame[key]) {
+              frame.set(key, validated.frame[key]);
+            }
+          }
         }
         if (patch.zIndex !== undefined) {
           element.set("zIndex", validated.zIndex);
@@ -739,6 +751,85 @@ export class DocumentElementManager implements DocumentElementManagerApi {
       this.rootIds.insert(0, ...ids);
     }
     this.hierarchy.invalidate();
+  }
+
+  /**
+   * Releases collaborative roots, cached snapshots, and listeners after document teardown.
+   *
+   * @returns The manager no longer retains document-owned data.
+   * @throws AggregateError when one or more observer removals fail.
+   */
+  destroy(): void {
+    const errors: unknown[] = [];
+    for (const unsubscribe of this.observers.splice(0)) {
+      try {
+        unsubscribe();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.elementStorage = undefined;
+    this.rootArray = undefined;
+    this.elementHierarchy = undefined;
+    this.elementCache = undefined;
+    this.pendingNodes.clear();
+    this.pendingTrees.clear();
+    this.listeners.clear();
+    if (errors.length) {
+      throw new AggregateError(errors, "Element manager observer cleanup failed");
+    }
+  }
+
+  /**
+   * Reads element records while the manager remains active.
+   *
+   * @returns The collaborative element record map.
+   * @throws If the manager has been destroyed.
+   */
+  private get storage(): CRDTMap<Record<IDElement, CRDTMap<ElementStorage>>> {
+    if (!this.elementStorage) {
+      throw new Error("Element manager is destroyed");
+    }
+    return this.elementStorage;
+  }
+
+  /**
+   * Reads element roots while the manager remains active.
+   *
+   * @returns The collaborative root array.
+   * @throws If the manager has been destroyed.
+   */
+  private get rootIds(): CRDTArray<string> {
+    if (!this.rootArray) {
+      throw new Error("Element manager is destroyed");
+    }
+    return this.rootArray;
+  }
+
+  /**
+   * Reads element hierarchy while the manager remains active.
+   *
+   * @returns The manager-owned hierarchy index.
+   * @throws If the manager has been destroyed.
+   */
+  private get hierarchy(): ElementHierarchy {
+    if (!this.elementHierarchy) {
+      throw new Error("Element manager is destroyed");
+    }
+    return this.elementHierarchy;
+  }
+
+  /**
+   * Reads the element snapshot cache while the manager remains active.
+   *
+   * @returns The manager-owned snapshot cache.
+   * @throws If the manager has been destroyed.
+   */
+  private get cache(): ElementCache {
+    if (!this.elementCache) {
+      throw new Error("Element manager is destroyed");
+    }
+    return this.elementCache;
   }
 
   /** Computes initial parent geometry from child frames without changing their coordinates. */

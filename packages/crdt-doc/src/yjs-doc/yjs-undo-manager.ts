@@ -10,9 +10,11 @@ const HISTORY_TRIM_IDLE_TIMEOUT_MS = 1_000;
  * Idle callbacks have a one-second timeout; environments without idle callbacks
  * use a timer. Undo and redo flush pending trimming before reading the stacks.
  * Eviction leaves Yjs keep flags intact because another history may need them.
+ * Destroying this adapter or its document releases the owned native manager.
  */
 export class YjsUndoManager implements CRDTUndoManager {
   private cancelScheduled: (() => void) | undefined;
+  private manager: UndoManager | undefined;
 
   /**
    * Takes ownership of one Yjs history manager and its optional entry limit.
@@ -23,15 +25,16 @@ export class YjsUndoManager implements CRDTUndoManager {
    * @param maxEntries - Maximum number of entries per stack, or undefined for no limit.
    */
   constructor(
-    private readonly manager: UndoManager,
+    manager: UndoManager,
     private readonly maxEntries?: number,
   ) {
+    this.manager = manager;
+    this.destroy = this.destroy.bind(this);
+    manager.doc.on("destroy", this.destroy);
     if (maxEntries !== undefined && maxEntries > 0) {
       // Yjs needs the same bound callbacks for registration and removal.
       this.schedule = this.schedule.bind(this);
-      this.cancel = this.cancel.bind(this);
       manager.on("stack-item-added", this.schedule);
-      manager.doc.on("destroy", this.cancel);
     }
   }
 
@@ -39,39 +42,43 @@ export class YjsUndoManager implements CRDTUndoManager {
    * Reverts the newest tracked change after applying any pending limit.
    *
    * @returns The latest undo entry is applied when available.
+   * @throws If this history or its document has been destroyed.
    */
   undo(): void {
     this.flush();
-    this.manager.undo();
+    this.getManager().undo();
   }
 
   /**
    * Reapplies the newest undone change after applying any pending limit.
    *
    * @returns The latest redo entry is applied when available.
+   * @throws If this history or its document has been destroyed.
    */
   redo(): void {
     this.flush();
-    this.manager.redo();
+    this.getManager().redo();
   }
 
   /**
    * Clears both history stacks and cancels pending trimming.
    *
    * @returns Undo and redo entries and the scheduled task are cleared.
+   * @throws If this history or its document has been destroyed.
    */
   clear(): void {
     this.cancel();
-    this.manager.clear();
+    this.getManager().clear();
   }
 
   /**
    * Ends the current capture group without applying pending trimming.
    *
    * @returns Later tracked changes begin a new history entry.
+   * @throws If this history or its document has been destroyed.
    */
   stopCapturing(): void {
-    this.manager.stopCapturing();
+    this.getManager().stopCapturing();
   }
 
   /**
@@ -81,11 +88,29 @@ export class YjsUndoManager implements CRDTUndoManager {
    */
   destroy(): void {
     this.cancel();
-    if (this.maxEntries !== undefined && this.maxEntries > 0) {
-      this.manager.off("stack-item-added", this.schedule);
-      this.manager.doc.off("destroy", this.cancel);
+    const manager = this.manager;
+    if (!manager) {
+      return;
     }
-    this.manager.destroy();
+    this.manager = undefined;
+    manager.doc.off("destroy", this.destroy);
+    if (this.maxEntries !== undefined && this.maxEntries > 0) {
+      manager.off("stack-item-added", this.schedule);
+    }
+    manager.destroy();
+  }
+
+  /**
+   * Reads the native manager while this history remains active.
+   *
+   * @returns The manager owned by this history adapter.
+   * @throws If this history or its document has been destroyed.
+   */
+  private getManager(): UndoManager {
+    if (!this.manager) {
+      throw new Error("History manager is destroyed");
+    }
+    return this.manager;
   }
 
   /**
@@ -108,8 +133,9 @@ export class YjsUndoManager implements CRDTUndoManager {
     if (this.maxEntries === undefined || this.maxEntries === 0) {
       return;
     }
+    const manager = this.getManager();
     // shortcut: Evicted entries retain Yjs keep flags until reload; replace when safe partial cleanup exists.
-    for (const stack of [this.manager.undoStack, this.manager.redoStack]) {
+    for (const stack of [manager.undoStack, manager.redoStack]) {
       if (stack.length > this.maxEntries) {
         stack.splice(0, stack.length - this.maxEntries);
       }
@@ -122,11 +148,11 @@ export class YjsUndoManager implements CRDTUndoManager {
    * @returns An idle callback or fallback timer is scheduled when needed.
    */
   private schedule(): void {
+    const manager = this.getManager();
     if (
       this.maxEntries === undefined ||
       this.cancelScheduled ||
-      (this.manager.undoStack.length <= this.maxEntries &&
-        this.manager.redoStack.length <= this.maxEntries)
+      (manager.undoStack.length <= this.maxEntries && manager.redoStack.length <= this.maxEntries)
     ) {
       return;
     }

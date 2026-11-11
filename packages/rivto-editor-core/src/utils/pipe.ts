@@ -5,6 +5,7 @@
  * document model, allowing several differently configured editors to share the
  * same document safely.
  */
+import { releaseAfterCall } from "./release-after-call";
 
 /** One named transformation or validation step in an editor pipeline. */
 export interface PipeProcessor<Value, Context = Record<string, never>> {
@@ -29,7 +30,8 @@ export class Pipe<Value, Context = Record<string, never>> {
   /**
    * Registers or replaces a processor.
    * @param processor - Processor to register.
-   * @returns Idempotent disposer for this exact registration.
+   * @returns Idempotent disposer for this exact registration that releases its references.
+   * @throws If the processor ID is empty.
    */
   register(processor: PipeProcessor<Value, Context>): () => void {
     if (!processor.id) {
@@ -37,13 +39,13 @@ export class Pipe<Value, Context = Record<string, never>> {
     }
     this.registry.set(processor.id, processor);
     this.rebuild();
-    return () => {
+    return releaseAfterCall(() => {
       if (this.registry.get(processor.id) !== processor) {
         return;
       }
       this.registry.delete(processor.id);
       this.rebuild();
-    };
+    });
   }
 
   /**

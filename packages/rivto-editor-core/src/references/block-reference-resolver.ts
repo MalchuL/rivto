@@ -7,6 +7,7 @@ import type {
   BlockResolution,
 } from "./types";
 import { waitWithAbort } from "./wait-with-abort";
+import { releaseAfterCall } from "../utils/release-after-call";
 
 /** Resolves document-qualified block references and observes source relocation. */
 export class BlockReferenceResolver<
@@ -25,8 +26,8 @@ export class BlockReferenceResolver<
    * @param options - Host metadata and resolution policies.
    */
   constructor(
-    private readonly storage: BlockReferenceSource<Model, Editor>,
-    private readonly options: BlockReferenceOptions,
+    private storage: BlockReferenceSource<Model, Editor> | undefined,
+    private options: BlockReferenceOptions,
   ) {}
   /**
    * Resolves a document-qualified reference without acquiring document content.
@@ -133,9 +134,11 @@ export class BlockReferenceResolver<
     const watch = () => {
       const direct =
         (!location.documentId || location.documentId === reference.documentId) &&
-        this.storage.getDocument(reference.documentId)?.blocks.hasBlock(reference.blockId);
+        this.requireStorage().getDocument(reference.documentId)?.blocks.hasBlock(reference.blockId);
       const models = new Set(
-        direct ? [this.storage.getDocument(reference.documentId)!] : this.storage.getDocuments(),
+        direct
+          ? [this.requireStorage().getDocument(reference.documentId)!]
+          : this.requireStorage().getDocuments(),
       );
       watched.forEach((unsubscribe, model) => {
         if (!models.has(model)) {
@@ -169,14 +172,14 @@ export class BlockReferenceResolver<
       watch();
       search();
     };
-    const unsubscribe = this.storage.subscribeDocuments(refresh);
-    const cleanup = () => {
+    const unsubscribe = this.requireStorage().subscribeDocuments(refresh);
+    const cleanup = releaseAfterCall(() => {
       controller.abort();
       unsubscribe();
       this.locationSubscriptions.delete(cleanup);
       watched.forEach((stop) => stop());
       watched.clear();
-    };
+    });
     this.locationSubscriptions.add(cleanup);
     refresh();
     return cleanup;
@@ -187,9 +190,10 @@ export class BlockReferenceResolver<
    * @param blockId - Document-local identity to find.
    * @returns Matching single editor in sorted document ID order, or undefined when absent.
    * Multiple documents may contain the ID; use resolveBlock when ambiguity matters.
+   * @throws If this resolver has been destroyed.
    */
   findEditorWithBlock(blockId: string): Editor | undefined {
-    return this.storage
+    return this.requireStorage()
       .getEditors()
       .filter((editor) => editor.blocks.hasBlock(blockId))
       .sort((a, b) => a.getDocument().id.localeCompare(b.getDocument().id))[0];
@@ -199,6 +203,7 @@ export class BlockReferenceResolver<
    *
    * @param blockId - Document-local identity.
    * @returns First loaded containing model in sorted document ID order, or undefined.
+   * @throws If this resolver has been destroyed.
    */
   findDocumentWithBlock(blockId: string): Model | undefined {
     return this.findEditorWithBlock(blockId)?.getDocument();
@@ -206,6 +211,8 @@ export class BlockReferenceResolver<
 
   /**
    * Cancels outstanding location observers; documents remain owned by storage.
+   *
+   * Releases borrowed storage and host options after cleanup, even if cleanup throws.
    *
    * @returns Subscriptions are released unless a delegated disposer throws.
    * @throws Propagates a subscription cleanup failure.
@@ -215,7 +222,12 @@ export class BlockReferenceResolver<
       return;
     }
     this.destroyed = true;
-    this.locationSubscriptions.forEach((cleanup) => cleanup());
+    try {
+      this.locationSubscriptions.forEach((cleanup) => cleanup());
+    } finally {
+      this.storage = undefined;
+      this.options = {};
+    }
   }
 
   /**
@@ -229,7 +241,7 @@ export class BlockReferenceResolver<
     reference: BlockReference,
     options: { readonly signal?: AbortSignal },
   ): Promise<BlockResolution> {
-    const preferred = this.storage.getDocument(reference.documentId);
+    const preferred = this.requireStorage().getDocument(reference.documentId);
     if (preferred?.blocks.hasBlock(reference.blockId)) {
       return { documentId: reference.documentId, ambiguous: false };
     }
@@ -240,7 +252,7 @@ export class BlockReferenceResolver<
     const ids = [
       ...new Set([
         ...indexed,
-        ...this.storage
+        ...this.requireStorage()
           .getDocuments()
           .filter((model) => model.blocks.hasBlock(reference.blockId))
           .map((model) => model.id),
@@ -251,6 +263,19 @@ export class BlockReferenceResolver<
     }
     return { documentId: ids[0], ambiguous: ids.length > 1 };
   }
+  /**
+   * Reads the borrowed source while this resolver is active.
+   *
+   * @returns The storage supplying loaded documents and subscriptions.
+   * @throws If this resolver has been destroyed.
+   */
+  private requireStorage(): BlockReferenceSource<Model, Editor> {
+    if (!this.storage) {
+      throw new Error("Block reference resolver is destroyed");
+    }
+    return this.storage;
+  }
+
   /**
    * Guards access after resolver destruction.
    *
