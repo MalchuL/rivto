@@ -34,6 +34,7 @@ import {
   counterBlockDefinition,
   sliderBlockDefinition,
 } from "./custom-block-definitions";
+import { hostBlockExtensions } from "../extensions/host-blocks";
 
 interface SliderProps {
   value: number;
@@ -249,4 +250,5 @@ export const customBlockExtensions: readonly ReactEditorExtension[] = [
       },
     },
   }),
+  ...hostBlockExtensions,
 ];

@@ -8,22 +8,25 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/*.test.mjs"
+    "test": "node --test --experimental-strip-types tests/*.test.mjs tests/*.test.ts"
   },
   "dependencies": {
     "@chulane/crdt-doc": "workspace:*",
     "@chulane/document-model": "workspace:*",
     "@chulane/rivto": "workspace:*",
     "@chulane/rivto-react": "workspace:*",
+    "@chulane/rivto-utils": "workspace:*",
     "lucide-react": "^1.28.0",
+    "mathjs": "^15.2.0",
+    "mdast-util-from-markdown": "2.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.1.13",
-    "@chulane/rivto-utils": "workspace:*"
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@chulane/rivto-edgeless": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "tailwindcss": "^4.3.3",
