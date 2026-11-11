@@ -18,14 +18,13 @@ interface ClipboardFlavors {
 async function insertBlock(
   page: Page,
   input: Record<string, unknown>,
-  afterId?: string | null,
 ): Promise<InsertedBlock> {
-  return page.evaluate(({ block, after }) => {
+  return page.evaluate((block) => {
     const editor = (window as unknown as {
       __rivtoDemo: {
         editor: {
           blocks: {
-            insertBlock: (value: Record<string, unknown>, anchor?: string | null) => {
+            insertBlock: (value: Record<string, unknown>) => {
               id: string;
               children: { id: string }[];
             };
@@ -33,9 +32,9 @@ async function insertBlock(
         };
       };
     }).__rivtoDemo.editor;
-    const inserted = editor.blocks.insertBlock(block, after);
+    const inserted = editor.blocks.insertBlock(block);
     return { id: inserted.id, childIds: inserted.children.map((child) => child.id) };
-  }, { block: input, after: afterId });
+  }, input);
 }
 
 async function blockProps(page: Page, id: string): Promise<Record<string, unknown>> {
@@ -122,10 +121,11 @@ test("slash conversion adds the host blocks and preserves unrelated content", as
   await noisyContent.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/toc");
-  await expect(tocCommand).toHaveCount(0);
+  await expect(tocCommand).toBeVisible();
+  await page.keyboard.press("Escape");
 
   const savedRow = block(page, saved.id);
-  const savedContent = savedRow.locator(":scope > .page-block-row [data-block-content]");
+  const savedContent = savedRow.locator(":scope > .rivto-block-row [data-block-content]");
   await savedContent.click();
   await page.keyboard.press("End");
   await page.keyboard.type("/note");
@@ -237,7 +237,7 @@ test("updates a table of contents and navigates to its heading", async ({ page }
       { type: "paragraph", content: "## Alpha\n\n```\n# Hidden\n```" },
       { type: "demo.warning", content: "# From callout", props: { emoji: "⚠️" } },
     ],
-  }, null);
+  });
   const outside = await insertBlock(page, { type: "paragraph", content: "# Outside" });
   const tocId = section.childIds[0]!;
   const alphaId = section.childIds[1]!;
@@ -393,7 +393,7 @@ test("copies host blocks as structured data and portable text", async ({ page })
   for (const item of cases) {
     const row = block(page, item.id);
     const content = row.locator("[data-block-content]");
-    await (await content.count() ? content : row).click({ modifiers: ["Control"] });
+    await (await content.count() ? content : row.locator(".demo-toc")).click({ modifiers: ["Control"], position: { x: 4, y: 4 } });
     await expect(row).toHaveAttribute("data-block-selected", "true");
     const flavors = await copySelection(page);
     const bundle = JSON.parse(flavors.structured) as { blocks: Array<Record<string, unknown>> };
@@ -439,10 +439,127 @@ test("selects host blocks on the page and the canvas", async ({ page }) => {
     });
     for (const id of ids) {
       const row = block(page, id);
-      const content = row.locator(":scope > .page-block-row [data-block-content]");
+      const content = row.locator(":scope > .rivto-block-row [data-block-content]");
       const anchor = (await content.count()) > 0 ? content : row.locator(".demo-toc");
-      await anchor.click({ modifiers: ["Control"], force: mode === "edgeless" });
+      await anchor.click({ modifiers: ["Control"], force: mode === "edgeless", position: { x: 4, y: 4 } });
       await expect(row).toHaveAttribute("data-block-selected", "true");
     }
   }
+});
+
+test("text host blocks accept a caret and paste into their own content", async ({ page }) => {
+  for (const type of ["demo.note", "demo.tip", "demo.warning", "demo.bookmark", "demo.math"]) {
+    const inserted = await insertBlock(page, { type, content: "" });
+    const row = block(page, inserted.id);
+    const content = row.locator("[data-block-content]");
+    await content.click();
+    await expect(row).not.toHaveAttribute("data-block-selected", "true");
+    const rootCount = await page.evaluate(() => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: { blocks: { getRootIds: () => string[] } } };
+      }).__rivtoDemo.editor;
+      return editor.blocks.getRootIds().length;
+    });
+    await pasteStructured(content, "", "Pasted text");
+    await expect(content).toHaveText("Pasted text");
+    const state = await page.evaluate((id) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: { blocks: {
+          getBlockNode: (id: string) => { content: string } | undefined;
+          getRootIds: () => string[];
+        } } };
+      }).__rivtoDemo.editor;
+      return { content: editor.blocks.getBlockNode(id)?.content, count: editor.blocks.getRootIds().length };
+    }, inserted.id);
+    expect(state).toEqual({ content: "Pasted text", count: rootCount });
+  }
+});
+
+test("host block surfaces follow editor theme tokens and selection", async ({ page }) => {
+  const note = await insertBlock(page, { type: "demo.note", content: "Note", props: { emoji: "💡" } });
+  const bookmark = await insertBlock(page, { type: "demo.bookmark", content: "Link" });
+  const math = await insertBlock(page, { type: "demo.math", content: "1 + 1" });
+  const toc = await insertBlock(page, { type: "demo.table-of-contents", content: "" });
+  await page.evaluate(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--rivto-background", "rgb(20, 25, 30)");
+    style.setProperty("--rivto-card", "rgb(31, 41, 51)");
+    style.setProperty("--rivto-foreground", "rgb(240, 241, 242)");
+    style.setProperty("--rivto-block-selection-background", "rgb(60, 70, 80)");
+  });
+  const noteSurface = block(page, note.id).locator(".demo-callout");
+  const bookmarkSurface = block(page, bookmark.id).locator(".demo-bookmark");
+  const mathSurface = block(page, math.id).locator(".demo-math");
+  const tocSurface = block(page, toc.id).locator(".demo-toc");
+  await expect(bookmarkSurface).toHaveCSS("background-color", "rgb(31, 41, 51)");
+  await expect(mathSurface).toHaveCSS("background-color", "rgb(31, 41, 51)");
+  await expect(noteSurface).toHaveCSS("color", "rgb(240, 241, 242)");
+  await expect(tocSurface).toHaveCSS("color", "rgb(240, 241, 242)");
+  await bookmarkSurface.locator("[data-block-content]").click({ modifiers: ["Control"] });
+  await expect(bookmarkSurface).toHaveCSS("background-color", "rgb(60, 70, 80)");
+});
+
+test("table of contents shows a distinct text size for each heading level", async ({ page }) => {
+  const headings = [1, 2, 3, 4, 5, 6].map((depth) => `${"#".repeat(depth)} Level ${depth}`).join("\n\n");
+  const section = await insertBlock(page, {
+    type: "paragraph",
+    content: headings,
+    children: [{ type: "demo.table-of-contents", content: "" }],
+  });
+  const toc = block(page, section.childIds[0]!);
+  const sizes: number[] = [];
+  for (let depth = 1; depth <= 6; depth += 1) {
+    const entry = toc.getByRole("button", { name: `Level ${depth}`, exact: true });
+    await expect(entry).toBeVisible();
+    sizes.push(await entry.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)));
+  }
+  for (let index = 1; index < sizes.length; index += 1) {
+    expect(sizes[index]).toBeLessThan(sizes[index - 1]!);
+  }
+  expect(sizes[0]!).toBeGreaterThanOrEqual(sizes[3]! * 1.4);
+});
+
+test("table of contents slash command is available after existing text and a second slash", async ({ page }) => {
+  for (const initial of ["Keep this text", "/"]) {
+    const inserted = await insertBlock(page, { type: "paragraph", content: initial });
+    const row = block(page, inserted.id);
+    const content = row.locator("[data-block-content]");
+    await content.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("/toc");
+    const command = page.locator('[data-slash-command="type.demo.table-of-contents"]');
+    await expect(command).toBeVisible();
+    await command.click();
+    await expect(row).toHaveAttribute("data-block-type", "demo.table-of-contents");
+    await expect.poll(() => page.evaluate((id) => {
+      const editor = (window as unknown as {
+        __rivtoDemo: { editor: { blocks: { getBlockNode: (id: string) => { content: string } | undefined } } };
+      }).__rivtoDemo.editor;
+      return editor.blocks.getBlockNode(id)?.content;
+    }, inserted.id)).toBe(initial);
+    await undo(page);
+    await expect(row).toHaveAttribute("data-block-type", "paragraph");
+    await expect(row.locator("[data-block-content]")).toHaveText(`${initial}/toc`);
+  }
+});
+
+test("table of contents aligns the chosen heading with the top of the page", async ({ page }) => {
+  const children = [
+    { type: "demo.table-of-contents", content: "" },
+    ...Array.from({ length: 25 }, (_, index) => ({ type: "paragraph", content: `Before ${index}` })),
+    { type: "paragraph", content: "# Destination heading" },
+    ...Array.from({ length: 35 }, (_, index) => ({ type: "paragraph", content: `After ${index}` })),
+  ];
+  const section = await insertBlock(page, { type: "paragraph", content: "Section", children });
+  await page.evaluate((id) => {
+    const blocks = (window as unknown as {
+      __rivtoDemo: { editor: { blocks: { getRootIds: () => string[]; moveBlock: (id: string, target: string, position: "before") => void } } };
+    }).__rivtoDemo.editor.blocks;
+    blocks.moveBlock(id, blocks.getRootIds()[0]!, "before");
+  }, section.id);
+  const toc = block(page, section.childIds[0]!);
+  const target = block(page, section.childIds[26]!);
+  await toc.getByRole("button", { name: "Destination heading" }).click();
+  await expect.poll(async () => (await target.boundingBox())?.y).toBeLessThan(5);
+  await expect.poll(async () => (await target.boundingBox())?.y).toBeGreaterThanOrEqual(-1);
 });

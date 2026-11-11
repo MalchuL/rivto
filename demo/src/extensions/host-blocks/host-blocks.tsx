@@ -1,7 +1,7 @@
 /**
  * Demo extensions for note, tip, warning, bookmark, table of contents, and math.
  *
- * Each factory registers one block through the public `blockExtension` API and
+ * Each factory registers one block through the public block-type API and
  * a portable clipboard formatter. The shared block shell still owns selection,
  * drag, and child layout. Note, tip, and warning are separate block types, each
  * with its own slash command.
@@ -10,6 +10,7 @@
  */
 import {
   BLOCK_ID_ATTRIBUTE,
+  BLOCK_TEXT_METADATA_KEY,
   MarkdownContent,
   useBlockEditing,
   useReactPanel,
@@ -22,6 +23,7 @@ import {
   type ReactPanelApi,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
+import "./host-blocks.css";
 import { Link2Icon, PencilIcon } from "lucide-react";
 import {
   useCallback,
@@ -32,7 +34,6 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
-import { Badge } from "../../../../packages/react-rivto-editor/src/components/ui/badge";
 import { Button } from "../../../../packages/react-rivto-editor/src/components/ui/button";
 import { Input } from "../../../../packages/react-rivto-editor/src/components/ui/input";
 import { Label } from "../../../../packages/react-rivto-editor/src/components/ui/label";
@@ -59,7 +60,6 @@ import {
 import { evaluateMathSource } from "./math-value";
 import {
   collectTocEntries,
-  isTocConversionAvailable,
   type TocDocumentView,
   type TocEntry,
 } from "./toc-entries";
@@ -74,15 +74,15 @@ const ADMONITION_ACCENT: Record<AdmonitionTone, string> = {
   tip: "var(--rivto-subtle-foreground)",
   warning: "var(--rivto-destructive)",
 };
-const ADMONITION_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex items-start gap-2 rounded-lg border border-solid py-2 pr-2 pl-3`;
+
+const ADMONITION_CLASS = `demo-callout ${BLOCK_FRAME_CLASS} flex items-center gap-2 rounded-lg py-2 pr-2 pl-3`;
 const ADMONITION_SURFACE_CLASS: Record<AdmonitionTone, string> = {
-  note: "border-primary/20 bg-muted/70",
-  tip: "border-primary/15 bg-accent/60",
-  warning: "border-destructive/25 bg-destructive/10",
+  note: "bg-muted/70",
+  tip: "bg-accent/60",
+  warning: "bg-destructive/10",
 };
-const ADMONITION_EMOJI_CLASS = "demo-callout-emoji mt-0.5 size-8 shrink-0 rounded-md border-border/80 bg-background/80 px-0 text-center text-base shadow-none";
+const ADMONITION_EMOJI_CLASS = "demo-callout-emoji size-8 shrink-0 rounded-md border-0 bg-transparent px-0 text-center text-base shadow-none";
 const ADMONITION_BODY_CLASS = "demo-callout-body min-w-0 flex-1 text-foreground";
-const ADMONITION_BADGE_CLASS = "demo-callout-tone mt-0.5 shrink-0";
 const ADMONITION_DEFINITION = {
   note: noteBlockDefinition,
   tip: tipBlockDefinition,
@@ -186,14 +186,14 @@ function useDocumentBlockRevision(): number {
 }
 
 /**
- * Expands collapsed ancestors and, on the page surface, scrolls the target into view.
+ * Expands collapsed ancestors and, on the page surface, aligns the target with the scroll viewport start.
  *
  * Canvas mode still opens collapsed ancestors so the heading can render inside
  * its card. It does not change pan or zoom.
  *
- * @param reactEditor - Editor that owns the target block.
+ * @param panel - Panel that owns navigation and the mounted surface.
  * @param blockId - Heading block to reveal.
- * @returns Nothing.
+ * @returns After scheduling the page scroll, or after expanding ancestors on canvas.
  */
 function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
   const reactEditor = panel.document;
@@ -220,7 +220,15 @@ function navigateToTocEntry(panel: ReactPanelApi, blockId: string): void {
       const target = surface?.querySelector<HTMLElement>(
         `[${BLOCK_ID_ATTRIBUTE}="${CSS.escape(blockId)}"]`,
       );
-      target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      target?.scrollIntoView({ block: "start", inline: "nearest" });
+      // Offscreen content can acquire its real height after the first scroll.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (target?.isConnected) {
+            target.scrollIntoView({ block: "start", inline: "nearest" });
+          }
+        });
+      });
     });
   });
 }
@@ -303,6 +311,7 @@ function registerHostBlock(
  */
 function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<AdmonitionProps>(blockId);
+  const panel = useReactPanel();
   const emojiId = useId();
   const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
   const committedEmoji = editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone];
@@ -313,7 +322,9 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
     <div
       className={`${ADMONITION_CLASS} ${ADMONITION_SURFACE_CLASS[tone]}`}
       data-callout-tone={tone}
-      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftColor: ADMONITION_ACCENT[tone] }}
+      style={{ borderLeftWidth: ACCENT_RULE_WIDTH, borderLeftStyle: "solid", borderLeftColor: ADMONITION_ACCENT[tone] }}
+      role="group"
+      aria-label={ADMONITION_LABELS[tone]}
     >
       <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>Emoji</Label>
       <Input
@@ -330,14 +341,13 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
         onBlur={() => {
           const next = (emojiDraft ?? committedEmoji).trim();
           setEmojiDraft(null);
-          if (!next || next === (editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
+          if (!next || next === (panel.blocks.getBlockNode(blockId)?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone])) return;
           editing.operations.setProp("emoji", next);
         }}
       />
       <div className={ADMONITION_BODY_CLASS}>
         <MarkdownContent blockId={blockId} />
       </div>
-      <Badge variant="outline" className={ADMONITION_BADGE_CLASS}>{ADMONITION_LABELS[tone]}</Badge>
     </div>
   );
 }
@@ -355,6 +365,12 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
  */
 function BookmarkBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<BookmarkProps>(blockId);
+  const panel = useReactPanel();
+  /** Reads the current property before committing a control draft. */
+  const currentProp = (key: keyof BookmarkProps) => {
+    const value = panel.blocks.getBlockNode(blockId)?.props[key];
+    return typeof value === "string" ? value : "";
+  };
   const committedUrl = editing.block?.props.url ?? "";
   const committedDescription = editing.block?.props.description ?? "";
   const [trackedUrl, setTrackedUrl] = useState(committedUrl);
@@ -383,7 +399,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
       return;
     }
     setUrlError(null);
-    if (next !== (editing.block?.props.url ?? "")) editing.operations.setProp("url", next);
+    if (next !== currentProp("url")) editing.operations.setProp("url", next);
     setEditingUrl(false);
   };
 
@@ -399,12 +415,12 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
         rows={1}
         value={description}
         placeholder="Add a description"
-        onFocus={() => setDescriptionDraft(editing.block?.props.description ?? "")}
+        onFocus={() => setDescriptionDraft(currentProp("description"))}
         onChange={(event) => setDescriptionDraft(event.target.value)}
         onBlur={() => {
-          const next = descriptionDraft ?? (editing.block?.props.description ?? "");
+          const next = descriptionDraft ?? currentProp("description");
           setDescriptionDraft(null);
-          if (next !== (editing.block?.props.description ?? "")) editing.operations.setProp("description", next);
+          if (next !== currentProp("description")) editing.operations.setProp("description", next);
         }}
       />
       {showUrlForm ? (
@@ -441,7 +457,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
               onClick={(event) => {
                 if (isClaimedSelectionClick(event)) return;
                 setEditingUrl(false);
-                setUrlDraft(editing.block?.props.url ?? "");
+                setUrlDraft(currentProp("url"));
                 setUrlError(null);
               }}
             >
@@ -474,7 +490,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
             aria-label="Change URL"
             onClick={(event) => {
               if (isClaimedSelectionClick(event)) return;
-              setUrlDraft(editing.block?.props.url ?? "");
+              setUrlDraft(currentProp("url"));
               setUrlError(null);
               setEditingUrl(true);
             }}
@@ -491,7 +507,7 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
  * Lists headings in the parent subtree, or the whole root forest at the root.
  *
  * The list is derived on each document revision. Activating an entry expands
- * collapsed ancestors and scrolls the owning block into view on the page.
+ * collapsed ancestors and aligns the owning block with the scroll viewport start on the page.
  *
  * @param blockId - Stable table-of-contents block ID.
  * @returns A structural selection region containing the heading list.
@@ -526,6 +542,7 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
                     size="sm"
                     className={TOC_BUTTON_CLASS}
                     data-toc-entry=""
+                    data-toc-level={entry.depth}
                     data-toc-target={entry.blockId}
                     style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
                     onClick={(event) => {
@@ -592,7 +609,7 @@ function admonitionBlockExtension(tone: AdmonitionTone): ReactEditorExtension {
     id: type,
     setup: (reactEditor) => {
       registerHostBlock(reactEditor, {
-        definition: ADMONITION_DEFINITION[tone],
+        definition: { ...ADMONITION_DEFINITION[tone], metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
         render: AdmonitionBlock,
         slashCommand: {
           title: ADMONITION_LABELS[tone],
@@ -645,7 +662,7 @@ export function bookmarkBlockExtension(): ReactEditorExtension {
     id: "demo.bookmark",
     setup: (reactEditor) => {
       registerHostBlock(reactEditor, {
-        definition: bookmarkBlockDefinition,
+        definition: { ...bookmarkBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
         render: BookmarkBlock,
         slashCommand: {
           title: "Bookmark",
@@ -683,9 +700,9 @@ export function bookmarkBlockExtension(): ReactEditorExtension {
 /**
  * Registers the table-of-contents block.
  *
- * Slash conversion is offered only when the block has no text of its own, so
- * turning a paragraph into a table of contents cannot hide existing writing.
- * Clipboard text is the generated heading list, not the empty stored content.
+ * Slash conversion preserves the block's existing content, though the table of
+ * contents renderer does not display it. Clipboard text is the generated heading
+ * list rather than the stored content.
  *
  * @returns An extension that installs the block wherever it is set up.
  */
@@ -700,10 +717,6 @@ export function tableOfContentsBlockExtension(): ReactEditorExtension {
           title: "Table of contents",
           group: "Turn into",
           keywords: ["toc", "outline", "contents", "headings"],
-          isAvailable: ({ blockId }) => {
-            const content = reactEditor.blocks.getBlockNode(blockId)?.content;
-            return content !== undefined && isTocConversionAvailable(content);
-          },
         },
       }, {
         id: "demo.table-of-contents",
@@ -733,7 +746,7 @@ export function mathBlockExtension(): ReactEditorExtension {
     id: "demo.math",
     setup: (reactEditor) => {
       registerHostBlock(reactEditor, {
-        definition: mathBlockDefinition,
+        definition: { ...mathBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
         render: MathBlock,
         slashCommand: {
           title: "Math",

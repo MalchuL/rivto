@@ -41,5 +41,4 @@ export {
   TOC_WRITING_BLOCK_TYPE,
   collectTocEntries,
   extractMarkdownHeadings,
-  isTocConversionAvailable,
 } from "./toc-entries";

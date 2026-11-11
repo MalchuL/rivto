@@ -1,0 +1,82 @@
+/* Host block surfaces use the same palette and selection fill as editor cards. */
+.demo-callout,
+.demo-bookmark,
+.demo-toc,
+.demo-math {
+  color: var(--rivto-foreground);
+  border-radius: var(--rivto-radius);
+}
+
+.demo-callout {
+  background: var(
+    --rivto-block-selection-fill,
+    color-mix(in srgb, var(--rivto-subtle) 45%, var(--rivto-background))
+  );
+}
+
+.demo-callout[data-callout-tone="tip"] {
+  background: var(
+    --rivto-block-selection-fill,
+    color-mix(in srgb, var(--rivto-muted) 50%, var(--rivto-background))
+  );
+}
+
+.demo-callout[data-callout-tone="warning"] {
+  background: var(
+    --rivto-block-selection-fill,
+    color-mix(in srgb, var(--rivto-destructive) 8%, var(--rivto-background))
+  );
+}
+
+.demo-bookmark,
+.demo-math {
+  background: var(--rivto-block-selection-fill, var(--rivto-card));
+  border-color: var(--rivto-border);
+}
+
+.demo-toc {
+  background: var(
+    --rivto-block-selection-fill,
+    color-mix(in srgb, var(--rivto-muted) 45%, var(--rivto-background))
+  );
+}
+
+.demo-math-source {
+  color: var(--rivto-foreground);
+  background: transparent;
+  border-color: var(--rivto-border);
+}
+
+.demo-math-value {
+  background: color-mix(in srgb, var(--rivto-muted) 55%, transparent);
+}
+
+.demo-toc [data-toc-entry] {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.demo-toc [data-toc-level="1"] {
+  font-size: 1.5rem;
+}
+
+.demo-toc [data-toc-level="2"] {
+  font-size: 1.3125rem;
+}
+
+.demo-toc [data-toc-level="3"] {
+  font-size: 1.125rem;
+}
+
+.demo-toc [data-toc-level="4"] {
+  font-size: 1rem;
+}
+
+.demo-toc [data-toc-level="5"] {
+  font-size: 0.875rem;
+}
+
+.demo-toc [data-toc-level="6"] {
+  font-size: 0.8125rem;
+}

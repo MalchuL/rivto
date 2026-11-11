@@ -12,7 +12,6 @@ import {
   TOC_WRITING_BLOCK_TYPE,
   collectTocEntries,
   extractMarkdownHeadings,
-  isTocConversionAvailable,
 } from "../src/extensions/host-blocks/toc-entries.ts";
 
 /**
@@ -168,16 +167,10 @@ test("moving a table of contents changes the headings it lists", () => {
   assert.equal(collectTocEntries(tree.view(), "missing").length, 0);
 });
 
-test("table of contents conversion is limited to empty content", () => {
+test("table of contents recognizes the host writing block types", () => {
   assert.equal(TOC_NOTE_BLOCK_TYPE, NOTE_BLOCK_TYPE);
   assert.equal(TOC_TIP_BLOCK_TYPE, TIP_BLOCK_TYPE);
   assert.equal(TOC_WARNING_BLOCK_TYPE, WARNING_BLOCK_TYPE);
   assert.equal(TOC_WRITING_BLOCK_TYPE, "paragraph");
-  assert.equal(isTocConversionAvailable(""), true);
-  assert.equal(isTocConversionAvailable("/"), true);
-  assert.equal(isTocConversionAvailable("/toc"), true);
-  assert.equal(isTocConversionAvailable("Hello"), false);
-  assert.equal(isTocConversionAvailable("Hello/toc"), false);
-  assert.equal(isTocConversionAvailable(" /toc"), false);
-  assert.equal(isTocConversionAvailable("/toc "), false);
+
 });

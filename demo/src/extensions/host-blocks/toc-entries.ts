@@ -75,26 +75,6 @@ interface MarkdownNode {
   children?: MarkdownNode[];
 }
 
-/**
- * Returns whether converting the block to a table of contents would keep its text.
- *
- * Slash menus store the typed `/query` in the block until the command runs, then
- * delete that query before conversion. A block is eligible when it is empty or
- * its entire content is that not-yet-removed query. Any other text stays put,
- * so the command is hidden instead of dropping it from the rendered document.
- *
- * @param content - Current block content, including an in-progress slash query.
- * @returns True when conversion would leave the content empty.
- */
-export function isTocConversionAvailable(content: string): boolean {
-  if (content === "") return true;
-  const slashIndex = content.lastIndexOf("/");
-  if (slashIndex < 0) return false;
-  const query = content.slice(slashIndex + 1);
-  if (/\s/.test(query)) return false;
-  return content.slice(0, slashIndex) === "";
-}
-
 /** Reads the plain text of one inline Markdown node. */
 function inlineText(node: MarkdownNode): string {
   if (node.type === "text" || node.type === "inlineCode") return node.value ?? "";
