@@ -12,7 +12,21 @@ import {
   TOC_WRITING_BLOCK_TYPE,
   collectTocEntries,
   extractMarkdownHeadings,
+  type TocDocumentView,
 } from "../src/extensions/host-blocks/toc-entries.ts";
+
+/** Block data used to construct a movable test tree. */
+interface FixtureBlock {
+  id: string;
+  type: string;
+  parentId: string | null;
+  content: string;
+}
+
+/** Fixture block with the direct children maintained by the test tree. */
+interface FixtureBlockNode extends FixtureBlock {
+  childIds: string[];
+}
 
 /**
  * Builds a parent map the table-of-contents walker can read and move.
@@ -20,17 +34,26 @@ import {
  * @param nodes - Blocks in document order. Root order follows this array.
  * @returns A view plus a move operation that reparents one block.
  */
-function createTree(nodes) {
-  const byId = new Map(nodes.map((node) => [node.id, { ...node, childIds: [] }]));
-  const rootIds = [];
+function createTree(nodes: readonly FixtureBlock[]) {
+  const byId = new Map<string, FixtureBlockNode>(
+    nodes.map((node) => [node.id, { ...node, childIds: [] }]),
+  );
+  const rootIds: string[] = [];
   for (const node of nodes) {
-    if (node.parentId == null) rootIds.push(node.id);
-    else byId.get(node.parentId).childIds.push(node.id);
+    if (node.parentId === null) {
+      rootIds.push(node.id);
+    } else {
+      const parent = byId.get(node.parentId);
+      assert.ok(parent);
+      parent.childIds.push(node.id);
+    }
   }
-  const view = () => ({
+  const view = (): TocDocumentView => ({
     getBlock: (id) => {
       const block = byId.get(id);
-      if (!block) return undefined;
+      if (!block) {
+        return undefined;
+      }
       return {
         id: block.id,
         type: block.type,
@@ -38,21 +61,37 @@ function createTree(nodes) {
         childIds: block.childIds,
       };
     },
-    getParentId: (id) => (byId.has(id) ? byId.get(id).parentId : undefined),
+    getParentId: (id) => byId.get(id)?.parentId,
     getRootIds: () => rootIds,
   });
   return {
     view,
-    move(id, parentId) {
+    /**
+     * Moves a fixture block to the end of the requested parent's children.
+     *
+     * @param id - ID of the existing block to move.
+     * @param parentId - ID of the existing parent, or null for a root.
+     * @returns After the fixture's parent and sibling lists are updated.
+     * @throws If the block or a referenced parent is missing.
+     */
+    move(id: string, parentId: string | null): void {
       const block = byId.get(id);
-      if (block.parentId == null) rootIds.splice(rootIds.indexOf(id), 1);
-      else {
+      assert.ok(block);
+      if (block.parentId === null) {
+        rootIds.splice(rootIds.indexOf(id), 1);
+      } else {
         const parent = byId.get(block.parentId);
+        assert.ok(parent);
         parent.childIds.splice(parent.childIds.indexOf(id), 1);
       }
       block.parentId = parentId;
-      if (parentId == null) rootIds.push(id);
-      else byId.get(parentId).childIds.push(id);
+      if (parentId === null) {
+        rootIds.push(id);
+      } else {
+        const parent = byId.get(parentId);
+        assert.ok(parent);
+        parent.childIds.push(id);
+      }
     },
   };
 }
@@ -80,6 +119,11 @@ const beforeContent = [
   "# Same",
 ].join("\n");
 
+/**
+ * Builds the outline shared by table-of-contents tests.
+ *
+ * @returns A movable fixture with headings, nested blocks, and unrelated roots.
+ */
 function sectionTree() {
   return createTree([
     { id: "section", type: TOC_WRITING_BLOCK_TYPE, parentId: null, content: sectionContent },
@@ -143,18 +187,21 @@ test("a root table of contents covers the root forest", () => {
 
 test("moving a table of contents changes the headings it lists", () => {
   const tree = sectionTree();
-  assert.deepEqual(collectTocEntries(tree.view(), "toc").map(({ text }) => text), [
-    "Parent",
-    "Parent two",
-    "First",
-    "Setext heading",
-    "Same",
-    "Same",
-    "Nested",
-    "Note heading",
-    "Tip heading",
-    "Warning heading",
-  ]);
+  assert.deepEqual(
+    collectTocEntries(tree.view(), "toc").map(({ text }) => text),
+    [
+      "Parent",
+      "Parent two",
+      "First",
+      "Setext heading",
+      "Same",
+      "Same",
+      "Nested",
+      "Note heading",
+      "Tip heading",
+      "Warning heading",
+    ],
+  );
   tree.move("toc", "cousin");
   assert.deepEqual(collectTocEntries(tree.view(), "toc"), [
     { blockId: "cousin", depth: 1, text: "Cousin" },
@@ -172,5 +219,4 @@ test("table of contents recognizes the host writing block types", () => {
   assert.equal(TOC_TIP_BLOCK_TYPE, TIP_BLOCK_TYPE);
   assert.equal(TOC_WARNING_BLOCK_TYPE, WARNING_BLOCK_TYPE);
   assert.equal(TOC_WRITING_BLOCK_TYPE, "paragraph");
-
 });

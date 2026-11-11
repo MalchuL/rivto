@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/*.test.mjs"
+    "test": "node --test --experimental-strip-types tests/*.test.mjs tests/*.test.ts"
   },
   "dependencies": {
     "@chulane/crdt-doc": "workspace:*",
@@ -26,6 +26,7 @@
   "devDependencies": {
     "@chulane/rivto-edgeless": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "tailwindcss": "^4.3.3",
