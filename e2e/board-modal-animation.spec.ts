@@ -16,7 +16,7 @@ test("fades the expanded board without transforming its editor", async ({ page }
   const backdrop = page.locator('[data-slot="dialog-overlay"]').last();
   expect(
     await backdrop.evaluate((element) => element.getAnimations()[0]?.effect?.getTiming().duration),
-  ).toBe(800);
+  ).toBe(200);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(expand).toBeFocused();

@@ -21,13 +21,21 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+/**
+ * Renders the dialog backdrop and forwards its DOM ref to the Radix overlay.
+ *
+ * @param props - Radix overlay properties and optional styling classes.
+ * @param ref - Ref to the rendered backdrop element.
+ * @returns The dialog backdrop.
+ */
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(function DialogOverlay({ className, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
+      ref={ref}
       className={cn(
         "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className,
@@ -35,7 +43,7 @@ function DialogOverlay({
       {...props}
     />
   );
-}
+});
 
 function DialogContent({
   className,

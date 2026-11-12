@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import type { BinaryProvider } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
 import { mimeTypeFromExtension } from "../../../file/utils/file-input";
-import { useAnimationDuration } from "../../../../hooks/editor/use-animation-duration";
+import { UI_TRANSITION_DURATION } from "../../../../constants";
 
 const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
 
@@ -194,15 +194,17 @@ function useImageCopy(
  */
 function ImageCopyMenu({ position, error, onCopy, onClose }: ImageCopyMenuProps) {
   const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("imageCopyMenu");
   return (
     <motion.span
       className={IMAGE_CONTEXT_MENU_CLASS}
       role="menu"
       style={{ left: position.x, top: position.y }}
-      initial={duration ? { opacity: 0, scale: reducedMotion ? 1 : 0.98 } : false}
+      initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: reducedMotion ? duration / 2 : duration, ease: [0.23, 1, 0.32, 1] }}
+      transition={{
+        duration: reducedMotion ? UI_TRANSITION_DURATION / 2 : UI_TRANSITION_DURATION,
+        ease: [0.23, 1, 0.32, 1],
+      }}
       onBlur={(event) => {
         // Moving focus within the menu does not dismiss it.
         if (!event.currentTarget.contains(event.relatedTarget)) {

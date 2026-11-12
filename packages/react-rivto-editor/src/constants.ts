@@ -5,6 +5,9 @@
  *
  * @module
  */
+/** Default duration for short UI transitions, in seconds. */
+export const UI_TRANSITION_DURATION = 0.2;
+
 /** Stable DOM attribute placed on every block shell container. */
 export const BLOCK_ID_ATTRIBUTE = "data-block-id";
 

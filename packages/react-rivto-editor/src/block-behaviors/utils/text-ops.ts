@@ -13,6 +13,7 @@ import type { KeyboardSelectionTarget } from "../../managers/keyboard/selection"
 import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
 import { createBlockOutlineContext } from "./context";
+import { captureBlockMove } from "../../surfaces/page/block-move-animation";
 
 /**
  * Slices a block at a caret and inserts a following writing block.
@@ -88,9 +89,11 @@ export function splitBlock(
       reactPanel.selection.get(),
     );
     if (outlineContext) {
+      const animateMove = captureBlockMove(root, reactPanel.page.regions, [block.id]);
       reactPanel.batchUpdates(() =>
         reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [block.id]),
       );
+      animateMove?.();
     }
     focusCaret(reactPanel, root, block.id, 0);
     return "handled";

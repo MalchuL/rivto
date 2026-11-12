@@ -287,3 +287,27 @@ for (const [repeat, edgeless] of [
     await expect(handle).toHaveCSS("opacity", "0");
   });
 }
+
+test("deletes a block from the menu and supports undo", async ({ page }) => {
+  const ids = await seed(page);
+  await menu(page, ids.parent);
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (id) => !!(window as unknown as Demo).__rivtoDemo.editor.blocks.getBlockNode(id),
+        ids.parent,
+      ),
+    )
+    .toBe(false);
+  await expect(page.locator("[data-block-deletion-animation]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).first().click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (id) => !!(window as unknown as Demo).__rivtoDemo.editor.blocks.getBlockNode(id),
+        ids.parent,
+      ),
+    )
+    .toBe(true);
+});

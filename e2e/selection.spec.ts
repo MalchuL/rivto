@@ -67,6 +67,19 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
 });
 
+for (const reducedMotion of [false, true]) {
+  test(`uses fixed block selection transitions with reduced motion ${reducedMotion}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: reducedMotion ? "reduce" : "no-preference" });
+    const first = textContents(page).nth(0);
+    await dragText(page, first, 2, textContents(page).nth(1), 8);
+    const block = first.locator(BLOCK_ANCESTOR_XPATH);
+    await expect(block).toHaveAttribute("data-block-selected", "true");
+    await expect(block).toHaveCSS("transition-duration", reducedMotion ? "0s" : "0.15s, 0.15s");
+  });
+}
+
 test("switches cross-block drag to blocks and restores text on return", async ({ page }) => {
   const contents = textContents(page);
   const first = contents.nth(0);

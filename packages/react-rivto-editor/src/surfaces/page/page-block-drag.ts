@@ -224,7 +224,6 @@ export class PageBlockDrag implements BlockDragAdapter {
         scope?.root ?? sourceRoot,
         receiver.page.regions,
         ids,
-        this.panel.editor.animations?.blockMove,
         () =>
           this.occurrence === occurrence &&
           (!scope || crossDocumentPageRootControllers.get(scope.root) === scope),

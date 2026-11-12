@@ -2,7 +2,7 @@ import { Listeners } from "@chulane/rivto-utils";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { useSyncExternalStore } from "react";
 import type { FileIngestionStatus } from "./types";
-import { useAnimationDuration } from "../../../hooks/editor/use-animation-duration";
+import { UI_TRANSITION_DURATION } from "../../../constants";
 
 /** One locally displayed upload, including its latest progress or error. */
 interface FileUploadStatus extends FileIngestionStatus {
@@ -131,8 +131,6 @@ interface FileUploadStatusCardProps {
   readonly upload: FileUploadStatus;
   /** Existing file or image styling. */
   readonly kind: "file" | "image";
-  /** Configured transition duration in seconds. */
-  readonly duration: number;
   /** Whether positional motion should be suppressed. */
   readonly reducedMotion: boolean | null;
   /**
@@ -152,7 +150,6 @@ interface FileUploadStatusCardProps {
  * @param props - Upload status, presentation, and dismissal callback.
  * @param props.upload - Current upload data, retained during exit.
  * @param props.kind - Selects the file or image status styles.
- * @param props.duration - Configured transition duration in seconds; zero disables motion.
  * @param props.reducedMotion - Whether positional movement should be suppressed.
  * @param props.onDismiss - Removes this upload from its owning store when Dismiss is pressed.
  * @returns A positioned status card.
@@ -160,7 +157,6 @@ interface FileUploadStatusCardProps {
 function FileUploadStatusCard({
   upload,
   kind,
-  duration,
   reducedMotion,
   onDismiss,
 }: FileUploadStatusCardProps) {
@@ -171,13 +167,12 @@ function FileUploadStatusCard({
       className={`rivto-${kind}-upload`}
       role={present ? role : undefined}
       aria-hidden={!present}
-      inert={!present}
       style={{ left: upload.x, top: upload.y, pointerEvents: present ? undefined : "none" }}
-      initial={duration ? { opacity: 0, y: reducedMotion ? 0 : 4 } : false}
+      initial={{ opacity: 0, y: reducedMotion ? 0 : 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: reducedMotion ? 0 : 4 }}
       transition={{
-        duration: reducedMotion ? duration / 2 : duration,
+        duration: reducedMotion ? UI_TRANSITION_DURATION / 2 : UI_TRANSITION_DURATION,
         ease: [0.23, 1, 0.32, 1],
       }}
     >
@@ -187,10 +182,10 @@ function FileUploadStatusCard({
       </span>
       {upload.error && (
         <>
-          <button type="button" onClick={upload.retry}>
+          <button type="button" disabled={!present} onClick={upload.retry}>
             Retry
           </button>
-          <button type="button" onClick={onDismiss}>
+          <button type="button" disabled={!present} onClick={onDismiss}>
             Dismiss
           </button>
         </>
@@ -211,7 +206,6 @@ function FileUploadStatusCard({
  */
 export function FileUploadStatusOverlay({ store, kind }: FileUploadStatusOverlayProps) {
   const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("upload");
   // Subscribe to a stable revision so React refreshes the current status cards.
   useSyncExternalStore(
     (listener) => store.subscribe(listener),
@@ -225,14 +219,13 @@ export function FileUploadStatusOverlay({ store, kind }: FileUploadStatusOverlay
         key={upload.id}
         upload={upload}
         kind={kind}
-        duration={duration}
         reducedMotion={reducedMotion}
         onDismiss={() => store.delete(upload.id)}
       />
     ));
   return (
     <div className={`rivto-${kind}-uploads`} aria-live="polite">
-      {duration ? <AnimatePresence initial={false}>{cards}</AnimatePresence> : cards}
+      <AnimatePresence initial={false}>{cards}</AnimatePresence>
     </div>
   );
 }

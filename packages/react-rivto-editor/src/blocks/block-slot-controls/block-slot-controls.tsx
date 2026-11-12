@@ -1,4 +1,4 @@
-import { editorControlProps } from "../../constants";
+import { editorControlProps, UI_TRANSITION_DURATION } from "../../constants";
 import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 /**
  * Built-in list and collapse contributions for the shared block left slot.
@@ -15,7 +15,6 @@ import { useBlockChildrenId } from "../../hooks/blocks/use-block-children-id";
 import { ChevronRightIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useBlockOperations, usePanel } from "../../hooks";
-import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 import type { BlockSlotProps } from "../../managers";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -74,7 +73,6 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
   const operations = useBlockOperations(block.id);
   const childrenId = useBlockChildrenId(block.id);
   const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("collapseIndicator");
   if (!block.childIds.length) {
     return null;
   }
@@ -110,7 +108,10 @@ export function BlockCollapseSlot({ block }: BlockSlotProps) {
         className="inline-flex"
         initial={false}
         animate={{ rotate: collapsed ? 0 : 90 }}
-        transition={{ duration: reducedMotion ? 0 : duration, ease: [0.23, 1, 0.32, 1] }}
+        transition={{
+          duration: reducedMotion ? 0 : UI_TRANSITION_DURATION,
+          ease: [0.23, 1, 0.32, 1],
+        }}
       >
         <ChevronRightIcon aria-hidden="true" />
       </motion.span>

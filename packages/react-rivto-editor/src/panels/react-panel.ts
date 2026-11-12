@@ -124,7 +124,6 @@ export class ReactPanel implements ReactPanelApi {
       this.page = new BlockEditorController({
         adapter: { blocks, selection: this.pageSelection },
         fallbackRenderer: editor.renderers.fallback ?? UnknownBlock,
-        animations: editor.animations,
       });
       this.pageNavigation = new PageNavigationController(this.page.adapter);
       this.pageRegistrations = new PageSurfaceRegistrations(

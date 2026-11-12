@@ -4,7 +4,7 @@
   @apply page:relative page:min-w-0 page:box-border;
   border: var(--rivto-block-border, none);
   outline: 2px solid transparent;
-  transition: background-color var(--rivto-block-selection-duration, 0s) ease;
+  transition: background-color 150ms ease;
   @apply page:rounded-[var(--rivto-block-radius,10px)];
 }
 
@@ -17,8 +17,8 @@
   --rivto-block-selection-fill: var(--rivto-block-selection-background);
   outline-color: var(--rivto-block-selection, #4868d8);
   transition:
-    background-color var(--rivto-block-selection-duration, 0s) ease,
-    outline-color var(--rivto-block-selection-duration, 0s) ease;
+    background-color 150ms ease,
+    outline-color 150ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

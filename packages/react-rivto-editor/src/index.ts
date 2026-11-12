@@ -168,7 +168,7 @@ export type {
   SurfaceComponent,
   PanelPasteStrategy,
 } from "./managers";
-export type { AnimationDurations, CreateReactEditorOptions, MarkdownLinkClick } from "./types";
+export type { CreateReactEditorOptions, MarkdownLinkClick } from "./types";
 export { isReactPanelApi, isRivtoEditor } from "./utils";
 
 export {

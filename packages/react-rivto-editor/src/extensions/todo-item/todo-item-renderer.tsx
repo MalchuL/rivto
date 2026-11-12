@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
-import { editorControlProps } from "../../constants";
+import { editorControlProps, UI_TRANSITION_DURATION } from "../../constants";
 import { useBlockEditing, useReactPanel } from "../../hooks";
 import { TodoItemActions } from "./todo-item-actions";
 import {
@@ -28,7 +28,6 @@ import type {
   TodoItemProps,
 } from "./todo-item-model";
 import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
-import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 
 /**
  * Renders one compact, editable TODO row and its selected properties modal.
@@ -45,7 +44,6 @@ export function TodoItem({
   const actions = useMemo(() => new TodoItemActions(reactPanel, blockId), [reactPanel, blockId]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const reducedMotion = useReducedMotion();
-  const priorityDuration = useAnimationDuration("todoPriority");
   const block = editing.block as TodoItemBlock | undefined;
   if (!block) {
     return null;
@@ -84,7 +82,7 @@ export function TodoItem({
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
       style={{
-        transition: `background-color ${reducedMotion ? priorityDuration / 2 : priorityDuration}s ease`,
+        transition: `background-color ${reducedMotion ? UI_TRANSITION_DURATION / 2 : UI_TRANSITION_DURATION}s ease`,
       }}
     >
       <Button

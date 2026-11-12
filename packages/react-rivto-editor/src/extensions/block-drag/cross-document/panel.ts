@@ -33,8 +33,6 @@ interface BlockDragDocument {
 /** Shared host behavior capability used by receiving occurrences. */
 interface BlockDragEditor {
   readonly blockBehaviors: Pick<BlockBehaviorsApi, "canMove" | "childrenVisible">;
-  /** Optional motion duration for moved rows. */
-  readonly animations?: Pick<NonNullable<ReactPanelApi["editor"]["animations"]>, "blockMove">;
 }
 
 /** Addressed source and receiving commands; excludes panel registration and destruction. */

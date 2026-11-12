@@ -9,7 +9,7 @@
  * the inline wrapper and expanded content live in the colocated `block-modal.css`.
  * @module
  */
-import { editorControlProps } from "../../constants";
+import { editorControlProps, UI_TRANSITION_DURATION } from "../../constants";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { animate, useReducedMotion } from "motion/react";
@@ -18,7 +18,6 @@ import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import { PageSurface } from "../../surfaces/page/page-surface";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
-import { useAnimationDuration } from "../../hooks/editor/use-animation-duration";
 const DIALOG_CLASS = "rivto-block-modal";
 const EXPAND_CLASS = "rivto-block-modal-expand";
 const ExpandContext = createContext<{
@@ -58,7 +57,6 @@ export function BlockModal({
   const panel = useReactPanel();
   const [expanded, setExpanded] = useState(false);
   const reducedMotion = useReducedMotion();
-  const duration = useAnimationDuration("boardDialog");
   if (parent?.expanded && parent.blockId === blockId) {
     return children;
   }
@@ -79,7 +77,7 @@ export function BlockModal({
             aria-describedby={undefined}
             aria-modal="true"
             onOpenAutoFocus={(event) => {
-              if (duration && event.target instanceof HTMLElement) {
+              if (event.target instanceof HTMLElement) {
                 const targets = [event.target, overlay.current].filter(
                   (target): target is HTMLElement => target !== null,
                 );
@@ -87,7 +85,7 @@ export function BlockModal({
                   targets,
                   { opacity: [0, 1] },
                   {
-                    duration: reducedMotion ? duration / 2 : duration,
+                    duration: reducedMotion ? UI_TRANSITION_DURATION / 2 : UI_TRANSITION_DURATION,
                     ease: [0.23, 1, 0.32, 1],
                   },
                 );

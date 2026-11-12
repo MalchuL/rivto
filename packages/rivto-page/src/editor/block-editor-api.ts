@@ -9,12 +9,9 @@ import type { BlockEditorNodeApi } from "./blocks/block-editor-node-api";
 import type { BlockDropTargetsApi } from "./drag-and-drop/types";
 import type { BlockEditorEventsApi } from "./events/block-editor-events";
 import type { BlockEditorExtensionsApi } from "./extensions/types";
-import type { BlockAnimationDurations } from "./animation-durations";
 
 /** Borrowed editor contract for components and extensions; the host owns attachment and destruction. */
 export interface BlockEditorApi {
-  /** Borrowed block animation settings; omitted durations disable animation. */
-  readonly animations?: BlockAnimationDurations;
   /** Mounted primitive ownership; refs release their own registrations. */
   readonly regions: Pick<BlockLayoutRegions, "register" | "get">;
   /** Borrowed semantic bindings and physical state queries. */

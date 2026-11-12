@@ -5,7 +5,7 @@ import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
 import { PanelRegistry } from "../panels/panel-registry";
-import type { AnimationDurations, ReactEditorApi } from "./types";
+import type { ReactEditorApi } from "./types";
 /**
  * React runtime coordinator.
  *
@@ -61,8 +61,6 @@ const WRITING_NOT_INSTALLED =
  * construction is reserved for managed storage infrastructure and internal tests.
  */
 export class ReactEditor implements ReactEditorApi {
-  /** Animation durations borrowed by the editor's views. */
-  readonly animations: AnimationDurations | undefined;
   /** Framework-neutral core permanently bound to this document and its managers.
    * Document managers provide the following shared capabilities:
    * Creates and updates document elements, including canvas objects, through the core element manager.
@@ -206,13 +204,11 @@ export class ReactEditor implements ReactEditorApi {
    * `defaultWritingBlockExtension` (included by `standardPreset`).
    *
    * @param options - Borrowed document editor, synchronous extensions and presentation defaults.
-   * @param options.animations - Optional durations in seconds; omitted or zero entries disable their animations.
    * @throws Propagates manager construction failures. Extension setup failure triggers
    * runtime cleanup; if cleanup also fails, both failures are retained in AggregateError.
    */
   constructor(options: CreateReactEditorOptions) {
     const editor = options.editor;
-    this.animations = options.animations;
     this.core = editor;
     const extensions = new ExtensionManager(this);
     this.extensions = extensions;

@@ -2,41 +2,263 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { blockDropRegion } from "./drop-regions";
 
-test("moves a nested subtree together when indenting", async ({ page }) => {
+for (const reducedMotion of [false, true]) {
+  test(`moves a nested subtree on indent and outdent with reduced motion ${reducedMotion}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: reducedMotion ? "reduce" : "no-preference" });
+    await page.goto("/?test_features=1");
+    const surface = page.locator('[data-journal-document="today"] > .page-surface');
+    await page.evaluate(() => {
+      const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo;
+      editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+      editor.blocks.insertBlock({ id: "tree-parent", type: "paragraph", content: "Parent" });
+      editor.blocks.insertBlock({
+        id: "tree-root",
+        type: "paragraph",
+        content: "Root",
+        children: [{ id: "tree-child", type: "paragraph", content: "Child" }],
+      });
+    });
+    const root = surface.locator('[data-block-id="tree-root"]');
+    const content = root.locator(":scope > .rivto-block-row [data-block-content]");
+    await content.click();
+    for (const [key, selector] of [
+      [
+        "Tab",
+        '[data-block-id="tree-parent"] > .rivto-block-children > [data-block-id="tree-root"]',
+      ],
+      ["Shift+Tab", '[data-virtual-block-id="tree-root"] > [data-block-id="tree-root"]'],
+    ] as const) {
+      await page.keyboard.press(key);
+      await expect(surface.locator(selector)).toHaveCount(1);
+      await expect(root.locator('[data-block-id="tree-child"]')).toBeVisible();
+      await expect(content).toBeFocused();
+      if (reducedMotion) {
+        expect(await root.evaluate((element) => element.getAnimations().length)).toBe(0);
+      } else {
+        await expect
+          .poll(() => root.evaluate((element) => element.getAnimations().length))
+          .toBeGreaterThan(0);
+        expect(
+          await root.evaluate(
+            (element) => element.getAnimations()[0]?.effect?.getTiming().duration,
+          ),
+        ).toBe(200);
+        await root.evaluate(async (element) => {
+          await Promise.all(element.getAnimations().map((animation) => animation.finished));
+        });
+      }
+    }
+  });
+}
+
+test("animates multiple selected blocks together on indent and outdent", async ({ page }) => {
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
-    const { editor } = (
-      window as unknown as {
-        __rivtoDemo: {
-          editor: DocumentEditorAPI;
-        };
-      }
-    ).__rivtoDemo;
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo;
     editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
-    editor.blocks.insertBlock({ id: "tree-parent", type: "paragraph", content: "Parent" });
+    editor.blocks.insertBlock({ id: "multi-parent", type: "paragraph", content: "Parent" });
     editor.blocks.insertBlock({
-      id: "tree-root",
+      id: "multi-first",
       type: "paragraph",
-      content: "Root",
-      children: [{ id: "tree-child", type: "paragraph", content: "Child" }],
+      content: "First",
+      children: [{ id: "multi-child", type: "paragraph", content: "Child" }],
+    });
+    editor.blocks.insertBlock({ id: "multi-last", type: "paragraph", content: "Last" });
+  });
+  const first = surface.locator('[data-block-id="multi-first"]');
+  const last = surface.locator('[data-block-id="multi-last"]');
+  const child = surface.locator('[data-block-id="multi-child"]');
+  await first.locator(":scope > .rivto-block-row [data-block-content]").click();
+  await last
+    .locator(":scope > .rivto-block-row [data-block-content]")
+    .click({ modifiers: ["Shift"] });
+  for (const [key, parent] of [
+    ["Tab", "multi-parent"],
+    ["Shift+Tab", null],
+  ] as const) {
+    await page.keyboard.press(key);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const blocks = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+            .__rivtoDemo.editor.blocks;
+          return [blocks.getParentId("multi-first"), blocks.getParentId("multi-last")];
+        }),
+      )
+      .toEqual([parent, parent]);
+    for (const block of [first, last]) {
+      await expect
+        .poll(() =>
+          block.evaluate((element) =>
+            element
+              .getAnimations()
+              .some((animation) =>
+                (animation.effect as KeyframeEffect)
+                  .getKeyframes()
+                  .some((frame) => "transform" in frame),
+              ),
+          ),
+        )
+        .toBe(true);
+    }
+    const groupFrames = await Promise.all(
+      [first, last].map((block) =>
+        block.evaluate((element) => {
+          const animation = element
+            .getAnimations()
+            .find((item) =>
+              (item.effect as KeyframeEffect).getKeyframes().some((frame) => "transform" in frame),
+            )!;
+          return {
+            frames: (animation.effect as KeyframeEffect)
+              .getKeyframes()
+              .map((frame) => frame.transform),
+            duration: animation.effect?.getTiming().duration,
+          };
+        }),
+      ),
+    );
+    expect(groupFrames[0]).toEqual(groupFrames[1]);
+    expect(groupFrames[0]!.duration).toBe(200);
+    expect(groupFrames[0]!.frames).toHaveLength(4);
+    expect(groupFrames[0]!.frames[2]).toMatch(/^translate\(-?3px/);
+    expect(
+      await child.evaluate((element) =>
+        element
+          .getAnimations()
+          .some((animation) =>
+            (animation.effect as KeyframeEffect)
+              .getKeyframes()
+              .some((frame) => "transform" in frame),
+          ),
+      ),
+    ).toBe(false);
+    await first.evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
+  }
+  await page.keyboard.press("Tab");
+  await expect
+    .poll(() => first.evaluate((element) => element.getAnimations().length))
+    .toBeGreaterThan(0);
+  await page.keyboard.press("Shift+Tab");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const blocks = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+          .__rivtoDemo.editor.blocks;
+        return [blocks.getParentId("multi-first"), blocks.getParentId("multi-last")];
+      }),
+    )
+    .toEqual([null, null]);
+  for (const block of [first, last]) {
+    await expect
+      .poll(() => block.evaluate((element) => getComputedStyle(element).transform))
+      .toBe("none");
+    await expect(block).toHaveAttribute("data-block-selected", "true");
+    expect(
+      await block.evaluate((element: HTMLElement) => ({
+        width: element.style.width,
+        height: element.style.height,
+        boxSizing: element.style.boxSizing,
+      })),
+    ).toEqual({ width: "", height: "", boxSizing: "" });
+  }
+});
+
+test("moves a selected parent and child with one rebound", async ({ page }) => {
+  await page.goto("/?test_features=1");
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo;
+    editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+    editor.blocks.insertBlock({ id: "nested-target", type: "paragraph", content: "Target" });
+    editor.blocks.insertBlock({
+      id: "nested-parent",
+      type: "paragraph",
+      content: "Parent",
+      children: [{ id: "nested-child", type: "paragraph", content: "Child" }],
     });
   });
-  const root = surface.locator('[data-block-id="tree-root"]');
-  await root.locator(":scope > .rivto-block-row [data-block-content]").click();
+  const parent = surface.locator('[data-block-id="nested-parent"]');
+  const child = surface.locator('[data-block-id="nested-child"]');
+  await parent.locator(":scope > .rivto-block-row [data-block-content]").click();
+  await child
+    .locator(":scope > .rivto-block-row [data-block-content]")
+    .click({ modifiers: ["Shift"] });
+  await expect(parent).toHaveAttribute("data-block-selected", "true");
+  await expect(child).toHaveAttribute("data-block-selected", "true");
   await page.keyboard.press("Tab");
   await expect(
     surface.locator(
-      '[data-block-id="tree-parent"] > .rivto-block-children > [data-block-id="tree-root"]',
+      '[data-block-id="nested-target"] > .rivto-block-children > [data-block-id="nested-parent"]',
     ),
   ).toHaveCount(1);
-  expect(await root.evaluate((element) => element.getAnimations().length)).toBe(0);
-  await expect(root.locator('[data-block-id="tree-child"]')).toBeVisible();
+  await expect
+    .poll(() =>
+      parent.evaluate((element) =>
+        element
+          .getAnimations()
+          .some((animation) =>
+            (animation.effect as KeyframeEffect)
+              .getKeyframes()
+              .some((frame) => "transform" in frame),
+          ),
+      ),
+    )
+    .toBe(true);
+  const frames = await parent.evaluate((element) =>
+    (
+      element
+        .getAnimations()
+        .find((animation) =>
+          (animation.effect as KeyframeEffect).getKeyframes().some((frame) => "transform" in frame),
+        )!.effect as KeyframeEffect
+    ).getKeyframes(),
+  );
+  expect(frames).toHaveLength(4);
+  expect(
+    await child.evaluate((element) =>
+      element
+        .getAnimations()
+        .some((animation) =>
+          (animation.effect as KeyframeEffect).getKeyframes().some((frame) => "transform" in frame),
+        ),
+    ),
+  ).toBe(false);
+});
+
+test("interrupts an indent when the same block is immediately outdented", async ({ page }) => {
+  await page.goto("/?test_features=1");
+  const surface = page.locator('[data-journal-document="today"] > .page-surface');
+  await page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo;
+    editor.load({ ...editor.dump(), blocks: [], elements: [], rootElementIds: [] });
+    editor.blocks.insertBlock({ id: "rapid-parent", type: "paragraph", content: "Parent" });
+    editor.blocks.insertBlock({ id: "rapid-child", type: "paragraph", content: "Child" });
+  });
+  const child = surface.locator('[data-block-id="rapid-child"]');
+  const content = child.locator("[data-block-content]");
+  await content.click();
+  await page.keyboard.press("Tab");
+  await expect
+    .poll(() => child.evaluate((element) => element.getAnimations().length))
+    .toBeGreaterThan(0);
   await page.keyboard.press("Shift+Tab");
   await expect(
-    surface.locator('[data-virtual-block-id="tree-root"] > [data-block-id="tree-root"]'),
+    surface.locator('[data-virtual-block-id="rapid-child"] > [data-block-id="rapid-child"]'),
   ).toHaveCount(1);
-  expect(await root.evaluate((element) => element.getAnimations().length)).toBe(0);
+  await expect(content).toBeFocused();
+  await expect
+    .poll(() => child.evaluate((element) => getComputedStyle(element).transform))
+    .toBe("none");
 });
 
 test("animates a dropped block after its document order changes", async ({ page }) => {
@@ -221,7 +443,7 @@ test("jiggles a block dropped into another block without fading", async ({ page 
   ]);
 });
 
-test("outdents with Backspace without an insertion fade", async ({ page }) => {
+test("animates outdent with Backspace without an insertion fade", async ({ page }) => {
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
@@ -260,10 +482,12 @@ test("outdents with Backspace without an insertion fade", async ({ page }) => {
         ),
     ),
   ).toBe(false);
-  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
+  await expect
+    .poll(() => child.evaluate((element) => element.getAnimations().length))
+    .toBeGreaterThan(0);
 });
 
-test("outdents an empty nested block on Enter without animation", async ({ page }) => {
+test("animates outdent of an empty nested block on Enter", async ({ page }) => {
   await page.goto("/?test_features=1");
   const surface = page.locator('[data-journal-document="today"] > .page-surface');
   await page.evaluate(() => {
@@ -288,7 +512,9 @@ test("outdents an empty nested block on Enter without animation", async ({ page 
     surface.locator('[data-virtual-block-id="enter-child"] > [data-block-id="enter-child"]'),
   ).toHaveCount(1);
   const row = child.locator(":scope > .rivto-block-row");
-  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
+  await expect
+    .poll(() => child.evaluate((element) => element.getAnimations().length))
+    .toBeGreaterThan(0);
   expect(
     await row.evaluate((element) =>
       element
@@ -300,7 +526,7 @@ test("outdents an empty nested block on Enter without animation", async ({ page 
   ).toBe(false);
 });
 
-test("indents a row inside a zoomed canvas card without animation", async ({ page }) => {
+test("animates indent inside a zoomed canvas card", async ({ page }) => {
   await page.goto("/?test_features=1");
   await page.locator('[data-editor-mode="edgeless"]').click();
   await page.getByRole("button", { name: "Zoom out" }).click();
@@ -324,5 +550,7 @@ test("indents a row inside a zoomed canvas card without animation", async ({ pag
       `:scope > .rivto-block-children > [data-block-id="${parentId}"] > .rivto-block-children > [data-block-id="${childId}"]`,
     ),
   ).toHaveCount(1);
-  expect(await child.evaluate((element) => element.getAnimations().length)).toBe(0);
+  await expect
+    .poll(() => child.evaluate((element) => element.getAnimations().length))
+    .toBeGreaterThan(0);
 });

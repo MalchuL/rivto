@@ -3456,3 +3456,28 @@ test("keeps block card geometry stable when React re-renders mid-resize", async 
       bottom: Math.round(seBefore.y),
     });
 });
+
+for (const kind of ["visual", "block"] as const) {
+  test(`deletes a selected canvas ${kind} immediately and supports undo`, async ({ page }) => {
+    await switchMode(page, "edgeless");
+    const target =
+      kind === "visual"
+        ? await createVisual(page, "Rectangle")
+        : page
+            .locator("[data-edgeless-root]")
+            .filter({ has: page.locator(".rivto-block-children") })
+            .first();
+    const id = await target.getAttribute("data-edgeless-object-id");
+    expect(id).toBeTruthy();
+    if (kind === "block") {
+      await clickCardChrome(page, target);
+    } else {
+      await target.click({ force: true });
+    }
+    await page.keyboard.press("Delete");
+    await expect(page.locator(`[data-edgeless-object-id="${id}"]`)).toHaveCount(0);
+    await expect(page.locator("[data-block-deletion-animation]")).toHaveCount(0);
+    await page.keyboard.press("Control+z");
+    await expect(page.locator(`[data-edgeless-object-id="${id}"]`)).toHaveCount(1);
+  });
+}
