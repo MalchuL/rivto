@@ -5,7 +5,7 @@
  * document model, allowing several differently configured editors to share the
  * same document safely.
  */
-import { releaseAfterCall } from "./release-after-call";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /** One named transformation or validation step in an editor pipeline. */
 export interface PipeProcessor<Value, Context = Record<string, never>> {

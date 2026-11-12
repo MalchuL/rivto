@@ -1,5 +1,5 @@
 /**
- * Verifies schema-v8 storage, atomic writes, collaboration, and path-cache repair.
+ * Verifies schema-v9 storage, atomic writes, collaboration, and path-cache repair.
  * Uses generic storage primitives; editor feature policies are tested with their
  * public managers so document tests do not depend on outline commands.
  */

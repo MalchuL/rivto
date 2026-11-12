@@ -46,18 +46,19 @@ export class DocumentModelImpl implements DocumentModel {
   /**
    * Initializes document-level storage and focused managers.
    *
-   * Managers receive the CRDT adapter and private undo-scope accumulator
-   * directly; none retain the coordinating document model.
+   * Managers receive the CRDT adapter directly; none retain the coordinating
+   * document model. Their collaborative scopes are collected after initial
+   * normalization to create the document-owned history manager.
    *
    * After the initial tree repair, updates outside the adapter's local transaction
    * window and not marked local re-run block and element normalization. Local APIs
    * already keep parent/child lists consistent; foreign writes (providers, `applyUpdate`, undo, peers)
    * can merge into duplicate ids, missing refs, or orphans.
    *
-   * @param crdt - Collaborative document owning identity and local transactions.
+   * @param crdt - Collaborative document owning identity and local transactions; this model destroys it during teardown.
    * @param options - Optional history settings for this document.
    * @param options.maxHistoryEntries - Maximum entries per undo and redo stack; defaults to 100.
-   * @throws If the history limit is not a non-negative integer.
+   * @throws If the history limit is not a non-negative integer, or manager initialization fails.
    */
   constructor(crdt: CRDTDoc, options: DocumentModelOptions = {}) {
     const maxEntries = options.maxHistoryEntries ?? DEFAULT_MAX_HISTORY_ENTRIES;
@@ -146,7 +147,8 @@ export class DocumentModelImpl implements DocumentModel {
   /**
    * Provides local history and transaction batching for this document.
    *
-   * @returns The document-owned history manager until teardown completes.
+   * @returns The document-owned history manager until teardown completes. Its
+   * destruction is attempted before providers disconnect.
    * @throws If document teardown has completed.
    */
   get history(): DocumentHistoryManagerApi {
@@ -269,8 +271,9 @@ export class DocumentModelImpl implements DocumentModel {
    * Releases document-owned history, subscriptions, and collaborative storage.
    *
    * Cleanup continues after individual failures so CRDT providers are not leaked.
-   * Managers remain available during provider disconnection and are released
-   * after it settles, including when teardown fails.
+   * Block, element, and plugin-data managers remain available during provider
+   * disconnection and are released after it settles, including when teardown fails.
+   * History destruction is attempted before provider disconnection begins.
    *
    * @returns Promise resolved after asynchronous CRDT cleanup.
    * @throws A cleanup error, or an AggregateError when multiple cleanups fail.

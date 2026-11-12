@@ -7,7 +7,7 @@ import type {
   BlockResolution,
 } from "./types";
 import { waitWithAbort } from "./wait-with-abort";
-import { releaseAfterCall } from "../utils/release-after-call";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /** Resolves document-qualified block references and observes source relocation. */
 export class BlockReferenceResolver<
@@ -81,108 +81,14 @@ export class BlockReferenceResolver<
     listener: (resolution: BlockResolution, error?: unknown) => void,
   ): () => void {
     this.assertActive();
-    const controller = new AbortController();
-    const watched = new Map<Model, () => void>();
-    let location: BlockResolution = { ambiguous: false };
-    let failed = false;
-    let settled = false;
-    let generation = 0;
-    /**
-     * Starts one location search and supersedes results from earlier searches.
-     *
-     * Registry and source-presence changes may start another search through
-     * the subscriptions below; failed or missing results do not schedule one.
-     *
-     * @returns Scheduling of one lookup and publication of its current result or error.
-     */
-    const search = () => {
-      const current = ++generation;
-      // CRDT structure observers can run before every record in a transaction is visible.
-      queueMicrotask(() => {
-        if (controller.signal.aborted || current !== generation) {
-          return;
-        }
-        void this.resolveBlock(reference, { signal: controller.signal })
-          .then((result) => {
-            if (controller.signal.aborted || current !== generation) {
-              return;
-            }
-            const next = result.documentId
-              ? result
-              : { ...result, documentId: location.documentId };
-            if (
-              !settled ||
-              next.documentId !== location.documentId ||
-              next.ambiguous !== location.ambiguous ||
-              failed
-            ) {
-              failed = false;
-              settled = true;
-              location = next;
-              listener(next);
-              watch();
-            }
-          })
-          .catch((error) => {
-            if (!controller.signal.aborted && current === generation) {
-              failed = true;
-              listener(location, error);
-            }
-          });
-      });
-    };
-    const watch = () => {
-      const direct =
-        (!location.documentId || location.documentId === reference.documentId) &&
-        this.requireStorage().getDocument(reference.documentId)?.blocks.hasBlock(reference.blockId);
-      const models = new Set(
-        direct
-          ? [this.requireStorage().getDocument(reference.documentId)!]
-          : this.requireStorage().getDocuments(),
-      );
-      watched.forEach((unsubscribe, model) => {
-        if (!models.has(model)) {
-          unsubscribe();
-          watched.delete(model);
-        }
-      });
-      models.forEach((model) => {
-        if (!watched.has(model)) {
-          let present = model.blocks.hasBlock(reference.blockId);
-          watched.set(
-            model,
-            model.blocks.subscribeBlockNode(reference.blockId, () => {
-              queueMicrotask(() => {
-                if (controller.signal.aborted) {
-                  return;
-                }
-                const next = model.blocks.hasBlock(reference.blockId);
-                if (next !== present) {
-                  present = next;
-                  watch();
-                  search();
-                }
-              });
-            }),
-          );
-        }
-      });
-    };
-    const refresh = () => {
-      watch();
-      search();
-    };
-    const unsubscribe = this.requireStorage().subscribeDocuments(refresh);
-    const cleanup = releaseAfterCall(() => {
-      controller.abort();
-      unsubscribe();
-      this.locationSubscriptions.delete(cleanup);
-      watched.forEach((stop) => stop());
-      watched.clear();
-    });
-    this.locationSubscriptions.add(cleanup);
-    refresh();
-    return cleanup;
+    const subscription = new BlockLocationSubscription(
+      this,
+      () => this.requireStorage(),
+      this.locationSubscriptions,
+      reference,
+      listener,
+    );
+    return subscription.subscribe();
   }
 
   /**
@@ -286,4 +192,163 @@ export class BlockReferenceResolver<
       throw new Error("Block reference resolver is destroyed");
     }
   }
+}
+
+/**
+ * Owns one block-location search and its borrowed document observations.
+ *
+ * The resolver owns the returned cleanup; the observed models and registry remain
+ * borrowed. Search generations discard stale asynchronous results after refresh.
+ */
+class BlockLocationSubscription<
+  Model extends ReferencedDocument,
+  Editor extends ReferencedEditor<Model>,
+> {
+  private readonly controller = new AbortController();
+  private readonly watched = new Map<Model, () => void>();
+  private location: BlockResolution = { ambiguous: false };
+  private failed = false;
+  private settled = false;
+  private generation = 0;
+
+  /**
+   * Captures the resolver and registry needed by one location observer.
+   *
+   * @param resolver - Borrowed operation that resolves the captured reference.
+   * @param source - Reads the resolver's borrowed document source while it remains active.
+   * @param subscriptions - Resolver-owned cleanup set updated on subscription and release.
+   * @param reference - Preferred document and document-local block identity.
+   * @param listener - Receives completed resolutions or lookup errors.
+   */
+  constructor(
+    private readonly resolver: Pick<BlockReferenceResolver<Model, Editor>, "resolveBlock">,
+    private readonly source: () => Pick<
+      BlockReferenceSource<Model, Editor>,
+      "getDocument" | "getDocuments" | "subscribeDocuments"
+    >,
+    private readonly subscriptions: Pick<Set<() => void>, "add" | "delete">,
+    private readonly reference: BlockReference,
+    private readonly listener: (resolution: BlockResolution, error?: unknown) => void,
+  ) {}
+
+  /**
+   * Subscribes to availability and starts the initial source lookup.
+   *
+   * @returns An idempotent cleanup that cancels lookup and removes owned observations.
+   * @throws If registry or block observation setup fails.
+   */
+  subscribe(): () => void {
+    const unsubscribe = this.source().subscribeDocuments(this.refresh);
+    const cleanup = releaseAfterCall(() => {
+      this.controller.abort();
+      unsubscribe();
+      this.subscriptions.delete(cleanup);
+      this.watched.forEach((stop) => stop());
+      this.watched.clear();
+    });
+    this.subscriptions.add(cleanup);
+    this.refresh();
+    return cleanup;
+  }
+
+  /**
+   * Starts one location search and supersedes results from earlier searches.
+   *
+   * Registry and source-presence changes may start another search through
+   * the subscriptions below; failed or missing results do not schedule one.
+   *
+   * @returns Scheduling of one lookup and publication of its current result or error.
+   */
+  private search(): void {
+    const current = ++this.generation;
+    // CRDT structure observers can run before every record in a transaction is visible.
+    queueMicrotask(() => {
+      if (this.controller.signal.aborted || current !== this.generation) {
+        return;
+      }
+      void this.resolver
+        .resolveBlock(this.reference, { signal: this.controller.signal })
+        .then((result) => {
+          if (this.controller.signal.aborted || current !== this.generation) {
+            return;
+          }
+          const next = result.documentId
+            ? result
+            : { ...result, documentId: this.location.documentId };
+          if (
+            !this.settled ||
+            next.documentId !== this.location.documentId ||
+            next.ambiguous !== this.location.ambiguous ||
+            this.failed
+          ) {
+            this.failed = false;
+            this.settled = true;
+            this.location = next;
+            this.listener(next);
+            this.watch();
+          }
+        })
+        .catch((error) => {
+          if (!this.controller.signal.aborted && current === this.generation) {
+            this.failed = true;
+            this.listener(this.location, error);
+          }
+        });
+    });
+  }
+
+  /**
+   * Watches the preferred source or loaded candidates for block presence changes.
+   *
+   * @returns Subscriptions match the currently relevant loaded documents.
+   * @throws If a document lookup or subscription fails.
+   */
+  private watch(): void {
+    const direct =
+      (!this.location.documentId || this.location.documentId === this.reference.documentId) &&
+      this.source().getDocument(this.reference.documentId)?.blocks.hasBlock(this.reference.blockId);
+    const models = new Set(
+      direct
+        ? [this.source().getDocument(this.reference.documentId)!]
+        : this.source().getDocuments(),
+    );
+    this.watched.forEach((unsubscribe, model) => {
+      if (!models.has(model)) {
+        unsubscribe();
+        this.watched.delete(model);
+      }
+    });
+    models.forEach((model) => {
+      if (!this.watched.has(model)) {
+        let present = model.blocks.hasBlock(this.reference.blockId);
+        this.watched.set(
+          model,
+          model.blocks.subscribeBlockNode(this.reference.blockId, () => {
+            queueMicrotask(() => {
+              if (this.controller.signal.aborted) {
+                return;
+              }
+              const next = model.blocks.hasBlock(this.reference.blockId);
+              if (next !== present) {
+                present = next;
+                this.watch();
+                this.search();
+              }
+            });
+          }),
+        );
+      }
+    });
+  }
+
+  /**
+   * Reconciles watched documents and schedules a fresh location search.
+   *
+   * @returns Current sources are watched and a lookup is scheduled.
+   * @throws If reconciling document observations fails.
+   */
+  private readonly refresh = (): void => {
+    this.watch();
+    this.search();
+  };
 }

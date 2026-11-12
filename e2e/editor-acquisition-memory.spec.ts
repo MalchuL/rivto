@@ -5,6 +5,12 @@ import type { EditorStorage } from "@chulane/rivto-react";
 interface AcquisitionMemoryWindow extends Window {
   readonly __rivtoDocuments: { readonly editor: EditorStorage };
   acquisitionProbe: {
+    /**
+     * Releases the retained editor acquisition once.
+     *
+     * @returns A promise resolving after the acquisition is released.
+     * @throws If acquisition cleanup fails.
+     */
     readonly release: () => Promise<void>;
     readonly editor: WeakRef<object>;
     readonly document: WeakRef<object>;

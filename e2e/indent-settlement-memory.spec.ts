@@ -2,17 +2,11 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import type { ReactEditorApi } from "@chulane/rivto-react";
 
-/** Demo runtime that owns panel destruction. */
-interface DestroyableReactEditor extends ReactEditorApi {
-  /** @returns A promise resolving after editor cleanup. */
-  destroy(): Promise<void>;
-}
-
 /** Browser observations for an interrupted indent settlement. */
 interface IndentMemoryWindow extends Window {
   readonly __rivtoDemo: {
     readonly editor: DocumentEditorAPI;
-    readonly reactEditor: DestroyableReactEditor;
+    readonly reactEditor: ReactEditorApi;
   };
   readonly settlementWheels: Set<EventListenerOrEventListenerObject>;
   readonly cancelledFrames: number[];

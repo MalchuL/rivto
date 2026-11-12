@@ -549,6 +549,15 @@ describe("YjsDoc", () => {
       });
     });
 
+    it("rejects unsupported roots before clearing existing state", () => {
+      yjsDoc.getMap("root").set("title", "Preserved");
+
+      expect(() => yjsDoc.fromJSON({ root: { title: "Changed" }, invalid: 1 })).toThrow(
+        'Unsupported root type for key "invalid"',
+      );
+      expect(yjsDoc.getMap("root").get("title")).toBe("Preserved");
+    });
+
     it("fromJSON should restore document state", () => {
       const mapRoot = new Map<string, any>([
         ["title", "FromMapRoot"],

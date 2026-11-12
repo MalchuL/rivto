@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { ReactEditorApi } from "@chulane/rivto-react";
 
@@ -55,10 +56,7 @@ test("completed extension cleanups release their callback data", async ({ page, 
   expect(result).toBeGreaterThanOrEqual(0);
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "extensionMemoryProbe") as ExtensionMemoryProbe;
       return {
@@ -86,10 +84,7 @@ for (const owner of ["runtime", "panel"] as const) {
     }, owner);
     if (browserName === "chromium") {
       const session = await page.context().newCDPSession(page);
-      for (let index = 0; index < 8; index++) {
-        await page.waitForTimeout(0);
-        await session.send("HeapProfiler.collectGarbage");
-      }
+      await collectGarbage(page, session);
       const retained = await page.evaluate(() => {
         const probe = Reflect.get(window, "runtimeMemoryProbe") as { payload: WeakRef<object> };
         return Boolean(probe.payload.deref());
@@ -116,10 +111,7 @@ test("completed revision subscription releases its listener data", async ({
   });
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "revisionMemoryProbe") as { payload: WeakRef<object> };
       return Boolean(probe.payload.deref());
@@ -144,10 +136,7 @@ test("destroyed runtime releases a retained revision subscription", async ({
   });
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "revisionMemoryProbe") as { payload: WeakRef<object> };
       return Boolean(probe.payload.deref());

@@ -17,7 +17,7 @@ import type { ReactEditorApi } from "./types";
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { BlockElementProjection } from "../elements/block-element-projection";
-import { releaseAfterCall } from "../utils/release-after-call";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 import type { BlockFactory } from "../block-factories";
 import type { BlockBehaviorsApi } from "../managers/blocks/block-behaviors-api";
 import type { BlockListPropsApi } from "../managers/blocks/block-list-props-api";
@@ -243,21 +243,7 @@ export class ReactEditor implements ReactEditorApi {
     this.surfaces = new SurfaceManager(extensions);
     this.blockElements = new BlockElementProjection(this);
     this.disposers.push(() => this.blockElements.destroy());
-    try {
-      extensions.initialize(options.extensions ?? []);
-      this.disposers.push(
-        this.core.blocks.subscribeStructure(this.blockElements.schedule),
-        this.core.elements.subscribe(this.blockElements.schedule),
-      );
-      this.blockElements.schedule();
-    } catch (error) {
-      try {
-        this.destroy();
-      } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], "React editor setup and cleanup failed");
-      }
-      throw error;
-    }
+    this.initializeExtensions(extensions, options.extensions);
   }
 
   /**
@@ -335,6 +321,37 @@ export class ReactEditor implements ReactEditorApi {
       throw new AggregateError(errors, "React editor teardown failed");
     }
     return Promise.resolve();
+  }
+
+  /**
+   * Installs extensions and subscribes the block-element projection to document changes.
+   *
+   * Failed setup destroys the partially initialized runtime before rethrowing.
+   *
+   * @param extensions - Extension owner used to install the configured extensions.
+   * @param configured - Extensions to install in order; defaults to none.
+   * @returns Extensions are installed and projection updates are scheduled.
+   * @throws If setup fails, or AggregateError if cleanup also fails.
+   */
+  private initializeExtensions(
+    extensions: Pick<ExtensionManager, "initialize">,
+    configured: CreateReactEditorOptions["extensions"],
+  ): void {
+    try {
+      extensions.initialize(configured ?? []);
+      this.disposers.push(
+        this.core.blocks.subscribeStructure(this.blockElements.schedule),
+        this.core.elements.subscribe(this.blockElements.schedule),
+      );
+      this.blockElements.schedule();
+    } catch (error) {
+      try {
+        this.destroy();
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "React editor setup and cleanup failed");
+      }
+      throw error;
+    }
   }
 }
 

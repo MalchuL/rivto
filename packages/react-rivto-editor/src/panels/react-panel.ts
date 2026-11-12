@@ -1,4 +1,4 @@
-import { Listeners } from "@chulane/rivto-utils";
+import { Listeners, releaseAfterCall } from "@chulane/rivto-utils";
 import { PAGE_SELECTION_BINDINGS } from "../surfaces/page/page-selection-extension";
 import { PageNavigationController } from "../surfaces/page/page-navigation-controller";
 import { PanelBlockContextMenuManager } from "../managers/block-context-menu/panel-manager";
@@ -23,7 +23,6 @@ import { PanelKeyboardManager } from "../managers/keyboard/panel-keyboard-manage
 import type { PanelSelectionApi } from "../managers/selection/api";
 import { PanelSelectionManager } from "../managers/selection/panel-selection-manager";
 import { PanelSlashCommandManager } from "../managers/slash/panel-slash-command-manager";
-import { releaseAfterCall } from "../utils/release-after-call";
 import type { PanelOptions, PanelSnapshot, ReactPanelApi } from "./types";
 
 /**
@@ -134,25 +133,7 @@ export class ReactPanel implements ReactPanelApi {
         this.blocks,
         this.mode,
       );
-      /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
-      this.registrations.add(
-        editor.blockElements.maintainBlockCards(
-          corePanel instanceof EmbeddingPanel ? null : (corePanel.rootBlockId ?? null),
-          corePanel.rootElementId,
-        ),
-      );
-      this.updateSnapshot(this.corePanel.document.getDocument(), true);
-      // A subtree root can disappear and return through undo while its document remains retained.
-      if (this.corePanel.rootBlockId) {
-        this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(
-          this.corePanel.rootBlockId,
-          () => this.updateSnapshot(this.corePanel.document.getDocument(), true),
-        );
-      }
-      // Keep edits made in different presentation modes out of the same undo capture.
-      this.unsubscribeMode = this.mode.subscribe(() =>
-        this.corePanel.document.history.stopCapturing(),
-      );
+      this.connectDocumentSubscriptions();
     } catch (error) {
       try {
         this.destroy();
@@ -376,6 +357,37 @@ export class ReactPanel implements ReactPanelApi {
       this.registerCurrentDOMRoot();
     }
   };
+
+  /**
+   * Connects the block-card projection and subscriptions owned by this panel.
+   *
+   * Their cleanup is retained for panel destruction. Construction calls this only
+   * after the local page managers exist, and rolls back partial setup on failure.
+   *
+   * @returns The initial snapshot and document subscriptions are connected.
+   * @throws If projection setup, snapshot publication, or subscription fails.
+   */
+  private connectDocumentSubscriptions(): void {
+    /** Connects the concrete panel's block-card projection and retains its release callback for cleanup. */
+    this.registrations.add(
+      this.editor.blockElements.maintainBlockCards(
+        this.corePanel instanceof EmbeddingPanel ? null : (this.corePanel.rootBlockId ?? null),
+        this.corePanel.rootElementId,
+      ),
+    );
+    this.updateSnapshot(this.corePanel.document.getDocument(), true);
+    // A subtree root can disappear and return through undo while its document remains retained.
+    if (this.corePanel.rootBlockId) {
+      this.unsubscribeBlock = this.corePanel.document.blocks.subscribeBlockNode(
+        this.corePanel.rootBlockId,
+        () => this.updateSnapshot(this.corePanel.document.getDocument(), true),
+      );
+    }
+    // Keep edits made in different presentation modes out of the same undo capture.
+    this.unsubscribeMode = this.mode.subscribe(() =>
+      this.corePanel.document.history.stopCapturing(),
+    );
+  }
 
   /** @returns Nothing after notifying local transient UI that this panel lost focus. */
   private readonly deactivate = (): void => {

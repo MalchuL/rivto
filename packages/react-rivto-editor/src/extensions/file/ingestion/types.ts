@@ -146,6 +146,7 @@ export interface FileIngestionStatuses {
    * Removes all upload feedback and its retry callbacks.
    *
    * @returns Publishes the empty state when statuses existed.
+   * @throws If publishing the empty state fails.
    */
   clear(): void;
 }

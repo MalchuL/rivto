@@ -59,6 +59,7 @@ export class FileIngestion {
    * Cancels pending work when the owning extension is destroyed.
    *
    * @returns Signals cancellation and releases upload feedback, retry callbacks, and error notification.
+   * @throws If clearing feedback fails; the error notification callback is then retained.
    */
   destroy(): void {
     this.abort.abort();

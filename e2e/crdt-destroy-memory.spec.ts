@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { EditorStorage, ReactEditorApi } from "@chulane/rivto-react";
 import type { YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
@@ -46,10 +47,7 @@ test("a retained destroyed adapter releases its native document", async ({ page,
   });
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "destroyedAdapterProbe") as DestroyedAdapterProbe;
       return probe.document.deref() !== undefined;
@@ -85,10 +83,7 @@ for (const kind of ["map", "array"] as const) {
     }, kind);
     if (browserName === "chromium") {
       const session = await page.context().newCDPSession(page);
-      for (let index = 0; index < 8; index++) {
-        await page.waitForTimeout(0);
-        await session.send("HeapProfiler.collectGarbage");
-      }
+      await collectGarbage(page, session);
       const retained = await page.evaluate(() => {
         const probe = Reflect.get(window, "observerHandleProbe");
         return { payload: !!probe.payload.deref(), nativeDocument: !!probe.nativeDocument.deref() };
@@ -97,6 +92,58 @@ for (const kind of ["map", "array"] as const) {
       await session.detach();
     }
   });
+}
+
+/**
+ * Detaches a provider and retains only its cleanup and weak references in the page.
+ *
+ * Runs in the browser so the test can check whether the detached objects are collected.
+ *
+ * @param operation - Cleanup path used before retaining the provider handle.
+ * @returns A promise resolving after the provider and document teardown attempts.
+ * @throws If teardown fails unexpectedly or the expected disconnection failure is absent.
+ */
+async function createProviderCleanupProbe(
+  operation: "cleanup" | "detach" | "destroy" | "destroy-failure",
+): Promise<void> {
+  const host = (window as any).__rivtoDocuments;
+  const Adapter = host.registry.root.constructor;
+  const adapter = new Adapter(`provider-${operation}`);
+  const provider = {
+    id: "probe",
+    bytes: new Uint8Array(1_000_000),
+    connect: async () => {},
+    disconnect: async () => {
+      if (operation === "destroy-failure") {
+        throw new Error("disconnect failed");
+      }
+    },
+  };
+  const adapterReference = new WeakRef(adapter);
+  const providerReference = new WeakRef(provider);
+  const cleanup = await adapter.attachProvider(provider);
+  if (operation === "cleanup") {
+    await cleanup();
+  }
+  if (operation === "detach") {
+    await adapter.detachProvider("probe");
+  }
+  if (operation === "destroy-failure") {
+    await adapter.destroy().then(
+      () => {
+        throw new Error("expected disconnect failure");
+      },
+      (error: Error) => {
+        if (error.message !== "disconnect failed") {
+          throw error;
+        }
+      },
+    );
+    await cleanup();
+  } else {
+    await adapter.destroy();
+  }
+  Reflect.set(window, "providerHandleProbe", { cleanup, adapterReference, providerReference });
 }
 
 for (const operation of ["cleanup", "detach", "destroy", "destroy-failure"] as const) {
@@ -108,52 +155,10 @@ for (const operation of ["cleanup", "detach", "destroy", "destroy-failure"] as c
     await expect(
       page.locator('[data-document-pane="source"] [data-block-content]').first(),
     ).toBeVisible();
-    await page.evaluate(async (operation) => {
-      const host = (window as any).__rivtoDocuments;
-      const Adapter = host.registry.root.constructor;
-      const adapter = new Adapter(`provider-${operation}`);
-      const provider = {
-        id: "probe",
-        bytes: new Uint8Array(1_000_000),
-        connect: async () => {},
-        disconnect: async () => {
-          if (operation === "destroy-failure") {
-            throw new Error("disconnect failed");
-          }
-        },
-      };
-      const adapterReference = new WeakRef(adapter);
-      const providerReference = new WeakRef(provider);
-      const cleanup = await adapter.attachProvider(provider);
-      if (operation === "cleanup") {
-        await cleanup();
-      }
-      if (operation === "detach") {
-        await adapter.detachProvider("probe");
-      }
-      if (operation === "destroy-failure") {
-        await adapter.destroy().then(
-          () => {
-            throw new Error("expected disconnect failure");
-          },
-          (error: Error) => {
-            if (error.message !== "disconnect failed") {
-              throw error;
-            }
-          },
-        );
-        await cleanup();
-      } else {
-        await adapter.destroy();
-      }
-      Reflect.set(window, "providerHandleProbe", { cleanup, adapterReference, providerReference });
-    }, operation);
+    await page.evaluate(createProviderCleanupProbe, operation);
     if (browserName === "chromium") {
       const session = await page.context().newCDPSession(page);
-      for (let index = 0; index < 8; index++) {
-        await page.waitForTimeout(0);
-        await session.send("HeapProfiler.collectGarbage");
-      }
+      await collectGarbage(page, session);
       const retained = await page.evaluate(() => {
         const probe = Reflect.get(window, "providerHandleProbe");
         return {

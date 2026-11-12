@@ -118,11 +118,23 @@ export class DemoDatabase {
   private readonly listeners = new Listeners<{ changed: void }>();
   private registry?: CRDTDoc;
   private index?: CRDTMap<Record<string, IndexedRecord>>;
+  /**
+   * Removes the shared identity index observer when the database is destroyed.
+   *
+   * @returns The index observer is detached.
+   * @throws If the underlying observer cannot be removed.
+   */
   private unsubscribeIndex?: () => void;
 
   /**
+   * Creates a session database and observes the optional shared identity index.
+   *
+   * Record contents and saved updates remain in this session database; acquiring
+   * a document connects its content provider. The registry is borrowed and is
+   * not destroyed by this database.
+   *
    * @param registry - Optional workspace metadata CRDT used to share document-qualified IDs and block locations across demo clients.
-   * Record contents and saved updates remain in this session database; acquiring a document connects its content provider.
+   * @throws If accessing or observing the registry fails.
    */
   constructor(registry?: CRDTDoc) {
     this.registry = registry;
@@ -130,7 +142,14 @@ export class DemoDatabase {
     this.unsubscribeIndex = this.index?.observe(() => this.listeners.emit("changed"));
   }
 
-  /** @param documentId - Allocating document. @returns A locally unused candidate ID; creation reserves it before CRDT writes. */
+  /**
+   * Generates an ID not yet reserved in the document's local namespace.
+   *
+   * Generating an ID does not reserve it; creation reserves it before CRDT writes.
+   *
+   * @param documentId - Document in which the ID will be allocated.
+   * @returns A locally unused candidate ID.
+   */
   createId(documentId: string): string {
     let id = crypto.randomUUID();
     while (this.hasId(documentId, id)) {
@@ -139,13 +158,26 @@ export class DemoDatabase {
     return id;
   }
 
-  /** @param documentId - Record's document. @param id - Candidate identity. @returns Whether this document has reserved it, including deleted records. */
+  /**
+   * Checks whether a document has reserved an identity, including deleted records.
+   *
+   * @param documentId - Document whose identity namespace is checked.
+   * @param id - Candidate identity.
+   * @returns True if the identity is reserved locally or in the shared index.
+   */
   hasId(documentId: string, id: string): boolean {
     const key = JSON.stringify([documentId, id]);
     return this.identities.has(key) || Boolean(this.index?.has(key));
   }
 
-  /** @param id - Existing document identity to open, or a fresh identity to register. @returns Nothing; records in other documents may use this same ID. */
+  /**
+   * Creates an empty update log for a document that is not already registered.
+   *
+   * Records in other documents may use the same ID.
+   *
+   * @param id - Existing document identity or fresh identity to register.
+   * @returns The document has an update log; an existing log is unchanged.
+   */
   openDocument(id: string): void {
     if (!this.documents.has(id)) {
       this.documents.set(id, { updates: [], uncompactedBytes: 0 });
@@ -204,10 +236,10 @@ export class DemoDatabase {
    *
    * Saved updates remain intact until a replacement snapshot is produced.
    *
-   * @param documentId - Open document identity.
+   * @param documentId - Identity previously registered by opening or restoring the document.
    * @param update - Adapter-native incremental update copied for later replay.
    * @returns The update is stored and compaction is scheduled when needed.
-   * @throws If a previously offloaded update cannot be loaded.
+   * @throws If the document is not registered or a previously offloaded update cannot be loaded.
    */
   saveUpdate(documentId: string, update: Uint8Array): void {
     const record = this.documents.get(documentId)!;
@@ -258,12 +290,28 @@ export class DemoDatabase {
     }
   }
 
-  /** @param documentId - Document whose row changed. @param id - Stable block ID. @param node - Current own fields, or undefined on deletion. @returns Nothing after updating this one row and its lookup membership. */
+  /**
+   * Stores or removes one detached block row and updates its lookup membership.
+   *
+   * @param documentId - Document whose row changed.
+   * @param id - Stable block ID.
+   * @param node - Current own fields, or undefined on deletion.
+   * @returns The row and its lookup membership reflect the supplied value.
+   * @throws If the ID belongs to another entity kind or the value cannot be cloned.
+   */
   saveBlock(documentId: string, id: string, node?: BlockNode): void {
     this.saveRecord(this.blocks, "block", documentId, id, node);
   }
 
-  /** @param documentId - Document whose row changed. @param id - Stable element ID. @param element - Current element, or undefined on deletion. @returns Nothing after updating this one row. */
+  /**
+   * Stores or removes one detached element row.
+   *
+   * @param documentId - Document whose row changed.
+   * @param id - Stable element ID.
+   * @param element - Current element, or undefined on deletion.
+   * @returns The row reflects the supplied value.
+   * @throws If the ID belongs to another entity kind or the value cannot be cloned.
+   */
   saveElement(documentId: string, id: string, element?: ElementNode): void {
     this.saveRecord(this.elements, "element", documentId, id, element);
   }
@@ -290,7 +338,14 @@ export class DemoDatabase {
       .sort();
   }
 
-  /** @param listener - Block membership observer; text edits do not notify it. @returns Unsubscribe callback. */
+  /**
+   * Subscribes to changes in block membership across documents.
+   *
+   * Text edits do not notify this listener.
+   *
+   * @param listener - Callback invoked when block membership changes.
+   * @returns An idempotent callback that removes the listener.
+   */
   subscribe(listener: () => void): () => void {
     return this.listeners.subscribe("changed", listener);
   }
@@ -472,9 +527,10 @@ export class DemoDatabase {
   /**
    * Records an entity's document-local identity and creates a missing index entry.
    *
-   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   * @param documentId - Document whose identity namespace is updated.
    * @param kind - Entity kind associated with the document-local ID.
    * @param id - Stable ID of the record or registration to access.
+   * @returns The identity is reserved and a missing shared index entry is created.
    * @throws If the ID was previously assigned to a different entity kind.
    */
   private recordIdentity(documentId: string, kind: EntityKind, id: string): void {
@@ -494,9 +550,11 @@ export class DemoDatabase {
    *
    * @param table - Record table indexed by entity ID and then document ID.
    * @param kind - Entity kind associated with the document-local ID.
-   * @param documentId - Document whose records and identities are being accessed; defaults to the CRDT document ID when omitted.
+   * @param documentId - Document whose record is stored or removed.
    * @param id - Stable ID of the record or registration to access.
    * @param value - Record to clone into storage, or undefined to remove its document entry.
+   * @returns The row and, for blocks, presence indexes and listeners are updated.
+   * @throws If the identity belongs to another kind or the record cannot be cloned.
    */
   private saveRecord<T>(
     table: Map<string, Map<string, T>>,
@@ -688,7 +746,16 @@ class DBElementManager extends DocumentElementManager {
 export class DBDocumentModel extends DocumentModelImpl {
   private readonly unsubscribeDatabase: () => void;
   private database?: DemoDatabase;
-  /** @param crdt - Fresh collaborative document. @param database - Shared application database holding documents and the document-local ID namespaces. */
+  /**
+   * Restores a document and starts persisting its subsequent collaborative updates.
+   *
+   * Previously offloaded rows are reconstructed from the restored document.
+   * The database is borrowed and is released when this model is destroyed.
+   *
+   * @param crdt - Fresh collaborative document to restore and own.
+   * @param database - Shared session database holding updates and document-local identity namespaces.
+   * @throws If restoration, model construction, persistence, or observation fails.
+   */
   constructor(crdt: CRDTDoc, database: DemoDatabase) {
     const restoreRows = database.documents.get(crdt.id)?.rowsOffloaded === true;
     database.restore(crdt);
@@ -706,12 +773,26 @@ export class DBDocumentModel extends DocumentModelImpl {
     database.retainDocument(this.id);
   }
 
-  /** Creates storage with deferred database access because base construction precedes database-field initialization. */
+  /**
+   * Creates block storage with deferred access to the borrowed database.
+   *
+   * Base construction precedes database-field initialization.
+   *
+   * @param crdt - Collaborative document backing the block manager.
+   * @returns A block manager that reads the database when its operations need it.
+   */
   protected override createBlockManager(crdt: CRDTDoc): DocumentBlockManager {
     return new DBBlockManager(crdt, () => this.requireDatabase());
   }
 
-  /** Creates element storage with the same deferred application dependency as block storage. */
+  /**
+   * Creates element storage with deferred access to the borrowed database.
+   *
+   * Base construction precedes database-field initialization, as with block storage.
+   *
+   * @param crdt - Collaborative document backing the element manager.
+   * @returns An element manager that reads the database when its operations need it.
+   */
   protected override createElementManager(crdt: CRDTDoc): DocumentElementManager {
     return new DBElementManager(crdt, () => this.requireDatabase());
   }

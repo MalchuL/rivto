@@ -1,11 +1,9 @@
 import { Listeners } from "@chulane/rivto-utils";
 import { YjsDoc } from "@chulane/crdt-doc";
 import { DocumentModelImpl, type DocumentModel } from "@chulane/document-model";
-import { createDocumentEditor } from "@chulane/rivto";
-import { BlockReferenceResolver } from "@chulane/rivto";
+import { BlockReferenceResolver, createDocumentEditor, waitWithAbort } from "@chulane/rivto";
 import { createReactEditor } from "./react-editor";
 import type { EditorAcquisition, EditorStorageOptions, Entry, ReactEditorApi } from "./types";
-import { waitWithAbort } from "@chulane/rivto";
 export type { BlockReference, BlockResolution } from "@chulane/rivto";
 
 /**
@@ -66,9 +64,23 @@ export class EditorStorage {
   private openDocument?: NonNullable<EditorStorageOptions["openDocument"]>;
   private createEditor?: NonNullable<EditorStorageOptions["createEditor"]>;
   private onError?: EditorStorageOptions["onError"];
+  /**
+   * Removes the host registry subscription during storage destruction.
+   *
+   * @returns The registry change listener is detached.
+   * @throws If the host's unsubscribe callback fails.
+   */
   private unsubscribeRegistry?: () => void;
 
-  /** @param options - Optional document loader, editor factory, and embedding lookup policy. */
+  /**
+   * Creates storage and subscribes to registry changes when a host supplies them.
+   *
+   * By default, each document uses a new Yjs adapter and the standard React editor.
+   * The storage owns models and runtimes produced by the configured factories.
+   *
+   * @param options - Optional document loader, editor factory, and embedding lookup policy.
+   * @throws If the registry subscription fails.
+   */
   constructor(options: EditorStorageOptions = {}) {
     this.blockReferences = new BlockReferenceResolver(this, options);
     this.onError = options.onError;
@@ -78,26 +90,51 @@ export class EditorStorage {
     this.unsubscribeRegistry = options.subscribeDocumentIds?.(() => this.notifyDocuments());
   }
 
-  /** @param listener - Open/close or registry observer; text edits do not notify it. @returns Cleanup. */
+  /**
+   * Subscribes to document open, close, and registry metadata changes.
+   *
+   * Text edits do not notify this listener.
+   *
+   * @param listener - Callback invoked when the available documents change.
+   * @returns An idempotent callback that removes the listener.
+   */
   subscribeDocuments(listener: () => void): () => void {
     return this.documentListeners.subscribe("changed", listener);
   }
-  /** @returns Usable editors, excluding pending and closing entries. */
+  /**
+   * Lists constructed editors that are not closing.
+   *
+   * @returns Usable editors, excluding pending and closing entries.
+   */
   getEditors(): readonly ReactEditorApi[] {
     return [...this.entries.values()].flatMap((entry) =>
       entry.editor && !entry.closing ? [entry.editor] : [],
     );
   }
-  /** @returns Loaded models without acquiring them. */
+  /**
+   * Lists models belonging to usable editors without acquiring them.
+   *
+   * @returns Loaded models; their lifetime remains owned by storage.
+   */
   getDocuments(): readonly DocumentModel[] {
     return this.getEditors().map((editor) => editor.getDocument());
   }
-  /** @param documentId - Requested identity. @returns Constructed editor, or undefined before construction, while closing, or absent. */
+  /**
+   * Looks up a constructed editor without acquiring a consumer reference.
+   *
+   * @param documentId - Requested document identity.
+   * @returns The editor, or undefined before construction, while closing, or when absent.
+   */
   getEditor(documentId: string): ReactEditorApi | undefined {
     const entry = this.entries.get(documentId);
     return entry?.closing ? undefined : entry?.editor;
   }
-  /** @param documentId - Requested identity. @returns Loaded model, or undefined without a usable editor. */
+  /**
+   * Looks up a loaded model without acquiring a consumer reference.
+   *
+   * @param documentId - Requested document identity.
+   * @returns The model, or undefined without a usable editor.
+   */
   getDocument(documentId: string): DocumentModel | undefined {
     return this.getEditor(documentId)?.getDocument();
   }
@@ -179,7 +216,13 @@ export class EditorStorage {
     return this.destruction;
   }
 
-  /** Finds a shared opening entry, waiting for final teardown before reopening. */
+  /**
+   * Finds or starts a shared opening entry, waiting for teardown before reopening.
+   *
+   * @param id - Nonempty document identity.
+   * @returns The existing or newly created entry after any previous close finishes.
+   * @throws If storage is destroyed, the ID is empty, or a previous close fails.
+   */
   private async getEntry(id: string): Promise<Entry> {
     this.assertActive();
     if (!id.trim()) {
@@ -202,7 +245,16 @@ export class EditorStorage {
     return entry;
   }
 
-  /** Transfers the loaded model into a fixed core; setup failures dispose every created resource. */
+  /**
+   * Transfers a loaded model into a fixed core and creates its React runtime.
+   *
+   * Setup failures attempt to dispose every created resource.
+   *
+   * @param id - Requested document identity.
+   * @param entry - Shared entry that receives the created core and runtime.
+   * @returns The configured runtime after document listeners are notified.
+   * @throws If loading, setup, notification, or cleanup fails; multiple failures are aggregated.
+   */
   private async load(id: string, entry: Entry): Promise<ReactEditorApi> {
     let document: DocumentModel | undefined;
     let editor: ReactEditorApi | undefined;
@@ -246,7 +298,14 @@ export class EditorStorage {
     }
   }
 
-  /** Closes an entry once, including a pending load, and removes it after disposal. */
+  /**
+   * Closes an entry once, including a pending load, and removes it after disposal.
+   *
+   * @param id - Document identity used to remove the matching entry.
+   * @param entry - Entry whose runtime, core, and model are owned by storage.
+   * @returns The shared close promise, resolved after cleanup and notification.
+   * @throws If disposal or document-change notification fails; disposal failures are aggregated.
+   */
   private close(id: string, entry: Entry): Promise<void> {
     if (entry.closing) {
       return entry.closing;
@@ -284,11 +343,21 @@ export class EditorStorage {
     this.notifyDocuments();
     return entry.closing;
   }
-  /** Publishes only document lifecycle or registry metadata changes. */
+  /**
+   * Publishes a document lifecycle or registry metadata change to subscribers.
+   *
+   * @returns Current document listeners have been notified.
+   * @throws If a listener throws.
+   */
   private notifyDocuments(): void {
     this.documentListeners.emit("changed");
   }
-  /** Rejects operations after shutdown starts. */
+  /**
+   * Rejects operations after shutdown starts.
+   *
+   * @returns Storage is still active.
+   * @throws If shutdown has started.
+   */
   private assertActive(): void {
     if (this.destroyed) {
       throw new Error("Editor storage is destroyed");

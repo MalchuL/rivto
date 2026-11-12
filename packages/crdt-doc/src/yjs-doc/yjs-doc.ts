@@ -21,10 +21,19 @@ import type { YJSType } from "./structures/utils/types";
 
 /** One provider connection and its shared, possibly pending disconnection. */
 interface ProviderAttachment {
+  /** Provider ID captured when this attachment was registered. */
   readonly id: string;
+  /** Provider connected by this attachment. */
   readonly provider: Provider;
+  /** Connection completion shared with any pending disconnection. */
   readonly connecting: Promise<void>;
+  /** Shared in-flight disconnection; cleared after failure to allow retry. */
   disconnecting?: Promise<void>;
+  /**
+   * Drops the caller's cleanup reference to this attachment after detachment.
+   *
+   * @returns The cleanup no longer retains the disconnect operation.
+   */
   releaseCleanup?: () => void;
 }
 
@@ -35,6 +44,7 @@ interface ProviderAttachment {
  *
  * @param disconnect - Disconnects the exact provider attachment.
  * @returns The caller's cleanup and the owner's reference-release operation.
+ * The cleanup rejects if the supplied disconnection fails.
  */
 function createProviderCleanup(
   disconnect: () => Promise<void>,
@@ -52,22 +62,26 @@ function createProviderCleanup(
   ];
 }
 
+/** Adapts one owned Yjs document to the collaborative document interface. */
 export class YjsDoc implements CRDTDoc {
   private nativeDocument: Y.Doc | undefined;
   private destruction?: Promise<void>;
   private transactionDepth = 0;
   private readonly localOrigin = Symbol("yjs-doc-local");
   /**
-   * The storage of the providers.
+   * Provider attachments keyed by their stable provider IDs.
    */
-  private providersStorage: Storage<ProviderAttachment> = new Storage<ProviderAttachment>();
+  private readonly providerAttachments = new Storage<ProviderAttachment>();
   /**
-   * Creates a new YjsDoc.
-   * @param id - The id of the YjsDoc.
-   * @param doc - The Y.Doc to wrap.
+   * Creates an adapter that owns the supplied Yjs document or a new one.
+   *
+   * The adapter destroys its native document after disconnecting providers.
+   *
+   * @param documentId - Stable identity exposed by this adapter.
+   * @param doc - Native document to wrap; defaults to a new Yjs document.
    */
   constructor(
-    private readonly _id: string,
+    private readonly documentId: string,
     doc?: Y.Doc,
   ) {
     this.nativeDocument = doc || new Y.Doc();
@@ -168,7 +182,7 @@ export class YjsDoc implements CRDTDoc {
       throw new Error("YjsDoc is destroyed");
     }
     const id = provider.id;
-    if (this.providersStorage.hasItem(id)) {
+    if (this.providerAttachments.hasItem(id)) {
       throw new Error(`Provider with id ${id} is already attached`);
     }
     let resolveConnection!: () => void;
@@ -178,7 +192,7 @@ export class YjsDoc implements CRDTDoc {
       rejectConnection = reject;
     });
     const attachment: ProviderAttachment = { id, provider, connecting };
-    this.providersStorage.setItem(id, attachment);
+    this.providerAttachments.setItem(id, attachment);
     // Register first so reentrant teardown can wait for this connection.
     try {
       Promise.resolve(provider.connect(this)).then(resolveConnection, rejectConnection);
@@ -188,16 +202,25 @@ export class YjsDoc implements CRDTDoc {
     try {
       await attachment.connecting;
     } catch (error) {
-      if (this.providersStorage.hasItem(id) && this.providersStorage.getItem(id) === attachment) {
-        this.providersStorage.removeItem(id);
+      if (
+        this.providerAttachments.hasItem(id) &&
+        this.providerAttachments.getItem(id) === attachment
+      ) {
+        this.providerAttachments.removeItem(id);
       }
       throw error;
     }
-    if (!this.providersStorage.hasItem(id) || this.providersStorage.getItem(id) !== attachment) {
+    if (
+      !this.providerAttachments.hasItem(id) ||
+      this.providerAttachments.getItem(id) !== attachment
+    ) {
       return async () => {};
     }
     const [cleanup, release] = createProviderCleanup(async () => {
-      if (this.providersStorage.hasItem(id) && this.providersStorage.getItem(id) === attachment) {
+      if (
+        this.providerAttachments.hasItem(id) &&
+        this.providerAttachments.getItem(id) === attachment
+      ) {
         await this.disconnectProvider(attachment);
       }
     });
@@ -213,7 +236,7 @@ export class YjsDoc implements CRDTDoc {
    */
   async detachProvider(id?: string): Promise<void> {
     const attachment =
-      id === undefined ? this.providersStorage.getOne() : this.providersStorage.getItem(id);
+      id === undefined ? this.providerAttachments.getOne() : this.providerAttachments.getItem(id);
     await this.disconnectProvider(attachment);
   }
 
@@ -270,39 +293,42 @@ export class YjsDoc implements CRDTDoc {
   }
 
   /**
-   * Gets (and creates if not exists) an array from the YjsDoc.
+   * Gets or creates a named root array in the Yjs document.
    *
    * The returned wrapper retains its native shared type and document independently
    * of this adapter. Release the wrapper when it is no longer needed.
    *
-   * @param path - The path to the array.
-   * @returns The array.
+   * @param path - Name of the root array.
+   * @returns A wrapper around the named native array.
+   * @throws If the document is destroyed or the root has an incompatible type.
    */
   getArray<Item extends CRDTType = CRDTType>(path: string): CRDTArray<Item> {
     return utils.wrapYJStoCRDT(this.doc.getArray(path)) as CRDTArray<Item>;
   }
 
   /**
-   * Gets (and creates if not exists) a map from the YjsDoc.
+   * Gets or creates a named root map in the Yjs document.
    *
    * The returned wrapper retains its native shared type and document independently
    * of this adapter. Release the wrapper when it is no longer needed.
    *
-   * @param path - The path to the map.
-   * @returns The map.
+   * @param path - Name of the root map.
+   * @returns A wrapper around the named native map.
+   * @throws If the document is destroyed or the root has an incompatible type.
    */
   getMap<Schema extends object = Record<string, CRDTType>>(path: string): CRDTMap<Schema> {
     return utils.wrapYJStoCRDT(this.doc.getMap(path)) as CRDTMap<Schema>;
   }
 
   /**
-   * Gets (and creates if not exists) a text from the YjsDoc.
+   * Gets or creates named root text in the Yjs document.
    *
    * The returned wrapper retains its native shared type and document independently
    * of this adapter. Release the wrapper when it is no longer needed.
    *
-   * @param path - The path to the text.
-   * @returns The text.
+   * @param path - Name of the root text.
+   * @returns A wrapper around the named native text.
+   * @throws If the document is destroyed or the root has an incompatible type.
    */
   getText(path: string): CRDTText {
     return utils.wrapYJStoCRDT(this.doc.getText(path)) as CRDTText;
@@ -310,9 +336,14 @@ export class YjsDoc implements CRDTDoc {
 
   /**
    * Subscribes to a document event.
-   * @param event - The event to subscribe to.
-   * @param handler - The function to execute when the event is triggered.
+   *
+   * The returned function releases its references on the first call, including
+   * after the native document has been destroyed.
+   *
+   * @param event - Native Yjs update or sync event to observe.
+   * @param handler - Callback invoked with the event's native arguments.
    * @returns An idempotent unsubscribe that releases its document and listener references.
+   * @throws If the document has already been destroyed or native registration fails.
    */
   on(event: "update" | "sync", handler: (event: any) => void): Unsubscribe {
     this.doc.on(event, handler);
@@ -327,16 +358,21 @@ export class YjsDoc implements CRDTDoc {
   }
 
   /**
-   * Gets a snapshot of the YjsDoc.
-   * @returns The snapshot.
+   * Encodes the current Yjs state as a collaborative update.
+   *
+   * @returns A binary update that can be applied to another Yjs document.
+   * @throws If the document has been destroyed or encoding fails.
    */
   getSnapshot(): any {
     return Y.encodeStateAsUpdate(this.doc);
   }
 
   /**
-   * Applies a snapshot to the YjsDoc.
-   * @param snapshot - The snapshot to apply.
+   * Applies a Yjs update to the current collaborative document.
+   *
+   * @param snapshot - Update bytes accepted by the Yjs update decoder.
+   * @returns The update has been applied and any resulting observers have run.
+   * @throws If the document has been destroyed or the update cannot be applied.
    */
   applySnapshot(snapshot: any): void {
     Y.applyUpdate(this.doc, new Uint8Array(snapshot));
@@ -349,7 +385,7 @@ export class YjsDoc implements CRDTDoc {
    * teardown, and the document remains available to providers during cleanup.
    *
    * @returns A promise resolving after all provider and document cleanup completes.
-   * @throws If a provider disconnection fails after cleanup is attempted.
+   * @throws If native destruction fails, or a provider disconnection fails after cleanup is attempted.
    */
   destroy(): Promise<void> {
     if (this.destruction) {
@@ -357,7 +393,7 @@ export class YjsDoc implements CRDTDoc {
     }
     this.destruction = Promise.resolve().then(async () => {
       const document = this.doc;
-      const attachments = this.providersStorage.values();
+      const attachments = this.providerAttachments.values();
       const results = await Promise.allSettled(
         attachments.map((attachment) => this.disconnectProvider(attachment)),
       );
@@ -365,7 +401,7 @@ export class YjsDoc implements CRDTDoc {
         attachment.releaseCleanup?.();
         attachment.releaseCleanup = undefined;
       }
-      this.providersStorage.clear();
+      this.providerAttachments.clear();
       try {
         document.destroy();
       } finally {
@@ -405,9 +441,15 @@ export class YjsDoc implements CRDTDoc {
   }
 
   /**
-   * Converts the YjsDoc from a JSON representation.
-   * @param json - The JSON representation.
-   * @param options - The options to convert the BasicType to a YJS type.
+   * Replaces known root contents from a JSON representation in one Yjs transaction.
+   *
+   * Root values are checked before clearing existing contents. Yjs transactions
+   * do not roll back mutations if a later conversion or insertion fails.
+   *
+   * @param json - Object or map of root names to maps, arrays, or text.
+   * @param options - Options for converting nested basic values to Yjs types.
+   * @returns The supplied roots have been restored and other known roots cleared.
+   * @throws If root values are unsupported, the document is destroyed, or conversion fails.
    */
   fromJSON(json: BasicType, options?: WrapBasicTypeToCRDTOptions): void {
     if (json === null || typeof json !== "object") {
@@ -438,39 +480,17 @@ export class YjsDoc implements CRDTDoc {
       // Clear collaborative contents of known typed roots. Deleting
       // `doc.share` is not a CRDT operation and is invisible to peers.
       this.doc.share.forEach((rootType, key) => this.clearTypedRoot(key));
-      entries.forEach(([key, value]) => {
-        if (value instanceof Map) {
-          const map = this.getMap(key);
-          value.forEach((v, k) => {
-            const basic = utils.wrapBasicTypeToCRDTType(v, options);
-            map.set(k, basic);
-          });
-        } else if (Array.isArray(value)) {
-          const array = this.getArray(key);
-          value.forEach((v, i) => {
-            const basic = utils.wrapBasicTypeToCRDTType(v, options);
-            array.insert(i, basic);
-          });
-        } else if (typeof value === "string") {
-          const text = this.getText(key);
-          text.insert(0, value);
-        } else if (typeof value === "object") {
-          const map = this.getMap(key);
-          Object.entries(value as Record<string, BasicType>).forEach(([k, v]) => {
-            const basic = utils.wrapBasicTypeToCRDTType(v, options);
-            map.set(k, basic);
-          });
-        }
-      });
+      entries.forEach(([key, value]) => this.restoreRoot(key, value, options));
     });
   }
 
   /**
-   * Gets the id of the YjsDoc.
-   * @returns The id of the YjsDoc.
+   * Reads the identity supplied when this adapter was constructed.
+   *
+   * @returns Stable document ID, including after native document destruction.
    */
   get id(): string {
-    return this._id;
+    return this.documentId;
   }
 
   /**
@@ -495,10 +515,10 @@ export class YjsDoc implements CRDTDoc {
       }
       await attachment.provider.disconnect(this);
       if (
-        this.providersStorage.hasItem(attachment.id) &&
-        this.providersStorage.getItem(attachment.id) === attachment
+        this.providerAttachments.hasItem(attachment.id) &&
+        this.providerAttachments.getItem(attachment.id) === attachment
       ) {
-        this.providersStorage.removeItem(attachment.id);
+        this.providerAttachments.removeItem(attachment.id);
       }
       attachment.releaseCleanup?.();
       attachment.releaseCleanup = undefined;
@@ -508,6 +528,40 @@ export class YjsDoc implements CRDTDoc {
       throw error;
     });
     return attachment.disconnecting;
+  }
+
+  /**
+   * Restores one validated root inside the caller's Yjs transaction.
+   *
+   * @param key - Shared root name to populate.
+   * @param value - Validated map, array, text, or object root value.
+   * @param options - Options for converting nested basic values to Yjs types.
+   * @returns The supplied values have been inserted into the named root.
+   * @throws If the existing root has an incompatible type or conversion fails.
+   */
+  private restoreRoot(key: string, value: BasicType, options?: WrapBasicTypeToCRDTOptions): void {
+    if (value instanceof Map) {
+      const map = this.getMap(key);
+      value.forEach((v, k) => {
+        const basic = utils.wrapBasicTypeToCRDTType(v, options);
+        map.set(k, basic);
+      });
+    } else if (Array.isArray(value)) {
+      const array = this.getArray(key);
+      value.forEach((v, i) => {
+        const basic = utils.wrapBasicTypeToCRDTType(v, options);
+        array.insert(i, basic);
+      });
+    } else if (typeof value === "string") {
+      const text = this.getText(key);
+      text.insert(0, value);
+    } else if (typeof value === "object") {
+      const map = this.getMap(key);
+      Object.entries(value as Record<string, BasicType>).forEach(([k, v]) => {
+        const basic = utils.wrapBasicTypeToCRDTType(v, options);
+        map.set(k, basic);
+      });
+    }
   }
 
   /**

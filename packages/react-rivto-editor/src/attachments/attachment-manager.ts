@@ -118,7 +118,8 @@ export class AttachmentManager {
    * resolved against the configured document base URI.
    *
    * The document ID is captured when this method starts.
-   * Cancellation stops waiting for the provider without cancelling its own read.
+   * Cancellation stops waiting and is forwarded to the provider; a provider that
+   * ignores the signal can continue its own read.
    *
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to resolve.
@@ -221,7 +222,8 @@ export class AttachmentManager {
    * the reference and operation context; the provider is not read in that path.
    * Without an opener, the reference is resolved and a browser link is clicked.
    * Resolved Blobs use an object URL scheduled for revocation after 60 seconds.
-   * Cancellation stops waiting for a host opener but cannot stop its own work.
+   * Cancellation stops waiting and is forwarded to a host opener; an opener that
+   * ignores the signal can continue its own work.
    *
    * @param provider - Storage provider for the attachment.
    * @param reference - Persisted attachment metadata.

@@ -26,7 +26,7 @@ import type { DocumentEditorAPI } from "../../editor/types";
 import type { BlockManagerApi, ImportedBlockForest } from "../types";
 import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
-import { releaseAfterCall } from "../../utils/release-after-call";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /**
  * Owns typed editor block operations.

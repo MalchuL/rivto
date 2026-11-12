@@ -2,12 +2,23 @@ import { AttachmentManager } from "./attachment-manager";
 
 /** Node's optional explicit garbage collector. */
 interface GarbageCollectionGlobal {
+  /**
+   * Requests explicit garbage collection when Node exposes it.
+   *
+   * @returns A collection pass has been requested.
+   */
   gc?: () => void;
 }
 
 /** Provider state retained independently of the cancelled attachment read. */
 interface PendingReadRetention {
   readonly editor: WeakRef<object>;
+  /**
+   * Resolves the provider's retained read.
+   *
+   * @param value - Blob returned to the pending read.
+   * @returns The pending provider promise is resolved.
+   */
   readonly finish: (value: Blob) => void;
   readonly state: { cancelled: boolean };
 }
@@ -66,6 +77,11 @@ gcTest("cancelling a pending provider read releases its former editor", async ()
 /** Pending opener retained independently of the cancelled attachment request. */
 interface PendingOpenRetention {
   readonly editor: WeakRef<object>;
+  /**
+   * Resolves the host's retained opener operation.
+   *
+   * @returns The pending opener promise is resolved.
+   */
   readonly finish: () => void;
   readonly state: { cancelled: boolean };
 }

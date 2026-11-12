@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { EditorStorage, ReactEditorApi } from "@chulane/rivto-react";
@@ -31,15 +32,31 @@ interface SavedUpdateStats {
  */
 async function expectOffloadedBuffersCollected(page: Page): Promise<void> {
   const session = await page.context().newCDPSession(page);
-  for (let index = 0; index < 8; index++) {
-    await page.waitForTimeout(0);
-    await session.send("HeapProfiler.collectGarbage");
-  }
+  await collectGarbage(page, session);
   const retained = await page.evaluate(() => {
     const references = Reflect.get(window, "offloadedUpdateReferences") as WeakRef<Uint8Array>[];
     return references.filter((reference) => reference.deref()).length;
   });
   expect(retained).toBe(0);
+  await session.detach();
+}
+
+/**
+ * Checks that the captured block and element rows are collectible in Chromium.
+ *
+ * @param page - Page holding weak references to the offloaded rows.
+ * @returns The references have been checked and the protocol session detached.
+ */
+async function expectOffloadedRowsCollected(page: Page): Promise<void> {
+  const session = await page.context().newCDPSession(page);
+  await collectGarbage(page, session);
+  expect(
+    await page.evaluate(() =>
+      (Reflect.get(window, "offloadedRowReferences") as WeakRef<object>[]).some((row) =>
+        row.deref(),
+      ),
+    ),
+  ).toBe(false);
   await session.detach();
 }
 
@@ -77,6 +94,140 @@ function writeSourceEdits(blockId: string): SavedUpdateStats {
     count: updates.length,
     bytes: updates.reduce((total, update) => total + update.byteLength, 0),
   };
+}
+
+/**
+ * Creates concurrent local and offline edits and retains weak lifecycle references.
+ *
+ * @returns The peer and weak references are stored in the browser for later assertions.
+ */
+function captureOfflineMergeProbe(): void {
+  const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
+  const editor = host.editor.getEditor("source")!;
+  const model = editor.getDocument();
+  const crdt = Reflect.get(model, "crdt") as YjsDoc;
+  const Adapter = crdt.constructor as typeof YjsDoc;
+  const peer = new Adapter("source");
+  crdt.transact(() => crdt.getText("lifecycle-probe").insert(0, "base"));
+  peer.applySnapshot(crdt.getSnapshot());
+  crdt.transact(() => crdt.getText("lifecycle-probe").insert(4, "L"));
+  peer.transact(() => peer.getText("lifecycle-probe").insert(4, "R"));
+  const manager = Reflect.get(Reflect.get(model.history, "manager"), "manager") as object;
+  Reflect.set(window, "lifecycleMemoryProbe", {
+    peer,
+    editor: new WeakRef(editor),
+    model: new WeakRef(model),
+    doc: new WeakRef(crdt.doc),
+    manager: new WeakRef(manager),
+  });
+}
+
+/**
+ * Exchanges the reopened document and offline peer updates, then releases the peer.
+ *
+ * @returns A promise resolving to both merged text values.
+ * @throws If update exchange or peer cleanup fails.
+ */
+async function mergeReopenedDocument() {
+  const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
+  const crdt = Reflect.get(host.editor.getDocument("source")!, "crdt") as YjsDoc;
+  const probe = Reflect.get(window, "lifecycleMemoryProbe") as { peer: YjsDoc };
+  crdt.applySnapshot(probe.peer.getSnapshot());
+  probe.peer.applySnapshot(crdt.getSnapshot());
+  const merged = [
+    crdt.getText("lifecycle-probe").toString(),
+    probe.peer.getText("lifecycle-probe").toString(),
+  ];
+  await probe.peer.destroy();
+  Reflect.deleteProperty(window, "lifecycleMemoryProbe");
+  return merged;
+}
+
+/**
+ * Adds large block and element rows and retains only weak references to them.
+ *
+ * @param id - Source block whose stored row receives the large property.
+ * @returns Weak references to the stored rows are available in the browser.
+ */
+function captureOffloadedRowReferences(id: string): void {
+  const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
+  const editor = host.editor.getEditor("source")!;
+  editor.blocks.setBlockProp(id, "largeRow", "x".repeat(300_000));
+  const row = host.database.blocks.get(id)!.get("source")!;
+  const element = editor.getDocument().elements.insertElement({
+    id: "offloaded-element",
+    type: "shape",
+    frame: { x: 0, y: 0, width: 10, height: 10 },
+    zIndex: 0,
+    props: { largeRow: "y".repeat(300_000) },
+  });
+  const elementRow = host.database.elements.get(element.id)!.get("source")!;
+  Reflect.set(window, "offloadedRowReferences", [new WeakRef(row), new WeakRef(elementRow)]);
+}
+
+/**
+ * Reads the reopened block and element rows and the block location index.
+ *
+ * @param id - Source block identity to inspect.
+ * @returns Restored large properties and the indexed document IDs.
+ */
+function readRestoredRows(id: string) {
+  const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
+  return {
+    block: host.database.blocks.get(id)?.get("source")?.props.largeRow,
+    element: host.database.elements.get("offloaded-element")?.get("source")?.props.largeRow,
+    locations: host.database.findDocumentIdsWithBlock(id),
+  };
+}
+
+/**
+ * Closes a model after its provider supplies a final update and restores that update.
+ *
+ * @param fails - Whether provider disconnection throws after applying the update.
+ * @returns A promise resolving to failure, offload, and restored-value observations.
+ * @throws If teardown fails for a reason other than the expected disconnection error.
+ */
+async function captureFinalProviderUpdate(fails: boolean) {
+  const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
+  const existing = host.editor.getDocument("source")!;
+  const Database = host.database.constructor as typeof DemoDatabase;
+  const Model = existing.constructor as typeof DBDocumentModel;
+  const Adapter = Reflect.get(existing, "crdt").constructor as typeof YjsDoc;
+  const database = new Database();
+  const adapter = new Adapter("provider-final");
+  const document = new Model(adapter, database);
+  const nativeDocument = new WeakRef(adapter.doc);
+  adapter.transact(() => adapter.getText("value").insert(0, "base"));
+  const peer = new Adapter("provider-final");
+  peer.applySnapshot(adapter.getSnapshot());
+  peer.transact(() => peer.getText("value").insert(4, "R"));
+  await adapter.attachProvider({
+    id: "final-update",
+    connect: async () => {},
+    disconnect: async (doc) => {
+      doc.applySnapshot(peer.getSnapshot());
+      if (fails) {
+        throw new Error("disconnect failed");
+      }
+    },
+  });
+  let failed = false;
+  try {
+    await document.destroy();
+  } catch (error) {
+    if (String(error) !== "Error: disconnect failed") {
+      throw error;
+    }
+    failed = true;
+  }
+  const offloaded = database.documents.get("provider-final")!.updates.length === 0;
+  const restored = new Adapter("provider-final");
+  database.restore(restored);
+  const value = restored.getText("value").toString();
+  await restored.destroy();
+  await peer.destroy();
+  Reflect.set(window, "finalProviderProbe", { database, document, nativeDocument });
+  return { failed, offloaded, value };
 }
 
 test("compacts edit updates without losing content or live undo", async ({ page }) => {
@@ -782,26 +933,7 @@ test("last editor close releases its live document and restores an offline merge
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
   ).toHaveText("Source text");
   await page.getByRole("button", { name: "Close references", exact: true }).click();
-  await page.evaluate(() => {
-    const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
-    const editor = host.editor.getEditor("source")!;
-    const model = editor.getDocument();
-    const crdt = Reflect.get(model, "crdt") as YjsDoc;
-    const Adapter = crdt.constructor as typeof YjsDoc;
-    const peer = new Adapter("source");
-    crdt.transact(() => crdt.getText("lifecycle-probe").insert(0, "base"));
-    peer.applySnapshot(crdt.getSnapshot());
-    crdt.transact(() => crdt.getText("lifecycle-probe").insert(4, "L"));
-    peer.transact(() => peer.getText("lifecycle-probe").insert(4, "R"));
-    const manager = Reflect.get(Reflect.get(model.history, "manager"), "manager") as object;
-    Reflect.set(window, "lifecycleMemoryProbe", {
-      peer,
-      editor: new WeakRef(editor),
-      model: new WeakRef(model),
-      doc: new WeakRef(crdt.doc),
-      manager: new WeakRef(manager),
-    });
-  });
+  await page.evaluate(captureOfflineMergeProbe);
   await page.getByRole("button", { name: "Close source", exact: true }).click();
   await expect
     .poll(() =>
@@ -816,10 +948,7 @@ test("last editor close releases its live document and restores an offline merge
     .toEqual({ open: false, updates: 0 });
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "lifecycleMemoryProbe");
       return ["editor", "model", "doc", "manager"].filter((key) => probe[key].deref());
@@ -831,20 +960,7 @@ test("last editor close releases its live document and restores an offline merge
   await expect(
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
   ).toHaveText("Source text");
-  const values = await page.evaluate(async () => {
-    const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
-    const crdt = Reflect.get(host.editor.getDocument("source")!, "crdt") as YjsDoc;
-    const probe = Reflect.get(window, "lifecycleMemoryProbe") as { peer: YjsDoc };
-    crdt.applySnapshot(probe.peer.getSnapshot());
-    probe.peer.applySnapshot(crdt.getSnapshot());
-    const merged = [
-      crdt.getText("lifecycle-probe").toString(),
-      probe.peer.getText("lifecycle-probe").toString(),
-    ];
-    await probe.peer.destroy();
-    Reflect.deleteProperty(window, "lifecycleMemoryProbe");
-    return merged;
-  });
+  const values = await page.evaluate(mergeReopenedDocument);
   expect(values[0]).toMatch(/^base(?:LR|RL)$/);
   expect(values[1]).toBe(values[0]);
 });
@@ -873,21 +989,7 @@ test("offloading a closed document releases its stored rows", async ({ page, bro
   await expect(
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
   ).toHaveText("Source text");
-  await page.evaluate((id) => {
-    const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
-    const editor = host.editor.getEditor("source")!;
-    editor.blocks.setBlockProp(id, "largeRow", "x".repeat(300_000));
-    const row = host.database.blocks.get(id)!.get("source")!;
-    const element = editor.getDocument().elements.insertElement({
-      id: "offloaded-element",
-      type: "shape",
-      frame: { x: 0, y: 0, width: 10, height: 10 },
-      zIndex: 0,
-      props: { largeRow: "y".repeat(300_000) },
-    });
-    const elementRow = host.database.elements.get(element.id)!.get("source")!;
-    Reflect.set(window, "offloadedRowReferences", [new WeakRef(row), new WeakRef(elementRow)]);
-  }, `${room}:source-block`);
+  await page.evaluate(captureOffloadedRowReferences, `${room}:source-block`);
   await page.getByRole("button", { name: "Close references", exact: true }).click();
   await page.getByRole("button", { name: "Close source", exact: true }).click();
   await expect
@@ -910,32 +1012,13 @@ test("offloading a closed document releases its stored rows", async ({ page, bro
     ),
   ).toEqual(["source"]);
   if (browserName === "chromium") {
-    const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
-    expect(
-      await page.evaluate(() =>
-        (Reflect.get(window, "offloadedRowReferences") as WeakRef<object>[]).some((row) =>
-          row.deref(),
-        ),
-      ),
-    ).toBe(false);
-    await session.detach();
+    await expectOffloadedRowsCollected(page);
   }
   await page.getByRole("button", { name: "Open source", exact: true }).click();
   await expect(
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
   ).toHaveText("Source text");
-  const restored = await page.evaluate((id) => {
-    const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
-    return {
-      block: host.database.blocks.get(id)?.get("source")?.props.largeRow,
-      element: host.database.elements.get("offloaded-element")?.get("source")?.props.largeRow,
-      locations: host.database.findDocumentIdsWithBlock(id),
-    };
-  }, `${room}:source-block`);
+  const restored = await page.evaluate(readRestoredRows, `${room}:source-block`);
   expect(restored).toEqual({
     block: "x".repeat(300_000),
     element: "y".repeat(300_000),
@@ -1083,55 +1166,11 @@ for (const fails of [false, true]) {
     await expect(
       page.locator('[data-document-pane="source"] [data-block-content]').first(),
     ).toBeVisible();
-    const result = await page.evaluate(async (fails) => {
-      const host = (window as unknown as DatabaseMemoryWindow).__rivtoDocuments;
-      const existing = host.editor.getDocument("source")!;
-      const Database = host.database.constructor as typeof DemoDatabase;
-      const Model = existing.constructor as typeof DBDocumentModel;
-      const Adapter = Reflect.get(existing, "crdt").constructor as typeof YjsDoc;
-      const database = new Database();
-      const adapter = new Adapter("provider-final");
-      const document = new Model(adapter, database);
-      const nativeDocument = new WeakRef(adapter.doc);
-      adapter.transact(() => adapter.getText("value").insert(0, "base"));
-      const peer = new Adapter("provider-final");
-      peer.applySnapshot(adapter.getSnapshot());
-      peer.transact(() => peer.getText("value").insert(4, "R"));
-      await adapter.attachProvider({
-        id: "final-update",
-        connect: async () => {},
-        disconnect: async (doc) => {
-          doc.applySnapshot(peer.getSnapshot());
-          if (fails) {
-            throw new Error("disconnect failed");
-          }
-        },
-      });
-      let failed = false;
-      try {
-        await document.destroy();
-      } catch (error) {
-        if (String(error) !== "Error: disconnect failed") {
-          throw error;
-        }
-        failed = true;
-      }
-      const offloaded = database.documents.get("provider-final")!.updates.length === 0;
-      const restored = new Adapter("provider-final");
-      database.restore(restored);
-      const value = restored.getText("value").toString();
-      await restored.destroy();
-      await peer.destroy();
-      Reflect.set(window, "finalProviderProbe", { database, document, nativeDocument });
-      return { failed, offloaded, value };
-    }, fails);
+    const result = await page.evaluate(captureFinalProviderUpdate, fails);
     expect(result).toEqual({ failed: fails, offloaded: true, value: "baseR" });
     if (browserName === "chromium") {
       const session = await page.context().newCDPSession(page);
-      for (let index = 0; index < 8; index++) {
-        await page.waitForTimeout(0);
-        await session.send("HeapProfiler.collectGarbage");
-      }
+      await collectGarbage(page, session);
       const retained = await page.evaluate(() =>
         Boolean(Reflect.get(window, "finalProviderProbe").nativeDocument.deref()),
       );

@@ -16,7 +16,7 @@ import type { DocumentEditorAPI } from "../../editor/types";
 import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
 import { Pipe } from "../../utils/pipe";
-import { releaseAfterCall } from "../../utils/release-after-call";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /** Public typed manager for generic first-class canvas elements. */
 export class ElementManager implements ElementManagerApi {
@@ -422,7 +422,12 @@ export class ElementManager implements ElementManagerApi {
     this.editor.history.batchUpdates(() => this.document.elements.removeElements(ids));
   }
 
-  /** Releases this manager's subscriptions and processors. */
+  /**
+   * Releases this manager's subscriptions and registered processors.
+   *
+   * @returns Retained subscriptions and processor registrations have been disposed.
+   * @throws If a subscription or processor disposer throws; later disposers are not attempted.
+   */
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();

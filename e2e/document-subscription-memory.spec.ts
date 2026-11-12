@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { EditorStorage, ReactEditorApi } from "@chulane/rivto-react";
 import type { YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
@@ -53,10 +54,7 @@ test("a completed document unsubscribe releases its dependencies", async ({
   expect(calls).toBe(1_000_000);
   if (browserName === "chromium") {
     const session = await page.context().newCDPSession(page);
-    for (let index = 0; index < 8; index++) {
-      await page.waitForTimeout(0);
-      await session.send("HeapProfiler.collectGarbage");
-    }
+    await collectGarbage(page, session);
     const retained = await page.evaluate(() => {
       const probe = Reflect.get(window, "completedSubscriptionProbe") as CompletedSubscriptionProbe;
       return { document: !!probe.document.deref(), payload: !!probe.payload.deref() };

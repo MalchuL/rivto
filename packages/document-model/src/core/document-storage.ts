@@ -6,16 +6,40 @@ import type { BlockInput, DocumentModel } from "./types";
 /** Host-owned registry and provider construction. No persistence is performed. */
 export interface DocumentStorageOptions {
   readonly registry: DocumentCRDTRegistry;
-  /** Constructs a model before providers attach, allowing application persistence to restore CRDT state. */
+  /**
+   * Constructs a model before providers attach, allowing application persistence to restore CRDT state.
+   *
+   * @param crdt - Opened collaborative document transferred to the model.
+   * @returns The model that will be transferred to the caller after provider attachment.
+   * @throws If model construction or restoration fails.
+   */
   readonly createDocumentModel?: (crdt: CRDTDoc) => DocumentModel;
-  /** Application search for an unloaded source. Returns its current registered document IDs; does not acquire it. The signal cancels this search request. */
+  /**
+   * Searches application metadata for an unloaded block source without acquiring it.
+   *
+   * @param blockId - Block identity to locate.
+   * @param options - Optional signal used to cancel this search request.
+   * @returns A promise resolving to current registered document IDs containing the block.
+   * @throws If the application search fails or is cancelled.
+   */
   readonly lookupDocumentIds?: (
     blockId: string,
     options: { readonly signal?: AbortSignal },
   ) => Promise<readonly string[]>;
-  /** @param channel - Workspace-qualified registry or document channel. @returns Fresh provider instances for one connection. */
+  /**
+   * Creates the providers for a registry or document connection.
+   *
+   * @param channel - Workspace-qualified registry or document channel.
+   * @returns Fresh provider instances for this connection, in attachment order.
+   * @throws If provider construction fails.
+   */
   readonly createProviders?: (channel: string) => readonly Provider[];
-  /** Receives registry initialization and provider cleanup failures that occur outside a successful openDocument result. */
+  /**
+   * Reports registry initialization and provider cleanup failures outside a successful open result.
+   *
+   * @param error - Failure raised during initialization or cleanup.
+   * @returns The host has been notified of the failure.
+   */
   readonly onError?: (error: unknown) => void;
 }
 
@@ -26,7 +50,15 @@ export class DocumentStorage {
   private destroyed = false;
   private destruction?: Promise<void>;
 
-  /** @param options - Registry, application source lookup, fresh provider factory, and optional asynchronous error reporting. */
+  /**
+   * Starts attaching providers to the supplied registry metadata document.
+   *
+   * The `ready` promise reports attachment completion, not remote content arrival.
+   * Initialization failures are also reported through the configured error callback.
+   * Destroying this storage destroys the registry metadata document and its providers.
+   *
+   * @param options - Registry, application source lookup, fresh provider factory, and optional asynchronous error reporting.
+   */
   constructor(private options: DocumentStorageOptions) {
     this.ready = this.connect(options.registry.root, options.registry.root.id).catch(
       async (error) => {
@@ -40,7 +72,11 @@ export class DocumentStorage {
     void this.ready.catch((error) => this.reportError(error));
   }
 
-  /** @returns Registered IDs, including documents whose session content was discarded. */
+  /**
+   * Lists document identities registered in workspace metadata.
+   *
+   * @returns Registered IDs, including documents whose session content was discarded.
+   */
   getDocumentIds(): string[] {
     return this.options.registry.getDocumentIds();
   }
@@ -96,12 +132,23 @@ export class DocumentStorage {
     return ids;
   }
 
-  /** @param listener - Registry metadata callback; text edits do not notify it. @returns Unsubscribe callback. */
+  /**
+   * Subscribes to registry metadata changes without observing document text edits.
+   *
+   * @param listener - Callback invoked when registry metadata changes.
+   * @returns The registry's unsubscribe callback.
+   */
   subscribe(listener: () => void): () => void {
     return this.options.registry.subscribe(listener);
   }
 
-  /** @param documentId - New nonempty identity. @returns Nothing; registers metadata without loading content. */
+  /**
+   * Registers document metadata without loading document content.
+   *
+   * @param documentId - New nonempty identity.
+   * @returns The registry has recorded the document identity.
+   * @throws If storage is destroyed or the registry rejects the identity.
+   */
   registerDocument(documentId: string): void {
     this.assertActive();
     this.options.registry.registerDocument(documentId);
@@ -139,6 +186,7 @@ export class DocumentStorage {
    * Pending document opens retain their error callback until their cleanup finishes.
    *
    * @returns Idempotent cleanup promise. Content-model lifetime is managed by the caller, including failed or cancelled editor acquisitions.
+   * @throws If registry teardown fails.
    */
   destroy(): Promise<void> {
     if (this.destruction) {
@@ -156,21 +204,39 @@ export class DocumentStorage {
     return this.destruction;
   }
 
-  /** Attaches fresh providers sequentially so partial failures have a deterministic cleanup owner. */
+  /**
+   * Attaches fresh providers sequentially so partial failures have a deterministic cleanup owner.
+   *
+   * @param doc - Collaborative document that owns the resulting attachments.
+   * @param channel - Workspace-qualified registry or document channel.
+   * @returns A promise resolving after all providers have attached.
+   * @throws If provider construction or attachment fails.
+   */
   private async connect(doc: CRDTDoc, channel: string): Promise<void> {
     for (const provider of this.options.createProviders?.(channel) ?? []) {
       await doc.attachProvider(provider);
     }
   }
 
-  /** Rejects new operations after shutdown starts. */
+  /**
+   * Rejects new operations after shutdown starts.
+   *
+   * @returns Storage is still active.
+   * @throws If shutdown has started.
+   */
   private assertActive(): void {
     if (this.destroyed) {
       throw new Error("Document storage is destroyed");
     }
   }
 
-  /** Reports asynchronous cleanup failures to the host. */
+  /**
+   * Reports an asynchronous initialization or cleanup failure to the host.
+   *
+   * @param error - Failure to report; logged to the console when no callback is configured.
+   * @returns The configured callback or console has received the failure.
+   * @throws If the configured callback throws.
+   */
   private reportError(error: unknown): void {
     (this.options.onError ?? console.error)(error);
   }

@@ -2,15 +2,9 @@ import { expect, test } from "@playwright/test";
 import type { ReactEditorApi } from "@chulane/rivto-react";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
-/** Demo editor that owns extension destruction. */
-interface DestroyableReactEditor extends ReactEditorApi {
-  /** @returns A promise resolving after editor cleanup. */
-  destroy(): Promise<void>;
-}
-
 /** Browser state used to observe a stalled image decode. */
 interface ImageInspectionWindow extends Window {
-  readonly __rivtoDemo: { readonly reactEditor: DestroyableReactEditor };
+  readonly __rivtoDemo: { readonly reactEditor: ReactEditorApi };
   readonly createdUrls: string[];
   readonly revokedUrls: string[];
   pendingInput: HTMLInputElement;
@@ -24,6 +18,12 @@ interface ImageReadWindow extends Window {
   };
   readSignal?: AbortSignal;
   readCancelled?: boolean;
+  /**
+   * Resolves the provider read retained by the test.
+   *
+   * @param blob - Content returned to the pending image read.
+   * @returns The pending provider read is resolved.
+   */
   finishRead: (blob: Blob) => void;
 }
 

@@ -35,6 +35,25 @@ interface RemoteImage {
   readonly alt: string;
 }
 
+/**
+ * Derives a display name from an image reference's final URL path segment.
+ *
+ * Relative references are resolved against the current page; malformed URLs or
+ * percent escapes keep the generic name.
+ *
+ * @param uri - Image reference supplied by the transfer.
+ * @returns The decoded final path segment, or "image" when none is usable.
+ */
+function imageNameFromUri(uri: string): string {
+  try {
+    const url = new URL(uri, location.href);
+    return decodeURIComponent(url.pathname.split("/").pop() || "image");
+  } catch {
+    // Invalid or non-URL references retain the generic name.
+    return "image";
+  }
+}
+
 /** Editor operations borrowed while routing image input. */
 interface ImageInputEditor {
   /** Resolves image references to readable binary content. */
@@ -390,17 +409,10 @@ export class ImageInputEvents {
         });
         const dimensions = await inspectImage(resolved, this.ingestion.signal);
         this.ingestion.signal.throwIfAborted();
-        let name = "image";
-        try {
-          const url = new URL(item.uri, location.href);
-          name = decodeURIComponent(url.pathname.split("/").pop() || "image");
-        } catch {
-          // Invalid or non-URL references retain the generic name.
-        }
         return prepareImageAsset(
           {
             uri: item.uri,
-            name,
+            name: imageNameFromUri(item.uri),
             mimeType:
               resolved instanceof Blob && resolved.type
                 ? resolved.type

@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { EditorStorage, ReactEditorApi } from "@chulane/rivto-react";
@@ -31,10 +32,7 @@ interface DestroyedStorageProbe {
  */
 async function expectCollected(page: Page, key: string): Promise<void> {
   const session = await page.context().newCDPSession(page);
-  for (let index = 0; index < 8; index++) {
-    await page.waitForTimeout(0);
-    await session.send("HeapProfiler.collectGarbage");
-  }
+  await collectGarbage(page, session);
   const retained = await page.evaluate((key) => {
     const probe = Reflect.get(window, key) as DestroyedStorageProbe;
     return Boolean(probe.payload.deref());

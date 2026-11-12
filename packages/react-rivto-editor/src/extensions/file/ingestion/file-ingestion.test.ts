@@ -8,6 +8,15 @@ import type { FileIngestionStatus, FileIngestionStatuses } from "./types";
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
 
 /**
+ * Yields to the next timer task so queued ingestion promises can settle.
+ *
+ * @returns A promise resolving on the next zero-delay timer task.
+ */
+function waitForNextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
  * Creates a canvas file representation for ingestion tests.
  *
  * @param name - File name stored in the prepared metadata.
@@ -32,17 +41,42 @@ function feedbackStore() {
   const statuses = new Map<string, FileIngestionStatus & { error?: string }>();
   const feedback: FileIngestionStatuses = {
     // Keep the current status available for assertions.
+    /**
+     * Stores a status for later assertions.
+     *
+     * @param status - Upload status keyed by its local identity.
+     * @returns The status is stored or replaced.
+     */
     set: (status) => {
       statuses.set(status.id, status);
     },
     // Apply progress and failure changes to the stored status.
+    /**
+     * Applies progress or failure feedback to an existing status.
+     *
+     * @param id - Identity of the status being updated.
+     * @param patch - Progress or failure fields to merge into the status.
+     * @returns The stored status contains the supplied fields.
+     * @throws If the status is absent.
+     */
     update: (id, patch) => {
       Object.assign(statuses.get(id)!, patch);
     },
     // Remove finished or retried statuses.
+    /**
+     * Removes a finished or retried status.
+     *
+     * @param id - Identity of the status to remove.
+     * @returns The status is absent after removal.
+     */
     delete: (id) => {
       statuses.delete(id);
     },
+    /**
+     * Clears feedback retained by the fixture.
+     *
+     * @returns All stored statuses are removed.
+     */
     clear: () => {
       statuses.clear();
     },
@@ -87,7 +121,7 @@ test("inserts successful jobs in source order and retries a failed job", async (
   });
   expect(statuses.get("2")).toMatchObject({ x: 12, y: 12 });
   finishFirst!(preparedFile("first"));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(panel.elements.getElements().map((element) => element.props.name)).toEqual([
     "first",
     "last",
@@ -95,7 +129,7 @@ test("inserts successful jobs in source order and retries a failed job", async (
   expect(panel.elements.getElements().map((element) => element.zIndex)).toEqual([1, 2]);
   expect(statuses.get("2")?.error).toBe("failed upload");
   statuses.get("2")!.retry();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(panel.elements.getElements().map((element) => element.props.name)).toEqual([
     "first",
     "last",
@@ -124,7 +158,7 @@ test("retains failed insertion feedback when a handler returns the wrong placeme
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(errors).toHaveLength(1);
   expect(statuses.get("1")?.error).toContain("does not match");
   expect(panel.elements.getElements()).toHaveLength(0);
@@ -149,7 +183,7 @@ test("refuses a file block when the receiving block rejects its type", async () 
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(permission).toHaveBeenCalledWith(
     expect.objectContaining({
       destination: { parentId: parent.id, beforeId: undefined },
@@ -184,7 +218,7 @@ test("rejects files in a Kanban board but accepts them in a column", async () =>
       staleMessage: "Destination changed",
     });
   }
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(panel.blocks.getChildIds(board.id)).toEqual([column.id]);
   expect(statuses.get("2")?.error).toBeUndefined();
   expect(panel.blocks.getChildIds(column.id)).toHaveLength(1);
@@ -218,7 +252,7 @@ test("does not insert a prepared file after its extension is destroyed", async (
   });
   ingestion.destroy();
   finish!(preparedFile("file"));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(ingestion.signal.aborted).toBe(true);
   expect(panel.elements.getElements()).toHaveLength(0);
   await panel.editor.destroy();
@@ -262,10 +296,10 @@ test("prepares a retry for its refreshed inline destination", async () => {
   });
   editor.blocks.updateBlock(block.id, { content: "edited" });
   finish!();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(statuses.get("1")?.error).toBe("Destination changed");
   statuses.get("1")!.retry();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(destinations).toEqual(["block", "inline"]);
   expect(editor.blocks.getBlock(block.id)?.content).toBe("edited[file]");
   await panel.editor.destroy();
@@ -340,7 +374,7 @@ test("inserts an inline file at the captured range and moves the caret after it"
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(editor.blocks.getBlock(block.id)?.content).toBe("before [file]");
   expect(panel.selection.get()).toMatchObject({
     type: "selection",
@@ -375,7 +409,7 @@ test("replaces an empty block with the first file and inserts later files in ord
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   const blocks = editor.blocks.getBlocks();
   expect(blocks.map((block) => [block.type, block.props.name])).toEqual([
     ["file", "first"],
@@ -409,7 +443,7 @@ test("places canvas files diagonally above existing elements", async () => {
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   const elements = panel.elements
     .getElements()
     .filter((element) => element.props.name !== "existing");
@@ -438,7 +472,7 @@ test("keeps insertion errors retryable when no error callback is supplied", asyn
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(statuses.get("1")?.error).toContain("does not match");
   expect(panel.elements.getElements()).toHaveLength(0);
   await panel.editor.destroy();
@@ -467,7 +501,7 @@ test("does not start a batch after the owning extension is destroyed", async () 
     failureMessage: "Unable to upload",
     staleMessage: "Destination changed",
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitForNextTask();
   expect(prepared).toBe(false);
   expect(statuses.size).toBe(0);
   expect(panel.elements.getElements()).toHaveLength(0);
@@ -544,7 +578,7 @@ test("does not report preparation failures after destruction", async () => {
     });
     ingestion.destroy();
     rejectPreparation!(new Error("cancelled"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForNextTask();
     expect(statuses.has("1")).toBe(false);
     expect(errors).toEqual([]);
     expect(panel.elements.getElements()).toHaveLength(0);

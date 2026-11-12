@@ -349,6 +349,25 @@ function registerImageFormatter(
 }
 
 /**
+ * Registers the image block and canvas element renderers for this extension.
+ *
+ * @param editor - Registries that own the extension's block and element types.
+ * @returns Both renderers are registered with the active extension.
+ * @throws If either type registration fails.
+ */
+function registerImageRenderers(editor: Pick<ReactEditorApi, "blockTypes" | "elementTypes">): void {
+  editor.blockTypes.register({
+    definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
+    render: ImageBlock,
+  });
+  editor.elementTypes.register({
+    definition: { type: "image" },
+    render: ImageElement,
+    title: "Image",
+  });
+}
+
+/**
  * Installs image input, block and canvas rendering, and slash insertion.
  *
  * The extension owns local upload feedback and cancels pending work on removal.
@@ -378,15 +397,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         () => <FileUploadStatusOverlay store={statuses} kind="image" />,
         "afterSurface",
       );
-      reactEditor.blockTypes.register({
-        definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
-        render: ImageBlock,
-      });
-      reactEditor.elementTypes.register({
-        definition: { type: "image" },
-        render: ImageElement,
-        title: "Image",
-      });
+      registerImageRenderers(reactEditor);
       registerImageHandler(
         reactEditor.clipboard,
         reactEditor.attachments,

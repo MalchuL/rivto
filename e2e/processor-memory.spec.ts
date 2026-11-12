@@ -1,3 +1,4 @@
+import { collectGarbage } from "./fixtures/collect-garbage";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
@@ -11,6 +12,16 @@ interface ProcessorMemoryWindow extends Window {
   };
 }
 
+/** Retained processor cleanup used after disposal or editor destruction. */
+interface ProcessorCleanupProbe {
+  /**
+   * Releases the retained processor registration.
+   *
+   * @returns The registration is disposed if still active.
+   */
+  dispose(): void;
+}
+
 /**
  * Forces Chromium collection and checks one processor payload reference.
  *
@@ -21,10 +32,7 @@ interface ProcessorMemoryWindow extends Window {
  */
 async function expectCollected(page: Page, key: string, direct: boolean): Promise<void> {
   const session = await page.context().newCDPSession(page);
-  for (let index = 0; index < 8; index++) {
-    await page.waitForTimeout(0);
-    await session.send("HeapProfiler.collectGarbage");
-  }
+  await collectGarbage(page, session);
   const retained = await page.evaluate(
     ({ key, direct }) => {
       const value = Reflect.get(window, key);
@@ -79,7 +87,7 @@ for (const kind of ["block", "element"] as const) {
         await expectCollected(page, "processorMemoryProbe", false);
       }
       await page.evaluate(() => {
-        const probe = Reflect.get(window, "processorMemoryProbe") as { dispose: () => void };
+        const probe = Reflect.get(window, "processorMemoryProbe") as ProcessorCleanupProbe;
         probe.dispose();
       });
     });

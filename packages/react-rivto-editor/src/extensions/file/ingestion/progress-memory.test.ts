@@ -1,15 +1,27 @@
 import { FileIngestion } from "./file-ingestion";
 import { FileUploadStatusStore } from "./file-upload-status";
 import type { FileIngestionPanel, FileUploadContext } from "./types";
+import type { BinaryWriteContext } from "../../../attachments";
 
 /** Node's optional explicit garbage collector for this retention test. */
 interface GarbageCollectionGlobal {
+  /**
+   * Requests explicit garbage collection when Node exposes it.
+   *
+   * @returns A collection pass has been requested.
+   */
   gc?: () => void;
 }
 
 /** Progress callback and weak panel reference retained after a completed upload. */
 interface ProgressRetention {
   readonly panel: WeakRef<object>;
+  /**
+   * Reports progress through the callback retained by the provider.
+   *
+   * @param value - Reported completion fraction.
+   * @returns Progress is forwarded while the ingestion remains active.
+   */
   readonly progress: (value: number) => void;
 }
 
@@ -72,6 +84,12 @@ gcTest("a retained upload progress callback does not retain its former panel", a
  */
 async function retainProgressWithErrorCallback(): Promise<{
   errorCallback: WeakRef<() => void>;
+  /**
+   * Reports progress through the callback retained by the provider.
+   *
+   * @param value - Reported completion fraction.
+   * @returns Progress is forwarded while the ingestion remains active.
+   */
   progress: (value: number) => void;
 }> {
   const panel = { editor: { getDocument: () => ({ id: "document" }) } };
@@ -105,6 +123,12 @@ gcTest("a retained progress callback releases the extension error callback", asy
 });
 /** Pending provider operation retained independently of the cancelled ingestion. */
 interface PendingRetention extends ProgressRetention {
+  /**
+   * Resolves the pending provider write.
+   *
+   * @param value - Provider reference returned by the write.
+   * @returns The provider promise is resolved.
+   */
   readonly finishWrite: (value: string) => void;
   readonly state: { settled: boolean };
 }
@@ -157,6 +181,12 @@ gcTest("cancellation releases the panel while a provider write remains pending",
 });
 /** Provider callbacks retained independently of a cancelled upload batch. */
 interface BatchRetention extends ProgressRetention {
+  /**
+   * Resolves the pending provider write.
+   *
+   * @param value - Provider reference returned by the write.
+   * @returns The provider promise is resolved.
+   */
   readonly finishWrite: (value: string) => void;
 }
 /**
@@ -171,7 +201,7 @@ function retainPendingBatch(): BatchRetention {
   let progress: ((value: number) => void) | undefined;
   let finishWrite: ((value: string) => void) | undefined;
   const provider = {
-    write: (_file: File, context: { reportProgress?: (value: number) => void }) => {
+    write: (_file: File, context: Pick<BinaryWriteContext, "reportProgress">) => {
       progress = context.reportProgress;
       return new Promise<string>((resolve) => {
         finishWrite = resolve;
