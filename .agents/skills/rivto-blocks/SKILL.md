@@ -233,3 +233,10 @@ Native controls must receive their own click: mark editor controls with
 and avoid suppressing clicks merely because a drag might have occurred. Keep
 selection and pointer handling with the shared owner; test ordinary clicks,
 modifier selection, dragging, and keyboard activation on the rendered surface.
+
+For the optional `unsafe-html` block, keep editor access host-controlled and
+source-specific. The sandbox bridge exposes only named operations, rechecks the
+current grant and source for each request, and keeps panel-local and shared-editor
+scopes distinct. Test disabled and forged requests, source changes, undo, and
+iframe startup before adding another operation; never put permission in widget
+props that the iframe can change.

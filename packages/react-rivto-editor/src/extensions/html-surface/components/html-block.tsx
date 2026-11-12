@@ -193,7 +193,7 @@ function HtmlBlockBody({
  * @param block - Detached block node from the editor.
  * @returns A plain snapshot safe to post into the sandbox.
  */
-function toBlockView(block: EditorBlockNode): HtmlBlockView {
+export function toBlockView(block: EditorBlockNode): HtmlBlockView {
   return {
     kind: "block",
     id: block.id,
@@ -217,7 +217,7 @@ function toBlockView(block: EditorBlockNode): HtmlBlockView {
  * @param command - Validated write from the sandbox.
  * @returns Applies the supported command when the block still exists.
  */
-function applyBlockCommand(
+export function applyBlockCommand(
   panel: HtmlBlockPanel,
   blockId: string,
   command: HtmlFrameCommand,
@@ -250,7 +250,11 @@ function applyBlockCommand(
  * @param draft - Source and parsed props from the editor.
  * @returns Saves the draft when the block still exists.
  */
-function commitBlockDraft(panel: HtmlBlockDraftPanel, blockId: string, draft: HtmlDraft): void {
+export function commitBlockDraft(
+  panel: HtmlBlockDraftPanel,
+  blockId: string,
+  draft: HtmlDraft,
+): void {
   const current = panel.blocks.getBlockNode(blockId);
   if (!current) {
     return;

@@ -213,3 +213,25 @@
 .html-source-editor [role="alert"] {
   color: var(--rivto-destructive);
 }
+
+.html-unsafe-warning {
+  margin: 0;
+  border: 1px solid var(--rivto-destructive);
+  border-radius: var(--rivto-radius);
+  color: var(--rivto-foreground);
+  background: var(--rivto-background);
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.html-unsafe-permission {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--rivto-foreground);
+  font-size: 13px;
+}
+
+.html-unsafe-edit {
+  justify-self: start;
+}

@@ -36,3 +36,31 @@ not prevent network requests. Scripts receive the widget's snapshot, including
 block plugin data, and can send those values to remote services. Install this
 extension only where executing authored HTML and that data exposure are acceptable;
 the sandbox is not a network isolation boundary.
+
+## Unsafe HTML block
+
+The extension also registers `unsafe-html`, exported as `UNSAFE_HTML_BLOCK_TYPE`.
+Its scripts run in the same separate-origin sandbox as ordinary HTML. The block's
+edit UI includes **Allow this HTML to read and modify editor blocks**, disabled by
+default. Saving with that option enabled grants access only to that mounted
+occurrence and source. Changing the source or unmounting the occurrence revokes
+it; the decision is not persisted or controlled by widget props. A warning above
+the block appears when access is requested while disabled and remains visible
+while it is enabled.
+
+`rivto.panel` and `rivto.reactEditor` return `null` when disabled. When enabled,
+they expose asynchronous `blocks` methods: `getRootIds()`, `getParentId(id)`,
+`getChildIds(id)`, `getBlockNode(id)`, and `setContent(id, text)`. The panel
+methods respect the current panel boundary; React editor methods operate on the
+shared document. Missing blocks and invalid operations return `null` where the
+underlying operation has no result; errors from the editor reject the promise.
+These are bounded bridge APIs, not the live objects exposed to React components.
+
+The iframe can use these methods to read and modify other blocks when enabled,
+and it can make network requests independently of that setting. Only grant access
+to source you trust. The demo includes a panel-scoped and a shared-editor example
+that append text to the preceding sibling and can be undone.
+
+Permission follows the HTML source string, not a snapshot of external resources:
+a script loaded from a URL can change independently. The unsafe bridge is not a
+network isolation or external-script integrity mechanism.

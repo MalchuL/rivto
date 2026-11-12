@@ -319,3 +319,5 @@ export * from "./attachments";
 
 export { htmlSurfaceExtension } from "./extensions/html-surface/extension";
 export { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "./extensions/html-surface/protocol/protocol";
+
+export { UNSAFE_HTML_BLOCK_TYPE } from "./extensions/html-surface/components/unsafe-html-block";
