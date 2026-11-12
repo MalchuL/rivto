@@ -7,6 +7,8 @@
  * @module
  */
 
+import { ORBIT_HTML, WEEKLY_PROGRESS_HTML } from "./animated-samples.ts";
+
 /** One pasted block stored as HTML content plus JSON props. */
 export interface HtmlBlockSample {
   /** Stable id copied onto the block so tests can find it. */
@@ -35,33 +37,6 @@ export interface HtmlElementSample {
     readonly height: number;
   };
 }
-
-/** Document shown when someone places a new HTML element from the toolbar. */
-export const HTML_STARTER = `<style>
-  html, body { height: 100%; margin: 0; }
-  body {
-    display: grid;
-    place-items: center;
-    background: radial-gradient(circle at 30% 20%, #d9ddff, #f7f4ef 55%, #efe7db);
-    color: #1c2348;
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    text-align: center;
-  }
-  p { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.04em; }
-  small { display: block; margin-top: 6px; color: #5c6478; font-size: 12px; }
-</style>
-<p id="label">HTML<small>Edit to paste markup</small></p>
-<script>
-  rivto.ready().then(function (node) {
-    var label = document.getElementById("label");
-    function paint(next) {
-      var text = typeof next.props.label === "string" ? next.props.label : "HTML";
-      label.firstChild.textContent = text;
-    }
-    paint(node);
-    rivto.subscribe(paint);
-  });
-</script>`;
 
 const POMODORO_HTML = `<style>
   body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -514,6 +489,11 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
     },
   },
   {
+    sample: "weekly-progress",
+    html: WEEKLY_PROGRESS_HTML,
+    props: { sample: "weekly-progress", label: "Weekly progress", sessions: [2, 3, 1, 4, 2, 0, 0] },
+  },
+  {
     sample: "mood",
     html: MOOD_HTML,
     props: { sample: "mood", label: "Mood", mood: "calm" },
@@ -540,6 +520,12 @@ export const HTML_ELEMENT_SAMPLES: readonly HtmlElementSample[] = [
     html: TALLY_HTML,
     props: { sample: "tally", label: "Tea", count: 2 },
     frame: { x: 2680, y: 48, width: 230, height: 250 },
+  },
+  {
+    sample: "orbit",
+    html: ORBIT_HTML,
+    props: { sample: "orbit", label: "Orbit", running: true },
+    frame: { x: 3200, y: 48, width: 250, height: 250 },
   },
   {
     sample: "signal",

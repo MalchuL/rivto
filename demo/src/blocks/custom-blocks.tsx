@@ -13,6 +13,7 @@ import {
   columnsExtension,
   editorControlProps,
   kanbanExtension,
+  htmlSurfaceExtension,
   MarkdownContent,
   tableExtension,
   useBlockNode,
@@ -29,7 +30,6 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import { htmlSurfaceExtension } from "../extensions/html-surface/extension";
 import {
   COUNTER_BLOCK_TYPE,
   counterBlockDefinition,

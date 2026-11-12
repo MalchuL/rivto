@@ -8,7 +8,7 @@
 }
 
 /* The edit control sits inside the block or element, not on a surrounding frame. */
-[data-block-type="demo.html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
+[data-block-type="html"] > .rivto-block-row > .rivto-block-slot[data-slot-position="right"] {
   /* Inset past the row padding so the control sits on the widget, not in the gutter. */
   top: 22px;
   right: 24px;
@@ -26,7 +26,7 @@
   transform: none;
 }
 
-[data-block-type="demo.html"]
+[data-block-type="html"]
   > .rivto-block-row
   > .rivto-block-slot[data-slot-position="right"]
   > button,
@@ -38,15 +38,15 @@
   background: var(--rivto-background, #fff);
 }
 
-[data-block-type="demo.html"]:hover
+[data-block-type="html"]:hover
   > .rivto-block-row
   > .rivto-block-slot[data-slot-position="right"]
   > button,
-[data-block-type="demo.html"][data-block-selected="true"]
+[data-block-type="html"][data-block-selected="true"]
   > .rivto-block-row
   > .rivto-block-slot[data-slot-position="right"]
   > button,
-[data-block-type="demo.html"]
+[data-block-type="html"]
   > .rivto-block-row
   > .rivto-block-slot[data-slot-position="right"]
   > button:focus,
@@ -83,22 +83,7 @@
 }
 
 .html-surface-paste button {
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 12px;
-  background: var(--rivto-accent, #3d4ed8);
-  color: white;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.html-surface-paste button:focus-visible,
-.html-source-editor textarea:focus-visible,
-.html-surface-paste textarea:focus-visible {
-  outline: 2px solid var(--rivto-ring, #3d4ed8);
-  outline-offset: 2px;
+  justify-self: start;
 }
 
 .html-surface-frame {
@@ -125,7 +110,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #1c2348;
+  color: var(--rivto-foreground);
   box-shadow: none;
 }
 
@@ -140,7 +125,7 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #505268;
+  color: var(--rivto-muted-foreground);
 }
 
 .html-surface-paste textarea,
@@ -149,10 +134,10 @@
   min-height: 88px;
   margin-top: 4px;
   padding: 8px 10px;
-  border: 1px solid rgba(28, 35, 72, 0.16);
-  border-radius: 12px;
-  background: white;
-  color: #1c2348;
+  border: 1px solid var(--rivto-input);
+  border-radius: calc(var(--rivto-radius) - 2px);
+  background: var(--rivto-background);
+  color: var(--rivto-foreground);
   font:
     12px/1.45 ui-monospace,
     SFMono-Regular,
@@ -193,9 +178,9 @@
 
 .html-code-field .cm-editor {
   width: 100%;
-  border: 1px solid rgba(28, 35, 72, 0.16);
-  border-radius: 12px;
-  background: white;
+  border: 1px solid var(--rivto-input);
+  border-radius: calc(var(--rivto-radius) - 2px);
+  background: var(--rivto-background);
   font-size: 12px;
 }
 
@@ -226,5 +211,5 @@
 }
 
 .html-source-editor [role="alert"] {
-  color: #9a3412;
+  color: var(--rivto-destructive);
 }

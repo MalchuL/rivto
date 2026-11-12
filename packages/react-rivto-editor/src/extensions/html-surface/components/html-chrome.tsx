@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { editorControlProps } from "@chulane/rivto-react";
+import { editorControlProps } from "../../../constants";
 import { CheckIcon, CodeXmlIcon, Maximize2Icon, Minimize2Icon, XIcon } from "lucide-react";
 import {
   useState,
@@ -14,14 +14,11 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Button } from "../../../../packages/react-rivto-editor/src/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "../../../../packages/react-rivto-editor/src/components/ui/dialog";
+import { Button } from "../../../components/ui/button";
+import { Textarea } from "../../../components/ui/textarea";
+import { Dialog, DialogContent, DialogTitle } from "../../../components/ui/dialog";
 import { HtmlCodeField } from "./html-code";
-import { parseWidgetProps, type HtmlDraft } from "./protocol";
+import { parseWidgetProps, type HtmlDraft } from "../protocol/protocol";
 
 const HTML_EDIT_HINT =
   "Scripts call rivto.ready() for this node. Blocks expose props, listProps, content, pluginData, and childIds. Elements expose props, frame, zIndex, and childIds. rivto.setProp(key, value) writes one property.";
@@ -33,13 +30,14 @@ export interface HtmlSlotEditButtonProps {
   /**
    * Toggles the source editor.
    *
-   * @returns Nothing. The caller updates the shared edit flag.
+   * @returns The caller has updated the shared edit flag.
    */
   readonly onToggle: () => void;
   /**
    * Called on pointer down before the click.
    *
    * @param event - Pointer event on the button. Callers can select the element here.
+   * @returns The caller has processed the pointer event.
    */
   readonly onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }
@@ -86,6 +84,7 @@ export interface HtmlPasteTargetProps {
    * Receives pasted or submitted markup.
    *
    * @param source - HTML text from the clipboard or the field.
+   * @returns The caller has received the source.
    */
   readonly onCommit: (source: string) => void;
 }
@@ -129,7 +128,7 @@ export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
       }}
     >
       <p>{HTML_EDIT_HINT}</p>
-      <textarea
+      <Textarea
         {...editorControlProps}
         aria-label="HTML source"
         placeholder="Paste HTML, CSS, and JavaScript"
@@ -138,9 +137,9 @@ export function HtmlPasteTarget({ onCommit }: HtmlPasteTargetProps) {
         onPaste={paste}
         onChange={(event) => setText(event.currentTarget.value)}
       />
-      <button {...editorControlProps} type="submit">
+      <Button {...editorControlProps} type="submit" size="sm">
         Render
-      </button>
+      </Button>
     </form>
   );
 }
@@ -157,9 +156,14 @@ export interface HtmlSourceEditorProps {
    * Persists a valid draft.
    *
    * @param draft - HTML source and parsed props. Invalid JSON never reaches this callback.
+   * @returns The caller has persisted the draft.
    */
   readonly onSave: (draft: HtmlDraft) => void;
-  /** Closes the editor without writing. */
+  /**
+   * Closes the editor without writing.
+   *
+   * @returns The caller has closed the editor.
+   */
   readonly onCancel: () => void;
 }
 
@@ -189,14 +193,7 @@ export function HtmlSourceEditor({
   const [props, setProps] = useState(propsText);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const save = () => {
-    try {
-      onSave({ source: html, props: parseWidgetProps(props) });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Props must be a JSON object");
-    }
-  };
-  const message = error ? <p role="alert">{error}</p> : <p>{HTML_EDIT_HINT}</p>;
+  const save = () => saveHtmlDraft(html, props, onSave, setError);
   const pane = (fullscreen: boolean) => (
     <HtmlEditorPane
       expanded={fullscreen}
@@ -213,7 +210,7 @@ export function HtmlSourceEditor({
         onHtml={setHtml}
         onProps={setProps}
       />
-      {message}
+      {error ? <p role="alert">{error}</p> : <p>{HTML_EDIT_HINT}</p>}
     </HtmlEditorPane>
   );
   return (
@@ -233,13 +230,47 @@ export function HtmlSourceEditor({
   );
 }
 
+/**
+ * Parses widget properties before passing a draft to its owner.
+ *
+ * @param html - Current HTML source.
+ * @param props - JSON text from the properties editor.
+ * @param onSave - Persists the parsed draft.
+ * @param setError - Displays parsing or save errors.
+ * @returns The draft is saved or its error is displayed.
+ */
+function saveHtmlDraft(
+  html: string,
+  props: string,
+  onSave: (draft: HtmlDraft) => void,
+  setError: (message: string) => void,
+): void {
+  try {
+    onSave({ source: html, props: parseWidgetProps(props) });
+  } catch (caught) {
+    setError(caught instanceof Error ? caught.message : "Props must be a JSON object");
+  }
+}
+
 /** Props for the HTML, props, and optional list-props documents. */
 interface HtmlEditorFieldsProps {
   readonly html: string;
   readonly propsText: string;
   readonly listPropsText?: string;
   readonly fill: boolean;
+  /**
+   * Replaces the current HTML draft.
+   *
+   * @param value - Edited HTML text.
+   * @returns The caller has received the new source.
+   */
   readonly onHtml: (value: string) => void;
+  /**
+   * Replaces the current JSON properties draft.
+   *
+   * @param value - Edited JSON text.
+   * @returns The caller has received the new properties text.
+   */
   readonly onProps: (value: string) => void;
 }
 
@@ -304,9 +335,29 @@ function HtmlEditorFields({
 /** Props for the editor actions and the documents they apply to. */
 interface HtmlEditorPaneProps {
   readonly expanded: boolean;
+  /**
+   * Opens the fullscreen editor.
+   *
+   * @returns The caller has performed the requested action.
+   */
   readonly onExpand: () => void;
+  /**
+   * Returns to the inline editor.
+   *
+   * @returns The caller has performed the requested action.
+   */
   readonly onCollapse: () => void;
+  /**
+   * Submits the current draft.
+   *
+   * @returns The caller has performed the requested action.
+   */
   readonly onSave: () => void;
+  /**
+   * Closes the current editor without saving.
+   *
+   * @returns The caller has performed the requested action.
+   */
   readonly onCancel: () => void;
   readonly children: ReactNode;
 }
@@ -375,6 +426,12 @@ function HtmlEditorPane({
 /** Props for the fullscreen code dialog. */
 interface HtmlEditorDialogProps {
   readonly expanded: boolean;
+  /**
+   * Updates whether the fullscreen dialog is open.
+   *
+   * @param expanded - True when the dialog should be open.
+   * @returns The caller has received the new visibility state.
+   */
   readonly onExpanded: (expanded: boolean) => void;
   readonly children: ReactNode;
 }

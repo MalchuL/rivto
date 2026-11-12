@@ -10,7 +10,7 @@ import {
   parseWidgetProps,
   replacedPropPatch,
   validateHtmlElementProps,
-} from "../src/extensions/html-surface/protocol.ts";
+} from "../../packages/react-rivto-editor/src/extensions/html-surface/protocol/protocol.ts";
 import {
   HTML_BLOCK_SAMPLES,
   HTML_ELEMENT_SAMPLES,
@@ -114,6 +114,6 @@ test("seeded widgets keep their props beside the html source", () => {
   const circle = HTML_ELEMENT_SAMPLES.find((sample) => sample.sample === "circle");
   assert.equal(circle.props.speed, 6);
   assert.match(circle.html, /data-ring="true"/);
-  assert.equal(HTML_BLOCK_SAMPLES.length, 4);
-  assert.equal(HTML_ELEMENT_SAMPLES.length, 4);
+  assert.equal(HTML_BLOCK_SAMPLES.length, 5);
+  assert.equal(HTML_ELEMENT_SAMPLES.length, 5);
 });
