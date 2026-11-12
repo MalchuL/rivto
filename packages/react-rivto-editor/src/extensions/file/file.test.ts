@@ -116,7 +116,6 @@ describe("fileExtension", () => {
 });
 
 test("removes its provider configuration when extension setup fails", async () => {
-  const { getFileProvider } = await import("./view/file-configuration");
   const editor = await createTestCoreEditor();
   const runtime = createReactEditor({ editor });
   runtime.clipboard.registerFileHandler({
@@ -126,7 +125,7 @@ test("removes its provider configuration when extension setup fails", async () =
     prepare: ({ reference }) => ({ kind: "inline", content: reference.uri }),
   });
   expect(() => runtime.extensions.install(fileExtension({ provider: testProvider }))).toThrow();
-  expect(getFileProvider(runtime)).toBeUndefined();
+  expect(runtime.extensions.getExtension("file")).toBeUndefined();
   await runtime.destroy();
   await editor.destroy();
 });
@@ -151,18 +150,35 @@ test("removes image view configuration when extension setup fails", async () => 
   await editor.destroy();
 });
 
-test("old provider cleanup does not remove a replacement using the same provider", async () => {
-  const { configureFileProvider, getFileProvider } = await import("./view/file-configuration");
+test("file provider follows extension removal and reinstall", async () => {
   const editor = await createTestCoreEditor();
   const runtime = createReactEditor({ editor });
-  const disposeFirst = configureFileProvider(runtime, testProvider);
-  const disposeSecond = configureFileProvider(runtime, testProvider);
+  const disposeFirst = runtime.extensions.install(fileExtension({ provider: testProvider }));
+  expect(runtime.extensions.getExtension("file")?.fields.provider).toBe(testProvider);
   disposeFirst();
-  expect(getFileProvider(runtime)).toBe(testProvider);
+  expect(runtime.extensions.getExtension("file")).toBeUndefined();
+  const disposeSecond = runtime.extensions.install(fileExtension({ provider: testProvider }));
+  disposeFirst();
+  expect(runtime.extensions.getExtension("file")?.fields.provider).toBe(testProvider);
   disposeSecond();
-  expect(getFileProvider(runtime)).toBeUndefined();
+  expect(runtime.extensions.getExtension("file")).toBeUndefined();
   await runtime.destroy();
   await editor.destroy();
+});
+
+test("one file extension object can be installed in independent editors", async () => {
+  const firstCore = await createTestCoreEditor();
+  const secondCore = await createTestCoreEditor();
+  const extension = fileExtension({ provider: testProvider });
+  const first = createReactEditor({ editor: firstCore, extensions: [extension] });
+  const second = createReactEditor({ editor: secondCore, extensions: [extension] });
+  expect(first.extensions.getExtension("file")).toBe(extension);
+  expect(second.extensions.getExtension("file")).toBe(extension);
+  await first.destroy();
+  expect(second.extensions.getExtension("file")?.fields.provider).toBe(testProvider);
+  await second.destroy();
+  await firstCore.destroy();
+  await secondCore.destroy();
 });
 
 test("stops clipboard postprocessing after the first binary contribution", async () => {

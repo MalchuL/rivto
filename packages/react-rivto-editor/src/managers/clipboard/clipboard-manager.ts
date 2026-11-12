@@ -20,7 +20,7 @@ import {
 import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { blockElementClipboardConverter } from "../../elements/clipboard-converters";
-import { ElementPasteStrategy } from "../../extensions/built-ins/clipboard/element-paste-strategy";
+import { ElementPasteStrategy } from "./element-paste-strategy";
 import { clipboardContentBundle, selectedClipboardElements } from "./clipboard-content";
 import { ClipboardConverters } from "./clipboard-converters";
 import { browserClipboardType } from "./utils";

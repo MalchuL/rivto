@@ -48,6 +48,28 @@ describe("ImageView", () => {
     await editor.destroy();
   });
 
+  test("updates image configuration when the extension is removed and reinstalled", async () => {
+    const editor = await createTestCoreEditor();
+    const panel = createTestReactEditor({ editor });
+    const observed: Array<string | undefined> = [];
+    const extensions = panel.editor.extensions;
+    const unsubscribe = extensions.subscribeExtension("image", () => {
+      observed.push(extensions.getExtension("image")?.fields.customizations.element?.resizeMode);
+    });
+    const remove = extensions.install(
+      imageExtension({ provider: testProvider, views: { element: { resizeMode: "letterbox" } } }),
+    );
+    expect(imageResizeMode(panel.editor, "element")).toBe("letterbox");
+    remove();
+    expect(imageResizeMode(panel.editor, "element")).toBe("stretch");
+    const removeAgain = extensions.install(imageExtension({ provider: testProvider }));
+    expect(observed).toEqual(["letterbox", undefined, undefined]);
+    removeAgain();
+    unsubscribe();
+    await panel.editor.destroy();
+    await editor.destroy();
+  });
+
   test("shares host controls and resize behavior across inline, block, and element images", async () => {
     const editor = await createTestCoreEditor();
     const reactPanel = createTestReactEditor({

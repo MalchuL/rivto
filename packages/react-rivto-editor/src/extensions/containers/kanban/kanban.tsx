@@ -8,7 +8,7 @@ import { KanbanLayout, KanbanColumnLayout } from "./kanban-layout";
  * @module
  */
 import type { EditorBlockInput } from "@chulane/rivto";
-import { convertLeafToContainer } from "../convert-leaf-to-container";
+import { convertLeafToContainer } from "../../../block-behaviors/convert-leaf-to-container";
 import type { BlockWrapperProps } from "../../../blocks";
 import type { ReactEditorExtension } from "../../../managers";
 import { Kanban, KanbanColumn } from "./kanban-content";

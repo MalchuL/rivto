@@ -1,6 +1,6 @@
 import { type DocumentEditorAPI } from "@chulane/rivto";
 import { createTestCoreEditor as createDocumentEditor } from "../../../test-utils";
-import { CrossDocumentBlockTransfer } from "./cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "../../../managers/clipboard/cross-document-block-transfer";
 
 async function createEditor(): Promise<DocumentEditorAPI> {
   const editor = await createDocumentEditor();

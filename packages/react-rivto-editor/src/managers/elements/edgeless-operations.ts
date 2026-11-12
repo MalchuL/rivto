@@ -11,8 +11,8 @@ import type { CreateElementInput } from "./types";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
-import { EdgelessSelectionRuntime } from "../../extensions/built-ins/selection/edgeless-runtime";
-import type { EdgelessSelectionRef } from "../../extensions/built-ins/selection/types";
+import { EdgelessSelectionRuntime } from "../selection/edgeless/edgeless-runtime";
+import type { EdgelessSelectionRef } from "../selection/edgeless/types";
 import { ElementGeometry } from "../../elements/element-geometry";
 import type {
   CreateVisualPayload,

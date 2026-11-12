@@ -1,7 +1,7 @@
 /** @jest-environment ./jest-browser-environment.mjs */
 import type { EditorEvent } from "../../../managers/events/editor-event";
-import { FileDropFeedback } from "./file-drop-feedback";
-import { fileDropDestination, pageFileDropTarget } from "./file-destination";
+import { FileDropFeedback } from "../../../attachments/ingestion/file-drop-feedback";
+import { fileDropDestination, pageFileDropTarget } from "../../../attachments/ingestion/file-destination";
 
 test("resolves editable content with the same block target as other regions", () => {
   const root = document.createElement("div");

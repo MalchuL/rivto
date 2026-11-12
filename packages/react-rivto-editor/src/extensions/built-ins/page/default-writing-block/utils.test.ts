@@ -1,5 +1,5 @@
 /** Regression coverage for default writing-block emptiness policy resolution. */
-import { createIsEmptyDefaultBlock, resolveIsEmptyBlock } from "./utils";
+import { createIsEmptyDefaultBlock, resolveIsEmptyBlock } from "../../../../blocks/default-writing/utils";
 
 describe("empty-block helpers", () => {
   test("createIsEmptyDefaultBlock matches type and empty content", () => {

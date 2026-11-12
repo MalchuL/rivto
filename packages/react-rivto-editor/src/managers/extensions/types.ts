@@ -10,10 +10,23 @@ export type ExtensionComponent = ComponentType;
 /** Explicit EditorPanel placement relative to the active surface. */
 export type ExtensionMountPosition = "beforeSurface" | "afterSurface";
 
+declare global {
+  // Extension modules augment this registry with their own installed types.
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  interface RivtoInstalledExtensions {}
+}
+
+/* eslint-disable @typescript-eslint/no-empty-object-type */
+/** Installed extension types keyed by ID; extension authors may augment this interface. */
+export interface InstalledExtensions extends RivtoInstalledExtensions {}
+/* eslint-enable @typescript-eslint/no-empty-object-type */
+
 /** Functional extension installed synchronously during ReactEditorApi creation. */
-export interface ReactEditorExtension {
+export interface ReactEditorExtension<Fields = unknown> {
   /** Stable identity used to reject duplicate installation. */
   readonly id: string;
+  /** Optional extension-specific values and operations exposed to other extensions. */
+  readonly fields?: Fields;
   /**
    * Registers behavior through the complete public React runtime.
    *

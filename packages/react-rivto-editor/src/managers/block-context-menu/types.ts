@@ -1,5 +1,17 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { ReactPanelApi } from "../../panels/types";
+
+/** Registration capability borrowed from the block context menu. */
+export interface BlockContextMenuRegistration {
+  /**
+   * Registers a menu entry for the current extension lifecycle.
+   *
+   * @param entry - Menu contribution to register.
+   * @returns Disposer that removes the registered entry.
+   * @throws If the registry is inactive or the entry is invalid or duplicated.
+   */
+  register(entry: BlockContextMenuEntry): () => void;
+}
 
 /** Stable targets captured when a block context menu opens. IDs belong to the invoking panel. */
 export interface BlockContextMenuContext {
@@ -35,6 +47,10 @@ export interface BlockContextMenuEntry {
   readonly order?: number;
   /** Presentation and callback requirements; omitted means action. */
   readonly kind?: "action" | "submenu" | "separator" | "custom";
+  /** Optional decorative artwork shown beside an action or submenu title. */
+  readonly icon?: ComponentType<{ "aria-hidden"?: boolean }>;
+  /** Visual emphasis for an action; defaults to the ordinary menu appearance. */
+  readonly variant?: "default" | "destructive";
   /**
    * Determines whether the entry is available for the captured menu targets.
    *

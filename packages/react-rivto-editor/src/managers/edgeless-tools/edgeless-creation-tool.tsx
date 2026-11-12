@@ -12,8 +12,8 @@ import {
   snapDraggedFrame,
 } from "../../elements/visuals/utils/creation-geometry";
 import { ElementCreationPreview } from "../../elements/visuals/element-creation-preview";
-import { useEditorRoot } from "../../hooks/editor/use-editor-root";
-import { showSnapGuides } from "../../extensions/edgeless/visuals/utils/snap-guides";
+import { useCanvasViewportLayers } from "@chulane/rivto-edgeless/react";
+import { showSnapGuides } from "../../surfaces/edgeless/snap-guides";
 import { EdgelessTool, type EdgelessToolOptions, type EdgelessToolPointer } from "./edgeless-tool";
 
 /** Detached placement shown by toolbar drag; no persisted identity exists yet. */
@@ -259,13 +259,13 @@ export class EdgelessCreationTool extends EdgelessTool {
  * @returns No React DOM; the existing guide renderer owns its overlay.
  */
 function CreationSnapGuides({ guides }: { readonly guides: readonly SnapGuide[] }) {
-  const { element: root } = useEditorRoot();
+  const plane = useCanvasViewportLayers()?.plane ?? null;
   useLayoutEffect(() => {
-    if (!root) {
+    if (!plane) {
       return;
     }
-    showSnapGuides(root, guides);
-    return () => showSnapGuides(root, []);
-  }, [root, guides]);
+    showSnapGuides(plane, guides);
+    return () => showSnapGuides(plane, []);
+  }, [plane, guides]);
   return null;
 }

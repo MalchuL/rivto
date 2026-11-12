@@ -8,6 +8,7 @@ import { BLOCK_TEXT_METADATA_KEY } from "../../managers/selection/block-text-met
  * @module
  */
 import type { ReactEditorExtension } from "../../managers";
+import { ListTodoIcon } from "lucide-react";
 import {
   TODO_ITEM_BLOCK_TYPE,
   createPromptMap,
@@ -69,6 +70,7 @@ export function todoItemExtension(options: TodoItemExtensionOptions = {}): React
         reactEditor.blockContextMenu.register({
           id: "type.todo-item",
           title: "Convert to TODO item",
+          icon: ListTodoIcon,
           order: 30,
           /**
            * Allows conversion only when every captured block exists and is not already a TODO type.

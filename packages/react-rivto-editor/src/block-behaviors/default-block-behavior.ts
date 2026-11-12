@@ -11,8 +11,8 @@ import type { ReactPanelApi } from "../panels/types";
  *
  * @module
  */
-import { removeEmptyBlockAfterStructuralPredecessor } from "../extensions/built-ins/page/block-merge/utils";
-import { navigationDomRoot } from "../extensions/built-ins/page/navigation/utils/scope";
+import { removeEmptyBlockAfterStructuralPredecessor } from "./structural-predecessor";
+import { navigationDomRoot } from "../surfaces/page/navigation-scope";
 import type { KeyboardSelectionTarget } from "../managers/keyboard/selection";
 import {
   findNextEditableBlock,

@@ -518,7 +518,7 @@ test("failure after canvas insertion removes imported trees and separators, keep
   f.editor.history.clear();
   // Register a failure after the element strategy, when records and a separator already exist.
   const { ElementPasteStrategy } =
-    await import("../../extensions/built-ins/clipboard/element-paste-strategy");
+    await import("./element-paste-strategy");
   const stopElements = f.clipboard.pasteStrategies.register(
     "test.elements",
     new ElementPasteStrategy(f.reactPanel),

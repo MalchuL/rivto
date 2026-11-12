@@ -1,14 +1,15 @@
-import { registerBlockCollapseActions } from "../../block-handle/actions";
+import { registerBlockCollapseActions } from "./actions";
 import { CollapseBlockBehavior } from "./collapse-block-behavior";
 import type { ReactEditorApi } from "../../../../editor/types";
 /**
  * Editor interaction contracts and operations. Browser editing context is separate from core whole-block selection; document mutations use core managers.
  */
-import { BlockCollapseSlot } from "../../../../blocks/block-slot-controls/block-slot-controls";
+import { BlockCollapseSlot } from "./block-collapse-slot";
 import type { ReactPanelApi } from "../../../../panels/types";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
-import { reconcileCollapsedSelection } from "../navigation";
+import { reconcileCollapsedSelection } from "./collapsed-selection";
 import { collapseTargets } from "./utils";
+import { registerBlockConversionDefaults } from "../../../../blocks/block-conversion-defaults";
 
 /**
  * Installs outliner collapse shortcuts and repairs selections after any
@@ -60,6 +61,7 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     defaults: { collapsed: false },
     isValid: (candidate) => typeof candidate.collapsed === "boolean",
   });
+  registerBlockConversionDefaults(reactEditor.extensions, { collapsed: false });
   reactEditor.blockBehaviors.register(new CollapseBlockBehavior(), -100);
   reactEditor.surfaces.registerBlockSlot({
     position: "left-top",
@@ -165,7 +167,5 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     ({ reactPanel }) => setCollapsed(reactPanel, "toggle"),
   );
 
-  return () => {
-    uninstallReconciliation();
-  };
+  return uninstallReconciliation;
 }

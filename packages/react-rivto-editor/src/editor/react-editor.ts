@@ -3,6 +3,16 @@ import { BlockContextMenuRegistry } from "../managers/block-context-menu/registr
 import { EdgelessToolbarManager } from "../managers/edgeless-toolbar/edgeless-toolbar-manager";
 import { ElementTypeManager } from "../managers/elements/element-type-manager";
 import type { ExtensionsApi } from "../managers/extensions/api";
+import type { SharedSpaceApi } from "../managers/extensions/shared-space";
+import {
+  EDGELESS_SELECTION_RUNTIMES_KEY,
+  type EdgelessSelectionRuntimes,
+} from "../managers/selection/edgeless/shared";
+import {
+  defaultPageBlockDecorationAdapter,
+  PAGE_BLOCK_DECORATIONS_KEY,
+  type PageBlockDecorationAdapter,
+} from "../blocks/page-block-decorations";
 import { BlockListPropsManager } from "../managers/blocks/block-list-props-manager";
 import { PanelRegistry } from "../panels/panel-registry";
 import type { ReactEditorApi } from "./types";
@@ -243,6 +253,7 @@ export class ReactEditor implements ReactEditorApi {
     this.blockElements = new BlockElementProjection(this);
     this.disposers.push(() => this.blockElements.destroy());
     try {
+      this.initializeSharedValues(extensions.shared);
       extensions.initialize(options.extensions ?? []);
       this.disposers.push(
         this.core.blocks.subscribeStructure(this.blockElements.schedule),
@@ -338,6 +349,25 @@ export class ReactEditor implements ReactEditorApi {
       throw new AggregateError(errors, "React editor teardown failed");
     }
     return Promise.resolve();
+  }
+
+  /**
+   * Installs editor-owned defaults before optional extensions are initialized.
+   *
+   * Reservations remain owned by the extension manager and are released during
+   * editor teardown, independently of any extension installation.
+   *
+   * @param shared - Runtime space supplied by the owning extension manager.
+   * @returns Default decoration and selection values are available.
+   * @throws If a reservation or value notification fails.
+   */
+  private initializeSharedValues(shared: Pick<SharedSpaceApi, "reserve" | "getValue">): void {
+    shared.reserve(PAGE_BLOCK_DECORATIONS_KEY, "value");
+    shared
+      .getValue<PageBlockDecorationAdapter>(PAGE_BLOCK_DECORATIONS_KEY)!
+      .set({ ...defaultPageBlockDecorationAdapter });
+    shared.reserve(EDGELESS_SELECTION_RUNTIMES_KEY, "value");
+    shared.getValue<EdgelessSelectionRuntimes>(EDGELESS_SELECTION_RUNTIMES_KEY)!.set(new WeakMap());
   }
 }
 

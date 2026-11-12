@@ -17,6 +17,8 @@ import type { CSSProperties } from "react";
  * @module
  */
 import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
+import { useBlockCollapsed } from "../../../hooks/blocks/use-block-collapsed";
+import { updatePageBlockDecorations } from "../../../blocks/page-block-decorations";
 import {
   BlockBody,
   BlockChildren,
@@ -36,12 +38,12 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { convertLeafToContainer } from "../convert-leaf-to-container";
+import { convertLeafToContainer } from "../../../block-behaviors/convert-leaf-to-container";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
   ContainerSummaryTitle,
-} from "../container-summary-title";
+} from "../../../components/container-summary-title";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { MarkdownContent } from "../../../blocks/markdown/markdown";
@@ -191,7 +193,7 @@ export function insertTableRow(reactPanel: ReactPanelApi, rowId: string): Editor
   );
   let inserted: EditorBlock | undefined;
   reactPanel.batchUpdates(() => {
-    reactPanel.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+    updatePageBlockDecorations(reactPanel, table.id, { collapsed: false });
     inserted = reactPanel.blocks.insertBlock(
       createTableRowInput(widths),
       reactPanel.blocks.getInsertionDestinationAfter(rowId),
@@ -221,9 +223,9 @@ export function insertTableColumn(
   const width = columnWidth(row.children[column]?.props.tableColumnWidth);
   const inserted: EditorBlock[] = [];
   reactPanel.batchUpdates(() => {
-    reactPanel.blocks.updateBlock(table.id, { listProps: { collapsed: false } });
+    updatePageBlockDecorations(reactPanel, table.id, { collapsed: false });
     table.children.forEach((tableRow) => {
-      reactPanel.blocks.updateBlock(tableRow.id, { listProps: { collapsed: false } });
+      updatePageBlockDecorations(reactPanel, tableRow.id, { collapsed: false });
       const anchor = tableRow.children[column] ?? tableRow.children.at(-1);
       const cell = reactPanel.blocks.insertBlock(
         createTableCellInput(width),
@@ -358,6 +360,7 @@ export function Table({ blockId }: { readonly blockId: string }) {
   const attributes = useBlockSelectionAnchor(blockId);
   const { rows, columns } = useTableDimensions(blockId);
   const block = editing.block;
+  const collapsed = useBlockCollapsed(block);
   if (!block) {
     return null;
   }
@@ -366,7 +369,7 @@ export function Table({ blockId }: { readonly blockId: string }) {
       {...attributes}
       className={`${TABLE_CLASS} ${TABLE_SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}
     >
-      {block.listProps.collapsed === true && (
+      {collapsed && (
         <>
           <ContainerSummaryTitle blockId={blockId} name="Table" />
           <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={TABLE_SUMMARY_STATS_CLASS}>

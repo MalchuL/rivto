@@ -3,7 +3,7 @@ import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { blockIdsOf } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS, isHTMLElementNode } from "../../managers";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 
 /** Removes selected descendants whose selected ancestor already owns them. */
 function topLevelSelection(reactPanel: ReactPanelApi, blockIds: readonly string[]): string[] {

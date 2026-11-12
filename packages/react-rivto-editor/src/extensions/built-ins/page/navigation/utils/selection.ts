@@ -23,7 +23,7 @@ import { focusBlock } from "../../../../../managers";
 import type { PanelSelectionApi } from "../../../../../managers/selection/api";
 import { PageNavigationController } from "../../../../../surfaces/page/page-navigation-controller";
 import { pageEntries } from "./outline";
-import { navigationOutlineBlocks } from "./scope";
+import { navigationOutlineBlocks } from "../../../../../surfaces/page/navigation-scope";
 import type { VerticalDirection } from "./types";
 
 export type { VerticalDirection } from "./types";

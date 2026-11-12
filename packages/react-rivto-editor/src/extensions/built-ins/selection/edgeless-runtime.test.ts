@@ -2,7 +2,11 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
 /** Core-backed edgeless selection notification and membership tests. */
 
 import { createTestCoreEditor } from "../../../test-utils";
-import { EdgelessSelectionRuntime } from "./edgeless-runtime";
+import {
+  EdgelessSelectionRuntime,
+  getEdgelessRuntime,
+  installEdgelessRuntime,
+} from "../../../managers/selection/edgeless/edgeless-runtime";
 
 /**
  * Creates one valid visual element for selection tests.
@@ -17,6 +21,27 @@ function element(editor: Awaited<ReturnType<typeof createTestCoreEditor>>): stri
     props: {},
   }).id;
 }
+
+test("acquires panel selection without installing the edgeless selection extension", async () => {
+  const editor = await createTestCoreEditor({ mode: "edgeless" });
+  const panel = createReactEditor({ editor });
+  try {
+    const id = element(editor);
+    const selection = getEdgelessRuntime(panel);
+    expect(selection.get()).toEqual({ active: false, items: [] });
+    selection.set([id]);
+    expect(getEdgelessRuntime(panel)).toBe(selection);
+    expect(selection.get()).toEqual({ active: true, items: [id] });
+    const uninstall = installEdgelessRuntime(panel);
+    expect(getEdgelessRuntime(panel)).toBe(selection);
+    uninstall();
+    expect(getEdgelessRuntime(panel)).toBe(selection);
+    expect(selection.get()).toEqual({ active: false, items: [] });
+  } finally {
+    await panel.editor.destroy();
+    await editor.destroy();
+  }
+});
 
 describe("EdgelessSelectionRuntime", () => {
   /**

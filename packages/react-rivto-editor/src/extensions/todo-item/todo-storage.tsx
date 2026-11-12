@@ -40,6 +40,7 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { editorControlProps } from "../../constants";
+import { useBlockCollapsed } from "../../hooks/blocks/use-block-collapsed";
 import {
   useBlock,
   useBlockNode,
@@ -49,13 +50,17 @@ import {
   usePanel,
   usePreventTextEditing,
 } from "../../hooks";
-import type { TodoItemProps, TodoItemStatus } from "./todo-item";
+import {
+  TODO_ITEM_BLOCK_TYPE,
+  TODO_STATUSES,
+  type TodoItemProps,
+  type TodoItemStatus,
+} from "./todo-item-model";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
   ContainerSummaryTitle,
-} from "../containers/container-summary-title";
-import { TODO_ITEM_BLOCK_TYPE } from "./todo-item";
+} from "../../components/container-summary-title";
 import {
   TODO_STORAGE_CLEAR_CLASS,
   TODO_STORAGE_CONTENT_CLASS,
@@ -90,8 +95,7 @@ export interface TodoStorageComponentProps {
   readonly blockId: string;
 }
 
-/** Fixed statuses which every customized sequence must contain exactly once. */
-export const TODO_STATUSES = ["todo", "doing", "done"] as const;
+export { TODO_STATUSES } from "./todo-item-model";
 
 const PRIORITIES = [1, 2, 3, 4] as const;
 const DEFAULT_STATUS_ORDER: readonly TodoItemStatus[] = [...TODO_STATUSES];
@@ -532,11 +536,12 @@ function TodoStorageToolbar({ blockId }: TodoStorageComponentProps) {
  */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
   const { block } = useBlockNode(blockId);
+  const collapsed = useBlockCollapsed(block);
   const attributes = useBlockSelectionAnchor(blockId);
   if (!block) {
     return null;
   }
-  if (block.listProps.collapsed === true) {
+  if (collapsed) {
     const count = block.childIds.length;
     return (
       <div {...attributes} className={`${TODO_STORAGE_SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}>

@@ -14,6 +14,10 @@ import type {
   PortableBlockFormats,
 } from "./types";
 import type { ClipboardConverters } from "./clipboard-converters";
+import {
+  defaultClipboardListProperties,
+  type ClipboardListProperties,
+} from "./clipboard-list-properties";
 
 /** Escapes text before including it in exported clipboard HTML. */
 export const escapeClipboardHTML = (value: string): string =>
@@ -31,6 +35,7 @@ export const escapeClipboardHTML = (value: string): string =>
 
 /** Ordered React-owned portable clipboard contributions. */
 export class ClipboardFormatRegistry {
+  private listPropertiesValue: ClipboardListProperties | undefined = defaultClipboardListProperties;
   private readonly formatters: ClipboardFormatter[] = [];
   private readonly parsers: ClipboardParser[] = [];
 
@@ -41,8 +46,32 @@ export class ClipboardFormatRegistry {
    */
   constructor(
     private readonly registrations: RegistrationOwner,
-    private readonly converters?: ClipboardConverters,
-  ) {}
+    private readonly converters: ClipboardConverters | undefined,
+  ) {
+    registrations.registerCleanup(() => {
+      this.listPropertiesValue = undefined;
+    });
+  }
+
+  /**
+   * Reads the translator captured at the beginning of each HTML parse.
+   *
+   * @returns The current translator, or undefined when list items have no translation.
+   */
+  get listProperties(): ClipboardListProperties | undefined {
+    return this.listPropertiesValue;
+  }
+
+  /**
+   * Replaces the translator used for subsequent HTML parses.
+   *
+   * @param translator - List-item translation, or undefined to leave items undecorated.
+   * @throws If the owning editor is being destroyed.
+   */
+  set listProperties(translator: ClipboardListProperties | undefined) {
+    this.registrations.assertActive();
+    this.listPropertiesValue = translator;
+  }
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.
@@ -231,6 +260,7 @@ export class ClipboardFormatRegistry {
    * Parses portable clipboard content without mounting external markup.
    * Whole-buffer parsers run first; type parsers then claim individual HTML subtrees.
    * Unclaimed containers preserve their children, while scripts and embedded documents are ignored.
+   * The current list-item translator is captured once for each HTML parse.
    * @param data - Available HTML and plain-text flavors.
    * @param context - Receiving surface and writing-block fallback.
    * @returns Detached block/element inputs, or undefined when only ordinary plain text remains.
@@ -245,6 +275,7 @@ export class ClipboardFormatRegistry {
     }
     const converters = this.converters?.getParsers() ?? [];
     if (data.html && typeof DOMParser !== "undefined") {
+      const listProperties = this.listProperties;
       const document = new DOMParser().parseFromString(data.html, "text/html");
       const blocks: EditorBlockInput[] = [];
       const elements: EditorElementInput[] = [];
@@ -286,10 +317,7 @@ export class ClipboardFormatRegistry {
               visit(child, children);
             }
           }
-          const checkbox = element.querySelector('input[type="checkbox"]');
-          const listProps = checkbox
-            ? { type: "checkbox", checked: checkbox.hasAttribute("checked") }
-            : { type: element.parentElement?.tagName === "OL" ? "numbered_list" : "list" };
+          const listProps = listProperties?.(element);
           destination.push({ type: context.defaultBlockType, content, children, listProps });
           return;
         }

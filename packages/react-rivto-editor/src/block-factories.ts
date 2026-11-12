@@ -1,7 +1,7 @@
 import type { EditorBlockInput, EditorBlockNode } from "@chulane/rivto";
-import { DEFAULT_WRITING_BLOCK_TYPE } from "./extensions/built-ins/page/default-writing-block/constants";
-import { createIsEmptyDefaultBlock } from "./extensions/built-ins/page/default-writing-block/utils";
-import { SEPARATOR_BLOCK_TYPE } from "./extensions/built-ins/separator/constants";
+import { DEFAULT_WRITING_BLOCK_TYPE } from "./blocks/default-writing/constants";
+import { createIsEmptyDefaultBlock } from "./blocks/default-writing/utils";
+import { SEPARATOR_BLOCK_TYPE } from "./blocks/separator/constants";
 
 /** Creates detached block inputs and recognizes a block role and its semantic emptiness. */
 export interface BlockFactory {

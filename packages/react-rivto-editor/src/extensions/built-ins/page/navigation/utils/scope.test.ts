@@ -10,11 +10,11 @@ import {
   extendBlockSelection,
   toggleBlockSelection,
 } from "./block-selection";
-import { reconcileCollapsedSelection } from "./collapsed-selection";
+import { reconcileCollapsedSelection } from "../../collapse/collapsed-selection";
 import { keyboardMovePlacement } from "./move-placement";
 import { selectedMoveRoots } from "./move-roots";
 import { pageEntries } from "./outline";
-import { navigationOutlineBlocks, owningBlockElement } from "./scope";
+import { navigationOutlineBlocks, owningBlockElement } from "../../../../../surfaces/page/navigation-scope";
 
 /**
  * Creates a minimal portable block tree for pure outline calculations.

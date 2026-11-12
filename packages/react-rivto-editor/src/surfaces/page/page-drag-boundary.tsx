@@ -1,7 +1,7 @@
 import { useLayoutEffect, type ReactNode } from "react";
 import { BlockDragExtension } from "@chulane/rivto-page";
 import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
-import type { PageDragExtensionOptions } from "../../extensions/block-drag/types";
+import type { PageDragExtensionOptions } from "./page-drag-types";
 import { PageDragContext } from "./page-drag-context";
 import { useEditorRoot } from "../../hooks/editor/use-editor-root";
 import { PageBlockDrag } from "./page-block-drag";

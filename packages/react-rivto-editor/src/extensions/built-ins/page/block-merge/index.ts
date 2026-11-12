@@ -2,4 +2,4 @@
 export { registerBlockMerge } from "./register";
 export { registerBackwardBlockMerge } from "./backward";
 export { registerForwardBlockMerge } from "./forward";
-export { removeEmptyBlockAfterStructuralPredecessor } from "./utils";
+export { removeEmptyBlockAfterStructuralPredecessor } from "../../../../block-behaviors/structural-predecessor";

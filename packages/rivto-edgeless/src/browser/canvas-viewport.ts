@@ -8,6 +8,14 @@ export interface CanvasViewportLayers {
   readonly plane: HTMLElement;
 }
 
+/** Live camera-pan flags for one mounted viewport. */
+export interface CanvasViewportPanState {
+  /** Whether the pan tool or keyboard modifier admits a pan. */
+  readonly ready: boolean;
+  /** Whether a pointer currently owns a pan gesture. */
+  readonly active: boolean;
+}
+
 /** Owns the browser attachment of a scene without owning its document or React rendering. */
 export class CanvasViewport {
   private static readonly mountedViewports = new WeakMap<Element, CanvasViewport>();
@@ -15,6 +23,27 @@ export class CanvasViewport {
   readonly events = new CanvasEvents();
   private readonly layersStore = new Store<CanvasViewportLayers | null>(null);
   readonly layers: CanvasSnapshot<CanvasViewportLayers | null> = this.layersStore;
+  private panStateValue: CanvasViewportPanState = { ready: false, active: false };
+
+  /**
+   * Reads the latest native-input pan state without subscribing to pointer events.
+   *
+   * @returns The latest flags, initially false and reset when the viewport detaches.
+   */
+  get panState(): CanvasViewportPanState {
+    return this.panStateValue;
+  }
+
+  /**
+   * Updates the pan state published by the viewport's input owner.
+   *
+   * @param ready - Whether a pan tool or modifier admits a pan.
+   * @param active - Whether a pointer currently owns a pan gesture.
+   * @returns Subsequent reads reflect these flags.
+   */
+  setPanState(ready: boolean, active: boolean): void {
+    this.panStateValue = { ready, active };
+  }
 
   /**
    * Creates an unattached browser view without accessing the DOM.
@@ -68,6 +97,7 @@ export class CanvasViewport {
       root.removeEventListener("scroll", this.onScroll);
       detachEvents();
       CanvasViewport.mountedViewports.delete(root);
+      this.setPanState(false, false);
       this.layersStore.set(null);
     };
   }

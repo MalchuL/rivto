@@ -16,6 +16,7 @@ import {
   blockTypeSelector,
 } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditorApi } from "@chulane/rivto-react";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
@@ -23,6 +24,56 @@ const MARKDOWN_PREVIEW_CLASS = "markdown-preview";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/?test_features=1");
+});
+
+test("updates a mounted Markdown preview when a shared contribution appears and disappears", async ({
+  page,
+}) => {
+  const id = await page.evaluate(() => {
+    const runtime = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+      .__rivtoDemo;
+    return runtime.editor.blocks.insertBlock({ type: "paragraph", content: "Shared preview" }).id;
+  });
+  const preview = page.locator(blockIdSelector(id)).locator(".markdown-preview");
+  await expect(preview).toHaveText("Shared preview");
+  await page.evaluate(() => {
+    const runtime = window as unknown as {
+      __rivtoDemo: { reactEditor: ReactEditorApi };
+      removeMarkdownContribution?: () => void;
+    };
+    const extensions = runtime.__rivtoDemo.reactEditor.extensions;
+    runtime.removeMarkdownContribution = extensions.install({
+      id: "test.dynamic-markdown",
+      setup: () => {
+        const key = "rivto.markdown.extensions";
+        const release = extensions.shared.reserve(key, "array");
+        const entries = extensions.shared.getArray<unknown>(key)!;
+        const contribution = {
+          remarkPlugins: [
+            () => (tree: { children?: Array<{ children?: Array<{ value?: string }> }> }) => {
+              const text = tree.children?.[0]?.children?.[0];
+              if (text?.value === "Shared preview") {
+                text.value = "Updated preview";
+              }
+            },
+          ],
+        };
+        entries.splice(entries.values().length, 0, contribution);
+        return () => {
+          const index = entries.values().indexOf(contribution);
+          if (index !== -1) {
+            entries.splice(index, 1);
+          }
+          release();
+        };
+      },
+    });
+  });
+  await expect(preview).toHaveText("Updated preview");
+  await page.evaluate(() => {
+    (window as unknown as { removeMarkdownContribution: () => void }).removeMarkdownContribution();
+  });
+  await expect(preview).toHaveText("Shared preview");
 });
 
 test("renders plain writing text and keeps Markdown list syntax", async ({ page }) => {

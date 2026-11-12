@@ -3,13 +3,28 @@ import type {
   BlockEditorBlocks,
   BlockEditorNodePatch,
   BlockEditorNodeSnapshot,
-  BlockListType,
 } from "@chulane/rivto-page";
 import type { BlockBehaviorsApi } from "../../managers/blocks/block-behaviors-api";
-import { BLOCK_BACKGROUND_COLORS } from "../../extensions/built-ins/block-handle/colors";
+import {
+  PAGE_BLOCK_DECORATIONS_KEY,
+  updatePageBlockDecorations,
+  type PageBlockDecorationAdapter,
+} from "../../blocks/page-block-decorations";
+import type { SharedSpace } from "../../managers/extensions/shared-space";
+
+/** Shared-space operations borrowed by the Page projection. */
+interface PageBlockHostExtensions {
+  readonly shared: Pick<SharedSpace, "getValue" | "subscribe">;
+}
+
+/** Editor capabilities borrowed by the Page projection. */
+interface PageBlockHostEditor {
+  readonly extensions: PageBlockHostExtensions;
+}
 
 /** Panel capabilities borrowed by the structural projection, without lifecycle ownership. */
 interface PageBlockHost {
+  readonly editor: PageBlockHostEditor;
   readonly blocks: Pick<
     PanelAPI["blocks"],
     | "getBlockNode"
@@ -33,6 +48,7 @@ interface PageBlockHost {
 /** Projection tied to the existing model cache's immutable own-node identity. */
 interface PageNodeProjection {
   readonly revision: number;
+  readonly decorations: PageBlockDecorationAdapter | undefined;
   readonly snapshot: BlockEditorNodeSnapshot;
 }
 
@@ -103,9 +119,10 @@ export class PageBlocks implements BlockEditorBlocks {
    *
    * The WeakMap borrows the model cache's identities instead of maintaining a
    * second block cache or invalidation index. Behavior changes invalidate only
-   * projections that are subsequently read. Uncolored host blocks use transparent
-   * shells so body decorations and whole-subtree selection remain visible; explicit
-   * palette colors still resolve to their host CSS variables.
+   * projections that are subsequently read. The shared decoration adapter also
+   * invalidates cached projections when replaced. The default adapter uses
+   * transparent shells for uncolored blocks so body decorations and whole-subtree
+   * selection remain visible, and resolves palette colors to host CSS variables.
    *
    * @param blockId - Accessible node or the hidden panel boundary.
    * @returns Stable structural projection, or undefined when unavailable.
@@ -117,24 +134,22 @@ export class PageBlocks implements BlockEditorBlocks {
       return undefined;
     }
     const cached = this.projections.get(node);
-    if (cached?.revision === this.behaviors.revision) {
+    const decorations = this.panel.editor.extensions.shared
+      .getValue<PageBlockDecorationAdapter>(PAGE_BLOCK_DECORATIONS_KEY)
+      ?.get();
+    if (cached?.revision === this.behaviors.revision && cached.decorations === decorations) {
       return cached.snapshot;
     }
-    const background = node.listProps.backgroundColor;
+    const presentation = decorations?.read(node) ?? { checked: false, color: "transparent" };
     const snapshot: BlockEditorNodeSnapshot = {
       id: node.id,
       type: node.type,
       childIds: node.childIds,
-      listType: this.readListType(node.listProps.type),
-      checked: node.listProps.checked === true,
+      ...presentation,
       collapsed: !this.behaviors.childrenVisible(node),
       dropPlacement: this.behaviors.childDropPlacement(node),
-      color:
-        typeof background === "string" && background
-          ? `var(--rivto-block-${background})`
-          : "transparent",
     };
-    this.projections.set(node, { revision: this.behaviors.revision, snapshot });
+    this.projections.set(node, { revision: this.behaviors.revision, decorations, snapshot });
     return snapshot;
   }
 
@@ -150,14 +165,28 @@ export class PageBlocks implements BlockEditorBlocks {
     const source =
       blockId === this.panel.rootBlockId ? this.panel.document.blocks : this.panel.blocks;
     const releaseNode = source.subscribeBlockNode(blockId, listener);
-    let releaseBehavior: () => void;
+    let releaseBehavior: (() => void) | undefined;
+    let releaseDecorations: () => void;
     try {
       releaseBehavior = this.behaviors.subscribe(listener);
+      releaseDecorations = this.panel.editor.extensions.shared.subscribe(
+        PAGE_BLOCK_DECORATIONS_KEY,
+        listener,
+      );
     } catch (error) {
+      const errors: unknown[] = [error];
+      try {
+        releaseBehavior?.();
+      } catch (cleanupError) {
+        errors.push(cleanupError);
+      }
       try {
         releaseNode();
       } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], "Page node subscription failed");
+        errors.push(cleanupError);
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, "Page node subscription failed");
       }
       throw error;
     }
@@ -168,7 +197,7 @@ export class PageBlocks implements BlockEditorBlocks {
       }
       active = false;
       const errors: unknown[] = [];
-      for (const release of [releaseBehavior, releaseNode]) {
+      for (const release of [releaseDecorations, releaseBehavior, releaseNode]) {
         try {
           release();
         } catch (error) {
@@ -185,53 +214,12 @@ export class PageBlocks implements BlockEditorBlocks {
    * Converts Page controls to one history batch of bounded host writes, preserving unrelated list properties.
    *
    * @param blockId - Existing node within the panel's editable boundary.
-   * @param patch - Structural decorations; color must be a host palette expression.
+   * @param patch - Structural decorations interpreted by the current adapter.
    * @returns The validated panel update and its synchronous notifications have completed.
-   * @throws If the node is inaccessible, the color is unsupported, or panel validation fails.
+   * @throws If the node is inaccessible, the adapter is missing or rejects the patch, or panel validation fails.
    */
   updateBlockNode(blockId: string, patch: BlockEditorNodePatch): void {
-    const node = this.panel.blocks.getBlockNode(blockId);
-    if (!node) {
-      throw new Error(`Block ${blockId} is outside the Page panel`);
-    }
-    const listProps: Record<string, unknown> = {};
-    const removals: string[] = [];
-    if (patch.listType === null) {
-      removals.push("type");
-    } else if (patch.listType !== undefined) {
-      listProps.type = patch.listType;
-    }
-    if (patch.checked !== undefined) {
-      listProps.checked = patch.checked;
-    }
-    if (patch.collapsed !== undefined) {
-      listProps.collapsed = patch.collapsed;
-    }
-    if (patch.color === null) {
-      removals.push("backgroundColor");
-    } else if (patch.color !== undefined) {
-      const color = BLOCK_BACKGROUND_COLORS.find(
-        (value) => value && `var(--rivto-block-${value})` === patch.color,
-      );
-      if (!color) {
-        throw new Error("Unsupported Page background color");
-      }
-      listProps.backgroundColor = color;
-    }
-    const candidate = { ...node.listProps, ...listProps };
-    this.panel.document.blockListProps.prepare(candidate);
-    for (const key of removals) {
-      delete candidate[key];
-    }
-    this.panel.document.blockListProps.prepare(candidate);
-    this.panel.batchUpdates(() => {
-      if (Object.keys(listProps).length) {
-        this.panel.blocks.updateBlock(blockId, { listProps });
-      }
-      if (removals.length) {
-        this.panel.blocks.deleteListProps(blockId, removals);
-      }
-    });
+    updatePageBlockDecorations(this.panel, blockId, patch);
   }
 
   /**
@@ -247,24 +235,5 @@ export class PageBlocks implements BlockEditorBlocks {
         ? this.panel.document.blocks.getBlockNode(blockId)
         : undefined)
     );
-  }
-
-  /**
-   * Narrows host list metadata to Page's supported structural list modes.
-   *
-   * @param value - Opaque persisted list annotation.
-   * @returns Supported list mode, or undefined for no recognized list decoration.
-   */
-  private readListType(value: unknown): BlockListType | undefined {
-    switch (value) {
-      case "list":
-      case "checkbox":
-      case "numbered_list":
-      case "start_numbered_list":
-      case "continue_numbered_list":
-        return value;
-      default:
-        return undefined;
-    }
   }
 }

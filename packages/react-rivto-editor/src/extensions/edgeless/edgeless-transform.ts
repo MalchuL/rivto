@@ -1,17 +1,28 @@
-import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import { useCanvasViewport, type CanvasViewportApi } from "@chulane/rivto-edgeless/react";
 import { flushSync } from "react-dom";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
 import { createElement, useContext, useLayoutEffect, useMemo } from "react";
 import { EDITOR_CONTROL_SELECTOR, PREVENT_TEXT_EDITING_SELECTOR } from "../../constants";
 import type { ReactPanelApi } from "../../panels/types";
 import type { ReactEditorApi } from "../../editor/types";
+import type { ReactEditorExtension } from "../../managers/extensions/types";
 import type { EditorEvent } from "../../managers/events/editor-event";
-import { EdgelessCreationDefaultsContext } from "../../surfaces/edgeless/edgeless-tools-context";
+import {
+  EdgelessCreationDefaultsContext,
+  useOptionalEdgelessTools,
+} from "../../surfaces/edgeless/edgeless-tools-context";
+import type { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
 import type { EdgelessCreationDefaults } from "../../managers/elements/edgeless-creation-defaults";
 import { SurfaceContext } from "../../surfaces/surface";
 import { EdgelessTransformControls } from "./edgeless-transform-controls";
 import { ElementGeometry } from "../../elements/element-geometry";
 import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } from "./types";
+/** Panel-local controllers owned by one transform extension instance. */
+interface TransformControlsProps {
+  /** Panel-local controllers retained while their controls are mounted. */
+  readonly controllers: WeakMap<ReactPanelApi, EdgelessTransformController>;
+}
+
 /**
  * Delegated move, resize, and rotate for edgeless cards, visuals, and groups.
  *
@@ -24,7 +35,7 @@ import type { ConnectorOverlayNode, ElementTransformPreview, TransformStart } fr
 import type { EditorElementFrame } from "@chulane/rivto";
 import { elementContainsBlock } from "../../elements/block-element-projection";
 import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../managers";
-import { getEdgelessRuntime } from "../built-ins/selection/edgeless-runtime";
+import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import {
   attachedConnectorsForTransform,
   isConnectorEndpoint,
@@ -47,21 +58,32 @@ import {
  * The controller receives the surface settings session and connects document
  * gestures in a layout effect; page occurrences do not install these controls.
  *
+ * @param props - Extension-owned panel controller registrations.
+ * @param props.controllers - Weak lookup populated only while controls are mounted.
  * @returns Mounted transform controls, or null outside edgeless mode.
  */
-function TransformControls() {
+function TransformControls({ controllers }: TransformControlsProps) {
   const mode = useContext(SurfaceContext);
   const creationDefaults = useContext(EdgelessCreationDefaultsContext);
+  const viewport = useCanvasViewport();
+  const tools = useOptionalEdgelessTools();
   const reactPanel = useReactPanel();
   const controller = useMemo(
-    () => new EdgelessTransformController(reactPanel.editor, creationDefaults),
-    [reactPanel, creationDefaults],
+    () => new EdgelessTransformController(reactPanel.editor, creationDefaults, viewport, tools),
+    [reactPanel, creationDefaults, viewport, tools],
   );
   // Claim object gestures before the passive marquee selection handlers change selection.
-  useLayoutEffect(
-    () => (mode === "edgeless" ? controller.setup(reactPanel) : undefined),
-    [controller, reactPanel, mode],
-  );
+  useLayoutEffect(() => {
+    if (mode !== "edgeless") {
+      return;
+    }
+    const dispose = controller.setup(reactPanel);
+    controllers.set(reactPanel, controller);
+    return () => {
+      controllers.delete(reactPanel);
+      dispose();
+    };
+  }, [controller, controllers, reactPanel, mode]);
   if (mode !== "edgeless") {
     return null;
   }
@@ -79,9 +101,44 @@ const CONNECTOR_LABEL_CLASS = "edgeless-connector-label";
 const CONNECTOR_LABEL_PREVIEW_CLASS = "edgeless-connector-label-preview";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Adds one delegated move/resize path for cards, visuals, and nested groups. */
-export function registerEdgelessTransform(reactEditor: ReactEditorApi): () => void {
-  return reactEditor.extensions.mount(TransformControls);
+/** Gesture state exposed by the edgeless transform extension. */
+export interface EdgelessTransformFields {
+  /**
+   * Checks whether the panel is currently moving, resizing, or rotating objects.
+   *
+   * @param panel - Panel occurrence whose gesture is being checked.
+   * @returns True while that panel owns an active transform gesture.
+   */
+  isTransforming(panel: ReactPanelApi): boolean;
+}
+
+/** Installed transform extension and its public gesture state. */
+export interface EdgelessTransformExtension extends ReactEditorExtension<EdgelessTransformFields> {
+  /** Stable installed identity for the canvas transform extension. */
+  readonly id: "transform.edgeless";
+  /** Live transform state for each mounted panel. */
+  readonly fields: EdgelessTransformFields;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Canvas transform state keyed by its owning extension. */
+    "transform.edgeless": EdgelessTransformExtension;
+  }
+}
+/**
+ * Creates the edgeless transform extension and its panel-local gesture lookup.
+ *
+ * @returns Extension exposing active gesture state for installed panels.
+ */
+export function createEdgelessTransformExtension(): EdgelessTransformExtension {
+  const controllers = new WeakMap<ReactPanelApi, EdgelessTransformController>();
+  return {
+    id: "transform.edgeless",
+    fields: { isTransforming: (panel) => controllers.get(panel)?.isTransforming() ?? false },
+    setup: (editor) =>
+      editor.extensions.mount(() => createElement(TransformControls, { controllers })),
+  };
 }
 
 /** Owns transform gesture state, preview geometry, and commit for one mounted panel. */
@@ -212,6 +269,15 @@ export class EdgelessTransformController {
     return this.reactPanel === reactPanel && this.start?.kind === "move";
   }
 
+  /**
+   * Checks whether this controller owns an active transform gesture.
+   *
+   * @returns True between gesture start and cleanup.
+   */
+  isTransforming(): boolean {
+    return this.start !== null;
+  }
+
   private releaseCanvasPins?: () => void;
   private sourceRotations = new Map<string, number>();
   private start: TransformStart | null = null;
@@ -232,10 +298,14 @@ export class EdgelessTransformController {
    *
    * @param reactEditor - Runtime receiving transform events and document commands.
    * @param creationDefaults - Settings updated after committed resizes; omitted controls do not remember dimensions.
+   * @param viewport - Borrowed canvas and mounted layers for this panel, or null outside the surface.
+   * @param tools - Surface-owned tools used to recognize active panning.
    */
   constructor(
     private readonly reactEditor: ReactEditorApi,
     private readonly creationDefaults?: EdgelessCreationDefaults | null,
+    private readonly viewport?: Pick<CanvasViewportApi, "canvas" | "layers" | "panState"> | null,
+    private readonly tools?: Pick<EdgelessToolContext, "active"> | null,
   ) {}
 
   /**
@@ -274,7 +344,7 @@ export class EdgelessTransformController {
     const moving = new Set(this.leaves(ids));
     this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
     flushSync(() => {
-      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+      this.releaseCanvasPins = this.viewport?.canvas.pin([...moving]);
     });
     const frames = new Map<string, EditorElementFrame>();
     [...ids, ...moving].forEach((item) => {
@@ -701,7 +771,7 @@ export class EdgelessTransformController {
    * @returns Connected overlay svg, or null when the plane is missing.
    */
   private ensureOverlay = (root: HTMLElement) => {
-    const plane = CanvasViewport.forElement(root)?.layers.get()?.plane;
+    const plane = this.viewport?.layers.get()?.plane;
     if (!plane) {
       return null;
     }
@@ -1121,7 +1191,7 @@ export class EdgelessTransformController {
     if (event.button !== 0 || !(event.target instanceof Element)) {
       return false;
     }
-    if (root.dataset.panningReady === "true" || root.dataset.edgelessPanTool === "true") {
+    if (this.viewport?.panState.ready || this.tools?.active?.pansViewport === true) {
       return false;
     }
     if (event.target.closest("[data-edgeless-ui]")) {
@@ -1233,7 +1303,7 @@ export class EdgelessTransformController {
     const kind = "move" as const;
     this.sourceRotations = new Map([...moving].map((id) => [id, this.rotation(id)]));
     flushSync(() => {
-      this.releaseCanvasPins = CanvasViewport.forElement(root)?.canvas.pin([...moving]);
+      this.releaseCanvasPins = this.viewport?.canvas.pin([...moving]);
     });
     const attachedConnectors = this.connectorTargets(moving, new Set(ids), kind);
     this.start = {

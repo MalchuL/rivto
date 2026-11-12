@@ -6,7 +6,8 @@ import type {
   BlockBehaviorOutcome,
 } from "../../../../block-behaviors/types";
 import { scheduleBlockFocus } from "../../../../block-behaviors/utils/focus-ops";
-import { convertEmptyToList, splitBlock } from "../../../../block-behaviors/utils/text-ops";
+import { splitBlock } from "../../../../block-behaviors/utils/text-ops";
+import { convertEmptyToList } from "./convert-empty-to-list";
 import { DEFAULT_BLOCK_LIST_PROPS, isNumberedListType } from "./utils";
 
 /** Ordinary list inheritance and root-marker restoration, excluding checkbox and numbered modes. */

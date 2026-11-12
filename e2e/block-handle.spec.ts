@@ -57,6 +57,31 @@ async function menu(page: Page, id: string) {
   await expect(page.getByRole("menu").first()).toBeVisible();
 }
 
+test("renders presentation supplied by a custom menu registration", async ({ page }) => {
+  const ids = await seed(page);
+  await page.evaluate(() => {
+    const registry = (window as unknown as Demo).__rivtoDemo.reactEditor.blockContextMenu;
+    const icon = registry.get("clipboard.copy")?.icon;
+    if (!icon) {
+      throw new Error("Expected the clipboard extension's registered icon");
+    }
+    registry.register({
+      id: "host.custom-action",
+      title: "Host custom action",
+      icon,
+      variant: "destructive",
+      execute: () => undefined,
+    });
+  });
+  await menu(page, ids.parent);
+  const action = page.getByRole("menuitem", { name: "Host custom action" });
+  await expect(action).toHaveAttribute("data-variant", "destructive");
+  await expect(action.locator("svg[aria-hidden='true']")).toHaveCount(1);
+  await expect(
+    page.getByRole("menuitem", { name: "Copy", exact: true }).locator("svg"),
+  ).toHaveCount(1);
+});
+
 test("menu colors selected subtrees, retains child colors, and supports keyboard actions", async ({
   page,
 }) => {

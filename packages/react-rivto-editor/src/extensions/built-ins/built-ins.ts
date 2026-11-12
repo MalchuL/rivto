@@ -1,3 +1,4 @@
+import type { CollapseExtensionFields } from "../../managers/clipboard/block-paste-children";
 import { blockHandleExtension } from "./block-handle/extension";
 /**
  * Public built-in extension catalog.
@@ -19,7 +20,7 @@ import { registerBlockMerge } from "./page/block-merge";
 import { registerBlockOutdent } from "./page/block-outdent";
 import { registerCollapse } from "./page/collapse";
 import { registerDefaultWritingBlock } from "./page/default-writing-block/register";
-import type { DefaultWritingBlockOptions } from "./page/default-writing-block/types";
+import type { DefaultWritingBlockOptions } from "../../blocks/default-writing/types";
 import { registerEmptyBlockReset } from "./page/empty-block-reset";
 import { registerIndent, type IndentExtensionOptions } from "./page/indent";
 import { registerListShortcuts } from "./page/list";
@@ -180,9 +181,32 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
   };
 };
 
+/** Block collapse extension and its public paste placement operation. */
+export interface CollapseReactEditorExtension extends ReactEditorExtension<CollapseExtensionFields> {
+  /** Stable installed identity for the collapse extension. */
+  readonly id: "block.collapse";
+  /** Collapse operations available while this extension is installed. */
+  readonly fields: CollapseExtensionFields;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Collapse operations keyed by their owning extension. */
+    "block.collapse": CollapseReactEditorExtension;
+  }
+}
 /** @returns Shared persisted collapse controls and keyboard actions. */
-export const collapseExtension = (): ReactEditorExtension => ({
+export const collapseExtension = (): CollapseReactEditorExtension => ({
   id: "block.collapse",
+  fields: {
+    /**
+     * Checks whether collapse state permits structural paste into a block.
+     *
+     * @param block - Destination block whose children may receive the paste.
+     * @returns True when the block is not collapsed.
+     */
+    canPasteIntoChildren: (block) => block.listProps.collapsed !== true,
+  },
   setup: registerCollapse,
 });
 
@@ -356,46 +380,9 @@ export const standardPreset = (options: StandardPresetOptions = {}): ReactEditor
   return {
     id: "rivto.standard",
     setup: (reactEditor) => {
-      const cleanups: Array<() => void> = [];
-      try {
-        for (const extension of extensions) {
-          const cleanup = extension.setup(reactEditor);
-          if (cleanup) {
-            cleanups.push(cleanup);
-          }
-        }
-      } catch (error) {
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch {
-              // Rollback is best-effort so the original setup error is preserved.
-            }
-          });
-        throw error;
+      for (const extension of extensions) {
+        reactEditor.extensions.install(extension);
       }
-      return () => {
-        const errors: unknown[] = [];
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch (cleanupError) {
-              errors.push(cleanupError);
-            }
-          });
-        if (errors.length === 1) {
-          throw errors[0];
-        }
-        if (errors.length > 1) {
-          throw new AggregateError(errors, "Standard preset cleanup failed");
-        }
-      };
     },
   };
 };

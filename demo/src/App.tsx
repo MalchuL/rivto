@@ -590,6 +590,7 @@ async function createDemoEditor() {
   const imageFirst = demoParams.has("imageFirst");
   const imageOnly = demoParams.has("imageOnly");
   const fileOnly = demoParams.has("fileOnly");
+  const noEdgelessSelection = demoParams.has("noEdgelessSelection");
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -628,7 +629,9 @@ async function createDemoEditor() {
               TODO_STORAGE_BLOCK_TYPE,
             ],
           }),
-          ...edgelessPreset({ visuals: edgelessOptions }),
+          ...edgelessPreset({ visuals: edgelessOptions }).filter(
+            (extension) => !noEdgelessSelection || extension.id !== "selection.edgeless",
+          ),
           mindmapExtension(),
           blockIdExtension(),
           blockNumberExtension(),

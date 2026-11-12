@@ -5,7 +5,6 @@ export {
   extendBlockSelection,
   toggleBlockSelection,
 } from "./block-selection";
-export { reconcileCollapsedSelection } from "./collapsed-selection";
 export { keyboardMovePlacement } from "./move-placement";
 export { selectedMoveRoots } from "./move-roots";
 export { pageEntries } from "./outline";
@@ -14,7 +13,7 @@ export {
   navigationOutlineBlocks,
   owningBlockElement,
   owningRootId,
-} from "./scope";
+} from "../../../../../surfaces/page/navigation-scope";
 export type {
   IsCollapsedBlock,
   KeyboardMovePlacement,

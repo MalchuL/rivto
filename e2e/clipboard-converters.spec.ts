@@ -65,6 +65,26 @@ test("HTML type converters preserve neighboring paragraphs and nested lists", as
   expect((await blocks(page)).filter((block) => !before.has(block.id))).toHaveLength(0);
 });
 
+test("uses configured list-item translation when parsing external HTML", async ({ page }) => {
+  const before = new Set((await blocks(page)).map((block) => block.id));
+  await page.evaluate(() => {
+    const { reactEditor } = (window as unknown as DemoWindow).__rivtoDemo;
+    reactEditor.clipboardFormats.listProperties = () => ({
+      type: "list",
+      checked: false,
+      hostMarker: "custom",
+    });
+  });
+  await paste(page, {
+    "text/html": "<ol><li>Custom list item</li></ol>",
+    "text/plain": "fallback",
+  });
+  const inserted = (await blocks(page)).filter((block) => !before.has(block.id));
+  expect(inserted).toHaveLength(1);
+  expect(inserted[0]!.content).toBe("Custom list item");
+  expect(inserted[0]!.listProps).toMatchObject({ type: "list", hostMarker: "custom" });
+});
+
 test("text converters recognize Counter while plain-text paste bypasses them", async ({ page }) => {
   const initial = (await blocks(page)).filter((block) => block.type === "demo.counter").length;
   await paste(page, { "text/plain": "Count: 73" });

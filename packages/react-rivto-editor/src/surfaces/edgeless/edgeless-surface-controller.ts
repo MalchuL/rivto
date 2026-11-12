@@ -1,3 +1,4 @@
+import type { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
 import { EDGELESS_GRID_SIZE } from "../../elements/visuals/utils/geometry";
 import { createCaretSelection } from "@chulane/rivto";
 import type {
@@ -52,11 +53,13 @@ export class EdgelessSurfaceController {
    * @param panel - Receiving document occurrence and mutation managers.
    * @param canvas - Scene supplying live world-coordinate conversion.
    * @param cardWidth - Preferred world width; invalid values use the default card width.
+   * @param tools - Surface-owned active tool used to admit canvas gestures.
    */
   constructor(
     private readonly panel: EdgelessSurfacePanel,
     private readonly canvas: Pick<Canvas, "toWorld" | "setSnapping">,
     private readonly cardWidth: number,
+    private readonly tools: Pick<EdgelessToolContext, "active">,
   ) {}
 
   /**
@@ -71,7 +74,7 @@ export class EdgelessSurfaceController {
     if (!root || !(target instanceof Element) || event.button !== 0) {
       return;
     }
-    if (root.dataset.edgelessPanTool === "true" || root.dataset.edgelessCaptureTool === "true") {
+    if (this.tools.active?.pansViewport || this.tools.active?.capturesPointer) {
       return;
     }
     if (
@@ -257,9 +260,9 @@ export class EdgelessSurfaceController {
   }
 
   /**
-   * Reads live pan-tool state from the mounted viewport.
+   * Reads live pan-tool state from the surface's tool session.
    *
-   * @returns Whether primary-button panning is enabled, or false while detached.
+   * @returns Whether primary-button panning is enabled.
    */
-  private readonly isPanEnabled = (): boolean => this.viewport?.dataset.edgelessPanTool === "true";
+  private readonly isPanEnabled = (): boolean => this.tools.active?.pansViewport === true;
 }

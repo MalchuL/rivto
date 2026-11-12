@@ -18,9 +18,13 @@ import {
   type ReactEditorExtension,
 } from "../../../managers";
 import { separatorBlockFactory, type BlockFactory } from "../../../block-factories";
-import { SEPARATOR_BLOCK_TYPE } from "./constants";
+import {
+  BLOCK_CONVERSION_DEFAULTS_KEY,
+  type BlockConversionDefaults,
+} from "../../../blocks/block-conversion-defaults";
+import { SEPARATOR_BLOCK_TYPE } from "../../../blocks/separator/constants";
 
-export { SEPARATOR_BLOCK_TYPE } from "./constants";
+export { SEPARATOR_BLOCK_TYPE } from "../../../blocks/separator/constants";
 
 const SEPARATOR_BLOCK_CLASS = "rivto-separator-block";
 const SEPARATOR_LINE_CLASS = "rivto-separator-line";
@@ -82,20 +86,27 @@ function insertSeparator(
   if (!block) {
     return undefined;
   }
+  const defaults = reactPanel.editor.extensions.shared
+    .getArray<BlockConversionDefaults>(BLOCK_CONVERSION_DEFAULTS_KEY)
+    ?.values();
+  const listProps = (defaults ?? []).reduce<Record<string, unknown>>(
+    (current, contribution) => ({ ...current, ...contribution }),
+    {},
+  );
+  if (!block.content && !reactPanel.blocks.hasChildren(blockId)) {
+    reactPanel.editor.blockListProps.prepare({ ...block.listProps, ...listProps });
+  }
   let separatorId = "";
   let writing: EditorBlock | undefined;
   reactPanel.batchUpdates(() => {
     if (!block.content && !reactPanel.blocks.hasChildren(blockId)) {
       separatorId = block.id;
       reactPanel.blocks.setBlockType(separatorId, separatorBlockFactory.createEmptyBlock().type);
-      reactPanel.blocks.updateBlock(separatorId, {
-        listProps: { collapsed: false, type: "list", checked: false },
-      });
+      reactPanel.blocks.updateBlock(separatorId, { listProps });
     } else {
       separatorId = reactPanel.blocks.insertBlock(
         {
           ...separatorBlockFactory.createEmptyBlock(),
-          listProps: { type: "list", checked: false },
         },
         reactPanel.blocks.canRemove(block.id)
           ? reactPanel.blocks.getInsertionDestinationAfter(block.id)

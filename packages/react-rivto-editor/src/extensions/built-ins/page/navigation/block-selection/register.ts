@@ -17,7 +17,7 @@ import {
   blockSelection,
   extendBlockSelection,
 } from "../utils/block-selection";
-import { navigationOutlineBlocks } from "../utils/scope";
+import { navigationOutlineBlocks } from "../../../../../surfaces/page/navigation-scope";
 import {
   currentNavigationSelection,
   focusBlockSelection,

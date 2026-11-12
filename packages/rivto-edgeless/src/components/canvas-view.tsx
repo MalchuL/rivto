@@ -52,7 +52,12 @@ export function CanvasView({
     events: viewport.events,
     allowCamera,
     panEnabled: () => Boolean(tool?.pansViewport || panEnabled?.()),
-    onPanState,
+    onPanState: (ready, active) => {
+      if (viewport.layers.get()?.root === root) {
+        viewport.setPanState(ready, active);
+      }
+      onPanState?.(ready, active);
+    },
   });
   return (
     <CanvasViewportContext.Provider value={viewport}>

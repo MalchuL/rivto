@@ -4,7 +4,7 @@ import { DocumentModelImpl } from "@chulane/document-model";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import { z } from "zod";
-import { CrossDocumentBlockTransfer } from "../extensions/built-ins/clipboard/cross-document-block-transfer";
+import { CrossDocumentBlockTransfer } from "../managers/clipboard/cross-document-block-transfer";
 import { createReactEditor } from "./react-editor";
 import { EditorStorage } from "./editor-storage";
 

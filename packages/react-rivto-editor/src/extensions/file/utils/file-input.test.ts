@@ -7,7 +7,7 @@ import {
   findTransferredLocalFileUri,
   getTransferredFiles,
   hasRedactedUriList,
-} from "./file-input";
+} from "../../../attachments/ingestion/file-input";
 
 test("collects every selected local path without consuming mixed text", () => {
   expect(findLocalFileUris("# copied\nfile:///a.png\nfile:///b.png")).toEqual([

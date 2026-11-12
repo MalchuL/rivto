@@ -5,6 +5,7 @@ import type { CanvasViewport, CanvasViewportLayers } from "../browser/canvas-vie
 export interface CanvasViewportApi {
   readonly canvas: CanvasViewport["canvas"];
   readonly layers: CanvasViewport["layers"];
+  readonly panState: CanvasViewport["panState"];
   readonly events: Pick<CanvasViewport["events"], "register">;
 }
 

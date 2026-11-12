@@ -8,10 +8,10 @@ import {
   type BlockDropTargetsApi,
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
-import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
-import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard/cross-document-block-transfer";
-import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
-import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
+import type { CrossDocumentBlockPanel } from "./cross-document/panel";
+import { CrossDocumentBlockTransfer } from "../../managers/clipboard/cross-document-block-transfer";
+import { crossDocumentPageRootControllers } from "./cross-document/target";
+import type { CrossDocumentPageRootController } from "./page-drag-types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
 
 /** One borrowed child-ID list in a bounded preview traversal; no descendants are copied. */

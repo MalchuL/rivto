@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { FileUploadStatusOverlay, FileUploadStatusStore } from "./file-upload-status";
+import { FileUploadStatusOverlay, FileUploadStatusStore } from "../../../attachments/ingestion/file-upload-status";
 
 test("keeps independent upload feedback and renders both existing presentations", () => {
   const fileUploads = new FileUploadStatusStore();

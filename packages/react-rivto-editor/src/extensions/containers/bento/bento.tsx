@@ -14,11 +14,12 @@ import { BentoLayout } from "./bento-layout";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
 import { useBlockNode, useBlockSelectionAnchor } from "../../../hooks";
+import { useBlockCollapsed } from "../../../hooks/blocks/use-block-collapsed";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
   ContainerSummaryTitle,
-} from "../container-summary-title";
+} from "../../../components/container-summary-title";
 import type { ReactEditorExtension } from "../../../managers";
 import { BENTO_BLOCK_TYPE, bentoBehavior } from "./bento-behavior";
 
@@ -46,13 +47,14 @@ export function Bento({ blockId }: BlockLayoutProps) {
   const editing = useBlockNode(blockId);
   const attributes = useBlockSelectionAnchor(blockId);
   const block = editing.block;
+  const collapsed = useBlockCollapsed(block);
   if (!block) {
     return null;
   }
   const tileCount = block.childIds.length;
   return (
     <div {...attributes} className={`${SUMMARY_CLASS} ${CONTAINER_SUMMARY_CLASS}`}>
-      {block.listProps.collapsed === true && (
+      {collapsed && (
         <>
           <ContainerSummaryTitle blockId={blockId} name="Bento" />
           <span {...CONTAINER_SUMMARY_SELECTION_ATTRIBUTES} className={SUMMARY_STATS_CLASS}>

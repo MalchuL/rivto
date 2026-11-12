@@ -15,42 +15,19 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal,
 } from "../ui/dropdown-menu";
-import {
-  CopyIcon,
-  ScissorsIcon,
-  Trash2Icon,
-  ListIcon,
-  ListTodoIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  LinkIcon,
-} from "lucide-react";
-
 const MENU_CLASS = "block-context-menu rounded-xl border-border/80 p-1.5 shadow-xl";
 const ITEM_CLASS = "block-context-menu-item rounded-md text-[13px]";
 
-const actionIcons = {
-  "clipboard.copy": CopyIcon,
-  "clipboard.cut": ScissorsIcon,
-  "block.delete": Trash2Icon,
-  list: ListIcon,
-  "type.todo-item": ListTodoIcon,
-  "block.collapse": ChevronsDownUpIcon,
-  "block.expand": ChevronsUpDownIcon,
-  "embedding.copy": LinkIcon,
-};
-
 /**
- * Renders decorative artwork for a known built-in menu entry.
+ * Renders decorative artwork supplied by a menu entry's owner.
  *
- * @param props - Identity of the entry whose artwork is requested.
- * @param props.id - Registration ID used to look up the built-in icon.
- * @returns An aria-hidden icon, or null when no artwork is mapped; the caller
+ * @param props - Entry whose registered artwork is requested.
+ * @param props.icon - Optional decorative component supplied by the registration.
+ * @returns An aria-hidden icon, or null when no artwork was registered; the caller
  * still renders the entry's text label.
  */
-function ActionIcon({ id }: { id: string }) {
-  const Icon = actionIcons[id as keyof typeof actionIcons];
-  return Icon ? <Icon aria-hidden="true" /> : null;
+function ActionIcon({ icon: Icon }: Pick<BlockContextMenuEntry, "icon">) {
+  return Icon ? <Icon aria-hidden={true} /> : null;
 }
 
 /**
@@ -112,14 +89,14 @@ function MenuEntries({
       return (
         <Item
           checked={entry.isChecked?.(context)}
-          variant={entry.id === "block.delete" ? "destructive" : "default"}
+          variant={entry.variant ?? "default"}
           key={entry.id}
           className={ITEM_CLASS}
           onSelect={() => {
             void context.reactPanel.blockContextMenu.execute(entry.id, context);
           }}
         >
-          {!entry.isChecked && <ActionIcon id={entry.id} />}
+          {!entry.isChecked && <ActionIcon icon={entry.icon} />}
           {entry.title}
         </Item>
       );
@@ -229,7 +206,7 @@ function BlockSubmenu({
   return (
     <DropdownMenuSub key={entry.id}>
       <DropdownMenuSubTrigger className={ITEM_CLASS}>
-        <ActionIcon id={entry.id} />
+        <ActionIcon icon={entry.icon} />
         {entry.title}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>

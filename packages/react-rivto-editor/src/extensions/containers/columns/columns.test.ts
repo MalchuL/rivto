@@ -7,6 +7,10 @@ import { createTestReactEditor as createReactEditor } from "../../../test-utils"
  */
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor } from "../../../test-utils";
+import {
+  PAGE_BLOCK_DECORATIONS_KEY,
+  type PageBlockDecorationAdapter,
+} from "../../../blocks/page-block-decorations";
 
 import { defaultWritingBlockExtension } from "../../built-ins/built-ins";
 import {
@@ -112,6 +116,43 @@ test("validates requested column counts", () => {
   expect(() => createColumnsBlockInput(0)).toThrow("Columns count must be an integer from 1 to 6");
   expect(() => createColumnsBlockInput(7)).toThrow("Columns count must be an integer from 1 to 6");
   expect(createColumnsBlockInput(3).children).toHaveLength(3);
+});
+
+test("uses the shared decoration adapter when expanding a board for a column change", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
+  const shared = reactPanel.editor.extensions.shared.getValue<PageBlockDecorationAdapter>(
+    PAGE_BLOCK_DECORATIONS_KEY,
+  )!;
+  const original = shared.get()!;
+  shared.set({
+    read: (block) => ({
+      ...original.read(block),
+      collapsed: block.listProps.hostCollapsed === true,
+    }),
+    prepare: (patch) => {
+      if (patch.collapsed !== undefined) {
+        return { listProps: { hostCollapsed: patch.collapsed }, removals: [] };
+      }
+      return original.prepare(patch);
+    },
+  });
+  try {
+    const board = editor.blocks.insertBlock({
+      ...createColumnsBlockInput(2),
+      listProps: { hostCollapsed: true },
+    }).id;
+    editor.history.clear();
+    expect(setColumnsCount(reactPanel, board, 3)).toBe(true);
+    expect(editor.blocks.getBlockNode(board)?.listProps.hostCollapsed).toBe(false);
+    expect(editor.blocks.getBlockNode(board)?.listProps.collapsed).toBeUndefined();
+    expect(editor.blocks.getBlock(board)?.children).toHaveLength(3);
+    editor.history.undo();
+    expect(editor.blocks.getBlockNode(board)?.listProps.hostCollapsed).toBe(true);
+    expect(editor.blocks.getBlock(board)?.children).toHaveLength(2);
+  } finally {
+    await reactPanel.editor.destroy();
+    await editor.destroy();
+  }
 });
 
 test("validates and preserves divider visibility through history, snapshots, and clipboard", async () => {

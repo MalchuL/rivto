@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import ReactMarkdown, {
   defaultUrlTransform,
   type Components,
@@ -13,12 +13,8 @@ import ReactMarkdown, {
 } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
-import { ImageView } from "../../extensions/image/view/image-view";
-import { remarkImageMacros, replaceImageMacro } from "../../extensions/image/macro/image-macro";
-import { remarkFileMacros } from "../../extensions/file/macro/file-macro";
-import { RegisteredFileView } from "../../extensions/file/view/file-view";
 import { editorControlProps } from "../../constants";
-import { useBlockEditing, usePanel } from "../../hooks";
+import { useBlockEditing, useReactPanel } from "../../hooks";
 import type { MarkdownLinkClick } from "../../types";
 import {
   MarkdownCodeBlock,
@@ -26,6 +22,7 @@ import {
   replaceMarkdownCode,
   type PositionedNode,
 } from "./markdown-code";
+import { MARKDOWN_EXTENSIONS_KEY, type MarkdownExtension } from "./markdown-extensions";
 
 const MARKDOWN_CONTENT_CLASS = "markdown-content";
 const PAGE_BLOCK_CONTENT_CLASS = "page-block-content";
@@ -54,22 +51,31 @@ function rehypeSharedHighlight() {
  */
 const MarkdownPreview = memo(function MarkdownPreview({
   components,
+  extensions,
   source,
   transformUrl,
 }: {
   readonly components: Components;
+  readonly extensions: readonly MarkdownExtension[];
   readonly source: string;
   readonly transformUrl: UrlTransform;
 }) {
-  if (PLAIN_TEXT_SOURCE.test(source)) {
+  if (PLAIN_TEXT_SOURCE.test(source) && extensions.every((extension) => extension.plainTextSafe)) {
     return <p>{source}</p>;
   }
   return (
     <ReactMarkdown
       components={components}
       urlTransform={transformUrl}
-      remarkPlugins={[remarkGfm, remarkImageMacros, remarkFileMacros]}
-      rehypePlugins={[rehypeCodeFenceMetadata, rehypeSharedHighlight]}
+      remarkPlugins={[
+        remarkGfm,
+        ...extensions.flatMap((extension) => extension.remarkPlugins ?? []),
+      ]}
+      rehypePlugins={[
+        rehypeCodeFenceMetadata,
+        rehypeSharedHighlight,
+        ...extensions.flatMap((extension) => extension.rehypePlugins ?? []),
+      ]}
       skipHtml
     >
       {source}
@@ -103,7 +109,17 @@ export function MarkdownContent({
 }) {
   const editing = useBlockEditing(blockId);
   const { block, operations } = editing;
-  const panel = usePanel();
+  const panel = useReactPanel();
+  const shared = panel.editor.extensions.shared;
+  const revision = useSyncExternalStore(
+    (listener) => shared.subscribe(MARKDOWN_EXTENSIONS_KEY, listener),
+    () => shared.revision,
+    () => shared.revision,
+  );
+  const extensions = useMemo(
+    () => shared.getArray<MarkdownExtension>(MARKDOWN_EXTENSIONS_KEY)?.values() ?? [],
+    [shared, revision],
+  );
   const [isEditing, setIsEditing] = useState(false);
   const source = block?.content ?? "";
 
@@ -129,89 +145,30 @@ export function MarkdownContent({
     [onLinkClick],
   );
   const components = useMemo<Components>(
-    () => ({
-      // Render file macro links through the registered attachment view.
-      a: ({ node, href = "", ...props }) => {
-        const properties = node?.properties ?? {};
-        const uri = properties["data-rivto-file-uri"];
-        const name = properties["data-rivto-file-name"];
-        const mimeType = properties["data-rivto-file-type"];
-        if (typeof uri === "string" && typeof name === "string" && typeof mimeType === "string") {
-          const size = Number(properties["data-rivto-file-size"]);
-          return (
-            <RegisteredFileView
-              reference={{
-                uri,
-                name,
-                mimeType,
-                size: Number.isSafeInteger(size) ? size : undefined,
-              }}
+    () =>
+      extensions.reduce<Components>(
+        (current, extension) =>
+          extension.components?.(current, { blockId, blocks: panel.blocks }) ?? current,
+        {
+          a: ({ node: _node, href = "", ...props }) => (
+            <a
+              {...editorControlProps}
+              {...props}
+              href={href}
+              tabIndex={-1}
+              onClick={(event) => onLinkClick?.({ blockId, href, event })}
             />
-          );
-        }
-        return (
-          <a
-            {...editorControlProps}
-            {...props}
-            href={href}
-            tabIndex={-1}
-            onClick={(event) => onLinkClick?.({ blockId, href, event })}
-          />
-        );
-      },
-      // Preserve ordinary Markdown images when their source range is unavailable.
-      img: ({ node, alt = "", width, height, ...props }) => {
-        const properties = node?.properties ?? {};
-        const macroUri = properties["data-rivto-image-uri"];
-        const uri = typeof macroUri === "string" ? macroUri : props.src;
-        const start = Number(properties["data-rivto-image-start"] ?? node?.position?.start.offset);
-        const end = Number(properties["data-rivto-image-end"] ?? node?.position?.end.offset);
-        if (typeof uri !== "string" || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
-          return <img {...props} alt={alt} width={width} height={height} />;
-        }
-        return (
-          <ImageView
-            kind="inline"
-            uri={uri}
-            alt={alt}
-            width={Number(width) || undefined}
-            height={Number(height) || undefined}
-            onChange={(patch) => {
-              // Apply edits to current content so a stale render does not replace it.
-              if (patch.reset && typeof macroUri !== "string") {
-                return;
-              }
-              const current = panel.blocks.getBlockNode(blockId)?.content;
-              if (current === undefined) {
-                return;
-              }
-              operations.setContent(
-                replaceImageMacro(
-                  current,
-                  { start, end },
-                  patch.reset
-                    ? { uri, alt }
-                    : {
-                        uri,
-                        alt: patch.alt ?? alt,
-                        width: patch.width ?? (Number(width) || undefined),
-                        height: patch.height ?? (Number(height) || undefined),
-                      },
-                ),
-              );
-            }}
-          />
-        );
-      },
-      pre: (props) => (
-        <MarkdownCodeBlock
-          {...props}
-          onCodeChange={updateCode}
-          preventTextEditingAttributes={editing.preventTextEditingAttributes}
-        />
+          ),
+          pre: (props) => (
+            <MarkdownCodeBlock
+              {...props}
+              onCodeChange={updateCode}
+              preventTextEditingAttributes={editing.preventTextEditingAttributes}
+            />
+          ),
+        },
       ),
-    }),
-    [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode, panel, operations],
+    [blockId, editing.preventTextEditingAttributes, onLinkClick, updateCode, panel, extensions],
   );
 
   return (
@@ -243,7 +200,12 @@ export function MarkdownContent({
       />
       {!isEditing && (
         <div className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_PREVIEW_CLASS}`}>
-          <MarkdownPreview components={components} source={source} transformUrl={transformUrl} />
+          <MarkdownPreview
+            components={components}
+            extensions={extensions}
+            source={source}
+            transformUrl={transformUrl}
+          />
         </div>
       )}
     </div>

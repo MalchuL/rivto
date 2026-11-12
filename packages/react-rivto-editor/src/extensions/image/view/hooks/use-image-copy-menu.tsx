@@ -3,7 +3,7 @@ import { Copy } from "lucide-react";
 import { createPortal } from "react-dom";
 import type { BinaryProvider } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
-import { mimeTypeFromExtension } from "../../../file/utils/file-input";
+import { mimeTypeFromExtension } from "../../../../attachments/ingestion/file-input";
 
 const IMAGE_CONTEXT_MENU_CLASS = "rivto-image-context-menu";
 

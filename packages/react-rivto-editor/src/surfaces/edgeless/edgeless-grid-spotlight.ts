@@ -9,6 +9,13 @@ export class EdgelessGridSpotlight {
   private viewportOrigin = { left: 0, top: 0 };
 
   /**
+   * Binds the live gesture check supplied by the receiving surface.
+   *
+   * @param isGestureActive - Reads whether the panel is currently panning or transforming.
+   */
+  constructor(private readonly isGestureActive: () => boolean) {}
+
+  /**
    * Observes viewport layout and scrolling and cancels outstanding paint work on cleanup.
    *
    * Camera translation moves the world plane rather than this viewport. Its
@@ -74,7 +81,7 @@ export class EdgelessGridSpotlight {
       if (!root || !overlay) {
         return;
       }
-      if (root.dataset.transforming || root.dataset.panning === "true") {
+      if (this.isGestureActive()) {
         return;
       }
       overlay.style.setProperty(

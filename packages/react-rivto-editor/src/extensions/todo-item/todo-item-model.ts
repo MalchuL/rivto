@@ -48,6 +48,7 @@ export interface TodoItemComponentProps {
   readonly propertiesModal?: ComponentType<TodoItemPropertiesModalProps>;
 }
 
+/** Fixed statuses which every customized sequence must contain exactly once. */
 export const TODO_STATUSES = ["todo", "doing", "done"] as const;
 const DEFAULT_PROMPTS: Readonly<Record<TodoItemStatus, readonly string[]>> = {
   todo: ["todo", "TODO"],

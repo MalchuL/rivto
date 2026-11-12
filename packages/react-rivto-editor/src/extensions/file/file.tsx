@@ -9,19 +9,24 @@
  * @module
  */
 import { escapeHtml } from "../../utils/escape-html";
+import { registerMarkdownExtension } from "../../blocks/markdown/markdown-extensions";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
+import type { FileExtensionFields } from "../../attachments/ingestion/file-input-routing";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { BinaryProvider, FileReference } from "../../attachments";
 import { FileView, RegisteredFileView } from "./view/file-view";
-import { configureFileProvider } from "./view/file-configuration";
 import { serializeFileMacro } from "./macro/file-macro";
-import { FileIngestion } from "./ingestion/file-ingestion";
-import { FileInputEvents } from "./ingestion/file-input-events";
-import { FileUploadStatusOverlay, FileUploadStatusStore } from "./ingestion/file-upload-status";
+import { fileMarkdownExtension } from "./macro/markdown";
+import { FileIngestion } from "../../attachments/ingestion/file-ingestion";
+import { FileInputEvents, ownsFileTransfer } from "./ingestion/file-input-events";
+import {
+  FileUploadStatusOverlay,
+  FileUploadStatusStore,
+} from "../../attachments/ingestion/file-upload-status";
 
 /** Persisted native type used by generic file blocks and elements. */
 export const FILE_BLOCK_TYPE = "file";
@@ -29,6 +34,20 @@ export const FILE_BLOCK_TYPE = "file";
 export const FILE_ELEMENT_TYPE = "file";
 const FILE_BLOCK_CLASS = "rivto-file-block";
 
+/** Installed file extension and its public fields. */
+export interface FileReactEditorExtension extends ReactEditorExtension<FileExtensionFields> {
+  /** Stable installed identity for the generic file extension. */
+  readonly id: "file";
+  /** Input routing and provider configuration owned by this extension. */
+  readonly fields: FileExtensionFields;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Generic file input and provider capabilities. */
+    file: FileReactEditorExtension;
+  }
+}
 /** Storage and asynchronous error notification for generic files. */
 export interface FileExtensionOptions {
   /** Provider used to store and resolve generic files. */
@@ -201,18 +220,18 @@ function registerFileClipboardCopy(
  * @param options - Storage provider and optional asynchronous error notification.
  * @returns Lifecycle-owned React editor extension.
  */
-export function fileExtension(options: FileExtensionOptions): ReactEditorExtension {
+export function fileExtension(options: FileExtensionOptions): FileReactEditorExtension {
   return {
     id: "file",
+    fields: { provider: options.provider, ownsTransfer: ownsFileTransfer },
     // Keep provider configuration, pending uploads, and registrations extension-owned.
     setup: (reactEditor) => {
-      const disposeFileViews = configureFileProvider(reactEditor, options.provider);
+      registerMarkdownExtension(reactEditor.extensions, fileMarkdownExtension);
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);
-      // Cancel pending work before removing the view provider.
+      // Cancel pending work when the extension is removed.
       const dispose = reactEditor.extensions.registerCleanup(() => {
         ingestion.destroy();
-        disposeFileViews();
       });
       reactEditor.extensions.mount(
         // Show this extension's local pending and failed file statuses.
@@ -237,7 +256,8 @@ export function fileExtension(options: FileExtensionOptions): ReactEditorExtensi
         ingestion.signal,
       );
 
-      new FileInputEvents(reactEditor, ingestion, options.onError).register();
+      const input = new FileInputEvents(reactEditor, ingestion, options.onError);
+      input.register();
       return dispose;
     },
   };

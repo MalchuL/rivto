@@ -8,7 +8,7 @@ import { memo, useRef, useState } from "react";
 import type { EditorElementNode } from "@chulane/rivto";
 import type { EditableLabelFocusPoint } from "../../components";
 import { ElementSlots } from "../../blocks";
-import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
+import { useEdgelessSelected } from "../../managers/selection/edgeless/edgeless-runtime";
 import type { EdgelessOperations } from "../../managers/elements/edgeless-operations";
 import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
 

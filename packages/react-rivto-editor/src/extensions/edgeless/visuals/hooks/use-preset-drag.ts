@@ -7,7 +7,8 @@ import type { EdgelessCreationTool } from "../../../../managers/edgeless-tools/e
 import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
 import { toolPointer } from "./use-tool-gesture";
 import type { VisualFrame } from "../../../../elements/visuals/types";
-import { showSnapGuides } from "../utils/snap-guides";
+import { showSnapGuides } from "../../../../surfaces/edgeless/snap-guides";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
 
 interface PresetDrag {
   pointerId: number;
@@ -21,6 +22,15 @@ interface PresetDrag {
   capture: HTMLButtonElement;
 }
 
+/** Surface-local state borrowed by toolbar preset placement. */
+interface PresetDragOptions {
+  readonly tools: EdgelessToolContext;
+  readonly root: HTMLElement | null;
+  readonly plane: HTMLElement | null;
+  readonly zoom: number;
+  readonly canvas: Pick<CanvasApi, "toWorld" | "snapping">;
+}
+
 /**
  * Pointer-capture place/drag for create-toolbar presets (no HTML5 DnD).
  *
@@ -31,20 +41,15 @@ interface PresetDrag {
  * unmount release capture, remove the ghost and cancel placement.
  * @param props - Surface tool context, canvas root for hit testing/snapping, positioned
  * plane for screen conversion, and viewport scale factor (1 is 100%).
+ * @param props.tools - Tool session receiving preset placement and cancellation.
+ * @param props.root - Receiving viewport, or null before mount.
+ * @param props.plane - World layer used to position the detached preview.
+ * @param props.zoom - Current viewport scale for the preview.
+ * @param props.canvas - Canvas camera and snapping settings read for each input sample.
  * @returns Preview portal to include in the toolbar tree and start/move/end button handlers.
  * Pass false to endPresetDrag on pointer cancellation; commit otherwise defaults to true.
  */
-export function usePresetDrag({
-  tools,
-  root,
-  plane,
-  zoom,
-}: {
-  tools: EdgelessToolContext;
-  root: HTMLElement | null;
-  plane: HTMLElement | null;
-  zoom: number;
-}) {
+export function usePresetDrag({ tools, root, plane, zoom, canvas }: PresetDragOptions) {
   const presetDrag = useRef<PresetDrag | null>(null);
   const [preview, setPreview] = useState<{
     host: HTMLDivElement;
@@ -94,10 +99,8 @@ export function usePresetDrag({
    * @throws If the creation tool rejects draft preparation.
    */
   const placement = (event: ReactPointerEvent<HTMLButtonElement>, active: PresetDrag) => {
-    const draft = active.tool.preparePlacement(toolPointer(event.nativeEvent, root, zoom));
-    if (root) {
-      showSnapGuides(root, draft.guides ?? []);
-    }
+    const draft = active.tool.preparePlacement(toolPointer(event.nativeEvent, root, zoom, canvas));
+    showSnapGuides(plane, draft.guides ?? []);
     return draft;
   };
 
@@ -117,9 +120,7 @@ export function usePresetDrag({
     if (active.capture.hasPointerCapture(active.pointerId)) {
       active.capture.releasePointerCapture(active.pointerId);
     }
-    if (root) {
-      showSnapGuides(root, []);
-    }
+    showSnapGuides(plane, []);
     return true;
   };
 
@@ -239,9 +240,7 @@ export function usePresetDrag({
       if (active.capture.hasPointerCapture(active.pointerId)) {
         active.capture.releasePointerCapture(active.pointerId);
       }
-      if (root) {
-        showSnapGuides(root, []);
-      }
+      showSnapGuides(plane, []);
       if (!commit) {
         active.tool.cancel();
         return;
@@ -267,9 +266,7 @@ export function usePresetDrag({
         tools.activate(active.tool.id);
       } finally {
         active.tool.cancel();
-        if (root) {
-          showSnapGuides(root, []);
-        }
+        showSnapGuides(plane, []);
       }
     },
   };

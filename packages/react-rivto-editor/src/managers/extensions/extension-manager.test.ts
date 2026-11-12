@@ -8,6 +8,40 @@ import {
 const Mounted: ComponentType = () => null;
 
 describe("ExtensionManager", () => {
+  test("owns shared reservations through installation, rollback and teardown", async () => {
+    const editor = await createEditor();
+    const panel = createReactEditor({ editor });
+    const space = panel.editor.extensions.shared;
+    const remove = panel.editor.extensions.install({
+      id: "shared.owner",
+      setup: () => {
+        space.reserve("shared", "set");
+      },
+    });
+    const set = space.getSet<string>("shared")!;
+    expect(() =>
+      panel.editor.extensions.install({
+        id: "shared.failure",
+        setup: () => {
+          space.reserve("shared", "set");
+          throw new Error("setup failed");
+        },
+      }),
+    ).toThrow("setup failed");
+    expect(space.getSet("shared")).toBe(set);
+    remove();
+    expect(space.getSet("shared")).toBeUndefined();
+    expect(() => set.has("value")).toThrow(/disposed/);
+    space.reserve("retained", "set");
+    const retained = space.getSet("retained")!;
+    space.subscribe("retained", () => undefined);
+    panel.editor.destroy();
+    expect(() => retained.values()).toThrow(/disposed/);
+    expect(() => space.subscribe("retained", () => undefined)).toThrow(/destroyed/);
+    expect(() => space.reserve("later", "set")).toThrow(/destroyed/);
+    editor.destroy();
+  });
+
   test("releases extensions when earlier runtime cleanup throws", async () => {
     const editor = await createEditor();
     let released = false;

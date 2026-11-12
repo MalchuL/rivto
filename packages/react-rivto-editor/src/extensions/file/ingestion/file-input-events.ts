@@ -6,27 +6,29 @@ import type {
   FileReference,
   PreparedFile,
 } from "../../../attachments";
-import type { FileIngestion } from "./file-ingestion";
-import type { FileIngestionPoint, FileInputPanel } from "./types";
-import { FileDropFeedback } from "./file-drop-feedback";
+import type { FileIngestion } from "../../../attachments/ingestion/file-ingestion";
+import type { FileIngestionPoint, FileInputPanel } from "../../../attachments/ingestion/types";
+import { FileDropFeedback } from "../../../attachments/ingestion/file-drop-feedback";
 import {
   fileDropDestination,
   filePasteDestination,
   filePickerPoint,
   type FileDestination,
-} from "./file-destination";
+} from "../../../attachments/ingestion/file-destination";
 import {
-  FILE_DROP_EVENT_ID,
-  FILE_PASTE_EVENT_ID,
   hasRedactedUriList,
   getTransferredFiles,
   findLocalFileUri,
   findLocalFileUris,
   findTransferredLocalFileUris,
   createFileReferenceFromUri,
-} from "../utils/file-input";
+} from "../../../attachments/ingestion/file-input";
 
 const FILE_INPUT_CLASS = "rivto-file-input";
+/** Event registration that claims generic file paste on the receiving surface. */
+const FILE_PASTE_EVENT_ID = "file.paste";
+/** Event registration that claims generic file drops on the receiving surface. */
+const FILE_DROP_EVENT_ID = "file.drop";
 
 /** Editor operations borrowed while routing generic file input. */
 interface FileInputEditor {
@@ -40,9 +42,33 @@ interface FileInputEditor {
     "createEmptyBlock" | "isEmptyBlock"
   >;
   /** Registers file input listeners. */
-  readonly events: Pick<ReactEditorApi["events"], "register">;
+  readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
   /** Registers the file picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
+}
+
+/**
+ * Checks whether the receiving editor's file router owns the current transfer.
+ *
+ * @param events - Event registrations for the receiving editor.
+ * @param event - Current native paste or drop event.
+ * @param data - Transferred data, or null when unavailable.
+ * @returns True if a registered file listener owns this transfer.
+ */
+export function ownsFileTransfer(
+  events: Pick<ReactEditorApi["events"], "has">,
+  event: Event,
+  data: DataTransfer | null,
+): boolean {
+  let registrationId: string;
+  if (event.type === "drop") {
+    registrationId = FILE_DROP_EVENT_ID;
+  } else if (event.type === "paste") {
+    registrationId = FILE_PASTE_EVENT_ID;
+  } else {
+    return false;
+  }
+  return events.has(registrationId, event) && getTransferredFiles(data).length > 0;
 }
 
 /** Registers and routes generic file input for one extension installation. */

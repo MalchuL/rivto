@@ -6,30 +6,43 @@ import type {
 } from "../../../../managers/edgeless-tools/edgeless-tool";
 import type { EdgelessToolContext } from "../../../../managers/edgeless-tools/edgeless-tool-context";
 import { canvasPoint } from "../../../../elements/visuals/utils/canvas-point";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
+
+/** Surface-local inputs required to route an active tool gesture. */
+interface UseToolGestureOptions {
+  readonly tools: EdgelessToolContext;
+  readonly tool?: EdgelessTool;
+  readonly root: HTMLElement | null;
+  readonly zoom: number;
+  readonly canvas: Pick<CanvasApi, "toWorld" | "snapping">;
+}
 
 /**
  * Converts browser pointer input into the tool's canvas-space contract.
  *
  * @param event - Native viewport coordinates and pointer/modifier metadata.
- * @param root - Receiving canvas root, including its snapping preferences.
+ * @param root - Receiving canvas root used to calculate client coordinates.
  * @param zoom - Canvas scale used for screen-constant snapping distance.
+ * @param canvas - Surface-owned camera and live snapping preferences.
  * @returns Detached normalized input without a DOM event or target reference.
  */
 export function toolPointer(
   event: Pick<PointerEvent, "clientX" | "clientY" | "pointerId" | "button" | "shiftKey" | "altKey">,
   root: HTMLElement | null,
   zoom: number,
+  canvas: Pick<CanvasApi, "toWorld" | "snapping">,
 ): EdgelessToolPointer {
+  const snapping = canvas.snapping.get();
   return {
-    point: canvasPoint(event, root, zoom),
+    point: canvasPoint(event, root, canvas),
     pointerId: event.pointerId,
     button: event.button,
     shiftKey: event.shiftKey,
     zoom,
     snapping: {
-      snapToGrid: root?.dataset.edgelessSnap !== "false",
-      alignObjects: root?.dataset.edgelessAlign !== "false",
-      grid: Number(root?.dataset.edgelessGrid) || undefined,
+      snapToGrid: snapping.snap,
+      alignObjects: snapping.align,
+      grid: snapping.grid || undefined,
       threshold: 8 / Math.max(zoom, 0.01),
       disabled: event.altKey,
     },
@@ -42,20 +55,15 @@ export function toolPointer(
  * Tool implementations own geometry and preview state. This adapter only normalizes
  * input and supplies Escape/deactivation policies; it never inspects tool IDs.
  *
- * @param props - Surface context, active instance, root and viewport scale.
+ * @param props - Surface context, active instance, root, viewport scale and canvas scene.
+ * @param props.tools - Tool session receiving cancellation and panel deactivation.
+ * @param props.tool - Active tool, if one is selected.
+ * @param props.root - Receiving viewport, or null before mount.
+ * @param props.zoom - Current viewport scale used for screen-constant snapping.
+ * @param props.canvas - Canvas camera and snapping settings read for each input sample.
  * @returns Pointer handlers for the common capture layer.
  */
-export function useToolGesture({
-  tools,
-  tool,
-  root,
-  zoom,
-}: {
-  readonly tools: EdgelessToolContext;
-  readonly tool?: EdgelessTool;
-  readonly root: HTMLElement | null;
-  readonly zoom: number;
-}) {
+export function useToolGesture({ tools, tool, root, zoom, canvas }: UseToolGestureOptions) {
   const subscribeCancellation = useCallback(
     (cancel: () => boolean, isCaptured: () => boolean) => {
       const stopKeyboard = tools.reactPanel.keyboard.register(
@@ -78,7 +86,7 @@ export function useToolGesture({
   );
   return useCanvasToolGesture({
     tool,
-    normalize: (event) => toolPointer(event, root, zoom),
+    normalize: (event) => toolPointer(event, root, zoom, canvas),
     subscribeCancellation,
   });
 }

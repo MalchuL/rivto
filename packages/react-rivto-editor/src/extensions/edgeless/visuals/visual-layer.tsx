@@ -21,7 +21,7 @@ import { SurfaceContext } from "../../../surfaces/surface";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useEditorRoot, useReactPanel } from "../../../hooks";
-import { useEdgelessSelection } from "../../built-ins/selection/edgeless-runtime";
+import { useEdgelessSelection } from "../../../managers/selection/edgeless/edgeless-runtime";
 import { BlockProperties } from "./components/block-properties";
 import { DrawingCapture } from "./components/drawing-capture";
 import { SelectionToolbar } from "./components/selection-toolbar";
@@ -173,7 +173,10 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
           keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessToolSelect],
           mode: "edgeless",
           priority: 20,
-          when: ({ root }) => !root.dataset.transforming && tools.canReset,
+          when: () =>
+            !reactPanel.editor.extensions
+              .getExtension("transform.edgeless")
+              ?.fields.isTransforming(reactPanel) && tools.canReset,
         },
         () => {
           tools.reset();
@@ -208,8 +211,8 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
     ],
     [options.fonts],
   );
-  const presetDrag = usePresetDrag({ tools, root, plane, zoom });
-  const gesture = useToolGesture({ tools, root, zoom, tool });
+  const presetDrag = usePresetDrag({ tools, root, plane, zoom, canvas });
+  const gesture = useToolGesture({ tools, root, zoom, tool, canvas });
   const targets = useMemo(
     () => new ConnectorTargets(edgelessOperation, zoom),
     [edgelessOperation, zoom],
@@ -224,13 +227,13 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
    */
   const resolveEndpoint = useCallback(
     (event: Pick<PointerEvent, "clientX" | "clientY">): ConnectorEndpoint => {
-      const point = canvasPoint(event, root, zoom);
+      const point = canvasPoint(event, root, canvas);
       const targetId = targets.objectAt(point);
       return targetId
         ? targets.endpoint(targetId, point)
         : { elementId: undefined, anchor: { x: 0.5, y: 0.5 }, position: point };
     },
-    [root, zoom, targets],
+    [root, canvas, targets],
   );
 
   /**
@@ -245,20 +248,11 @@ function EdgelessCanvasVisuals({ options }: { readonly options: EdgelessVisualsO
         setReconnectHover(null);
         return;
       }
-      const point = canvasPoint(event, root, zoom);
+      const point = canvasPoint(event, root, canvas);
       setReconnectHover(targets.hoverFor(point));
     },
-    [root, zoom, targets],
+    [root, canvas, targets],
   );
-
-  useEffect(() => {
-    if (!root) {
-      return;
-    }
-    root.dataset.edgelessTool = tool?.id ?? "";
-    root.dataset.edgelessPanTool = String(tool?.pansViewport ?? false);
-    root.dataset.edgelessCaptureTool = String(tool?.capturesPointer ?? false);
-  }, [root, tool]);
 
   useEffect(() => {
     if (!root) {

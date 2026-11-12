@@ -6,7 +6,7 @@ import { PageBlockDrag } from "./page-block-drag";
 import {
   crossDocumentPageRootControllers,
   CROSS_DOCUMENT_PAGE_ROOT_ATTRIBUTE,
-} from "../../extensions/block-drag/cross-document/target";
+} from "./cross-document/target";
 
 /** Owns a real receiving registration without adding another event or rendering runtime. */
 class DragAttachment {

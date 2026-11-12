@@ -13,7 +13,7 @@ import type { EditorElementNode } from "@chulane/rivto";
 import { memo, useLayoutEffect, useRef } from "react";
 import { ElementSlots } from "../../blocks";
 import { usePanel } from "../../hooks";
-import { useEdgelessSelected } from "../../extensions/built-ins/selection/edgeless-runtime";
+import { useEdgelessSelected } from "../../managers/selection/edgeless/edgeless-runtime";
 import { useEdgelessElementStyle } from "../../hooks/elements/use-edgeless-element-style";
 
 const CARD_CLASS = "edgeless-card";

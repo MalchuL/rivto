@@ -9,8 +9,8 @@ import { createBlockFactory } from "../../../../block-factories";
 import { createElement } from "react";
 import { MarkdownContent } from "../../../../blocks/markdown/markdown";
 import type { BlockRenderer, ReactBlockSlashCommand } from "../../../../managers";
-import { DEFAULT_WRITING_BLOCK_TYPE } from "./constants";
-import type { DefaultWritingBlockOptions } from "./types";
+import { DEFAULT_WRITING_BLOCK_TYPE } from "../../../../blocks/default-writing/constants";
+import type { DefaultWritingBlockOptions } from "../../../../blocks/default-writing/types";
 
 /**
  * Installs writing factories, rendering, and slash conversion.

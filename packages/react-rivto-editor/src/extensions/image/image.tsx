@@ -8,19 +8,22 @@
  * @module
  */
 import { escapeHtml } from "../../utils/escape-html";
-import { FileIngestion } from "../file/ingestion/file-ingestion";
+import { FileIngestion } from "../../attachments/ingestion/file-ingestion";
 import {
   FileUploadStatusOverlay,
   FileUploadStatusStore,
-} from "../file/ingestion/file-upload-status";
+} from "../../attachments/ingestion/file-upload-status";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ReactEditorExtension } from "../../managers";
+import type { ImageViewConfiguration } from "../../components/image-view-types";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { BinaryProvider } from "../../attachments";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
-import { configureImageViews, ImageView, type ImageViewCustomizations } from "./view/image-view";
+import { ImageView, type ImageViewCustomizations } from "./view/image-view";
+import { registerMarkdownExtension } from "../../blocks/markdown/markdown-extensions";
+import { imageMarkdownExtension } from "./macro/markdown";
 import { serializeImageMacro } from "./macro/image-macro";
 import { IMAGE_BLOCK_TYPE, prepareImageAsset } from "./ingestion/image-asset";
 export { IMAGE_BLOCK_TYPE } from "./ingestion/image-asset";
@@ -44,6 +47,20 @@ export interface ImageProps extends FileReference {
   readonly intrinsicHeight?: number;
 }
 
+/** Installed image extension and its public fields. */
+export interface ImageReactEditorExtension extends ReactEditorExtension<ImageViewConfiguration> {
+  /** Stable installed identity for the image extension. */
+  readonly id: "image";
+  /** Image provider and view configuration owned by this extension. */
+  readonly fields: ImageViewConfiguration;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Image provider and view configuration. */
+    image: ImageReactEditorExtension;
+  }
+}
 /** Storage, presentation, and asynchronous error notification for images. */
 export interface ImageExtensionOptions {
   /** Storage provider for uploaded and resolved images. */
@@ -325,22 +342,18 @@ function registerImageFormatter(
  * @param options - Storage provider, optional view customization, and error notification.
  * @returns The lifecycle-owned image extension.
  */
-export function imageExtension(options: ImageExtensionOptions): ReactEditorExtension {
+export function imageExtension(options: ImageExtensionOptions): ImageReactEditorExtension {
   return {
     id: "image",
+    fields: { provider: options.provider, customizations: options.views ?? {} },
     // Keep image configuration and ingestion scoped to this extension installation.
     setup: (reactEditor) => {
+      registerMarkdownExtension(reactEditor.extensions, imageMarkdownExtension);
       const statuses = new FileUploadStatusStore();
       const ingestion = new FileIngestion(statuses, options.onError);
-      const disposeImageViews = configureImageViews(
-        reactEditor,
-        options.views ?? {},
-        options.provider,
-      );
-      // Cancel pending work before removing image-view configuration.
+      // Cancel pending work when the extension is removed.
       const dispose = reactEditor.extensions.registerCleanup(() => {
         ingestion.destroy();
-        disposeImageViews();
       });
       reactEditor.extensions.mount(
         // Show this extension's local pending and failed image statuses.
