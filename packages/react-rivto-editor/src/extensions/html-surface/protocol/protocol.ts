@@ -51,6 +51,7 @@ export type HtmlNodeView = HtmlBlockView | HtmlElementView;
 export type HtmlFrameCommand =
   | { readonly kind: "ready" }
   | { readonly kind: "resize"; readonly height: number }
+  | { readonly kind: "pointerdown"; readonly primary: boolean }
   | { readonly kind: "set-prop"; readonly key: string; readonly value: unknown }
   | { readonly kind: "set-props"; readonly props: Record<string, unknown> }
   | { readonly kind: "set-list-props"; readonly listProps: Record<string, unknown> }
@@ -109,6 +110,11 @@ const BRIDGE_RUNTIME = `
     setContent: function (content) { send({ kind: "set-content", content: content }); }
   };
   send({ kind: "ready" });
+  window.addEventListener("pointerdown", function (event) {
+    if (event.isTrusted && event.button === 0) {
+      send({ kind: "pointerdown", primary: event.ctrlKey || event.metaKey });
+    }
+  }, true);
   var report = function () {
     send({ kind: "resize", height: Math.ceil(document.documentElement.scrollHeight) });
   };
@@ -356,6 +362,9 @@ function commandFromMessage(message: Record<string, unknown>): HtmlFrameCommand 
     Number.isFinite(message.height)
   ) {
     return { kind: "resize", height: message.height };
+  }
+  if (message.kind === "pointerdown" && typeof message.primary === "boolean") {
+    return { kind: "pointerdown", primary: message.primary };
   }
   if (message.kind === "set-prop" && typeof message.key === "string" && isHtmlKey(message.key)) {
     if (isJsonValue(message.value)) {

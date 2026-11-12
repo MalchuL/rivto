@@ -1,3 +1,4 @@
+import { resolveEdgelessPointerTarget } from "./edgeless-pointer-target";
 import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
 import { flushSync } from "react-dom";
 import { useReactPanel } from "../../hooks/editor/use-react-panel";
@@ -1153,25 +1154,20 @@ export class EdgelessTransformController {
      * Moveable handles target the concrete selection through beginControls;
      * they do not enter this pointer-based group selection path.
      */
+    const selectedId = current.length === 1 ? current[0] : undefined;
+    id = resolveEdgelessPointerTarget({
+      elementId: childId,
+      parentId: parent,
+      selectedId,
+      selectedParentId: parent && !primary && selectedId ? this.parentId(selectedId) : undefined,
+      primary,
+    });
     let returnToGroup: string | undefined;
-    if (parent && !primary) {
-      const selectedId = current.length === 1 ? current[0] : undefined;
-      const inActiveGroup = Boolean(
-        selectedId && (selectedId === parent || this.parentId(selectedId) === parent),
-      );
-      if (selectedId === childId) {
-        // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
-        id = childId;
-        const kind = this.elements.getElementNode(childId)?.type;
-        if (!this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel) {
-          returnToGroup = parent;
-        }
-      } else if (inActiveGroup) {
-        // Purpose: second click (or sibling click) enters/switches the child under the active group.
-        id = childId;
-      } else {
-        // Purpose: first click on any grouped child selects the group shell first.
-        id = parent;
+    if (parent && !primary && selectedId === childId) {
+      // Purpose: allow drag on the drilled child; non-label shapes bounce back to group on click.
+      const kind = this.elements.getElementNode(childId)?.type;
+      if (!this.reactEditor.elementTypes.get(kind ?? "")?.behavior?.editableLabel) {
+        returnToGroup = parent;
       }
     }
     const hitBlock = event.target.closest<HTMLElement>(BLOCK_SELECTOR);
