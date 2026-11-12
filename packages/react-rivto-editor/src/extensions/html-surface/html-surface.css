@@ -184,6 +184,12 @@
   font-size: 12px;
 }
 
+/* Canvas visual hosts suppress text selection; the source editor owns its text. */
+.html-code-field .cm-content {
+  cursor: text;
+  user-select: text;
+}
+
 .html-code-field .cm-scroller {
   max-height: 220px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

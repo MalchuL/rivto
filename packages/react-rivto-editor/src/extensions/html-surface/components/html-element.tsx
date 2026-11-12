@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { resolveEdgelessPointerTarget } from "../../edgeless/edgeless-pointer-target";
 import type { ElementRenderProps } from "../../../managers/elements/types";
 import type { ElementSlotProps } from "../../../managers/surfaces/types";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
@@ -80,6 +81,7 @@ export function HtmlElementEditSlot({
  * @param props.element - Current element, including local property previews.
  * @param props.reactPanel - Panel used to update this element.
  * @param props.preview - True while the element is a detached placement ghost.
+ * @param props.operations - Panel-bound canvas selection operations.
  * @param props.editingStore - State shared with its slot in this extension installation.
  * @returns The sandbox or the source editor, filling the host frame.
  */
@@ -87,17 +89,23 @@ export function HtmlElement({
   element,
   reactPanel,
   preview,
+  operations,
   editingStore,
 }: ElementRenderProps & HtmlEditingProps) {
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   const node = useMemo(() => toElementView(element), [element]);
   const onCommand = useCallback(
     (command: HtmlFrameCommand) => {
-      if (!preview) {
+      if (preview) {
+        return;
+      }
+      if (command.kind === "pointerdown" && reactPanel.elements.getElementNode(element.id)) {
+        selectHtmlElement(operations, element.id, command.primary);
+      } else if (command.kind !== "pointerdown") {
         applyElementCommand(reactPanel, element.id, command);
       }
     },
-    [preview, reactPanel, element.id],
+    [preview, reactPanel, element.id, operations],
   );
   const label = readLabel(element.props, "HTML");
   const source = typeof element.props.html === "string" ? element.props.html : "";
@@ -125,6 +133,39 @@ export function HtmlElement({
       )}
     </div>
   );
+}
+
+/**
+ * Selects a canvas element after a pointer gesture inside its sandboxed frame.
+ *
+ * The iframe owns native selection and controls, so its pointer is not replayed
+ * as a canvas drag. Group entry and modifier toggling follow the shared target policy.
+ *
+ * @param operations - Canvas selection and parent operations for this panel.
+ * @param id - Persisted HTML element under the pointer.
+ * @param primary - Whether Control or Meta was held during the gesture.
+ * @returns Canvas selection reflects the iframe interaction.
+ */
+function selectHtmlElement(
+  operations: Pick<ElementRenderProps["operations"], "getSelection" | "getParentId" | "select">,
+  id: string,
+  primary: boolean,
+): void {
+  const current = operations.getSelection().items;
+  const selectedId = current.length === 1 ? current[0] : undefined;
+  const target = resolveEdgelessPointerTarget({
+    elementId: id,
+    parentId: operations.getParentId(id),
+    selectedId,
+    selectedParentId: selectedId ? operations.getParentId(selectedId) : undefined,
+    primary,
+  });
+  const selected = current.includes(target);
+  if (primary) {
+    operations.select(selected ? current.filter((item) => item !== target) : [...current, target]);
+  } else if (!selected) {
+    operations.select([target]);
+  }
 }
 
 /**

@@ -215,6 +215,7 @@ export function HtmlSourceEditor({
   );
   return (
     <div
+      {...editorControlProps}
       className="html-source-editor"
       data-edgeless-ui="true"
       onPointerDown={(event) => event.stopPropagation()}

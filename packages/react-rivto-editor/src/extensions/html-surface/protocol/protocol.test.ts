@@ -30,3 +30,24 @@ test("rejects structured-clone objects that are not JSON records", () => {
     ).toBeUndefined();
   }
 });
+
+test("accepts only boolean modifier state for iframe pointer messages", () => {
+  expect(
+    parseFrameMessage(
+      { channel: HTML_CHANNEL, token: "frame", kind: "pointerdown", primary: true },
+      "frame",
+    ),
+  ).toEqual({ kind: "pointerdown", primary: true });
+  expect(
+    parseFrameMessage(
+      { channel: HTML_CHANNEL, token: "frame", kind: "pointerdown", primary: "yes" },
+      "frame",
+    ),
+  ).toBeUndefined();
+  expect(
+    parseFrameMessage(
+      { channel: HTML_CHANNEL, token: "other", kind: "pointerdown", primary: true },
+      "frame",
+    ),
+  ).toBeUndefined();
+});

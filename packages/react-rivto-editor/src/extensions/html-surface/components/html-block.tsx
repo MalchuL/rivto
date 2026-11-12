@@ -222,7 +222,7 @@ export function applyBlockCommand(
   blockId: string,
   command: HtmlFrameCommand,
 ): void {
-  if (!panel.blocks.getBlockNode(blockId)) {
+  if (command.kind === "pointerdown" || !panel.blocks.getBlockNode(blockId)) {
     return;
   }
   if (command.kind === "set-prop") {
