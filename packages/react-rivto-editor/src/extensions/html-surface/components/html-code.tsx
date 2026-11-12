@@ -29,6 +29,7 @@ export interface HtmlCodeFieldProps {
    * Receives the full document after each user edit.
    *
    * @param value - Current document text.
+   * @returns The caller has received the edited text.
    */
   readonly onChange?: (value: string) => void;
 }
@@ -82,6 +83,12 @@ interface CodeViewOptions {
   readonly label: string;
   readonly language: HtmlCodeLanguage;
   readonly readOnly: boolean;
+  /**
+   * Receives the whole document after an edit.
+   *
+   * @param value - Current document text.
+   * @returns The caller has received the edited text.
+   */
   readonly onChange: (value: string) => void;
 }
 
@@ -92,7 +99,7 @@ interface CodeViewOptions {
  * @param view - Ref that retains the view for later document replacement.
  * @param initial - Document text at creation.
  * @param options - Language, label, and the edit callback.
- * @returns Destroys the view. Does nothing when the host is missing.
+ * @returns Cleanup that destroys the view, or a no-op when the host is missing.
  */
 function mountCodeView(
   parent: HTMLDivElement | null,
@@ -146,7 +153,7 @@ function codeExtensions(options: CodeViewOptions) {
  *
  * @param view - Mounted editor, or null before the view exists.
  * @param value - Document text that should be showing.
- * @returns Nothing. An equal document is left unchanged, including its selection.
+ * @returns Replaces differing text; equal text and its selection remain unchanged.
  */
 function replaceCodeDocument(view: EditorView | null, value: string): void {
   if (!view || view.state.doc.toString() === value) {

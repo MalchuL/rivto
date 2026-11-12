@@ -62,3 +62,5 @@
 /* Chrome shares the utility layer with the primitives it customizes. */
 @import "../components/edgeless/controls.css" layer(utilities);
 @import "../extensions/edgeless/visuals/controls.css" layer(utilities);
+
+@import "../extensions/html-surface/html-surface.css" layer(components);

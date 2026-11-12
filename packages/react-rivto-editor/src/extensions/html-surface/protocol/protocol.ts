@@ -10,7 +10,7 @@
  */
 
 /** Persisted block type for pasted HTML, CSS, and JavaScript. */
-export const HTML_BLOCK_TYPE = "demo.html";
+export const HTML_BLOCK_TYPE = "html";
 
 /** Persisted canvas element type for pasted HTML, CSS, and JavaScript. */
 export const HTML_ELEMENT_TYPE = "html";
@@ -148,6 +148,12 @@ export function isJsonValue(value: unknown): boolean {
     }
     if (!candidate || typeof candidate !== "object") {
       return false;
+    }
+    if (!Array.isArray(candidate)) {
+      const prototype = Object.getPrototypeOf(candidate);
+      if (prototype !== Object.prototype && prototype !== null) {
+        return false;
+      }
     }
     if (seen.has(candidate)) {
       return false;
@@ -326,16 +332,6 @@ export function readLabel(props: Record<string, unknown>, fallback: string): str
     return label.trim();
   }
   return fallback;
-}
-
-/**
- * Reads the stable sample id used to find a seeded widget.
- *
- * @param props - Persisted properties that may include `sample`.
- * @returns The sample id, or undefined when this widget was created blank.
- */
-export function readSample(props: Record<string, unknown>): string | undefined {
-  return typeof props.sample === "string" && props.sample ? props.sample : undefined;
 }
 
 /**

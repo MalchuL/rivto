@@ -6,22 +6,37 @@
  *
  * @module
  */
-import type { ElementRenderProps, ElementSlotProps } from "@chulane/rivto-react";
-import { useReactPanel } from "@chulane/rivto-react";
+import type { ElementRenderProps } from "../../../managers/elements/types";
+import type { ElementSlotProps } from "../../../managers/surfaces/types";
+import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import type { EditorElementNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
-import { useHtmlEditing } from "./html-edit-session";
+import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
 import { HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
 import { HtmlFrame } from "./html-frame";
 import {
   formatWidgetProps,
   readLabel,
-  readSample,
   replacedPropPatch,
   type HtmlDraft,
   type HtmlElementView,
   type HtmlFrameCommand,
-} from "./protocol";
+} from "../protocol/protocol";
+
+/** Panel operations needed to read and update HTML elements. */
+interface HtmlElementPanel {
+  readonly elements: Pick<PanelAPI["elements"], "getElementNode" | "updateElement">;
+}
+
+/** Panel operations needed to save an HTML element draft in one history entry. */
+interface HtmlElementDraftPanel extends HtmlElementPanel {
+  readonly batchUpdates: PanelAPI["batchUpdates"];
+}
+
+/** Shared editing state supplied by the installed extension. */
+interface HtmlEditingProps {
+  readonly editingStore: HtmlEditingStore;
+}
 
 /**
  * Opens the source editor from the element's right slot.
@@ -31,11 +46,15 @@ import {
  *
  * @param props - Slot context for the HTML element.
  * @param props.element - Element whose edit flag this button toggles.
+ * @param props.editingStore - State shared with the element renderer.
  * @returns The embedding-style edit button. A placement preview does not render slots.
  */
-export function HtmlElementEditSlot({ element }: ElementSlotProps) {
+export function HtmlElementEditSlot({
+  element,
+  editingStore,
+}: ElementSlotProps & HtmlEditingProps) {
   const reactPanel = useReactPanel();
-  const [editing, setEditing] = useHtmlEditing(element.id);
+  const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   return (
     <HtmlSlotEditButton
       editing={editing}
@@ -61,10 +80,16 @@ export function HtmlElementEditSlot({ element }: ElementSlotProps) {
  * @param props.element - Current element, including local property previews.
  * @param props.reactPanel - Panel used to update this element.
  * @param props.preview - True while the element is a detached placement ghost.
+ * @param props.editingStore - State shared with its slot in this extension installation.
  * @returns The sandbox or the source editor, filling the host frame.
  */
-export function HtmlElement({ element, reactPanel, preview }: ElementRenderProps) {
-  const [editing, setEditing] = useHtmlEditing(element.id);
+export function HtmlElement({
+  element,
+  reactPanel,
+  preview,
+  editingStore,
+}: ElementRenderProps & HtmlEditingProps) {
+  const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
   const node = useMemo(() => toElementView(element), [element]);
   const onCommand = useCallback(
     (command: HtmlFrameCommand) => {
@@ -75,15 +100,9 @@ export function HtmlElement({ element, reactPanel, preview }: ElementRenderProps
     [preview, reactPanel, element.id],
   );
   const label = readLabel(element.props, "HTML");
-  const sample = readSample(element.props);
   const source = typeof element.props.html === "string" ? element.props.html : "";
   return (
-    <div
-      className="html-surface-canvas"
-      data-html-surface="element"
-      data-html-label={label}
-      {...(sample ? { "data-html-sample": sample } : {})}
-    >
+    <div className="html-surface-canvas" data-html-surface="element" data-html-label={label}>
       {editing && !preview ? (
         <HtmlSourceEditor
           source={source}
@@ -96,7 +115,7 @@ export function HtmlElement({ element, reactPanel, preview }: ElementRenderProps
         />
       ) : (
         <HtmlFrame
-          frameName={sample ?? label}
+          frameName={label}
           source={source}
           node={node}
           fit="fill"
@@ -140,9 +159,13 @@ function toElementView(element: EditorElementNode): HtmlElementView {
  * @param panel - Panel that owns the element.
  * @param elementId - Stable id of the HTML element.
  * @param command - Validated write from the sandbox.
- * @returns Nothing. A missing element is left unchanged.
+ * @returns Applies the write when the element still exists.
  */
-function applyElementCommand(panel: PanelAPI, elementId: string, command: HtmlFrameCommand): void {
+function applyElementCommand(
+  panel: HtmlElementPanel,
+  elementId: string,
+  command: HtmlFrameCommand,
+): void {
   if (!panel.elements.getElementNode(elementId)) {
     return;
   }
@@ -165,9 +188,13 @@ function applyElementCommand(panel: PanelAPI, elementId: string, command: HtmlFr
  * @param panel - Panel that owns the element.
  * @param elementId - Stable id of the HTML element.
  * @param draft - Source and parsed props from the editor. `html` in the JSON is ignored.
- * @returns Nothing. A missing element is left unchanged.
+ * @returns Saves the draft when the element still exists.
  */
-function commitElementDraft(panel: PanelAPI, elementId: string, draft: HtmlDraft): void {
+function commitElementDraft(
+  panel: HtmlElementDraftPanel,
+  elementId: string,
+  draft: HtmlDraft,
+): void {
   const current = panel.elements.getElementNode(elementId);
   if (!current) {
     return;

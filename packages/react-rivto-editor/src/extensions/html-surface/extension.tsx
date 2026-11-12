@@ -3,12 +3,28 @@
  *
  * @module
  */
-import type { ReactEditorExtension } from "@chulane/rivto-react";
-import { HtmlBlock, HtmlBlockEditSlot } from "./html-block";
-import { HtmlElement, HtmlElementEditSlot } from "./html-element";
-import "./html-surface.css";
-import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, validateHtmlElementProps } from "./protocol";
-import { HTML_STARTER } from "./samples";
+import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
+import type { ElementRenderProps } from "../../managers/elements/types";
+import type { BlockSlotProps, ElementSlotProps } from "../../managers/surfaces/types";
+import { createHtmlEditingStore, type HtmlEditingStore } from "./hooks/use-html-editing";
+import type { ReactEditorExtension } from "../../managers/extensions/types";
+import type { ReactEditorApi } from "../../editor/types";
+import { HtmlBlock, HtmlBlockEditSlot } from "./components/html-block";
+import { HtmlElement, HtmlElementEditSlot } from "./components/html-element";
+import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, validateHtmlElementProps } from "./protocol/protocol";
+import { HTML_STARTER } from "./html-starter";
+
+/** Registration operations borrowed while installing the HTML block. */
+interface HtmlBlockRegistrationEditor {
+  readonly blockTypes: Pick<ReactEditorApi["blockTypes"], "register">;
+  readonly surfaces: Pick<ReactEditorApi["surfaces"], "registerBlockSlot">;
+}
+
+/** Registration operations borrowed while installing the HTML element. */
+interface HtmlElementRegistrationEditor {
+  readonly elementTypes: Pick<ReactEditorApi["elementTypes"], "register">;
+  readonly surfaces: Pick<ReactEditorApi["surfaces"], "registerElementSlot">;
+}
 
 const htmlIcon = (
   <svg
@@ -36,11 +52,11 @@ const htmlIcon = (
  * canvas tool. Disposing the extension removes both registrations and leaves
  * any saved widgets in the document.
  *
- * @returns Extension installed with the demo editor.
+ * @returns Extension installed by the host editor.
  */
 export function htmlSurfaceExtension(): ReactEditorExtension {
   return {
-    id: "demo.html-surface",
+    id: "rivto.html-surface",
     /**
      * Registers the block renderer and the canvas element together.
      *
@@ -48,8 +64,9 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
      * @returns Cleanup that removes the block and the element registration.
      */
     setup(editor) {
-      const removeBlock = registerHtmlBlock(editor);
-      const removeElement = registerHtmlElement(editor);
+      const editingStore = createHtmlEditingStore();
+      const removeBlock = registerHtmlBlock(editor, editingStore);
+      const removeElement = registerHtmlElement(editor, editingStore);
       return () => {
         removeElement();
         removeBlock();
@@ -62,16 +79,17 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
  * Registers the page HTML block, including its slash command and clipboard text.
  *
  * @param editor - Editor whose block registry receives the type.
+ * @param editingStore - State shared by the registered block components.
  * @returns Disposer that removes the block and its right-slot control.
  */
-function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0]) {
+function registerHtmlBlock(editor: HtmlBlockRegistrationEditor, editingStore: HtmlEditingStore) {
   const removeType = editor.blockTypes.register({
     definition: {
       type: HTML_BLOCK_TYPE,
       title: "HTML",
       defaultProps: { label: "HTML" },
     },
-    render: HtmlBlock,
+    render: (props: BlockRendererProps) => <HtmlBlock {...props} editingStore={editingStore} />,
     slashCommand: {
       title: "HTML",
       group: "Turn into",
@@ -95,7 +113,9 @@ function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0])
   });
   const removeEdit = editor.surfaces.registerBlockSlot({
     position: "right",
-    component: HtmlBlockEditSlot,
+    component: (props: BlockSlotProps) => (
+      <HtmlBlockEditSlot {...props} editingStore={editingStore} />
+    ),
     when: ({ block }) => block.type === HTML_BLOCK_TYPE,
   });
   return () => {
@@ -108,9 +128,13 @@ function registerHtmlBlock(editor: Parameters<ReactEditorExtension["setup"]>[0])
  * Registers the canvas HTML element and its placement tool.
  *
  * @param editor - Editor whose element registry receives the type.
+ * @param editingStore - State shared by the registered element components.
  * @returns Disposer that removes the element and its right-slot control.
  */
-function registerHtmlElement(editor: Parameters<ReactEditorExtension["setup"]>[0]) {
+function registerHtmlElement(
+  editor: HtmlElementRegistrationEditor,
+  editingStore: HtmlEditingStore,
+) {
   const removeType = editor.elementTypes.register({
     title: "HTML",
     definition: {
@@ -125,7 +149,7 @@ function registerHtmlElement(editor: Parameters<ReactEditorExtension["setup"]>[0
        */
       validate: validateHtmlElementProps,
     },
-    render: HtmlElement,
+    render: (props: ElementRenderProps) => <HtmlElement {...props} editingStore={editingStore} />,
     creation: {
       title: "HTML",
       icon: htmlIcon,
@@ -144,7 +168,9 @@ function registerHtmlElement(editor: Parameters<ReactEditorExtension["setup"]>[0
   });
   const removeEdit = editor.surfaces.registerElementSlot({
     position: "right",
-    component: HtmlElementEditSlot,
+    component: (props: ElementSlotProps) => (
+      <HtmlElementEditSlot {...props} editingStore={editingStore} />
+    ),
     when: ({ element }) => element.type === HTML_ELEMENT_TYPE,
   });
   return () => {

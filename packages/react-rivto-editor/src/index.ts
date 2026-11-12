@@ -316,3 +316,6 @@ export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
 export * from "./extensions/file";
 export * from "./extensions/image";
 export * from "./attachments";
+
+export { htmlSurfaceExtension } from "./extensions/html-surface/extension";
+export { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "./extensions/html-surface/protocol/protocol";

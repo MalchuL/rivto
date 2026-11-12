@@ -244,3 +244,10 @@ factory called once, natural initial size, content scaling before release, uncha
 document and zero document notifications during preview, matching committed content
 and geometry, one-step undo, cancellation and inert controls. Check native toolbar
 preset dragging as well as canvas placement on normal and large documents.
+
+## Interactive HTML elements
+
+The `html-surface` extension demonstrates a sandboxed HTML element with live
+host-relative resize. Keep its script bridge validated and use the shared element
+operations for writes. Exercise iframe controls and editor selection with real
+pointer and keyboard input; controls and drag gestures must retain separate owners.

@@ -90,3 +90,5 @@ export * from "./extensions/file";
 export * from "./extensions/image";
 
 export type { BinaryProvider, BinaryReadContext, BinaryWriteContext } from "./attachments";
+
+export { htmlSurfaceExtension } from "./extensions/html-surface/extension";

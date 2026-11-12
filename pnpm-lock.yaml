@@ -194,21 +194,6 @@ importers:
       '@chulane/rivto-utils':
         specifier: workspace:*
         version: link:../packages/rivto-utils
-      '@codemirror/lang-html':
-        specifier: ^6.4.12
-        version: 6.4.12
-      '@codemirror/lang-json':
-        specifier: ^6.0.2
-        version: 6.0.2
-      '@codemirror/state':
-        specifier: ^6.7.6
-        version: 6.7.6
-      '@codemirror/view':
-        specifier: ^6.43.15
-        version: 6.43.15
-      codemirror:
-        specifier: ^6.0.2
-        version: 6.0.2
       lucide-react:
         specifier: ^1.28.0
         version: 1.28.0(react@19.2.7)
@@ -301,13 +286,13 @@ importers:
         version: 29.5.14
       jest:
         specifier: ^29.7.0
-        version: 29.7.0(@types/node@26.1.0)
+        version: 29.7.0(@types/node@24.13.3)
       resolve:
         specifier: 1.22.12
         version: 1.22.12
       ts-jest:
         specifier: ^29.4.5
-        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@26.1.0))(typescript@5.8.3)
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@24.13.3))(typescript@5.8.3)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.8.3)
@@ -326,13 +311,13 @@ importers:
         version: 29.5.14
       jest:
         specifier: ^29.7.0
-        version: 29.7.0(@types/node@24.13.3)
+        version: 29.7.0(@types/node@26.1.0)
       resolve:
         specifier: 1.22.12
         version: 1.22.12
       ts-jest:
         specifier: ^29.4.5
-        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@24.13.3))(typescript@5.8.3)
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@26.1.0))(typescript@5.8.3)
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.8.3)
@@ -419,6 +404,18 @@ importers:
       '@chulane/rivto-utils':
         specifier: workspace:*
         version: link:../rivto-utils
+      '@codemirror/lang-html':
+        specifier: ^6.4.12
+        version: 6.4.12
+      '@codemirror/lang-json':
+        specifier: ^6.0.2
+        version: 6.0.2
+      '@codemirror/state':
+        specifier: ^6.7.6
+        version: 6.7.6
+      '@codemirror/view':
+        specifier: ^6.43.15
+        version: 6.43.15
       '@dnd-kit/helpers':
         specifier: 0.5.0
         version: 0.5.0
@@ -434,6 +431,9 @@ importers:
       cn:
         specifier: ^0.3.0
         version: 0.3.0
+      codemirror:
+        specifier: ^6.0.2
+        version: 6.0.2
       lucide-react:
         specifier: ^1.28.0
         version: 1.28.0(react@19.2.7)

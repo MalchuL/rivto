@@ -3,26 +3,38 @@
  *
  * @module
  */
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  usePanel,
-  type BlockSlotProps,
-} from "@chulane/rivto-react";
+import { useBlockNode } from "../../../hooks/blocks/use-block";
+import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
+import { usePanel } from "../../../hooks/editor/use-panel";
+import type { BlockSlotProps } from "../../../managers/surfaces/types";
 import type { EditorBlockNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
-import { useHtmlEditing } from "./html-edit-session";
+import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
 import { HtmlPasteTarget, HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
 import { HtmlFrame } from "./html-frame";
 import {
   formatWidgetProps,
   readLabel,
-  readSample,
   replacedPropPatch,
   type HtmlBlockView,
   type HtmlDraft,
   type HtmlFrameCommand,
-} from "./protocol";
+} from "../protocol/protocol";
+
+/** Panel operations needed to read and update HTML blocks. */
+interface HtmlBlockPanel {
+  readonly blocks: Pick<PanelAPI["blocks"], "getBlockNode" | "updateBlock">;
+}
+
+/** Panel operations needed to save an HTML block draft in one history entry. */
+interface HtmlBlockDraftPanel extends HtmlBlockPanel {
+  readonly batchUpdates: PanelAPI["batchUpdates"];
+}
+
+/** Shared editing state supplied by the installed extension. */
+interface HtmlEditingProps {
+  readonly editingStore: HtmlEditingStore;
+}
 
 /**
  * Renders one HTML block inside its row.
@@ -33,13 +45,17 @@ import {
  *
  * @param props - Renderer props from the block host.
  * @param props.blockId - Stable id of the HTML block.
+ * @param props.editingStore - State shared with its slot in this extension installation.
  * @returns The sandbox, the editor, or the paste target. Nothing after deletion.
  */
-export function HtmlBlock({ blockId }: { readonly blockId: string }) {
+export function HtmlBlock({
+  blockId,
+  editingStore,
+}: { readonly blockId: string } & HtmlEditingProps) {
   const { block } = useBlockNode(blockId);
   const panel = usePanel();
   const anchor = useBlockSelectionAnchor(blockId);
-  const [editing, setEditing] = useHtmlEditing(blockId);
+  const [editing, setEditing] = useHtmlEditing(editingStore, "block", blockId);
   const onCommand = useCallback(
     (command: HtmlFrameCommand) => applyBlockCommand(panel, blockId, command),
     [panel, blockId],
@@ -49,14 +65,12 @@ export function HtmlBlock({ blockId }: { readonly blockId: string }) {
     return null;
   }
   const label = readLabel(block.props, "HTML");
-  const sample = readSample(block.props);
   return (
     <div
       {...anchor}
       className="html-surface-block"
       data-html-surface="block"
       data-html-label={label}
-      {...(sample ? { "data-html-sample": sample } : {})}
     >
       <HtmlBlockBody
         block={block}
@@ -80,10 +94,11 @@ export function HtmlBlock({ blockId }: { readonly blockId: string }) {
  *
  * @param props - Slot context for the HTML block.
  * @param props.block - Block whose edit flag this button toggles.
+ * @param props.editingStore - State shared with the block renderer.
  * @returns The edit button overlaid on the block.
  */
-export function HtmlBlockEditSlot({ block }: BlockSlotProps) {
-  const [editing, setEditing] = useHtmlEditing(block.id);
+export function HtmlBlockEditSlot({ block, editingStore }: BlockSlotProps & HtmlEditingProps) {
+  const [editing, setEditing] = useHtmlEditing(editingStore, "block", block.id);
   return <HtmlSlotEditButton editing={editing} onToggle={() => setEditing(!editing)} />;
 }
 
@@ -93,9 +108,32 @@ interface HtmlBlockBodyProps {
   readonly node: HtmlBlockView;
   readonly label: string;
   readonly editing: boolean;
+  /**
+   * Applies a validated sandbox command to the block.
+   *
+   * @param command - Command received from the iframe.
+   * @returns The command has been applied when supported.
+   */
   readonly onCommand: (command: HtmlFrameCommand) => void;
+  /**
+   * Stores HTML submitted through the empty paste target.
+   *
+   * @param source - Nonblank HTML text.
+   * @returns The source has been submitted for storage.
+   */
   readonly onCommit: (source: string) => void;
+  /**
+   * Closes the source editor without saving.
+   *
+   * @returns The caller has closed the editor.
+   */
   readonly onCancel: () => void;
+  /**
+   * Saves a valid source and properties draft.
+   *
+   * @param draft - Parsed source and widget properties.
+   * @returns The caller has saved the draft and closed the editor.
+   */
   readonly onSave: (draft: HtmlDraft) => void;
 }
 
@@ -137,10 +175,9 @@ function HtmlBlockBody({
   if (!block.content.trim()) {
     return <HtmlPasteTarget onCommit={onCommit} />;
   }
-  const sample = readSample(block.props);
   return (
     <HtmlFrame
-      frameName={sample ?? label}
+      frameName={label}
       source={block.content}
       node={node}
       fit="auto"
@@ -178,9 +215,13 @@ function toBlockView(block: EditorBlockNode): HtmlBlockView {
  * @param panel - Panel that owns the block.
  * @param blockId - Stable id of the HTML block.
  * @param command - Validated write from the sandbox.
- * @returns Nothing. The document changes when the block still exists.
+ * @returns Applies the supported command when the block still exists.
  */
-function applyBlockCommand(panel: PanelAPI, blockId: string, command: HtmlFrameCommand): void {
+function applyBlockCommand(
+  panel: HtmlBlockPanel,
+  blockId: string,
+  command: HtmlFrameCommand,
+): void {
   if (!panel.blocks.getBlockNode(blockId)) {
     return;
   }
@@ -207,9 +248,9 @@ function applyBlockCommand(panel: PanelAPI, blockId: string, command: HtmlFrameC
  * @param panel - Panel that owns the block.
  * @param blockId - Stable id of the HTML block.
  * @param draft - Source and parsed props from the editor.
- * @returns Nothing. A missing block is left unchanged.
+ * @returns Saves the draft when the block still exists.
  */
-function commitBlockDraft(panel: PanelAPI, blockId: string, draft: HtmlDraft): void {
+function commitBlockDraft(panel: HtmlBlockDraftPanel, blockId: string, draft: HtmlDraft): void {
   const current = panel.blocks.getBlockNode(blockId);
   if (!current) {
     return;

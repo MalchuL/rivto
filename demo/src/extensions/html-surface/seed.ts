@@ -5,7 +5,7 @@
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { separatorBlockFactory } from "@chulane/rivto-react/block-factories";
-import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "./protocol";
+import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "@chulane/rivto-react";
 import { HTML_BLOCK_SAMPLES, HTML_ELEMENT_SAMPLES } from "./samples";
 
 /** Borrowed operations used while the notebook is still empty of history. */
@@ -22,7 +22,7 @@ interface HtmlSeedEditor {
 }
 
 /** Canvas card that holds the HTML section without covering the weekend plan. */
-const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 920 };
+const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 1220 };
 
 /**
  * Inserts the HTML heading, widgets, and their canvas card before the notebook.
@@ -70,7 +70,7 @@ export function appendHtmlBlockSection(editor: HtmlSeedEditor): string {
  * Places the rotating circle and the other HTML elements beside the picnic plan.
  *
  * @param editor - Editor whose canvas receives the elements.
- * @returns The label and the four HTML elements have been inserted.
+ * @returns The label and HTML elements have been inserted.
  * @throws If a visual command or element insertion fails.
  */
 export function seedHtmlElements(editor: HtmlSeedEditor): void {

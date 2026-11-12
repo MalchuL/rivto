@@ -220,3 +220,16 @@ Do not weaken a failing body assertion into a block-edge assertion or repair one
 container's renderer when the same primitive fails elsewhere. New renderers should
 inherit the verified behavior without another drag handler, pointer callback,
 container-type check or duplicate selection tree.
+
+## Interactive embedded content
+
+For HTML/CSS/JavaScript content, inspect the package `html-surface` extension:
+its iframe isolates authored scripts, validates messages and sends current snapshots
+through the owning managers. Keep sample content in the host. Test the iframe's
+real controls, source editing, undo, and cleanup in Page and Edgeless as applicable.
+
+Native controls must receive their own click: mark editor controls with
+`editorControlProps`, honor `defaultPrevented` when selection claims a gesture,
+and avoid suppressing clicks merely because a drag might have occurred. Keep
+selection and pointer handling with the shared owner; test ordinary clicks,
+modifier selection, dragging, and keyboard activation on the rendered surface.
