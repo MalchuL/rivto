@@ -14,6 +14,7 @@ const RECTANGLE_CLASS = "edgeless-selection-rectangle";
 export class EdgelessSelectionController {
   readonly marquee: CanvasMarquee;
   private readonly releases: Array<() => void> = [];
+  private pointerId: number | undefined;
 
   /**
    * Creates one host-styled marquee for this mounted occurrence.
@@ -96,10 +97,16 @@ export class EdgelessSelectionController {
         this.releases.push(
           events.register(
             { id: `edgeless.selection.${type}`, type, target: "window", mode: "edgeless" },
-            this.marquee.stop,
+            () => this.stop(),
           ),
         );
       }
+      this.releases.push(
+        events.register(
+          { id: "edgeless.selection.lost-pointer", type: "lostpointercapture", mode: "edgeless" },
+          ({ raw }) => (raw.pointerId === this.pointerId ? this.stop() : false),
+        ),
+      );
       return () => this.destroy();
     } catch (error) {
       try {
@@ -119,7 +126,11 @@ export class EdgelessSelectionController {
    */
   destroy(): void {
     const errors: unknown[] = [];
-    for (const release of [...this.releases.splice(0).reverse(), () => this.marquee.destroy()]) {
+    for (const release of [
+      ...this.releases.splice(0).reverse(),
+      () => this.stop(),
+      () => this.marquee.destroy(),
+    ]) {
       try {
         release();
       } catch (error) {
@@ -129,6 +140,25 @@ export class EdgelessSelectionController {
     if (errors.length) {
       throw new AggregateError(errors, "Edgeless selection cleanup failed");
     }
+  }
+
+  /**
+   * Ends the marquee and releases its pointer when the gesture or surface ends.
+   *
+   * @returns False so subsequent event handlers may receive the event.
+   * @throws If the browser cannot release an active pointer capture.
+   */
+  stop(): false {
+    const pointerId = this.pointerId;
+    this.pointerId = undefined;
+    try {
+      if (pointerId !== undefined && this.root.hasPointerCapture(pointerId)) {
+        this.root.releasePointerCapture(pointerId);
+      }
+    } finally {
+      this.marquee.stop();
+    }
+    return false;
   }
 
   /**
@@ -171,6 +201,9 @@ export class EdgelessSelectionController {
     if (!primary) {
       this.selection.clear();
     }
+    // Capture keeps canvas input alive when the pointer crosses an embedded iframe.
+    this.root.setPointerCapture(event.pointerId);
+    this.pointerId = event.pointerId;
     this.marquee.start(event.clientX, event.clientY, primary ? this.selection.get().items : []);
     return true;
   }

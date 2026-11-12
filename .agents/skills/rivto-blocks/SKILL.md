@@ -234,6 +234,17 @@ and avoid suppressing clicks merely because a drag might have occurred. Keep
 selection and pointer handling with the shared owner; test ordinary clicks,
 modifier selection, dragging, and keyboard activation on the rendered surface.
 
+For an embedded source editor, put `editorControlProps` on the wrapper containing
+the editable surface so Page's capture-phase selection recognizes the entire
+control. Check inherited canvas styles as well: a visual host may set
+`user-select: none`, so explicitly allow text selection on the editable content
+when needed. Preserve the embedded editor's own focus, selection and history.
+Use [e2e/html-interaction.spec.ts](../../../e2e/html-interaction.spec.ts) as a
+browser-input example: drag across actual text, assert the native selection and
+absence of structural block selection, then exercise typing, clipboard, local
+undo/redo, save and document undo. Cover Page and an Edgeless card when supported,
+in Chromium and Firefox; wait until text is visible and hit-testable before dragging.
+
 For the optional `unsafe-html` block, keep editor access host-controlled and
 source-specific. The sandbox bridge exposes only named operations, rechecks the
 current grant and source for each request, and keeps panel-local and shared-editor

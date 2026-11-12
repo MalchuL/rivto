@@ -5,9 +5,9 @@
  */
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
-import { usePanel } from "../../../hooks/editor/use-panel";
+import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import type { BlockSlotProps } from "../../../managers/surfaces/types";
-import type { EditorBlockNode, PanelAPI } from "@chulane/rivto";
+import { createStructuralSelection, type EditorBlockNode, type PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
 import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
 import { HtmlPasteTarget, HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
@@ -53,13 +53,10 @@ export function HtmlBlock({
   editingStore,
 }: { readonly blockId: string } & HtmlEditingProps) {
   const { block } = useBlockNode(blockId);
-  const panel = usePanel();
+  const panel = useReactPanel();
   const anchor = useBlockSelectionAnchor(blockId);
   const [editing, setEditing] = useHtmlEditing(editingStore, "block", blockId);
-  const onCommand = useCallback(
-    (command: HtmlFrameCommand) => applyBlockCommand(panel, blockId, command),
-    [panel, blockId],
-  );
+  const onCommand = useHtmlBlockCommand(blockId);
   const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
   if (!block || !node) {
     return null;
@@ -86,6 +83,26 @@ export function HtmlBlock({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Applies iframe commands through the owning panel, including block selection.
+ *
+ * @param blockId - Persisted block receiving commands from its iframe.
+ * @returns Stable callback that ignores a deleted block.
+ */
+export function useHtmlBlockCommand(blockId: string): (command: HtmlFrameCommand) => void {
+  const panel = useReactPanel();
+  return useCallback(
+    (command: HtmlFrameCommand) => {
+      if (command.kind === "pointerdown" && panel.blocks.getBlockNode(blockId)) {
+        panel.selection.set(createStructuralSelection([blockId]));
+      } else {
+        applyBlockCommand(panel, blockId, command);
+      }
+    },
+    [panel, blockId],
   );
 }
 

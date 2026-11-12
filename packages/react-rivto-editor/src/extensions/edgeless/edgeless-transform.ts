@@ -1022,6 +1022,7 @@ export class EdgelessTransformController {
    * @param commit - Whether to commit the gesture; false cancels without creating or updating document entities.
    * @param eventDetail - Native click count; defaults to one and prevents drill-out during double clicks.
    * @returns Whether a gesture was committed, cancelled, or used to return selection to its group.
+   * @throws If releasing an active pointer capture or committing geometry fails.
    */
   private finish = (commit: boolean, eventDetail = 1): boolean => {
     const active = this.start;
@@ -1041,6 +1042,9 @@ export class EdgelessTransformController {
     }
     this.clearPreview(!commit);
     this.start = null;
+    if (active.pointer?.target.hasPointerCapture(active.pointer.id)) {
+      active.pointer.target.releasePointerCapture(active.pointer.id);
+    }
     this.releaseCanvasPins?.();
     this.releaseCanvasPins = undefined;
     if (!commit) {
@@ -1113,7 +1117,19 @@ export class EdgelessTransformController {
     return true;
   };
 
-  /** Resolves click/drill-in selection and starts a permitted object move. */
+  /**
+   * Resolves click or group selection and starts a permitted object move.
+   *
+   * The original hit target captures the pointer so movement continues across
+   * embedded frames while ordinary click targeting remains on that element.
+   *
+   * @param context - Panel-scoped pointer event and mounted surface.
+   * @param context.raw - Native pointer event on the canvas object.
+   * @param context.root - Mounted canvas viewport.
+   * @param context.reactPanel - Panel owning selection and element operations.
+   * @returns Whether this controller claimed the gesture.
+   * @throws If pointer capture or the delegated selection and geometry operations fail.
+   */
   private onPointerDown = ({
     raw: event,
     root,
@@ -1236,6 +1252,7 @@ export class EdgelessTransformController {
       root,
       kind,
       stopMoveable: controls.stop,
+      pointer: { target: event.target, id: event.pointerId },
       dx: 0,
       dy: 0,
       ids,
@@ -1249,6 +1266,8 @@ export class EdgelessTransformController {
     root.focus({ preventScroll: true });
     this.lockGeometry(root, ids);
     controls.prepareDrag(this.getMoveTargets(reactPanel, root, ids));
+    // Keep Moveable's mouse events in this document while crossing an iframe.
+    event.target.setPointerCapture(event.pointerId);
     return true;
   };
   /** Includes ancestor groups whose derived bounds change when a child moves. */

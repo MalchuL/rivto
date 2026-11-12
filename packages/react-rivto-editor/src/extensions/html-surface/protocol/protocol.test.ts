@@ -1,4 +1,17 @@
-import { HTML_CHANNEL, isJsonValue, parseFrameMessage, parseWidgetProps } from "./protocol";
+import {
+  HTML_CHANNEL,
+  clampFrameHeight,
+  isJsonValue,
+  parseFrameMessage,
+  parseWidgetProps,
+} from "./protocol";
+
+test("allows small iframe heights while bounding invalid and oversized measurements", () => {
+  expect(clampFrameHeight(0)).toBe(0);
+  expect(clampFrameHeight(24.4)).toBe(24);
+  expect(clampFrameHeight(-1)).toBe(0);
+  expect(clampFrameHeight(900)).toBe(720);
+});
 
 test("rejects unsafe or non-JSON values in sandbox messages and edited props", () => {
   const cyclic: { self?: unknown } = {};

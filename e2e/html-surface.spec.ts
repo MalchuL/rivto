@@ -8,6 +8,34 @@ interface DemoWindow extends Window {
   stopResizeObservation: () => void;
 }
 
+test("HTML block height follows small and changing content", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+      type: "html",
+      content: '<div id="size" style="width:40px;height:32px">Small</div>',
+      props: { label: "Small HTML" },
+    });
+  });
+  const frame = page.locator('iframe[name="Small HTML"]');
+  await frame.scrollIntoViewIfNeeded();
+  const sandbox = page.frameLocator('iframe[name="Small HTML"]');
+  await expect(sandbox.locator("#size")).toBeVisible();
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(32);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "210px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(210);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "24px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(24);
+  await sandbox.locator("#size").evaluate((element) => {
+    element.style.height = "25px";
+  });
+  await expect.poll(async () => (await frame.boundingBox())?.height).toBe(25);
+});
+
 /**
  * Waits until a named sandbox has published its node snapshot.
  *

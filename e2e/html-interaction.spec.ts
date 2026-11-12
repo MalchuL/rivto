@@ -5,13 +5,99 @@ interface DemoWindow extends Window {
   __rivtoDemo: { editor: DocumentEditorAPI };
 }
 
+for (const type of ["html", "unsafe-html"] as const) {
+  test(`clicking ${type} preview selects its block`, async ({ page }) => {
+    await page.goto("/");
+    const id = await page.evaluate(
+      (blockType) =>
+        (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.insertBlock({
+          type: blockType,
+          content: "<p>Plain preview</p>",
+          props: { label: "Click preview" },
+        }).id,
+      type,
+    );
+    const block = page.locator(`[data-block-id="${id}"]`);
+    await block.scrollIntoViewIfNeeded();
+    await page.locator('iframe[name="Click preview"]').click();
+    await expect(block).toHaveAttribute("data-block-selected", "true");
+  });
+}
+
+test("canvas marquee ends when released over an HTML iframe", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await panToHtmlElement(page, "tally");
+  const frame = page.locator('iframe[name="Tea"]');
+  const box = await frame.boundingBox();
+  if (!box) {
+    throw new Error("Missing iframe geometry");
+  }
+  await page.mouse.move(box.x + 30, box.y - 25);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 35, box.y - 10, { steps: 4 });
+  const marquee = page.locator("[data-edgeless-selection-rectangle]");
+  await expect(marquee).toBeVisible();
+  await page.mouse.move(box.x + 30, box.y + 35, { steps: 4 });
+  await page.mouse.up();
+  await expect(marquee).toBeHidden();
+  await page.mouse.move(box.x - 15, box.y + 50);
+  await expect(marquee).toBeHidden();
+});
+
+test("fast canvas drag commits after the pointer crosses an HTML iframe", async ({ page }) => {
+  await page.goto("/");
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    const tally = editor.elements.getElementNodes().find((item) => item.props.sample === "tally");
+    if (!tally) {
+      throw new Error("Missing HTML element");
+    }
+    return editor.elements.insertElement({
+      type: "rectangle",
+      frame: { x: tally.frame.x, y: tally.frame.y - 120, width: 80, height: 60 },
+      zIndex: 999,
+    }).id;
+  });
+  await page.locator('[data-editor-mode="edgeless"]').click();
+  await panToHtmlElement(page, "tally");
+  const shape = page.locator(`[data-edgeless-object-id="${id}"]`);
+  const frame = page.locator('iframe[name="Tea"]');
+  const before = await shape.boundingBox();
+  const target = await frame.boundingBox();
+  if (!before || !target) {
+    throw new Error("Missing drag geometry");
+  }
+  const start = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
+  const storedY = () =>
+    page.evaluate(
+      (elementId) =>
+        (window as unknown as DemoWindow).__rivtoDemo.editor.elements.getElementNode(elementId)
+          ?.frame.y,
+      id,
+    );
+  const originalY = await storedY();
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x + 40, target.y + 40);
+  await expect.poll(async () => (await shape.boundingBox())?.y).toBeGreaterThan(before.y + 30);
+  expect(await storedY()).toBe(originalY);
+  await page.mouse.up();
+  await expect.poll(async () => (await shape.boundingBox())?.y).toBeGreaterThan(before.y + 30);
+  await expect.poll(storedY).toBeGreaterThan(originalY!);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(async () => (await shape.boundingBox())?.y).toBeCloseTo(before.y);
+  await expect.poll(storedY).toBe(originalY);
+});
+
 /**
- * Waits until the word to select is visible and hit-testable in CodeMirror.
+ * Scrolls the field into view and waits until its text is hit-testable in CodeMirror.
  *
  * @param editor - Contenteditable field containing the word.
  * @returns The browser has settled its scroller on visible text.
  */
 async function waitForHello(editor: Locator): Promise<void> {
+  await editor.scrollIntoViewIfNeeded();
   await expect
     .poll(() =>
       editor.evaluate((element) => {
@@ -426,6 +512,8 @@ test("HTML block source keeps text selection inside an edgeless card", async ({ 
       ),
     )
     .toBe("<p>Hello selection world</p>");
+  await block.locator("iframe").click();
+  await expect(block).toHaveAttribute("data-block-selected", "true");
 });
 
 /**

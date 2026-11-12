@@ -396,5 +396,5 @@ function applyResize(
     return;
   }
   const next = clampFrameHeight(reported);
-  setHeight((current) => (Math.abs(current - next) < 2 ? current : next));
+  setHeight((current) => (current === next ? current : next));
 }
