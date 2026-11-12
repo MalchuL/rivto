@@ -16,11 +16,7 @@ import type { DocumentEditorAPI } from "../../editor/types";
 import type { ElementProcessor } from "./element-pipe";
 import type { ElementManagerApi } from "../types";
 import { Pipe } from "../../utils/pipe";
-
-interface ElementProcessorRegistration {
-  readonly processor: ElementProcessor;
-  dispose: () => void;
-}
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /** Public typed manager for generic first-class canvas elements. */
 export class ElementManager implements ElementManagerApi {
@@ -31,7 +27,7 @@ export class ElementManager implements ElementManagerApi {
    * processors follow this editor without becoming shared document state.
    */
   private readonly pipe = new Pipe<ElementInput>();
-  private readonly processors = new Set<ElementProcessorRegistration>();
+  private readonly processors = new Map<string, () => void>();
   private readonly subscriptions = new Set<() => void>();
 
   /**
@@ -111,22 +107,22 @@ export class ElementManager implements ElementManagerApi {
    * its previous step.
    *
    * @param processor - Named processing step with its priority and callback.
-   * @returns Idempotent function that unregisters this step. Destroying the manager
-   * also removes remaining registered processors.
+   * @returns Idempotent function that unregisters this step and releases its references.
+   * Destroying the manager also removes remaining registered processors.
    * @throws If the processor ID is empty.
    */
   registerProcessor(processor: ElementProcessor): () => void {
-    const registration: ElementProcessorRegistration = {
-      processor,
-      dispose: this.pipe.register(processor),
-    };
-    this.processors.add(registration);
-    return () => {
-      if (!this.processors.delete(registration)) {
-        return;
+    const id = processor.id;
+    this.processors.get(id)?.();
+    const unregister = this.pipe.register(processor);
+    const dispose = releaseAfterCall(() => {
+      if (this.processors.get(id) === dispose) {
+        this.processors.delete(id);
       }
-      registration.dispose();
-    };
+      unregister();
+    });
+    this.processors.set(id, dispose);
+    return dispose;
   }
 
   /**
@@ -426,11 +422,16 @@ export class ElementManager implements ElementManagerApi {
     this.editor.history.batchUpdates(() => this.document.elements.removeElements(ids));
   }
 
-  /** Releases this manager's subscriptions and processors. */
+  /**
+   * Releases this manager's subscriptions and registered processors.
+   *
+   * @returns Retained subscriptions and processor registrations have been disposed.
+   * @throws If a subscription or processor disposer throws; later disposers are not attempted.
+   */
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
-    this.processors.forEach((registration) => registration.dispose());
+    this.processors.forEach((dispose) => dispose());
     this.processors.clear();
   }
 

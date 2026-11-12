@@ -12,6 +12,8 @@ import type { ListenerArguments, ListenerCallback, StoredListener } from "./type
 export class Listeners<Events extends object> {
   /** Listener sets isolated by their typed event names. */
   private readonly listeners = new Map<keyof Events, Set<StoredListener>>();
+  /** Shared weak reference prevents each unsubscribe from allocating its own owner reference. */
+  private readonly weakOwner = new WeakRef(this);
 
   /**
    * Counts event names that currently have subscribers.
@@ -48,11 +50,13 @@ export class Listeners<Events extends object> {
    * Subscribes a callback to one named event.
    *
    * Registering the same callback twice for one name retains one set entry.
+   * The handle does not keep the registry, channel, or callback alive after
+   * their owner releases them. While the channel is active, its set retains the callback.
    *
    * @typeParam Name - Selected event name from the owner's event map.
    * @param name - Event name whose listener list receives the callback.
    * @param listener - Callback accepting the payload declared for that event.
-   * @returns Idempotent function that removes this exact callback.
+   * @returns Idempotent function that removes this exact callback and releases its references.
    */
   subscribe<Name extends Extract<keyof Events, string>>(
     name: Name,
@@ -65,15 +69,32 @@ export class Listeners<Events extends object> {
     }
     const storedListener = listener as StoredListener;
     eventListeners.add(storedListener);
-    let active = true;
+    // Preserve exact channel identity without letting an abandoned handle own its resources.
+    let subscription:
+      | {
+          owner: WeakRef<Listeners<Events>>;
+          listeners: WeakRef<Set<StoredListener>>;
+          listener: WeakRef<StoredListener>;
+        }
+      | undefined = {
+      owner: this.weakOwner,
+      listeners: new WeakRef(eventListeners),
+      listener: new WeakRef(storedListener),
+    };
     return () => {
-      if (!active) {
+      if (!subscription) {
         return;
       }
-      active = false;
-      eventListeners.delete(storedListener);
-      if (eventListeners.size === 0 && this.listeners.get(name) === eventListeners) {
-        this.listeners.delete(name);
+      const owner = subscription.owner.deref();
+      const listeners = subscription.listeners.deref();
+      const listener = subscription.listener.deref();
+      subscription = undefined;
+      if (!owner || !listeners || !listener) {
+        return;
+      }
+      listeners.delete(listener);
+      if (listeners.size === 0 && owner.listeners.get(name) === listeners) {
+        owner.listeners.delete(name);
       }
     };
   }

@@ -6,27 +6,43 @@ const IMAGE_FILE_EXTENSION = /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i;
 /**
  * Loads intrinsic dimensions and rejects undecodable image data.
  *
- * Blob inputs use a temporary object URL that is revoked after loading or failure.
+ * Blob inputs use a temporary object URL that is revoked after loading, failure, or cancellation.
  * Browser-readable URI strings are used directly.
  *
  * @param source - Image bytes or a browser-readable image URL to decode.
+ * @param signal - Cancels pending decoding and releases its temporary resources.
  * @returns A promise resolving to intrinsic pixel dimensions.
- * @throws If the browser cannot create an object URL or decode the image.
+ * @throws If cancelled or the browser cannot create an object URL or decode the image.
  */
-export function inspectImage(source: string | Blob): Promise<{
+export function inspectImage(
+  source: string | Blob,
+  signal: AbortSignal,
+): Promise<{
   /** Decoded image width in pixels. */
   width: number;
   /** Decoded image height in pixels. */
   height: number;
 }> {
   return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
     const image = new Image();
     const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
     // Revoke Blob URLs created here; string sources remain borrowed.
     const cleanup = () => {
+      signal.removeEventListener("abort", abort);
+      image.onload = null;
+      image.onerror = null;
       if (source instanceof Blob) {
         URL.revokeObjectURL(sourceUrl);
       }
+    };
+    const abort = () => {
+      cleanup();
+      image.removeAttribute("src");
+      reject(signal.reason);
     };
     // Release the temporary URL after the browser decodes the image dimensions.
     image.onload = () => {
@@ -38,7 +54,13 @@ export function inspectImage(source: string | Blob): Promise<{
       cleanup();
       reject(new TypeError("File or URI is not a decodable image"));
     };
-    image.src = sourceUrl;
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      image.src = sourceUrl;
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
   });
 }
 

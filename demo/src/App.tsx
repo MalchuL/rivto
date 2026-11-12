@@ -528,7 +528,10 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
 
 /**
  * Opens one demo database model before creating its core API and seeding.
- * @returns Host-owned document storage and its database model; the caller or editor cache creates the core.
+ *
+ * @returns Host-owned document storage, session database, and database model;
+ * the caller or editor cache creates the core.
+ * @throws If registry initialization or document opening fails.
  */
 async function createDemoDocument() {
   const database = new DemoDatabase();
@@ -538,28 +541,38 @@ async function createDemoDocument() {
   });
   storage.registerDocument("journal");
   const document = await storage.openDocument("journal");
-  return { storage, document };
+  return { storage, document, database };
 }
 
 /**
  * Releases runtime registrations before closing all document connections.
+ *
+ * The session database is destroyed even if editor or storage cleanup fails.
+ * A failing earlier cleanup prevents later editor and storage cleanup steps.
+ *
  * @param runtime - Resources created by a demo factory.
- * @returns Nothing after the host storage has closed its registry and documents.
+ * @returns A promise resolving after the host storage has closed its registry and documents.
+ * @throws If an editor, document, storage, or database cleanup fails.
  */
 async function destroyDemoEditor(runtime: {
   readonly storage: DocumentStorage;
+  readonly database: DemoDatabase;
   readonly editor: DocumentEditorAPI;
   readonly reactEditor: ReactEditorApi;
   readonly editorStorage?: EditorStorage;
 }): Promise<void> {
-  if (runtime.editorStorage) {
-    await runtime.editorStorage.destroy();
-  } else {
-    runtime.reactEditor.destroy();
-    runtime.editor.destroy();
-    await runtime.editor.getDocument().destroy();
+  try {
+    if (runtime.editorStorage) {
+      await runtime.editorStorage.destroy();
+    } else {
+      runtime.reactEditor.destroy();
+      runtime.editor.destroy();
+      await runtime.editor.getDocument().destroy();
+    }
+    await runtime.storage.destroy();
+  } finally {
+    runtime.database.destroy();
   }
-  await runtime.storage.destroy();
 }
 
 /**
@@ -1694,6 +1707,127 @@ function MultiEditorApp() {
 }
 
 /**
+ * Waits until the shared document appears in registry metadata.
+ *
+ * The registry and abort listeners are removed when the wait settles.
+ *
+ * @param storage - Registry storage observed for the shared document.
+ * @param signal - Cancels the wait when the demo unmounts.
+ * @returns A promise resolving once the shared document is registered.
+ * @throws If the signal is aborted before registration.
+ */
+function waitForSharedDocument(storage: DocumentStorage, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    // Release both listeners before completing the wait.
+    const finish = () => {
+      unsubscribe();
+      signal.removeEventListener("abort", abort);
+    };
+    // Resolve only after the shared document has been registered.
+    const refresh = () => {
+      if (!storage.getDocumentIds().includes("shared")) {
+        return;
+      }
+      finish();
+      resolve();
+    };
+    // Reject the wait and release its listeners when cancelled.
+    const abort = () => {
+      finish();
+      reject(signal.reason);
+    };
+    const unsubscribe = storage.subscribe(refresh);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) {
+      abort();
+    } else {
+      refresh();
+    }
+  });
+}
+
+/**
+ * Seeds the left peer with introductory and optional repeated writing blocks.
+ *
+ * The repeated blocks share one history batch, and history is cleared after seeding.
+ *
+ * @param editor - Core editor for the initially empty shared document.
+ * @param repeatCount - Number of additional writing blocks to append.
+ * @returns The initial blocks are inserted and the editor history is cleared.
+ * @throws If insertion or history operations fail.
+ */
+function seedSyncedPeer(editor: DocumentEditorAPI, repeatCount: number): void {
+  const introId = editor.blocks.insertBlock({
+    ...paragraphBlockFactory.createEmptyBlock(),
+    content: "**Synced demo** — edit here or in the other pane.",
+  }).id;
+  editor.blocks.insertBlock(
+    {
+      ...paragraphBlockFactory.createEmptyBlock(),
+      content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
+    },
+    editor.blocks.getInsertionDestinationAfter(introId),
+  );
+  editor.history.batchUpdates(() => {
+    let afterId = editor.blocks.getRootIds().at(-1);
+    for (let index = 0; index < repeatCount; index += 1) {
+      afterId = editor.blocks.insertBlock(
+        {
+          ...paragraphBlockFactory.createEmptyBlock(),
+          content: `Synced repeated block ${index + 1}`,
+        },
+        editor.blocks.getInsertionDestinationAfter(afterId),
+      ).id;
+    }
+  });
+  editor.history.clear();
+}
+
+/**
+ * Opens the shared document after the right peer discovers its registry entry.
+ *
+ * Failed opening attempts to release the document, storage, and database in that
+ * order; a document cleanup failure stops the remaining cleanup. Cancellation is
+ * checked after registry initialization and document opening and during discovery.
+ *
+ * @param storage - Registry and document provider owner for this peer.
+ * @param database - Session database released if opening fails.
+ * @param side - Left peer registers the document; right peer waits for it.
+ * @param signal - Cancels pending discovery or an acquisition after it completes.
+ * @returns A promise resolving to the opened document.
+ * @throws If discovery, opening, cancellation, or cleanup fails.
+ */
+async function openSyncedDocument(
+  storage: DocumentStorage,
+  database: DemoDatabase,
+  side: "left" | "right",
+  signal: AbortSignal,
+) {
+  let document;
+  try {
+    await storage.ready;
+    signal.throwIfAborted();
+    if (side === "right" && !storage.getDocumentIds().includes("shared")) {
+      await waitForSharedDocument(storage, signal);
+    }
+    if (!storage.getDocumentIds().includes("shared")) {
+      storage.registerDocument("shared");
+    }
+    document = await storage.openDocument("shared");
+    signal.throwIfAborted();
+    return document;
+  } catch (failure) {
+    await document?.destroy();
+    try {
+      await storage.destroy();
+    } finally {
+      database.destroy();
+    }
+    throw failure;
+  }
+}
+
+/**
  * Creates one peer for the local BroadcastChannel sync demo.
  *
  * Needed to wire a Yjs-backed editor + `BroadcastChannelProvider` without a
@@ -1704,7 +1838,8 @@ function MultiEditorApp() {
  * @param roomId - Broadcast channel shared by every peer.
  * @param repeatCount - Additional writing blocks seeded on the left peer.
  * @param signal - Cancels pending registry discovery and document acquisition when the demo unmounts.
- * @returns Editor runtime and provider resources for one peer.
+ * @returns Editor runtime, session database, and provider resources for one peer.
+ * @throws If initialization, cancellation, editor construction, or seeding fails.
  */
 async function createSyncedPeer(
   side: "left" | "right",
@@ -1719,50 +1854,8 @@ async function createSyncedPeer(
     createProviders: (channel) => [new BroadcastChannelProvider(channel)],
     onError: console.error,
   });
-  let document;
-  try {
-    await storage.ready;
-    signal.throwIfAborted();
-    if (side === "right" && !storage.getDocumentIds().includes("shared")) {
-      await new Promise<void>((resolve, reject) => {
-        // Release both listeners before completing the wait.
-        const finish = () => {
-          unsubscribe();
-          signal.removeEventListener("abort", abort);
-        };
-        // Resolve only after the shared document has been registered.
-        const refresh = () => {
-          if (!storage.getDocumentIds().includes("shared")) {
-            return;
-          }
-          finish();
-          resolve();
-        };
-        // Reject the wait and release its listeners when cancelled.
-        const abort = () => {
-          finish();
-          reject(signal.reason);
-        };
-        const unsubscribe = storage.subscribe(refresh);
-        signal.addEventListener("abort", abort, { once: true });
-        if (signal.aborted) {
-          abort();
-        } else {
-          refresh();
-        }
-      });
-    }
-    if (!storage.getDocumentIds().includes("shared")) {
-      storage.registerDocument("shared");
-    }
-    document = await storage.openDocument("shared");
-    signal.throwIfAborted();
-  } catch (failure) {
-    await document?.destroy();
-    await storage.destroy();
-    throw failure;
-  }
-  const editor = createDocumentEditor({ document: document! });
+  const document = await openSyncedDocument(storage, database, side, signal);
+  const editor = createDocumentEditor({ document });
   const reactEditor = createReactEditor({
     editor,
     extensions: [
@@ -1780,32 +1873,9 @@ async function createSyncedPeer(
     ],
   });
   if (side === "left" && !editor.blocks.getRootIds().length) {
-    const introId = editor.blocks.insertBlock({
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "**Synced demo** — edit here or in the other pane.",
-    }).id;
-    editor.blocks.insertBlock(
-      {
-        ...paragraphBlockFactory.createEmptyBlock(),
-        content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
-      },
-      editor.blocks.getInsertionDestinationAfter(introId),
-    );
-    editor.history.batchUpdates(() => {
-      let afterId = editor.blocks.getRootIds().at(-1);
-      for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock(
-          {
-            ...paragraphBlockFactory.createEmptyBlock(),
-            content: `Synced repeated block ${index + 1}`,
-          },
-          editor.blocks.getInsertionDestinationAfter(afterId),
-        ).id;
-      }
-    });
-    editor.history.clear();
+    seedSyncedPeer(editor, repeatCount);
   }
-  return { storage, editor, reactEditor };
+  return { storage, database, editor, reactEditor };
 }
 
 /**

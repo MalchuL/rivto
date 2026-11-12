@@ -34,19 +34,12 @@ export class YjsMap<Schema extends object = Record<string, CRDTType>>
    * `Y.YMapEvent`; array and text nested events pass an empty `keys` list.
    *
    * @param handler - Adapter-neutral observer.
-   * @returns Function that removes this exact Yjs deep observer.
+   * @returns Function that removes this exact Yjs deep observer and releases its
+   * references after successful removal. Repeated removal is harmless.
+   * @throws If native observer registration or removal fails.
    */
   observe(handler: CRDTObserveHandler): () => void {
-    const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) =>
-      handler(
-        events.map((event) => ({
-          path: event.path,
-          keys: event instanceof Y.YMapEvent ? [...event.keysChanged] : [],
-        })),
-        transaction,
-      );
-    this.yjsObj.observeDeep(listener);
-    return () => this.yjsObj.unobserveDeep(listener);
+    return this.observeDeep(handler);
   }
 
   /**

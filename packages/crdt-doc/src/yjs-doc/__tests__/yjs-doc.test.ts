@@ -35,6 +35,129 @@ describe("YjsDoc", () => {
       disconnect: jest.fn(),
     };
 
+    it("waits for a pending connection before destroying its provider", async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      let connected = false;
+      const provider: Provider = {
+        id: "pending-destroy",
+        connect: async () => {
+          await pending;
+          connected = true;
+        },
+        disconnect: jest.fn(async () => {
+          connected = false;
+        }),
+      };
+      const attaching = yjsDoc.attachProvider(provider);
+      const destroying = yjsDoc.destroy();
+      await Promise.resolve();
+      finish();
+      await attaching;
+      await destroying;
+      expect(provider.disconnect).toHaveBeenCalledTimes(1);
+      expect(connected).toBe(false);
+    });
+
+    it("waits for a pending connection before detaching its provider", async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      let connected = false;
+      const provider: Provider = {
+        id: "pending-detach",
+        connect: async () => {
+          await pending;
+          connected = true;
+        },
+        disconnect: jest.fn(async () => {
+          connected = false;
+        }),
+      };
+      const attaching = yjsDoc.attachProvider(provider);
+      const detaching = yjsDoc.detachProvider(provider.id);
+      await Promise.resolve();
+      finish();
+      await attaching;
+      await detaching;
+      expect(provider.disconnect).toHaveBeenCalledTimes(1);
+      expect(connected).toBe(false);
+    });
+
+    it("shares concurrent disconnection and retries a failed disconnection", async () => {
+      const failure = new Error("disconnect failed");
+      const disconnect = jest.fn().mockRejectedValueOnce(failure).mockResolvedValue(undefined);
+      const provider: Provider = { id: "retry", connect: jest.fn(), disconnect };
+      const cleanup = await yjsDoc.attachProvider(provider);
+      const first = cleanup();
+      const second = yjsDoc.detachProvider(provider.id);
+      await expect(first).rejects.toBe(failure);
+      await expect(second).rejects.toBe(failure);
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      await cleanup();
+      expect(disconnect).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not let an old cleanup disconnect a replacement provider", async () => {
+      const first: Provider = { id: "replacement", connect: jest.fn(), disconnect: jest.fn() };
+      const second: Provider = { id: first.id, connect: jest.fn(), disconnect: jest.fn() };
+      const oldCleanup = await yjsDoc.attachProvider(first);
+      await yjsDoc.detachProvider(first.id);
+      const newCleanup = await yjsDoc.attachProvider(second);
+      await oldCleanup();
+      expect(second.disconnect).not.toHaveBeenCalled();
+      await newCleanup();
+      expect(second.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it("shares an in-flight disconnection with document destruction", async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const provider: Provider = {
+        id: "pending-disconnect",
+        connect: jest.fn(),
+        disconnect: jest.fn(() => pending),
+      };
+      const cleanup = await yjsDoc.attachProvider(provider);
+      const native = yjsDoc.doc;
+      const detaching = cleanup();
+      const destroying = yjsDoc.destroy();
+      await Promise.resolve();
+      expect(provider.disconnect).toHaveBeenCalledTimes(1);
+      expect(yjsDoc.doc).toBe(native);
+      finish();
+      await Promise.all([detaching, destroying]);
+      expect(provider.disconnect).toHaveBeenCalledTimes(1);
+      expect(() => yjsDoc.doc).toThrow("destroyed");
+    });
+
+    it("releases a failed pending connection during destruction", async () => {
+      let fail!: (error: Error) => void;
+      const pending = new Promise<void>((_, reject) => {
+        fail = reject;
+      });
+      const failure = new Error("connect failed");
+      const provider: Provider = {
+        id: "failed-pending",
+        connect: () => pending,
+        disconnect: jest.fn(),
+      };
+      const attaching = yjsDoc.attachProvider(provider);
+      const rejection = expect(attaching).rejects.toBe(failure);
+      const destroying = yjsDoc.destroy();
+      expect(yjsDoc.destroy()).toBe(destroying);
+      fail(failure);
+      await rejection;
+      await destroying;
+      expect(provider.disconnect).not.toHaveBeenCalled();
+      await expect(yjsDoc.attachProvider(provider)).rejects.toThrow("destroyed");
+    });
+
     it("attachProvider should store provider, connect, and return cleanup", async () => {
       const cleanup = await yjsDoc.attachProvider(mockProvider);
 
@@ -362,6 +485,24 @@ describe("YjsDoc", () => {
   });
 
   describe("Lifecycle", () => {
+    it("releases the native document after a provider disconnection fails", async () => {
+      const failure = new Error("disconnect failed");
+      const adapter = new YjsDoc("failing-destroy");
+      const disconnect = jest.fn().mockRejectedValue(failure);
+      const otherDisconnect = jest.fn();
+      await adapter.attachProvider({ id: "failing", connect: jest.fn(), disconnect });
+      await adapter.attachProvider({
+        id: "other",
+        connect: jest.fn(),
+        disconnect: otherDisconnect,
+      });
+      const destruction = adapter.destroy();
+      expect(adapter.destroy()).toBe(destruction);
+      await expect(destruction).rejects.toBe(failure);
+      expect(otherDisconnect).toHaveBeenCalledTimes(1);
+      expect(() => adapter.doc).toThrow("destroyed");
+    });
+
     it("destroy should disconnect every provider before cleaning up resources", async () => {
       const first: Provider = { id: "first", connect: jest.fn(), disconnect: jest.fn() };
       const second: Provider = { id: "second", connect: jest.fn(), disconnect: jest.fn() };
@@ -406,6 +547,15 @@ describe("YjsDoc", () => {
           items: ["first"],
         },
       });
+    });
+
+    it("rejects unsupported roots before clearing existing state", () => {
+      yjsDoc.getMap("root").set("title", "Preserved");
+
+      expect(() => yjsDoc.fromJSON({ root: { title: "Changed" }, invalid: 1 })).toThrow(
+        'Unsupported root type for key "invalid"',
+      );
+      expect(yjsDoc.getMap("root").get("title")).toBe("Preserved");
     });
 
     it("fromJSON should restore document state", () => {

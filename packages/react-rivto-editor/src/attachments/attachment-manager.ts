@@ -1,3 +1,4 @@
+import { waitWithAbort } from "@chulane/rivto";
 import type { ReactEditorApi } from "../editor/types";
 import { validateBinaryUri } from "./utils";
 import type { RegistrationOwner } from "../managers/extensions/types";
@@ -117,7 +118,8 @@ export class AttachmentManager {
    * resolved against the configured document base URI.
    *
    * The document ID is captured when this method starts.
-   * Cancellation is checked before and after the provider's asynchronous read.
+   * Cancellation stops waiting and is forwarded to the provider; a provider that
+   * ignores the signal can continue its own read.
    *
    * @param provider - Storage provider to consult first, if installed.
    * @param uri - Persisted reference to resolve.
@@ -137,7 +139,8 @@ export class AttachmentManager {
   ): Promise<string | Blob> {
     context.signal.throwIfAborted();
     const operationContext = this.getFileOperationContext(context);
-    const resolved = await provider?.read(uri, operationContext);
+    const read = provider?.read(uri, operationContext);
+    const resolved = await (read ? waitWithAbort(read, context.signal) : undefined);
     context.signal.throwIfAborted();
     let source: string | Blob;
     if (resolved !== undefined) {
@@ -219,6 +222,8 @@ export class AttachmentManager {
    * the reference and operation context; the provider is not read in that path.
    * Without an opener, the reference is resolved and a browser link is clicked.
    * Resolved Blobs use an object URL scheduled for revocation after 60 seconds.
+   * Cancellation stops waiting and is forwarded to a host opener; an opener that
+   * ignores the signal can continue its own work.
    *
    * @param provider - Storage provider for the attachment.
    * @param reference - Persisted attachment metadata.
@@ -239,7 +244,10 @@ export class AttachmentManager {
     const operationContext = this.getFileOperationContext(context);
     const handler = this.selectFileOpenHandler(reference);
     if (handler) {
-      await handler.open(reference, operationContext);
+      await waitWithAbort(
+        Promise.resolve(handler.open(reference, operationContext)),
+        context.signal,
+      );
     } else {
       // Fall back to browser navigation when no host opener is selected.
       const resolved = await this.resolveBinary(provider, reference.uri, context);

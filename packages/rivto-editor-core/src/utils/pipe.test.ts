@@ -57,3 +57,15 @@ describe("editor Pipe", () => {
     expect(pipe.process(2, { add: 3 })).toBe(5);
   });
 });
+
+test("a completed disposer cannot remove a later registration of the same processor", () => {
+  const pipe = new Pipe<number>();
+  const processor = { id: "double", priority: 0, processor: (value: number) => value * 2 };
+  const dispose = pipe.register(processor);
+  dispose();
+  const later = pipe.register(processor);
+  dispose();
+  expect(pipe.process(3)).toBe(6);
+  later();
+  expect(pipe.process(3)).toBe(3);
+});

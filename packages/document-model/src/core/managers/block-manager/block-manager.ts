@@ -44,6 +44,7 @@ import {
 } from "../../utils";
 import { contentFrom, strings, validateBlockForest, validateBlockListProps } from "./utils";
 import { BlockCache } from "./cache";
+import { TransactionIdentity } from "./transaction-identity";
 
 /** Block snapshots are keyed by ID; root and structure channels are independent. */
 type BlockListenerEvents = Record<
@@ -85,7 +86,9 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     return crypto.randomUUID();
   }
   /** Detached snapshots invalidated before subscribers are notified. */
-  private readonly cache: BlockCache;
+  private blockCache?: BlockCache;
+  /** Subscriptions owned by this manager until document teardown. */
+  private readonly observers: Array<() => void> = [];
   /**
    * Per-block subscribers keyed by block ID, including recursive snapshot consumers on ancestors.
    * Node subscribers observe own fields and direct child IDs only; root subscribers observe
@@ -95,23 +98,20 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   /** Monotonic block-data revision used by derived presentation caches. */
   private currentRevision = 0;
   /** Last transaction already published to hierarchy subscribers. */
-  private lastStructureTransaction?: unknown;
+  private readonly lastStructureTransaction = new TransactionIdentity();
   /** Root blocks. */
-  private readonly roots: CRDTArray<IDBlock>;
+  private rootArray?: CRDTArray<IDBlock>;
   /** Block storage. */
-  private readonly storage: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
-  /** Adapter roots tracked by document-owned history. */
-  readonly historyScopes: readonly CRDTUndoScope[];
+  private blockStorage?: CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>>;
   /**
    * Creates a block manager over existing collaborative document storage.
    *
    * @param crdt - Collaborative storage adapter.
    */
   constructor(private readonly crdt: CRDTDoc) {
-    this.roots = crdt.getArray<IDBlock>(ROOTS_KEY);
-    this.storage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
-    this.historyScopes = [this.storage, this.roots];
-    this.cache = new BlockCache(
+    this.rootArray = crdt.getArray<IDBlock>(ROOTS_KEY);
+    this.blockStorage = crdt.getMap<Record<IDBlock, CRDTMap<BlockStorage>>>(BLOCKS_KEY);
+    this.blockCache = new BlockCache(
       (parentId) => {
         if (parentId === null) {
           return strings(this.roots);
@@ -125,10 +125,24 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
     // Nested maps name the owning block in `path` / `keys`. Child-list
     // edits therefore already include the parent ID, so ancestor snapshots
     // are dropped through `invalidateBlocks` without a parent-map diff.
-    this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction));
+    this.observers.push(
+      this.storage.observe((events, transaction) => this.onRecordsChanged(events, transaction)),
+    );
     // The roots array is not a field on any block, so these events have an
     // empty path and cannot name a parent for `invalidateBlocks`.
-    this.roots.observe((events, transaction) => this.onRootsChanged(transaction));
+    this.observers.push(
+      this.roots.observe((events, transaction) => this.onRootsChanged(transaction)),
+    );
+  }
+
+  /**
+   * Exposes collaborative roots for document-owned undo history.
+   *
+   * @returns Block record and root-order scopes while this manager is active.
+   * @throws If the manager has been destroyed.
+   */
+  get historyScopes(): readonly CRDTUndoScope[] {
+    return [this.storage, this.roots];
   }
 
   /** @returns Monotonic revision incremented by block data or hierarchy changes. */
@@ -933,6 +947,69 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   }
 
   /**
+   * Releases collaborative roots, cached snapshots, and listeners after document teardown.
+   *
+   * @returns The manager no longer retains document-owned data.
+   * @throws AggregateError when one or more observer removals fail.
+   */
+  destroy(): void {
+    const errors: unknown[] = [];
+    for (const unsubscribe of this.observers.splice(0)) {
+      try {
+        unsubscribe();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.rootArray = undefined;
+    this.blockStorage = undefined;
+    this.blockCache = undefined;
+    this.listeners.clear();
+    if (errors.length) {
+      throw new AggregateError(errors, "Block manager observer cleanup failed");
+    }
+  }
+
+  /**
+   * Reads block roots while the manager remains active.
+   *
+   * @returns The collaborative root array.
+   * @throws If the manager has been destroyed.
+   */
+  private get roots(): CRDTArray<IDBlock> {
+    if (!this.rootArray) {
+      throw new Error("Block manager is destroyed");
+    }
+    return this.rootArray;
+  }
+
+  /**
+   * Reads block records while the manager remains active.
+   *
+   * @returns The collaborative block record map.
+   * @throws If the manager has been destroyed.
+   */
+  private get storage(): CRDTMap<Record<IDBlock, CRDTMap<BlockStorage>>> {
+    if (!this.blockStorage) {
+      throw new Error("Block manager is destroyed");
+    }
+    return this.blockStorage;
+  }
+
+  /**
+   * Reads the block snapshot cache while the manager remains active.
+   *
+   * @returns The manager-owned snapshot cache.
+   * @throws If the manager has been destroyed.
+   */
+  private get cache(): BlockCache {
+    if (!this.blockCache) {
+      throw new Error("Block manager is destroyed");
+    }
+    return this.blockCache;
+  }
+
+  /**
    * Validates sequential placements without changing collaborative state.
    * @param moves - Ordered placements, including self-anchors to skip.
    * @returns Placements excluding self-anchors, ready to apply in order.
@@ -1333,10 +1410,10 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
    * @returns No value.
    */
   private emitStructure(transaction: unknown): void {
-    if (this.lastStructureTransaction === transaction) {
+    if (this.lastStructureTransaction.matches(transaction)) {
       return;
     }
-    this.lastStructureTransaction = transaction;
+    this.lastStructureTransaction.remember(transaction);
     this.listeners.emit("structure");
   }
 

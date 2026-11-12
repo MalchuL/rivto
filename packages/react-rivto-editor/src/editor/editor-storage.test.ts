@@ -14,6 +14,20 @@ const configured = (editor: DocumentEditorAPI) => {
   return createReactEditor({ editor });
 };
 
+it("closes owned documents when registry cleanup throws", async () => {
+  const failure = new Error("registry cleanup failed");
+  const multi = new EditorStorage({
+    subscribeDocumentIds: () => () => {
+      throw failure;
+    },
+  });
+  const acquisition = await multi.acquireEditor("A");
+  const destroy = jestApi.spyOn(acquisition.document, "destroy");
+  await expect(multi.destroy()).rejects.toThrow("Editor storage teardown failed");
+  expect(destroy).toHaveBeenCalledTimes(1);
+  await expect(multi.destroy()).rejects.toThrow("Editor storage teardown failed");
+});
+
 it("creates empty documents by default and returns the same single editor for concurrent requests", async () => {
   let core!: DocumentEditorAPI;
   const multi = new EditorStorage({
@@ -254,6 +268,21 @@ it("shares view consumers, retains independent ownership, and closes the model e
   await first.release();
   expect(destroy).toHaveBeenCalledTimes(1);
   await multi.destroy();
+});
+
+it("shares the acquisition release promise with a reentrant subscriber", async () => {
+  const storage = new EditorStorage();
+  const acquisition = await storage.acquireEditor("A");
+  let reentrant: Promise<void> | undefined;
+  const unsubscribe = storage.subscribeDocuments(() => {
+    reentrant = acquisition.release();
+  });
+  const released = acquisition.release();
+  expect(reentrant).toBe(released);
+  unsubscribe();
+  await released;
+  expect(acquisition.release()).toBe(released);
+  await storage.destroy();
 });
 
 it("cancels one waiting view without cancelling another consumer", async () => {

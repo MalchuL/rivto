@@ -205,6 +205,7 @@ function ImageElement({ element, reactPanel, preview }: ElementRenderProps) {
  * @param clipboard - File handler registration.
  * @param attachments - Binary resolution for existing image references.
  * @param provider - Provider used for image storage and reads.
+ * @param extensionSignal - Cancels work when the image extension is removed.
  * @returns Installs the extension-owned image handler.
  * @throws If handler registration fails.
  */
@@ -212,6 +213,7 @@ function registerImageHandler(
   clipboard: Pick<ReactEditorApi["clipboard"], "registerFileHandler">,
   attachments: Pick<ReactEditorApi["attachments"], "resolveBinary">,
   provider: BinaryProvider,
+  extensionSignal: AbortSignal,
 ): void {
   clipboard.registerFileHandler({
     id: "image",
@@ -222,29 +224,58 @@ function registerImageHandler(
       Boolean(file ? isImageFile(file) : reference.mimeType.startsWith("image/")),
     // Inspect file bytes or the resolved reference before preparing an image representation.
     prepare: async ({ file, reference }, context) => {
-      const resolved = file
-        ? file
-        : await attachments.resolveBinary(provider, reference.uri, {
-            signal: context.signal,
-          });
-      const dimensions = await inspectImage(resolved);
-      context.signal.throwIfAborted();
-      const completeReference = {
-        ...reference,
-        mimeType: resolved instanceof Blob && resolved.type ? resolved.type : reference.mimeType,
-        ...(resolved instanceof Blob ? { size: resolved.size } : {}),
-      };
-      return prepareImageAsset(
-        {
-          ...completeReference,
-          alt: file ? file.name || "Image" : reference.name || "Image",
-          intrinsicWidth: dimensions.width,
-          intrinsicHeight: dimensions.height,
-        },
-        context.destination,
-      );
+      const controller = new AbortController();
+      const release = linkImageCancellation(controller, [context.signal, extensionSignal]);
+      try {
+        const resolved = file
+          ? file
+          : await attachments.resolveBinary(provider, reference.uri, {
+              signal: controller.signal,
+            });
+        const dimensions = await inspectImage(resolved, controller.signal);
+        controller.signal.throwIfAborted();
+        const completeReference = {
+          ...reference,
+          mimeType: resolved instanceof Blob && resolved.type ? resolved.type : reference.mimeType,
+          ...(resolved instanceof Blob ? { size: resolved.size } : {}),
+        };
+        return prepareImageAsset(
+          {
+            ...completeReference,
+            alt: file ? file.name || "Image" : reference.name || "Image",
+            intrinsicWidth: dimensions.width,
+            intrinsicHeight: dimensions.height,
+          },
+          context.destination,
+        );
+      } finally {
+        release();
+      }
     },
   });
+}
+
+/**
+ * Forwards cancellation from the caller and extension to one image operation.
+ *
+ * @param controller - Controller used by the pending image operation.
+ * @param signals - Sources whose cancellation ends that operation.
+ * @returns A function removing the installed cancellation listeners.
+ */
+function linkImageCancellation(controller: AbortController, signals: AbortSignal[]): () => void {
+  const abort = (event: Event) => controller.abort((event.target as AbortSignal).reason);
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return () => {
+    for (const signal of signals) {
+      signal.removeEventListener("abort", abort);
+    }
+  };
 }
 
 /**
@@ -318,6 +349,25 @@ function registerImageFormatter(
 }
 
 /**
+ * Registers the image block and canvas element renderers for this extension.
+ *
+ * @param editor - Registries that own the extension's block and element types.
+ * @returns Both renderers are registered with the active extension.
+ * @throws If either type registration fails.
+ */
+function registerImageRenderers(editor: Pick<ReactEditorApi, "blockTypes" | "elementTypes">): void {
+  editor.blockTypes.register({
+    definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
+    render: ImageBlock,
+  });
+  editor.elementTypes.register({
+    definition: { type: "image" },
+    render: ImageElement,
+    title: "Image",
+  });
+}
+
+/**
  * Installs image input, block and canvas rendering, and slash insertion.
  *
  * The extension owns local upload feedback and cancels pending work on removal.
@@ -347,16 +397,13 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         () => <FileUploadStatusOverlay store={statuses} kind="image" />,
         "afterSurface",
       );
-      reactEditor.blockTypes.register({
-        definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
-        render: ImageBlock,
-      });
-      reactEditor.elementTypes.register({
-        definition: { type: "image" },
-        render: ImageElement,
-        title: "Image",
-      });
-      registerImageHandler(reactEditor.clipboard, reactEditor.attachments, options.provider);
+      registerImageRenderers(reactEditor);
+      registerImageHandler(
+        reactEditor.clipboard,
+        reactEditor.attachments,
+        options.provider,
+        ingestion.signal,
+      );
       registerImageClipboardCopy(
         reactEditor.clipboard,
         reactEditor.attachments,

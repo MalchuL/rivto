@@ -7,37 +7,67 @@
  *
  * @module
  */
-import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
+import { getSelectedBlockIds, isStructuralSelection, type Selection } from "@chulane/rivto";
 import { createBlockOutlineContext } from "../../../../block-behaviors/utils/context";
+import type { BlockOutlineContext } from "../../../../block-behaviors/types";
 import type { ReactPanelApi } from "../../../../panels/types";
-import {
-  firstKeyboardTarget,
-  isEditableKeyboardEvent,
-  type KeyboardSelectionTarget,
-} from "../../../../managers";
+import { firstKeyboardTarget, isEditableKeyboardEvent } from "../../../../managers";
 import type { PanelSelectionApi } from "../../../../managers/selection/api";
-import { PageNavigationController } from "../../../../surfaces/page/page-navigation-controller";
+import {
+  PageNavigationController,
+  type PageNavigationApi,
+} from "../../../../surfaces/page/page-navigation-controller";
 
-/** Active viewport settlement for one page surface. */
-interface ViewportSettlement {
-  /** Block whose viewport position is retained across repeated commands. */
-  readonly anchorId?: string;
-  /** Latest intended viewport top, including deliberate user scrolling. */
-  expectedTop?: number;
-  /** Stops pending correction and restores normal virtual measurement behavior. */
-  cancel(): void;
-}
-
+/** Active viewport settlement for each page surface. */
 const viewportSettlements = new WeakMap<HTMLElement, ViewportSettlement>();
 
+/** Captured selection and block context for one eligible indent shortcut. */
+interface IndentShortcutTarget {
+  /** Selection to restore after the structural command. */
+  readonly selection: Selection | undefined;
+  /** Context passed to the target block's behavior. */
+  readonly context: BlockOutlineContext;
+  /** Selected structural IDs or the active text block ID. */
+  readonly blockIds: string[];
+}
+
 /**
- * Resolves the identifiers moved by one indent shortcut.
+ * Resolves a keyboard shortcut to its selected blocks and outline context.
  *
- * @param target - Keyboard target that qualified the shortcut.
- * @returns Selected structural IDs or the active text block ID.
+ * An editable DOM selection is published before resolving the target. Noneditable
+ * events qualify only for structural selections focused on the page root.
+ *
+ * @param selectionManager - Selection bridge used to read and publish DOM state.
+ * @param root - Active page surface or edgeless card.
+ * @param event - Native keyboard event that matched the binding.
+ * @param reactPanel - Panel supplying the current outline context.
+ * @returns The captured command target, or undefined when the shortcut is ineligible.
  */
-function indentTargetIds(target: KeyboardSelectionTarget): string[] {
-  return getSelectedBlockIds(target.item);
+function resolveIndentShortcutTarget(
+  selectionManager: PanelSelectionApi,
+  root: HTMLElement,
+  event: KeyboardEvent,
+  reactPanel: ReactPanelApi,
+): IndentShortcutTarget | undefined {
+  const editable = isEditableKeyboardEvent(event);
+  const nativeSelection = editable ? selectionManager.readDOM() : undefined;
+  if (nativeSelection) {
+    selectionManager.set(nativeSelection);
+  }
+  const selection = nativeSelection ?? selectionManager.get();
+  const target = firstKeyboardTarget(selection);
+  if (!target) {
+    return undefined;
+  }
+  const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
+  if (!editable && !blockSelectionAtRoot) {
+    return undefined;
+  }
+  const context = createBlockOutlineContext(reactPanel, target.blockId, selection);
+  if (!context) {
+    return undefined;
+  }
+  return { selection, context, blockIds: getSelectedBlockIds(target.item) };
 }
 
 /**
@@ -173,167 +203,287 @@ export function applyIndentShortcut(
   outdent: boolean,
   reactPanel: ReactPanelApi,
 ): boolean {
-  const editable = isEditableKeyboardEvent(event);
-  const nativeSelection = editable ? selectionManager.readDOM() : undefined;
-  if (nativeSelection) {
-    selectionManager.set(nativeSelection);
-  }
-  const selection = nativeSelection ?? selectionManager.get();
-  const target = firstKeyboardTarget(selection);
+  const target = resolveIndentShortcutTarget(selectionManager, root, event, reactPanel);
   if (!target) {
     return false;
   }
-  const blockSelectionAtRoot = event.target === root && isStructuralSelection(target.item);
-  if (!editable && !blockSelectionAtRoot) {
-    return false;
-  }
-
-  const context = createBlockOutlineContext(reactPanel, target.blockId, selection);
-  if (!context) {
-    return false;
-  }
-  const targetIds = indentTargetIds(target);
-  // Reparenting a virtualized root block partially above the viewport changes
-  // both the root count and its DOM parent. Preserve the viewport through that
-  // render instead of letting browser scroll anchoring reveal the hidden row edge.
-  const virtualizationController = PageNavigationController.getForElement(root);
-  const mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
-  const previousSettlement = viewportSettlements.get(root);
-  const inheritedAnchor =
-    previousSettlement?.anchorId &&
-    targetIds.includes(previousSettlement.anchorId) &&
-    blockViewportTop(root, previousSettlement.anchorId) !== undefined &&
-    previousSettlement.expectedTop !== undefined
-      ? { id: previousSettlement.anchorId, top: previousSettlement.expectedTop }
-      : undefined;
-  previousSettlement?.cancel();
-  const releaseScrollAdjustments = virtualizationController?.suspendScrollAdjustments();
-  const scrollElement = virtualizationController ? root.ownerDocument.scrollingElement : null;
-  const anchor = inheritedAnchor ?? selectedViewportAnchor(root, targetIds);
-  const anchorId = anchor?.id;
-  const anchorTop = anchor?.top;
-  const view = root.ownerDocument.defaultView;
-  let settlementActive = true;
-  let adjustmentsReleased = false;
-  /** Applies deliberate wheel movement to the retained visual position. */
-  const onWheel = (wheelEvent: WheelEvent): void => {
-    if (settlement.expectedTop !== undefined) {
-      settlement.expectedTop -= wheelEvent.deltaY;
-    }
-  };
-  /** Restores normal virtualizer behavior once for this command. */
-  const releaseAdjustments = (): void => {
-    if (adjustmentsReleased) {
-      return;
-    }
-    adjustmentsReleased = true;
-    releaseScrollAdjustments?.();
-  };
-  const settlement: ViewportSettlement = {
-    anchorId,
-    expectedTop: anchorTop,
-    cancel: () => {
-      if (!settlementActive) {
-        return;
-      }
-      settlementActive = false;
-      view?.removeEventListener("wheel", onWheel);
-      releaseAdjustments();
-    },
-  };
-  viewportSettlements.set(root, settlement);
-  view?.addEventListener("wheel", onWheel, { passive: true });
+  const { selection, context, blockIds: targetIds } = target;
+  const settlement = new ViewportSettlement(root, targetIds, reactPanel);
   const claimed = reactPanel.editor.blockBehaviors.dispatch(
     outdent ? "onOutdent" : "onIndent",
     context,
     targetIds,
   );
-  // Selection state remains model-backed. Keep only the selected blocks that
-  // were already in the virtual window mounted across the reparent; this
-  // preserves local measurements without rendering the complete selection.
-  // Mounting every selected root here makes a large outdent briefly defeat
-  // virtualization, then the following indent replaces hundreds of measured
-  // roots with one subtree and produces a large scroll offset correction.
-  let mountIds = targetIds.slice(-1);
-  if (mountedTargetIds.length) {
-    mountIds = mountedTargetIds;
-  } else if (anchorId) {
-    mountIds = [anchorId];
-  }
-  virtualizationController?.mountBlocks(mountIds, { scroll: false });
-  if (scrollElement && anchorId && anchorTop !== undefined) {
-    restoreBlockViewportTop(root, scrollElement, anchorId, anchorTop);
+  settlement.preserveSelection(selectionManager, selection, targetIds);
+  return claimed;
+}
+
+/**
+ * Preserves an indent command's viewport anchor and selection through rendering.
+ *
+ * The panel owns cancellation; a later command on the same surface replaces this
+ * settlement. The settlement owns its wheel listener, animation frame, and temporary
+ * virtualizer scroll-adjustment suspension until cancellation or completion.
+ */
+class ViewportSettlement {
+  /** Block whose viewport position is retained across repeated commands. */
+  readonly anchorId?: string;
+  /** Latest intended viewport top, including deliberate user scrolling. */
+  expectedTop?: number;
+  private readonly anchorTop?: number;
+  private readonly view: Window | null;
+  private readonly scrollElement: Element | null;
+  private readonly controller:
+    Pick<PageNavigationApi, "mountBlocks" | "suspendScrollAdjustments"> | undefined;
+  private readonly mountedTargetIds: string[];
+  /**
+   * Releases the virtualizer's scroll-adjustment suspension.
+   *
+   * @returns Normal scroll-adjustment behavior is restored when this suspension ends.
+   */
+  private readonly releaseScrollAdjustments?: () => void;
+  private active = true;
+  private adjustmentsReleased = false;
+  /**
+   * Removes the panel-owned settlement cleanup registration.
+   *
+   * @returns The panel no longer retains this registration.
+   * @throws If the registered cleanup fails.
+   */
+  private releasePanel?: () => void;
+  /**
+   * Removes the panel deactivation listener for this settlement.
+   *
+   * @returns The deactivation listener is detached.
+   */
+  private unsubscribeDeactivation?: () => void;
+  private frame?: number;
+
+  /**
+   * Captures the viewport before dispatch and registers panel-owned cleanup.
+   *
+   * @param root - Surface whose viewport and selection are being preserved.
+   * @param targetIds - Blocks selected before the structural command.
+   * @param panel - Panel that cancels this settlement on deactivation or destruction.
+   * @throws If panel cleanup or deactivation registration fails.
+   */
+  constructor(
+    private readonly root: HTMLElement,
+    targetIds: readonly string[],
+    panel: Pick<ReactPanelApi, "registerCleanup" | "subscribeDeactivation">,
+  ) {
+    // Reparenting a virtualized root block partially above the viewport changes
+    // both the root count and its DOM parent. Preserve the viewport through that
+    // render instead of letting browser scroll anchoring reveal the hidden row edge.
+    this.controller = PageNavigationController.getForElement(root);
+    this.mountedTargetIds = mountedSelectedBlockIds(root, targetIds);
+    const previous = viewportSettlements.get(root);
+    const inheritedAnchor =
+      previous?.anchorId &&
+      targetIds.includes(previous.anchorId) &&
+      blockViewportTop(root, previous.anchorId) !== undefined &&
+      previous.expectedTop !== undefined
+        ? { id: previous.anchorId, top: previous.expectedTop }
+        : undefined;
+    previous?.cancel();
+    this.releaseScrollAdjustments = this.controller?.suspendScrollAdjustments();
+    this.scrollElement = this.controller ? root.ownerDocument.scrollingElement : null;
+    const anchor = inheritedAnchor ?? selectedViewportAnchor(root, targetIds);
+    this.anchorId = anchor?.id;
+    this.anchorTop = anchor?.top;
+    this.expectedTop = anchor?.top;
+    this.view = root.ownerDocument.defaultView;
+    try {
+      this.releasePanel = panel.registerCleanup(() => this.cancel());
+      this.unsubscribeDeactivation = panel.subscribeDeactivation(() => this.cancel());
+    } catch (error) {
+      this.cancel();
+      throw error;
+    }
+    viewportSettlements.set(root, this);
+    this.view?.addEventListener("wheel", this.onWheel, { passive: true });
   }
 
-  // React may reparent every selected block shell and cause the browser to emit
-  // a transient empty selectionchange. Re-publish the selection captured
-  // before the command, then resolve its text endpoints in the committed DOM.
-  // Virtual measurements can settle across several frames for a large moved
-  // subtree. Track deliberate scrolling between frames and preserve that
-  // movement while compensating only for changes in the anchor's layout.
-  // This callback owns caret/selection restoration, not the indent mutation. Mounting
-  // endpoints and preserving the viewport support that restoration; unrelated work
-  // must not use this slot because a newer selection callback replaces it.
-  selectionManager.scheduleIfSelectionUnchanged(
-    () => {
-      // A newer command owns selection restoration once this settlement is cancelled.
-      if (!settlementActive) {
-        return;
-      }
-      // The controller captured before dispatch still indexes the old root list.
-      // Resolve it again after React commits so an outdented viewport window is
-      // pinned as new roots instead of being looked up in the former parent root.
-      PageNavigationController.getForElement(root)?.mountBlocks(mountIds, { scroll: false });
-      selectionManager.set(selection!);
-      selectionManager.restoreDOM(selection, { scroll: false });
-      if (!scrollElement || !anchorId || anchorTop === undefined) {
-        settlement.cancel();
-        if (viewportSettlements.get(root) === settlement) {
-          viewportSettlements.delete(root);
-        }
-        return;
-      }
-      const deadline = (view?.performance.now() ?? 0) + 300;
-      /** Preserves the visual anchor until virtual subtree measurements settle. */
-      const stabilize = (): void => {
-        if (!settlementActive) {
+  /**
+   * Restores virtual mounts, viewport, and selection after the structural command.
+   *
+   * @param selectionManager - Selection bridge that owns DOM restoration scheduling.
+   * @param selection - Selection captured before the command.
+   * @param targetIds - IDs supplied to the structural command.
+   * @returns Selection restoration is scheduled and the current viewport is corrected.
+   */
+  preserveSelection(
+    selectionManager: Pick<
+      PanelSelectionApi,
+      "scheduleIfSelectionUnchanged" | "set" | "restoreDOM"
+    >,
+    selection: Selection | undefined,
+    targetIds: readonly string[],
+  ): void {
+    // Selection state remains model-backed. Keep only the selected blocks that
+    // were already in the virtual window mounted across the reparent; this
+    // preserves local measurements without rendering the complete selection.
+    // Mounting every selected root here makes a large outdent briefly defeat
+    // virtualization, then the following indent replaces hundreds of measured
+    // roots with one subtree and produces a large scroll offset correction.
+    let mountIds = targetIds.slice(-1);
+    if (this.mountedTargetIds.length) {
+      mountIds = this.mountedTargetIds;
+    } else if (this.anchorId) {
+      mountIds = [this.anchorId];
+    }
+    this.controller?.mountBlocks(mountIds, { scroll: false });
+    if (this.scrollElement && this.anchorId && this.anchorTop !== undefined) {
+      restoreBlockViewportTop(this.root, this.scrollElement, this.anchorId, this.anchorTop);
+    }
+
+    // React may reparent every selected block shell and cause the browser to emit
+    // a transient empty selectionchange. Re-publish the selection captured
+    // before the command, then resolve its text endpoints in the committed DOM.
+    // Virtual measurements can settle across several frames for a large moved
+    // subtree. Track deliberate scrolling between frames and preserve that
+    // movement while compensating only for changes in the anchor's layout.
+    // This callback owns caret/selection restoration, not the indent mutation. Mounting
+    // endpoints and preserving the viewport support that restoration; unrelated work
+    // must not use this slot because a newer selection callback replaces it.
+    selectionManager.scheduleIfSelectionUnchanged(
+      () => this.restoreSelection(selectionManager, selection, mountIds),
+      () => this.finish(),
+    );
+  }
+
+  /**
+   * Stops pending corrections and releases all settlement-owned listeners.
+   *
+   * @returns The scheduled frame, wheel listener, panel registrations, and suspension are released.
+   * @throws If a delegated cleanup fails.
+   */
+  cancel(): void {
+    if (!this.active) {
+      return;
+    }
+    this.active = false;
+    if (this.frame !== undefined) {
+      this.view?.cancelAnimationFrame(this.frame);
+      this.frame = undefined;
+    }
+    this.view?.removeEventListener("wheel", this.onWheel);
+    const release = this.releasePanel;
+    this.releasePanel = undefined;
+    try {
+      this.releaseAdjustments();
+    } finally {
+      this.unsubscribeDeactivation?.();
+      this.unsubscribeDeactivation = undefined;
+      release?.();
+    }
+  }
+
+  /**
+   * Applies deliberate wheel movement to the retained visual position.
+   *
+   * @param event - Wheel event whose vertical delta adjusts the expected anchor position.
+   * @returns The expected anchor position includes the user's vertical scroll.
+   */
+  private readonly onWheel = (event: WheelEvent): void => {
+    if (this.expectedTop !== undefined) {
+      this.expectedTop -= event.deltaY;
+    }
+  };
+
+  /**
+   * Restores the captured selection after React commits the reparented blocks.
+   *
+   * @param selectionManager - Selection bridge owning the scheduled callback.
+   * @param selection - Selection captured before the command.
+   * @param mountIds - Previously mounted selected blocks or the chosen anchor.
+   * @returns Selection is restored and viewport stabilization begins when possible.
+   */
+  private restoreSelection(
+    selectionManager: Pick<PanelSelectionApi, "set" | "restoreDOM">,
+    selection: Selection | undefined,
+    mountIds: readonly string[],
+  ): void {
+    // A newer command owns selection restoration once this settlement is cancelled.
+    if (!this.active) {
+      return;
+    }
+    // The controller captured before dispatch still indexes the old root list.
+    // Resolve it again after React commits so an outdented viewport window is
+    // pinned as new roots instead of being looked up in the former parent root.
+    PageNavigationController.getForElement(this.root)?.mountBlocks(mountIds, { scroll: false });
+    selectionManager.set(selection!);
+    selectionManager.restoreDOM(selection, { scroll: false });
+    if (!this.scrollElement || !this.anchorId || this.anchorTop === undefined) {
+      this.finish();
+      return;
+    }
+    this.stabilize((this.view?.performance.now() ?? 0) + 300);
+  }
+
+  /**
+   * Preserves the visual anchor until virtual subtree measurements settle.
+   *
+   * @param deadline - Window performance timestamp after which corrections stop.
+   * @returns The current position is corrected and a later frame is scheduled when available.
+   */
+  private stabilize(deadline: number): void {
+    if (!this.active) {
+      return;
+    }
+    this.restoreAnchor();
+    if (this.view && this.view.performance.now() < deadline) {
+      this.frame = this.view.requestAnimationFrame(() => this.stabilize(deadline));
+    } else {
+      // Re-enabling ordinary virtual measurement behavior can itself apply
+      // one deferred offset. Correct that final frame unless a newer command
+      // has superseded this settlement.
+      this.releaseAdjustments();
+      this.frame = this.view?.requestAnimationFrame(() => {
+        if (!this.active) {
           return;
         }
-        const expectedTop = settlement.expectedTop;
-        if (expectedTop !== undefined) {
-          restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
-        }
-        if (view && view.performance.now() < deadline) {
-          view.requestAnimationFrame(stabilize);
-        } else {
-          // Re-enabling ordinary virtual measurement behavior can itself apply
-          // one deferred offset. Correct that final frame unless a newer command
-          // has superseded this settlement.
-          releaseAdjustments();
-          view?.requestAnimationFrame(() => {
-            if (!settlementActive) {
-              return;
-            }
-            const expectedTop = settlement.expectedTop;
-            if (expectedTop !== undefined) {
-              restoreBlockViewportTop(root, scrollElement, anchorId, expectedTop);
-            }
-            settlementActive = false;
-            view.removeEventListener("wheel", onWheel);
-            if (viewportSettlements.get(root) === settlement) {
-              viewportSettlements.delete(root);
-            }
-          });
-        }
-      };
-      stabilize();
-    },
-    () => {
-      settlement.cancel();
-      if (viewportSettlements.get(root) === settlement) {
-        viewportSettlements.delete(root);
-      }
-    },
-  );
-  return claimed;
+        this.restoreAnchor();
+        this.finish();
+      });
+    }
+  }
+
+  /**
+   * Restores the current anchor position after a virtual layout change.
+   *
+   * @returns The scrolling element is adjusted when an anchor and expected top exist.
+   */
+  private restoreAnchor(): void {
+    if (this.scrollElement && this.anchorId && this.expectedTop !== undefined) {
+      restoreBlockViewportTop(this.root, this.scrollElement, this.anchorId, this.expectedTop);
+    }
+  }
+
+  /**
+   * Cancels this settlement and removes it only if it still owns the surface.
+   *
+   * @returns The settlement is released and its current registry entry is removed.
+   * @throws If delegated cleanup fails.
+   */
+  private finish(): void {
+    this.cancel();
+    if (viewportSettlements.get(this.root) === this) {
+      viewportSettlements.delete(this.root);
+    }
+  }
+
+  /**
+   * Restores normal virtualizer behavior once for this command.
+   *
+   * @returns The virtualizer's scroll-adjustment suspension is released at most once.
+   * @throws If the suspension release fails.
+   */
+  private releaseAdjustments(): void {
+    if (this.adjustmentsReleased) {
+      return;
+    }
+    this.adjustmentsReleased = true;
+    this.releaseScrollAdjustments?.();
+  }
 }

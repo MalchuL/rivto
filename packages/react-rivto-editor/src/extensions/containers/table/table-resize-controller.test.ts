@@ -64,14 +64,14 @@ class TableResizeFixture {
   }
 
   /**
-   * Releases gesture resources before destroying the borrowed panel and document.
+   * Releases gesture resources before destroying the owning React runtime and document.
    *
    * @returns No mounted fixture or owned model remains.
    */
   destroy(): void {
     this.controller.cancel();
     this.root.remove();
-    this.panel.destroy();
+    this.panel.editor.destroy();
     this.core.destroy();
   }
 

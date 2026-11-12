@@ -1,5 +1,5 @@
 /**
- * Verifies schema-v8 storage, atomic writes, collaboration, and path-cache repair.
+ * Verifies schema-v9 storage, atomic writes, collaboration, and path-cache repair.
  * Uses generic storage primitives; editor feature policies are tested with their
  * public managers so document tests do not depend on outline commands.
  */
@@ -505,4 +505,60 @@ describe("DocumentModelImpl schema v9 Markdown storage", () => {
     expect(model.blocks.getBlocks()[0].type).toBe("acme.chart");
     doc.destroy();
   });
+});
+
+it.each([false, true])(
+  "releases model-owned managers after provider cleanup settles (failure: %s)",
+  async (fails) => {
+    const crdt = new YjsDoc("teardown-managers");
+    const model = new DocumentModelImpl(crdt);
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await crdt.attachProvider({
+      id: "delayed-disconnect",
+      connect: async () => {},
+      disconnect: async () => {
+        await pending;
+        if (fails) {
+          throw new Error("disconnect failed");
+        }
+      },
+    });
+    const blocks = model.blocks;
+    const elements = model.elements;
+    const pluginData = model.pluginData;
+    const closing = model.destroy();
+    expect(model.blocks).toBe(blocks);
+    finish();
+    if (fails) {
+      await expect(closing).rejects.toThrow("disconnect failed");
+    } else {
+      await closing;
+    }
+    expect(() => model.blocks).toThrow("Document model is destroyed");
+    expect(() => model.elements).toThrow("Document model is destroyed");
+    expect(() => model.pluginData).toThrow("Document model is destroyed");
+    expect(() => model.history).toThrow("Document model is destroyed");
+    expect(() => blocks.getBlocks()).toThrow("Block manager is destroyed");
+    expect(() => elements.getElementNodes()).toThrow("Element manager is destroyed");
+    expect(() => pluginData.get("example")).toThrow("Plugin data manager is destroyed");
+  },
+);
+
+it("detaches manager observers if CRDT destruction fails before stopping updates", async () => {
+  const crdt = new YjsDoc("failed-crdt-teardown");
+  const model = new DocumentModelImpl(crdt);
+  const roots = crdt.getArray<string>("rivto.editor.roots");
+  const elementRoots = crdt.getArray<string>("rivto.editor.rootElementIds");
+  const destroy = jest.spyOn(crdt, "destroy").mockRejectedValueOnce(new Error("destroy failed"));
+  try {
+    await expect(model.destroy()).rejects.toThrow("destroy failed");
+    expect(() => roots.insert(0, "missing-block")).not.toThrow();
+    expect(() => elementRoots.insert(0, "missing-element")).not.toThrow();
+  } finally {
+    destroy.mockRestore();
+    await crdt.destroy();
+  }
 });

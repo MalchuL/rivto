@@ -1,5 +1,6 @@
 import type { ReactEditorApi } from "../../editor/types";
 import { RevisionStore } from "../../internal-store";
+import { releaseAfterCall } from "@chulane/rivto-utils";
 import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
@@ -109,20 +110,18 @@ export class ExtensionManager implements ExtensionsApi {
   /**
    * Gives a manager registration runtime and active-extension ownership.
    *
+   * The callback reference is released before invoking it, including when it throws.
+   *
    * @param release - Exact underlying resource cleanup.
    * @returns Idempotent disposer safe for callers and repeated teardown.
+   * @throws If the manager is destroyed, or if the returned disposer invokes a failing cleanup.
    */
   registerCleanup(release: RegistrationDisposer): RegistrationDisposer {
     this.assertActive();
-    let active = true;
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const dispose = releaseAfterCall(() => {
       this.registrations.delete(dispose);
       release();
-    };
+    });
     this.registrations.add(dispose);
     this.activeExtensionRegistrations?.push(dispose);
     return dispose;
@@ -139,7 +138,7 @@ export class ExtensionManager implements ExtensionsApi {
    * Runs extension cleanup and all remaining registrations in reverse order.
    *
    * Each disposer runs independently. Failures are collected and rethrown after
-   * every owned resource has been released.
+   * cleanup has been attempted for every owned resource.
    *
    * @returns Extension and registration cleanup has been attempted; repeated calls do nothing.
    * @throws The single cleanup failure, or AggregateError containing multiple failures.
@@ -206,7 +205,9 @@ export class ExtensionManager implements ExtensionsApi {
    *
    * Identity is released before invoking user cleanup, so reentrant removal and
    * later ID reuse cannot remove another installation. Custom cleanup runs first;
-   * owned registrations must still release after a throwing cleanup.
+   * owned registrations must still release after a throwing cleanup. The returned
+   * disposer drops its captured callback and registration references before invoking
+   * cleanup; they remain in use for the duration of that invocation.
    *
    * @param id - Installation identity reserved by the completed setup.
    * @param cleanup - Optional synchronous cleanup returned by setup.
@@ -219,12 +220,7 @@ export class ExtensionManager implements ExtensionsApi {
     cleanup: void | RegistrationDisposer,
     owned: readonly RegistrationDisposer[],
   ): RegistrationDisposer {
-    let active = true;
-    const dispose = () => {
-      if (!active) {
-        return;
-      }
-      active = false;
+    const dispose = releaseAfterCall(() => {
       this.extensionIds.delete(id);
       const index = this.extensionDisposers.indexOf(dispose);
       if (index >= 0) {
@@ -235,7 +231,7 @@ export class ExtensionManager implements ExtensionsApi {
         releases.push(cleanup);
       }
       this.releaseAll(releases);
-    };
+    });
     return dispose;
   }
 

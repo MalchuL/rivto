@@ -110,6 +110,42 @@ describe("host document storage", () => {
     expect(disconnect).toHaveBeenCalledTimes(2);
   });
 
+  test("reports pending document cleanup failures after storage has closed", async () => {
+    const registry = new YjsDocumentRegistry(crypto.randomUUID());
+    registry.registerDocument("source");
+    const failure = new Error("document disconnect failed");
+    const onError = jest.fn();
+    let finish!: () => void;
+    const storage = new DocumentStorage({
+      registry,
+      onError,
+      createProviders: (id) => [
+        {
+          id,
+          connect: async (doc) => {
+            if (doc.id === "source") {
+              await new Promise<void>((resolve) => {
+                finish = resolve;
+              });
+            }
+          },
+          disconnect: async (doc) => {
+            if (doc.id === "source") {
+              throw failure;
+            }
+          },
+        },
+      ],
+    });
+    const pending = storage.openDocument("source");
+    const rejected = expect(pending).rejects.toThrow("destroyed");
+    await eventually(() => expect(finish).toBeDefined());
+    await storage.destroy();
+    finish();
+    await rejected;
+    expect(onError).toHaveBeenCalledWith(failure);
+  });
+
   test("partial registry connections are cleaned on failure", async () => {
     const registry = new YjsDocumentRegistry(crypto.randomUUID());
     registry.registerDocument("source");

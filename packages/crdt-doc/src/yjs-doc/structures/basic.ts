@@ -1,5 +1,29 @@
 import * as Y from "yjs";
+import type { CRDTObserveHandler } from "../../types";
 import { YjsUndefinedError } from "../error";
+
+/**
+ * Creates a disposer outside the observer callback's lexical scope.
+ *
+ * Failed removal keeps its references so the caller can retry.
+ *
+ * @param target - Native shared type owning the observer.
+ * @param listener - Exact native observer to remove.
+ * @returns A disposer that releases both references after successful removal.
+ * @throws If native observer removal fails.
+ */
+function createDeepObserverDisposer<T extends Y.AbstractType<any>>(
+  target: T,
+  listener: (events: Y.YEvent<any>[], transaction: Y.Transaction) => void,
+): () => void {
+  let subscription: [T, typeof listener] | undefined = [target, listener];
+  return () => {
+    if (subscription) {
+      subscription[0].unobserveDeep(subscription[1]);
+      subscription = undefined;
+    }
+  };
+}
 
 export abstract class YjsBasic<T extends Y.AbstractType<any>> {
   /**
@@ -60,5 +84,29 @@ export abstract class YjsBasic<T extends Y.AbstractType<any>> {
    */
   protected setYjsObj(yjsObj: T): void {
     this._yjsObj = yjsObj;
+  }
+
+  /**
+   * Observes nested shared-type changes without retaining released subscriptions.
+   *
+   * The returned function keeps its target and callback until removal succeeds;
+   * repeated calls after successful removal do nothing.
+   *
+   * @param handler - Callback receiving adapter-neutral changes and the transaction.
+   * @returns A disposer that removes the observer and releases its references.
+   * @throws If native observer registration or removal fails.
+   */
+  protected observeDeep(handler: CRDTObserveHandler): () => void {
+    const listener = (events: Y.YEvent<any>[], transaction: Y.Transaction) =>
+      handler(
+        events.map((event) => ({
+          path: event.path,
+          keys: event instanceof Y.YMapEvent ? [...event.keysChanged] : [],
+        })),
+        transaction,
+      );
+    const target = this.yjsObj;
+    target.observeDeep(listener);
+    return createDeepObserverDisposer(target, listener);
   }
 }

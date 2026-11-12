@@ -99,6 +99,19 @@ export class FileUploadStatusStore {
   }
 
   /**
+   * Removes all upload cards and their retry callbacks.
+   *
+   * @returns Publishes the empty state when statuses existed.
+   * @throws If a subscriber throws while the empty state is published.
+   */
+  clear(): void {
+    if (this.uploads.size) {
+      this.uploads.clear();
+      this.emit();
+    }
+  }
+
+  /**
    * Advances the revision and notifies the current listeners.
    *
    * @returns Subscribers have been notified of the current state.

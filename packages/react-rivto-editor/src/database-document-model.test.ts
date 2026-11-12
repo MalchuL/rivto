@@ -1,5 +1,5 @@
 const jestApi = (import.meta as ImportMeta & { jest: typeof jest }).jest;
-import { YjsDocumentRegistry } from "@chulane/crdt-doc";
+import { YjsDoc, YjsDocumentRegistry } from "@chulane/crdt-doc";
 import { DocumentStorage, type BlockInput } from "@chulane/document-model";
 import { DBDocumentModel, DemoDatabase } from "../../../demo/src/database";
 import { createReactEditor } from "./editor/react-editor";
@@ -13,6 +13,35 @@ const element = {
   frame: { x: 0, y: 0, width: 10, height: 10 },
   zIndex: 0,
 };
+
+test.each([false, true])(
+  "persists a final provider update when disconnect fails: %s",
+  async (fails) => {
+    const database = new DemoDatabase();
+    const crdt = new YjsDoc("disconnect-update");
+    const document = new DBDocumentModel(crdt, database);
+    await crdt.attachProvider({
+      id: "final-update",
+      connect: async () => {},
+      disconnect: async (doc) => {
+        doc.getText("final-update").insert(0, "saved");
+        if (fails) {
+          throw new Error("disconnect failed");
+        }
+      },
+    });
+    if (fails) {
+      await expect(document.destroy()).rejects.toThrow("disconnect failed");
+    } else {
+      await document.destroy();
+    }
+    const restored = new YjsDoc("disconnect-update");
+    database.restore(restored);
+    expect(restored.getText("final-update").toString()).toBe("saved");
+    await restored.destroy();
+    database.destroy();
+  },
+);
 
 async function fixture(database = new DemoDatabase()) {
   const registry = new YjsDocumentRegistry(crypto.randomUUID());

@@ -26,11 +26,7 @@ import type { DocumentEditorAPI } from "../../editor/types";
 import type { BlockManagerApi, ImportedBlockForest } from "../types";
 import type { BlockPrepareErrorHandler } from "./types";
 import { Pipe } from "../../utils/pipe";
-
-interface BlockProcessorRegistration {
-  readonly processor: BlockProcessor;
-  dispose: () => void;
-}
+import { releaseAfterCall } from "@chulane/rivto-utils";
 
 /**
  * Owns typed editor block operations.
@@ -48,7 +44,7 @@ export class BlockManager implements BlockManagerApi {
    * processors stay local to this editor without becoming shared document state.
    */
   private readonly pipe = new Pipe<BlockInput>();
-  private readonly processors = new Set<BlockProcessorRegistration>();
+  private readonly processors = new Map<string, () => void>();
   private readonly subscriptions = new Set<() => void>();
 
   /**
@@ -65,19 +61,25 @@ export class BlockManager implements BlockManagerApi {
     return this.document.blocks.revision;
   }
 
-  /** Registers an editor-owned block processor and returns its disposer. */
+  /**
+   * Registers an editor-owned block processor until replacement, disposal, or manager destruction.
+   *
+   * @param processor - Named transformation and its ordering priority.
+   * @returns Idempotent disposer that releases this exact registration.
+   * @throws If the processor ID is empty.
+   */
   registerProcessor(processor: BlockProcessor): () => void {
-    const registration: BlockProcessorRegistration = {
-      processor,
-      dispose: this.pipe.register(processor),
-    };
-    this.processors.add(registration);
-    return () => {
-      if (!this.processors.delete(registration)) {
-        return;
+    const id = processor.id;
+    this.processors.get(id)?.();
+    const unregister = this.pipe.register(processor);
+    const dispose = releaseAfterCall(() => {
+      if (this.processors.get(id) === dispose) {
+        this.processors.delete(id);
       }
-      registration.dispose();
-    };
+      unregister();
+    });
+    this.processors.set(id, dispose);
+    return dispose;
   }
 
   /**
@@ -653,7 +655,7 @@ export class BlockManager implements BlockManagerApi {
   destroy(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions.clear();
-    this.processors.forEach((registration) => registration.dispose());
+    this.processors.forEach((dispose) => dispose());
     this.processors.clear();
   }
 
