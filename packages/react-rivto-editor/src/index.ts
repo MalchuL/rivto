@@ -22,10 +22,8 @@ export type {
   PageBlockDecorations,
   PageBlockDecorationUpdate,
 } from "./blocks/page-block-decorations";
-export { FILE_INPUT_ROUTING_KEY } from "./attachments/ingestion/file-input-routing";
-export type { FileInputRouting } from "./attachments/ingestion/file-input-routing";
-export { BLOCK_PASTE_CHILDREN_KEY } from "./managers/clipboard/block-paste-children";
-export type { BlockPasteChildren } from "./managers/clipboard/block-paste-children";
+export type { FileExtensionFields } from "./attachments/ingestion/file-input-routing";
+export type { CollapseExtensionFields } from "./managers/clipboard/block-paste-children";
 export { CLIPBOARD_LIST_PROPERTIES_KEY } from "./managers/clipboard/clipboard-list-properties";
 export type { ClipboardListProperties } from "./managers/clipboard/clipboard-list-properties";
 export {
@@ -185,6 +183,7 @@ export type {
   ElementSlotProps,
   ElementSlotRegistration,
   ExtensionMountPosition,
+  InstalledExtensions,
   KeyboardBindingSnapshot,
   KeyboardEventDefinition,
   KeyboardShortcut,

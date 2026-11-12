@@ -26,10 +26,6 @@ import { KEYBOARD_BINDING_IDS, matchesShortcut, parseShortcut } from "../../../m
 import { findEdgelessRuntime } from "../../../managers/selection/edgeless/edgeless-runtime";
 import { isNonBlockEditableClipboardEvent } from "./clipboard-target";
 import { ElementPasteStrategy } from "../../../managers/clipboard/element-paste-strategy";
-import {
-  BLOCK_PASTE_CHILDREN_KEY,
-  type BlockPasteChildren,
-} from "../../../managers/clipboard/block-paste-children";
 
 const ELEMENT_PASTE_STRATEGY_ID = "paste.elements";
 
@@ -237,9 +233,7 @@ export function registerClipboard(
     const ends = active ? BlockSelectionEndpoints.resolve(active, lengthOf) : undefined;
     const activeId = ends?.head.blockId ?? active?.focusBlockId;
     const activeBlock = activeId ? reactPanel.blocks.getBlockNode(activeId) : undefined;
-    const pasteIntoChildren = reactPanel.editor.extensions.shared
-      .getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)
-      ?.get();
+    const collapse = reactPanel.editor.extensions.getExtension("block.collapse");
     // Only whole-block paste needs a parent and sibling insertion position.
     // A native bundle marked `fromTextSelection` is pasted into text instead.
     const structuralSource =
@@ -249,7 +243,8 @@ export function registerClipboard(
     if (activeBlock && structuralSource) {
       if (
         !reactPanel.blocks.canRemove(activeBlock.id) ||
-        (pasteIntoChildren?.(activeBlock) && reactPanel.blocks.hasChildren(activeBlock.id))
+        (collapse?.fields.canPasteIntoChildren(activeBlock) &&
+          reactPanel.blocks.hasChildren(activeBlock.id))
       ) {
         placement = { parentId: activeBlock.id, afterId: null };
       } else {

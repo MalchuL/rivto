@@ -23,10 +23,6 @@ import {
   findTransferredLocalFileUris,
   createFileReferenceFromUri,
 } from "../../../attachments/ingestion/file-input";
-import {
-  FILE_INPUT_ROUTING_KEY,
-  type FileInputRouting,
-} from "../../../attachments/ingestion/file-input-routing";
 
 const FILE_INPUT_CLASS = "rivto-file-input";
 /** Event registration that claims generic file paste on the receiving surface. */
@@ -47,10 +43,32 @@ interface FileInputEditor {
   >;
   /** Registers file input listeners. */
   readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
-  /** Shared routing capabilities and extension-owned cleanup. */
-  readonly extensions: Pick<ReactEditorApi["extensions"], "shared" | "registerCleanup">;
   /** Registers the file picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
+}
+
+/**
+ * Checks whether the receiving editor's file router owns the current transfer.
+ *
+ * @param events - Event registrations for the receiving editor.
+ * @param event - Current native paste or drop event.
+ * @param data - Transferred data, or null when unavailable.
+ * @returns True if a registered file listener owns this transfer.
+ */
+export function ownsFileTransfer(
+  events: Pick<ReactEditorApi["events"], "has">,
+  event: Event,
+  data: DataTransfer | null,
+): boolean {
+  let registrationId: string;
+  if (event.type === "drop") {
+    registrationId = FILE_DROP_EVENT_ID;
+  } else if (event.type === "paste") {
+    registrationId = FILE_PASTE_EVENT_ID;
+  } else {
+    return false;
+  }
+  return events.has(registrationId, event) && getTransferredFiles(data).length > 0;
 }
 
 /** Registers and routes generic file input for one extension installation. */
@@ -87,40 +105,6 @@ export class FileInputEvents {
     this.registerDrop();
     this.registerPaste();
     this.registerPicker();
-    this.registerSharedRouting();
-  }
-
-  /**
-   * Publishes this router's event-snapshot ownership to other input extensions.
-   *
-   * @returns The shared function is registered for this extension lifecycle.
-   * @throws If the shared reservation or cleanup registration fails.
-   */
-  private registerSharedRouting(): void {
-    const { shared } = this.editor.extensions;
-    const release = shared.reserve(FILE_INPUT_ROUTING_KEY, "function");
-    const routing = shared.getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)!;
-    const ownsTransfer: FileInputRouting = (event, data) => {
-      let registrationId: string;
-      if (event.type === "drop") {
-        registrationId = FILE_DROP_EVENT_ID;
-      } else if (event.type === "paste") {
-        registrationId = FILE_PASTE_EVENT_ID;
-      } else {
-        return false;
-      }
-      return this.editor.events.has(registrationId, event) && getTransferredFiles(data).length > 0;
-    };
-    routing.set(ownsTransfer);
-    this.editor.extensions.registerCleanup(() => {
-      try {
-        if (shared.getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)?.get() === ownsTransfer) {
-          routing.set(undefined);
-        }
-      } finally {
-        release();
-      }
-    });
   }
 
   /**

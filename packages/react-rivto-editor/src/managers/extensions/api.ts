@@ -1,10 +1,36 @@
-import type { ExtensionComponent, ExtensionMountPosition, ReactEditorExtension } from "./types";
+import type {
+  ExtensionComponent,
+  InstalledExtensions,
+  ExtensionMountPosition,
+  ReactEditorExtension,
+} from "./types";
 import type { SharedSpaceApi } from "./shared-space";
 
 /** Extension installation, mounted components, and revision subscriptions. */
 export interface ExtensionsApi {
   /** Editor-local named runtime values shared by extensions. */
   readonly shared: SharedSpaceApi;
+  /**
+   * Reads a successfully installed extension.
+   *
+   * @param id - ID of the extension.
+   * @returns The installed extension object, or undefined if unavailable.
+   */
+  getExtension<K extends keyof InstalledExtensions & string>(
+    id: K,
+  ): InstalledExtensions[K] | undefined;
+  /**
+   * Observes availability changes for one extension.
+   *
+   * @param id - ID of the extension to observe.
+   * @param listener - Called synchronously after the extension is installed or removed.
+   * @returns An idempotent disposer for the subscription.
+   * @throws If the extension manager is being destroyed.
+   */
+  subscribeExtension<K extends keyof InstalledExtensions & string>(
+    id: K,
+    listener: () => void,
+  ): () => void;
   /**
    * Adds cleanup to the runtime and, during setup, to the active extension.
    * Extension cleanup runs before its registrations; remaining registrations

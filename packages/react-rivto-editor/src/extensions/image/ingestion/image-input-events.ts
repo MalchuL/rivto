@@ -15,10 +15,6 @@ import {
   getTransferredFiles,
   findLocalFileUris,
 } from "../../../attachments/ingestion/file-input";
-import {
-  FILE_INPUT_ROUTING_KEY,
-  type FileInputRouting,
-} from "../../../attachments/ingestion/file-input-routing";
 import { prepareImageAsset } from "./image-asset";
 import {
   inspectImage,
@@ -49,9 +45,9 @@ interface ImageInputEditor {
     "isEmptyBlock"
   >;
   /** Registers input listeners. */
-  readonly events: Pick<ReactEditorApi["events"], "register">;
-  /** Reads optional shared input-routing capabilities. */
-  readonly extensions: Pick<ReactEditorApi["extensions"], "shared">;
+  readonly events: Pick<ReactEditorApi["events"], "register" | "has">;
+  /** Reads the optional file extension. */
+  readonly extensions: Pick<ReactEditorApi["extensions"], "getExtension">;
   /** Registers the image picker slash command. */
   readonly slashCommands: Pick<ReactEditorApi["slashCommands"], "register">;
 }
@@ -459,9 +455,10 @@ export class ImageInputEvents {
    * @returns True when an active generic handler is registered and files are present.
    */
   private hasGenericFileInput(event: Event, data: DataTransfer | null): boolean {
-    const route = this.editor.extensions.shared
-      .getFunction<FileInputRouting>(FILE_INPUT_ROUTING_KEY)
-      ?.get();
-    return route?.(event, data) === true;
+    return (
+      this.editor.extensions
+        .getExtension("file")
+        ?.fields.ownsTransfer(this.editor.events, event, data) === true
+    );
   }
 }

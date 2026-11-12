@@ -1,11 +1,21 @@
-/** Shared function identifying file transfers owned by the generic input router. */
-export const FILE_INPUT_ROUTING_KEY = "rivto.attachments.file-input-routing";
+import type { BinaryProvider } from "../types";
+import type { ReactEditorApi } from "../../editor/types";
 
-/**
- * Reports whether a native transfer belongs to the generic file input router.
- *
- * @param event - Current native paste or drop event.
- * @param data - Transfer data for the event, or null when unavailable.
- * @returns True when the active generic router owns a file transfer in this dispatch.
- */
-export type FileInputRouting = (event: Event, data: DataTransfer | null) => boolean;
+/** Operations exposed by the installed generic file extension. */
+export interface FileExtensionFields {
+  /** Provider used to resolve and store this extension's file references. */
+  readonly provider: BinaryProvider;
+  /**
+   * Reports whether a native transfer belongs to the generic file input router.
+   *
+   * @param events - Event registrations belonging to the receiving editor.
+   * @param event - Current native paste or drop event.
+   * @param data - Transfer data for the event, or null when unavailable.
+   * @returns True when the active generic router owns a file transfer in this dispatch.
+   */
+  ownsTransfer(
+    events: Pick<ReactEditorApi["events"], "has">,
+    event: Event,
+    data: DataTransfer | null,
+  ): boolean;
+}

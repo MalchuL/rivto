@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileReference } from "../../../../attachments";
 import { useReactPanel } from "../../../../hooks";
-import { getFileProvider } from "../file-configuration";
 
 /** Operations and feedback owned by one mounted file view. */
 interface FileActions {
@@ -87,7 +86,7 @@ function useFileOpen(
   // Start opening through the provider currently registered for this editor.
   return () => {
     const controller = start();
-    const provider = getFileProvider(editor);
+    const provider = editor.extensions.getExtension("file")?.fields.provider;
     if (!provider) {
       setError("No file provider is installed");
       return;
@@ -124,9 +123,14 @@ function useFileCopy(
   // Copy the current reference using the active operation's cancellation signal.
   return () => {
     const controller = start();
-    const data = editor.attachments.readBinary(getFileProvider(editor), uri, mimeType, {
-      signal: controller.signal,
-    });
+    const data = editor.attachments.readBinary(
+      editor.extensions.getExtension("file")?.fields.provider,
+      uri,
+      mimeType,
+      {
+        signal: controller.signal,
+      },
+    );
     void editor.clipboard
       .writeBinary({ name, mimeType, data })
       // Only an active successful copy may close the current menu.

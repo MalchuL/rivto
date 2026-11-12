@@ -4,6 +4,7 @@ import { SharedSpace } from "./shared-space";
 import type { ExtensionsApi } from "./api";
 import type {
   ExtensionComponent,
+  InstalledExtensions,
   ExtensionMountPosition,
   ReactEditorExtension,
   RegistrationDisposer,
@@ -21,6 +22,8 @@ export class ExtensionManager implements ExtensionsApi {
   readonly shared = new SharedSpace((release) => this.registerCleanup(release));
   private readonly store = new RevisionStore();
   private readonly extensionIds = new Set<string>();
+  private readonly installedExtensions = new Map<string, ReactEditorExtension>();
+  private readonly extensionListeners = new Map<string, Set<() => void>>();
   private readonly extensionDisposers: RegistrationDisposer[] = [];
   private readonly registrations = new Set<RegistrationDisposer>();
   private readonly components: Array<{
@@ -36,6 +39,43 @@ export class ExtensionManager implements ExtensionsApi {
    * @param reactEditor - Owning React runtime supplied during extension setup.
    */
   constructor(private readonly reactEditor: ReactEditorApi) {}
+
+  /**
+   * Looks up a successfully installed extension.
+   *
+   * @param id - ID of the owning extension.
+   * @returns The installed extension, or undefined when unavailable.
+   */
+  getExtension<K extends keyof InstalledExtensions & string>(
+    id: K,
+  ): InstalledExtensions[K] | undefined {
+    return this.installedExtensions.get(id) as InstalledExtensions[K] | undefined;
+  }
+
+  /**
+   * Subscribes to one extension's installation and removal.
+   *
+   * @param id - ID of the extension to observe.
+   * @param listener - Synchronous notification callback.
+   * @returns Idempotent subscription cleanup captured by the active extension.
+   * @throws If the manager is being destroyed.
+   */
+  subscribeExtension<K extends keyof InstalledExtensions & string>(
+    id: K,
+    listener: () => void,
+  ): () => void {
+    this.assertActive();
+    const listeners = this.extensionListeners.get(id) ?? new Set();
+    const notify = () => listener();
+    listeners.add(notify);
+    this.extensionListeners.set(id, listeners);
+    return this.registerCleanup(() => {
+      listeners.delete(notify);
+      if (!listeners.size) {
+        this.extensionListeners.delete(id);
+      }
+    });
+  }
 
   /**
    * Installs the creation-time extension list.
@@ -156,6 +196,8 @@ export class ExtensionManager implements ExtensionsApi {
       this.releaseAll([...this.registrations, ...this.extensionDisposers]);
     } finally {
       this.shared.destroy();
+      this.installedExtensions.clear();
+      this.extensionListeners.clear();
       this.components.length = 0;
       this.store.clear();
     }
@@ -202,6 +244,12 @@ export class ExtensionManager implements ExtensionsApi {
     const dispose = this.createExtensionDisposer(extension.id, cleanup, owned);
     this.extensionDisposers.push(dispose);
     parent?.push(dispose);
+    this.installedExtensions.set(extension.id, extension);
+    try {
+      this.notifyExtension(extension.id);
+    } catch (error) {
+      this.releaseAll([dispose], [error]);
+    }
     return dispose;
   }
 
@@ -209,8 +257,9 @@ export class ExtensionManager implements ExtensionsApi {
    * Creates once-only removal for an installed extension and its captured resources.
    *
    * Identity is released before invoking user cleanup, so reentrant removal and
-   * later ID reuse cannot remove another installation. Custom cleanup runs first;
-   * owned registrations must still release after a throwing cleanup.
+   * later ID reuse cannot remove another installation. Extension observers are
+   * notified before custom cleanup so they can detach while the extension is still live.
+   * Owned registrations must still release after a throwing cleanup.
    *
    * @param id - Installation identity reserved by the completed setup.
    * @param cleanup - Optional synchronous cleanup returned by setup.
@@ -235,8 +284,12 @@ export class ExtensionManager implements ExtensionsApi {
         this.extensionDisposers.splice(index, 1);
       }
       const releases = [...owned];
+      const wasInstalled = this.installedExtensions.delete(id);
       if (cleanup) {
         releases.push(cleanup);
+      }
+      if (wasInstalled) {
+        releases.push(() => this.notifyExtension(id));
       }
       this.releaseAll(releases);
     };
@@ -267,6 +320,30 @@ export class ExtensionManager implements ExtensionsApi {
     }
     if (errors.length > 1) {
       throw new AggregateError(errors, "Extension cleanup failed");
+    }
+  }
+
+  /**
+   * Notifies a snapshot of listeners after an extension changes availability.
+   *
+   * @param id - ID whose listeners should be called.
+   * @returns Every listener has been called.
+   * @throws The first listener failure after all listeners have been attempted.
+   */
+  private notifyExtension(id: string): void {
+    const errors: unknown[] = [];
+    for (const listener of [...(this.extensionListeners.get(id) ?? [])]) {
+      try {
+        listener();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Extension listeners failed");
     }
   }
 }

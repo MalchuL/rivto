@@ -10,7 +10,11 @@ import { blockHandleExtension } from "./block-handle/extension";
 import { createStructuralSelection } from "@chulane/rivto";
 import { createElement } from "react";
 import { blockIdsOf, insertBlockElementSeparator } from "../../elements/block-element-projection";
-import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
+import {
+  type CollapseReactEditorExtension,
+  type ReactBlockRegistration,
+  type ReactEditorExtension,
+} from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
@@ -181,8 +185,17 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
 };
 
 /** @returns Shared persisted collapse controls and keyboard actions. */
-export const collapseExtension = (): ReactEditorExtension => ({
+export const collapseExtension = (): CollapseReactEditorExtension => ({
   id: "block.collapse",
+  fields: {
+    /**
+     * Checks whether collapse state permits structural paste into a block.
+     *
+     * @param block - Destination block whose children may receive the paste.
+     * @returns True when the block is not collapsed.
+     */
+    canPasteIntoChildren: (block) => block.listProps.collapsed !== true,
+  },
   setup: registerCollapse,
 });
 
@@ -356,46 +369,9 @@ export const standardPreset = (options: StandardPresetOptions = {}): ReactEditor
   return {
     id: "rivto.standard",
     setup: (reactEditor) => {
-      const cleanups: Array<() => void> = [];
-      try {
-        for (const extension of extensions) {
-          const cleanup = extension.setup(reactEditor);
-          if (cleanup) {
-            cleanups.push(cleanup);
-          }
-        }
-      } catch (error) {
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch {
-              // Rollback is best-effort so the original setup error is preserved.
-            }
-          });
-        throw error;
+      for (const extension of extensions) {
+        reactEditor.extensions.install(extension);
       }
-      return () => {
-        const errors: unknown[] = [];
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch (cleanupError) {
-              errors.push(cleanupError);
-            }
-          });
-        if (errors.length === 1) {
-          throw errors[0];
-        }
-        if (errors.length > 1) {
-          throw new AggregateError(errors, "Standard preset cleanup failed");
-        }
-      };
     },
   };
 };

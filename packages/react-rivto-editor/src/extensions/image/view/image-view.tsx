@@ -15,7 +15,19 @@ import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { useReactPanel } from "../../../hooks";
 import type { ReactEditorApi } from "../../../editor/types";
-import type { BinaryProvider } from "../../../attachments";
+import type {
+  ImageHoverMenuProps,
+  ImageResizeMode,
+  ImageViewCustomization,
+  ImageViewKind,
+} from "../../../components/image-view-types";
+export type {
+  ImageHoverMenuProps,
+  ImageResizeMode,
+  ImageViewCustomization,
+  ImageViewCustomizations,
+  ImageViewKind,
+} from "../../../components/image-view-types";
 import { useImageSource } from "./hooks/use-image-source";
 import { useImageResize } from "./hooks/use-image-resize";
 import { useImageCopyMenu } from "./hooks/use-image-copy-menu";
@@ -26,95 +38,6 @@ const IMAGE_CONTROLS_CLASS = "rivto-image-controls";
 const IMAGE_RESIZE_CLASS = "rivto-image-resize";
 const IMAGE_ERROR_CLASS = "rivto-image-error";
 
-/** Persisted presentation context using the shared image component. */
-export type ImageViewKind = "inline" | "block" | "element";
-
-/** Image behavior while its frame changes size. */
-export type ImageResizeMode = "letterbox" | "stretch";
-
-/** State and actions supplied to a custom hover-menu component. */
-export interface ImageHoverMenuProps {
-  /** Document context in which the image appears. */
-  readonly kind: ImageViewKind;
-  /** Persisted URI or provider reference. */
-  readonly uri: string;
-  /** Current alternative text. */
-  readonly alt: string;
-  /** Persisted display width in pixels, when specified. */
-  readonly width?: number;
-  /** Persisted display height in pixels, when specified. */
-  readonly height?: number;
-  /**
-   * Applies edited alternative text to the image.
-   *
-   * @param alt - New alternative text from the menu.
-   * @returns Requests the text change from the owning view.
-   */
-  readonly onAltChange: (alt: string) => void;
-  /**
-   * Requests restoration of the image's original size.
-   *
-   * @returns Requests a size reset from the owning view.
-   */
-  readonly onReset: () => void;
-}
-
-/** Per-kind overrides for the shared image component. */
-export interface ImageViewCustomization {
-  /** Fit and resize behavior for this image context. */
-  readonly resizeMode?: ImageResizeMode;
-  /** Whether the view exposes a drag-resize control. */
-  readonly dragResize?: boolean;
-  /** Custom menu component, or null to suppress the menu. */
-  readonly HoverMenu?: ComponentType<ImageHoverMenuProps> | null;
-}
-
-/** Static image-view overrides registered for one editor runtime. */
-export type ImageViewCustomizations = Partial<Record<ImageViewKind, ImageViewCustomization>>;
-
-/** Image presentation options and provider registered for one editor. */
-interface ImageViewConfiguration {
-  /** Presentation overrides indexed by image context. */
-  readonly customizations: ImageViewCustomizations;
-  /** Provider used to resolve the image content. */
-  readonly provider: BinaryProvider;
-}
-
-const IMAGE_VIEW_CONFIGURATION_KEY = "rivto.image.view-configuration";
-
-/**
- * Installs per-kind image presentation options and a storage provider for one editor.
- *
- * @param editor - React editor whose image views receive the options.
- * @param customizations - Presentation overrides indexed by persisted context.
- * @param provider - Storage provider used by image views.
- * @returns A disposer that removes only this registration.
- */
-export function configureImageViews(
-  editor: ReactEditorApi,
-  customizations: ImageViewCustomizations,
-  provider: BinaryProvider,
-): () => void {
-  const configuration = { customizations, provider };
-  const space = editor.extensions.shared;
-  const release = space.reserve(IMAGE_VIEW_CONFIGURATION_KEY, "value");
-  const shared = space.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)!;
-  shared.set(configuration);
-  // An older disposer must not remove a newer configuration for the same editor.
-  return () => {
-    try {
-      if (
-        space.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get() ===
-        configuration
-      ) {
-        shared.set(undefined);
-      }
-    } finally {
-      release();
-    }
-  };
-}
-
 /**
  * Returns the configured fit/resize mode used by image frame interactions.
  *
@@ -124,8 +47,8 @@ export function configureImageViews(
  */
 export function imageResizeMode(editor: ReactEditorApi, kind: ImageViewKind): ImageResizeMode {
   return (
-    editor.extensions.shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get()
-      ?.customizations[kind]?.resizeMode ?? (kind === "element" ? "stretch" : "letterbox")
+    editor.extensions.getExtension("image")?.fields.customizations[kind]?.resizeMode ??
+    (kind === "element" ? "stretch" : "letterbox")
   );
 }
 
@@ -298,15 +221,15 @@ function useImageView({
 }: ImageViewStateProps) {
   const reactPanel = useReactPanel();
   const reactEditor = reactPanel.editor;
-  const shared = reactEditor.extensions.shared;
+  const extensions = reactEditor.extensions;
   // Refresh provider and presentation when extension registrations change.
   const configuration = useSyncExternalStore(
-    (listener) => shared.subscribe(IMAGE_VIEW_CONFIGURATION_KEY, listener),
-    () => shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get(),
-    () => shared.getValue<ImageViewConfiguration>(IMAGE_VIEW_CONFIGURATION_KEY)?.get(),
+    (listener) => extensions.subscribeExtension("image", listener),
+    () => extensions.getExtension("image"),
+    () => extensions.getExtension("image"),
   );
-  const provider = configuration?.provider;
-  const registered = configuration?.customizations[kind];
+  const provider = configuration?.fields.provider;
+  const registered = configuration?.fields.customizations[kind];
   const resizeMode = customization?.resizeMode ?? imageResizeMode(reactEditor, kind);
   const dragResize = customization?.dragResize ?? registered?.dragResize ?? kind !== "element";
   const configuredHoverMenu =

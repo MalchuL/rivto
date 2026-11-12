@@ -10,10 +10,6 @@ import { BUILTIN_KEYMAP, KEYBOARD_BINDING_IDS } from "../../../../managers";
 import { reconcileCollapsedSelection } from "./collapsed-selection";
 import { collapseTargets } from "./utils";
 import { registerBlockConversionDefaults } from "../../../../blocks/block-conversion-defaults";
-import {
-  BLOCK_PASTE_CHILDREN_KEY,
-  type BlockPasteChildren,
-} from "../../../../managers/clipboard/block-paste-children";
 
 /**
  * Installs outliner collapse shortcuts and repairs selections after any
@@ -27,22 +23,6 @@ import {
  * @returns Cleanup for document and selection reconciliation subscriptions.
  */
 export function registerCollapse(reactEditor: ReactEditorApi): () => void {
-  const shared = reactEditor.extensions.shared;
-  const releasePaste = shared.reserve(BLOCK_PASTE_CHILDREN_KEY, "function");
-  const pasteIntoChildren = shared.getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)!;
-  const acceptsPaste: BlockPasteChildren = (block) => block.listProps.collapsed !== true;
-  pasteIntoChildren.set(acceptsPaste);
-  const disposePaste = reactEditor.extensions.registerCleanup(() => {
-    try {
-      if (
-        shared.getFunction<BlockPasteChildren>(BLOCK_PASTE_CHILDREN_KEY)?.get() === acceptsPaste
-      ) {
-        pasteIntoChildren.set(undefined);
-      }
-    } finally {
-      releasePaste();
-    }
-  });
   registerBlockCollapseActions(reactEditor.blockContextMenu);
   reactEditor.slashCommands.register({
     id: "block.collapse",
@@ -187,11 +167,5 @@ export function registerCollapse(reactEditor: ReactEditorApi): () => void {
     ({ reactPanel }) => setCollapsed(reactPanel, "toggle"),
   );
 
-  return () => {
-    try {
-      uninstallReconciliation();
-    } finally {
-      disposePaste();
-    }
-  };
+  return uninstallReconciliation;
 }

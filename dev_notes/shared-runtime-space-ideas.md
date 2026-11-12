@@ -72,6 +72,52 @@ to unrelated names.
 
 ## Shared contracts
 
+### Accessing installed extensions
+
+An extension can expose values and methods in the `fields` property of the object passed to
+`install`. Augment `InstalledExtensions` to associate its ID with the type:
+
+```ts
+import type { ReactEditorExtension } from "@chulane/rivto-react";
+
+interface SearchFields {
+  search(query: string): readonly string[];
+}
+
+interface SearchExtension extends ReactEditorExtension<SearchFields> {
+  readonly id: "example.search";
+  readonly fields: SearchFields;
+}
+
+declare module "@chulane/rivto-react" {
+  interface InstalledExtensions {
+    "example.search": SearchExtension;
+  }
+}
+
+const searchExtension: SearchExtension = {
+  id: "example.search",
+  fields: { search: (query) => query ? [query] : [] },
+  setup() {},
+};
+editor.extensions.install(searchExtension);
+const search = editor.extensions.getExtension("example.search");
+const results = search?.fields.search("example");
+const unsubscribe = editor.extensions.subscribeExtension("example.search", () => {
+  // Re-read the installed extension when its availability changes.
+});
+```
+
+Lookup returns the exact installed object after setup succeeds, or undefined if
+it is unavailable. Removal notifies subscribers before extension cleanup so they
+can release contributions while it is live. A cached extension must not be used
+after removal. Subscriptions created during setup are released with their owner;
+otherwise their caller owns the returned disposer. Shared values remain suitable
+for contracts that do not belong to one optional extension.
+The standard preset installs its child extensions through the extension manager,
+so their fields are discoverable and their lifetimes follow the preset. A failed
+child installation rolls back the preset's previously installed children.
+
 Extensions agree on the names and meanings of shared keys and their contents in
 neutral shared contracts. For example, a nesting-lines contract can be used by a
 block extension without either extension importing the other's implementation.
@@ -102,16 +148,18 @@ The list and collapse extensions contribute conversion values to
 without resetting unrelated properties such as background color. Newly inserted
 blocks receive ordinary defaults through the existing block-property policy.
 
-The collapse extension supplies `rivto.clipboard.paste-into-children` while it is
-installed. Clipboard consults this optional function when choosing a destination
+The collapse extension exposes `fields.canPasteIntoChildren` while it is
+installed. Clipboard consults this optional operation when choosing a destination
 for whole blocks; without it, clipboard uses its ordinary sibling placement.
 
-The generic file extension supplies `rivto.attachments.file-input-routing` while
-its input listeners are installed. Image input consults that optional function to
-defer file transfers to the generic router without depending on its event IDs. The
-function uses the event manager's captured dispatch registrations, so an input
-listener added during an event takes effect on the next event and a removed
-listener is ignored immediately.
+The generic file extension exposes its fields and operations while installed. Image
+input consults its `ownsTransfer` operation to defer file transfers to the generic
+router without depending on its event IDs. The operation uses the event manager's
+captured dispatch registrations, so an input listener added during an event takes
+effect on the next event and a removed listener is ignored immediately.
+The file extension also supplies the provider used by file views. The image extension
+supplies its provider and per-context view options; image views observe
+extension availability so removal and reinstallation update mounted views.
 
 `rivto.clipboard.list-properties` translates detached HTML list items to host
 list properties. The editor supplies the existing list and checkbox translation
