@@ -29,7 +29,7 @@ The script API is available as `window.rivto` before the authored markup runs:
 
 Writes go through the current panel's managers and participate in document
 history. Placement previews ignore writes. Block iframe height follows its content
-within 140–720 CSS pixels; an element iframe fills the host frame.
+up to 720 CSS pixels; an element iframe fills the host frame.
 
 The sandbox prevents scripts from reading the parent's DOM and origin, but does
 not prevent network requests. Scripts receive the widget's snapshot, including

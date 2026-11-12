@@ -36,7 +36,7 @@ export function EdgelessInteractionOverlay() {
   useEffect(() => controller?.install(reactPanel.events), [controller, reactPanel.events]);
   useEffect(() => {
     if (mode !== "edgeless") {
-      controller?.marquee.stop();
+      controller?.stop();
     }
   }, [mode, controller]);
 

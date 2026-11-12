@@ -1,17 +1,12 @@
 /** HTML block with explicitly enabled, sandboxed editor operations. */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import { editorControlProps } from "../../../constants";
 import { Button } from "../../../components/ui/button";
-import {
-  formatWidgetProps,
-  readLabel,
-  type HtmlDraft,
-  type HtmlFrameCommand,
-} from "../protocol/protocol";
-import { applyBlockCommand, commitBlockDraft, toBlockView } from "./html-block";
+import { formatWidgetProps, readLabel, type HtmlDraft } from "../protocol/protocol";
+import { commitBlockDraft, toBlockView, useHtmlBlockCommand } from "./html-block";
 import { HtmlFrame } from "./html-frame";
 import { HtmlPasteTarget, HtmlSourceEditor } from "./html-chrome";
 
@@ -90,10 +85,7 @@ function useUnsafeHtmlBlock(blockId: string) {
   const [denied, setDenied] = useState(false);
   const enabled = grant !== null && block?.content === grant;
   const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
-  const onCommand = useCallback(
-    (command: HtmlFrameCommand) => applyBlockCommand(panel, blockId, command),
-    [panel, blockId],
-  );
+  const onCommand = useHtmlBlockCommand(blockId);
   useEffect(() => {
     if (grant !== null && block?.content !== grant) {
       setGrant(null);

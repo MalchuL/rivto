@@ -116,10 +116,18 @@ const BRIDGE_RUNTIME = `
     }
   }, true);
   var report = function () {
-    send({ kind: "resize", height: Math.ceil(document.documentElement.scrollHeight) });
+    var body = document.body;
+    if (body) {
+      send({ kind: "resize", height: Math.ceil(Math.max(body.scrollHeight, body.getBoundingClientRect().bottom)) });
+    }
   };
   if (typeof ResizeObserver === "function") {
-    new ResizeObserver(report).observe(document.documentElement);
+    var observer = new ResizeObserver(report);
+    observer.observe(document.documentElement);
+    window.addEventListener("DOMContentLoaded", function () {
+      if (document.body) { observer.observe(document.body); }
+      report();
+    });
   }
   window.addEventListener("load", report);
 })();`;
@@ -263,10 +271,10 @@ export function validateHtmlElementProps(props: Record<string, unknown>): Record
  * Limits an automatic iframe height to a range that cannot grow without bound.
  *
  * @param height - Document scroll height reported by the sandbox, in CSS pixels.
- * @returns A height from 140 through 720 CSS pixels.
+ * @returns A height from zero through 720 CSS pixels.
  */
 export function clampFrameHeight(height: number): number {
-  return Math.min(720, Math.max(140, Math.round(height)));
+  return Math.min(720, Math.max(0, Math.round(height)));
 }
 
 /**
