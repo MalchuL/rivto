@@ -5,8 +5,9 @@
  */
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { separatorBlockFactory } from "@chulane/rivto-react/block-factories";
-import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "@chulane/rivto-react";
+import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, UNSAFE_HTML_BLOCK_TYPE } from "@chulane/rivto-react";
 import { HTML_BLOCK_SAMPLES, HTML_ELEMENT_SAMPLES } from "./samples";
+import { UNSAFE_HTML_SAMPLES } from "./unsafe-samples";
 
 /** Borrowed operations used while the notebook is still empty of history. */
 interface HtmlSeedEditor {
@@ -22,7 +23,7 @@ interface HtmlSeedEditor {
 }
 
 /** Canvas card that holds the HTML section without covering the weekend plan. */
-const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 1220 };
+const HTML_BLOCK_CARD_FRAME = { x: 60, y: 980, width: 560, height: 1600 };
 
 /**
  * Inserts the HTML heading, widgets, and their canvas card before the notebook.
@@ -54,6 +55,7 @@ export function appendHtmlBlockSection(editor: HtmlSeedEditor): string {
     );
     afterId = created.id;
   }
+  afterId = appendUnsafeHtmlSamples(editor, afterId);
   editor.elements.insertElement({
     type: "block",
     frame: HTML_BLOCK_CARD_FRAME,
@@ -64,6 +66,29 @@ export function appendHtmlBlockSection(editor: HtmlSeedEditor): string {
     separatorBlockFactory.createEmptyBlock(),
     editor.blocks.getInsertionDestinationAfter(afterId),
   ).id;
+}
+
+/**
+ * Adds each unsafe example after a dedicated previous-sibling target.
+ *
+ * @param editor - Editor inserting blocks into the demo document.
+ * @param afterId - Last block already inserted in the section.
+ * @returns ID of the final unsafe example.
+ * @throws If inserting either block fails.
+ */
+function appendUnsafeHtmlSamples(editor: HtmlSeedEditor, afterId: string): string {
+  for (const sample of UNSAFE_HTML_SAMPLES) {
+    const previous = editor.blocks.insertBlock(
+      { type: "paragraph", content: sample.previous },
+      editor.blocks.getInsertionDestinationAfter(afterId),
+    );
+    const widget = editor.blocks.insertBlock(
+      { type: UNSAFE_HTML_BLOCK_TYPE, content: sample.html, props: { label: sample.label } },
+      editor.blocks.getInsertionDestinationAfter(previous.id),
+    );
+    afterId = widget.id;
+  }
+  return afterId;
 }
 
 /**

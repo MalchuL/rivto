@@ -188,14 +188,20 @@ export function isJsonRecord(value: unknown): value is Record<string, unknown> {
  * @param source - Authored HTML fragment or complete document.
  * @param token - Per-frame secret required on every message in either direction.
  * @param fit - `fill` locks the document to the host box; `auto` lets the body grow.
+ * @param additionalScript - Optional host-provided bridge installed before authored scripts.
  * @returns A `srcdoc` string that installs `window.rivto` before the authored markup runs.
  */
-export function composeSrcDoc(source: string, token: string, fit: HtmlFrameFit): string {
+export function composeSrcDoc(
+  source: string,
+  token: string,
+  fit: HtmlFrameFit,
+  additionalScript = "",
+): string {
   const sizing =
     fit === "fill"
       ? "html,body{margin:0;height:100%;background:transparent}body{overflow:hidden}"
       : "html,body{margin:0;background:transparent}";
-  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${BRIDGE_RUNTIME.replace("__TOKEN__", JSON.stringify(token))}</scr${"ipt>"}`;
+  const head = `<meta charset="utf-8"><style>${sizing}</style><script>${BRIDGE_RUNTIME.replace("__TOKEN__", JSON.stringify(token))}${additionalScript}</scr${"ipt>"}`;
   const headOpen = /<head[^>]*>/i.exec(source);
   if (headOpen && /<html[\s>]/i.test(source)) {
     const index = headOpen.index + headOpen[0].length;

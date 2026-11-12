@@ -1,5 +1,5 @@
 /**
- * Registers the HTML block and the HTML canvas element.
+ * Registers the HTML blocks and the HTML canvas element.
  *
  * @module
  */
@@ -11,6 +11,7 @@ import type { ReactEditorExtension } from "../../managers/extensions/types";
 import type { ReactEditorApi } from "../../editor/types";
 import { HtmlBlock, HtmlBlockEditSlot } from "./components/html-block";
 import { HtmlElement, HtmlElementEditSlot } from "./components/html-element";
+import { UnsafeHtmlBlock, UNSAFE_HTML_BLOCK_TYPE } from "./components/unsafe-html-block";
 import { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE, validateHtmlElementProps } from "./protocol/protocol";
 import { HTML_STARTER } from "./html-starter";
 
@@ -46,11 +47,11 @@ const htmlIcon = (
 );
 
 /**
- * Installs the paste-and-render HTML block and canvas element.
+ * Installs the sandboxed HTML blocks and canvas element.
  *
- * The block is available from the slash menu. The element is a standalone
- * canvas tool. Disposing the extension removes both registrations and leaves
- * any saved widgets in the document.
+ * Both blocks are available from the slash menu. The element is a standalone
+ * canvas tool. Disposing the extension removes all registrations and leaves
+ * any saved widgets in the document. Unsafe block grants are local to the mounted occurrence.
  *
  * @returns Extension installed by the host editor.
  */
@@ -58,16 +59,18 @@ export function htmlSurfaceExtension(): ReactEditorExtension {
   return {
     id: "rivto.html-surface",
     /**
-     * Registers the block renderer and the canvas element together.
+     * Registers both block renderers and the canvas element together.
      *
-     * @param editor - Editor that owns both registries.
-     * @returns Cleanup that removes the block and the element registration.
+     * @param editor - Editor that owns the block and element registries.
+     * @returns Cleanup that removes both block and element registrations.
      */
     setup(editor) {
       const editingStore = createHtmlEditingStore();
       const removeBlock = registerHtmlBlock(editor, editingStore);
       const removeElement = registerHtmlElement(editor, editingStore);
+      const removeUnsafeBlock = registerUnsafeHtmlBlock(editor);
       return () => {
+        removeUnsafeBlock();
         removeElement();
         removeBlock();
       };
@@ -122,6 +125,28 @@ function registerHtmlBlock(editor: HtmlBlockRegistrationEditor, editingStore: Ht
     removeEdit();
     removeType();
   };
+}
+
+/**
+ * Registers the opt-in HTML block and its conversion command.
+ *
+ * @param editor - Editor that owns the block type registry.
+ * @returns A disposer that removes the registration.
+ */
+function registerUnsafeHtmlBlock(editor: HtmlBlockRegistrationEditor): () => void {
+  return editor.blockTypes.register({
+    definition: {
+      type: UNSAFE_HTML_BLOCK_TYPE,
+      title: "Unsafe HTML",
+      defaultProps: { label: "Unsafe HTML" },
+    },
+    render: UnsafeHtmlBlock,
+    slashCommand: {
+      title: "Unsafe HTML",
+      group: "Turn into",
+      keywords: ["html", "unsafe", "script"],
+    },
+  });
 }
 
 /**
