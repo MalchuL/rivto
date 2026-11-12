@@ -1,24 +1,25 @@
-import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import type { CanvasApi } from "@chulane/rivto-edgeless";
 export interface CanvasPoint {
   x: number;
   y: number;
 }
 
-/** Converts a viewport pointer into unscaled canvas coordinates. */
+/**
+ * Converts client coordinates to canvas coordinates using the current camera.
+ *
+ * @param point - Browser pointer position in client pixels.
+ * @param viewport - Receiving viewport, or null before it mounts.
+ * @param canvas - Surface-owned scene supplying the current camera transform.
+ * @returns Canvas coordinates, or the origin when the viewport is unavailable.
+ */
 export function canvasPoint(
   point: Pick<PointerEvent, "clientX" | "clientY">,
   viewport: HTMLElement | null,
-  fallbackZoom = 1,
+  canvas: Pick<CanvasApi, "toWorld">,
 ): CanvasPoint {
   const rect = viewport?.getBoundingClientRect();
-  const canvas = CanvasViewport.forElement(viewport)?.canvas;
-  if (canvas && rect) {
-    return canvas.toWorld({ x: point.clientX - rect.left, y: point.clientY - rect.top });
+  if (!rect) {
+    return { x: 0, y: 0 };
   }
-  const zoom = Number(viewport?.dataset.edgelessZoom) || fallbackZoom;
-  const panX = Number(viewport?.dataset.edgelessPanX) || 0;
-  const panY = Number(viewport?.dataset.edgelessPanY) || 0;
-  return rect
-    ? { x: (point.clientX - rect.left - panX) / zoom, y: (point.clientY - rect.top - panY) / zoom }
-    : { x: 0, y: 0 };
+  return canvas.toWorld({ x: point.clientX - rect.left, y: point.clientY - rect.top });
 }

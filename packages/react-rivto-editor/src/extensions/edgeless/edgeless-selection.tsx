@@ -1,3 +1,5 @@
+import { useOptionalEdgelessTools } from "../../surfaces/edgeless/edgeless-tools-context";
+import { useCanvasViewport } from "@chulane/rivto-edgeless/react";
 import { EdgelessSelectionController } from "./edgeless-selection-controller";
 import { useContext } from "react";
 import { SurfaceContext } from "../../surfaces/surface";
@@ -26,12 +28,16 @@ import { getEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-r
 export function EdgelessInteractionOverlay() {
   const reactPanel = useReactPanel();
   const selection = getEdgelessRuntime(reactPanel);
+  const viewport = useCanvasViewport();
+  const tools = useOptionalEdgelessTools();
   const mode = useContext(SurfaceContext);
   const { element: root } = useEditorRoot();
   const controller = useMemo(
     () =>
-      root ? new EdgelessSelectionController(root, reactPanel.elements, selection) : undefined,
-    [root, reactPanel.elements, selection],
+      root
+        ? new EdgelessSelectionController(root, reactPanel.elements, selection, viewport, tools)
+        : undefined,
+    [root, reactPanel.elements, selection, viewport, tools],
   );
   useEffect(() => controller?.install(reactPanel.events), [controller, reactPanel.events]);
   useEffect(() => {
@@ -45,8 +51,12 @@ export function EdgelessInteractionOverlay() {
       id: KEYBOARD_BINDING_IDS.edgelessSelectionClear,
       keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.edgelessSelectionClear],
       mode: "edgeless",
-      when: ({ root }) =>
-        !root.dataset.transforming && selection.get().active && selection.get().items.length > 0,
+      when: () =>
+        !reactPanel.editor.extensions
+          .getExtension("transform.edgeless")
+          ?.fields.isTransforming(reactPanel) &&
+        selection.get().active &&
+        selection.get().items.length > 0,
     },
     () => {
       if (!root) {

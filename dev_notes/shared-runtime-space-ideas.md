@@ -56,8 +56,6 @@ observable contents change. They support the following kinds of runtime data:
 - **Array:** Supports ordered insertion and removal. Per-value claim counts are
   not required.
 - **Scalar value:** Holds one value; updates immediately replace it.
-- **Function:** Holds one replaceable function. Consumers can determine whether a
-  function is available before calling it.
 
 An extension explicitly releases its own entry claims during cleanup. The
 collection's counters keep an entry present when another claim remains. Repeated
@@ -161,10 +159,11 @@ The file extension also supplies the provider used by file views. The image exte
 supplies its provider and per-context view options; image views observe
 extension availability so removal and reinstallation update mounted views.
 
-`rivto.clipboard.list-properties` translates detached HTML list items to host
-list properties. The editor supplies the existing list and checkbox translation
-without requiring a list extension; a host can replace the function through the
-shared space while the clipboard registry continues to own HTML traversal.
+`clipboardFormats.listProperties` translates detached HTML list items to host
+list properties. The clipboard registry supplies the existing list and checkbox
+translation without requiring a list extension; a host can replace the function
+or set it to `undefined` while the registry continues to own HTML traversal. Each
+parse captures the current function once, so a change affects subsequent parses.
 
 The editor owns the shared edgeless-selection adapter cache for its lifetime.
 Each panel receives its own adapter, and consumers can acquire one before the

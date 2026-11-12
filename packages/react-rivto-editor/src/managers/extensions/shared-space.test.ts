@@ -73,16 +73,11 @@ test("sets and maps count claims and notify only observable changes", () => {
   releaseMap();
 });
 
-test("arrays, values and functions notify and reject use after disposal", () => {
+test("arrays and values notify and reject use after disposal", () => {
   const space = createSpace();
-  const releases = [
-    space.reserve("array", "array"),
-    space.reserve("value", "value"),
-    space.reserve("function", "function"),
-  ];
+  const releases = [space.reserve("array", "array"), space.reserve("value", "value")];
   const array = space.getArray<number>("array")!;
   const value = space.getValue<number>("value")!;
-  const fn = space.getFunction<() => string>("function")!;
   let notifications = 0;
   array.subscribe(() => notifications++);
   array.splice(0, 0, 1, 2);
@@ -90,11 +85,7 @@ test("arrays, values and functions notify and reject use after disposal", () => 
   expect(notifications).toBe(1);
   value.set(1);
   expect(value.get()).toBe(1);
-  fn.set(() => "first");
-  fn.set(() => "second");
-  expect(fn.get()?.()).toBe("second");
   releases.forEach((release) => release());
   expect(() => array.values()).toThrow(/disposed/);
   expect(() => value.get()).toThrow(/disposed/);
-  expect(() => fn.get()).toThrow(/disposed/);
 });

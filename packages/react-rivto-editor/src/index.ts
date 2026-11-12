@@ -24,7 +24,6 @@ export type {
 } from "./blocks/page-block-decorations";
 export type { FileExtensionFields } from "./attachments/ingestion/file-input-routing";
 export type { CollapseExtensionFields } from "./managers/clipboard/block-paste-children";
-export { CLIPBOARD_LIST_PROPERTIES_KEY } from "./managers/clipboard/clipboard-list-properties";
 export type { ClipboardListProperties } from "./managers/clipboard/clipboard-list-properties";
 export {
   BLOCK_CONVERSION_DEFAULTS_KEY,

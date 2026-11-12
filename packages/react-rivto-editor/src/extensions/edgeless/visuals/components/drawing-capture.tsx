@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, type ReactNode, type PointerEventHandler } from "react";
-import { useEditorRoot } from "../../../../hooks/editor/use-editor-root";
+import { useEdgelessCanvas } from "../../../../surfaces/edgeless/edgeless-tools-context";
 
 /**
  * Covers the canvas viewport with an SVG event layer without knowing the active tool type.
  *
- * Observes pan and zoom attributes and counter-transforms the capture box without
+ * Observes the canvas camera and counter-transforms the capture box without
  * invalidating card styles. Children use absolute canvas coordinates. Cleanup
- * disconnects the observer when the root changes or the layer unmounts.
+ * releases the camera subscription when the surface changes or the layer unmounts.
  *
  * @param props - Capture capability, optional pointer adapters and arbitrary SVG preview content.
  * @param props.active - Whether the layer accepts pointer input; defaults to false.
@@ -36,11 +36,11 @@ export function DrawingCapture({
   readonly onPointerCancel?: PointerEventHandler<SVGSVGElement>;
   readonly onPointerLeave?: PointerEventHandler<SVGSVGElement>;
 }) {
-  const { element: root } = useEditorRoot();
+  const canvas = useEdgelessCanvas();
   const capture = useRef<SVGSVGElement | null>(null);
   useLayoutEffect(() => {
     const svg = capture.current;
-    if (!root || !svg) {
+    if (!canvas || !svg) {
       return;
     }
     /**
@@ -53,9 +53,7 @@ export function DrawingCapture({
      * @returns Updates only the SVG's viewport coverage and preview origin.
      */
     const refresh = (): void => {
-      const scale = Number(root.dataset.edgelessZoom) || 1;
-      const x = Number(root.dataset.edgelessPanX) || 0;
-      const y = Number(root.dataset.edgelessPanY) || 0;
+      const { zoom: scale, x, y } = canvas.camera.get();
       svg.style.setProperty("--edgeless-capture-left", `${-x / scale}px`);
       svg.style.setProperty("--edgeless-capture-top", `${-y / scale}px`);
       svg.style.setProperty("--edgeless-capture-width", `${100 / scale}%`);
@@ -64,13 +62,8 @@ export function DrawingCapture({
       svg.style.setProperty("--edgeless-capture-offset-y", `${y / scale}px`);
     };
     refresh();
-    const observer = new MutationObserver(refresh);
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-edgeless-zoom", "data-edgeless-pan-x", "data-edgeless-pan-y"],
-    });
-    return () => observer.disconnect();
-  }, [root]);
+    return canvas.camera.subscribe(refresh);
+  }, [canvas]);
   return (
     <svg
       ref={capture}

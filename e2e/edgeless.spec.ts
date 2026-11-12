@@ -1,5 +1,6 @@
 import { ROOT_BLOCK_SELECTOR } from "./dom-markers";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { ReactEditorApi } from "@chulane/rivto-react";
 import {
   BLOCK_ID_ATTRIBUTE,
   HOST_BLOCK_ID_SELECTOR as BLOCK_ID_SELECTOR,
@@ -257,6 +258,59 @@ test.beforeEach(async ({ page }, info) => {
     await page.setViewportSize({ width: 1280, height: 1800 });
   }
   await page.goto("/?test_features=1");
+});
+
+test("exposes the active transform through panel-scoped extension fields", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const rectangle = await createVisual(page, "Rectangle");
+  const box = await rectangle.boundingBox();
+  if (!box) {
+    throw new Error("Expected rectangle");
+  }
+  const isTransforming = () =>
+    page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { reactEditor: ReactEditorApi } })
+        .__rivtoDemo.reactEditor;
+      const panel = editor.panels.getActive() ?? editor.panels.getDefault();
+      return (
+        panel && editor.extensions.getExtension("transform.edgeless")?.fields.isTransforming(panel)
+      );
+    });
+  expect(await isTransforming()).toBe(false);
+  await page.keyboard.down("Alt");
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 60, box.y + 20, { steps: 4 });
+  await expect.poll(isTransforming).toBe(true);
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await expect.poll(isTransforming).toBe(false);
+});
+
+test("Space pans over selected objects without relying on viewport markers", async ({ page }) => {
+  await switchMode(page, "edgeless");
+  const rectangle = await createVisual(page, "Rectangle");
+  const before = await visualFrame(rectangle);
+  const box = await rectangle.boundingBox();
+  if (!box) {
+    throw new Error("Expected rectangle");
+  }
+  const viewport = page.locator(".edgeless-viewport");
+  const cameraBefore = Number(await viewport.getAttribute("data-edgeless-pan-x"));
+  await viewport.focus();
+  await page.keyboard.down("Space");
+  await expect(viewport).toHaveAttribute("data-panning-ready", "true");
+  await viewport.evaluate((element) => delete (element as HTMLElement).dataset.panningReady);
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 90, box.y + 30, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+  expect(await visualFrame(rectangle)).toEqual(before);
+  await expect
+    .poll(async () => Number(await viewport.getAttribute("data-edgeless-pan-x")))
+    .not.toBe(cameraBefore);
+  await expect(rectangle).toHaveAttribute("data-selected", "true");
 });
 
 test("darkens grid dots around the pointer with a CSS-configurable radius", async ({ page }) => {
@@ -3285,6 +3339,12 @@ test("keeps drawing coordinates aligned after pan and zoom", async ({ page }) =>
   const drawing = page.locator('[data-edgeless-visual-kind="drawing"]');
   for (const [index, tool] of ["Pencil", "Marker"].entries()) {
     await chooseDrawing(page, tool);
+    await viewport.evaluate((element) => {
+      const root = element as HTMLElement;
+      delete root.dataset.edgelessZoom;
+      delete root.dataset.edgelessPanX;
+      delete root.dataset.edgelessPanY;
+    });
     const start = { x: box.x + box.width - 220, y: box.y + 140 + index * 100 };
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();

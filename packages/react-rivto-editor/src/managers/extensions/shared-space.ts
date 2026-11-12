@@ -315,20 +315,13 @@ export type SharedArrayApi<T> = Omit<SharedArray<T>, "dispose">;
 /** Borrowed value operations; the space owns disposal. */
 export type SharedValueApi<T> = Omit<SharedValue<T>, "dispose">;
 
-/** Supported runtime object kinds; function values use the function kind. */
-export type SharedObjectKind = "set" | "map" | "array" | "value" | "function";
+/** Supported runtime object kinds. */
+export type SharedObjectKind = "set" | "map" | "array" | "value";
 
 /** Borrowed shared-space operations; the extension manager owns destruction. */
 export type SharedSpaceApi = Pick<
   SharedSpace,
-  | "reserve"
-  | "getSet"
-  | "getMap"
-  | "getArray"
-  | "getValue"
-  | "getFunction"
-  | "subscribe"
-  | "revision"
+  "reserve" | "getSet" | "getMap" | "getArray" | "getValue" | "subscribe" | "revision"
 >;
 
 interface SharedEntry {
@@ -494,17 +487,6 @@ export class SharedSpace {
    */
   getValue<T>(key: string): SharedValueApi<T> | undefined {
     return this.getObject(key, "value", () => new SharedValue<T>());
-  }
-
-  /**
-   * Looks up a reserved replaceable function, creating it on first lookup.
-   *
-   * @param key - Name reserved for a function.
-   * @returns The shared function value, or undefined if the name is unreserved.
-   * @throws If the name is reserved for another kind.
-   */
-  getFunction<T extends (...args: never[]) => unknown>(key: string): SharedValueApi<T> | undefined {
-    return this.getObject(key, "function", () => new SharedValue<T>());
   }
 
   /**

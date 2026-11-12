@@ -1,5 +1,7 @@
+import type { EdgelessToolContext } from "../../managers/edgeless-tools/edgeless-tool-context";
 import type { PanelEventsApi } from "../../managers/events/api";
-import { CanvasMarquee, CanvasViewport } from "@chulane/rivto-edgeless/browser";
+import { CanvasMarquee } from "@chulane/rivto-edgeless/browser";
+import type { CanvasViewportApi } from "@chulane/rivto-edgeless/react";
 import type { ReactPanelApi } from "../../panels/types";
 import type { EdgelessSelectionRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import { BLOCK_CONTENT_SELECTOR, EDITOR_CONTROL_SELECTOR } from "../../constants";
@@ -24,11 +26,15 @@ export class EdgelessSelectionController {
    * @param root - Fixed mounted viewport receiving input.
    * @param elements - Borrowed group records, read once when a marquee crosses slop.
    * @param selection - Canonical host selection reads and writes, without teardown access.
+   * @param viewport - Borrowed scene and live pan state, when a viewport is mounted.
+   * @param tools - Surface-owned tools used to recognize active panning.
    */
   constructor(
     private readonly root: HTMLElement,
     private readonly elements: Pick<ReactPanelApi["elements"], "getElementNodes">,
     private readonly selection: Pick<EdgelessSelectionRuntime, "get" | "set" | "clear">,
+    private readonly viewport?: Pick<CanvasViewportApi, "canvas" | "panState"> | null,
+    private readonly tools?: Pick<EdgelessToolContext, "active"> | null,
   ) {
     const rectangle = root.ownerDocument.createElement("div");
     rectangle.className = RECTANGLE_CLASS;
@@ -40,7 +46,7 @@ export class EdgelessSelectionController {
        * @returns Host selection identities paired with each child's captured bounds.
        */
       capture: () => {
-        const canvas = CanvasViewport.forElement(this.root)?.canvas;
+        const canvas = this.viewport?.canvas;
         if (!canvas) {
           return [];
         }
@@ -144,8 +150,8 @@ export class EdgelessSelectionController {
       return false;
     }
     if (
-      root.dataset.panningReady === "true" ||
-      root.dataset.edgelessPanTool === "true" ||
+      this.viewport?.panState.ready === true ||
+      this.tools?.active?.pansViewport === true ||
       target.closest(HANDLE_SELECTOR)
     ) {
       return false;
@@ -182,7 +188,7 @@ export class EdgelessSelectionController {
    * @returns Whether the marquee consumed this sample.
    */
   private move(event: PointerEvent): boolean {
-    return this.root.dataset.panning !== "true" && this.marquee.move(event.clientX, event.clientY);
+    return !this.viewport?.panState.active && this.marquee.move(event.clientX, event.clientY);
   }
 
   /**

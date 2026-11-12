@@ -16,7 +16,9 @@ import { registerEdgelessDeletion } from "./edgeless-deletion";
 import { registerEdgelessMovement } from "./edgeless-movement";
 import { installEdgelessRuntime } from "../../managers/selection/edgeless/edgeless-runtime";
 import { EdgelessInteractionOverlay } from "./edgeless-selection";
-import { registerEdgelessTransform } from "./edgeless-transform";
+import { createEdgelessTransformExtension } from "./edgeless-transform";
+import type { EdgelessTransformExtension } from "./edgeless-transform";
+export type { EdgelessTransformExtension, EdgelessTransformFields } from "./edgeless-transform";
 import { EdgelessSurfaceRegistration } from "../../surfaces/edgeless/register";
 
 /** @returns The built-in positioned-card surface. */
@@ -56,11 +58,8 @@ export function edgelessMovementExtension(): ReactEditorExtension {
  * Handles are mounted per view; the editor retains selection, connector previews, and undo.
  * @returns The optional edgeless transform extension.
  */
-export function edgelessTransformExtension(): ReactEditorExtension {
-  return {
-    id: "transform.edgeless",
-    setup: (reactEditor) => registerEdgelessTransform(reactEditor),
-  };
+export function edgelessTransformExtension(): EdgelessTransformExtension {
+  return createEdgelessTransformExtension();
 }
 
 /** Options for the complete opt-in edgeless interaction preset. */

@@ -1,21 +1,19 @@
-import { CanvasViewport } from "@chulane/rivto-edgeless/browser";
 import type { SnapGuide } from "../../elements/visuals/utils/geometry";
 
 /**
  * Renders the current snap guides into an edgeless plane, removing stale guides.
  *
- * @param root - Mounted receiving viewport; missing attachments are ignored.
+ * @param plane - Mounted receiving world layer; missing attachments are ignored.
  * @param values - Current alignment guides in world coordinates.
  * @returns The owning plane contains exactly these guides without a document mutation.
  */
-export function showSnapGuides(root: HTMLElement, values: readonly SnapGuide[]): void {
-  const plane = CanvasViewport.forElement(root)?.layers.get()?.plane;
+export function showSnapGuides(plane: HTMLElement | null, values: readonly SnapGuide[]): void {
   if (!plane) {
     return;
   }
-  const existing = [...root.querySelectorAll<HTMLElement>("[data-edgeless-snap-guide]")];
+  const existing = [...plane.querySelectorAll<HTMLElement>(":scope > [data-edgeless-snap-guide]")];
   values.forEach((guide, index) => {
-    const element = existing[index] ?? root.ownerDocument.createElement("div");
+    const element = existing[index] ?? plane.ownerDocument.createElement("div");
     element.dataset.edgelessSnapGuide = guide.kind;
     element.className = `edgeless-snap-guide edgeless-snap-guide-${guide.axis}`;
     if (guide.axis === "x") {

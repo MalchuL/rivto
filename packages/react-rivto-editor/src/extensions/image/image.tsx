@@ -15,7 +15,8 @@ import {
 } from "../../attachments/ingestion/file-upload-status";
 import type { ElementRenderProps } from "../../managers/elements/types";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
-import type { ImageReactEditorExtension } from "../../managers";
+import type { ReactEditorExtension } from "../../managers";
+import type { ImageViewConfiguration } from "../../components/image-view-types";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { BinaryProvider } from "../../attachments";
@@ -46,6 +47,20 @@ export interface ImageProps extends FileReference {
   readonly intrinsicHeight?: number;
 }
 
+/** Installed image extension and its public fields. */
+export interface ImageReactEditorExtension extends ReactEditorExtension<ImageViewConfiguration> {
+  /** Stable installed identity for the image extension. */
+  readonly id: "image";
+  /** Image provider and view configuration owned by this extension. */
+  readonly fields: ImageViewConfiguration;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Image provider and view configuration. */
+    image: ImageReactEditorExtension;
+  }
+}
 /** Storage, presentation, and asynchronous error notification for images. */
 export interface ImageExtensionOptions {
   /** Storage provider for uploaded and resolved images. */

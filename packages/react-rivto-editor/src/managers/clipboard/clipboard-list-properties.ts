@@ -1,8 +1,5 @@
 import type { EditorBlockInput } from "@chulane/rivto";
 
-/** Shared function translating an HTML list item to persisted list properties. */
-export const CLIPBOARD_LIST_PROPERTIES_KEY = "rivto.clipboard.list-properties";
-
 /**
  * Reads host list properties from a detached HTML list item.
  *

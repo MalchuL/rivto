@@ -14,9 +14,8 @@ import type {
   PortableBlockFormats,
 } from "./types";
 import type { ClipboardConverters } from "./clipboard-converters";
-import type { SharedSpace } from "../extensions/shared-space";
 import {
-  CLIPBOARD_LIST_PROPERTIES_KEY,
+  defaultClipboardListProperties,
   type ClipboardListProperties,
 } from "./clipboard-list-properties";
 
@@ -36,6 +35,7 @@ export const escapeClipboardHTML = (value: string): string =>
 
 /** Ordered React-owned portable clipboard contributions. */
 export class ClipboardFormatRegistry {
+  private listPropertiesValue: ClipboardListProperties | undefined = defaultClipboardListProperties;
   private readonly formatters: ClipboardFormatter[] = [];
   private readonly parsers: ClipboardParser[] = [];
 
@@ -43,13 +43,35 @@ export class ClipboardFormatRegistry {
    * Creates the React-owned formatter and parser registry.
    * @param registrations - Extension lifecycle owning registered contributions.
    * @param converters - Optional runtime type converters applied before general formatting.
-   * @param shared - Borrowed runtime values used for optional list-item translation.
    */
   constructor(
     private readonly registrations: RegistrationOwner,
     private readonly converters: ClipboardConverters | undefined,
-    private readonly shared: Pick<SharedSpace, "getFunction">,
-  ) {}
+  ) {
+    registrations.registerCleanup(() => {
+      this.listPropertiesValue = undefined;
+    });
+  }
+
+  /**
+   * Reads the translator captured at the beginning of each HTML parse.
+   *
+   * @returns The current translator, or undefined when list items have no translation.
+   */
+  get listProperties(): ClipboardListProperties | undefined {
+    return this.listPropertiesValue;
+  }
+
+  /**
+   * Replaces the translator used for subsequent HTML parses.
+   *
+   * @param translator - List-item translation, or undefined to leave items undecorated.
+   * @throws If the owning editor is being destroyed.
+   */
+  set listProperties(translator: ClipboardListProperties | undefined) {
+    this.registrations.assertActive();
+    this.listPropertiesValue = translator;
+  }
 
   /**
    * Appends a formatter to the ordered, composable formatting pipeline.
@@ -238,7 +260,7 @@ export class ClipboardFormatRegistry {
    * Parses portable clipboard content without mounting external markup.
    * Whole-buffer parsers run first; type parsers then claim individual HTML subtrees.
    * Unclaimed containers preserve their children, while scripts and embedded documents are ignored.
-   * The shared list-item translator is captured once for each HTML parse.
+   * The current list-item translator is captured once for each HTML parse.
    * @param data - Available HTML and plain-text flavors.
    * @param context - Receiving surface and writing-block fallback.
    * @returns Detached block/element inputs, or undefined when only ordinary plain text remains.
@@ -253,9 +275,7 @@ export class ClipboardFormatRegistry {
     }
     const converters = this.converters?.getParsers() ?? [];
     if (data.html && typeof DOMParser !== "undefined") {
-      const listProperties = this.shared
-        .getFunction<ClipboardListProperties>(CLIPBOARD_LIST_PROPERTIES_KEY)
-        ?.get();
+      const listProperties = this.listProperties;
       const document = new DOMParser().parseFromString(data.html, "text/html");
       const blocks: EditorBlockInput[] = [];
       const elements: EditorElementInput[] = [];

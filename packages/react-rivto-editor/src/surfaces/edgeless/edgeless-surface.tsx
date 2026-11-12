@@ -1,8 +1,14 @@
 import { EdgelessGridSpotlight } from "./edgeless-grid-spotlight";
 import { useReactPanelContext } from "../../hooks/editor/use-react-panel-context";
 import { BlockEditorScope } from "@chulane/rivto-page";
-import { CanvasView, useCanvasCamera, useCanvasVisible } from "@chulane/rivto-edgeless/react";
-import { useEdgelessCanvas } from "./edgeless-tools-context";
+import {
+  CanvasView,
+  useCanvasCamera,
+  useCanvasViewport,
+  useCanvasVisible,
+} from "@chulane/rivto-edgeless/react";
+import { useEdgelessCanvas, useEdgelessTools } from "./edgeless-tools-context";
+import { useVisualTool } from "../../hooks/elements/use-visual-tool";
 import { EdgelessToolsProvider } from "./edgeless-tools-context";
 import type { CanvasApi } from "@chulane/rivto-edgeless";
 import { EdgelessSurfaceController } from "./edgeless-surface-controller";
@@ -93,13 +99,25 @@ function EdgelessSurfaceContent({
 }: SurfaceContentProps) {
   const panel = useReactPanel();
   const canvas = useEdgelessCanvas()!;
+  const viewport = useCanvasViewport();
+  const tools = useEdgelessTools();
+  const tool = useVisualTool(tools);
   const camera = useCanvasCamera(canvas);
   const snap = useSurfaceSnapping(snapping);
   const controller = useMemo(
-    () => new EdgelessSurfaceController(panel, canvas, blockElementWidth),
-    [panel, canvas, blockElementWidth],
+    () => new EdgelessSurfaceController(panel, canvas, blockElementWidth, tools),
+    [panel, canvas, blockElementWidth, tools],
   );
-  const spotlight = useMemo(() => new EdgelessGridSpotlight(), []);
+  const spotlight = useMemo(
+    () =>
+      new EdgelessGridSpotlight(() =>
+        Boolean(
+          viewport?.panState.active ||
+          panel.editor.extensions.getExtension("transform.edgeless")?.fields.isTransforming(panel),
+        ),
+      ),
+    [panel, viewport],
+  );
   const { reactPanel } = useReactPanelContext();
   const { ref: registerRoot, element: root } = useEditorRoot();
   const rootRef = useCallback(
@@ -110,6 +128,14 @@ function EdgelessSurfaceContent({
     },
     [controller, spotlight, registerRoot],
   );
+  useEffect(() => {
+    if (!root) {
+      return;
+    }
+    root.dataset.edgelessTool = tool?.id ?? "";
+    root.dataset.edgelessPanTool = String(tool?.pansViewport ?? false);
+    root.dataset.edgelessCaptureTool = String(tool?.capturesPointer ?? false);
+  }, [root, tool]);
   useEffect(() => spotlight.observeViewport(), [spotlight]);
   useEffect(() => controller.applySnapping(snap), [controller, snap]);
   return (

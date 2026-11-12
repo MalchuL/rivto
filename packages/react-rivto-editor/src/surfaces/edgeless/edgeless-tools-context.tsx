@@ -58,6 +58,15 @@ export function useEdgelessCreationDefaults(): EdgelessCreationDefaults {
 }
 
 /**
+ * Reads the current surface's tools when an edgeless surface is mounted.
+ *
+ * @returns The surface-owned tools, or null outside its provider.
+ */
+export function useOptionalEdgelessTools(): EdgelessToolContext | null {
+  return useContext(ToolsContext);
+}
+
+/**
  * Reads the surface's tool context without allocating another instance.
  *
  * @returns Shared tool, operation and group ownership for this surface.

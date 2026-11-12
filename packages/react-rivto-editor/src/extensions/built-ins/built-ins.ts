@@ -1,3 +1,4 @@
+import type { CollapseExtensionFields } from "../../managers/clipboard/block-paste-children";
 import { blockHandleExtension } from "./block-handle/extension";
 /**
  * Public built-in extension catalog.
@@ -10,11 +11,7 @@ import { blockHandleExtension } from "./block-handle/extension";
 import { createStructuralSelection } from "@chulane/rivto";
 import { createElement } from "react";
 import { blockIdsOf, insertBlockElementSeparator } from "../../elements/block-element-projection";
-import {
-  type CollapseReactEditorExtension,
-  type ReactBlockRegistration,
-  type ReactEditorExtension,
-} from "../../managers";
+import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
@@ -184,6 +181,20 @@ export const indentExtension = (options: IndentExtensionOptions = {}): ReactEdit
   };
 };
 
+/** Block collapse extension and its public paste placement operation. */
+export interface CollapseReactEditorExtension extends ReactEditorExtension<CollapseExtensionFields> {
+  /** Stable installed identity for the collapse extension. */
+  readonly id: "block.collapse";
+  /** Collapse operations available while this extension is installed. */
+  readonly fields: CollapseExtensionFields;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Collapse operations keyed by their owning extension. */
+    "block.collapse": CollapseReactEditorExtension;
+  }
+}
 /** @returns Shared persisted collapse controls and keyboard actions. */
 export const collapseExtension = (): CollapseReactEditorExtension => ({
   id: "block.collapse",

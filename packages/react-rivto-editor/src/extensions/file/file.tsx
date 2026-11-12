@@ -11,7 +11,8 @@
 import { escapeHtml } from "../../utils/escape-html";
 import { registerMarkdownExtension } from "../../blocks/markdown/markdown-extensions";
 import { useBlock, useBlockSelectionAnchor } from "../../hooks";
-import type { FileReactEditorExtension } from "../../managers";
+import type { ReactEditorExtension } from "../../managers";
+import type { FileExtensionFields } from "../../attachments/ingestion/file-input-routing";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { ElementRenderProps } from "../../managers/elements/types";
@@ -33,6 +34,20 @@ export const FILE_BLOCK_TYPE = "file";
 export const FILE_ELEMENT_TYPE = "file";
 const FILE_BLOCK_CLASS = "rivto-file-block";
 
+/** Installed file extension and its public fields. */
+export interface FileReactEditorExtension extends ReactEditorExtension<FileExtensionFields> {
+  /** Stable installed identity for the generic file extension. */
+  readonly id: "file";
+  /** Input routing and provider configuration owned by this extension. */
+  readonly fields: FileExtensionFields;
+}
+
+declare global {
+  interface RivtoInstalledExtensions {
+    /** Generic file input and provider capabilities. */
+    file: FileReactEditorExtension;
+  }
+}
 /** Storage and asynchronous error notification for generic files. */
 export interface FileExtensionOptions {
   /** Provider used to store and resolve generic files. */
