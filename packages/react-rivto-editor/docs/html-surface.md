@@ -7,7 +7,7 @@ The exported `HTML_BLOCK_TYPE` and `HTML_ELEMENT_TYPE` identify the persisted
 types. Uninstalling the extension removes its registrations, not document data.
 
 A block stores its HTML in `content`; an element stores it in `props.html`.
-Each widget runs its markup in an iframe sandbox with `allow-scripts` and no
+Each widget runs its markup in an iframe sandbox with `allow-scripts` and `allow-forms`, and no
 `allow-same-origin`. The parent posts a detached snapshot for that widget.
 A block snapshot contains `kind`, `id`, `type`, `content`, `props`, `listProps`,
 `pluginData`, and `childIds`. An element snapshot contains `kind`, `id`, `type`,
@@ -64,8 +64,9 @@ native hit target over the region; it never converts iframe messages into pointe
 events or trusts them as permission to edit another object. Mark only regions
 that do not contain buttons, links, editable fields or text that must be selected:
 the host target receives their pointer input. Without a marker, background areas
-are used as drag targets while text, native controls and elements with click or
-pointer listeners retain iframe interaction. Mark custom interactive content with
+are used as drag targets while text, native controls, draggable elements and
+elements with recognized click, pointer or drag-and-drop listeners retain iframe
+interaction. Mark custom interactive content with
 `data-rivto-interactive` when its interaction is delegated to the document or window,
 or uses an event the bridge cannot identify. Regions follow normal layout, scrolling and element size;
 they are clipped to the iframe and rectangular overflow ancestors. Continuous
@@ -85,7 +86,8 @@ renderers receive `selected` and `preview` in `ElementRenderProps`. Containers
 can pass the selection state owned by their existing layout.
 
 The sandbox prevents scripts from reading the parent's DOM and origin, but does
-not prevent network requests. Scripts receive the widget's snapshot, including
+not prevent network requests or form submissions. A form can navigate its iframe;
+use `submit` with `preventDefault()` for in-place widget actions. Scripts receive the widget's snapshot, including
 block plugin data, and can send those values to remote services. Install this
 extension only where executing authored HTML and that data exposure are acceptable;
 the sandbox is not a network isolation boundary.

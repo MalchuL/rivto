@@ -63,13 +63,12 @@
   pointer-events: auto;
 }
 
+/* Offscreen iframe placeholders can shift controls between pointer-down and release. */
 .html-surface-block {
   display: grid;
   gap: 8px;
   min-width: 0;
   max-width: 100%;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
 }
 
 .html-surface-canvas {

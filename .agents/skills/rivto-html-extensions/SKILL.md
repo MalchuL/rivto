@@ -54,7 +54,7 @@ to the mounted widget; replacing its source or unmounting must release them.
 
 ## Bridge and capabilities
 
-The HTML iframe allows scripts but withholds the parent's origin. Its document is
+The HTML iframe allows scripts and forms but withholds the parent's origin. Its document is
 separate from the host document, so live panel, editor and DOM objects cannot be
 passed into it. Validate the message source, frame token and payload at the host
 boundary; reject malformed or unsafe property values, ignore detached placement
@@ -78,7 +78,11 @@ objects. Recheck the current grant and source on each request, keep panel-local
 and shared-editor scopes distinct, and show the existing warning when access is
 requested while disabled and while it is enabled. Never store permission in
 iframe-writable widget props. The sandbox does not block network requests or pin
-external script contents; snapshot data can be sent to remote services.
+external script contents; snapshot data can be sent to remote services. Forms can
+submit network requests and navigate their iframe; prevent the default `submit`
+action for in-place widget operations, while preserving button and Enter activation.
+Install that prevention before waiting for `rivto.ready()` so early input cannot
+accidentally navigate the iframe; disable actions until their state is ready.
 
 ## Pointer and selection ownership
 
@@ -89,10 +93,15 @@ leaving dragging or selection stuck. Page's pointer owner temporarily disables
 pointer input on frames inside its root during its own gesture and restores it on
 release, cancellation or detach. Keep this generic to embedded frames and keep
 gesture completion, drop geometry and selection with the existing surface owner.
+Avoid guessed offscreen heights for HTML blocks: activating an offscreen iframe's
+real layout can move another control between pointer-down and release. Check real
+scroll and pointer behavior before adding content-visibility optimizations.
 
 Gestures starting inside the iframe need real host-side hit targets. Unmarked HTML
 backgrounds receive automatic targets; text, native controls and recognized
-interactive elements retain their iframe events. Use `data-rivto-interactive` for
+interactive elements retain their iframe events. Native draggable elements and
+elements with detected `dragstart`, `dragenter`, `dragover` or `drop` listeners
+remain available to HTML drag-and-drop inside the iframe. Use `data-rivto-interactive` for
 custom interactive areas whose handlers cannot be detected, including handlers
 delegated to `document` or `window`. An explicit `data-rivto-drag-handle` marks a
 noninteractive region and takes precedence over automatic background targets.
@@ -111,6 +120,21 @@ modifier behavior. Preserve the native event so buttons work on the first click 
 iframe text remains selectable. Never replay iframe messages as trusted pointer
 events or use them to authorize moving other objects.
 
+For custom pointer-driven controls, capture the actual pointer on pointer-down and
+release or cancel it with the gesture; capture keeps fast movement owned by the
+widget when the pointer leaves its control. Do not use a host drag marker over
+that control. For a range input, update immediate visual feedback on `input` and
+commit the intended document value on `change` when one undoable change is desired.
+Keep the focused control stable across the widget's own document-update echo;
+after a keyboard reorder, restore focus to an enabled control for the moved item.
+An iframe's keyboard and paste events belong to its own document, so keep native
+input, contenteditable selection and clipboard behavior inside the widget rather
+than forwarding those events to Page or the canvas.
+Track listener ownership without strongly retaining removed DOM nodes: use weak
+references and prune dead entries while preserving controls inside shadow roots.
+Disconnect observers on frame replacement. Verify that controls added or replaced
+later, including in a closed shadow root, still receive clicks.
+
 For an embedded source editor, place `editorControlProps` on the wrapper containing
 the editable surface so Page recognizes the whole control. Check inherited
 `user-select` styles, especially in a canvas visual host, and preserve the source
@@ -126,6 +150,13 @@ across an iframe, and drag another block over it and release: assert the committ
 destination, cleanup and undo. For canvas, check a fast drag, live preview, final
 commit, cancellation and undo, including a grouped element. Include populated
 containers when the renderer is hosted there.
+
+Exercise a native slider, a form submitted by button and Enter, internal HTML
+drag-and-drop, and a pointer-captured drag. Verify that interacting does not move
+the canvas element or structurally select the Page block. Cut and paste inside
+input and contenteditable fields, including an image URL that must remain text;
+also copy and paste a whole HTML block and verify its source and properties.
+For a reorderable widget, test keyboard focus and document undo as well as dragging.
 
 For source editing, drag across visible, hit-testable text and assert native
 selection without structural block selection; exercise typing, clipboard,

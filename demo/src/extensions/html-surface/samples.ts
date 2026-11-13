@@ -8,6 +8,7 @@
  */
 
 import { ORBIT_HTML, WEEKLY_PROGRESS_HTML } from "./animated-samples.ts";
+import { MIXER_HTML, PRIORITY_BOARD_HTML } from "./interactive-samples.ts";
 
 /** One pasted block stored as HTML content plus JSON props. */
 export interface HtmlBlockSample {
@@ -479,6 +480,16 @@ export const HTML_BLOCK_SAMPLES: readonly HtmlBlockSample[] = [
     props: { sample: "goal", label: "Reading goal", value: 36, goal: 80 },
   },
   {
+    sample: "priorities",
+    html: PRIORITY_BOARD_HTML,
+    props: { sample: "priorities", label: "Priority board", items: ["Plan", "Build", "Review"] },
+  },
+  {
+    sample: "mixer-block",
+    html: MIXER_HTML,
+    props: { sample: "mixer-block", label: "Page mixer", volume: 40, playing: false },
+  },
+  {
     sample: "quote",
     html: QUOTE_HTML,
     props: {
@@ -532,5 +543,21 @@ export const HTML_ELEMENT_SAMPLES: readonly HtmlElementSample[] = [
     html: SIGNAL_HTML,
     props: { sample: "signal", label: "Signal", status: "On air", hue: 262 },
     frame: { x: 2930, y: 48, width: 250, height: 250 },
+  },
+  {
+    sample: "mixer",
+    html: MIXER_HTML,
+    props: { sample: "mixer", label: "Sound mixer", volume: 40, playing: false },
+    frame: { x: 3470, y: 48, width: 280, height: 250 },
+  },
+  {
+    sample: "priorities-element",
+    html: PRIORITY_BOARD_HTML,
+    props: {
+      sample: "priorities-element",
+      label: "Canvas priorities",
+      items: ["Sketch", "Create", "Share"],
+    },
+    frame: { x: 3470, y: 360, width: 300, height: 290 },
   },
 ];

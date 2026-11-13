@@ -192,6 +192,7 @@ const BRIDGE_RUNTIME = `
   var observedHandles = [];
   var observedNodes = [];
   var interactiveNodes = new Set();
+  var interactiveReferences = new WeakMap();
   var lastHandles = "";
   var handleFrame = 0;
   /**
@@ -264,16 +265,18 @@ const BRIDGE_RUNTIME = `
    */
   function automaticHandles(width, height) {
     var regions = [{ x: 0, y: 0, width: 1, height: 1 }];
-    var controls = document.querySelectorAll('button, a[href], input, textarea, select, [contenteditable], [tabindex], [role="button"], [onclick], [onmousedown], [onpointerdown], [data-rivto-interactive]');
+    var controls = document.querySelectorAll('button, a[href], input, textarea, select, [contenteditable], [tabindex], [role="button"], [draggable="true"], [onclick], [onmousedown], [onpointerdown], [ondragstart], [ondragenter], [ondragover], [ondrop], [data-rivto-interactive]');
     controls.forEach(function (node) { regions = excludeRectangle(regions, handleRectangle(node, width, height)); });
     document.body.querySelectorAll("*").forEach(function (node) {
       var style = getComputedStyle(node);
-      if (node.onclick || node.onmousedown || node.onpointerdown || style.cursor === "pointer") {
+      if (node.onclick || node.onmousedown || node.onpointerdown || node.ondragstart || node.ondragenter || node.ondragover || node.ondrop || style.cursor === "pointer") {
         regions = excludeRectangle(regions, handleRectangle(node, width, height));
       }
     });
-    interactiveNodes.forEach(function (node) {
-      if (node.isConnected) { regions = excludeRectangle(regions, handleRectangle(node, width, height)); }
+    interactiveNodes.forEach(function (reference) {
+      var node = reference.deref();
+      if (!node) { interactiveNodes.delete(reference); }
+      else if (node.isConnected) { regions = excludeRectangle(regions, handleRectangle(node, width, height)); }
     });
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     var text;
@@ -341,7 +344,7 @@ const BRIDGE_RUNTIME = `
   if (typeof MutationObserver === "function") {
     new MutationObserver(function (changes) {
       if (autoHandles || changes.some(affectsHandles)) { scheduleHandles(); }
-    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["style", "class", "data-rivto-drag-handle", "data-rivto-interactive", "onclick", "onmousedown", "onpointerdown", "tabindex", "contenteditable", "role", "href"] });
+    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["style", "class", "data-rivto-drag-handle", "data-rivto-interactive", "onclick", "onmousedown", "onpointerdown", "ondragstart", "ondragenter", "ondragover", "ondrop", "draggable", "tabindex", "contenteditable", "role", "href"] });
   }
   window.addEventListener("resize", scheduleHandles);
   window.addEventListener("scroll", scheduleHandles, true);
@@ -364,8 +367,12 @@ const BRIDGE_RUNTIME = `
   if (autoHandles) {
     var addListener = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (type, listener, options) {
-      if (listener && /^(click|dblclick|mousedown|pointerdown|touchstart)$/.test(type)) {
-        if (this instanceof Element) { interactiveNodes.add(this); }
+      if (listener && /^(click|dblclick|mousedown|pointerdown|touchstart|dragstart|dragenter|dragover|drop)$/.test(type)) {
+        if (this instanceof Element && !interactiveReferences.has(this)) {
+          var reference = new WeakRef(this);
+          interactiveReferences.set(this, reference);
+          interactiveNodes.add(reference);
+        }
         scheduleHandles();
       }
       return addListener.call(this, type, listener, options);
