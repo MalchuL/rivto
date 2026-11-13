@@ -168,6 +168,13 @@ export class BlockPointerSelection {
    */
   private installStart(feature: "pointer" | "range"): void {
     const events = this.editor.events;
+    if (feature === "range") {
+      events.register(
+        "selection.range.suppress-click",
+        { type: "click", capture: true, scope: "block", priority: 100 },
+        this.onSuppressedClick,
+      );
+    }
     events.register(
       `selection.${feature}.start`,
       { type: "pointerdown", scope: "block", priority: feature === "range" ? 20 : 0 },
@@ -237,14 +244,7 @@ export class BlockPointerSelection {
     events.register(
       "selection.suppress-click",
       { type: "click", capture: true, scope: "block", priority: 100 },
-      (event) => {
-        if (this.suppressClickBlockId === event.blockId) {
-          this.suppressClickBlockId = undefined;
-          event.raw.preventDefault();
-          return "handled";
-        }
-        return "continue";
-      },
+      this.onSuppressedClick,
     );
   }
   /**
@@ -305,11 +305,31 @@ export class BlockPointerSelection {
   private installToggle(): void {
     const events = this.editor.events;
     events.register(
+      "selection.toggle.suppress-click",
+      { type: "click", capture: true, scope: "block", priority: 100 },
+      this.onSuppressedClick,
+    );
+    events.register(
       "selection.toggle",
       { type: "pointerdown", capture: true, scope: "block", priority: 50 },
       this.onToggle,
     );
   }
+
+  /**
+   * Claims a control click after the editor has consumed its pointer gesture.
+   *
+   * @param input - Native click in the block that initiated the gesture.
+   * @returns Handled when this click belongs to the claimed gesture.
+   */
+  private onSuppressedClick = (input: BlockInputEvent<"click">): BlockInputResult => {
+    if (this.suppressClickBlockId !== input.blockId) {
+      return "continue";
+    }
+    this.suppressClickBlockId = undefined;
+    input.raw.preventDefault();
+    return "handled";
+  };
 
   /**
    * Reads canonical selectable order from the host, including collapse filtering.
@@ -378,60 +398,42 @@ export class BlockPointerSelection {
       ? this.dom.readDOMSelectionPoint(root, current.x, current.y)
       : undefined;
     const headPosition = head && this.dom.readDOMPointPosition(root, head);
-    // Caret hit-testing falls back to a nearby editable host over contentless
-    // blocks. The configured exact-endpoint binding keeps that DOM point only for native painting and
-    // uses the actual BlockView hit as the portable selection endpoint.
-    //
-    // Nested parents wrap descendant rows, so a bottom-to-top drag can sit
-    // in the margin between children while `elementFromPoint` still reports
-    // the parent. `readBlockIdAtPoint` maps that wrapping hit to the nearest
-    // nested row. Promoting the parent here would select the whole subtree
-    // even though the pointer never entered the parent's own row.
-    const partialContentlessBlockId =
-      current.exact && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
-    const effectiveHeadPosition = partialContentlessBlockId
-      ? { blockId: partialContentlessBlockId, offset: 0 }
-      : headPosition;
+    const effectiveHeadPosition = this.exactHeadPosition(
+      current.exact,
+      pointedBlockId,
+      headPosition,
+    );
     // Structural selection follows the owning block under the pointer. A
     // contentless body can make caret lookup fall back to the anchor or a
     // neighboring editable block, which must not decide the range boundary.
     const crossBlock =
       (pointedBlockId ?? effectiveHeadPosition?.blockId) !== active.anchorPosition.blockId;
     const wholeBlocks = Boolean(crossBlock) && !current.exact;
-    let handled = false;
     if (
       wholeBlocks &&
       pointedBlockId &&
       pointedBlockId !== headPosition?.blockId &&
       (pointedBlockId !== active.anchorPosition.blockId || !active.anchor)
     ) {
-      this.ownsCrossBlockSelection = true;
-      if (!active.anchor) {
-        this.suppressClickBlockId = active.anchorPosition.blockId;
-      }
-      this.publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
-      handled = true;
-    } else if (head && effectiveHeadPosition) {
+      this.publishPointedBlockSelection(active, pointedBlockId);
+      return true;
+    }
+    if (head && effectiveHeadPosition) {
       const sameBlock = effectiveHeadPosition.blockId === active.anchorPosition.blockId;
-      if (!(sameBlock && !this.ownsCrossBlockSelection)) {
-        this.ownsCrossBlockSelection = true;
-        this.publish(active, head, effectiveHeadPosition, wholeBlocks);
-        handled = true;
+      if (sameBlock && !this.ownsCrossBlockSelection) {
+        return false;
       }
-    } else if (
-      pointedBlockId &&
-      (pointedBlockId !== active.anchorPosition.blockId || !active.anchor)
-    ) {
+      this.ownsCrossBlockSelection = true;
+      this.publish(active, head, effectiveHeadPosition, wholeBlocks);
+      return true;
+    }
+    if (pointedBlockId && (pointedBlockId !== active.anchorPosition.blockId || !active.anchor)) {
       // Contentless structural blocks have no caret geometry, so their stable
       // BlockView marker advances a whole-block range instead.
-      this.ownsCrossBlockSelection = true;
-      if (!active.anchor) {
-        this.suppressClickBlockId = active.anchorPosition.blockId;
-      }
-      this.publish(active, undefined, { blockId: pointedBlockId, offset: 0 }, true);
-      handled = true;
+      this.publishPointedBlockSelection(active, pointedBlockId);
+      return true;
     }
-    return handled;
+    return false;
   };
 
   /**
@@ -558,6 +560,13 @@ export class BlockPointerSelection {
       this.pointer = start;
     }
     if (handled) {
+      const control = this.isElement(raw.target)
+        ? raw.target.closest(EDITOR_CONTROL_SELECTOR)
+        : null;
+      if (control?.matches(BLOCK_SELECTION_ANCHOR_SELECTOR)) {
+        // A range gesture can be followed by a native click on the opted-in control.
+        this.suppressClickBlockId = start.anchorPosition.blockId;
+      }
       raw.preventDefault();
     }
     if (!this.features.has("pointer")) {
@@ -867,6 +876,24 @@ export class BlockPointerSelection {
       return "continue";
     }
     this.cancel();
+    this.toggleStructuralSelection(blockId);
+    root.ownerDocument.getSelection()?.removeAllRanges();
+    root.focus({ preventScroll: true });
+    if (control) {
+      // The browser may still send click after this configured modifier gesture.
+      this.suppressClickBlockId = blockId;
+    }
+    raw.preventDefault();
+    return "handled";
+  };
+
+  /**
+   * Toggles one block in the currently visible structural selection.
+   *
+   * @param blockId - Block to add or remove from selection.
+   * @returns Updates selection in canonical visible order, or clears it when empty.
+   */
+  private toggleStructuralSelection(blockId: string): void {
     const selection = this.editor.adapter.selection;
     const current = selection.get();
     const ids = new Set(
@@ -893,9 +920,51 @@ export class BlockPointerSelection {
     } else {
       selection.clear();
     }
-    root.ownerDocument.getSelection()?.removeAllRanges();
-    root.focus({ preventScroll: true });
-    raw.preventDefault();
-    return "handled";
-  };
+  }
+
+  /**
+   * Publishes a whole-block range to the block under the moving pointer.
+   *
+   * A contentless origin also suppresses the click produced after the drag.
+   *
+   * @param active - Current gesture and its fixed anchor.
+   * @param blockId - Pointed block used as the structural endpoint.
+   * @returns Updates selection ownership and publishes the structural range.
+   */
+  private publishPointedBlockSelection(active: PointerSelection, blockId: string): void {
+    this.ownsCrossBlockSelection = true;
+    if (!active.anchor) {
+      this.suppressClickBlockId = active.anchorPosition.blockId;
+    }
+    this.publish(active, undefined, { blockId, offset: 0 }, true);
+  }
+
+  /**
+   * Resolves the portable endpoint for an exact pointer selection.
+   *
+   * @param exact - Whether the configured exact-endpoint binding is active.
+   * @param pointedBlockId - Block whose own row is under the pointer, if any.
+   * @param headPosition - Caret-derived position, if a DOM point was found.
+   * @returns The pointed block's start for a differing exact hit, otherwise the caret position.
+   */
+  private exactHeadPosition(
+    exact: boolean,
+    pointedBlockId: string | undefined,
+    headPosition: EditorPosition | undefined,
+  ): EditorPosition | undefined {
+    // Caret hit-testing falls back to a nearby editable host over contentless
+    // blocks. The configured exact-endpoint binding keeps that DOM point only for native painting and
+    // uses the actual BlockView hit as the portable selection endpoint.
+    //
+    // Nested parents wrap descendant rows, so a bottom-to-top drag can sit
+    // in the margin between children while `elementFromPoint` still reports
+    // the parent. `readBlockIdAtPoint` maps that wrapping hit to the nearest
+    // nested row. Promoting the parent here would select the whole subtree
+    // even though the pointer never entered the parent's own row.
+    const partialContentlessBlockId =
+      exact && pointedBlockId !== headPosition?.blockId ? pointedBlockId : undefined;
+    return partialContentlessBlockId
+      ? { blockId: partialContentlessBlockId, offset: 0 }
+      : headPosition;
+  }
 }

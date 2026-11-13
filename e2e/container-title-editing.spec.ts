@@ -1,4 +1,32 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+/**
+ * Drags over characters at offsets two through six in a visible title.
+ *
+ * @param page - Browser receiving the mouse gesture.
+ * @param title - Editable title containing a text node.
+ * @returns Resolves after releasing the pointer.
+ */
+async function dragTitleText(page: Page, title: Locator): Promise<void> {
+  await title.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  const points = await title.evaluate((element) => {
+    const node = element.firstChild!;
+    return [2, 6].map((offset) => {
+      const range = document.createRange();
+      range.setStart(node, offset);
+      range.collapse(true);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.left, y: rect.top + rect.height / 2 };
+    });
+  });
+  await page.mouse.move(points[0].x, points[0].y);
+  await page.mouse.down();
+  await page.mouse.move(points[1].x, points[1].y, { steps: 8 });
+  await page.mouse.up();
+}
 
 for (const [type, name] of [
   ["bento", "Bento"],
@@ -40,24 +68,7 @@ for (const [type, name] of [
       element.dispatchEvent(event);
     });
     await expect(title).toHaveText("Replaced pasted");
-    await title.evaluate((element) => element.scrollIntoView({ block: "center" }));
-    await page.evaluate(
-      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-    );
-    const points = await title.evaluate((element) => {
-      const node = element.firstChild!;
-      return [2, 6].map((offset) => {
-        const range = document.createRange();
-        range.setStart(node, offset);
-        range.collapse(true);
-        const rect = range.getBoundingClientRect();
-        return { x: rect.left, y: rect.top + rect.height / 2 };
-      });
-    });
-    await page.mouse.move(points[0].x, points[0].y);
-    await page.mouse.down();
-    await page.mouse.move(points[1].x, points[1].y, { steps: 8 });
-    await page.mouse.up();
+    await dragTitleText(page, title);
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("plac");
     await page.keyboard.type("X");
     await expect(title).toHaveText("ReXed pasted");
@@ -76,6 +87,7 @@ for (const [type, name] of [
 ]) {
   test(`copies and pastes a collapsed ${name} title in edgeless mode`, async ({ page }) => {
     await page.goto("/?test_features=1");
+    await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
     await page.evaluate((type) => {
       const editor = (
         window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }

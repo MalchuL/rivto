@@ -12,17 +12,17 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_TEXT_METADATA_KEY,
   MarkdownContent,
+  BlockText,
+  useBlockContent,
   useBlockEditing,
   useReactPanel,
-  useBlockNode,
-  useBlockSelectionAnchor,
   type ClipboardFormatter,
   type PortableBlockFormats,
   type ReactBlockRegistration,
   type ReactEditorApi,
   type ReactPanelApi,
   type ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import "./host-blocks.css";
 import { createCaretSelection } from "@chulane/rivto";
 import { Link2Icon, PencilIcon } from "lucide-react";
@@ -339,37 +339,33 @@ function registerHostBlock(
   reactEditor.clipboardFormats.registerFormatter(formatter);
 }
 
+/** Input state and mutation callback for the callout's independent emoji control. */
+interface AdmonitionEmojiProps {
+  readonly blockId: string;
+  readonly tone: AdmonitionTone;
+  readonly committedEmoji: string;
+  readonly onCommit: (emoji: string) => void;
+}
+
 /**
- * Editable Markdown inside a note, tip, or warning box.
+ * Edits the callout emoji without claiming the block's selection gestures.
  *
- * The tone comes from the block type. Slash commands create each type on its own.
+ * The draft stays local until blur; the current document value is checked before
+ * writing to avoid committing the same emoji again.
  *
- * @param blockId - Stable admonition block ID.
- * @returns The emoji, Markdown body, and tone badge, or null after deletion.
+ * @param props - Callout identity, tone, current emoji and mutation callback.
+ * @param props.blockId - Persisted callout whose live emoji is checked on blur.
+ * @param props.tone - Tone supplying the default emoji when none is persisted.
+ * @param props.committedEmoji - Emoji from the current block snapshot.
+ * @param props.onCommit - Writes a changed, nonempty emoji when the input blurs.
+ * @returns Accessible emoji input with a local draft.
  */
-function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockEditing<AdmonitionProps>(blockId);
+function AdmonitionEmoji({ blockId, tone, committedEmoji, onCommit }: AdmonitionEmojiProps) {
   const panel = useReactPanel();
   const emojiId = useId();
-  const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
-  const committedEmoji = editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone];
   const [emojiDraft, setEmojiDraft] = useState<string | null>(null);
-  if (!editing.block) {
-    return null;
-  }
-  const emoji = emojiDraft ?? committedEmoji;
   return (
-    <div
-      className={`${ADMONITION_CLASS} ${ADMONITION_SURFACE_CLASS[tone]}`}
-      data-callout-tone={tone}
-      style={{
-        borderLeftWidth: ACCENT_RULE_WIDTH,
-        borderLeftStyle: "solid",
-        borderLeftColor: ADMONITION_ACCENT[tone],
-      }}
-      role="group"
-      aria-label={ADMONITION_LABELS[tone]}
-    >
+    <>
       <Label className={SCREEN_READER_CLASS} htmlFor={emojiId}>
         Emoji
       </Label>
@@ -377,7 +373,7 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
         id={emojiId}
         className={ADMONITION_EMOJI_CLASS}
         type="text"
-        value={emoji}
+        value={emojiDraft ?? committedEmoji}
         maxLength={32}
         spellCheck={false}
         onMouseDown={(event) => {
@@ -396,13 +392,364 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
           ) {
             return;
           }
-          editing.operations.setProp("emoji", next);
+          onCommit(next);
         }}
+      />
+    </>
+  );
+}
+
+/**
+ * Editable Markdown inside a note, tip, or warning box.
+ *
+ * The tone comes from the block type. Slash commands create each type on its own.
+ *
+ * @param blockId - Stable admonition block ID.
+ * @returns The emoji, Markdown body, and tone badge, or null after deletion.
+ */
+function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
+  const editing = useBlockEditing<AdmonitionProps>(blockId);
+  const tone = admonitionTone(editing.block?.type ?? "") ?? "note";
+  const committedEmoji = editing.block?.props.emoji ?? ADMONITION_DEFAULT_EMOJI[tone];
+  if (!editing.block) {
+    return null;
+  }
+  return (
+    <div
+      className={`${ADMONITION_CLASS} ${ADMONITION_SURFACE_CLASS[tone]}`}
+      data-callout-tone={tone}
+      style={{
+        borderLeftWidth: ACCENT_RULE_WIDTH,
+        borderLeftStyle: "solid",
+        borderLeftColor: ADMONITION_ACCENT[tone],
+      }}
+      role="group"
+      aria-label={ADMONITION_LABELS[tone]}
+    >
+      <AdmonitionEmoji
+        blockId={blockId}
+        tone={tone}
+        committedEmoji={committedEmoji}
+        onCommit={(emoji) => editing.operations.setProp("emoji", emoji)}
       />
       <div className={ADMONITION_BODY_CLASS}>
         <MarkdownContent blockId={blockId} />
       </div>
     </div>
+  );
+}
+
+/** Live block reads used before committing a bookmark control draft. */
+interface BookmarkBlockReader {
+  readonly blocks: Pick<ReactPanelApi["blocks"], "getBlockNode">;
+}
+
+/**
+ * Reads a bookmark property from the current document snapshot.
+ *
+ * @param panel - Borrowed block lookup for the invoking occurrence.
+ * @param blockId - Persisted bookmark ID.
+ * @param key - Property to inspect before committing a draft.
+ * @returns Current string value, or an empty string when absent or non-string.
+ */
+function readBookmarkProp(panel: BookmarkBlockReader, blockId: string, key: keyof BookmarkProps) {
+  const value = panel.blocks.getBlockNode(blockId)?.props[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** Current persisted value and write callback for one bookmark field. */
+interface BookmarkFieldProps {
+  readonly blockId: string;
+  readonly committed: string;
+  readonly onCommit: (value: string) => void;
+}
+
+/**
+ * Edits the manual description and commits its draft on blur.
+ *
+ * @param props - Bookmark identity, current description and write callback.
+ * @param props.blockId - Persisted bookmark whose live property is checked on blur.
+ * @param props.committed - Description from the current block snapshot.
+ * @param props.onCommit - Writes a changed description after focus leaves the field.
+ * @returns Accessible description textarea with a local draft.
+ */
+function BookmarkDescription({ blockId, committed, onCommit }: BookmarkFieldProps) {
+  const panel = useReactPanel();
+  const [draft, setDraft] = useState<string | null>(null);
+  const descriptionId = useId();
+  return (
+    <>
+      <Label className={SCREEN_READER_CLASS} htmlFor={descriptionId}>
+        Description
+      </Label>
+      <Textarea
+        id={descriptionId}
+        className={BOOKMARK_DESCRIPTION_CLASS}
+        rows={1}
+        value={draft ?? committed}
+        placeholder="Add a description"
+        onFocus={() => setDraft(readBookmarkProp(panel, blockId, "description"))}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          const next = draft ?? readBookmarkProp(panel, blockId, "description");
+          setDraft(null);
+          if (next !== readBookmarkProp(panel, blockId, "description")) {
+            onCommit(next);
+          }
+        }}
+      />
+    </>
+  );
+}
+
+/** Values needed to validate and commit a URL form submission. */
+interface BookmarkUrlSubmission {
+  readonly urlDraft: string;
+  readonly currentUrl: () => string;
+  readonly onCommit: (value: string) => void;
+  readonly setUrlError: (error: string | null) => void;
+  readonly setEditingUrl: (editing: boolean) => void;
+}
+
+/**
+ * Validates and commits the submitted URL, keeping invalid text in the form.
+ *
+ * @param event - Form submission event.
+ * @param state - Current draft, live URL reader and form update callbacks.
+ * @returns Updates validation state and commits a changed HTTP(S) URL.
+ * @throws If the delegated property update fails.
+ */
+function submitBookmarkUrl(event: FormEvent<HTMLFormElement>, state: BookmarkUrlSubmission): void {
+  event.preventDefault();
+  const next = state.urlDraft.trim();
+  if (!isHttpUrl(next)) {
+    state.setUrlError("Enter an HTTP or HTTPS URL.");
+    return;
+  }
+  state.setUrlError(null);
+  if (next !== state.currentUrl()) {
+    state.onCommit(next);
+  }
+  state.setEditingUrl(false);
+}
+
+/**
+ * Owns URL draft and validation state for one mounted bookmark.
+ *
+ * A changed persisted URL resets the draft and closes the form; invalid input
+ * remains local until the user corrects or cancels it.
+ *
+ * @param blockId - Persisted bookmark whose current URL is read before writing.
+ * @param committed - URL from the current block snapshot.
+ * @param onCommit - Writes a validated URL when the submitted value changed.
+ * @returns URL form state and callbacks for submission, cancellation and editing.
+ * @throws If rendered outside a panel; callbacks propagate delegated write failures.
+ */
+function useBookmarkUrl(blockId: string, committed: string, onCommit: (value: string) => void) {
+  const panel = useReactPanel();
+  const [trackedUrl, setTrackedUrl] = useState(committed);
+  const [urlDraft, setUrlDraft] = useState(committed);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const urlId = useId();
+  const urlErrorId = useId();
+  /**
+   * Reads the current URL before a draft is committed or reset.
+   *
+   * @returns The live URL, or an empty string when the block or property is absent.
+   */
+  const currentUrl = () => readBookmarkProp(panel, blockId, "url");
+  if (trackedUrl !== committed) {
+    setTrackedUrl(committed);
+    setUrlDraft(committed);
+    setEditingUrl(false);
+    setUrlError(null);
+  }
+  /**
+   * Submits the current draft through the shared validation and commit path.
+   *
+   * @param event - Form submission event.
+   * @returns Updates validation state and commits a changed HTTP(S) URL.
+   * @throws If the delegated property update fails.
+   */
+  const submitUrl = (event: FormEvent<HTMLFormElement>) => {
+    submitBookmarkUrl(event, { urlDraft, currentUrl, onCommit, setUrlError, setEditingUrl });
+  };
+  return {
+    committed,
+    urlDraft,
+    setUrlDraft,
+    urlError,
+    setUrlError,
+    editingUrl,
+    setEditingUrl,
+    urlId,
+    urlErrorId,
+    submitUrl,
+    currentUrl,
+  };
+}
+
+/** URL state borrowed by the form and link presentation. */
+type BookmarkUrlState = ReturnType<typeof useBookmarkUrl>;
+
+/**
+ * Renders the controlled URL input and its accessible validation link.
+ *
+ * @param props - URL draft and validation state.
+ * @param props.state - Input IDs, draft, error and their update callbacks.
+ * @returns Labeled URL input without an additional DOM wrapper.
+ */
+function BookmarkUrlField({
+  state,
+}: {
+  readonly state: Pick<
+    BookmarkUrlState,
+    "urlId" | "urlErrorId" | "urlDraft" | "setUrlDraft" | "urlError" | "setUrlError"
+  >;
+}) {
+  return (
+    <>
+      <Label className={SCREEN_READER_CLASS} htmlFor={state.urlId}>
+        URL
+      </Label>
+      <Input
+        id={state.urlId}
+        className={BOOKMARK_URL_CLASS}
+        type="text"
+        inputMode="url"
+        value={state.urlDraft}
+        placeholder="Paste a link"
+        aria-invalid={state.urlError ? true : undefined}
+        aria-describedby={state.urlError ? state.urlErrorId : undefined}
+        onChange={(event) => {
+          state.setUrlDraft(event.target.value);
+          if (state.urlError) {
+            state.setUrlError(null);
+          }
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * Renders URL validation, save and optional cancellation controls.
+ *
+ * @param props - URL draft and form actions.
+ * @param props.state - Current URL form state and its update callbacks.
+ * @returns URL form that preserves editor selection gestures.
+ */
+function BookmarkUrlForm({ state }: { readonly state: Omit<BookmarkUrlState, "editingUrl"> }) {
+  return (
+    <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={state.submitUrl}>
+      <BookmarkUrlField state={state} />
+      <Button
+        type="submit"
+        size="sm"
+        onClick={(event) => {
+          if (isClaimedSelectionClick(event)) {
+            event.preventDefault();
+          }
+        }}
+      >
+        Save link
+      </Button>
+      {state.committed ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={(event) => {
+            if (isClaimedSelectionClick(event)) {
+              return;
+            }
+            state.setEditingUrl(false);
+            state.setUrlDraft(state.currentUrl());
+            state.setUrlError(null);
+          }}
+        >
+          Cancel
+        </Button>
+      ) : null}
+      {state.urlError ? (
+        <p id={state.urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">
+          {state.urlError}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+/**
+ * Renders the saved link and its URL-editing control.
+ *
+ * @param props - Persisted URL and edit actions.
+ * @param props.state - Current URL state used to reopen editing with live data.
+ * @returns Link metadata and an accessible edit button.
+ */
+function BookmarkUrlLink({
+  state,
+}: {
+  readonly state: Pick<
+    BookmarkUrlState,
+    "committed" | "setUrlDraft" | "setUrlError" | "setEditingUrl" | "currentUrl"
+  >;
+}) {
+  return (
+    <div className={BOOKMARK_META_CLASS}>
+      <a
+        className={BOOKMARK_LINK_CLASS}
+        href={state.committed}
+        title={state.committed}
+        aria-label={state.committed}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => {
+          if (isClaimedSelectionClick(event)) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <Link2Icon className="size-3 shrink-0 pointer-events-none" aria-hidden="true" />
+        <span className={BOOKMARK_HOST_CLASS}>{bookmarkHost(state.committed)}</span>
+      </a>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="ml-auto text-muted-foreground"
+        aria-label="Change URL"
+        onClick={(event) => {
+          if (isClaimedSelectionClick(event)) {
+            return;
+          }
+          state.setUrlDraft(state.currentUrl());
+          state.setUrlError(null);
+          state.setEditingUrl(true);
+        }}
+      >
+        <PencilIcon className="pointer-events-none" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Selects the URL form or saved-link view for one bookmark.
+ *
+ * @param props - Bookmark identity, persisted URL and update callback.
+ * @param props.blockId - Persisted bookmark whose current URL is read before changes.
+ * @param props.committed - URL from the current block snapshot.
+ * @param props.onCommit - Writes a validated URL when the form is submitted.
+ * @returns URL form for an empty or edited link, otherwise its saved-link view.
+ */
+function BookmarkUrl({ blockId, committed, onCommit }: BookmarkFieldProps) {
+  const state = useBookmarkUrl(blockId, committed, onCommit);
+  return committed === "" || state.editingUrl ? (
+    <BookmarkUrlForm state={state} />
+  ) : (
+    <BookmarkUrlLink state={state} />
   );
 }
 
@@ -419,165 +766,59 @@ function AdmonitionBlock({ blockId }: { readonly blockId: string }) {
  */
 function BookmarkBlock({ blockId }: { readonly blockId: string }) {
   const editing = useBlockEditing<BookmarkProps>(blockId);
-  const panel = useReactPanel();
-  /** Reads the current property before committing a control draft. */
-  const currentProp = (key: keyof BookmarkProps) => {
-    const value = panel.blocks.getBlockNode(blockId)?.props[key];
-    return typeof value === "string" ? value : "";
-  };
-  const committedUrl = editing.block?.props.url ?? "";
-  const committedDescription = editing.block?.props.description ?? "";
-  const [trackedUrl, setTrackedUrl] = useState(committedUrl);
-  const [urlDraft, setUrlDraft] = useState(committedUrl);
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [editingUrl, setEditingUrl] = useState(false);
-  const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
-  const descriptionId = useId();
-  const urlId = useId();
-  const urlErrorId = useId();
-  if (trackedUrl !== committedUrl) {
-    setTrackedUrl(committedUrl);
-    setUrlDraft(committedUrl);
-    setEditingUrl(false);
-    setUrlError(null);
-  }
   if (!editing.block) {
     return null;
   }
-  const description = descriptionDraft ?? committedDescription;
-  const showUrlForm = committedUrl === "" || editingUrl;
-
-  const submitUrl = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const next = urlDraft.trim();
-    if (!isHttpUrl(next)) {
-      setUrlError("Enter an HTTP or HTTPS URL.");
-      return;
-    }
-    setUrlError(null);
-    if (next !== currentProp("url")) {
-      editing.operations.setProp("url", next);
-    }
-    setEditingUrl(false);
-  };
-
   return (
     <div className={BOOKMARK_CLASS}>
       <div className={BOOKMARK_TITLE_CLASS}>
         <MarkdownContent blockId={blockId} />
       </div>
-      <Label className={SCREEN_READER_CLASS} htmlFor={descriptionId}>
-        Description
-      </Label>
-      <Textarea
-        id={descriptionId}
-        className={BOOKMARK_DESCRIPTION_CLASS}
-        rows={1}
-        value={description}
-        placeholder="Add a description"
-        onFocus={() => setDescriptionDraft(currentProp("description"))}
-        onChange={(event) => setDescriptionDraft(event.target.value)}
-        onBlur={() => {
-          const next = descriptionDraft ?? currentProp("description");
-          setDescriptionDraft(null);
-          if (next !== currentProp("description")) {
-            editing.operations.setProp("description", next);
-          }
-        }}
+      <BookmarkDescription
+        blockId={blockId}
+        committed={editing.block.props.description ?? ""}
+        onCommit={(value) => editing.operations.setProp("description", value)}
       />
-      {showUrlForm ? (
-        <form className={BOOKMARK_FORM_CLASS} noValidate onSubmit={submitUrl}>
-          <Label className={SCREEN_READER_CLASS} htmlFor={urlId}>
-            URL
-          </Label>
-          <Input
-            id={urlId}
-            className={BOOKMARK_URL_CLASS}
-            type="text"
-            inputMode="url"
-            value={urlDraft}
-            placeholder="Paste a link"
-            aria-invalid={urlError ? true : undefined}
-            aria-describedby={urlError ? urlErrorId : undefined}
-            onChange={(event) => {
-              setUrlDraft(event.target.value);
-              if (urlError) {
-                setUrlError(null);
-              }
-            }}
-          />
-          <Button
-            type="submit"
-            size="sm"
-            onClick={(event) => {
-              if (isClaimedSelectionClick(event)) {
-                event.preventDefault();
-              }
-            }}
-          >
-            Save link
-          </Button>
-          {committedUrl ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={(event) => {
-                if (isClaimedSelectionClick(event)) {
-                  return;
-                }
-                setEditingUrl(false);
-                setUrlDraft(currentProp("url"));
-                setUrlError(null);
-              }}
-            >
-              Cancel
-            </Button>
-          ) : null}
-          {urlError ? (
-            <p id={urlErrorId} className={`${MESSAGE_CLASS} basis-full`} role="alert">
-              {urlError}
-            </p>
-          ) : null}
-        </form>
-      ) : (
-        <div className={BOOKMARK_META_CLASS}>
-          <a
-            className={BOOKMARK_LINK_CLASS}
-            href={committedUrl}
-            title={committedUrl}
-            aria-label={committedUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => {
-              if (isClaimedSelectionClick(event)) {
-                event.preventDefault();
-              }
-            }}
-          >
-            <Link2Icon className="size-3 shrink-0 pointer-events-none" aria-hidden="true" />
-            <span className={BOOKMARK_HOST_CLASS}>{bookmarkHost(committedUrl)}</span>
-          </a>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="ml-auto text-muted-foreground"
-            aria-label="Change URL"
-            onClick={(event) => {
-              if (isClaimedSelectionClick(event)) {
-                return;
-              }
-              setUrlDraft(currentProp("url"));
-              setUrlError(null);
-              setEditingUrl(true);
-            }}
-          >
-            <PencilIcon className="pointer-events-none" aria-hidden="true" />
-          </Button>
-        </div>
-      )}
+      <BookmarkUrl
+        blockId={blockId}
+        committed={editing.block.props.url ?? ""}
+        onCommit={(value) => editing.operations.setProp("url", value)}
+      />
     </div>
+  );
+}
+
+/**
+ * Renders one heading navigation control inside the table of contents.
+ *
+ * @param panel - Current panel used to expand and navigate to the heading.
+ * @param entry - Heading identity, text and depth in the current outline.
+ * @param index - Occurrence index used with the block ID as the React key.
+ * @returns List item whose button respects selection gestures.
+ */
+function renderTocEntry(panel: ReactPanelApi, entry: TocEntry, index: number) {
+  const label = entry.text.trim() || "Empty heading";
+  return (
+    <li className={TOC_ENTRY_CLASS} key={`${entry.blockId}:${index}`}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={TOC_BUTTON_CLASS}
+        data-toc-entry=""
+        data-toc-level={entry.depth}
+        data-toc-target={entry.blockId}
+        style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
+        onClick={(event) => {
+          if (isClaimedSelectionClick(event)) {
+            return;
+          }
+          navigateToTocEntry(panel, entry.blockId);
+        }}
+      >
+        {label}
+      </Button>
+    </li>
   );
 }
 
@@ -591,8 +832,8 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
  * @returns A structural selection region containing the heading list.
  */
 function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const panel = useReactPanel();
   const reactEditor = panel.document;
   const revision = useDocumentBlockRevision();
@@ -618,31 +859,7 @@ function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
           <p className={QUIET_CLASS}>No headings</p>
         ) : (
           <ol className={TOC_LIST_CLASS}>
-            {entries.map((entry, index) => {
-              const label = entry.text.trim() || "Empty heading";
-              return (
-                <li className={TOC_ENTRY_CLASS} key={`${entry.blockId}:${index}`}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={TOC_BUTTON_CLASS}
-                    data-toc-entry=""
-                    data-toc-level={entry.depth}
-                    data-toc-target={entry.blockId}
-                    style={{ paddingInlineStart: `${(entry.depth - 1) * 12}px` }}
-                    onClick={(event) => {
-                      if (isClaimedSelectionClick(event)) {
-                        return;
-                      }
-                      navigateToTocEntry(panel, entry.blockId);
-                    }}
-                  >
-                    {label}
-                  </Button>
-                </li>
-              );
-            })}
+            {entries.map((entry, index) => renderTocEntry(panel, entry, index))}
           </ol>
         )}
       </nav>
@@ -672,12 +889,10 @@ function MathBlock({ blockId }: { readonly blockId: string }) {
         <span>Expressions</span>
         <span>Results</span>
       </div>
-      <div
-        {...editing.attributes}
+      <BlockText
+        attributes={editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
-        role="textbox"
-        aria-label="Math source"
-        aria-multiline="true"
+        label="Math source"
         spellCheck={false}
       />
       <div className={MATH_VALUE_CLASS} data-math-value="" aria-label="Math results">
@@ -854,6 +1069,58 @@ export function tableOfContentsBlockExtension(): ReactEditorExtension {
   };
 }
 
+/** Editing behavior used only by math blocks. */
+const MATH_BEHAVIOR: NonNullable<ReactBlockRegistration["behavior"]> = {
+  /**
+   * Selects only math blocks for this editing behavior.
+   *
+   * @param context - Current block and owning editor.
+   * @returns Whether the block contains math source.
+   */
+  isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
+  /**
+   * Inserts a line break at the current caret within the caller's transaction.
+   *
+   * Expanded text selections are removed by the keyboard dispatcher first.
+   * A structural target is left to the ordinary block behavior.
+   *
+   * @param context - Current block and panel that owns the selection.
+   * @param target - Caret position after any selected text was removed.
+   * @returns Handled after inserting a line break, or unhandled for structural selection.
+   * @throws If the block update or browser selection operation fails.
+   */
+  onSplit: ({ block, reactPanel, root }, target) => {
+    if (!target.collapsed) {
+      return "unhandled";
+    }
+    const offset = Math.min(target.offset ?? 0, block.content.length);
+    const content = `${block.content.slice(0, offset)}\n${block.content.slice(offset)}`;
+    reactPanel.blocks.updateBlock(block.id, { content });
+    const editable = root.ownerDocument.activeElement;
+    if (
+      editable instanceof HTMLElement &&
+      editable.hasAttribute("data-block-content") &&
+      editable.closest(`[${BLOCK_ID_ATTRIBUTE}]`)?.getAttribute(BLOCK_ID_ATTRIBUTE) === block.id
+    ) {
+      // Put the caret after the new line before the next keystroke arrives.
+      editable.textContent = content;
+      // A trailing line break needs a placeholder so the browser retains its caret position.
+      if (content.endsWith("\n")) {
+        editable.appendChild(root.ownerDocument.createElement("br"));
+      }
+      const range = root.ownerDocument.createRange();
+      range.setStart(editable.firstChild!, offset + 1);
+      range.collapse(true);
+      const selection = root.ownerDocument.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    reactPanel.selection.set(createCaretSelection(block.id, offset + 1));
+    reactPanel.selection.scheduleIfSelectionUnchanged(() => reactPanel.selection.restoreDOM());
+    return "handled";
+  },
+};
+
 /**
  * Registers the math block and clipboard forms that include each evaluated value.
  *
@@ -868,59 +1135,7 @@ export function mathBlockExtension(): ReactEditorExtension {
         {
           definition: { ...mathBlockDefinition, metadata: { [BLOCK_TEXT_METADATA_KEY]: true } },
           render: MathBlock,
-          behavior: {
-            /**
-             * Selects only math blocks for this editing behavior.
-             *
-             * @param context - Current block and owning editor.
-             * @returns Whether the block contains math source.
-             */
-            isAvailable: ({ block }) => block.type === MATH_BLOCK_TYPE,
-            /**
-             * Inserts a line break at the current caret within the caller's transaction.
-             *
-             * Expanded text selections are removed by the keyboard dispatcher first.
-             * A structural target is left to the ordinary block behavior.
-             *
-             * @param context - Current block and panel that owns the selection.
-             * @param target - Caret position after any selected text was removed.
-             * @returns Handled after inserting a line break, or unhandled for structural selection.
-             * @throws If the block update or browser selection operation fails.
-             */
-            onSplit: ({ block, reactPanel, root }, target) => {
-              if (!target.collapsed) {
-                return "unhandled";
-              }
-              const offset = Math.min(target.offset ?? 0, block.content.length);
-              const content = `${block.content.slice(0, offset)}\n${block.content.slice(offset)}`;
-              reactPanel.blocks.updateBlock(block.id, { content });
-              const editable = root.ownerDocument.activeElement;
-              if (
-                editable instanceof HTMLElement &&
-                editable.hasAttribute("data-block-content") &&
-                editable.closest(`[${BLOCK_ID_ATTRIBUTE}]`)?.getAttribute(BLOCK_ID_ATTRIBUTE) ===
-                  block.id
-              ) {
-                // Put the caret after the new line before the next keystroke arrives.
-                editable.textContent = content;
-                // A trailing line break needs a placeholder so the browser retains its caret position.
-                if (content.endsWith("\n")) {
-                  editable.appendChild(root.ownerDocument.createElement("br"));
-                }
-                const range = root.ownerDocument.createRange();
-                range.setStart(editable.firstChild!, offset + 1);
-                range.collapse(true);
-                const selection = root.ownerDocument.getSelection();
-                selection?.removeAllRanges();
-                selection?.addRange(range);
-              }
-              reactPanel.selection.set(createCaretSelection(block.id, offset + 1));
-              reactPanel.selection.scheduleIfSelectionUnchanged(() =>
-                reactPanel.selection.restoreDOM(),
-              );
-              return "handled";
-            },
-          },
+          behavior: { ...MATH_BEHAVIOR },
           slashCommand: {
             title: "Math",
             group: "Turn into",

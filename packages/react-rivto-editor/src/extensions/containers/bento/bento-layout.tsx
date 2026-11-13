@@ -1,4 +1,4 @@
-import { BlockBody, BlockChildren, BlockContent, BlockRow } from "@chulane/rivto-page";
+import { BlockBody, BlockChildren, BlockContent, BlockRow } from "../../../authoring/layout";
 import { BentoTileItem } from "./bento-tile";
 
 /**

@@ -1,5 +1,5 @@
 import type { EditorBlockInput } from "@chulane/rivto";
-import { useBlockNode } from "../../../hooks";
+import { useBlockContent } from "../../../authoring/use-block-content";
 import type { ReactEditorExtension } from "../../../managers";
 import { escapeHtml } from "../../../utils/escape-html";
 
@@ -13,12 +13,12 @@ export const ERROR_BLOCK_TYPE = "rivto.error";
  * block is no longer present.
  */
 export function ErrorBlock({ blockId }: { readonly blockId: string }) {
-  const { block } = useBlockNode(blockId);
+  const { block, selectionProps } = useBlockContent(blockId);
   if (!block) {
     return null;
   }
   return (
-    <div role="alert" data-error-block="true">
+    <div {...selectionProps} role="alert" data-error-block="true">
       <strong>{block.content || "Invalid block data"}</strong>
       <pre>{JSON.stringify(block.props.originalBlock, null, 2)}</pre>
     </div>

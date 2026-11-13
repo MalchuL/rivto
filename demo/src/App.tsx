@@ -1,5 +1,6 @@
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
+import { createDynamicExtensions } from "./dynamic-extensions/loader";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
@@ -364,17 +365,13 @@ interface FeatureSeedEditor extends DemoCanvasSeedEditor {
 }
 
 /**
- * Seeds canvas visuals that exercise edgeless features in the journal demo.
+ * Adds the heading and description above the canvas cards.
  *
- * Needed so a fresh demo load already has shapes, text, sticky, drawing,
- * connectors, nested groups, and spare siblings for align / distribute /
- * layer-order practice — without the visitor having to create them first.
- *
- * @param editor - Borrowed command registry used to create and select showcase elements.
- * @returns Showcase elements have been inserted and their selection cleared.
+ * @param editor - Borrowed canvas command registry.
+ * @returns After both text elements are created.
  * @throws If a registered canvas command fails.
  */
-function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
+function seedEdgelessShowcaseHeading(editor: DemoCanvasSeedEditor): void {
   // Cards grow with their content, including embeddings. Keep the heading
   // above their initial frames so collapsing an outline cannot put it over a row.
   editor.commands.execute("edgeless.visual.create", {
@@ -396,7 +393,19 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
       color: "#495057",
     },
   }) as EditorElementNode;
+}
 
+/**
+ * Creates and groups the two connected shapes.
+ *
+ * @param editor - Borrowed canvas command registry.
+ * @returns IDs of the ellipse and the new group.
+ * @throws If a registered canvas command fails.
+ */
+function seedEdgelessShowcaseShapes(editor: DemoCanvasSeedEditor): {
+  ellipseId: string;
+  shapeGroupId: string;
+} {
   const rect = editor.commands.execute("edgeless.visual.create", {
     kind: "rectangle",
     ...{
@@ -433,7 +442,23 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
 
   editor.commands.execute("edgeless.selection.set", [rect.id, ellipse.id]);
   const shapeGroup = editor.commands.execute("edgeless.selection.group") as EditorElementNode;
+  return { ellipseId: ellipse.id, shapeGroupId: shapeGroup.id };
+}
 
+/**
+ * Creates a sticky, connects it to the ellipse, and nests the group.
+ *
+ * @param editor - Borrowed canvas command registry.
+ * @param ellipseId - Existing ellipse ID for the connector.
+ * @param shapeGroupId - Existing shape group ID.
+ * @returns After the connector and nested group are created.
+ * @throws If a registered canvas command fails.
+ */
+function seedEdgelessShowcaseSticky(
+  editor: DemoCanvasSeedEditor,
+  ellipseId: string,
+  shapeGroupId: string,
+): void {
   const sticky = editor.commands.execute("edgeless.visual.create", {
     kind: "sticker",
     ...{
@@ -449,7 +474,7 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
     kind: "connector",
     ...{
       route: "curve",
-      source: { elementId: ellipse.id, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
+      source: { elementId: ellipseId, anchor: { x: 1, y: 0.5 }, position: { x: 350, y: 585 } },
       target: { elementId: sticky.id, anchor: { x: 0, y: 0.5 }, position: { x: 420, y: 595 } },
       stroke: "#868e96",
       lineStyle: "dashed-animated",
@@ -459,9 +484,18 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
   }) as EditorElementNode;
 
   // Nested group: existing group + sticky (Primary-click / Group again in the UI).
-  editor.commands.execute("edgeless.selection.set", [shapeGroup.id, sticky.id]);
+  editor.commands.execute("edgeless.selection.set", [shapeGroupId, sticky.id]);
   editor.commands.execute("edgeless.selection.group") as EditorElementNode;
+}
 
+/**
+ * Creates the pencil drawing and free-text example.
+ *
+ * @param editor - Borrowed canvas command registry.
+ * @returns After both canvas elements are created.
+ * @throws If a registered canvas command fails.
+ */
+function seedEdgelessShowcaseDrawing(editor: DemoCanvasSeedEditor): void {
   editor.commands.execute("edgeless.visual.create", {
     kind: "drawing",
     ...{
@@ -488,7 +522,16 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
       color: "#343a40",
     },
   }) as EditorElementNode;
+}
 
+/**
+ * Creates independent shapes for alignment and distribution.
+ *
+ * @param editor - Borrowed canvas command registry.
+ * @returns After the independent shapes are created.
+ * @throws If a registered canvas command fails.
+ */
+function seedEdgelessShowcaseSiblings(editor: DemoCanvasSeedEditor): void {
   // Unrelated siblings for align / distribute / multi-select practice.
   editor.commands.execute("edgeless.visual.create", {
     kind: "rectangle",
@@ -522,7 +565,25 @@ function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
       stroke: "#d9480f",
     },
   }) as EditorElementNode;
+}
 
+/**
+ * Seeds canvas visuals that exercise edgeless features in the journal demo.
+ *
+ * Needed so a fresh demo load already has shapes, text, sticky, drawing,
+ * connectors, nested groups, and spare siblings for align / distribute /
+ * layer-order practice — without the visitor having to create them first.
+ *
+ * @param editor - Borrowed command registry used to create and select showcase elements.
+ * @returns Showcase elements have been inserted and their selection cleared.
+ * @throws If a registered canvas command fails.
+ */
+function seedEdgelessShowcase(editor: DemoCanvasSeedEditor): void {
+  seedEdgelessShowcaseHeading(editor);
+  const { ellipseId, shapeGroupId } = seedEdgelessShowcaseShapes(editor);
+  seedEdgelessShowcaseSticky(editor, ellipseId, shapeGroupId);
+  seedEdgelessShowcaseDrawing(editor);
+  seedEdgelessShowcaseSiblings(editor);
   editor.commands.execute("edgeless.selection.clear");
 }
 
@@ -562,6 +623,92 @@ async function destroyDemoEditor(runtime: {
   await runtime.storage.destroy();
 }
 
+/** Configuration captured when the journal editor cache is created. */
+interface JournalEditorSettings {
+  /** Optional alternate keyboard bindings for the demo. */
+  readonly alternateKeymap: Parameters<typeof createReactEditor>[0]["keymap"];
+  /** Install the image handler before the file handler. */
+  readonly imageFirst: boolean;
+  /** Install the image handler without the file handler. */
+  readonly imageOnly: boolean;
+  /** Install the file handler without the image handler. */
+  readonly fileOnly: boolean;
+}
+
+/**
+ * Captures the journal's keyboard and file-handler options from the current URL.
+ *
+ * @returns Settings retained for every editor created by this journal cache.
+ */
+function readJournalEditorSettings(): JournalEditorSettings {
+  // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
+  const alternateKeymap =
+    new URLSearchParams(window.location.search).get("keymap") === "alternate"
+      ? {
+          [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
+          [KEYBOARD_BINDING_IDS.blockOutdent]: [],
+        }
+      : undefined;
+  const demoParams = new URLSearchParams(window.location.search);
+  return {
+    alternateKeymap,
+    imageFirst: demoParams.has("imageFirst"),
+    imageOnly: demoParams.has("imageOnly"),
+    fileOnly: demoParams.has("fileOnly"),
+  };
+}
+
+/**
+ * Creates a journal presentation runtime with the requested demo extensions.
+ *
+ * The owning EditorStorage retains and destroys the returned React editor.
+ *
+ * @param documentEditor - Core editor owned by the journal cache.
+ * @param settings - Keyboard and file-handler choices captured at initialization.
+ * @returns React editor with the journal's presentation extensions installed.
+ * @throws If an extension fails to install.
+ */
+function createJournalReactEditor(
+  documentEditor: DocumentEditorAPI,
+  settings: JournalEditorSettings,
+) {
+  return createReactEditor({
+    editor: documentEditor,
+    keymap: settings.alternateKeymap,
+    extensions: [
+      ...(settings.imageFirst || settings.imageOnly
+        ? [imageExtension({ provider: demoBinaryProvider })]
+        : []),
+      ...(settings.imageOnly ? [] : [fileExtension({ provider: demoBinaryProvider })]),
+      demoLocalFileExtension,
+      ...(settings.imageFirst || settings.imageOnly || settings.fileOnly
+        ? []
+        : [imageExtension({ provider: demoBinaryProvider })]),
+      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      todoItemExtension({ prompts: { todo: ["task"] } }),
+      pageDragExtension(),
+      bulletThreadingExtension({
+        anchor: demoThreadAnchor,
+        excludeBlockTypes: [
+          BENTO_BLOCK_TYPE,
+          COLUMNS_BLOCK_TYPE,
+          KANBAN_BLOCK_TYPE,
+          TABLE_BLOCK_TYPE,
+          TODO_STORAGE_BLOCK_TYPE,
+        ],
+      }),
+      ...edgelessPreset({ visuals: edgelessOptions }),
+      mindmapExtension(),
+      blockIdExtension(),
+      blockNumberExtension(),
+      ...customBlockExtensions,
+      ...createDynamicExtensions(),
+      embeddingExtension(),
+      ...demoReviewReports(),
+    ],
+  });
+}
+
 /**
  * Builds today's journal editor with notebook or feature-showcase content.
  *
@@ -578,18 +725,7 @@ async function destroyDemoEditor(runtime: {
  */
 async function createDemoEditor() {
   const resources = await createDemoDocument();
-  // Used by e2e / KEYMAP demos: `?keymap=alternate` remaps indent without test-only APIs.
-  const alternateKeymap =
-    new URLSearchParams(window.location.search).get("keymap") === "alternate"
-      ? {
-          [KEYBOARD_BINDING_IDS.blockIndent]: ["Primary+ArrowRight"],
-          [KEYBOARD_BINDING_IDS.blockOutdent]: [],
-        }
-      : undefined;
-  const demoParams = new URLSearchParams(window.location.search);
-  const imageFirst = demoParams.has("imageFirst");
-  const imageOnly = demoParams.has("imageOnly");
-  const fileOnly = demoParams.has("fileOnly");
+  const settings = readJournalEditorSettings();
   // Hand the already-open journal model to the editor cache exactly once.
   const prepared = new Map([[resources.document.id, resources.document]]);
   const editorStorage = new EditorStorage({
@@ -605,38 +741,7 @@ async function createDemoEditor() {
      * @returns React editor retained and disposed by the owning cache.
      */
     createEditor: (documentEditor) => {
-      return createReactEditor({
-        editor: documentEditor,
-        keymap: alternateKeymap,
-        extensions: [
-          ...(imageFirst || imageOnly ? [imageExtension({ provider: demoBinaryProvider })] : []),
-          ...(imageOnly ? [] : [fileExtension({ provider: demoBinaryProvider })]),
-          demoLocalFileExtension,
-          ...(imageFirst || imageOnly || fileOnly
-            ? []
-            : [imageExtension({ provider: demoBinaryProvider })]),
-          standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-          todoItemExtension({ prompts: { todo: ["task"] } }),
-          pageDragExtension(),
-          bulletThreadingExtension({
-            anchor: demoThreadAnchor,
-            excludeBlockTypes: [
-              BENTO_BLOCK_TYPE,
-              COLUMNS_BLOCK_TYPE,
-              KANBAN_BLOCK_TYPE,
-              TABLE_BLOCK_TYPE,
-              TODO_STORAGE_BLOCK_TYPE,
-            ],
-          }),
-          ...edgelessPreset({ visuals: edgelessOptions }),
-          mindmapExtension(),
-          blockIdExtension(),
-          blockNumberExtension(),
-          ...customBlockExtensions,
-          embeddingExtension(),
-          ...demoReviewReports(),
-        ],
-      });
+      return createJournalReactEditor(documentEditor, settings);
     },
   });
   const acquisition = await editorStorage.acquireEditor(resources.document.id);
@@ -659,17 +764,17 @@ async function createDemoEditor() {
 }
 
 /**
- * Populates the feature showcase used by browser regression tests and manual exploration.
+ * Creates the introductory and selection paragraphs and the first outline root.
  *
- * This preserves the original seeded structure, including optional repeated cards and
- * canvas examples. The caller owns the editor and resets its history after seeding.
- *
- * @param editor - Initialized editor whose document receives the showcase blocks and elements.
- * @param documentId - Identity used by the self-referencing embedded block.
- * @returns The feature showcase has been inserted into the document.
- * @throws If a delegated block or element operation fails.
+ * @param editor - Document block operations.
+ * @returns IDs needed by later blocks and cards.
+ * @throws If a delegated document operation fails.
  */
-function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
+function seedShowcaseIntroduction(editor: Pick<FeatureSeedEditor, "blocks">): {
+  introId: string;
+  paragraphId: string;
+  listId: string;
+} {
   const introId = editor.blocks.insertBlock({
     ...paragraphBlockFactory.createEmptyBlock(),
     content: "**Rivto editor**",
@@ -706,6 +811,18 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(middleParagraphId),
   ).id;
+  return { introId, paragraphId, listId };
+}
+
+/**
+ * Creates the nested children of the first outline root.
+ *
+ * @param editor - Document block operations.
+ * @param listId - First outline root ID.
+ * @returns After the nested branch has been inserted.
+ * @throws If a delegated document operation fails.
+ */
+function seedFirstShowcaseOutline(editor: Pick<FeatureSeedEditor, "blocks">, listId: string): void {
   const childId = editor.blocks.insertBlock(
     {
       ...paragraphBlockFactory.createEmptyBlock(),
@@ -737,7 +854,20 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(childId),
   );
+}
 
+/**
+ * Creates the reverse-selection paragraph and second nested outline.
+ *
+ * @param editor - Document block operations.
+ * @param listId - First outline root ID.
+ * @returns IDs of the reverse-selection paragraph and second outline root.
+ * @throws If a delegated document operation fails.
+ */
+function seedSecondShowcaseOutline(
+  editor: Pick<FeatureSeedEditor, "blocks">,
+  listId: string,
+): { reverseSelectionId: string; secondBranchId: string } {
   const reverseSelectionId = editor.blocks.insertBlock(
     {
       ...paragraphBlockFactory.createEmptyBlock(),
@@ -775,7 +905,21 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(numberedChildId),
   );
+  return { reverseSelectionId, secondBranchId };
+}
 
+/**
+ * Creates the slider, counter, and ending selection paragraphs.
+ *
+ * @param editor - Document block operations.
+ * @param secondBranchId - Second outline root ID.
+ * @returns ID of the slash-command paragraph.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseSelectionEnd(
+  editor: Pick<FeatureSeedEditor, "blocks">,
+  secondBranchId: string,
+): string {
   const sliderId = editor.blocks.insertBlock(
     {
       type: SLIDER_BLOCK_TYPE,
@@ -805,6 +949,21 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(finalId),
   ).id;
+  return slashId;
+}
+
+/**
+ * Creates checked and unchecked checkbox examples.
+ *
+ * @param editor - Document block operations.
+ * @param slashId - Preceding slash-command paragraph ID.
+ * @returns ID of the checked checkbox.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseCheckboxes(
+  editor: Pick<FeatureSeedEditor, "blocks">,
+  slashId: string,
+): string {
   const uncheckedId = editor.blocks.insertBlock(
     {
       ...paragraphBlockFactory.createEmptyBlock(),
@@ -821,6 +980,21 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(uncheckedId),
   ).id;
+  return checkedId;
+}
+
+/**
+ * Creates numbered-list examples after the checkbox blocks.
+ *
+ * @param editor - Document block operations.
+ * @param checkedId - Preceding checked checkbox ID.
+ * @returns ID of the final numbered item.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseNumberedLists(
+  editor: Pick<FeatureSeedEditor, "blocks">,
+  checkedId: string,
+): string {
   const numberedStartId = editor.blocks.insertBlock(
     {
       ...paragraphBlockFactory.createEmptyBlock(),
@@ -852,7 +1026,27 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(numberedGapId),
   ).id;
+  return numberedContinueId;
+}
 
+/**
+ * Creates the separator and the two initial canvas block cards.
+ *
+ * @param editor - Document block and element operations.
+ * @param introId - First block ID.
+ * @param reverseSelectionId - End of the first card.
+ * @param secondBranchId - Start of the second card.
+ * @param numberedContinueId - End of the second card.
+ * @returns After inserting the separator and canvas cards.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseCards(
+  editor: Pick<FeatureSeedEditor, "blocks" | "elements">,
+  introId: string,
+  reverseSelectionId: string,
+  secondBranchId: string,
+  numberedContinueId: string,
+): void {
   // The explicit separator is visible in block mode and partitions cards only
   // because its React block plugin declares `separatesBlockElements`.
   editor.blocks.insertBlock(
@@ -871,6 +1065,20 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     zIndex: 1,
     props: { startBlockId: secondBranchId, endBlockId: numberedContinueId },
   });
+}
+
+/**
+ * Creates bento, table, and Kanban examples with a movable card.
+ *
+ * @param editor - Document block operations.
+ * @param numberedContinueId - Block preceding the example layouts.
+ * @returns ID of the Kanban board.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseBentoAndKanban(
+  editor: Pick<FeatureSeedEditor, "blocks">,
+  numberedContinueId: string,
+): string {
   editor.blocks.insertBlock(
     {
       ...createBentoBlockInput(),
@@ -912,6 +1120,18 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     editor.blocks.getInsertionDestinationAfter(kanbanId),
   ).id;
   editor.blocks.moveBlocks([cardId], column.id, "inside");
+  return kanbanId;
+}
+
+/**
+ * Creates two columns and moves one sample block into each.
+ *
+ * @param editor - Document block operations.
+ * @param kanbanId - Kanban board preceding the columns.
+ * @returns After inserting and populating the columns.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseColumns(editor: Pick<FeatureSeedEditor, "blocks">, kanbanId: string): void {
   const columnsId = editor.blocks.insertBlock(
     createColumnsBlockInput(2),
     editor.blocks.getInsertionDestinationAfter(kanbanId),
@@ -934,6 +1154,22 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
   ).id;
   editor.blocks.moveBlocks([leftColumnId], columnsBoard.children[0]!.id, "inside");
   editor.blocks.moveBlocks([rightColumnId], columnsBoard.children[1]!.id, "inside");
+}
+
+/**
+ * Appends the configured number of copies of the selected root range.
+ *
+ * @param editor - Document block and history operations.
+ * @param secondBranchId - First root in the repeated range.
+ * @param numberedContinueId - Last root in the repeated range.
+ * @returns After inserting the repeated blocks in one history batch.
+ * @throws If a delegated document operation fails.
+ */
+function seedRepeatedShowcaseBlocks(
+  editor: Pick<FeatureSeedEditor, "blocks" | "history">,
+  secondBranchId: string,
+  numberedContinueId: string,
+): void {
   const repeatCount = demoRepeatCount();
   if (repeatCount > 0) {
     const rootIds = editor.blocks.getRootIds();
@@ -950,6 +1186,16 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
       }
     });
   }
+}
+
+/**
+ * Creates a TODO storage block and three sample tasks.
+ *
+ * @param editor - Document block operations.
+ * @returns After inserting and nesting the task examples.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseTodos(editor: Pick<FeatureSeedEditor, "blocks">): void {
   const todoStorageId = editor.blocks.insertBlock({
     type: TODO_STORAGE_BLOCK_TYPE,
     content: "",
@@ -994,6 +1240,16 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
     },
     editor.blocks.getInsertionDestinationAfter(doingId),
   );
+}
+
+/**
+ * Creates the edgeless visuals and review element.
+ *
+ * @param editor - Canvas commands and element operations.
+ * @returns After the canvas examples have been inserted.
+ * @throws If a delegated document operation fails.
+ */
+function seedShowcaseCanvas(editor: Pick<FeatureSeedEditor, "commands" | "elements">): void {
   seedEdgelessShowcase(editor);
   editor.elements.insertElement(
     createReviewElementInput({
@@ -1003,6 +1259,32 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
       problem: "Ошибка структуры на холсте",
     }),
   );
+}
+
+/**
+ * Populates the feature showcase used by browser regression tests and manual exploration.
+ *
+ * This preserves the original seeded structure, including optional repeated cards and
+ * canvas examples. The caller owns the editor and resets its history after seeding.
+ *
+ * @param editor - Initialized editor whose document receives the showcase blocks and elements.
+ * @param documentId - Identity used by the self-referencing embedded block.
+ * @returns The feature showcase has been inserted into the document.
+ * @throws If a delegated block or element operation fails.
+ */
+function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
+  const { introId, paragraphId, listId } = seedShowcaseIntroduction(editor);
+  seedFirstShowcaseOutline(editor, listId);
+  const { reverseSelectionId, secondBranchId } = seedSecondShowcaseOutline(editor, listId);
+  const slashId = seedShowcaseSelectionEnd(editor, secondBranchId);
+  const checkedId = seedShowcaseCheckboxes(editor, slashId);
+  const numberedContinueId = seedShowcaseNumberedLists(editor, checkedId);
+  seedShowcaseCards(editor, introId, reverseSelectionId, secondBranchId, numberedContinueId);
+  const kanbanId = seedShowcaseBentoAndKanban(editor, numberedContinueId);
+  seedShowcaseColumns(editor, kanbanId);
+  seedRepeatedShowcaseBlocks(editor, secondBranchId, numberedContinueId);
+  seedShowcaseTodos(editor);
+  seedShowcaseCanvas(editor);
   editor.blocks.insertBlock(
     {
       type: EMBEDDING_BLOCK_TYPE,
@@ -1024,22 +1306,7 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
 async function createEmptyDemoEditor() {
   const resources = await createDemoDocument();
   const editor = createDocumentEditor({ document: resources.document });
-  const reactEditor = createReactEditor({
-    editor,
-    extensions: [
-      fileExtension({ provider: demoBinaryProvider }),
-      demoLocalFileExtension,
-      imageExtension({ provider: demoBinaryProvider }),
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      pageDragExtension(),
-      ...edgelessPreset({ visuals: edgelessOptions }),
-      mindmapExtension(),
-      blockIdExtension(),
-      blockNumberExtension(),
-      ...customBlockExtensions,
-      ...demoReviewReports(),
-    ],
-  });
+  const reactEditor = createMultiSurfaceDemoEditor(editor);
   return { ...resources, editor, reactEditor };
 }
 
@@ -1071,6 +1338,363 @@ function JournalDate({ date }: { readonly date: Date }) {
   );
 }
 
+/** Host-owned settings displayed by the shared demo toolbar. */
+interface DemoToolbarProps {
+  /** Document actions used by the toolbar. */
+  readonly editor: Pick<DocumentEditorAPI, "selection" | "history" | "load">;
+  /** Whether debug block IDs are visible. */
+  readonly showBlockIds: boolean;
+  /**
+   * Requests a change to block ID visibility.
+   *
+   * @param visible - Checked state selected by the visitor.
+   * @returns Completes the host state update request.
+   */
+  readonly onShowBlockIdsChange: (visible: boolean) => void;
+  /** Whether gutter block numbers are visible. */
+  readonly showBlockNumbers: boolean;
+  /**
+   * Requests a host-owned change to gutter-number visibility.
+   *
+   * @param visible - Checked state selected by the toolbar checkbox.
+   * @returns No value; the host supplies the updated showBlockNumbers prop.
+   */
+  readonly onShowBlockNumbersChange: (visible: boolean) => void;
+  /** Whether nesting lines are enabled, when exposed. */
+  readonly showNestingLines?: boolean;
+  /**
+   * Requests a change to nesting-line visibility.
+   *
+   * @param visible - Whether the overlay should be installed.
+   * @returns The host receives the requested visibility.
+   */
+  readonly onShowNestingLinesChange?: (visible: boolean) => void;
+  /** Current page virtualization threshold, when exposed. */
+  readonly virtualizePageThreshold?: boolean | number;
+  /**
+   * Requests a page virtualization threshold.
+   *
+   * @param threshold - Disabled, always enabled, or minimum root count.
+   * @returns Completes the host state update request.
+   */
+  readonly onVirtualizePageThresholdChange?: (threshold: boolean | number) => void;
+  /** Number of extra page roots rendered on each side. */
+  readonly virtualizePageOverscan?: number;
+  /**
+   * Requests a new page virtualization overscan.
+   *
+   * @param count - Number of extra roots to render on each side.
+   * @returns Completes the host state update request.
+   */
+  readonly onVirtualizePageOverscanChange?: (count: number) => void;
+}
+
+/**
+ * Switches the active panel between Page and Edgeless modes.
+ *
+ * @returns Mode controls reflecting the active panel.
+ */
+function DemoToolbarMode() {
+  const { mode, setMode } = useEditorMode();
+  /**
+   * Changes mode only when the requested surface differs from the current one.
+   *
+   * @param next - Requested editor surface.
+   * @returns After any necessary mode change.
+   */
+  const switchMode = (next: "block" | "edgeless") => {
+    if (next === mode) {
+      return;
+    }
+    setMode(next);
+  };
+  return (
+    <div className="demo-mode-switch" role="group" aria-label="Editor mode">
+      {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
+      <button
+        type="button"
+        data-editor-mode="block"
+        aria-pressed={mode === "block"}
+        onClick={() => switchMode("block")}
+      >
+        Page
+      </button>
+      <button
+        type="button"
+        data-editor-mode="edgeless"
+        aria-pressed={mode === "edgeless"}
+        onClick={() => switchMode("edgeless")}
+      >
+        Edgeless
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Renders the mode switch and the document's delete and undo actions.
+ *
+ * @param props - Document actions used by the shared toolbar.
+ * @param props.editor - Borrowed selection and history managers.
+ * @returns The toolbar's main action row.
+ */
+function DemoToolbarMain(props: {
+  readonly editor: Pick<DocumentEditorAPI, "selection" | "history">;
+}) {
+  return (
+    <div className="demo-toolbar-main">
+      <span className="demo-wordmark">
+        Rivto <span>editor</span>
+      </span>
+      <DemoToolbarMode />
+      <button
+        type="button"
+        data-editor-action="delete"
+        aria-label="Delete"
+        title="Delete"
+        onClick={() => props.editor.selection.delete()}
+      >
+        <Trash2Icon size={16} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        data-editor-action="undo"
+        aria-label="Undo"
+        title="Undo"
+        onClick={() => props.editor.history.undo()}
+      >
+        <Undo2Icon size={16} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Renders the shared drag-handle visibility toggle when its host provides it.
+ *
+ * @returns The toggle label, or null without a visibility provider.
+ */
+function DemoToolbarHandleVisibility() {
+  const handleVisibility = useContext(DemoHandleVisibilityContext);
+  if (!handleVisibility) {
+    return null;
+  }
+  return (
+    <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+      <input
+        type="checkbox"
+        checked={handleVisibility.visible}
+        onChange={(event) => handleVisibility.setVisible(event.currentTarget.checked)}
+      />
+      Always show drag handles
+    </label>
+  );
+}
+
+/**
+ * Renders shared block-label, nesting-line, and handle visibility controls.
+ *
+ * @param props - Host-controlled visibility values and change callbacks.
+ * @param props.showBlockIds - Whether block IDs are visible.
+ * @param props.onShowBlockIdsChange - Receives requested ID visibility.
+ * @param props.showBlockNumbers - Whether block numbers are visible.
+ * @param props.onShowBlockNumbersChange - Receives requested number visibility.
+ * @param props.showNestingLines - Whether nesting lines are enabled.
+ * @param props.onShowNestingLinesChange - Receives requested line visibility, when exposed.
+ * @returns Checkbox labels without an additional DOM wrapper.
+ */
+function DemoToolbarVisibility(
+  props: Pick<
+    DemoToolbarProps,
+    | "showBlockIds"
+    | "onShowBlockIdsChange"
+    | "showBlockNumbers"
+    | "onShowBlockNumbersChange"
+    | "showNestingLines"
+    | "onShowNestingLinesChange"
+  >,
+) {
+  const updateNestingLines = props.onShowNestingLinesChange;
+  return (
+    <>
+      <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_BLOCK_IDS_TOOLTIP}>
+        <input
+          type="checkbox"
+          checked={props.showBlockIds}
+          title={DEMO_BLOCK_IDS_TOOLTIP}
+          onChange={(event) => props.onShowBlockIdsChange(event.currentTarget.checked)}
+        />
+        Block IDs
+      </label>
+      <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+        <input
+          type="checkbox"
+          checked={props.showBlockNumbers}
+          onChange={(event) => props.onShowBlockNumbersChange(event.currentTarget.checked)}
+        />
+        Block numbers
+      </label>
+      {updateNestingLines && (
+        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
+          <input
+            type="checkbox"
+            checked={props.showNestingLines}
+            onChange={(event) => updateNestingLines(event.currentTarget.checked)}
+          />
+          Nesting lines
+        </label>
+      )}
+      <DemoToolbarHandleVisibility />
+    </>
+  );
+}
+
+/**
+ * Uses an empty threshold input to mean virtualization is always enabled.
+ *
+ * @param event - Current numeric input.
+ * @param update - Host callback receiving the resulting setting.
+ * @returns Requests the clamped threshold or always-enabled setting.
+ */
+function changeVirtualizationThreshold(
+  event: ChangeEvent<HTMLInputElement>,
+  update: NonNullable<DemoToolbarProps["onVirtualizePageThresholdChange"]>,
+): void {
+  const value = event.currentTarget.valueAsNumber;
+  if (Number.isFinite(value)) {
+    update(Math.max(0, Math.trunc(value)));
+  } else {
+    update(true);
+  }
+}
+
+/**
+ * Renders the optional virtualization toggle and minimum root count.
+ *
+ * @param props - Current threshold and host update callback.
+ * @param props.virtualizePageThreshold - Current threshold or enabled state.
+ * @param props.onVirtualizePageThresholdChange - Receives the requested setting, when exposed.
+ * @returns Threshold controls, or null when virtualization is not exposed.
+ */
+function DemoToolbarVirtualizationThreshold(
+  props: Pick<DemoToolbarProps, "virtualizePageThreshold" | "onVirtualizePageThresholdChange">,
+) {
+  const update = props.onVirtualizePageThresholdChange;
+  if (!update) {
+    return null;
+  }
+  let thresholdInputValue: number | "" = "";
+  if (typeof props.virtualizePageThreshold === "number") {
+    thresholdInputValue = props.virtualizePageThreshold;
+  }
+  return (
+    <>
+      <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
+        <input
+          type="checkbox"
+          checked={props.virtualizePageThreshold !== false}
+          title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}
+          onChange={(event) => update(event.currentTarget.checked)}
+        />
+        Virtualize page
+      </label>
+      <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}>
+        Virtualize after roots count
+        <input
+          type="number"
+          min={0}
+          step={1}
+          placeholder="Always"
+          disabled={props.virtualizePageThreshold === false}
+          value={thresholdInputValue}
+          title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}
+          onChange={(event) => changeVirtualizationThreshold(event, update)}
+        />
+      </label>
+    </>
+  );
+}
+
+/**
+ * Renders the optional number of extra virtualized roots.
+ *
+ * @param props - Current overscan and host update callback.
+ * @param props.virtualizePageOverscan - Number of extra roots rendered on each side.
+ * @param props.onVirtualizePageOverscanChange - Receives the requested count, when exposed.
+ * @returns The overscan control, or null when it is not exposed.
+ */
+function DemoToolbarVirtualizationOverscan(
+  props: Pick<DemoToolbarProps, "virtualizePageOverscan" | "onVirtualizePageOverscanChange">,
+) {
+  const update = props.onVirtualizePageOverscanChange;
+  if (!update) {
+    return null;
+  }
+  return (
+    <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}>
+      Extra roots per side
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={props.virtualizePageOverscan}
+        title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}
+        onChange={(event) =>
+          update(Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)))
+        }
+      />
+    </label>
+  );
+}
+
+/**
+ * Restores a selected Review report snapshot and displays any parsing error.
+ *
+ * @param props - Borrowed document load operation.
+ * @param props.editor - Editor receiving the validated snapshot.
+ * @returns Report file input and any error, without a wrapper.
+ */
+function DemoToolbarReport(props: { readonly editor: Pick<DocumentEditorAPI, "load"> }) {
+  const [reportError, setReportError] = useState<string | null>(null);
+  /**
+   * Loads the snapshot from a user-selected Review report envelope.
+   *
+   * @param event - File input change containing the selected report.
+   * @returns Resolves after loading the snapshot or reporting an error.
+   */
+  const restoreReport = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) {
+      return;
+    }
+    setReportError(null);
+    try {
+      const report = JSON.parse(await file.text()) as Partial<ReviewReport>;
+      if (!report.snapshot || report.snapshot.version !== 9) {
+        throw new Error("Selected file is not a Review report");
+      }
+      props.editor.load(report.snapshot);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Failed to restore Review report");
+    }
+  };
+  return (
+    <>
+      <label>
+        Restore report
+        <input
+          type="file"
+          accept=".json,application/json"
+          aria-label="Restore Review report"
+          onChange={(event) => void restoreReport(event)}
+        />
+      </label>
+      {reportError && <span role="alert">{reportError}</span>}
+    </>
+  );
+}
+
 /**
  * Shared chrome above each demo editor (mode, block IDs, delete, undo).
  *
@@ -1092,227 +1716,15 @@ function JournalDate({ date }: { readonly date: Date }) {
  * @param props.onVirtualizePageOverscanChange - Receives the requested extra-row count.
  * @returns Toolbar controls and any report-restoration error, within the active panel.
  */
-function DemoToolbar({
-  editor,
-  showBlockIds,
-  onShowBlockIdsChange,
-  showBlockNumbers,
-  onShowBlockNumbersChange,
-  showNestingLines,
-  onShowNestingLinesChange,
-  virtualizePageThreshold,
-  onVirtualizePageThresholdChange,
-  virtualizePageOverscan,
-  onVirtualizePageOverscanChange,
-}: {
-  readonly editor: DocumentEditorAPI;
-  readonly showBlockNumbers: boolean;
-  /**
-   * Requests a host-owned change to gutter-number visibility.
-   *
-   * @param visible - Checked state selected by the toolbar checkbox.
-   * @returns No value; the host supplies the updated showBlockNumbers prop.
-   */
-  readonly onShowBlockNumbersChange: (visible: boolean) => void;
-  readonly showNestingLines?: boolean;
-  /**
-   * Requests a change to nesting-line visibility.
-   *
-   * @param visible - Whether the overlay should be installed.
-   * @returns The host receives the requested visibility.
-   */
-  readonly onShowNestingLinesChange?: (visible: boolean) => void;
-  readonly showBlockIds: boolean;
-  readonly onShowBlockIdsChange: (visible: boolean) => void;
-  readonly virtualizePageThreshold?: boolean | number;
-  readonly onVirtualizePageThresholdChange?: (threshold: boolean | number) => void;
-  readonly virtualizePageOverscan?: number;
-  readonly onVirtualizePageOverscanChange?: (count: number) => void;
-}) {
-  const { mode, setMode } = useEditorMode();
-  const handleVisibility = useContext(DemoHandleVisibilityContext);
-  const [reportError, setReportError] = useState<string | null>(null);
-  let thresholdInputValue: number | "" = "";
-  if (typeof virtualizePageThreshold === "number") {
-    thresholdInputValue = virtualizePageThreshold;
-  }
-  /** No-ops when already in `next` so repeated clicks do not thrash mode. */
-  const switchMode = (next: "block" | "edgeless") => {
-    if (next === mode) {
-      return;
-    }
-    setMode(next);
-  };
-
-  /** Loads the snapshot from a user-selected Review report envelope. */
-  const restoreReport = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (!file) {
-      return;
-    }
-    setReportError(null);
-    try {
-      const report = JSON.parse(await file.text()) as Partial<ReviewReport>;
-      if (!report.snapshot || report.snapshot.version !== 9) {
-        throw new Error("Selected file is not a Review report");
-      }
-      editor.load(report.snapshot);
-    } catch (error) {
-      setReportError(error instanceof Error ? error.message : "Failed to restore Review report");
-    }
-  };
-
-  /**
-   * Uses an empty threshold input to mean virtualization is always enabled.
-   *
-   * @param event - Current numeric input.
-   * @returns Nothing.
-   */
-  const changeVirtualizationThreshold = (event: ChangeEvent<HTMLInputElement>): void => {
-    const value = event.currentTarget.valueAsNumber;
-    if (Number.isFinite(value)) {
-      onVirtualizePageThresholdChange?.(Math.max(0, Math.trunc(value)));
-    } else {
-      onVirtualizePageThresholdChange?.(true);
-    }
-  };
-
+function DemoToolbar(props: DemoToolbarProps) {
   return (
     <header className="demo-header">
-      <div className="demo-toolbar-main">
-        <span className="demo-wordmark">
-          Rivto <span>editor</span>
-        </span>
-        <div className="demo-mode-switch" role="group" aria-label="Editor mode">
-          {/* `data-editor-mode` / `data-editor-action` are used by e2e. */}
-          <button
-            type="button"
-            data-editor-mode="block"
-            aria-pressed={mode === "block"}
-            onClick={() => switchMode("block")}
-          >
-            Page
-          </button>
-          <button
-            type="button"
-            data-editor-mode="edgeless"
-            aria-pressed={mode === "edgeless"}
-            onClick={() => switchMode("edgeless")}
-          >
-            Edgeless
-          </button>
-        </div>
-        <button
-          type="button"
-          data-editor-action="delete"
-          aria-label="Delete"
-          title="Delete"
-          onClick={() => editor.selection.delete()}
-        >
-          <Trash2Icon size={16} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          data-editor-action="undo"
-          aria-label="Undo"
-          title="Undo"
-          onClick={() => editor.history.undo()}
-        >
-          <Undo2Icon size={16} aria-hidden="true" />
-        </button>
-      </div>
+      <DemoToolbarMain editor={props.editor} />
       <div className="demo-toolbar-controls">
-        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_BLOCK_IDS_TOOLTIP}>
-          <input
-            type="checkbox"
-            checked={showBlockIds}
-            title={DEMO_BLOCK_IDS_TOOLTIP}
-            onChange={(event) => onShowBlockIdsChange(event.currentTarget.checked)}
-          />
-          Block IDs
-        </label>
-        <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-          <input
-            type="checkbox"
-            checked={showBlockNumbers}
-            onChange={(event) => onShowBlockNumbersChange(event.currentTarget.checked)}
-          />
-          Block numbers
-        </label>
-        {onShowNestingLinesChange && (
-          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-            <input
-              type="checkbox"
-              checked={showNestingLines}
-              onChange={(event) => onShowNestingLinesChange(event.currentTarget.checked)}
-            />
-            Nesting lines
-          </label>
-        )}
-        {handleVisibility && (
-          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS}>
-            <input
-              type="checkbox"
-              checked={handleVisibility.visible}
-              onChange={(event) => handleVisibility.setVisible(event.currentTarget.checked)}
-            />
-            Always show drag handles
-          </label>
-        )}
-        {onVirtualizePageThresholdChange && (
-          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}>
-            <input
-              type="checkbox"
-              checked={virtualizePageThreshold !== false}
-              title={DEMO_VIRTUALIZE_PAGE_TOOLTIP}
-              onChange={(event) => onVirtualizePageThresholdChange(event.currentTarget.checked)}
-            />
-            Virtualize page
-          </label>
-        )}
-        {onVirtualizePageThresholdChange && (
-          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}>
-            Virtualize after roots count
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="Always"
-              disabled={virtualizePageThreshold === false}
-              value={thresholdInputValue}
-              title={DEMO_VIRTUALIZE_THRESHOLD_TOOLTIP}
-              onChange={changeVirtualizationThreshold}
-            />
-          </label>
-        )}
-        {onVirtualizePageOverscanChange && (
-          <label className={DEMO_BLOCK_ID_TOGGLE_CLASS} title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}>
-            Extra roots per side
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={virtualizePageOverscan}
-              title={DEMO_VIRTUALIZE_OVERSCAN_TOOLTIP}
-              onChange={(event) =>
-                onVirtualizePageOverscanChange(
-                  Math.max(0, Math.trunc(event.currentTarget.valueAsNumber || 0)),
-                )
-              }
-            />
-          </label>
-        )}
-        <label>
-          Restore report
-          <input
-            type="file"
-            accept=".json,application/json"
-            aria-label="Restore Review report"
-            onChange={(event) => void restoreReport(event)}
-          />
-        </label>
-        {reportError && <span role="alert">{reportError}</span>}
+        <DemoToolbarVisibility {...props} />
+        <DemoToolbarVirtualizationThreshold {...props} />
+        <DemoToolbarVirtualizationOverscan {...props} />
+        <DemoToolbarReport editor={props.editor} />
       </div>
     </header>
   );
@@ -1325,15 +1737,11 @@ interface JournalPresentation {
 }
 
 /**
- * Default demo: stacked today (seeded) + yesterday (empty) journals.
+ * Tracks the active journal panel's mode and open-block state.
  *
- * Needed as the primary product walkthrough — two editors, shared toolbar
- * patterns, and lifecycle cleanup when the page unmounts.
- *
- * @returns Loading or initialization-error feedback, then two journal surfaces.
- * The component disposes created runtimes on unmount, including late completions.
+ * @returns Current presentation and a callback that ignores unchanged values.
  */
-function JournalDemoApp() {
+function useJournalPresentation() {
   const [presentation, setPresentation] = useState<JournalPresentation>({
     mode: "block",
     hasOpenBlock: false,
@@ -1353,23 +1761,21 @@ function JournalDemoApp() {
       return { mode, hasOpenBlock };
     });
   }, []);
+  return { presentation, onPresentationChange };
+}
+
+/**
+ * Creates the journal editors and owns their subscriptions and cleanup.
+ *
+ * @param showNestingLines - Whether the today editor installs nesting lines.
+ * @returns Current editor runtimes and any initialization error.
+ */
+function useJournalRuntime(showNestingLines: boolean) {
   const [runtime, setRuntime] = useState<{
     today: Awaited<ReturnType<typeof createDemoEditor>>;
     yesterday: Awaited<ReturnType<typeof createEmptyDemoEditor>>;
   }>();
   const [error, setError] = useState<string>();
-  const [showBlockIds, setShowBlockIds] = useState(false);
-  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
-  const [showNestingLines, setShowNestingLines] = useState(true);
-  const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
-  const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
-  const [dates] = useState(() => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    return { today, yesterday };
-  });
-
   // EditorPanel acquires its model but does not own the shared runtime. The
   // application releases runtime subscriptions, commands, and host storage.
   // Cleanup also closes factories that finish after this component unmounts.
@@ -1409,6 +1815,156 @@ function JournalDemoApp() {
     }
     return runtime.today.reactEditor.extensions.install(nestingLinesExtension());
   }, [runtime, showNestingLines]);
+  return { runtime, error };
+}
+
+/** Inputs owned by the journal host and passed to today's editor surface. */
+interface JournalTodayProps {
+  /** Editor resources retained by the journal host. */
+  readonly runtime: Pick<
+    Awaited<ReturnType<typeof createDemoEditor>>,
+    "editor" | "reactEditor" | "editorStorage"
+  >;
+  /** Calendar date shown above the editor. */
+  readonly date: Date;
+  /** Current mode used for journal presentation. */
+  readonly mode: EditorMode;
+  /**
+   * Updates the journal when the active panel changes presentation.
+   *
+   * @param mode - Active panel's editor mode.
+   * @param hasOpenBlock - Whether the panel displays a nested block.
+   * @returns Completes the host state update request.
+   */
+  readonly onPresentationChange: (mode: EditorMode, hasOpenBlock: boolean) => void;
+  /** Whether block IDs are shown. */
+  readonly showBlockIds: boolean;
+  /**
+   * Requests a change to block ID visibility.
+   *
+   * @param visible - Whether block IDs should be shown.
+   * @returns Completes the host state update request.
+   */
+  readonly onShowBlockIdsChange: (visible: boolean) => void;
+  /** Whether block numbers are shown. */
+  readonly showBlockNumbers: boolean;
+  /**
+   * Requests a change to block number visibility.
+   *
+   * @param visible - Whether block numbers should be shown.
+   * @returns Completes the host state update request.
+   */
+  readonly onShowBlockNumbersChange: (visible: boolean) => void;
+  /** Whether the nesting-lines extension is installed. */
+  readonly showNestingLines: boolean;
+  /**
+   * Requests installation or removal of nesting lines.
+   *
+   * @param visible - Whether nesting lines should be shown.
+   * @returns Completes the host state update request.
+   */
+  readonly onShowNestingLinesChange: (visible: boolean) => void;
+}
+
+/**
+ * Renders today's editor, its toolbar, and its nested panel surface.
+ *
+ * The host owns editor lifetime and shared visibility state; virtualization
+ * settings belong to this mounted journal surface.
+ *
+ * @param props - Runtime, date, presentation callback, and toolbar settings.
+ * @param props.runtime - Editors retained by the journal host.
+ * @param props.date - Date displayed above the editor.
+ * @param props.mode - Current panel mode used by the section.
+ * @param props.onPresentationChange - Receives mode and nested-block changes.
+ * @param props.showBlockIds - Whether block IDs are visible.
+ * @param props.onShowBlockIdsChange - Receives the requested ID visibility.
+ * @param props.showBlockNumbers - Whether block numbers are visible.
+ * @param props.onShowBlockNumbersChange - Receives the requested number visibility.
+ * @param props.showNestingLines - Whether nesting lines are enabled.
+ * @param props.onShowNestingLinesChange - Receives the requested line visibility.
+ * @returns The today section within its editor storage context.
+ */
+function JournalToday(props: JournalTodayProps) {
+  const [virtualizePageThreshold, setVirtualizePageThreshold] = useState<boolean | number>(false);
+  const [virtualizePageOverscan, setVirtualizePageOverscan] = useState(8);
+  return (
+    <section
+      className="journal-document"
+      data-journal-document="today"
+      data-edgeless={props.mode === "edgeless" || undefined}
+    >
+      <EditorStorageContext.Provider value={props.runtime.editorStorage}>
+        <DemoEditorPanels
+          editor={props.runtime.reactEditor}
+          onPresentationChange={props.onPresentationChange}
+          documentTitle={
+            <time dateTime={localDateKey(props.date)}>
+              {new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(props.date)}
+            </time>
+          }
+          virtualizePageThreshold={virtualizePageThreshold}
+          virtualizePageOverscan={virtualizePageOverscan}
+        >
+          {(header) => (
+            <>
+              <DemoToolbar
+                editor={props.runtime.editor}
+                showBlockIds={props.showBlockIds}
+                onShowBlockIdsChange={props.onShowBlockIdsChange}
+                showBlockNumbers={props.showBlockNumbers}
+                onShowBlockNumbersChange={props.onShowBlockNumbersChange}
+                showNestingLines={props.showNestingLines}
+                onShowNestingLinesChange={props.onShowNestingLinesChange}
+                virtualizePageThreshold={virtualizePageThreshold}
+                onVirtualizePageThresholdChange={setVirtualizePageThreshold}
+                virtualizePageOverscan={virtualizePageOverscan}
+                onVirtualizePageOverscanChange={setVirtualizePageOverscan}
+              />
+              <RevisionsPanel />
+              <KeyboardPanel />
+              {header}
+              <DemoEditorSurface />
+            </>
+          )}
+        </DemoEditorPanels>
+      </EditorStorageContext.Provider>
+    </section>
+  );
+}
+
+/**
+ * Captures today's and yesterday's local dates for one journal mount.
+ *
+ * @returns The stable pair of dates displayed by the journal.
+ */
+function useJournalDates() {
+  const [dates] = useState(() => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return { today, yesterday };
+  });
+  return dates;
+}
+
+/**
+ * Default demo: stacked today (seeded) + yesterday (empty) journals.
+ *
+ * Needed as the primary product walkthrough — two editors, shared toolbar
+ * patterns, and lifecycle cleanup when the page unmounts.
+ *
+ * @returns Loading or initialization-error feedback, then two journal surfaces.
+ * The component disposes created runtimes on unmount, including late completions.
+ */
+function JournalDemoApp() {
+  const { presentation, onPresentationChange } = useJournalPresentation();
+  const [showBlockIds, setShowBlockIds] = useState(false);
+  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
+  const [showNestingLines, setShowNestingLines] = useState(true);
+  const { runtime, error } = useJournalRuntime(showNestingLines);
+  const dates = useJournalDates();
+
   if (error) {
     return <p role="alert">{error}</p>;
   }
@@ -1426,47 +1982,18 @@ function JournalDemoApp() {
           data-edgeless={presentation.mode === "edgeless" || undefined}
         >
           {/* `data-journal-document` is used by e2e to pick today vs yesterday. */}
-          <section
-            className="journal-document"
-            data-journal-document="today"
-            data-edgeless={presentation.mode === "edgeless" || undefined}
-          >
-            <EditorStorageContext.Provider value={todayEditor.editorStorage}>
-              <DemoEditorPanels
-                editor={todayEditor.reactEditor}
-                onPresentationChange={onPresentationChange}
-                documentTitle={
-                  <time dateTime={localDateKey(dates.today)}>
-                    {new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(dates.today)}
-                  </time>
-                }
-                virtualizePageThreshold={virtualizePageThreshold}
-                virtualizePageOverscan={virtualizePageOverscan}
-              >
-                {(header) => (
-                  <>
-                    <DemoToolbar
-                      editor={todayEditor.editor}
-                      showBlockIds={showBlockIds}
-                      onShowBlockIdsChange={setShowBlockIds}
-                      showBlockNumbers={showBlockNumbers}
-                      onShowBlockNumbersChange={setShowBlockNumbers}
-                      showNestingLines={showNestingLines}
-                      onShowNestingLinesChange={setShowNestingLines}
-                      virtualizePageThreshold={virtualizePageThreshold}
-                      onVirtualizePageThresholdChange={setVirtualizePageThreshold}
-                      virtualizePageOverscan={virtualizePageOverscan}
-                      onVirtualizePageOverscanChange={setVirtualizePageOverscan}
-                    />
-                    <RevisionsPanel />
-                    <KeyboardPanel />
-                    {header}
-                    <DemoEditorSurface />
-                  </>
-                )}
-              </DemoEditorPanels>
-            </EditorStorageContext.Provider>
-          </section>
+          <JournalToday
+            runtime={todayEditor}
+            date={dates.today}
+            mode={presentation.mode}
+            onPresentationChange={onPresentationChange}
+            showBlockIds={showBlockIds}
+            onShowBlockIdsChange={setShowBlockIds}
+            showBlockNumbers={showBlockNumbers}
+            onShowBlockNumbersChange={setShowBlockNumbers}
+            showNestingLines={showNestingLines}
+            onShowNestingLinesChange={setShowNestingLines}
+          />
           <section className="journal-document" data-journal-document="yesterday">
             <EditorPanel editor={yesterdayEditor.reactEditor}>
               <JournalDate date={dates.yesterday} />
@@ -1477,6 +2004,103 @@ function JournalDemoApp() {
       </BlockIdsVisibleProvider>
     </BlockNumbersVisibleProvider>
   );
+}
+
+/**
+ * Seeds the source editor with a movable subtree, card, and remaining sibling.
+ *
+ * @param editor - Document editor owning the new sample blocks and element.
+ * @returns After the source fixture has been inserted.
+ */
+function seedMultiEditorSource(editor: Pick<DocumentEditorAPI, "blocks" | "elements">): void {
+  const parentId = editor.blocks.insertBlock({
+    id: "left-parent",
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Movable parent",
+    listProps: { collapsed: true },
+    children: [
+      {
+        id: "left-child",
+        type: DEFAULT_WRITING_BLOCK_TYPE,
+        content: "Nested child",
+      },
+    ],
+  }).id;
+  editor.elements.insertElement({
+    type: "block",
+    frame: { x: 41, y: 52, width: 310, height: 170 },
+    zIndex: 3,
+    props: { startBlockId: parentId, endBlockId: parentId },
+  });
+  editor.blocks.insertBlock({
+    id: "left-counter",
+    type: COUNTER_BLOCK_TYPE,
+    props: { count: 7 },
+  });
+  editor.blocks.insertBlock({
+    id: "left-stay",
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Stays in the source",
+  });
+}
+
+/**
+ * Seeds the destination editor, optionally including a conflicting block ID.
+ *
+ * @param editor - Document editor owning the new sample blocks.
+ * @param conflict - Adds a duplicate source-child ID when set to `block`.
+ * @returns After the destination fixture has been inserted.
+ */
+function seedMultiEditorDestination(
+  editor: Pick<DocumentEditorAPI, "blocks">,
+  conflict: "block" | undefined,
+): void {
+  editor.blocks.insertBlock({
+    id: "right-target",
+    type: DEFAULT_WRITING_BLOCK_TYPE,
+    content: "Destination parent",
+    children: [
+      { id: "right-nested", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Destination child" },
+      // Used by e2e + manual `?conflict=block`: duplicate id must reject the drop.
+      ...(conflict === "block"
+        ? [{ id: "left-child", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Conflicting ID" }]
+        : []),
+    ],
+  });
+  editor.blocks.insertBlock({
+    id: "right-counter",
+    type: COUNTER_BLOCK_TYPE,
+    props: { count: 20 },
+  });
+}
+
+/**
+ * Creates the shared Page and canvas presentation used by demo editors.
+ *
+ * The caller owns the returned React editor and destroys it with its document.
+ *
+ * @param editor - Existing document editor borrowed by the React runtime.
+ * @returns React editor with the demo's file, block, canvas, and report extensions installed.
+ * @throws If an extension fails during installation.
+ */
+function createMultiSurfaceDemoEditor(editor: DocumentEditorAPI) {
+  return createReactEditor({
+    editor,
+    extensions: [
+      fileExtension({ provider: demoBinaryProvider }),
+      demoLocalFileExtension,
+      imageExtension({ provider: demoBinaryProvider }),
+      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
+      pageDragExtension(),
+      ...edgelessPreset({ visuals: edgelessOptions }),
+      mindmapExtension(),
+      blockIdExtension(),
+      blockNumberExtension(),
+      ...customBlockExtensions,
+      ...createDynamicExtensions(),
+      ...demoReviewReports(),
+    ],
+  });
 }
 
 /**
@@ -1505,70 +2129,11 @@ async function createMultiEditor(
 ) {
   const resources = await createDemoDocument();
   const editor = createDocumentEditor({ document: resources.document });
-  const reactEditor = createReactEditor({
-    editor,
-    extensions: [
-      fileExtension({ provider: demoBinaryProvider }),
-      demoLocalFileExtension,
-      imageExtension({ provider: demoBinaryProvider }),
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      pageDragExtension(),
-      ...edgelessPreset({ visuals: edgelessOptions }),
-      mindmapExtension(),
-      blockIdExtension(),
-      blockNumberExtension(),
-      ...customBlockExtensions,
-      ...demoReviewReports(),
-    ],
-  });
+  const reactEditor = createMultiSurfaceDemoEditor(editor);
   if (side === "left") {
-    const parentId = editor.blocks.insertBlock({
-      id: "left-parent",
-      type: DEFAULT_WRITING_BLOCK_TYPE,
-      content: "Movable parent",
-      listProps: { collapsed: true },
-      children: [
-        {
-          id: "left-child",
-          type: DEFAULT_WRITING_BLOCK_TYPE,
-          content: "Nested child",
-        },
-      ],
-    }).id;
-    editor.elements.insertElement({
-      type: "block",
-      frame: { x: 41, y: 52, width: 310, height: 170 },
-      zIndex: 3,
-      props: { startBlockId: parentId, endBlockId: parentId },
-    });
-    editor.blocks.insertBlock({
-      id: "left-counter",
-      type: COUNTER_BLOCK_TYPE,
-      props: { count: 7 },
-    });
-    editor.blocks.insertBlock({
-      id: "left-stay",
-      type: DEFAULT_WRITING_BLOCK_TYPE,
-      content: "Stays in the source",
-    });
+    seedMultiEditorSource(editor);
   } else if (!options.empty) {
-    editor.blocks.insertBlock({
-      id: "right-target",
-      type: DEFAULT_WRITING_BLOCK_TYPE,
-      content: "Destination parent",
-      children: [
-        { id: "right-nested", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Destination child" },
-        // Used by e2e + manual `?conflict=block`: duplicate id must reject the drop.
-        ...(options.conflict === "block"
-          ? [{ id: "left-child", type: DEFAULT_WRITING_BLOCK_TYPE, content: "Conflicting ID" }]
-          : []),
-      ],
-    });
-    editor.blocks.insertBlock({
-      id: "right-counter",
-      type: COUNTER_BLOCK_TYPE,
-      props: { count: 20 },
-    });
+    seedMultiEditorDestination(editor, options.conflict);
   }
   editor.history.clear();
   return { ...resources, editor, reactEditor };
@@ -1631,15 +2196,16 @@ function MultiEditorPane({
 }
 
 /**
- * Side-by-side editors for manual cross-document practice (`?editors=2`).
+ * Creates and releases both independent editors for the dual-editor demo.
  *
- * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block`.
+ * Editors resolving after unmount are destroyed immediately; mounted editors
+ * remain owned by this hook until its options change or it unmounts.
+ *
+ * @param emptyDestination - Whether the right document starts empty.
+ * @param conflict - Optional conflicting block fixture in the right document.
+ * @returns Current editor resources and any initialization error.
  */
-function MultiEditorApp() {
-  const params = new URLSearchParams(window.location.search);
-  const emptyDestination = params.get("emptyDestination") === "1";
-  const conflictParam = params.get("conflict");
-  const conflict = conflictParam === "block" ? conflictParam : undefined;
+function useMultiEditorRuntime(emptyDestination: boolean, conflict: "block" | undefined) {
   const [runtime, setRuntime] = useState<{
     left: Awaited<ReturnType<typeof createMultiEditor>>;
     right: Awaited<ReturnType<typeof createMultiEditor>>;
@@ -1677,6 +2243,22 @@ function MultiEditorApp() {
       created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
     };
   }, [emptyDestination, conflict]);
+  return { runtime, error };
+}
+
+/**
+ * Side-by-side editors for manual cross-document practice (`?editors=2`).
+ *
+ * Query extras (also used by e2e): `emptyDestination=1`, `conflict=block`.
+ *
+ * @returns The two editor panes, a loading message, or an initialization error.
+ */
+function MultiEditorApp() {
+  const params = new URLSearchParams(window.location.search);
+  const emptyDestination = params.get("emptyDestination") === "1";
+  const conflictParam = params.get("conflict");
+  const conflict = conflictParam === "block" ? conflictParam : undefined;
+  const { runtime, error } = useMultiEditorRuntime(emptyDestination, conflict);
   if (error) {
     return <p role="alert">{error}</p>;
   }
@@ -1691,6 +2273,84 @@ function MultiEditorApp() {
       <MultiEditorPane side="right" runtime={right} />
     </div>
   );
+}
+
+/**
+ * Waits for the shared document registration or cancels the wait.
+ *
+ * @param storage - Document storage receiving registry updates.
+ * @param signal - Signal that cancels the subscription and rejects the wait.
+ * @returns Resolves after the shared document is registered.
+ * @throws The abort reason when the signal is aborted before registration.
+ */
+async function waitForSharedDocument(
+  storage: Pick<DocumentStorage, "getDocumentIds" | "subscribe">,
+  signal: AbortSignal,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    // Release both listeners before completing the wait.
+    const finish = () => {
+      unsubscribe();
+      signal.removeEventListener("abort", abort);
+    };
+    // Resolve only after the shared document has been registered.
+    const refresh = () => {
+      if (!storage.getDocumentIds().includes("shared")) {
+        return;
+      }
+      finish();
+      resolve();
+    };
+    // Reject the wait and release its listeners when cancelled.
+    const abort = () => {
+      finish();
+      reject(signal.reason);
+    };
+    const unsubscribe = storage.subscribe(refresh);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) {
+      abort();
+    } else {
+      refresh();
+    }
+  });
+}
+
+/**
+ * Seeds the first synchronized document with introduction and repeated blocks.
+ *
+ * @param editor - Document editor owning the shared blocks and history.
+ * @param repeatCount - Number of additional writing blocks to append.
+ * @returns After seeding the document and clearing its initial history.
+ */
+function seedSyncedDocument(
+  editor: Pick<DocumentEditorAPI, "blocks" | "history">,
+  repeatCount: number,
+): void {
+  const introId = editor.blocks.insertBlock({
+    ...paragraphBlockFactory.createEmptyBlock(),
+    content: "**Synced demo** — edit here or in the other pane.",
+  }).id;
+  editor.blocks.insertBlock(
+    {
+      ...paragraphBlockFactory.createEmptyBlock(),
+      content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
+    },
+    editor.blocks.getInsertionDestinationAfter(introId),
+  );
+  editor.history.batchUpdates(() => {
+    let afterId = editor.blocks.getRootIds().at(-1);
+    for (let index = 0; index < repeatCount; index += 1) {
+      afterId = editor.blocks.insertBlock(
+        {
+          ...paragraphBlockFactory.createEmptyBlock(),
+          content: `Synced repeated block ${index + 1}`,
+        },
+        editor.blocks.getInsertionDestinationAfter(afterId),
+      ).id;
+    }
+  });
+  editor.history.clear();
 }
 
 /**
@@ -1724,33 +2384,7 @@ async function createSyncedPeer(
     await storage.ready;
     signal.throwIfAborted();
     if (side === "right" && !storage.getDocumentIds().includes("shared")) {
-      await new Promise<void>((resolve, reject) => {
-        // Release both listeners before completing the wait.
-        const finish = () => {
-          unsubscribe();
-          signal.removeEventListener("abort", abort);
-        };
-        // Resolve only after the shared document has been registered.
-        const refresh = () => {
-          if (!storage.getDocumentIds().includes("shared")) {
-            return;
-          }
-          finish();
-          resolve();
-        };
-        // Reject the wait and release its listeners when cancelled.
-        const abort = () => {
-          finish();
-          reject(signal.reason);
-        };
-        const unsubscribe = storage.subscribe(refresh);
-        signal.addEventListener("abort", abort, { once: true });
-        if (signal.aborted) {
-          abort();
-        } else {
-          refresh();
-        }
-      });
+      await waitForSharedDocument(storage, signal);
     }
     if (!storage.getDocumentIds().includes("shared")) {
       storage.registerDocument("shared");
@@ -1763,70 +2397,29 @@ async function createSyncedPeer(
     throw failure;
   }
   const editor = createDocumentEditor({ document: document! });
-  const reactEditor = createReactEditor({
-    editor,
-    extensions: [
-      fileExtension({ provider: demoBinaryProvider }),
-      demoLocalFileExtension,
-      imageExtension({ provider: demoBinaryProvider }),
-      standardPreset({ writing: { onMarkdownLinkClick: handleMarkdownLink } }),
-      pageDragExtension(),
-      ...edgelessPreset({ visuals: edgelessOptions }),
-      mindmapExtension(),
-      blockIdExtension(),
-      blockNumberExtension(),
-      ...customBlockExtensions,
-      ...demoReviewReports(),
-    ],
-  });
+  const reactEditor = createMultiSurfaceDemoEditor(editor);
   if (side === "left" && !editor.blocks.getRootIds().length) {
-    const introId = editor.blocks.insertBlock({
-      ...paragraphBlockFactory.createEmptyBlock(),
-      content: "**Synced demo** — edit here or in the other pane.",
-    }).id;
-    editor.blocks.insertBlock(
-      {
-        ...paragraphBlockFactory.createEmptyBlock(),
-        content: "Both editors share one Yjs room over `BroadcastChannel` (same PC, no server).",
-      },
-      editor.blocks.getInsertionDestinationAfter(introId),
-    );
-    editor.history.batchUpdates(() => {
-      let afterId = editor.blocks.getRootIds().at(-1);
-      for (let index = 0; index < repeatCount; index += 1) {
-        afterId = editor.blocks.insertBlock(
-          {
-            ...paragraphBlockFactory.createEmptyBlock(),
-            content: `Synced repeated block ${index + 1}`,
-          },
-          editor.blocks.getInsertionDestinationAfter(afterId),
-        ).id;
-      }
-    });
-    editor.history.clear();
+    seedSyncedDocument(editor, repeatCount);
   }
   return { storage, editor, reactEditor };
 }
 
 /**
- * Collaborative demo opened with `?sync=1` (optional `?room=`).
+ * Creates and releases the two BroadcastChannel peers for the sync demo.
  *
- * Needed to verify same-origin Yjs sync over BroadcastChannel: two panes on
- * this page, plus more peers if another tab opens the same URL.
+ * Cleanup cancels pending acquisition and destroys peers that have already
+ * been created, including peers that finish after unmount.
  *
- * @returns Loading or initialization-error feedback, then two synchronized editor panes.
- * The component closes created peers on unmount, including late completions.
+ * @param roomId - Shared channel identifier for both peers.
+ * @param repeatCount - Additional blocks seeded by the left peer.
+ * @returns Current peers and any initialization error.
  */
-function SyncEditorsApp() {
-  const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
-  const repeatCount = demoRepeatCount();
+function useSyncedPeers(roomId: string, repeatCount: number) {
   const [peers, setPeers] = useState<{
     left: Awaited<ReturnType<typeof createSyncedPeer>>;
     right: Awaited<ReturnType<typeof createSyncedPeer>>;
   }>();
   const [error, setError] = useState<string>();
-  const [showBlockIds, setShowBlockIds] = useState(false);
-  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
   useEffect(() => {
     let active = true;
     const request = new AbortController();
@@ -1856,6 +2449,24 @@ function SyncEditorsApp() {
       created.forEach((resource) => void destroyDemoEditor(resource).catch(console.error));
     };
   }, [roomId, repeatCount]);
+  return { peers, error };
+}
+
+/**
+ * Collaborative demo opened with `?sync=1` (optional `?room=`).
+ *
+ * Needed to verify same-origin Yjs sync over BroadcastChannel: two panes on
+ * this page, plus more peers if another tab opens the same URL.
+ *
+ * @returns Loading or initialization-error feedback, then two synchronized editor panes.
+ * The component closes created peers on unmount, including late completions.
+ */
+function SyncEditorsApp() {
+  const roomId = new URLSearchParams(window.location.search).get("room") ?? "rivto-demo-sync";
+  const repeatCount = demoRepeatCount();
+  const { peers, error } = useSyncedPeers(roomId, repeatCount);
+  const [showBlockIds, setShowBlockIds] = useState(false);
+  const [showBlockNumbers, setShowBlockNumbers] = useState(false);
   if (error) {
     return <p role="alert">{error}</p>;
   }

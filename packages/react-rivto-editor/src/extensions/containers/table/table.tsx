@@ -1,3 +1,4 @@
+import { useBlockContent } from "../../../authoring/use-block-content";
 import { TableResizeController } from "./table-resize-controller";
 import {
   columnWidth,
@@ -24,7 +25,7 @@ import {
   BlockItem,
   BlockRow,
   type BlockChildrenItemProps,
-} from "@chulane/rivto-page";
+} from "../../../authoring/layout";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { PlusIcon } from "lucide-react";
 import {
@@ -48,13 +49,8 @@ import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  useEditorRoot,
-  useReactPanel,
-  usePanel,
-} from "../../../hooks";
+import type { ReactEditorApi } from "../../../editor/types";
+import { useBlockNode, useEditorRoot, useReactPanel, usePanel } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import {
   TABLE_BLOCK_TYPE,
@@ -354,8 +350,8 @@ function useTableDimensions(tableId: string): { readonly rows: number; readonly 
  * @throws If rendered outside an editor panel.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const { rows, columns } = useTableDimensions(blockId);
   const block = editing.block;
   if (!block) {
@@ -414,6 +410,38 @@ interface TableCellRendererProps {
 }
 
 /**
+ * Renders the column resize control bound to the cell's live controller.
+ *
+ * @param controller - Occurrence-owned controller, cleared when the cell detaches.
+ * @param currentWidth - Current column width in CSS pixels.
+ * @returns Keyboard- and pointer-accessible resize control.
+ */
+function renderTableResizeHandle(
+  controller: RefObject<TableResizeController | null>,
+  currentWidth: number,
+) {
+  return (
+    <div
+      {...editorControlProps}
+      className={RESIZE_COLUMN_CLASS}
+      role="separator"
+      tabIndex={0}
+      aria-label="Resize table column"
+      aria-orientation="vertical"
+      aria-valuemin={MIN_COLUMN_WIDTH}
+      aria-valuemax={MAX_COLUMN_WIDTH}
+      aria-valuenow={currentWidth}
+      onPointerDown={(event) => controller.current?.start(event.nativeEvent, event.currentTarget)}
+      onPointerMove={(event) => controller.current?.move(event.nativeEvent)}
+      onPointerUp={(event) => controller.current?.finish(event.nativeEvent, true)}
+      onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, false)}
+      onLostPointerCapture={(event) => controller.current?.finish(event.nativeEvent, false)}
+      onKeyDown={(event) => controller.current?.resizeWithKeyboard(event.nativeEvent)}
+    />
+  );
+}
+
+/**
  * Renders editable cell text, accepts nested blocks, and adds a full column at
  * the hovered right boundary. Enter creates a first-class child block while
  * Shift+Enter remains available for a text line break.
@@ -459,31 +487,29 @@ function TableCell({ blockId }: TableCellRendererProps) {
           </Button>,
           host,
         )}
-      {host &&
-        createPortal(
-          <div
-            {...editorControlProps}
-            className={RESIZE_COLUMN_CLASS}
-            role="separator"
-            tabIndex={0}
-            aria-label="Resize table column"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_COLUMN_WIDTH}
-            aria-valuemax={MAX_COLUMN_WIDTH}
-            aria-valuenow={currentWidth}
-            onPointerDown={(event) =>
-              controller.current?.start(event.nativeEvent, event.currentTarget)
-            }
-            onPointerMove={(event) => controller.current?.move(event.nativeEvent)}
-            onPointerUp={(event) => controller.current?.finish(event.nativeEvent, true)}
-            onPointerCancel={(event) => controller.current?.finish(event.nativeEvent, false)}
-            onLostPointerCapture={(event) => controller.current?.finish(event.nativeEvent, false)}
-            onKeyDown={(event) => controller.current?.resizeWithKeyboard(event.nativeEvent)}
-          />,
-          host,
-        )}
+      {host && createPortal(renderTableResizeHandle(controller, currentWidth), host)}
     </>
   );
+}
+
+/**
+ * Registers the action that turns a leaf into a table.
+ *
+ * @param editor - Editor exposing the slash command registry.
+ * @returns Registration of the table insertion action.
+ */
+function registerTableSlashCommand(editor: Pick<ReactEditorApi, "slashCommands">): void {
+  editor.slashCommands.register({
+    id: "block.table.insert",
+    title: "Table",
+    group: "Turn into",
+    keywords: ["grid", "rows", "columns", "cells"],
+    isAvailable: ({ blockId, reactPanel }) =>
+      reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
+    execute: ({ blockId, reactPanel }) => {
+      convertLeafToContainer(reactPanel, blockId, createTableBlockInput());
+    },
+  });
 }
 
 /**
@@ -531,17 +557,7 @@ export function tableExtension(): ReactEditorExtension {
         component: BlockModalButton,
         when: ({ block }) => block.type === TABLE_BLOCK_TYPE,
       });
-      reactEditor.slashCommands.register({
-        id: "block.table.insert",
-        title: "Table",
-        group: "Turn into",
-        keywords: ["grid", "rows", "columns", "cells"],
-        isAvailable: ({ blockId, reactPanel }) =>
-          reactPanel.blocks.hasBlock(blockId) && !reactPanel.blocks.hasChildren(blockId),
-        execute: ({ blockId, reactPanel }) => {
-          convertLeafToContainer(reactPanel, blockId, createTableBlockInput());
-        },
-      });
+      registerTableSlashCommand(reactEditor);
     },
   };
 }

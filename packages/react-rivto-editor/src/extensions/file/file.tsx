@@ -8,12 +8,12 @@
  *
  * @module
  */
+import { useBlockContent } from "../../authoring/use-block-content";
 import { escapeHtml } from "../../utils/escape-html";
-import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import type { ReactEditorExtension } from "../../managers";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { BinaryProvider, FileReference } from "../../attachments";
 import { FileView, RegisteredFileView } from "./view/file-view";
@@ -70,8 +70,7 @@ function fileReference(props: Record<string, unknown>): FileReference | undefine
  * @returns Display-only file block or validation error.
  */
 function FileBlock({ blockId }: BlockRendererProps) {
-  const { block } = useBlock(blockId);
-  const selectionAnchor = useBlockSelectionAnchor(blockId);
+  const { block, selectionProps: selectionAnchor } = useBlockContent(blockId);
   const reference = block ? fileReference(block.props) : undefined;
   return (
     <div {...selectionAnchor} className={FILE_BLOCK_CLASS}>

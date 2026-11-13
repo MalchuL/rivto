@@ -1,7 +1,7 @@
 import { VISUAL_TOOL_GROUPS, VISUAL_ELEMENT_TYPES } from "./constants";
 import { RECTANGLE_REMEMBERED_PROPERTIES } from "./remembered-properties";
 import type { ReactEditorApi } from "../../editor/types";
-import type { ReactElementRegistration } from "../../managers/elements/types";
+import type { ReactElementRegistration } from "../../authoring";
 import {
   connectorClipboardConverter,
   textElementClipboardConverter,
@@ -118,6 +118,197 @@ function styleDefaults(group: string): NonNullable<ReactElementRegistration["beh
 }
 
 /**
+ * Creates the rectangle registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @param shapes - Creation settings shared by both shape types.
+ * @returns Definition, presentation and behavior for the rectangle element.
+ */
+function rectangleRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+  shapes: NonNullable<ReactElementRegistration["behavior"]>,
+): ReactElementRegistration {
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.rectangle,
+      defaults: { ...defaults.shape, cornerRadius: 3 },
+      validate: validateRectangle,
+    },
+    title: "Shape",
+    render: RectangleContent,
+    rememberedProperties: { props: RECTANGLE_REMEMBERED_PROPERTIES, validate: validateRectangle },
+    properties: ShapeProperties,
+    behavior: { ...shapes, editableLabel: true },
+  };
+}
+
+/**
+ * Creates the ellipse registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @param shapes - Creation settings shared by both shape types.
+ * @returns Definition, presentation and behavior for the ellipse element.
+ */
+function ellipseRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+  shapes: NonNullable<ReactElementRegistration["behavior"]>,
+): ReactElementRegistration {
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.ellipse,
+      defaults: defaults.shape,
+      validate: validateStyle,
+    },
+    title: "Shape",
+    render: EllipseContent,
+    properties: ShapeProperties,
+    behavior: { ...shapes, editableLabel: true },
+  };
+}
+
+/**
+ * Creates the text registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @returns Definition, presentation and behavior for the text element.
+ */
+function textRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+): ReactElementRegistration {
+  const text = styleDefaults(VISUAL_TOOL_GROUPS.text);
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.text,
+      defaults: { ...defaults.text, text: "" },
+      validate: validateStyle,
+    },
+    title: "Text",
+    render: TextContent,
+    properties: TextProperties,
+    behavior: {
+      ...text,
+      editableLabel: true,
+      create: (input, panel) =>
+        text.create!(
+          { ...input, props: { ...input.props, text: input.props?.text ?? "Text" } },
+          panel,
+        ),
+    },
+  };
+}
+
+/**
+ * Creates the sticker registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @returns Definition, presentation and behavior for the sticker element.
+ */
+function stickerRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+): ReactElementRegistration {
+  const sticky = styleDefaults(VISUAL_TOOL_GROUPS.stickers);
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.sticker,
+      defaults: { ...defaults.sticker, text: "" },
+      validate: validateStyle,
+    },
+    title: "Sticky",
+    render: StickerContent,
+    properties: StickerProperties,
+    behavior: {
+      ...sticky,
+      editableLabel: true,
+      create: (input, panel) =>
+        sticky.create!(
+          { ...input, props: { ...input.props, text: input.props?.text ?? "Sticky note" } },
+          panel,
+        ),
+    },
+  };
+}
+
+/**
+ * Creates the drawing registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @returns Definition, presentation and behavior for the drawing element.
+ */
+function drawingRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+): ReactElementRegistration {
+  const drawing = styleDefaults(VISUAL_TOOL_GROUPS.drawing);
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.drawing,
+      defaults: defaults.drawing,
+      validate: validateDrawing,
+    },
+    title: "Drawing",
+    render: DrawingContent,
+    properties: DrawingProperties,
+    behavior: {
+      ...drawing,
+      resize: drawingResizeProps,
+      /**
+       * Combines remembered drawing settings with the defaults for an explicitly changed brush.
+       *
+       * @param settings - Remembered drawing settings for creation.
+       * @param input - Creation or update fields for this operation.
+       * @returns Detached creation settings for the requested brush.
+       */
+      creationDefaults(settings, input) {
+        const brush = input.props?.brush;
+        if (
+          (brush === "pencil" || brush === "pen" || brush === "marker") &&
+          brush !== settings.brush
+        ) {
+          return { ...settings, ...drawingDefaults[brush], brush };
+        }
+        return { ...settings };
+      },
+    },
+  };
+}
+
+/**
+ * Creates the connector registration using this installation's defaults.
+ *
+ * @param defaults - Fresh defaults shared by this installation.
+ * @returns Definition, presentation and behavior for the connector element.
+ */
+function connectorRegistration(
+  defaults: ReturnType<typeof createEdgelessDefaults>,
+): ReactElementRegistration {
+  const connector = styleDefaults(VISUAL_TOOL_GROUPS.connectors);
+  return {
+    definition: {
+      type: VISUAL_ELEMENT_TYPES.connector,
+      defaults: defaults.connector,
+      validate: validateConnector,
+    },
+    title: "Connector",
+    render: ConnectorContent,
+    properties: ConnectorProperties,
+    behavior: {
+      ...connector,
+      editableLabel: true,
+      absoluteGeometry: true,
+      create: prepareConnector,
+      relatedElements: (element) => {
+        const source = element.props.source as { elementId?: string };
+        const target = element.props.target as { elementId?: string };
+        if (!source.elementId || !target.elementId) {
+          return [];
+        }
+        return [source.elementId, target.elementId];
+      },
+    },
+    clipboard: { ...textElementClipboardConverter("connector"), ...connectorClipboardConverter },
+  };
+}
+
+/**
  * Registers built-in rectangle, ellipse, text, sticker, drawing and connector element types.
  *
  * Installs persisted definitions, renderers, property editors, interaction behavior and
@@ -131,128 +322,13 @@ function styleDefaults(group: string): NonNullable<ReactElementRegistration["beh
 export function registerVisualElements(editor: ReactEditorApi): () => void {
   const defaults = createEdgelessDefaults();
   const shapes = styleDefaults(VISUAL_TOOL_GROUPS.shapes);
-  const text = styleDefaults(VISUAL_TOOL_GROUPS.text);
-  const sticky = styleDefaults(VISUAL_TOOL_GROUPS.stickers);
-  const drawing = styleDefaults(VISUAL_TOOL_GROUPS.drawing);
-  const connector = styleDefaults(VISUAL_TOOL_GROUPS.connectors);
   const registrations: readonly ReactElementRegistration[] = [
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.rectangle,
-        defaults: { ...defaults.shape, cornerRadius: 3 },
-        validate: validateRectangle,
-      },
-      title: "Shape",
-      render: RectangleContent,
-      rememberedProperties: { props: RECTANGLE_REMEMBERED_PROPERTIES, validate: validateRectangle },
-      properties: ShapeProperties,
-      behavior: { ...shapes, editableLabel: true },
-    },
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.ellipse,
-        defaults: defaults.shape,
-        validate: validateStyle,
-      },
-      title: "Shape",
-      render: EllipseContent,
-      properties: ShapeProperties,
-      behavior: { ...shapes, editableLabel: true },
-    },
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.text,
-        defaults: { ...defaults.text, text: "" },
-        validate: validateStyle,
-      },
-      title: "Text",
-      render: TextContent,
-      properties: TextProperties,
-      behavior: {
-        ...text,
-        editableLabel: true,
-        create: (input, panel) =>
-          text.create!(
-            { ...input, props: { ...input.props, text: input.props?.text ?? "Text" } },
-            panel,
-          ),
-      },
-    },
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.sticker,
-        defaults: { ...defaults.sticker, text: "" },
-        validate: validateStyle,
-      },
-      title: "Sticky",
-      render: StickerContent,
-      properties: StickerProperties,
-      behavior: {
-        ...sticky,
-        editableLabel: true,
-        create: (input, panel) =>
-          sticky.create!(
-            { ...input, props: { ...input.props, text: input.props?.text ?? "Sticky note" } },
-            panel,
-          ),
-      },
-    },
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.drawing,
-        defaults: defaults.drawing,
-        validate: validateDrawing,
-      },
-      title: "Drawing",
-      render: DrawingContent,
-      properties: DrawingProperties,
-      behavior: {
-        ...drawing,
-        resize: drawingResizeProps,
-        /**
-         * Combines remembered drawing settings with the defaults for an explicitly changed brush.
-         *
-         * @param settings - Remembered drawing settings for creation.
-         * @param input - Creation or update fields for this operation.
-         * @returns Detached creation settings for the requested brush.
-         */
-        creationDefaults(settings, input) {
-          const brush = input.props?.brush;
-          if (
-            (brush === "pencil" || brush === "pen" || brush === "marker") &&
-            brush !== settings.brush
-          ) {
-            return { ...settings, ...drawingDefaults[brush], brush };
-          }
-          return { ...settings };
-        },
-      },
-    },
-    {
-      definition: {
-        type: VISUAL_ELEMENT_TYPES.connector,
-        defaults: defaults.connector,
-        validate: validateConnector,
-      },
-      title: "Connector",
-      render: ConnectorContent,
-      properties: ConnectorProperties,
-      behavior: {
-        ...connector,
-        editableLabel: true,
-        absoluteGeometry: true,
-        create: prepareConnector,
-        relatedElements: (element) => {
-          const source = element.props.source as { elementId?: string };
-          const target = element.props.target as { elementId?: string };
-          if (!source.elementId || !target.elementId) {
-            return [];
-          }
-          return [source.elementId, target.elementId];
-        },
-      },
-      clipboard: { ...textElementClipboardConverter("connector"), ...connectorClipboardConverter },
-    },
+    rectangleRegistration(defaults, shapes),
+    ellipseRegistration(defaults, shapes),
+    textRegistration(defaults),
+    stickerRegistration(defaults),
+    drawingRegistration(defaults),
+    connectorRegistration(defaults),
   ];
   const disposers: Array<() => void> = [];
   try {

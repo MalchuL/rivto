@@ -1,4 +1,4 @@
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import { EditableLabel } from "../../components";
 import type {
   ShapeVisual,
@@ -7,7 +7,12 @@ import type {
   DrawingVisual,
   ConnectorVisual,
 } from "./types";
-import { connectorLabelCssDegrees, connectorLabelPoint, connectorPoints } from "./utils/geometry";
+import {
+  connectorLabelCssDegrees,
+  connectorLabelPoint,
+  connectorPoints,
+  type Point,
+} from "./utils/geometry";
 import { ConnectorEndpoints, useConnectorPreview } from "./connector-endpoints";
 import { drawingPath } from "./utils/drawing-path";
 import { RectangleShape } from "./rectangle-shape";
@@ -73,6 +78,140 @@ export function DrawingContent(props: ElementRenderProps) {
   );
 }
 /**
+ * Renders the arrow markers using stable IDs scoped to one connector.
+ *
+ * @param visual - Current connector stroke color.
+ * @param markerStart - SVG marker ID for the source endpoint.
+ * @param markerEnd - SVG marker ID for the target endpoint.
+ * @returns SVG marker definitions for both endpoint directions.
+ */
+function renderConnectorMarkers(visual: ConnectorVisual, markerStart: string, markerEnd: string) {
+  return (
+    <defs>
+      <marker id={markerEnd} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
+      </marker>
+      <marker
+        id={markerStart}
+        markerWidth="8"
+        markerHeight="8"
+        refX="7"
+        refY="4"
+        orient="auto-start-reverse"
+      >
+        <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
+      </marker>
+    </defs>
+  );
+}
+
+/**
+ * Renders endpoint hover rings below the connector ink.
+ *
+ * @param visual - Connector frame used to convert points into local coordinates.
+ * @param preview - Current endpoint positions, including an active draft.
+ * @returns Both endpoint highlight circles.
+ */
+function renderConnectorHighlights(
+  visual: ConnectorVisual,
+  preview: ReturnType<typeof useConnectorPreview>,
+) {
+  return (["source", "target"] as const).map((key) => {
+    const point = preview[key].position;
+    return (
+      <circle
+        key={key}
+        className="edgeless-connector-endpoint-highlight"
+        data-edgeless-connector-endpoint-highlight={key}
+        cx={point.x - visual.frame.x}
+        cy={point.y - visual.frame.y}
+        r={9}
+      />
+    );
+  });
+}
+
+/**
+ * Renders connector ink, hit path and optional endpoint highlights in layer order.
+ *
+ * @param visual - Current connector frame and visual properties.
+ * @param preview - Current endpoint positions, including an active draft.
+ * @param selected - Whether endpoint highlight rings should be mounted.
+ * @param path - Validated local SVG path for the routed connector.
+ * @returns SVG connector content inside the shared element host.
+ */
+function renderConnectorSvg(
+  visual: ConnectorVisual,
+  preview: ReturnType<typeof useConnectorPreview>,
+  selected: boolean,
+  path: string,
+) {
+  const markerEnd = `connector-arrow-end-${visual.id}`;
+  const markerStart = `connector-arrow-start-${visual.id}`;
+  return (
+    <svg
+      data-edgeless-connector-route={visual.route}
+      className="edgeless-connector"
+      viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`}
+      preserveAspectRatio="none"
+    >
+      {renderConnectorMarkers(visual, markerStart, markerEnd)}
+      <path className="edgeless-connector-hit" d={path} />
+      {selected && renderConnectorHighlights(visual, preview)}
+      <path
+        className="edgeless-connector-stroke"
+        data-line-style={visual.lineStyle}
+        d={path}
+        fill="none"
+        stroke={visual.stroke}
+        strokeWidth={visual.strokeWidth}
+        opacity={visual.opacity}
+        markerStart={visual.startStyle === "arrow" ? `url(#${markerStart})` : undefined}
+        markerEnd={visual.endStyle === "arrow" ? `url(#${markerEnd})` : undefined}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Renders the connector label at its routed position when text or editing is present.
+ *
+ * @param props - Full element renderer contract, including editing and label operations.
+ * @param visual - Current connector text, style and route.
+ * @param points - Validated route points in connector-local coordinates.
+ * @returns Editable label, or the empty text value when editing is inactive.
+ */
+function renderConnectorLabel(props: ElementRenderProps, visual: ConnectorVisual, points: Point[]) {
+  const { editing } = props;
+  const labelFor = labelControl(props);
+  const labelAt = connectorLabelPoint(points, visual.route);
+  const labelDegrees = connectorLabelCssDegrees(points, visual.route, visual.textRotation);
+  return (
+    (editing || visual.text) && (
+      <div
+        className="edgeless-connector-label"
+        data-editing={editing || undefined}
+        data-empty={!visual.text && !editing ? "true" : undefined}
+        data-vertical-align={visual.verticalAlign}
+        data-text-rotation={visual.textRotation}
+        style={{
+          left: labelAt.x,
+          top: labelAt.y,
+          color: visual.color,
+          fontFamily: visual.fontFamily,
+          fontSize: visual.fontSize,
+          textAlign: visual.align,
+          transform: labelDegrees ? `rotate(${labelDegrees}deg)` : undefined,
+        }}
+      >
+        {labelFor(visual.text)}
+      </div>
+    )
+  );
+}
+
+/**
  * Renders routed connector geometry, its editable label, and selected endpoint controls.
  *
  * Endpoint hover rings paint below the path and arrowheads so they do not cover connector ink.
@@ -85,13 +224,12 @@ export function DrawingContent(props: ElementRenderProps) {
 export function ConnectorContent(props: ElementRenderProps) {
   const preview = useConnectorPreview(props);
   const { source, target } = preview;
-  const { operations: edgelessOperation, editing } = props;
+  const { operations: edgelessOperation } = props;
   const visual = {
     ...props.element.props,
     id: props.element.id,
     frame: props.element.frame,
   } as unknown as ConnectorVisual;
-  const labelFor = labelControl(props);
   const sourceBound = source.elementId ? edgelessOperation.getBounds(source.elementId) : undefined;
   const targetBound = target.elementId ? edgelessOperation.getBounds(target.elementId) : undefined;
   const points = connectorPoints(
@@ -113,82 +251,11 @@ export function ConnectorContent(props: ElementRenderProps) {
     visual.route === "curve"
       ? `M ${points[0]!.x} ${points[0]!.y} C ${points[1]!.x} ${points[1]!.y}, ${points[2]!.x} ${points[2]!.y}, ${points[3]!.x} ${points[3]!.y}`
       : points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
-  const markerEnd = `connector-arrow-end-${visual.id}`;
-  const markerStart = `connector-arrow-start-${visual.id}`;
-  const labelAt = connectorLabelPoint(points, visual.route);
-  const labelDegrees = connectorLabelCssDegrees(points, visual.route, visual.textRotation);
   return (
     <>
       <ConnectorEndpoints {...props} preview={preview} />
-      <svg
-        data-edgeless-connector-route={visual.route}
-        className="edgeless-connector"
-        viewBox={`0 0 ${visual.frame.width} ${visual.frame.height}`}
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <marker id={markerEnd} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
-          </marker>
-          <marker
-            id={markerStart}
-            markerWidth="8"
-            markerHeight="8"
-            refX="7"
-            refY="4"
-            orient="auto-start-reverse"
-          >
-            <path d="M0 0L8 4L0 8z" fill={visual.stroke} />
-          </marker>
-        </defs>
-        <path className="edgeless-connector-hit" d={path} />
-        {props.selected &&
-          (["source", "target"] as const).map((key) => {
-            const point = (key === "source" ? source : target).position;
-            return (
-              <circle
-                key={key}
-                className="edgeless-connector-endpoint-highlight"
-                data-edgeless-connector-endpoint-highlight={key}
-                cx={point.x - visual.frame.x}
-                cy={point.y - visual.frame.y}
-                r={9}
-              />
-            );
-          })}
-        <path
-          className="edgeless-connector-stroke"
-          data-line-style={visual.lineStyle}
-          d={path}
-          fill="none"
-          stroke={visual.stroke}
-          strokeWidth={visual.strokeWidth}
-          opacity={visual.opacity}
-          markerStart={visual.startStyle === "arrow" ? `url(#${markerStart})` : undefined}
-          markerEnd={visual.endStyle === "arrow" ? `url(#${markerEnd})` : undefined}
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      {(editing || visual.text) && (
-        <div
-          className="edgeless-connector-label"
-          data-editing={editing || undefined}
-          data-empty={!visual.text && !editing ? "true" : undefined}
-          data-vertical-align={visual.verticalAlign}
-          data-text-rotation={visual.textRotation}
-          style={{
-            left: labelAt.x,
-            top: labelAt.y,
-            color: visual.color,
-            fontFamily: visual.fontFamily,
-            fontSize: visual.fontSize,
-            textAlign: visual.align,
-            transform: labelDegrees ? `rotate(${labelDegrees}deg)` : undefined,
-          }}
-        >
-          {labelFor(visual.text)}
-        </div>
-      )}
+      {renderConnectorSvg(visual, preview, props.selected, path)}
+      {renderConnectorLabel(props, visual, points)}
     </>
   );
 }
@@ -242,7 +309,7 @@ export function StickerContent(props: ElementRenderProps) {
  * @returns Responsive shape content and its optional editable label inside the shared host.
  */
 function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
-  const { zoom, editing, ellipse } = props;
+  const { zoom, editing } = props;
   const visual = { ...props.element.props, frame: props.element.frame } as unknown as ShapeVisual;
   const labelFor = labelControl(props);
   const stroked = visual.stroked !== false;
@@ -251,20 +318,7 @@ function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
   const stroke = stroked ? visual.stroke : "none";
   const strokeWidth = stroked ? visual.strokeWidth : 0;
   const pad = strokeWidth / (2 * Math.max(zoom, 0.01));
-  const shape = ellipse ? (
-    <ellipse
-      cx="50%"
-      cy="50%"
-      rx="50%"
-      ry="50%"
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={strokeWidth}
-      vectorEffect="non-scaling-stroke"
-    />
-  ) : (
-    <RectangleShape {...props} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
-  );
+  const shape = renderShapeGeometry(props, fill, stroke, strokeWidth);
   return (
     <>
       <svg
@@ -294,6 +348,38 @@ function ShapeContent(props: ElementRenderProps & { ellipse: boolean }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Renders the SVG geometry for a rectangle or ellipse.
+ *
+ * @param props - Current element data and shape selection.
+ * @param fill - Active fill color or none.
+ * @param stroke - Active stroke color or none.
+ * @param strokeWidth - Active stroke width in screen pixels.
+ * @returns Shape geometry for the surrounding responsive SVG viewport.
+ */
+function renderShapeGeometry(
+  props: ElementRenderProps & { ellipse: boolean },
+  fill: string,
+  stroke: string,
+  strokeWidth: number,
+) {
+  if (!props.ellipse) {
+    return <RectangleShape {...props} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  return (
+    <ellipse
+      cx="50%"
+      cy="50%"
+      rx="50%"
+      ry="50%"
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      vectorEffect="non-scaling-stroke"
+    />
   );
 }
 /**

@@ -7,13 +7,13 @@
  *
  * @module
  */
+import { useBlockContent } from "../../../authoring/use-block-content";
 import type { EditorBlockInput } from "@chulane/rivto";
-import type { BlockLayoutProps } from "@chulane/rivto-page";
+import type { BlockLayoutProps } from "../../../authoring/layout";
 import { BLOCK_TEXT_METADATA_KEY } from "../../../managers/selection/block-text-metadata";
 import { BentoLayout } from "./bento-layout";
 import { BlockModal, BlockModalButton } from "../../../blocks/block-modal/block-modal";
 import { type BlockWrapperProps } from "../../../blocks/block-wrapper/block-wrapper";
-import { useBlockNode, useBlockSelectionAnchor } from "../../../hooks";
 import {
   CONTAINER_SUMMARY_CLASS,
   CONTAINER_SUMMARY_SELECTION_ATTRIBUTES,
@@ -43,8 +43,8 @@ export function createBentoBlockInput(): EditorBlockInput {
  * @returns Selection anchor with statistics when collapsed; the layout separately places its tile collection.
  */
 export function Bento({ blockId }: BlockLayoutProps) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const block = editing.block;
   if (!block) {
     return null;

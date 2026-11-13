@@ -9,7 +9,54 @@ A renderer owns content, while Page owns the block occurrence, row, child traver
 selection frame and shared pointer/drop behavior. An ordinary block must work in
 an outline, column, tile, cell or Edgeless card without learning its parent type.
 Fix missing shared behavior in the primitive or interaction owner, rather than
-adding a renderer-specific handler or a list of container exceptions.
+adding a renderer-specific handler or a list of container exceptions. Import
+extension-authoring APIs from `@chulane/rivto-react/authoring`.
+
+## Mandatory block authoring checklist
+
+Before completing an implementation or review, check every item below against the
+actual block and its installed editor extensions. Mark an item not applicable only
+when the block does not have that capability; state any unverified behavior and
+its reason. For an implementation, leave focused regression coverage where the
+behavior can recur and follow `rivto-performance-testing`. A review-only task
+reports findings and missing evidence without changing code or requiring new tests.
+
+- [ ] **Selection and controls:** Identify the structural selection region, editable
+      text and independent controls. A contentless block uses `useBlockContent` and
+      spreads its `selectionProps` on the whole selectable body; a plain click on blank
+      body space selects the block. Mark independent controls with `editorControlProps`.
+      Use `BlockSelectionButton` when a button supports both its action and selection
+      drag; it respects selection gestures claimed by the editor, including configured
+      modifiers. For other opted-in controls, use the selection anchor marker and respect
+      `event.defaultPrevented`. Read live data in callbacks that calculate a mutation.
+      Verify ordinary click activates only the control, a drag
+      selects without activating it, modifier selection does not activate it, and
+      keyboard control operation still works. Preserve native gestures for controls
+      that do not opt into selection drag. Test in Page and Edgeless where supported.
+- [ ] **Visible selection:** For every opaque renderer, child surface and control
+      background, check that the actual selected block remains visibly highlighted.
+      Consume `--rivto-block-selection-fill` with the ordinary background as fallback
+      where the background would otherwise cover the shared fill; preserve text, icon
+      and control legibility. Verify rendered colors or pixels as well as selection
+      state, and restoration after deselection, including nested or colored content
+      when applicable. A selected DOM attribute alone is not visual evidence.
+- [ ] **Canonical children and collapse:** When the block owns child layout, use
+      `rivto-containers` and the existing Page primitives; render each canonical
+      child once through `BlockChildren`, never a second renderer tree or a parallel
+      child list. Review empty and populated drop regions, geometry versus movement
+      permission, persisted parent/order and undo. If collapsible, use the existing
+      collapse state and installed reconciliation: children remain in the document,
+      hidden descendants stop receiving selection/drop, and focus and selection are
+      reconciled on collapse and restored appropriately on expansion. Test real drop
+      and collapse/expand on affected surfaces, including empty and populated states.
+- [ ] **Text editing and accessibility:** For a custom plain-text editable, pass
+      `useBlockEditing` attributes and an accessible name to one `BlockText`. It
+      supplies the textbox role and multiline semantics; its `multiline` setting
+      affects accessibility only and does not restrict input.
+      Keep React children out of the hook-owned editable; preserve its ref, input and
+      composition handlers and browser-owned text. Verify native text selection,
+      keyboard input, focus, IME composition, undo/redo and external updates as
+      applicable. Contentless blocks use a structural anchor, not a fake editable.
 
 ## Read the current owning path
 
@@ -122,17 +169,15 @@ handle its current placement. Do not seed blank paragraphs to create height.
 ## Choose one editing owner
 
 For ordinary rich text, prefer the existing Markdown renderer. For custom plain
-text, use `useBlockEditing(blockId)` and spread its attributes onto exactly one
-contenteditable element. The `page-block-content` renderer hook remains available
+text, pass `useBlockEditing(blockId)` attributes to exactly one `BlockText`. The `page-block-content` renderer hook remains available
 for text styling; it is not the shared `.rivto-block-content` layout host.
 Do not render persisted `block.content` as React children inside an editable owned
 by the hook. Preserve its ref, input/composition handlers and selection lifecycle.
 The hook reconciles commands, undo/redo and remote updates; IME composition owns
 the DOM until it completes.
 
-For contentless or control-only UI, compose `useBlockNode<Props>(blockId)` with
-`useBlockSelectionAnchor(blockId)` and spread the anchor on the actual whole-body
-region. Keep persisted content empty when the block has no text. Do not add hidden
+For contentless or control-only UI, use `useBlockContent<Props>(blockId)` and spread
+its `selectionProps` on the actual whole-body region. Keep persisted content empty when the block has no text. Do not add hidden
 editable text or a fake paragraph merely to obtain selection or dragging.
 
 Give text and independent controls separate owners. Keep a nested rich editor on

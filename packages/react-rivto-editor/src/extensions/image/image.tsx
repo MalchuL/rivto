@@ -7,19 +7,19 @@
  *
  * @module
  */
+import { useBlockContent } from "../../authoring/use-block-content";
 import { escapeHtml } from "../../utils/escape-html";
 import { FileIngestion } from "../file/ingestion/file-ingestion";
 import {
   FileUploadStatusOverlay,
   FileUploadStatusStore,
 } from "../file/ingestion/file-upload-status";
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ReactEditorExtension } from "../../managers";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { BinaryProvider } from "../../attachments";
-import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import { configureImageViews, ImageView, type ImageViewCustomizations } from "./view/image-view";
 import { serializeImageMacro } from "./macro/image-macro";
 import { IMAGE_BLOCK_TYPE, prepareImageAsset } from "./ingestion/image-asset";
@@ -118,8 +118,7 @@ function imageProps(props: Record<string, unknown>): ImageProps | undefined {
  * @returns The shared image view, or a validation error for invalid props.
  */
 function ImageBlock({ blockId }: BlockRendererProps) {
-  const { block, operations } = useBlock(blockId);
-  const selectionAnchor = useBlockSelectionAnchor(blockId);
+  const { block, operations, selectionProps: selectionAnchor } = useBlockContent(blockId);
   const image = block ? imageProps(block.props) : undefined;
   if (!image) {
     return (
@@ -318,6 +317,25 @@ function registerImageFormatter(
 }
 
 /**
+ * Registers the image block and canvas element renderers for this installation.
+ *
+ * @param editor - Editor registries that own the two image registrations.
+ * @returns After both renderers have been registered.
+ * @throws If either type registration fails.
+ */
+function registerImageRenderers(editor: Pick<ReactEditorApi, "blockTypes" | "elementTypes">): void {
+  editor.blockTypes.register({
+    definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
+    render: ImageBlock,
+  });
+  editor.elementTypes.register({
+    definition: { type: "image" },
+    render: ImageElement,
+    title: "Image",
+  });
+}
+
+/**
  * Installs image input, block and canvas rendering, and slash insertion.
  *
  * The extension owns local upload feedback and cancels pending work on removal.
@@ -347,15 +365,7 @@ export function imageExtension(options: ImageExtensionOptions): ReactEditorExten
         () => <FileUploadStatusOverlay store={statuses} kind="image" />,
         "afterSurface",
       );
-      reactEditor.blockTypes.register({
-        definition: { type: IMAGE_BLOCK_TYPE, title: "Image" },
-        render: ImageBlock,
-      });
-      reactEditor.elementTypes.register({
-        definition: { type: "image" },
-        render: ImageElement,
-        title: "Image",
-      });
+      registerImageRenderers(reactEditor);
       registerImageHandler(reactEditor.clipboard, reactEditor.attachments, options.provider);
       registerImageClipboardCopy(
         reactEditor.clipboard,

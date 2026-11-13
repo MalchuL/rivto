@@ -7,16 +7,18 @@
  *
  * @module
  */
-import type { EditorElementNode } from "@chulane/rivto";
+import type { DocumentEditorAPI, EditorElementNode } from "@chulane/rivto";
 import {
   BLOCK_TEXT_METADATA_KEY,
+  BlockText,
   blockExtension,
+  elementExtension,
   editorControlProps,
   useBlockEditing,
   useEditorSelection,
   usePanel,
   type ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import { useState, type ChangeEvent } from "react";
 import {
   REVIEW_REPORT_TYPE,
@@ -76,25 +78,30 @@ interface ReviewControlsProps {
 }
 
 /**
- * Renders the shared window controls, Save state, and collapsed JSON preview.
+ * Commits a non-negative integer from a Review number input when it is valid.
  *
- * @param props - Current capture values and mutations supplied by an owner.
- * @returns Shared accessible Review controls.
+ * @param event - Change event from a number input.
+ * @param update - Callback receiving the valid integer.
+ * @returns A valid value is passed to the callback; invalid values are ignored.
  */
-function ReviewControls(props: ReviewControlsProps) {
-  /** Commits a valid non-negative integer from a number input. */
-  const updateNumber = (
-    event: ChangeEvent<HTMLInputElement>,
-    update: (value: number) => void,
-  ): void => {
-    const value = Number(event.currentTarget.value);
-    if (Number.isInteger(value) && value >= 0) {
-      update(value);
-    }
-  };
+function updateNumber(event: ChangeEvent<HTMLInputElement>, update: (value: number) => void): void {
+  const value = Number(event.currentTarget.value);
+  if (Number.isInteger(value) && value >= 0) {
+    update(value);
+  }
+}
 
+/**
+ * Renders the capture window's preceding and following item inputs.
+ *
+ * @param props - Current window sizes and their change callbacks.
+ * @returns Accessible number inputs for the capture window.
+ */
+function ReviewWindowInputs(
+  props: Pick<ReviewControlsProps, "above" | "below" | "onAboveChange" | "onBelowChange">,
+) {
   return (
-    <div {...editorControlProps} className={REVIEW_CONTROLS_CLASS}>
+    <>
       <label>
         Above
         <input
@@ -117,6 +124,25 @@ function ReviewControls(props: ReviewControlsProps) {
           onChange={(event) => updateNumber(event, props.onBelowChange)}
         />
       </label>
+    </>
+  );
+}
+
+/**
+ * Renders the shared window controls, Save state, and collapsed JSON preview.
+ *
+ * @param props - Current capture values and mutations supplied by an owner.
+ * @returns Shared accessible Review controls.
+ */
+function ReviewControls(props: ReviewControlsProps) {
+  return (
+    <div {...editorControlProps} className={REVIEW_CONTROLS_CLASS}>
+      <ReviewWindowInputs
+        above={props.above}
+        below={props.below}
+        onAboveChange={props.onAboveChange}
+        onBelowChange={props.onBelowChange}
+      />
       {props.includeReportBlock !== undefined && props.onIncludeReportBlockChange && (
         <label className={REVIEW_INCLUDE_CLASS}>
           <input
@@ -153,28 +179,17 @@ function ReviewControls(props: ReviewControlsProps) {
 }
 
 /**
- * Renders one Review leaf block and captures its root-level context on demand.
+ * Tracks an asynchronous Review save and exposes any failure to the controls.
  *
- * @param props - Stable block identity and host persistence callback.
- * @returns Editable problem statement and report controls, or null after deletion.
+ * The current render's operation is used when save is invoked. Concurrent calls
+ * from a render that is already saving are ignored.
+ *
+ * @param operation - Captures, persists and commits one report.
+ * @returns Save state, the last failure message and a save callback.
  */
-function ReviewBlock({
-  blockId,
-  saveReport,
-}: {
-  readonly blockId: string;
-  readonly saveReport: SaveReviewReport;
-}) {
-  const panel = usePanel();
-  const editing = useBlockEditing<ReviewBlockProps>(blockId);
+function useReviewSave(operation: () => Promise<void>) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!editing.block) {
-    return null;
-  }
-  const props = reviewBlockPropsSchema.parse(editing.block.props);
-
-  /** Exports current state, then commits snapshot metadata as one undo item. */
   const save = async (): Promise<void> => {
     if (saving) {
       return;
@@ -182,42 +197,86 @@ function ReviewBlock({
     setSaving(true);
     setError(null);
     try {
-      const live = panel.blocks.getBlockNode(blockId);
-      if (!live) {
-        throw new Error("Review block no longer exists");
-      }
-      const liveProps = reviewBlockPropsSchema.parse(live.props);
-      const capture = captureBlockReview(
-        panel.document,
-        blockId,
-        liveProps.blocksAbove,
-        liveProps.blocksBelow,
-        liveProps.includeReportBlock,
-      );
-      const savedAt = new Date().toISOString();
-      await saveReport({
-        kind: "block",
-        reportId: blockId,
-        problem: live.content,
-        savedAt,
-        ...capture,
-      });
-      panel.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
+      await operation();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save report");
     } finally {
       setSaving(false);
     }
   };
+  return { saving, error, save };
+}
+
+interface ReviewBlockSavePanel {
+  readonly document: DocumentEditorAPI;
+  readonly blocks: Pick<ReturnType<typeof usePanel>["blocks"], "getBlockNode" | "updateBlock">;
+}
+
+/**
+ * Captures and persists a block report, then commits its snapshot metadata.
+ *
+ * @param panel - Borrowed panel exposing the document and required block operations.
+ * @param blockId - Review block to capture.
+ * @param saveReport - Host callback that persists the captured report.
+ * @returns Resolves after the saved snapshot metadata is committed.
+ * @throws If the block is missing, its properties are invalid, or capture or persistence fails.
+ */
+async function saveBlockReview(
+  panel: ReviewBlockSavePanel,
+  blockId: string,
+  saveReport: SaveReviewReport,
+): Promise<void> {
+  const live = panel.blocks.getBlockNode(blockId);
+  if (!live) {
+    throw new Error("Review block no longer exists");
+  }
+  const liveProps = reviewBlockPropsSchema.parse(live.props);
+  const capture = captureBlockReview(
+    panel.document,
+    blockId,
+    liveProps.blocksAbove,
+    liveProps.blocksBelow,
+    liveProps.includeReportBlock,
+  );
+  const savedAt = new Date().toISOString();
+  await saveReport({
+    kind: "block",
+    reportId: blockId,
+    problem: live.content,
+    savedAt,
+    ...capture,
+  });
+  panel.blocks.updateBlock(blockId, { props: { snapshot: capture.snapshot, savedAt } });
+}
+
+interface ReviewBlockRendererProps {
+  readonly blockId: string;
+  readonly saveReport: SaveReviewReport;
+}
+
+/**
+ * Renders one Review leaf block and captures its root-level context on demand.
+ *
+ * @param props - Stable block identity and host persistence callback.
+ * @param props.blockId - ID of the persisted Review block.
+ * @param props.saveReport - Host callback that persists a captured report.
+ * @returns Editable problem statement and report controls, or null after deletion.
+ */
+function ReviewBlock({ blockId, saveReport }: ReviewBlockRendererProps) {
+  const panel = usePanel();
+  const editing = useBlockEditing<ReviewBlockProps>(blockId);
+  const { saving, error, save } = useReviewSave(() => saveBlockReview(panel, blockId, saveReport));
+  if (!editing.block) {
+    return null;
+  }
+  const props = reviewBlockPropsSchema.parse(editing.block.props);
 
   return (
     <section className={REVIEW_BLOCK_CLASS} data-review-report={blockId}>
-      <div
-        {...editing.attributes}
+      <BlockText
+        attributes={editing.attributes}
         className={REVIEW_PROBLEM_CLASS}
-        role="textbox"
-        aria-label="Review problem"
-        aria-multiline="true"
+        label="Review problem"
         data-placeholder="Describe the problem"
       />
       <div {...editing.preventTextEditingAttributes}>
@@ -242,65 +301,82 @@ function ReviewBlock({
   );
 }
 
+interface ReviewElementSavePanel {
+  readonly document: DocumentEditorAPI;
+  readonly elements: Pick<
+    ReturnType<typeof usePanel>["elements"],
+    "getElementNode" | "updateElement"
+  >;
+}
+
+/**
+ * Captures and persists a canvas report, then commits its snapshot metadata.
+ *
+ * @param panel - Borrowed panel exposing the document and required element operations.
+ * @param elementId - Review element to capture.
+ * @param saveReport - Host callback that persists the captured report.
+ * @returns Resolves after the saved snapshot metadata is committed.
+ * @throws If the element is missing, its properties are invalid, or capture or persistence fails.
+ */
+async function saveElementReview(
+  panel: ReviewElementSavePanel,
+  elementId: string,
+  saveReport: SaveReviewReport,
+): Promise<void> {
+  const live = panel.elements.getElementNode(elementId);
+  if (!live) {
+    throw new Error("Review element no longer exists");
+  }
+  const liveProps = reviewElementPropsSchema.parse(live.props);
+  const snapshot = captureElementReviewSnapshot(
+    panel.document,
+    elementId,
+    liveProps.elementsAbove,
+    liveProps.elementsBelow,
+  );
+  const savedAt = new Date().toISOString();
+  await saveReport({
+    kind: "element",
+    reportId: elementId,
+    problem: liveProps.problem,
+    savedAt,
+    snapshot,
+  });
+  panel.elements.updateElement(elementId, { props: { snapshot, savedAt } });
+}
+
+interface ReviewElementRendererProps {
+  readonly element: EditorElementNode;
+  readonly saveReport: SaveReviewReport;
+}
+
 /**
  * Renders one first-class Review element in the edgeless plane.
  *
  * @param props - Persisted element and injected report writer.
+ * @param props.element - Current Review element snapshot.
+ * @param props.saveReport - Host callback that persists a captured report.
  * @returns Review content with the same Save UX as the block; the registered element host owns positioning and selection slots.
  */
-function ReviewElement({
-  element,
-  saveReport,
-}: {
-  readonly element: EditorElementNode;
-  readonly saveReport: SaveReviewReport;
-}) {
+function ReviewElement({ element, saveReport }: ReviewElementRendererProps) {
   const panel = usePanel();
   const selection = useEditorSelection();
   const selected = selection?.elements?.includes(element.id) ?? false;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const props = reviewElementPropsSchema.parse(element.props);
 
-  /** Applies one validated persisted property patch to this element. */
+  /**
+   * Applies a property patch to this element through its panel.
+   *
+   * @param patch - Properties to update on the persisted element.
+   * @returns The panel has applied the property patch.
+   */
   const update = (patch: Partial<ReviewElementProps>): void => {
     panel.elements.updateElement(element.id, { props: patch });
   };
 
-  /** Exports current state, then commits snapshot metadata as one undo item. */
-  const save = async (): Promise<void> => {
-    if (saving) {
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const live = panel.elements.getElementNode(element.id);
-      if (!live) {
-        throw new Error("Review element no longer exists");
-      }
-      const liveProps = reviewElementPropsSchema.parse(live.props);
-      const snapshot = captureElementReviewSnapshot(
-        panel.document,
-        element.id,
-        liveProps.elementsAbove,
-        liveProps.elementsBelow,
-      );
-      const savedAt = new Date().toISOString();
-      await saveReport({
-        kind: "element",
-        reportId: element.id,
-        problem: liveProps.problem,
-        savedAt,
-        snapshot,
-      });
-      panel.elements.updateElement(element.id, { props: { snapshot, savedAt } });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save report");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const { saving, error, save } = useReviewSave(() =>
+    saveElementReview(panel, element.id, saveReport),
+  );
 
   return (
     <section
@@ -354,20 +430,13 @@ export function reviewReportExtensions(options: {
         keywords: ["report", "context", "snapshot"],
       },
     }),
-    {
-      id: "demo.review-report.elements",
-      setup: (reactEditor) => {
-        return reactEditor.elementTypes.register({
-          definition: {
-            type: REVIEW_REPORT_TYPE,
-            validate: (props) => reviewElementPropsSchema.parse(props),
-          },
-          render: ({ element }) => (
-            <ReviewElement element={element} saveReport={options.saveReport} />
-          ),
-        });
+    elementExtension({
+      definition: {
+        type: REVIEW_REPORT_TYPE,
+        validate: (props) => reviewElementPropsSchema.parse(props),
       },
-    },
+      render: ({ element }) => <ReviewElement element={element} saveReport={options.saveReport} />,
+    }),
   ];
 }
 

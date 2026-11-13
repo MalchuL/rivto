@@ -1,3 +1,4 @@
+import { useBlockContent } from "../../authoring/use-block-content";
 import {
   BlockBody,
   BlockChildren,
@@ -5,7 +6,7 @@ import {
   BlockDropTarget,
   BlockRow,
   type BlockChildrenItemProps,
-} from "@chulane/rivto-page";
+} from "../../authoring/layout";
 import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../block-behaviors/types";
 import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
 /**
@@ -43,7 +44,6 @@ import { editorControlProps } from "../../constants";
 import {
   useBlock,
   useBlockNode,
-  useBlockSelectionAnchor,
   useEditorRoot,
   useReactPanel,
   usePanel,
@@ -264,6 +264,45 @@ interface TodoStorageStateProps extends TodoStorageComponentProps {
   readonly children: ReactNode;
 }
 
+/** Panel operations used by status ordering; the layout owns the panel lifecycle. */
+interface TodoStorageOrderingPanel {
+  readonly batchUpdates: ReturnType<typeof usePanel>["batchUpdates"];
+  readonly blocks: Pick<ReturnType<typeof usePanel>["blocks"], "moveBlock">;
+}
+
+/**
+ * Reconciles direct-child order when status ordering is enabled.
+ *
+ * The effect batches moves only when the current order differs, and follows the
+ * same subtree snapshots used by the layout's local filters.
+ *
+ * @param panel - Panel used to batch and commit block moves.
+ * @param tree - Current detached storage subtree, or undefined after deletion.
+ * @param childBlocks - Direct children from the current subtree snapshot.
+ * @returns Schedules ordering reconciliation after the snapshot changes.
+ */
+function useTodoStorageOrdering(
+  panel: TodoStorageOrderingPanel,
+  tree: EditorBlock | undefined,
+  childBlocks: readonly EditorBlock[],
+): void {
+  useEffect(() => {
+    const props = tree?.props as TodoStorageProps | undefined;
+    if (!tree || props?.orderMode !== "status") {
+      return;
+    }
+    const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
+    const current = childBlocks.map(({ id }) => id);
+    if (desired.some((id, index) => id !== current[index])) {
+      panel.batchUpdates(() => {
+        desired.forEach((id, index) => {
+          panel.blocks.moveBlock(id, index ? desired[index - 1]! : null);
+        });
+      });
+    }
+  }, [childBlocks, panel, tree]);
+}
+
 /**
  * Owns filters and ordering subscriptions for one mounted storage layout.
  *
@@ -297,21 +336,7 @@ function TodoStorageState({ blockId, children }: TodoStorageStateProps) {
       }));
     }
   }, [projectKey]);
-  useEffect(() => {
-    const props = tree?.props as TodoStorageProps | undefined;
-    if (!tree || props?.orderMode !== "status") {
-      return;
-    }
-    const desired = orderTodoStorageChildren(childBlocks, props.statusOrder);
-    const current = childBlocks.map(({ id }) => id);
-    if (desired.some((id, index) => id !== current[index])) {
-      panel.batchUpdates(() => {
-        desired.forEach((id, index) => {
-          panel.blocks.moveBlock(id, index ? desired[index - 1]! : null);
-        });
-      });
-    }
-  }, [childBlocks, panel, tree]);
+  useTodoStorageOrdering(panel, tree, childBlocks);
 
   const value = useMemo<TodoStorageContextValue>(
     () => ({
@@ -531,8 +556,7 @@ function TodoStorageToolbar({ blockId }: TodoStorageComponentProps) {
  * @returns Toolbar or collapsed summary; null when the block has been removed.
  */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const { block } = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const { block, selectionProps: attributes } = useBlockContent(blockId);
   if (!block) {
     return null;
   }

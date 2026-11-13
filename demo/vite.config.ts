@@ -2,6 +2,7 @@ import { localFileBridgePlugin } from "./local-file-bridge";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 import { reviewReportFilesPlugin } from "./review-report-files";
 
 export default defineConfig({
@@ -31,6 +32,67 @@ export default defineConfig({
         ) {
           return code.replace('@import "@chulane/rivto-page/styles.css";', "");
         }
+      },
+    },
+    {
+      name: "dynamic-authoring-entry",
+      /**
+       * Adds the browser SDK entry only to the application build.
+       *
+       * Library fixtures provide their own single entry and may require an IIFE;
+       * merging the application entries into those builds makes Rollup reject them.
+       *
+       * @param config - Vite configuration including caller-provided build overrides.
+       * @param env - Current Vite command.
+       * @returns Application entry configuration, or undefined for library and non-build commands.
+       */
+      config(config, env) {
+        if (env.command !== "build" || config.build?.lib) {
+          return;
+        }
+        return {
+          build: {
+            rollupOptions: {
+              preserveEntrySignatures: "strict",
+              input: {
+                main: fileURLToPath(new URL("./index.html", import.meta.url)),
+                "dynamic-sdk/authoring": fileURLToPath(
+                  new URL("./src/dynamic-authoring.ts", import.meta.url),
+                ),
+              },
+              output: {
+                entryFileNames: (chunk: { name: string }) =>
+                  chunk.name === "dynamic-sdk/authoring"
+                    ? "dynamic-sdk/authoring.js"
+                    : "assets/[name]-[hash].js",
+              },
+            },
+          },
+        };
+      },
+      /**
+       * Serves the authoring entry through Vite's shared development module graph.
+       *
+       * @param server - Development server receiving the stable browser SDK path.
+       * @returns Registers the middleware before the server starts serving requests.
+       */
+      configureServer(server) {
+        server.middlewares.use("/dynamic-sdk/authoring.js", (_request, response) => {
+          response.setHeader("Content-Type", "text/javascript");
+          response.end('export * from "/src/dynamic-authoring.ts";');
+        });
+        // These are independent browser modules; Vite must not transform their import map imports.
+        server.middlewares.use("/dynamic-extensions", (request, response, next) => {
+          const name = request.url?.split("?")[0];
+          if (!name || !/^\/[a-z0-9-]+\.js$/.test(name)) {
+            next();
+            return;
+          }
+          readFile(new URL(`./public/dynamic-extensions${name}`, import.meta.url)).then((code) => {
+            response.setHeader("Content-Type", "text/javascript");
+            response.end(code);
+          }, next);
+        });
       },
     },
     tailwindcss(),
@@ -65,6 +127,12 @@ export default defineConfig({
         find: "@chulane/rivto-react/block-factories",
         replacement: fileURLToPath(
           new URL("../packages/react-rivto-editor/src/block-factories.ts", import.meta.url),
+        ),
+      },
+      {
+        find: "@chulane/rivto-react/authoring",
+        replacement: fileURLToPath(
+          new URL("../packages/react-rivto-editor/src/authoring/index.ts", import.meta.url),
         ),
       },
       {

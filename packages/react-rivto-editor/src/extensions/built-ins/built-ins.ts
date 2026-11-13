@@ -10,7 +10,10 @@ import { blockHandleExtension } from "./block-handle/extension";
 import { createStructuralSelection } from "@chulane/rivto";
 import { createElement } from "react";
 import { blockIdsOf, insertBlockElementSeparator } from "../../elements/block-element-projection";
-import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
+import { type ReactEditorExtension } from "../../managers";
+import type { ReactEditorApi } from "../../editor/types";
+import type { ReactPanelApi } from "../../panels/types";
+import type { SlashCommandContext } from "../../managers/slash/types";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
@@ -187,6 +190,102 @@ export const collapseExtension = (): ReactEditorExtension => ({
 });
 
 /**
+ * Creates the canvas card for an already duplicated root block.
+ *
+ * @param elements - Panel operations used to inspect and insert canvas elements.
+ * @param sourceElement - Original block card, when the root had one.
+ * @param duplicateId - Newly inserted block used as both card range boundaries.
+ * @returns Inserts a card offset from its source, or at the default frame.
+ * @throws If insertion is rejected by the element manager.
+ */
+function insertDuplicateBlockElement(
+  elements: Pick<ReactPanelApi["elements"], "getElementNodes" | "insertElement">,
+  sourceElement: ReturnType<ReactPanelApi["elements"]["getElementNodes"]>[number] | undefined,
+  duplicateId: string,
+): void {
+  elements.insertElement({
+    type: "block",
+    frame: sourceElement
+      ? {
+          ...sourceElement.frame,
+          x: sourceElement.frame.x + 24,
+          y: sourceElement.frame.y + 24,
+        }
+      : { x: 84, y: 84, width: 320, height: 120 },
+    zIndex: Math.max(0, ...elements.getElementNodes().map((element) => element.zIndex)) + 1,
+    props: {
+      ...sourceElement?.props,
+      startBlockId: duplicateId,
+      endBlockId: duplicateId,
+    },
+  });
+}
+
+/**
+ * Duplicates a complete block subtree in the invoking surface.
+ *
+ * Page occurrences receive a sibling; an Edgeless root receives a new card.
+ * The clipboard converters assign fresh identities and preserve block data.
+ *
+ * @param clipboard - Copy and paste operations registered on the editor.
+ * @param context - Source block and the invoking panel occurrence.
+ * @param context.blockId - Stable ID of the block to duplicate.
+ * @param context.reactPanel - Occurrence that owns placement and selection.
+ * @returns Inserts and selects the duplicate when a copy bundle is available.
+ * @throws If a delegated clipboard, document or selection operation fails.
+ */
+function duplicateBlock(
+  clipboard: Pick<ReactEditorApi["clipboard"], "copy" | "paste">,
+  { blockId, reactPanel }: SlashCommandContext,
+): void {
+  const block = reactPanel.blocks.getBlock(blockId);
+  if (!block) {
+    return;
+  }
+  const bundle = clipboard.copy(createStructuralSelection([blockId]), reactPanel, "duplicate");
+  if (!bundle) {
+    return;
+  }
+  // Use the receiving view: a page embedding can share an edgeless core.
+  // Duplicating there should insert a sibling, not create a canvas card.
+  const isEdgelessRoot =
+    reactPanel.getSurfaceType() === "edgeless" && reactPanel.blocks.getRootIds().includes(blockId);
+  const sourceElement = isEdgelessRoot
+    ? reactPanel.elements
+        .getElementNodes()
+        .find(
+          (element) =>
+            element.type === "block" &&
+            blockIdsOf(element, reactPanel.blocks.getRootIds()).includes(blockId),
+        )
+    : undefined;
+  let duplicateId = "";
+  reactPanel.batchUpdates(() => {
+    const afterId = isEdgelessRoot ? reactPanel.blocks.getRootIds().at(-1)! : block.id;
+    clipboard.paste(
+      {
+        bundle,
+        textTarget: createStructuralSelection([]),
+        placement: { afterId, mergeText: false },
+      },
+      reactPanel,
+      "duplicate",
+    );
+    duplicateId = reactPanel.selection.get()?.blocks[0]?.id ?? "";
+    if (!duplicateId) {
+      return;
+    }
+    if (isEdgelessRoot) {
+      insertBlockElementSeparator(reactPanel.editor, afterId);
+    }
+    if (isEdgelessRoot) {
+      insertDuplicateBlockElement(reactPanel.elements, sourceElement, duplicateId);
+    }
+  });
+  reactPanel.selection.set(createStructuralSelection([duplicateId]));
+}
+
+/**
  * Adds the inline command menu and generic structural block actions.
  *
  * Block-type conversion entries are registered separately by `registerBlock`.
@@ -211,77 +310,7 @@ export const slashCommandExtension = (
         group: "Actions",
         keywords: ["copy", "clone"],
         isAvailable: ({ blockId, reactPanel }) => reactPanel.blocks.hasBlock(blockId),
-        execute: ({ blockId, reactPanel }) => {
-          const block = reactPanel.blocks.getBlock(blockId);
-          if (!block) {
-            return;
-          }
-          const bundle = reactEditor.clipboard.copy(
-            createStructuralSelection([blockId]),
-            reactPanel,
-            "duplicate",
-          );
-          if (!bundle) {
-            return;
-          }
-          // Use the receiving view: a page embedding can share an edgeless core.
-          // Duplicating there should insert a sibling, not create a canvas card.
-          const isEdgelessRoot =
-            reactPanel.getSurfaceType() === "edgeless" &&
-            reactPanel.blocks.getRootIds().includes(blockId);
-          const sourceElement = isEdgelessRoot
-            ? reactPanel.elements
-                .getElementNodes()
-                .find(
-                  (element) =>
-                    element.type === "block" &&
-                    blockIdsOf(element, reactPanel.blocks.getRootIds()).includes(blockId),
-                )
-            : undefined;
-          let duplicateId = "";
-          reactPanel.batchUpdates(() => {
-            const afterId = isEdgelessRoot ? reactPanel.blocks.getRootIds().at(-1)! : block.id;
-            reactEditor.clipboard.paste(
-              {
-                bundle,
-                textTarget: createStructuralSelection([]),
-                placement: { afterId, mergeText: false },
-              },
-              reactPanel,
-              "duplicate",
-            );
-            duplicateId = reactPanel.selection.get()?.blocks[0]?.id ?? "";
-            if (!duplicateId) {
-              return;
-            }
-            if (isEdgelessRoot) {
-              insertBlockElementSeparator(reactPanel.editor, afterId);
-            }
-            if (isEdgelessRoot) {
-              reactPanel.elements.insertElement({
-                type: "block",
-                frame: sourceElement
-                  ? {
-                      ...sourceElement.frame,
-                      x: sourceElement.frame.x + 24,
-                      y: sourceElement.frame.y + 24,
-                    }
-                  : { x: 84, y: 84, width: 320, height: 120 },
-                zIndex:
-                  Math.max(
-                    0,
-                    ...reactPanel.elements.getElementNodes().map((element) => element.zIndex),
-                  ) + 1,
-                props: {
-                  ...sourceElement?.props,
-                  startBlockId: duplicateId,
-                  endBlockId: duplicateId,
-                },
-              });
-            }
-          });
-          reactPanel.selection.set(createStructuralSelection([duplicateId]));
-        },
+        execute: (context) => duplicateBlock(reactEditor.clipboard, context),
       }),
       // Route deletion through structural selection so descendants are atomic.
       reactEditor.slashCommands.register({
@@ -301,14 +330,6 @@ export const slashCommandExtension = (
   },
 });
 
-/** Creates one atomic model, renderer, and optional slash-command extension. */
-export const blockExtension = (registration: ReactBlockRegistration): ReactEditorExtension => ({
-  id: `block.${registration.definition.type}`,
-  setup: (reactEditor) => {
-    reactEditor.blockTypes.register(registration);
-  },
-});
-
 /** Options for {@link standardPreset}. */
 export interface StandardPresetOptions {
   /** Number of page-end insertion targets. */
@@ -317,6 +338,63 @@ export interface StandardPresetOptions {
   readonly writing?: DefaultWritingBlockOptions;
   /** Floating slash-menu dimensions and caret spacing. */
   readonly slashMenu?: SlashMenuPositionOptions;
+}
+
+/**
+ * Installs the standard extensions and releases their cleanups in reverse order.
+ *
+ * A failed setup rolls back completed installations while preserving the original
+ * error; final cleanup attempts every disposer and reports all failures.
+ *
+ * @param reactEditor - Runtime receiving the configured extension installations.
+ * @param extensions - Ordered extension instances owned by the standard preset.
+ * @returns Disposer for all completed installations.
+ * @throws If installation fails, or later cleanup encounters one or more errors.
+ */
+function installStandardExtensions(
+  reactEditor: ReactEditorApi,
+  extensions: readonly ReactEditorExtension[],
+): () => void {
+  const cleanups: Array<() => void> = [];
+  try {
+    for (const extension of extensions) {
+      const cleanup = extension.setup(reactEditor);
+      if (cleanup) {
+        cleanups.push(cleanup);
+      }
+    }
+  } catch (error) {
+    cleanups
+      .slice()
+      .reverse()
+      .forEach((cleanup) => {
+        try {
+          cleanup();
+        } catch {
+          // Rollback is best-effort so the original setup error is preserved.
+        }
+      });
+    throw error;
+  }
+  return () => {
+    const errors: unknown[] = [];
+    cleanups
+      .slice()
+      .reverse()
+      .forEach((cleanup) => {
+        try {
+          cleanup();
+        } catch (cleanupError) {
+          errors.push(cleanupError);
+        }
+      });
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Standard preset cleanup failed");
+    }
+  };
 }
 
 /**
@@ -355,47 +433,6 @@ export const standardPreset = (options: StandardPresetOptions = {}): ReactEditor
   ];
   return {
     id: "rivto.standard",
-    setup: (reactEditor) => {
-      const cleanups: Array<() => void> = [];
-      try {
-        for (const extension of extensions) {
-          const cleanup = extension.setup(reactEditor);
-          if (cleanup) {
-            cleanups.push(cleanup);
-          }
-        }
-      } catch (error) {
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch {
-              // Rollback is best-effort so the original setup error is preserved.
-            }
-          });
-        throw error;
-      }
-      return () => {
-        const errors: unknown[] = [];
-        cleanups
-          .slice()
-          .reverse()
-          .forEach((cleanup) => {
-            try {
-              cleanup();
-            } catch (cleanupError) {
-              errors.push(cleanupError);
-            }
-          });
-        if (errors.length === 1) {
-          throw errors[0];
-        }
-        if (errors.length > 1) {
-          throw new AggregateError(errors, "Standard preset cleanup failed");
-        }
-      };
-    },
+    setup: (reactEditor) => installStandardExtensions(reactEditor, extensions),
   };
 };

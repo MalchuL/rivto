@@ -1,3 +1,4 @@
+import { BlockText } from "../../authoring/block-text";
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
@@ -28,6 +29,164 @@ import type {
 } from "./todo-item-model";
 import { DefaultTodoItemPropertiesModal } from "./todo-item-properties";
 
+/** Data and borrowed operations needed by the inline property controls. */
+interface TodoItemMetaProps {
+  readonly block: TodoItemBlock;
+  readonly editing: Pick<
+    ReturnType<typeof useBlockEditing<TodoItemProps>>,
+    "preventTextEditingAttributes"
+  >;
+  readonly actions: Pick<TodoItemActions, "commitProperties">;
+}
+
+/** Data and borrowed operations needed to render the inline TODO fields. */
+interface TodoItemBodyProps {
+  readonly block: TodoItemBlock;
+  readonly editing: Pick<
+    ReturnType<typeof useBlockEditing<TodoItemProps>>,
+    "attributes" | "preventTextEditingAttributes"
+  >;
+  readonly actions: Pick<TodoItemActions, "commitText" | "commitProperties">;
+}
+
+/**
+ * Renders the priority and project controls for the current TODO snapshot.
+ *
+ * @param props - Current block, editing prevention attributes and property operation.
+ * @param props.block - Snapshot supplying the displayed property values.
+ * @param props.editing - Attributes protecting controls from block text editing.
+ * @param props.actions - Operation that validates and commits changed properties.
+ * @returns Inline priority and project controls.
+ */
+function TodoItemMeta({ block, editing, actions }: TodoItemMetaProps) {
+  return (
+    <div className={TODO_META_CLASS}>
+      <NativeSelect
+        {...editorControlProps}
+        {...editing.preventTextEditingAttributes}
+        className={TODO_PRIORITY_CLASS}
+        aria-label="Priority"
+        value={block.props.priority}
+        onChange={(event) =>
+          actions.commitProperties({
+            priority: Number(event.currentTarget.value) as TodoItemProps["priority"],
+          })
+        }
+      >
+        {[1, 2, 3, 4].map((priority) => (
+          <NativeSelectOption key={priority} value={priority}>
+            P{priority}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+      <Input
+        {...editorControlProps}
+        {...editing.preventTextEditingAttributes}
+        className={TODO_PROJECT_CLASS}
+        aria-label="Project"
+        value={block.props.project}
+        placeholder="Add project"
+        onChange={(event) => actions.commitProperties({ project: event.currentTarget.value })}
+      />
+    </div>
+  );
+}
+
+/**
+ * Renders the editable TODO name and inline property controls.
+ *
+ * @param props - Current block, editing attributes and borrowed mutation operations.
+ * @param props.block - Snapshot supplying the displayed property values.
+ * @param props.editing - Hook-owned text attributes and control prevention attributes.
+ * @param props.actions - Operations that commit text or properties with timestamps.
+ * @returns Editable name, description and metadata controls.
+ */
+function TodoItemBody({ block, editing, actions }: TodoItemBodyProps) {
+  /**
+   * Updates content and its timestamp inside one editor batch.
+   *
+   * @param event - Input event received by the hook-owned editable.
+   * @returns Commits the input and timestamp through the current block operations.
+   */
+  const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
+    actions.commitText(() => editing.attributes.onInput(event));
+  };
+  /**
+   * Completes IME input and advances its timestamp atomically.
+   *
+   * @param event - Composition completion event received by the editable.
+   * @returns Commits the composition result and timestamp in one batch.
+   */
+  const finishComposition = (
+    event: Parameters<typeof editing.attributes.onCompositionEnd>[0],
+  ): void => {
+    actions.commitText(() => editing.attributes.onCompositionEnd(event));
+  };
+  return (
+    <div className={TODO_BODY_CLASS}>
+      <BlockText
+        attributes={{
+          ...editing.attributes,
+          onInput: updateName,
+          onCompositionEnd: finishComposition,
+        }}
+        className={TODO_NAME_CLASS}
+        label="TODO item name"
+      />
+      <Input
+        {...editorControlProps}
+        {...editing.preventTextEditingAttributes}
+        className={TODO_DESCRIPTION_CLASS}
+        aria-label="Description"
+        value={block.props.description}
+        placeholder="Add description"
+        onChange={(event) => actions.commitProperties({ description: event.currentTarget.value })}
+      />
+      <TodoItemMeta block={block} editing={editing} actions={actions} />
+    </div>
+  );
+}
+
+/**
+ * Renders the workflow-status control for the current TODO snapshot.
+ *
+ * @param block - Snapshot supplying the displayed status.
+ * @param editing - Attributes protecting the button from block text editing.
+ * @param cycleStatus - Callback that commits the next workflow status.
+ * @returns Accessible status button with its current icon and color.
+ */
+function renderTodoStatus(
+  block: TodoItemBlock,
+  editing: Pick<ReturnType<typeof useBlockEditing<TodoItemProps>>, "preventTextEditingAttributes">,
+  cycleStatus: () => void,
+) {
+  const statusClass = {
+    todo: TODO_STATUS_TODO_CLASS,
+    doing: TODO_STATUS_DOING_CLASS,
+    done: TODO_STATUS_DONE_CLASS,
+  }[block.props.status];
+  const statusIcon = {
+    todo: null,
+    doing: <MinusIcon aria-hidden="true" />,
+    done: <CheckIcon aria-hidden="true" />,
+  }[block.props.status];
+
+  return (
+    <Button
+      {...editorControlProps}
+      {...editing.preventTextEditingAttributes}
+      variant="ghost"
+      size="icon-xs"
+      className={`${TODO_STATUS_CLASS} ${statusClass}`}
+      type="button"
+      aria-label={`Status: ${block.props.status}. Change status`}
+      onClick={cycleStatus}
+    >
+      {statusIcon}
+    </Button>
+  );
+}
+
 /**
  * Renders one compact, editable TODO row and its selected properties modal.
  *
@@ -47,32 +206,16 @@ export function TodoItem({
     return null;
   }
 
-  /** Updates content and its timestamp inside one editor batch. */
-  const updateName = (event: Parameters<typeof editing.attributes.onInput>[0]): void => {
-    actions.commitText(() => editing.attributes.onInput(event));
-  };
-  /** Completes IME input and advances its timestamp atomically. */
-  const finishComposition = (
-    event: Parameters<typeof editing.attributes.onCompositionEnd>[0],
-  ): void => {
-    actions.commitText(() => editing.attributes.onCompositionEnd(event));
-  };
-  /** Closes the modal and commits a valid changed patch. */
+  /**
+   * Closes the modal and commits a valid changed patch.
+   *
+   * @param patch - Optional changes supplied by the properties modal.
+   * @returns Closes the dialog and commits a changed, valid patch when supplied.
+   */
   const closeProperties = (patch?: TodoItemPropertiesPatch): void => {
     setPropertiesOpen(false);
     actions.commitProperties(patch);
   };
-
-  const statusClass = {
-    todo: TODO_STATUS_TODO_CLASS,
-    doing: TODO_STATUS_DOING_CLASS,
-    done: TODO_STATUS_DONE_CLASS,
-  }[block.props.status];
-  const statusIcon = {
-    todo: null,
-    doing: <MinusIcon aria-hidden="true" />,
-    done: <CheckIcon aria-hidden="true" />,
-  }[block.props.status];
 
   return (
     <div
@@ -80,66 +223,8 @@ export function TodoItem({
       data-todo-status={block.props.status}
       data-todo-priority={block.props.priority}
     >
-      <Button
-        {...editorControlProps}
-        {...editing.preventTextEditingAttributes}
-        variant="ghost"
-        size="icon-xs"
-        className={`${TODO_STATUS_CLASS} ${statusClass}`}
-        type="button"
-        aria-label={`Status: ${block.props.status}. Change status`}
-        onClick={actions.cycleStatus}
-      >
-        {statusIcon}
-      </Button>
-      <div className={TODO_BODY_CLASS}>
-        <div
-          {...editing.attributes}
-          className={TODO_NAME_CLASS}
-          role="textbox"
-          aria-label="TODO item name"
-          onInput={updateName}
-          onCompositionEnd={finishComposition}
-        />
-        <Input
-          {...editorControlProps}
-          {...editing.preventTextEditingAttributes}
-          className={TODO_DESCRIPTION_CLASS}
-          aria-label="Description"
-          value={block.props.description}
-          placeholder="Add description"
-          onChange={(event) => actions.commitProperties({ description: event.currentTarget.value })}
-        />
-        <div className={TODO_META_CLASS}>
-          <NativeSelect
-            {...editorControlProps}
-            {...editing.preventTextEditingAttributes}
-            className={TODO_PRIORITY_CLASS}
-            aria-label="Priority"
-            value={block.props.priority}
-            onChange={(event) =>
-              actions.commitProperties({
-                priority: Number(event.currentTarget.value) as TodoItemProps["priority"],
-              })
-            }
-          >
-            {[1, 2, 3, 4].map((priority) => (
-              <NativeSelectOption key={priority} value={priority}>
-                P{priority}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <Input
-            {...editorControlProps}
-            {...editing.preventTextEditingAttributes}
-            className={TODO_PROJECT_CLASS}
-            aria-label="Project"
-            value={block.props.project}
-            placeholder="Add project"
-            onChange={(event) => actions.commitProperties({ project: event.currentTarget.value })}
-          />
-        </div>
-      </div>
+      {renderTodoStatus(block, editing, actions.cycleStatus)}
+      <TodoItemBody block={block} editing={editing} actions={actions} />
       <Button
         {...editorControlProps}
         {...editing.preventTextEditingAttributes}

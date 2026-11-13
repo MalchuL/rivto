@@ -6,7 +6,7 @@ import {
   BlockRow,
   type BlockChildrenItemProps,
   type BlockLayoutProps,
-} from "@chulane/rivto-page";
+} from "../../../authoring/layout";
 import { KanbanAddCard, KanbanAddColumn } from "./kanban-content";
 
 /**

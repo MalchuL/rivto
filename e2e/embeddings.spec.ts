@@ -25,10 +25,1279 @@ interface JournalInspection {
   reactEditor: ReactEditor;
 }
 
+/**
+ * Checks that a collapsed embedded root has only its intended bottom spacing.
+ *
+ * @param region - Embedded editor containing the collapsed root.
+ * @returns Resolves after comparing the measured gap with padding and margin.
+ */
+async function checkCollapsedEmbeddingSpacing(region: Locator): Promise<void> {
+  const spacing = await region.evaluate((element) => {
+    const block = element.querySelector<HTMLElement>(
+      ":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
+    )!;
+    const bottomGap = element.getBoundingClientRect().bottom - block.getBoundingClientRect().bottom;
+    const padding = parseFloat(getComputedStyle(element).paddingBottom);
+    const margin = parseFloat(getComputedStyle(block).marginBottom);
+    return { bottomGap, expectedGap: padding + margin };
+  });
+  expect(spacing.bottomGap).toBeCloseTo(spacing.expectedGap, 0);
+}
+
+/**
+ * Scrolls a drag's source and destination away from viewport auto-scroll edges.
+ *
+ * @param source - Source row whose current bounds are used for centering.
+ * @param destination - Destination row used to calculate the combined span.
+ * @returns Resolves after the window scrolls to center both rows.
+ * @throws If source geometry is unavailable.
+ */
+async function centerDragRows(source: Locator, destination: Locator): Promise<void> {
+  const sourceBounds = await source.boundingBox();
+  if (!sourceBounds) {
+    throw new Error("Expected source row geometry before scrolling");
+  }
+  await destination.evaluate((element, source) => {
+    const target = element.getBoundingClientRect();
+    const top = Math.min(source.y, target.top);
+    const bottom = Math.max(source.y + source.height, target.bottom);
+    window.scrollBy(0, (top + bottom - window.innerHeight) / 2);
+  }, sourceBounds);
+}
+
+/**
+ * Measures editing and rendering through both occurrences of an embedded block.
+ *
+ * @param page - Browser hosting both occurrences.
+ * @param detail - Editable embedded occurrence.
+ * @param originalDetail - Corresponding block in the original branch.
+ * @param detailId - Persisted ID updated by the command samples.
+ * @returns Five keyboard, synchronous command, and two-frame render samples.
+ */
+async function sampleJournalEmbedding(
+  page: Page,
+  detail: Locator,
+  originalDetail: Locator,
+  detailId: string,
+): Promise<{ command: number; render: number; keyboard: number }[]> {
+  const samples: { command: number; render: number; keyboard: number }[] = [];
+  for (let index = 0; index < 5; index += 1) {
+    await detail.fill(`Sample ${index}`);
+    await detail.press("End");
+    const start = Date.now();
+    await detail.press("x");
+    await expect(originalDetail).toHaveText(`Sample ${index}x`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(
+      await detail.evaluate((element) => element.ownerDocument.getSelection()?.focusOffset),
+    ).toBe(`Sample ${index}x`.length);
+    const keyboard = Date.now() - start;
+    const timing = await page.evaluate(
+      async ({ id, index }) => {
+        const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+        const start = performance.now();
+        editor.blocks.updateBlock(id, { content: `Command ${index}` });
+        const command = performance.now() - start;
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        return { command, render: performance.now() - start };
+      },
+      { id: detailId, index },
+    );
+    samples.push({ ...timing, keyboard });
+    await expect(detail).toHaveText(`Command ${index}`);
+    await expect(originalDetail).toHaveText(`Command ${index}`);
+  }
+  return samples;
+}
+
+/**
+ * Verifies shared editing, undo, and surface changes for an embedded branch.
+ *
+ * @param page - Browser hosting the journal.
+ * @param today - Journal document containing the surface switcher.
+ * @param region - Embedded editor occurrence.
+ * @param detail - Embedded child content.
+ * @param originalDetail - Original child content.
+ * @param target - Persisted embedded root block ID.
+ * @returns Resolves after verifying undo and returning to Page mode.
+ */
+async function checkJournalEmbeddingModes(
+  page: Page,
+  today: Locator,
+  region: Locator,
+  detail: Locator,
+  originalDetail: Locator,
+  target: string,
+): Promise<void> {
+  await page.evaluate(() =>
+    (
+      window as unknown as { __rivtoDemo: JournalInspection }
+    ).__rivtoDemo.editor.history.stopCapturing(),
+  );
+  await detail.press("End");
+  await detail.press("y");
+  await expect(originalDetail).toHaveText("Command 4y");
+  await detail.press("Control+z");
+  await expect(originalDetail).toHaveText("Command 4");
+  await originalDetail.fill("Edited in the original branch");
+  await expect(detail).toHaveText("Edited in the original branch");
+  await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+  await expect(region.locator("[data-block-id]")).toHaveCount(5);
+  await expect(detail).toHaveText("Edited in the original branch");
+  await page.evaluate(() =>
+    (
+      window as unknown as { __rivtoDemo: JournalInspection }
+    ).__rivtoDemo.editor.history.stopCapturing(),
+  );
+  const embeddedRoot = region.locator("[data-block-content]").first();
+  const rootText = await embeddedRoot.textContent();
+  await embeddedRoot.click();
+  await embeddedRoot.press("Control+End");
+  await embeddedRoot.press("z");
+  await expect(embeddedRoot).toHaveText(`${rootText}z`);
+  expect(
+    await page.evaluate(
+      (id) =>
+        (
+          window as unknown as { __rivtoDemo: JournalInspection }
+        ).__rivtoDemo.editor.blocks.getBlockNode(id)!.content,
+      target,
+    ),
+  ).toBe(`${rootText}z`);
+  await embeddedRoot.press("Control+z");
+  await expect(embeddedRoot).toHaveText(rootText!);
+  await today.getByRole("button", { name: "Page", exact: true }).click();
+  await expect(originalDetail).toHaveText("Edited in the original branch");
+  await expect(detail).toHaveText("Edited in the original branch");
+}
+
+/**
+ * Checks that hovering preserves both native and editor text selection.
+ *
+ * @param page - Browser hosting the embedding.
+ * @param content - Editable embedded text.
+ * @param edit - Host embedding control.
+ * @param readSelection - Reads the current shared editor selection.
+ * @returns Resolves after checking selection before and after hover.
+ */
+async function checkEmbeddedTextSelection(
+  page: Page,
+  content: Locator,
+  edit: Locator,
+  readSelection: () => Promise<ReturnType<DocumentEditorAPI["selection"]["get"]>>,
+): Promise<void> {
+  await content.click();
+  await content.press("End");
+  await content.press("Shift+Home");
+  const nativeText = await page.evaluate(() => window.getSelection()?.toString());
+  expect(nativeText?.length).toBeGreaterThan(0);
+  // Native selectionchange is delivered asynchronously after Shift+Home.
+  await expect
+    .poll(async () => {
+      const range = (await readSelection())?.blocks[0];
+      return range ? range.end - range.start : 0;
+    })
+    .toBe(nativeText!.length);
+  const textSelection = await readSelection();
+  expect(textSelection?.blocks).toHaveLength(1);
+  await edit.hover();
+  expect(await readSelection()).toEqual(textSelection);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(nativeText);
+  await content.hover();
+  expect(await readSelection()).toEqual(textSelection);
+}
+
+/** IDs used to exercise selection around an embedded block. */
+interface EmbeddingSelectionIds {
+  /** Host embedding block. */
+  embed: string;
+  /** Block before the embedding. */
+  before: string;
+  /** Block after the embedding. */
+  after: string;
+  /** Block later moved inside the embedding. */
+  child: string;
+}
+
+/**
+ * Creates blocks around the embedding for selection in either direction.
+ *
+ * @param page - Demo page containing the journal.
+ * @returns Persisted IDs of the embedding and its surrounding blocks.
+ */
+async function seedEmbeddingSelection(page: Page): Promise<EmbeddingSelectionIds> {
+  return page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+    const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!.id;
+    const before = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Start above the reference",
+    }).id;
+    const after = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Start below the reference",
+    }).id;
+    const child = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Ordinary child below the reference",
+    }).id;
+    editor.blocks.moveBlocks([before], embed, "before");
+    editor.blocks.moveBlocks([after], embed, "after");
+    return { embed, before, after, child };
+  });
+}
+
+/**
+ * Drags a selection through the embedding body and checks its host endpoints.
+ *
+ * @param page - Browser receiving the pointer gesture.
+ * @param anchor - Editable text where the gesture starts.
+ * @param body - Embedded body crossed by the pointer.
+ * @param expected - Block IDs expected in the host selection.
+ * @param readSelection - Reads the currently selected block IDs.
+ * @returns Resolves after the gesture and selection cleanup.
+ */
+async function dragThroughEmbedding(
+  page: Page,
+  anchor: Locator,
+  body: Locator,
+  expected: string[],
+  readSelection: () => Promise<string[] | undefined>,
+): Promise<void> {
+  await body.scrollIntoViewIfNeeded();
+  const start = (await anchor.boundingBox())!;
+  const rect = (await body.boundingBox())!;
+  await page.mouse.move(start.x + 20, start.y + start.height / 2);
+  await page.mouse.down();
+  // The pointer crosses another view, but the gesture still belongs to
+  // the host. Its endpoint is the embedding, not nearby editable text.
+  for (const fraction of [0.75, 0.25]) {
+    await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height * fraction, { steps: 10 });
+    await expect.poll(readSelection).toEqual(expected);
+  }
+  await page.mouse.up();
+  await expect.poll(readSelection).toEqual(expected);
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection.clear(),
+  );
+}
+
+/**
+ * Verifies selection stops at the embedding with and without a child.
+ *
+ * @param page - Browser receiving the pointer gestures.
+ * @param today - Journal containing both selection endpoints.
+ * @param ids - Persisted IDs defining the selection fixture.
+ * @returns Resolves after checking both drag directions and clearing selection.
+ */
+async function checkEmbeddingDragSelection(
+  page: Page,
+  today: Locator,
+  ids: EmbeddingSelectionIds,
+): Promise<void> {
+  const embedding = today.locator(`[data-block-id="${ids.embed}"]`).first();
+  const body = embedding.locator(':scope > .rivto-block-slot[data-slot-position="body"]');
+  const readSelection = () =>
+    page.evaluate(() =>
+      (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection
+        .get()
+        ?.blocks.map(({ id }) => id),
+    );
+  for (const withChild of [false, true]) {
+    if (withChild) {
+      await page.evaluate(
+        ({ child, embed }) =>
+          (
+            window as unknown as { __rivtoDemo: JournalInspection }
+          ).__rivtoDemo.editor.blocks.moveBlocks([child], embed, "inside"),
+        ids,
+      );
+    }
+    for (const fromAbove of [true, false]) {
+      const anchorId = fromAbove ? ids.before : ids.after;
+      const expected = fromAbove ? [ids.before, ids.embed] : [ids.embed, ids.after];
+      if (!fromAbove && withChild) {
+        expected.splice(1, 0, ids.child);
+      }
+      const anchor = today
+        .locator(`[data-block-id="${anchorId}"] > .rivto-block-row [data-block-content]`)
+        .first();
+      await dragThroughEmbedding(page, anchor, body, expected, readSelection);
+    }
+  }
+}
+
+/**
+ * Checks the embedding's display and edit-control hover behavior.
+ *
+ * @param page - Browser hosting the embedding.
+ * @param host - Embedding block containing the editable body.
+ * @param edit - Settings button in the block's right slot.
+ * @returns Resolves after verifying visibility and unchanged geometry.
+ */
+async function checkEmbeddingSettingsControl(
+  page: Page,
+  host: Locator,
+  edit: Locator,
+): Promise<void> {
+  await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).getByRole("textbox")).toHaveCount(0);
+  await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR} .rivto-embedding`)).toHaveText("");
+  await expect(
+    host.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`),
+  ).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(host.getByRole("region", { name: "Block editor" })).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await host.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  await expect(edit).toHaveCSS("opacity", "0");
+  const beforeHover = await host.boundingBox();
+  await host.hover();
+  await expect(edit).toHaveCSS("opacity", "1");
+  expect(await host.boundingBox()).toEqual(beforeHover);
+  await page.mouse.move(0, 0);
+  await expect(edit).toHaveCSS("opacity", "0");
+}
+
+/**
+ * Cancels edited embedding settings and checks that stored properties are unchanged.
+ *
+ * @param edit - Button opening the settings dialog.
+ * @param settings - Settings dialog.
+ * @param room - Fixture room identifying the original target block.
+ * @param readProps - Reads the host block's current properties.
+ * @returns The original properties for the subsequent save and undo checks.
+ */
+async function checkEmbeddingSettingsCancel(
+  edit: Locator,
+  settings: Locator,
+  room: string,
+  readProps: () => Promise<unknown>,
+): Promise<unknown> {
+  const original = await readProps();
+  await edit.focus();
+  await expect(edit).toHaveCSS("opacity", "1");
+  await edit.press("Enter");
+  await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue("source");
+  await expect(settings.getByRole("textbox", { name: "Target block ID" })).toHaveValue(
+    `${room}:source-block`,
+  );
+  await settings.getByRole("textbox", { name: "Target document ID" }).fill("unsaved-document");
+  await settings.getByRole("textbox", { name: "Target block ID" }).fill("unsaved-block");
+  await settings.getByRole("textbox", { name: "Target block ID" }).press("Escape");
+  await expect(settings).toBeHidden();
+  expect(await readProps()).toEqual(original);
+  return original;
+}
+
+/**
+ * Saves both target IDs, then undoes the change and verifies the original content.
+ *
+ * @param page - Browser hosting the reference document.
+ * @param host - Embedding block showing the resolved content.
+ * @param edit - Button opening settings.
+ * @param settings - Settings dialog.
+ * @param room - Fixture room identifying the replacement target.
+ * @param readProps - Reads the current host properties.
+ * @param original - Properties before editing.
+ * @returns Resolves after saving, reopening, and undoing the change.
+ */
+async function checkEmbeddingSettingsSave(
+  page: Page,
+  host: Locator,
+  edit: Locator,
+  settings: Locator,
+  room: string,
+  readProps: () => Promise<unknown>,
+  original: unknown,
+): Promise<void> {
+  await edit.click();
+  await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue("source");
+  await settings.getByRole("textbox", { name: "Target document ID" }).fill(" references ");
+  await settings
+    .getByRole("textbox", { name: "Target block ID" })
+    .fill(` ${room}:reference-heading `);
+  expect(await readProps()).toEqual(original);
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
+      .getEditor("references")!
+      .history.clear(),
+  );
+  await settings.getByRole("button", { name: "Save embedding" }).click();
+  await expect(settings).toBeHidden();
+  expect(await readProps()).toEqual({
+    targetDocumentId: "references",
+    targetBlockId: `${room}:reference-heading`,
+  });
+  await expect(
+    host.getByRole("region", { name: "Block editor" }).locator("[data-block-content]"),
+  ).toHaveText("Live source references");
+  await edit.click();
+  await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue(
+    "references",
+  );
+  await settings.getByRole("textbox", { name: "Target block ID" }).press("Escape");
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
+      .getEditor("references")!
+      .history.undo(),
+  );
+  expect(await readProps()).toEqual(original);
+  await expect(
+    host.getByRole("region", { name: "Block editor" }).locator("[data-block-content]").first(),
+  ).toHaveText("Source text");
+}
+
+/**
+ * Moves the referenced source block into a newly registered document.
+ *
+ * @param page - Browser hosting the shared documents.
+ * @param target - Persisted source block ID.
+ * @returns Resolves after moving the snapshot and retaining its acquisition.
+ */
+async function moveSourceToNewDocument(page: Page, target: string): Promise<void> {
+  await page.evaluate(async (blockId) => {
+    const { editor, panes } = (window as unknown as { __rivtoDocuments: DemoInspection })
+      .__rivtoDocuments;
+    const source = [...panes].find((pane) => pane.id === "source")!.reactEditor;
+    const snapshot = source.blocks.getBlock(blockId)!;
+    const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    inspection.storage.registerDocument("new-source");
+    const moved = await editor.acquireEditor("new-source");
+    (window as unknown as { __movedSource: typeof moved }).__movedSource = moved;
+    source.blocks.removeBlock(blockId);
+    moved.document.blocks.insertBlock(snapshot);
+  }, target);
+}
+
+/**
+ * Removes every child from the source root in one history batch.
+ *
+ * @param page - Browser hosting the shared source document.
+ * @returns Resolves after the source children are removed.
+ */
+async function clearSourceChildren(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const panes = [
+      ...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes,
+    ];
+    const source = panes.find((pane) => pane.id === "source")!.reactEditor;
+    const root = source.blocks.getRootIds()[0]!;
+    source.history.batchUpdates(() =>
+      source.blocks.getBlockNode(root)!.childIds.forEach((id) => source.blocks.removeBlock(id)),
+    );
+  });
+}
+
+/**
+ * Checks indent and outdent of a source child through an embedding.
+ *
+ * @param page - Browser hosting the documents.
+ * @param child - Embedded child receiving keyboard shortcuts.
+ * @param room - Fixture room containing the child blocks.
+ * @returns Resolves after both parent changes are observed.
+ */
+async function checkEmbeddedIndentUndo(page: Page, child: Locator, room: string): Promise<void> {
+  await child.press("Tab");
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        return editor.getDocument("source")!.blocks.getParentId(`${id}:child-1`);
+      }, room),
+    )
+    .toBe(`${room}:child-0`);
+  await child.press("Shift+Tab");
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        return editor.getDocument("source")!.blocks.getParentId(`${id}:child-1`);
+      }, room),
+    )
+    .toBe(`${room}:source-block`);
+}
+
+/**
+ * Dispatches a plain-text exclamation mark as a clipboard paste.
+ *
+ * @param content - Editable block receiving the paste event.
+ * @returns Resolves after dispatching the clipboard event.
+ */
+async function pasteExclamation(content: Locator): Promise<void> {
+  await content.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", "!");
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: clipboardData });
+    element.dispatchEvent(event);
+  });
+}
+
+/**
+ * Measures one source command and its two-frame rendering time.
+ *
+ * @param page - Browser hosting the source document.
+ * @param room - Fixture room identifying the source block.
+ * @param index - Sample number written into the block.
+ * @returns Synchronous command and two-frame elapsed times in milliseconds.
+ */
+async function sampleEmbeddedCommand(
+  page: Page,
+  room: string,
+  index: number,
+): Promise<{ command: number; render: number }> {
+  return page.evaluate(
+    async ({ target, index }) => {
+      const panes = [
+        ...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes,
+      ];
+      const source = panes.find((pane) => pane.id === "source")!.reactEditor;
+      const start = performance.now();
+      source.blocks.updateBlock(target, { content: `Command sample ${index}` });
+      const command = performance.now() - start;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      return { command, render: performance.now() - start };
+    },
+    { target: `${room}:source-block`, index },
+  );
+}
+
+/**
+ * Samples keyboard input and command rendering in an embedded source document.
+ *
+ * @param page - Browser hosting the source and reference panes.
+ * @param content - Editable embedded source content.
+ * @param room - Fixture room identifying the source block.
+ * @returns Five interaction and rendering duration samples in milliseconds.
+ */
+async function sampleEmbeddedEditing(
+  page: Page,
+  content: Locator,
+  room: string,
+): Promise<{ command: number; render: number; input: number; keyboard: number }[]> {
+  const samples: { command: number; render: number; input: number; keyboard: number }[] = [];
+  for (let index = 0; index < 5; index += 1) {
+    const inputStart = Date.now();
+    await content.fill(`Keyboard sample ${index}`);
+    await expect(
+      page.locator('[data-document-pane="source"] [data-block-content]').first(),
+    ).toHaveText(`Keyboard sample ${index}`);
+    const input = Date.now() - inputStart;
+    await content.press("End");
+    const keyboardStart = Date.now();
+    await content.press("x");
+    await expect(content).toHaveText(`Keyboard sample ${index}x`);
+    await expect(
+      page.locator('[data-document-pane="source"] [data-block-content]').first(),
+    ).toHaveText(`Keyboard sample ${index}x`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(
+      await content.evaluate((element) => element.ownerDocument.getSelection()?.focusOffset),
+    ).toBe(`Keyboard sample ${index}x`.length);
+    const keyboard = Date.now() - keyboardStart;
+    const timing = await sampleEmbeddedCommand(page, room, index);
+    samples.push({ ...timing, input, keyboard });
+    await expect(content).toHaveText(`Command sample ${index}`);
+  }
+  return samples;
+}
+
+/**
+ * Selects an embedded root as a block and focuses its editor occurrence.
+ *
+ * @param page - Browser hosting the source document.
+ * @param blockId - Persisted root ID to select.
+ * @returns Resolves after replacing native selection and focusing the embedded editor.
+ */
+async function selectEmbeddedRoot(page: Page, blockId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const source = editor.getEditor("source")!;
+    source.selection.set({
+      type: "selection",
+      blocks: [{ id, start: 0, end: -1 }],
+      anchorBlockId: id,
+      focusBlockId: id,
+    });
+    document.getSelection()?.removeAllRanges();
+    document.querySelector<HTMLElement>('[role="region"][aria-label="Block editor"]')!.focus();
+  }, blockId);
+}
+
+/**
+ * Checks that source undo and deletion preserve focus outside the embedding.
+ *
+ * @param page - Browser hosting the source and references.
+ * @param content - Embedded source content expected after undo.
+ * @param blockId - Root block to delete after restoring it.
+ * @returns Resolves after both operations preserve the external focus.
+ */
+async function checkExternalFocusAfterSourceChanges(
+  page: Page,
+  content: Locator,
+  blockId: string,
+): Promise<void> {
+  const outside = page
+    .locator('[data-document-pane="references"]')
+    .getByRole("button", { name: "Toggle mode", exact: true });
+  await outside.focus();
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
+      .getEditor("source")!
+      .history.undo(),
+  );
+  await expect(content).toHaveText("Source text");
+  await expect(outside).toBeFocused();
+  await page.evaluate(
+    (id) =>
+      (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
+        .getEditor("source")!
+        .blocks.removeBlock(id),
+    blockId,
+  );
+  await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
+  await expect(outside).toBeFocused();
+}
+
+/**
+ * Seeds an embedding between a movable paragraph and a columns container.
+ *
+ * @param page - Browser hosting the journal document.
+ * @returns IDs of the embedding, movable block, and following container.
+ */
+async function seedEmbeddingGap(
+  page: Page,
+): Promise<{ embedId: string; movedId: string; nextId: string }> {
+  return page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+    const embedId = editor.blocks.getBlocks().find((block) => block.type === "embedding")!.id;
+    const movedId = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Place below the embedding",
+    }).id;
+    editor.blocks.moveBlocks([movedId], embedId, "before");
+    const nextId = editor.blocks.insertBlock({
+      type: "columns",
+      children: [{ type: "columns-column" }],
+    }).id;
+    editor.blocks.moveBlocks([nextId], embedId, "after");
+    editor.history.clear();
+    return { embedId, movedId, nextId };
+  });
+}
+
+/**
+ * Switches to the canvas and brings the tested embedding card above its peers.
+ *
+ * @param page - Browser hosting the journal editor.
+ * @param today - Journal containing the canvas controls and card.
+ * @param embedId - Embedded block whose card must remain visible.
+ * @returns Resolves after zooming out and clearing the fixture history.
+ */
+async function showEmbeddingGapOnCanvas(
+  page: Page,
+  today: Locator,
+  embedId: string,
+): Promise<void> {
+  await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+  const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
+  for (let index = 0; index < 3; index++) {
+    await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
+  }
+  // Repeated cards can overlap after their content grows. Keep the tested
+  // card visible while retaining every stress card and the default layout.
+  const cardId = await today
+    .locator(`[data-block-id="${embedId}"]`)
+    .first()
+    .evaluate(
+      (element) =>
+        element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!,
+    );
+  await page.evaluate((id) => {
+    const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+    editor.elements.updateElement(id, {
+      zIndex: Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1,
+    });
+    editor.history.clear();
+  }, cardId);
+}
+
+/**
+ * Checks the host drop line above and at the top edge of an embedding.
+ *
+ * @param page - Browser receiving pointer movement.
+ * @param line - Visible drop indicator.
+ * @param x - Horizontal viewport coordinate of the expected indicator.
+ * @param top - Embedding top edge in viewport coordinates.
+ * @returns Resolves after both top-edge positions have been checked.
+ */
+async function checkEmbeddingTopGap(
+  page: Page,
+  line: Locator,
+  x: number,
+  top: number,
+): Promise<void> {
+  // Check the gap above the reference, then its bottom padding and the next
+  // container's edge. All of these belong to the enclosing document.
+  await page.mouse.move(x, top - 1, { steps: 10 });
+  await expect(line).toHaveCount(1);
+  expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(false);
+  expect(Math.abs((await line.boundingBox())!.x - x)).toBeLessThan(2);
+  // The reference's top edge sorts it; its row center may accept children.
+  await page.mouse.move(x, top + 1);
+  await expect(line).toHaveCount(1);
+  expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(false);
+}
+
+/**
+ * Sweeps the outer embedding gap and checks the drop line remains centered.
+ *
+ * @param page - Browser receiving the pointer movement.
+ * @param line - Visible drop indicator.
+ * @param x - Horizontal viewport coordinate of the sweep.
+ * @param firstY - First vertical viewport coordinate.
+ * @param lastY - Last vertical viewport coordinate.
+ * @param embedId - Embedding block before the gap.
+ * @param nextId - Container block after the gap.
+ * @returns Resolves after checking each position in the sweep.
+ */
+async function checkEmbeddingGapSweep(
+  page: Page,
+  line: Locator,
+  x: number,
+  firstY: number,
+  lastY: number,
+  embedId: string,
+  nextId: string,
+): Promise<void> {
+  for (let y = firstY; y <= lastY; y += 2) {
+    await page.mouse.move(x, y);
+    await expect(line).toHaveCount(1);
+    expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
+      false,
+    );
+    // Autoscroll can move the canvas during a sweep; compare the line with
+    // its current neighbors rather than their pre-gesture viewport positions.
+    await expect
+      .poll(() =>
+        line.evaluate(
+          (element, { embedId, nextId }) => {
+            const view = element.closest("[data-rivto-panel]")!;
+            const before = view
+              .querySelector(`[data-block-id="${embedId}"]`)!
+              .getBoundingClientRect();
+            const after = view
+              .querySelector(`[data-block-id="${nextId}"]`)!
+              .getBoundingClientRect();
+            const indicator = element.getBoundingClientRect();
+            return indicator.y + indicator.height / 2 - (before.bottom + after.top) / 2;
+          },
+          { embedId, nextId },
+        ),
+      )
+      .toBeCloseTo(0, 0);
+  }
+}
+
+/**
+ * Checks a sibling drop placement and its undo in the journal document.
+ *
+ * @param page - Browser hosting the journal.
+ * @param embedId - Embedding that should precede the moved block.
+ * @param movedId - Block moved by the drag gesture.
+ * @returns Resolves after verifying placement and undo.
+ */
+async function checkEmbeddingGapPlacement(
+  page: Page,
+  embedId: string,
+  movedId: string,
+): Promise<void> {
+  const readPlacement = () =>
+    page.evaluate(
+      ({ embedId, movedId }) => {
+        const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+        const roots = editor.blocks.getRootIds();
+        return {
+          parent: editor.blocks.getParentId(movedId),
+          followsEmbedding: roots.indexOf(movedId) === roots.indexOf(embedId) + 1,
+        };
+      },
+      { embedId, movedId },
+    );
+  await expect.poll(readPlacement).toEqual({ parent: null, followsEmbedding: true });
+  await page.keyboard.press("Control+z");
+  await expect.poll(readPlacement).toEqual({ parent: null, followsEmbedding: false });
+}
+
+/** Block IDs in the indented embedding-gap fixture. */
+interface IndentedEmbeddingGapIds {
+  /** Block dragged into the gap. */
+  source: string;
+  /** Ordinary block before the embedding. */
+  upper: string;
+  /** Embedding between the surrounding blocks. */
+  embed: string;
+  /** Container after the embedding. */
+  lower: string;
+}
+
+/**
+ * Seeds ordinary and embedded blocks with a movable sibling between them.
+ *
+ * @param page - Browser hosting the journal document.
+ * @returns IDs of the drag source and the blocks bordering the tested gaps.
+ */
+async function seedIndentedEmbeddingGap(page: Page): Promise<IndentedEmbeddingGapIds> {
+  return page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+    const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    const source = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Drag into an outline gap",
+    }).id;
+    const upper = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Before the embedding",
+    }).id;
+    const lower = editor.blocks.insertBlock({
+      type: "columns",
+      children: [{ type: "columns-column" }],
+    }).id;
+    editor.blocks.moveBlocks([upper, source], embed.id, "before");
+    editor.blocks.moveBlocks([lower], embed.id, "after");
+    editor.history.clear();
+    return { source, upper, embed: embed.id, lower };
+  });
+}
+
+/**
+ * Checks embedding body decoration and selection fill after nesting a child.
+ *
+ * @param page - Browser hosting the journal editor.
+ * @param parent - Embedding block containing the new child.
+ * @param parentId - Persisted embedding ID used for selection.
+ * @returns Resolves after checking colors, borders, and selection cleanup.
+ */
+async function checkEmbeddedChildDecoration(
+  page: Page,
+  parent: Locator,
+  parentId: string,
+): Promise<void> {
+  const body = parent.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`);
+  // The reference has its own decoration; ordinary outline children
+  // below it must see the surrounding document's background instead.
+  await expect(parent).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(body).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(body).toHaveCSS("border-top-width", "1px");
+  await expect(parent).toHaveCSS("border-top-width", "0px");
+  await page.evaluate(
+    (id) =>
+      (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection.set({
+        type: "selection",
+        blocks: [{ id, start: 0, end: -1 }],
+        anchorBlockId: id,
+        focusBlockId: id,
+      }),
+    parentId,
+  );
+  await expect(parent).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(body).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection.clear(),
+  );
+}
+
+/**
+ * Checks sibling and child drop lines while sweeping an indented gap.
+ *
+ * @param page - Browser receiving pointer movement.
+ * @param parent - Block that can receive a child.
+ * @param line - Visible insertion line.
+ * @param box - Parent bounds in viewport coordinates.
+ * @param after - Following block bounds in viewport coordinates.
+ * @param scale - Canvas zoom applied to horizontal offsets.
+ * @returns Resolves after checking every gap position and indicator.
+ */
+async function checkIndentedGapFeedback(
+  page: Page,
+  parent: Locator,
+  line: Locator,
+  box: { x: number; y: number; height: number },
+  after: { y: number },
+  scale: number,
+): Promise<void> {
+  // Moving right across the same gap must turn its sibling line into an
+  // indented child line, even when the following block owns another view.
+  for (const y of [box.y + box.height - 1, (box.y + box.height + after.y) / 2, after.y + 1]) {
+    await page.mouse.move(box.x + 12 * scale, y, { steps: 10 });
+    await expect(line).toHaveCount(1);
+    expect(Math.abs((await line.boundingBox())!.x - (box.x + 12 * scale))).toBeLessThan(2);
+    await page.mouse.move(box.x + 38 * scale, y);
+    await expect(line).toHaveCount(1);
+    expect(Math.abs((await line.boundingBox())!.x - (box.x + 36 * scale))).toBeLessThan(2);
+    await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
+    await expect(parent).not.toHaveAttribute("data-block-drop-active", "true");
+    await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
+      "data-block-drop-active",
+      "true",
+    );
+  }
+}
+
+/**
+ * Reads a journal block's current parent from the document model.
+ *
+ * @param page - Browser hosting the journal editor.
+ * @param blockId - Persisted block ID to inspect.
+ * @returns The parent ID, or the root or missing value returned by the manager.
+ */
+async function readJournalBlockParent(page: Page, blockId: string) {
+  return page.evaluate(
+    (id) =>
+      (
+        window as unknown as { __rivtoDemo: JournalInspection }
+      ).__rivtoDemo.editor.blocks.getParentId(id),
+    blockId,
+  );
+}
+
+/**
+ * Verifies undo and redo of a move out of the embedded source subtree.
+ *
+ * @param page - Browser receiving the history shortcuts.
+ * @param movedId - Block moved back to the root.
+ * @param childId - Parent restored by undo.
+ * @returns Resolves after both parent transitions have been observed.
+ */
+async function checkSameDocumentMoveHistory(
+  page: Page,
+  movedId: string,
+  childId: string,
+): Promise<void> {
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readJournalBlockParent(page, movedId)).toBe(childId);
+  await page.keyboard.press("Control+Shift+z");
+  await expect.poll(() => readJournalBlockParent(page, movedId)).toBeNull();
+}
+
+/**
+ * Creates a movable block next to a same-document reference.
+ *
+ * @param page - Browser hosting the journal document.
+ * @returns IDs of the reference, source branch, child, and movable block.
+ */
+async function seedSameDocumentMove(
+  page: Page,
+): Promise<{ embedId: string; targetId: string; childId: string; movedId: string }> {
+  return page.evaluate(() => {
+    const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+    const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    const targetId = String(embed.props.targetBlockId);
+    const childId = editor.blocks.getBlockNode(targetId)!.childIds[0]!;
+    const moved = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Drag into the source",
+    });
+    editor.blocks.moveBlocks([moved.id], embed.id, "before");
+    editor.history.stopCapturing();
+    return { embedId: embed.id, targetId, childId, movedId: moved.id };
+  });
+}
+
+/**
+ * Switches to canvas mode and zooms to show both source and reference.
+ *
+ * @param today - Journal containing the mode and zoom controls.
+ * @returns Resolves after the canvas reaches 50 percent zoom.
+ */
+async function showSameDocumentMoveOnCanvas(today: Locator): Promise<void> {
+  await today.getByRole("button", { name: "Edgeless", exact: true }).click();
+  // Keep the reference header and source children visible together, using native canvas zoom.
+  // At 70%, Firefox scrolls the tall embedded subtree on source hover and clips the drop header.
+  const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
+  for (let index = 0; index < 5; index++) {
+    await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
+  }
+  await expect(zoom.getByRole("button", { name: "Reset zoom" })).toHaveText("50%");
+}
+
+/**
+ * Changes the first reference's target-document property in the host document.
+ *
+ * @param page - Browser hosting the reference document.
+ * @param documentId - Document ID to persist; an empty string removes qualification.
+ * @returns Resolves after updating the reference block.
+ */
+async function setEmbeddingTargetDocument(page: Page, documentId: string): Promise<void> {
+  await page.evaluate((targetDocumentId) => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const host = editor.getEditor("references")!;
+    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
+    host.blocks.setBlockProp(reference.id, "targetDocumentId", targetDocumentId);
+  }, documentId);
+}
+
+/**
+ * Checks ambiguous-reference fallback editing without changing the stored address.
+ *
+ * @param page - Browser hosting the reference and source documents.
+ * @param embeds - Rendered reference occurrences.
+ * @param target - Block ID shared by both documents.
+ * @returns Resolves after checking fallback content, source isolation, and saved address.
+ */
+async function checkAmbiguousReferenceFallback(
+  page: Page,
+  embeds: Locator,
+  target: string,
+): Promise<void> {
+  await page.evaluate((id) => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    const reference = editor
+      .getEditor("references")!
+      .blocks.getBlocks()
+      .find((block) => block.type === "embedding")!;
+    editor
+      .getEditor("references")!
+      .blocks.setBlockProp(reference.id, "targetDocumentId", "old-document");
+    if (!editor.getDocument("source")!.blocks.hasBlock(id)) {
+      throw new Error("Source must remain present");
+    }
+  }, target);
+  await expect(
+    page.getByText("Multiple documents contain this block; showing document references.", {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await expect(embeds.first().locator("[data-block-content]").first()).toHaveText(
+    "Same ID in references",
+  );
+  await embeds.first().locator("[data-block-content]").first().fill("Edited fallback document");
+  expect(
+    await page.evaluate((id) => {
+      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+        .__rivtoDocuments;
+      return [
+        editor.getDocument("references")!.blocks.getBlockNode(id)?.content,
+        editor.getDocument("source")!.blocks.getBlockNode(id)?.content,
+      ];
+    }, target),
+  ).toEqual(["Edited fallback document", "Source text"]);
+  expect(
+    await page.evaluate(() => {
+      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+        .__rivtoDocuments;
+      return editor
+        .getEditor("references")!
+        .blocks.getBlocks()
+        .find((block) => block.type === "embedding")!.props.targetDocumentId;
+    }),
+  ).toBe("old-document");
+}
+
+/**
+ * Measures selecting an embedded block and publishing its shared selection.
+ *
+ * @param page - Browser receiving pointer and keyboard events.
+ * @param embedded - Embedded block used as the selection source.
+ * @returns Three command, render, and pointer duration samples in milliseconds.
+ */
+async function sampleSharedSelection(
+  page: Page,
+  embedded: Locator,
+): Promise<{ command: number; render: number; pointer: number }[]> {
+  const samples = [];
+  for (let index = 0; index < 3; index += 1) {
+    const row = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
+    await row.hover();
+    const start = Date.now();
+    await row.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`).click({ button: "right" });
+    await expect(embedded).toHaveAttribute("data-block-selected", "true");
+    const timing = await page.evaluate(async () => {
+      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
+      const selection = editor.selection.get()!;
+      editor.selection.clear();
+      const start = performance.now();
+      editor.selection.set(selection);
+      const command = performance.now() - start;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      return { command, render: performance.now() - start };
+    });
+    samples.push({ ...timing, pointer: Date.now() - start });
+    await page.keyboard.press("Escape");
+  }
+  return samples;
+}
+
+/**
+ * Checks structural selection from the embedded and original occurrences.
+ *
+ * @param page - Browser hosting the journal.
+ * @param today - Journal containing both occurrences.
+ * @param occurrences - Original and embedded shells of the same block.
+ * @returns Resolves after checking both selections and closing the context menu.
+ */
+async function checkOriginalSharedSelection(
+  page: Page,
+  today: Locator,
+  occurrences: Locator,
+): Promise<void> {
+  for (const occurrence of await occurrences.all()) {
+    await expect(occurrence).toHaveAttribute("data-block-selected", "true");
+  }
+  await page.evaluate(() =>
+    (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection.clear(),
+  );
+  await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+  const originalIndex = await occurrences.evaluateAll((elements) =>
+    elements.findIndex((element) => !element.closest('[role="region"][aria-label="Block editor"]')),
+  );
+  expect(originalIndex).toBeGreaterThanOrEqual(0);
+  const originalRow = occurrences.nth(originalIndex).locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
+  // Canvas cards can overlap the original; target its menu handler after focusing it.
+  const originalHandle = originalRow.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`);
+  await originalHandle.focus();
+  await originalHandle.dispatchEvent("contextmenu", { button: 2 });
+  for (const occurrence of await occurrences.all()) {
+    await expect(occurrence).toHaveAttribute("data-block-selected", "true");
+  }
+  await page.keyboard.press("Escape");
+}
+
+/**
+ * Returns to text editing and checks native selection inside the embedded editor.
+ *
+ * @param page - Browser receiving pointer and keyboard input.
+ * @param today - Journal containing the canvas viewport.
+ * @param region - Embedded editor region.
+ * @param embedded - Embedded block selected earlier.
+ * @param canvas - Whether the embedding is displayed on the canvas.
+ * @returns Resolves after checking focus and native text selection.
+ */
+async function checkEmbeddedTextAfterSelection(
+  page: Page,
+  today: Locator,
+  region: Locator,
+  embedded: Locator,
+  canvas: boolean,
+): Promise<void> {
+  const text = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`).first();
+  if (canvas) {
+    // Focusing the original card can pan the embedded occurrence above the viewport.
+    const viewport = today.locator(".edgeless-viewport");
+    const view = (await viewport.boundingBox())!;
+    const target = (await text.boundingBox())!;
+    const offset = Math.max(0, view.y + 40 - target.y);
+    if (offset) {
+      await page.mouse.move(view.x + 20, view.y + 20);
+      await page.mouse.down({ button: "middle" });
+      await page.mouse.move(view.x + 20, view.y + 20 + offset, { steps: 5 });
+      await page.mouse.up({ button: "middle" });
+    }
+  }
+  await text.click();
+  await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+  expect(
+    await region.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
+  ).toBe(true);
+  await text.press("Home");
+  await text.press("Shift+ArrowRight");
+  await expect(today.locator("[data-block-selected]")).toHaveCount(0);
+  expect(
+    await region.evaluate((element) =>
+      element.contains(element.ownerDocument.getSelection()?.anchorNode ?? null),
+    ),
+  ).toBe(true);
+}
+
+/**
+ * Checks selection and focus when each occurrence is activated by its handle.
+ *
+ * @param page - Browser receiving pointer and keyboard events.
+ * @param views - Embedded and source editor occurrences.
+ * @param unrelated - Host block with the same local ID in another document.
+ * @param childId - Shared source block ID to select.
+ * @returns Resolves after each occurrence has selected and focused its own content.
+ */
+async function checkCrossDocumentSelectionGestures(
+  page: Page,
+  views: Locator[],
+  unrelated: Locator,
+  childId: string,
+): Promise<void> {
+  for (const view of views) {
+    const row = view.locator(`[data-block-id="${childId}"] > ${BLOCK_ROW_SELECTOR}`);
+    await row.hover({ position: { x: 6, y: 6 } });
+    await row.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`).click({ button: "right" });
+    for (const occurrence of views) {
+      await expect(occurrence.locator(`[data-block-id="${childId}"]`)).toHaveAttribute(
+        "data-block-selected",
+        "true",
+      );
+    }
+    await expect(unrelated).not.toHaveAttribute("data-block-selected");
+    expect(
+      await page.evaluate(() => {
+        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
+          .__rivtoDocuments;
+        return editor.getEditor("references")!.selection.get();
+      }),
+    ).toBeUndefined();
+    await page.keyboard.press("Escape");
+    await row.locator("[data-block-content]").click({ position: { x: 10, y: 8 } });
+    await expect(page.locator("[data-block-selected]")).toHaveCount(0);
+    expect(
+      await view.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
+    ).toBe(true);
+  }
+}
+
+/**
+ * Selects the first two source children as whole blocks.
+ *
+ * @param page - Browser hosting the source document.
+ * @param room - Fixture room used to construct child IDs.
+ * @returns Resolves after setting the source selection.
+ */
+async function selectSourceChildren(page: Page, room: string): Promise<void> {
+  await page.evaluate((roomId) => {
+    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
+    editor.getEditor("source")!.selection.set({
+      type: "selection",
+      blocks: [0, 1].map((index) => ({ id: `${roomId}:child-${index}`, start: 0, end: -1 })),
+      anchorBlockId: `${roomId}:child-0`,
+      focusBlockId: `${roomId}:child-1`,
+    });
+  }, room);
+}
+
 for (const repeat of [0, 200]) {
   test(`embedded content has no extra ending space with repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto(`/?test_features=1&repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
     for (const mode of ["Page", "Edgeless"]) {
       await today.getByRole("button", { name: mode, exact: true }).click();
@@ -53,6 +1322,7 @@ for (const repeat of [0, 200]) {
     test.setTimeout(120_000);
     page.setDefaultTimeout(10_000);
     await page.goto(`/?test_features=1&repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
     // Host construction precedes asynchronous embedding mount; keep fixture loading outside interaction timing.
     await today.locator(".page-surface").first().waitFor({ state: "visible" });
@@ -88,83 +1358,11 @@ for (const repeat of [0, 200]) {
     );
     await detail.fill("Warm embedded child");
     await expect(originalDetail).toHaveText("Warm embedded child");
-    const samples: { command: number; render: number; keyboard: number }[] = [];
-    for (let index = 0; index < 5; index += 1) {
-      await detail.fill(`Sample ${index}`);
-      await detail.press("End");
-      const start = Date.now();
-      await detail.press("x");
-      await expect(originalDetail).toHaveText(`Sample ${index}x`);
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          ),
-      );
-      expect(
-        await detail.evaluate((element) => element.ownerDocument.getSelection()?.focusOffset),
-      ).toBe(`Sample ${index}x`.length);
-      const keyboard = Date.now() - start;
-      const timing = await page.evaluate(
-        async ({ id, index }) => {
-          const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-          const start = performance.now();
-          editor.blocks.updateBlock(id, { content: `Command ${index}` });
-          const command = performance.now() - start;
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          );
-          return { command, render: performance.now() - start };
-        },
-        { id: detailId, index },
-      );
-      samples.push({ ...timing, keyboard });
-      await expect(detail).toHaveText(`Command ${index}`);
-      await expect(originalDetail).toHaveText(`Command ${index}`);
-    }
+    const samples = await sampleJournalEmbedding(page, detail, originalDetail, detailId);
     console.log(`journal embedding ${browserName} repeat=${repeat} ${JSON.stringify(samples)}`);
     expect(samples.map(({ command }) => command).sort((a, b) => a - b)[2]).toBeLessThan(25);
     expect(samples.map(({ render }) => render).sort((a, b) => a - b)[2]).toBeLessThan(100);
-    await page.evaluate(() =>
-      (
-        window as unknown as { __rivtoDemo: JournalInspection }
-      ).__rivtoDemo.editor.history.stopCapturing(),
-    );
-    await detail.press("End");
-    await detail.press("y");
-    await expect(originalDetail).toHaveText("Command 4y");
-    await detail.press("Control+z");
-    await expect(originalDetail).toHaveText("Command 4");
-    await originalDetail.fill("Edited in the original branch");
-    await expect(detail).toHaveText("Edited in the original branch");
-    await today.getByRole("button", { name: "Edgeless", exact: true }).click();
-    await expect(region.locator("[data-block-id]")).toHaveCount(5);
-    await expect(detail).toHaveText("Edited in the original branch");
-    await page.evaluate(() =>
-      (
-        window as unknown as { __rivtoDemo: JournalInspection }
-      ).__rivtoDemo.editor.history.stopCapturing(),
-    );
-    const embeddedRoot = region.locator("[data-block-content]").first();
-    const rootText = await embeddedRoot.textContent();
-    await embeddedRoot.click();
-    await embeddedRoot.press("Control+End");
-    await embeddedRoot.press("z");
-    await expect(embeddedRoot).toHaveText(`${rootText}z`);
-    expect(
-      await page.evaluate(
-        (id) =>
-          (
-            window as unknown as { __rivtoDemo: JournalInspection }
-          ).__rivtoDemo.editor.blocks.getBlockNode(id)!.content,
-        target,
-      ),
-    ).toBe(`${rootText}z`);
-    await embeddedRoot.press("Control+z");
-    await expect(embeddedRoot).toHaveText(rootText!);
-    await today.getByRole("button", { name: "Page", exact: true }).click();
-    await expect(originalDetail).toHaveText("Edited in the original branch");
-    await expect(detail).toHaveText("Edited in the original branch");
+    await checkJournalEmbeddingModes(page, today, region, detail, originalDetail, target);
   });
 }
 
@@ -175,6 +1373,7 @@ for (const repeat of [0, 200]) {
     }) => {
       test.setTimeout(120_000);
       await page.goto(`/?test_features=1&repeat=${repeat}`);
+      await page.waitForFunction(() => "__rivtoDemo" in window);
       const today = page.locator('[data-journal-document="today"]');
       if (canvas) {
         await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -207,25 +1406,7 @@ for (const repeat of [0, 200]) {
           )?.getAttribute("role");
         }),
       ).toBe("region");
-      await content.click();
-      await content.press("End");
-      await content.press("Shift+Home");
-      const nativeText = await page.evaluate(() => window.getSelection()?.toString());
-      expect(nativeText?.length).toBeGreaterThan(0);
-      // Native selectionchange is delivered asynchronously after Shift+Home.
-      await expect
-        .poll(async () => {
-          const range = (await readSelection())?.blocks[0];
-          return range ? range.end - range.start : 0;
-        })
-        .toBe(nativeText!.length);
-      const textSelection = await readSelection();
-      expect(textSelection?.blocks).toHaveLength(1);
-      await edit.hover();
-      expect(await readSelection()).toEqual(textSelection);
-      expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(nativeText);
-      await content.hover();
-      expect(await readSelection()).toEqual(textSelection);
+      await checkEmbeddedTextSelection(page, content, edit, readSelection);
     });
   }
 }
@@ -242,26 +1423,9 @@ for (const [repeat, canvas] of [
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto(`/?test_features=1&repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
-    const ids = await page.evaluate(() => {
-      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-      const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!.id;
-      const before = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Start above the reference",
-      }).id;
-      const after = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Start below the reference",
-      }).id;
-      const child = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Ordinary child below the reference",
-      }).id;
-      editor.blocks.moveBlocks([before], embed, "before");
-      editor.blocks.moveBlocks([after], embed, "after");
-      return { embed, before, after, child };
-    });
+    const ids = await seedEmbeddingSelection(page);
     if (canvas) {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();
       const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
@@ -283,55 +1447,7 @@ for (const [repeat, canvas] of [
         });
       }, cardId);
     }
-    const embedding = today.locator(`[data-block-id="${ids.embed}"]`).first();
-    const body = embedding.locator(':scope > .rivto-block-slot[data-slot-position="body"]');
-    const readSelection = () =>
-      page.evaluate(() =>
-        (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo.editor.selection
-          .get()
-          ?.blocks.map(({ id }) => id),
-      );
-    for (const withChild of [false, true]) {
-      if (withChild) {
-        await page.evaluate(
-          ({ child, embed }) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.moveBlocks([child], embed, "inside"),
-          ids,
-        );
-      }
-      for (const fromAbove of [true, false]) {
-        const anchorId = fromAbove ? ids.before : ids.after;
-        const expected = fromAbove ? [ids.before, ids.embed] : [ids.embed, ids.after];
-        if (!fromAbove && withChild) {
-          expected.splice(1, 0, ids.child);
-        }
-        const anchor = today
-          .locator(`[data-block-id="${anchorId}"] > .rivto-block-row [data-block-content]`)
-          .first();
-        await body.scrollIntoViewIfNeeded();
-        const start = (await anchor.boundingBox())!;
-        const rect = (await body.boundingBox())!;
-        await page.mouse.move(start.x + 20, start.y + start.height / 2);
-        await page.mouse.down();
-        // The pointer crosses another view, but the gesture still belongs to
-        // the host. Its endpoint is the embedding, not nearby editable text.
-        for (const fraction of [0.75, 0.25]) {
-          await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height * fraction, {
-            steps: 10,
-          });
-          await expect.poll(readSelection).toEqual(expected);
-        }
-        await page.mouse.up();
-        await expect.poll(readSelection).toEqual(expected);
-        await page.evaluate(() =>
-          (
-            window as unknown as { __rivtoDemo: JournalInspection }
-          ).__rivtoDemo.editor.selection.clear(),
-        );
-      }
-    }
+    await checkEmbeddingDragSelection(page, today, ids);
   });
 }
 
@@ -340,6 +1456,7 @@ for (const canvas of [false, true]) {
     page,
   }) => {
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
     if (canvas) {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -370,6 +1487,7 @@ for (const canvas of [false, true]) {
     page,
   }) => {
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
     if (canvas) {
       await today.getByRole("button", { name: "Edgeless", exact: true }).click();
@@ -397,17 +1515,7 @@ for (const canvas of [false, true]) {
     await expect(region.locator("[data-block-content]")).toHaveText(
       "Nested branch one owns several Markdown children.",
     );
-    const spacing = await region.evaluate((element) => {
-      const block = element.querySelector<HTMLElement>(
-        ":scope > .rivto-virtual-tree > div > [data-virtual-block-id] > [data-block-id]",
-      )!;
-      const bottomGap =
-        element.getBoundingClientRect().bottom - block.getBoundingClientRect().bottom;
-      const padding = parseFloat(getComputedStyle(element).paddingBottom);
-      const margin = parseFloat(getComputedStyle(block).marginBottom);
-      return { bottomGap, expectedGap: padding + margin };
-    });
-    expect(spacing.bottomGap).toBeCloseTo(spacing.expectedGap, 0);
+    await checkCollapsedEmbeddingSpacing(region);
     const expand = region.getByRole("button", {
       name: "Expand block: Nested branch one owns several Markdown children.",
       exact: true,
@@ -448,26 +1556,7 @@ for (const canvas of [false, true]) {
       .locator(`:scope > ${BLOCK_ROW_SELECTOR} > [data-slot-position="right"]`)
       .getByRole("button", { name: "Edit embedding", exact: true });
     const settings = page.getByRole("dialog", { name: "Embedding settings" });
-    await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR}`).getByRole("textbox")).toHaveCount(
-      0,
-    );
-    await expect(host.locator(`:scope > ${BLOCK_ROW_SELECTOR} .rivto-embedding`)).toHaveText("");
-    await expect(
-      host.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`),
-    ).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(host.getByRole("region", { name: "Block editor" })).toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0)",
-    );
-    await host.scrollIntoViewIfNeeded();
-    await page.mouse.move(0, 0);
-    await expect(edit).toHaveCSS("opacity", "0");
-    const beforeHover = await host.boundingBox();
-    await host.hover();
-    await expect(edit).toHaveCSS("opacity", "1");
-    expect(await host.boundingBox()).toEqual(beforeHover);
-    await page.mouse.move(0, 0);
-    await expect(edit).toHaveCSS("opacity", "0");
+    await checkEmbeddingSettingsControl(page, host, edit);
     const readProps = () =>
       page.evaluate(
         (id) =>
@@ -476,58 +1565,8 @@ for (const canvas of [false, true]) {
             .blocks.getBlockNode(id)!.props,
         `${room}:embed-1`,
       );
-    const original = await readProps();
-    await edit.focus();
-    await expect(edit).toHaveCSS("opacity", "1");
-    await edit.press("Enter");
-    await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue(
-      "source",
-    );
-    await expect(settings.getByRole("textbox", { name: "Target block ID" })).toHaveValue(
-      `${room}:source-block`,
-    );
-    await settings.getByRole("textbox", { name: "Target document ID" }).fill("unsaved-document");
-    await settings.getByRole("textbox", { name: "Target block ID" }).fill("unsaved-block");
-    await settings.getByRole("textbox", { name: "Target block ID" }).press("Escape");
-    await expect(settings).toBeHidden();
-    expect(await readProps()).toEqual(original);
-    await edit.click();
-    await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue(
-      "source",
-    );
-    await settings.getByRole("textbox", { name: "Target document ID" }).fill(" references ");
-    await settings
-      .getByRole("textbox", { name: "Target block ID" })
-      .fill(` ${room}:reference-heading `);
-    expect(await readProps()).toEqual(original);
-    await page.evaluate(() =>
-      (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
-        .getEditor("references")!
-        .history.clear(),
-    );
-    await settings.getByRole("button", { name: "Save embedding" }).click();
-    await expect(settings).toBeHidden();
-    expect(await readProps()).toEqual({
-      targetDocumentId: "references",
-      targetBlockId: `${room}:reference-heading`,
-    });
-    await expect(
-      host.getByRole("region", { name: "Block editor" }).locator("[data-block-content]"),
-    ).toHaveText("Live source references");
-    await edit.click();
-    await expect(settings.getByRole("textbox", { name: "Target document ID" })).toHaveValue(
-      "references",
-    );
-    await settings.getByRole("textbox", { name: "Target block ID" }).press("Escape");
-    await page.evaluate(() =>
-      (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
-        .getEditor("references")!
-        .history.undo(),
-    );
-    expect(await readProps()).toEqual(original);
-    await expect(
-      host.getByRole("region", { name: "Block editor" }).locator("[data-block-content]").first(),
-    ).toHaveText("Source text");
+    const original = await checkEmbeddingSettingsCancel(edit, settings, room, readProps);
+    await checkEmbeddingSettingsSave(page, host, edit, settings, room, readProps, original);
   });
 }
 
@@ -556,16 +1595,7 @@ async function dragRow(
   const handle = source.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`);
   await handle.hover();
   // Keep the entire pointer path away from the page's autoscroll edge bands.
-  const sourceBounds = await source.boundingBox();
-  if (!sourceBounds) {
-    throw new Error("Expected source row geometry before scrolling");
-  }
-  await destination.evaluate((element, source) => {
-    const target = element.getBoundingClientRect();
-    const top = Math.min(source.y, target.top);
-    const bottom = Math.max(source.y + source.height, target.bottom);
-    window.scrollBy(0, (top + bottom - window.innerHeight) / 2);
-  }, sourceBounds);
+  await centerDragRows(source, destination);
   // Scrolling moves the row away from the pointer and hides its hover-only handle.
   await source.hover();
   await handle.hover();
@@ -709,46 +1739,11 @@ for (const [repeat, canvas] of [
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto(`/?test_features=1&repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
-    const { embedId, movedId, nextId } = await page.evaluate(() => {
-      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-      const embedId = editor.blocks.getBlocks().find((block) => block.type === "embedding")!.id;
-      const movedId = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Place below the embedding",
-      }).id;
-      editor.blocks.moveBlocks([movedId], embedId, "before");
-      const nextId = editor.blocks.insertBlock({
-        type: "columns",
-        children: [{ type: "columns-column" }],
-      }).id;
-      editor.blocks.moveBlocks([nextId], embedId, "after");
-      editor.history.clear();
-      return { embedId, movedId, nextId };
-    });
+    const { embedId, movedId, nextId } = await seedEmbeddingGap(page);
     if (canvas) {
-      await today.getByRole("button", { name: "Edgeless", exact: true }).click();
-      const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
-      for (let index = 0; index < 3; index++) {
-        await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
-      }
-      // Repeated cards can overlap after their content grows. Keep the tested
-      // card visible while retaining every stress card and the default layout.
-      const cardId = await today
-        .locator(`[data-block-id="${embedId}"]`)
-        .first()
-        .evaluate(
-          (element) =>
-            element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!,
-        );
-      await page.evaluate((id) => {
-        const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        editor.elements.updateElement(id, {
-          zIndex:
-            Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1,
-        });
-        editor.history.clear();
-      }, cardId);
+      await showEmbeddingGapOnCanvas(page, today, embedId);
     }
     const region = today.getByRole("region", { name: "Block editor" });
     const source = today.locator(`[data-block-id="${movedId}"] > ${BLOCK_ROW_SELECTOR}`);
@@ -768,70 +1763,15 @@ for (const [repeat, canvas] of [
     }
     const x = rect.x + (canvas ? 8.4 : 12);
     const line = today.locator(".rivto-block-drop-line:visible");
-    // Check the gap above the reference, then its bottom padding and the next
-    // container's edge. All of these belong to the enclosing document.
-    await page.mouse.move(x, rect.y - 1, { steps: 10 });
-    await expect(line).toHaveCount(1);
-    expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
-      false,
-    );
-    expect(Math.abs((await line.boundingBox())!.x - (rect.x + (canvas ? 8.4 : 12)))).toBeLessThan(
-      2,
-    );
-    // The reference's top edge sorts it; its row center may accept children.
-    await page.mouse.move(x, rect.y + 1);
-    await expect(line).toHaveCount(1);
-    expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
-      false,
-    );
+    await checkEmbeddingTopGap(page, line, x, rect.y);
     // Native pointer coordinates can be integral at canvas zoom; round away
     // from embedded content to stay inside the enclosing block's inset strip.
     const firstY = Math.ceil(content.y + content.height + 1);
-    for (let y = firstY; y <= after.y + 4; y += 2) {
-      await page.mouse.move(x, y);
-      await expect(line).toHaveCount(1);
-      expect(await line.evaluate((element) => Boolean(element.closest('[role="region"]')))).toBe(
-        false,
-      );
-      // Autoscroll can move the canvas during a sweep; compare the line with
-      // its current neighbors rather than their pre-gesture viewport positions.
-      await expect
-        .poll(() =>
-          line.evaluate(
-            (element, { embedId, nextId }) => {
-              const view = element.closest("[data-rivto-panel]")!;
-              const before = view
-                .querySelector(`[data-block-id="${embedId}"]`)!
-                .getBoundingClientRect();
-              const after = view
-                .querySelector(`[data-block-id="${nextId}"]`)!
-                .getBoundingClientRect();
-              const indicator = element.getBoundingClientRect();
-              return indicator.y + indicator.height / 2 - (before.bottom + after.top) / 2;
-            },
-            { embedId, nextId },
-          ),
-        )
-        .toBeCloseTo(0, 0);
-    }
+    await checkEmbeddingGapSweep(page, line, x, firstY, after.y + 4, embedId, nextId);
     // Release in the inner padding, rather than only testing the outermost edge.
     await page.mouse.move(x, firstY);
     await page.mouse.up();
-    const readPlacement = () =>
-      page.evaluate(
-        ({ embedId, movedId }) => {
-          const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-          const roots = editor.blocks.getRootIds();
-          return {
-            parent: editor.blocks.getParentId(movedId),
-            followsEmbedding: roots.indexOf(movedId) === roots.indexOf(embedId) + 1,
-          };
-        },
-        { embedId, movedId },
-      );
-    await expect.poll(readPlacement).toEqual({ parent: null, followsEmbedding: true });
-    await page.keyboard.press("Control+z");
-    await expect.poll(readPlacement).toEqual({ parent: null, followsEmbedding: false });
+    await checkEmbeddingGapPlacement(page, embedId, movedId);
   });
 }
 
@@ -847,48 +1787,11 @@ for (const [repeat, canvas] of [
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto(`/?test_features=1&repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
-    const ids = await page.evaluate(() => {
-      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-      const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!;
-      const source = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Drag into an outline gap",
-      }).id;
-      const upper = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Before the embedding",
-      }).id;
-      const lower = editor.blocks.insertBlock({
-        type: "columns",
-        children: [{ type: "columns-column" }],
-      }).id;
-      editor.blocks.moveBlocks([upper, source], embed.id, "before");
-      editor.blocks.moveBlocks([lower], embed.id, "after");
-      editor.history.clear();
-      return { source, upper, embed: embed.id, lower };
-    });
+    const ids = await seedIndentedEmbeddingGap(page);
     if (canvas) {
-      await today.getByRole("button", { name: "Edgeless", exact: true }).click();
-      const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
-      for (let index = 0; index < 3; index++) {
-        await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
-      }
-      const cardId = await today
-        .locator(`[data-block-id="${ids.embed}"]`)
-        .first()
-        .evaluate(
-          (element) =>
-            element.closest<HTMLElement>("[data-edgeless-object-id]")!.dataset.edgelessObjectId!,
-        );
-      await page.evaluate((id) => {
-        const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-        editor.elements.updateElement(id, {
-          zIndex:
-            Math.max(...editor.elements.getElementNodes().map((element) => element.zIndex)) + 1,
-        });
-        editor.history.clear();
-      }, cardId);
+      await showEmbeddingGapOnCanvas(page, today, ids.embed);
     }
     for (const [parentId, nextId] of [
       [ids.upper, ids.embed],
@@ -904,84 +1807,17 @@ for (const [repeat, canvas] of [
       const after = (await next.boundingBox())!;
       const scale = canvas ? 0.7 : 1;
       const line = today.locator(".rivto-block-drop-line:visible");
-      // Moving right across the same gap must turn its sibling line into an
-      // indented child line, even when the following block owns another view.
-      for (const y of [box.y + box.height - 1, (box.y + box.height + after.y) / 2, after.y + 1]) {
-        await page.mouse.move(box.x + 12 * scale, y, { steps: 10 });
-        await expect(line).toHaveCount(1);
-        expect(Math.abs((await line.boundingBox())!.x - (box.x + 12 * scale))).toBeLessThan(2);
-        await page.mouse.move(box.x + 38 * scale, y);
-        await expect(line).toHaveCount(1);
-        expect(Math.abs((await line.boundingBox())!.x - (box.x + 36 * scale))).toBeLessThan(2);
-        await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
-          "data-block-drop-active",
-          "true",
-        );
-        await expect(parent).not.toHaveAttribute("data-block-drop-active", "true");
-        await expect(parent.locator(`:scope > ${BLOCK_ROW_SELECTOR}`)).not.toHaveAttribute(
-          "data-block-drop-active",
-          "true",
-        );
-      }
+      await checkIndentedGapFeedback(page, parent, line, box, after, scale);
       await page.mouse.up();
-      await expect
-        .poll(() =>
-          page.evaluate(
-            (id) =>
-              (
-                window as unknown as {
-                  __rivtoDemo: JournalInspection;
-                }
-              ).__rivtoDemo.editor.blocks.getParentId(id),
-            ids.source,
-          ),
-        )
-        .toBe(parentId);
+      await expect.poll(() => readJournalBlockParent(page, ids.source)).toBe(parentId);
       await expect(
         parent.locator(`:scope > .rivto-block-children > [data-block-id="${ids.source}"]`),
       ).toBeVisible();
       if (parentId === ids.embed) {
-        const body = parent.locator(`:scope > ${BLOCK_SLOT_SELECTOR}[data-slot-position="body"]`);
-        // The reference has its own decoration; ordinary outline children
-        // below it must see the surrounding document's background instead.
-        await expect(parent).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-        await expect(body).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-        await expect(body).toHaveCSS("border-top-width", "1px");
-        await expect(parent).toHaveCSS("border-top-width", "0px");
-        await page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.selection.set({
-              type: "selection",
-              blocks: [{ id, start: 0, end: -1 }],
-              anchorBlockId: id,
-              focusBlockId: id,
-            }),
-          parentId,
-        );
-        await expect(parent).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-        await expect(body).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-        await page.evaluate(() =>
-          (
-            window as unknown as { __rivtoDemo: JournalInspection }
-          ).__rivtoDemo.editor.selection.clear(),
-        );
+        await checkEmbeddedChildDecoration(page, parent, parentId);
       }
       await page.keyboard.press("Control+z");
-      await expect
-        .poll(() =>
-          page.evaluate(
-            (id) =>
-              (
-                window as unknown as {
-                  __rivtoDemo: JournalInspection;
-                }
-              ).__rivtoDemo.editor.blocks.getParentId(id),
-            ids.source,
-          ),
-        )
-        .toBeNull();
+      await expect.poll(() => readJournalBlockParent(page, ids.source)).toBeNull();
     }
   });
 }
@@ -991,31 +1827,13 @@ for (const mode of ["Page", "Edgeless"] as const) {
     page,
   }) => {
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     const today = page.locator('[data-journal-document="today"]');
     const region = today.getByRole("region", { name: "Block editor" });
     await expect(region.locator("[data-block-id]")).toHaveCount(5);
-    const { embedId, targetId, childId, movedId } = await page.evaluate(() => {
-      const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-      const embed = editor.blocks.getBlocks().find((block) => block.type === "embedding")!;
-      const targetId = String(embed.props.targetBlockId);
-      const childId = editor.blocks.getBlockNode(targetId)!.childIds[0]!;
-      const moved = editor.blocks.insertBlock({
-        type: "paragraph",
-        content: "Drag into the source",
-      });
-      editor.blocks.moveBlocks([moved.id], embed.id, "before");
-      editor.history.stopCapturing();
-      return { embedId: embed.id, targetId, childId, movedId: moved.id };
-    });
+    const { embedId, targetId, childId, movedId } = await seedSameDocumentMove(page);
     if (mode === "Edgeless") {
-      await today.getByRole("button", { name: "Edgeless", exact: true }).click();
-      // Keep the reference header and source children visible together, using native canvas zoom.
-      // At 70%, Firefox scrolls the tall embedded subtree on source hover and clips the drop header.
-      const zoom = today.getByRole("toolbar", { name: "Canvas zoom" });
-      for (let index = 0; index < 5; index++) {
-        await zoom.getByRole("button", { name: "Zoom out", exact: true }).click();
-      }
-      await expect(zoom.getByRole("button", { name: "Reset zoom" })).toHaveText("50%");
+      await showSameDocumentMoveOnCanvas(today);
     }
     const outer = today.locator("[data-rivto-panel]").first();
     const header = outer.locator(`[data-block-id="${embedId}"] > ${BLOCK_ROW_SELECTOR}`);
@@ -1027,17 +1845,7 @@ for (const mode of ["Page", "Edgeless"] as const) {
       "true",
     );
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.getParentId(id),
-          movedId,
-        ),
-      )
-      .toBe(childId);
+    await expect.poll(() => readJournalBlockParent(page, movedId)).toBe(childId);
     await expect(region.locator(`[data-block-id="${movedId}"]`)).toHaveCount(1);
     await page.evaluate(() =>
       (
@@ -1052,59 +1860,16 @@ for (const mode of ["Page", "Edgeless"] as const) {
     );
     await expect(outer.locator(".rivto-block-drop-line:visible")).toBeVisible();
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.getParentId(id),
-          movedId,
-        ),
-      )
-      .toBeNull();
+    await expect.poll(() => readJournalBlockParent(page, movedId)).toBeNull();
     await expect(region.locator(`[data-block-id="${movedId}"]`)).toHaveCount(0);
-    await page.keyboard.press("Control+z");
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.getParentId(id),
-          movedId,
-        ),
-      )
-      .toBe(childId);
-    await page.keyboard.press("Control+Shift+z");
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.getParentId(id),
-          movedId,
-        ),
-      )
-      .toBeNull();
+    await checkSameDocumentMoveHistory(page, movedId, childId);
     // The original branch cannot be moved into a descendant displayed through its own reference.
     const original = outer.locator(`[data-block-id="${targetId}"]`).first();
     await dragRow(page, original.locator(`:scope > ${BLOCK_ROW_SELECTOR}`), destination);
     await expect(destination).not.toHaveAttribute("data-block-drop-active", "true");
     await expect(outer.locator(".rivto-block-drop-line:visible")).toHaveCount(0);
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (id) =>
-            (
-              window as unknown as { __rivtoDemo: JournalInspection }
-            ).__rivtoDemo.editor.blocks.getParentId(id),
-          targetId,
-        ),
-      )
-      .toBeNull();
+    await expect.poll(() => readJournalBlockParent(page, targetId)).toBeNull();
     await expect(region.locator("[data-block-id]")).toHaveCount(5);
   });
 }
@@ -1154,18 +1919,7 @@ test("references follow the same block into a new document identity without pers
 }) => {
   const room = await openDemo(page);
   const target = `${room}:source-block`;
-  await page.evaluate(async (blockId) => {
-    const { editor, panes } = (window as unknown as { __rivtoDocuments: DemoInspection })
-      .__rivtoDocuments;
-    const source = [...panes].find((pane) => pane.id === "source")!.reactEditor;
-    const snapshot = source.blocks.getBlock(blockId)!;
-    const inspection = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    inspection.storage.registerDocument("new-source");
-    const moved = await editor.acquireEditor("new-source");
-    (window as unknown as { __movedSource: typeof moved }).__movedSource = moved;
-    source.blocks.removeBlock(blockId);
-    moved.document.blocks.insertBlock(snapshot);
-  }, target);
+  await moveSourceToNewDocument(page, target);
   const content = page
     .getByRole("region", { name: "Block editor" })
     .first()
@@ -1215,16 +1969,7 @@ test("Enter in a protected embedding root inserts a child without mutating the h
   page,
 }) => {
   await openDemo(page);
-  await page.evaluate(() => {
-    const panes = [
-      ...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes,
-    ];
-    const source = panes.find((pane) => pane.id === "source")!.reactEditor;
-    const root = source.blocks.getRootIds()[0]!;
-    source.history.batchUpdates(() =>
-      source.blocks.getBlockNode(root)!.childIds.forEach((id) => source.blocks.removeBlock(id)),
-    );
-  });
+  await clearSourceChildren(page);
   const first = page.getByRole("region", { name: "Block editor" }).first();
   const content = first.locator("[data-block-content]").first();
   await content.click();
@@ -1474,7 +2219,6 @@ test("reference shell selection removes only the reference and collapse controls
 for (const repeat of [0, 200]) {
   test(`editing cost and lifecycle with repeat=${repeat}`, async ({ page, browserName }) => {
     const room = await openDemo(page, repeat);
-    const samples: { command: number; render: number; input: number; keyboard: number }[] = [];
     const content = page
       .getByRole("region", { name: "Block editor" })
       .first()
@@ -1491,49 +2235,7 @@ for (const repeat of [0, 200]) {
         return original(...args);
       };
     });
-    for (let index = 0; index < 5; index += 1) {
-      const inputStart = Date.now();
-      await content.fill(`Keyboard sample ${index}`);
-      await expect(
-        page.locator('[data-document-pane="source"] [data-block-content]').first(),
-      ).toHaveText(`Keyboard sample ${index}`);
-      const input = Date.now() - inputStart;
-      await content.press("End");
-      const keyboardStart = Date.now();
-      await content.press("x");
-      await expect(content).toHaveText(`Keyboard sample ${index}x`);
-      await expect(
-        page.locator('[data-document-pane="source"] [data-block-content]').first(),
-      ).toHaveText(`Keyboard sample ${index}x`);
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          ),
-      );
-      expect(
-        await content.evaluate((element) => element.ownerDocument.getSelection()?.focusOffset),
-      ).toBe(`Keyboard sample ${index}x`.length);
-      const keyboard = Date.now() - keyboardStart;
-      const timing = await page.evaluate(
-        async ({ target, index }) => {
-          const panes = [
-            ...(window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.panes,
-          ];
-          const source = panes.find((pane) => pane.id === "source")!.reactEditor;
-          const start = performance.now();
-          source.blocks.updateBlock(target, { content: `Command sample ${index}` });
-          const command = performance.now() - start;
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          );
-          return { command, render: performance.now() - start };
-        },
-        { target: `${room}:source-block`, index },
-      );
-      samples.push({ ...timing, input, keyboard });
-      await expect(content).toHaveText(`Command sample ${index}`);
-    }
+    const samples = await sampleEmbeddedEditing(page, content, room);
     expect(
       await page.evaluate(
         () => (window as unknown as { __documentSearches: number }).__documentSearches,
@@ -1595,26 +2297,7 @@ test("one host selection follows the clicked occurrence and source keyboard edit
   await expect(second).toHaveText("Source textx");
   const child = regions.nth(1).locator("[data-block-content]").nth(2);
   await child.click();
-  await child.press("Tab");
-  await expect
-    .poll(() =>
-      page.evaluate((id) => {
-        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-          .__rivtoDocuments;
-        return editor.getDocument("source")!.blocks.getParentId(`${id}:child-1`);
-      }, room),
-    )
-    .toBe(`${room}:child-0`);
-  await child.press("Shift+Tab");
-  await expect
-    .poll(() =>
-      page.evaluate((id) => {
-        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-          .__rivtoDocuments;
-        return editor.getDocument("source")!.blocks.getParentId(`${id}:child-1`);
-      }, room),
-    )
-    .toBe(`${room}:source-block`);
+  await checkEmbeddedIndentUndo(page, child, room);
   const host = page.locator('[data-document-pane="references"] [data-block-content]').first();
   await host.click();
   await host.press("End");
@@ -1665,13 +2348,7 @@ test("slash conversion and native clipboard paste use the source model in an emb
       }),
     )
     .toBe(10);
-  await content.evaluate((element) => {
-    const clipboardData = new DataTransfer();
-    clipboardData.setData("text/plain", "!");
-    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "clipboardData", { value: clipboardData });
-    element.dispatchEvent(event);
-  });
+  await pasteExclamation(content);
   await expect(content).toHaveText("Paste here!");
   await expect(
     page.locator('[data-document-pane="source"] [data-block-content]').first(),
@@ -1728,19 +2405,7 @@ for (const canvas of [false, true]) {
       .locator("[data-block-content]")
       .first();
     await content.click();
-    await page.evaluate((id) => {
-      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-        .__rivtoDocuments;
-      const source = editor.getEditor("source")!;
-      source.selection.set({
-        type: "selection",
-        blocks: [{ id, start: 0, end: -1 }],
-        anchorBlockId: id,
-        focusBlockId: id,
-      });
-      document.getSelection()?.removeAllRanges();
-      document.querySelector<HTMLElement>('[role="region"][aria-label="Block editor"]')!.focus();
-    }, `${room}:source-block`);
+    await selectEmbeddedRoot(page, `${room}:source-block`);
     await page.keyboard.press("Delete");
     await expect(content).toHaveText("Source text");
     await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(0);
@@ -1758,26 +2423,7 @@ for (const canvas of [false, true]) {
     await expect(page.getByRole("region", { name: "Block editor" })).toHaveCount(2);
     await page.keyboard.press("Control+Shift+z");
     await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
-    const outside = page
-      .locator('[data-document-pane="references"]')
-      .getByRole("button", { name: "Toggle mode", exact: true });
-    await outside.focus();
-    await page.evaluate(() =>
-      (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
-        .getEditor("source")!
-        .history.undo(),
-    );
-    await expect(content).toHaveText("Source text");
-    await expect(outside).toBeFocused();
-    await page.evaluate(
-      (id) =>
-        (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments.editor
-          .getEditor("source")!
-          .blocks.removeBlock(id),
-      `${room}:source-block`,
-    );
-    await expect(page.getByText("Referenced block was deleted.", { exact: true })).toHaveCount(2);
-    await expect(outside).toBeFocused();
+    await checkExternalFocusAfterSourceChanges(page, content, `${room}:source-block`);
   });
 }
 
@@ -1829,7 +2475,65 @@ test("document tabs share one editor cache and retain inactive documents without
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-/** Verifies shared editing, independent private documents, and lazy acquisition for two users. */
+/**
+ * Checks that one user edits a private document without loading the other user's document.
+ *
+ * @param page - User's page containing the document tabs.
+ * @param user - User identifier and private-document suffix.
+ * @param unopened - Other user's private document, expected to remain unloaded.
+ * @returns Resolves after checking the editor cache, channels, and unloaded subdocument.
+ */
+async function checkPrivateDocumentIsolation(
+  page: Page,
+  user: string,
+  unopened: string,
+): Promise<void> {
+  await page.getByRole("tab", { name: `private-${user}`, exact: true }).click();
+  await page
+    .locator(`[data-document-pane="private-${user}"] [data-block-content]`)
+    .first()
+    .fill(`Private edit ${user}`);
+  const state = await page.evaluate((unopened) => {
+    const info = (
+      window as unknown as {
+        __rivtoDocuments: DemoInspection & { channels: Map<string, number> };
+      }
+    ).__rivtoDocuments;
+    const panes = [...info.panes];
+    return {
+      oneEditorStorage: panes.every(
+        (pane) =>
+          info.editor.getEditor(pane.id) === pane.reactEditor &&
+          !("editorStorage" in pane.reactEditor),
+      ),
+      singleEditors: new Set(panes.map((pane) => pane.reactEditor)).size,
+      loaded: info.editor
+        .getDocuments()
+        .map((doc) => doc.id)
+        .sort(),
+      channels: [...info.channels.keys()].map((channel) => JSON.parse(channel)[1]),
+      unopenedLoaded: info.editor.getDocument(unopened) !== undefined,
+      unopenedSubdocument: [...info.registry.root.doc.getSubdocs()].find(
+        (doc) => JSON.parse(doc.guid)[2] === unopened,
+      )?.shouldLoad,
+    };
+  }, unopened);
+  expect(state.oneEditorStorage).toBe(true);
+  expect(state.singleEditors).toBe(3);
+  expect(state.loaded).toEqual([`private-${user}`, "references", "source"]);
+  expect(state.channels).not.toContain(unopened);
+  expect(state.unopenedLoaded).toBe(false);
+  expect(state.unopenedSubdocument).toBe(false);
+}
+
+/**
+ * Verifies shared editing, independent private documents, and lazy acquisition for two users.
+ *
+ * @param first - First user's browser page.
+ * @param second - Second user's browser page.
+ * @param route - Shared demo URL before its user parameters.
+ * @returns Resolves after verifying shared changes and private document isolation.
+ */
 async function checkTwoUsers(first: Page, second: Page, route: string): Promise<void> {
   await first.goto(`${route}&user=1`);
   await expect(first.getByRole("tab", { name: "private-1", exact: true })).toBeVisible();
@@ -1867,42 +2571,7 @@ async function checkTwoUsers(first: Page, second: Page, route: string): Promise<
     [first, "1", "private-2"],
     [second, "2", "private-1"],
   ] as const) {
-    await page.getByRole("tab", { name: `private-${user}`, exact: true }).click();
-    await page
-      .locator(`[data-document-pane="private-${user}"] [data-block-content]`)
-      .first()
-      .fill(`Private edit ${user}`);
-    const state = await page.evaluate((unopened) => {
-      const info = (
-        window as unknown as {
-          __rivtoDocuments: DemoInspection & { channels: Map<string, number> };
-        }
-      ).__rivtoDocuments;
-      const panes = [...info.panes];
-      return {
-        oneEditorStorage: panes.every(
-          (pane) =>
-            info.editor.getEditor(pane.id) === pane.reactEditor &&
-            !("editorStorage" in pane.reactEditor),
-        ),
-        singleEditors: new Set(panes.map((pane) => pane.reactEditor)).size,
-        loaded: info.editor
-          .getDocuments()
-          .map((doc) => doc.id)
-          .sort(),
-        channels: [...info.channels.keys()].map((channel) => JSON.parse(channel)[1]),
-        unopenedLoaded: info.editor.getDocument(unopened) !== undefined,
-        unopenedSubdocument: [...info.registry.root.doc.getSubdocs()].find(
-          (doc) => JSON.parse(doc.guid)[2] === unopened,
-        )?.shouldLoad,
-      };
-    }, unopened);
-    expect(state.oneEditorStorage).toBe(true);
-    expect(state.singleEditors).toBe(3);
-    expect(state.loaded).toEqual([`private-${user}`, "references", "source"]);
-    expect(state.channels).not.toContain(unopened);
-    expect(state.unopenedLoaded).toBe(false);
-    expect(state.unopenedSubdocument).toBe(false);
+    await checkPrivateDocumentIsolation(page, user, unopened);
   }
   await second.getByRole("button", { name: "Open private-1", exact: true }).click();
   await expect(
@@ -1954,12 +2623,7 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
 }) => {
   const room = await openDemo(page);
   const target = `${room}:source-block`;
-  await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const host = editor.getEditor("references")!;
-    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
-    host.blocks.setBlockProp(reference.id, "targetDocumentId", "");
-  });
+  await setEmbeddingTargetDocument(page, "");
   await expect(
     page
       .getByRole("region", { name: "Block editor" })
@@ -1967,12 +2631,7 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
       .locator("[data-block-content]")
       .first(),
   ).toHaveText("Source text");
-  await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const host = editor.getEditor("references")!;
-    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
-    host.blocks.setBlockProp(reference.id, "targetDocumentId", "source");
-  });
+  await setEmbeddingTargetDocument(page, "source");
 
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
@@ -1987,57 +2646,11 @@ test("qualified embeddings allow equal block IDs, show ambiguous fallback, and k
       exact: true,
     }),
   ).toHaveCount(0);
-  await page.evaluate(() => {
-    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const host = editor.getEditor("references")!;
-    const reference = host.blocks.getBlocks().find((block) => block.type === "embedding")!;
-    host.blocks.setBlockProp(reference.id, "targetDocumentId", "");
-  });
+  await setEmbeddingTargetDocument(page, "");
   await expect(embeds.first().locator("[data-block-content]").first()).toHaveText(
     "Same ID in references",
   );
-  await page.evaluate((id) => {
-    const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
-    const reference = editor
-      .getEditor("references")!
-      .blocks.getBlocks()
-      .find((block) => block.type === "embedding")!;
-    editor
-      .getEditor("references")!
-      .blocks.setBlockProp(reference.id, "targetDocumentId", "old-document");
-    if (!editor.getDocument("source")!.blocks.hasBlock(id)) {
-      throw new Error("Source must remain present");
-    }
-  }, target);
-  await expect(
-    page.getByText("Multiple documents contain this block; showing document references.", {
-      exact: true,
-    }),
-  ).toHaveCount(1);
-  await expect(embeds.first().locator("[data-block-content]").first()).toHaveText(
-    "Same ID in references",
-  );
-  await embeds.first().locator("[data-block-content]").first().fill("Edited fallback document");
-  expect(
-    await page.evaluate((id) => {
-      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-        .__rivtoDocuments;
-      return [
-        editor.getDocument("references")!.blocks.getBlockNode(id)?.content,
-        editor.getDocument("source")!.blocks.getBlockNode(id)?.content,
-      ];
-    }, target),
-  ).toEqual(["Edited fallback document", "Source text"]);
-  expect(
-    await page.evaluate(() => {
-      const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-        .__rivtoDocuments;
-      return editor
-        .getEditor("references")!
-        .blocks.getBlocks()
-        .find((block) => block.type === "embedding")!.props.targetDocumentId;
-    }),
-  ).toBe("old-document");
+  await checkAmbiguousReferenceFallback(page, embeds, target);
   await page.evaluate((id) => {
     const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection }).__rivtoDocuments;
     // An embedding may itself have the same local ID as its target in another document.
@@ -2063,6 +2676,7 @@ for (const repeat of [0, 200]) {
       test.setTimeout(120_000);
       page.setDefaultTimeout(10_000);
       await page.goto(`/?test_features=1&repeat=${repeat}`);
+      await page.waitForFunction(() => "__rivtoDemo" in window);
       const today = page.locator('[data-journal-document="today"]');
       const region = today.getByRole("region", { name: "Block editor" });
       await expect(region.locator("[data-block-id]")).toHaveCount(5, { timeout: 30_000 });
@@ -2074,84 +2688,12 @@ for (const repeat of [0, 200]) {
       const id = await embedded.getAttribute("data-block-id");
       const occurrences = today.locator(`[data-block-id="${id}"]`);
       await expect(occurrences).toHaveCount(2);
-      const samples = [];
-      for (let index = 0; index < 3; index += 1) {
-        const row = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
-        await row.hover();
-        const start = Date.now();
-        await row
-          .locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`)
-          .click({ button: "right" });
-        await expect(embedded).toHaveAttribute("data-block-selected", "true");
-        const timing = await page.evaluate(async () => {
-          const { editor } = (window as unknown as { __rivtoDemo: JournalInspection }).__rivtoDemo;
-          const selection = editor.selection.get()!;
-          editor.selection.clear();
-          const start = performance.now();
-          editor.selection.set(selection);
-          const command = performance.now() - start;
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          );
-          return { command, render: performance.now() - start };
-        });
-        samples.push({ ...timing, pointer: Date.now() - start });
-        await page.keyboard.press("Escape");
-      }
+      const samples = await sampleSharedSelection(page, embedded);
       console.log(
         `shared selection ${browserName} ${canvas ? "edgeless" : "page"} repeat=${repeat} ${JSON.stringify(samples)}`,
       );
-      for (const occurrence of await occurrences.all()) {
-        await expect(occurrence).toHaveAttribute("data-block-selected", "true");
-      }
-      await page.evaluate(() =>
-        (
-          window as unknown as { __rivtoDemo: JournalInspection }
-        ).__rivtoDemo.editor.selection.clear(),
-      );
-      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
-      const originalIndex = await occurrences.evaluateAll((elements) =>
-        elements.findIndex(
-          (element) => !element.closest('[role="region"][aria-label="Block editor"]'),
-        ),
-      );
-      expect(originalIndex).toBeGreaterThanOrEqual(0);
-      const originalRow = occurrences.nth(originalIndex).locator(`:scope > ${BLOCK_ROW_SELECTOR}`);
-      // Canvas cards can overlap the original; target its menu handler after focusing it.
-      const originalHandle = originalRow.locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`);
-      await originalHandle.focus();
-      await originalHandle.dispatchEvent("contextmenu", { button: 2 });
-      for (const occurrence of await occurrences.all()) {
-        await expect(occurrence).toHaveAttribute("data-block-selected", "true");
-      }
-      await page.keyboard.press("Escape");
-      const text = embedded.locator(`:scope > ${BLOCK_ROW_SELECTOR} [data-block-content]`).first();
-      if (canvas) {
-        // Focusing the original card can pan the embedded occurrence above the viewport.
-        const viewport = today.locator(".edgeless-viewport");
-        const view = (await viewport.boundingBox())!;
-        const target = (await text.boundingBox())!;
-        const offset = Math.max(0, view.y + 40 - target.y);
-        if (offset) {
-          await page.mouse.move(view.x + 20, view.y + 20);
-          await page.mouse.down({ button: "middle" });
-          await page.mouse.move(view.x + 20, view.y + 20 + offset, { steps: 5 });
-          await page.mouse.up({ button: "middle" });
-        }
-      }
-      await text.click();
-      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
-      expect(
-        await region.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
-      ).toBe(true);
-      await text.press("Home");
-      await text.press("Shift+ArrowRight");
-      await expect(today.locator("[data-block-selected]")).toHaveCount(0);
-      expect(
-        await region.evaluate((element) =>
-          element.contains(element.ownerDocument.getSelection()?.anchorNode ?? null),
-        ),
-      ).toBe(true);
+      await checkOriginalSharedSelection(page, today, occurrences);
+      await checkEmbeddedTextAfterSelection(page, today, region, embedded, canvas);
     });
   }
 }
@@ -2191,16 +2733,7 @@ for (const repeat of [0, 200]) {
         .locator(`[data-block-id="${childId}"]`)
         .filter({ hasText: "Unrelated host block" });
       await expect(unrelated).toHaveCount(1);
-      await page.evaluate((roomId) => {
-        const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-          .__rivtoDocuments;
-        editor.getEditor("source")!.selection.set({
-          type: "selection",
-          blocks: [0, 1].map((index) => ({ id: `${roomId}:child-${index}`, start: 0, end: -1 })),
-          anchorBlockId: `${roomId}:child-0`,
-          focusBlockId: `${roomId}:child-1`,
-        });
-      }, room);
+      await selectSourceChildren(page, room);
       for (const view of views) {
         await expect(view.locator("[data-block-selected]")).toHaveCount(2);
       }
@@ -2211,33 +2744,7 @@ for (const repeat of [0, 200]) {
         editor.getEditor("source")!.selection.clear();
       });
       await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-      for (const view of views) {
-        const row = view.locator(`[data-block-id="${childId}"] > ${BLOCK_ROW_SELECTOR}`);
-        await row.hover({ position: { x: 6, y: 6 } });
-        await row
-          .locator(`:scope > ${BLOCK_SLOT_SELECTOR} > .block-handle`)
-          .click({ button: "right" });
-        for (const occurrence of views) {
-          await expect(occurrence.locator(`[data-block-id="${childId}"]`)).toHaveAttribute(
-            "data-block-selected",
-            "true",
-          );
-        }
-        await expect(unrelated).not.toHaveAttribute("data-block-selected");
-        expect(
-          await page.evaluate(() => {
-            const { editor } = (window as unknown as { __rivtoDocuments: DemoInspection })
-              .__rivtoDocuments;
-            return editor.getEditor("references")!.selection.get();
-          }),
-        ).toBeUndefined();
-        await page.keyboard.press("Escape");
-        await row.locator("[data-block-content]").click({ position: { x: 10, y: 8 } });
-        await expect(page.locator("[data-block-selected]")).toHaveCount(0);
-        expect(
-          await view.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
-        ).toBe(true);
-      }
+      await checkCrossDocumentSelectionGestures(page, views, unrelated, childId);
     });
   }
 }

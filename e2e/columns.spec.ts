@@ -12,6 +12,7 @@ import type { DocumentEditorAPI } from "@chulane/rivto";
  */
 async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate((mode) => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -39,6 +40,61 @@ async function openUnequalColumns(page: Page, mode: "block" | "edgeless") {
     }
   }, mode);
   await page.locator(`[data-editor-mode="${mode}"]`).click();
+}
+
+/**
+ * Replaces the demo document with a columns board whose first column is empty.
+ *
+ * @param page - Browser page hosting the loaded demo editor.
+ * @returns Resolves after the document is replaced.
+ */
+async function prepareEmptyColumn(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
+    editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
+    // Measure column feedback in one layout, away from outer-page scroll edges.
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(board.id)!],
+      elements: [],
+    });
+  });
+}
+
+/**
+ * Seeds a column with a collapsed parent and a sibling without a collapse toggle.
+ *
+ * @param page - Browser page hosting the loaded demo editor.
+ * @returns Resolves after the board becomes the document's only root.
+ */
+async function prepareColumnHandles(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const editor = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI };
+      }
+    ).__rivtoDemo.editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
+    const column = board.children[0]!;
+    editor.blocks.removeBlocks(column.children.map((child) => child.id));
+    const parent = editor.blocks.insertBlock({
+      type: "paragraph",
+      content: "Collapsible",
+      children: [{ type: "paragraph", content: "Nested" }],
+    }).id;
+    const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
+    editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
+    editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
+    editor.load({
+      ...editor.dump(),
+      rootElementIds: [],
+      blocks: [editor.blocks.getBlock(board.id)!],
+      elements: [],
+    });
+  });
 }
 
 for (const mode of ["block", "edgeless"] as const) {
@@ -153,6 +209,7 @@ test("keeps nested blocks when settings remove a column and does not scroll hori
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -200,6 +257,7 @@ test("creates a writing block on empty-column click without retaining the empty 
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -231,19 +289,8 @@ test("creates a writing block on empty-column click without retaining the empty 
 
 test("aligns the inside-drop highlight with an empty column", async ({ page }) => {
   await page.goto("/?test_features=1");
-  await page.evaluate(() => {
-    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
-      .editor;
-    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
-    editor.blocks.removeBlocks(board.children[0]!.children.map((child) => child.id));
-    // Measure column feedback in one layout, away from outer-page scroll edges.
-    editor.load({
-      ...editor.dump(),
-      rootElementIds: [],
-      blocks: [editor.blocks.getBlock(board.id)!],
-      elements: [],
-    });
-  });
+  await page.waitForFunction(() => "__rivtoDemo" in window);
+  await prepareEmptyColumn(page);
 
   const board = page.locator('[data-block-type="columns"]').first();
   await board.scrollIntoViewIfNeeded();
@@ -290,30 +337,8 @@ test("aligns the inside-drop highlight with an empty column", async ({ page }) =
 
 test("aligns sibling drag handles when only one block has a collapse toggle", async ({ page }) => {
   await page.goto("/?test_features=1");
-  await page.evaluate(() => {
-    const editor = (
-      window as unknown as {
-        __rivtoDemo: { editor: DocumentEditorAPI };
-      }
-    ).__rivtoDemo.editor;
-    const board = editor.blocks.getBlocks().find((block) => block.type === "columns")!;
-    const column = board.children[0]!;
-    editor.blocks.removeBlocks(column.children.map((child) => child.id));
-    const parent = editor.blocks.insertBlock({
-      type: "paragraph",
-      content: "Collapsible",
-      children: [{ type: "paragraph", content: "Nested" }],
-    }).id;
-    const sibling = editor.blocks.insertBlock({ type: "paragraph", content: "Sibling" }).id;
-    editor.blocks.moveBlocks([parent, sibling], column.id, "inside");
-    editor.blocks.updateBlock(parent, { listProps: { collapsed: true } });
-    editor.load({
-      ...editor.dump(),
-      rootElementIds: [],
-      blocks: [editor.blocks.getBlock(board.id)!],
-      elements: [],
-    });
-  });
+  await page.waitForFunction(() => "__rivtoDemo" in window);
+  await prepareColumnHandles(page);
 
   const column = page.locator('[data-block-type="columns-column"]').first();
   const children = column.locator(":scope > .rivto-block-children > .rivto-block");

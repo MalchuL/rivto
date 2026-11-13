@@ -7,8 +7,9 @@
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
+import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
 import type { ReactPanelApi } from "../../../panels/types";
+import type { ReactEditorApi } from "../../../editor/types";
 import {
   BUILTIN_KEYMAP,
   firstKeyboardTarget,
@@ -25,17 +26,19 @@ export { SEPARATOR_BLOCK_TYPE } from "./constants";
 const SEPARATOR_BLOCK_CLASS = "rivto-separator-block";
 const SEPARATOR_LINE_CLASS = "rivto-separator-line";
 const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
-const SEPARATOR_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
 /**
  * Contentless divider renderer shared by page and nested edgeless block trees.
  *
+ * @param props - Stable block identity supplied by the editor.
+ * @param props.blockId - ID of the separator block.
  * @returns A three-row grid: an upward arrow, the rule, and a downward arrow.
  */
-export function SeparatorBlock() {
+export function SeparatorBlock({ blockId }: { readonly blockId: string }) {
+  const selectionProps = useBlockSelectionAnchor(blockId);
   return (
     <div
-      {...SEPARATOR_SELECTION_ATTRIBUTES}
+      {...selectionProps}
       className={`${SEPARATOR_BLOCK_CLASS} grid min-h-[21px] w-full grid-rows-[10px_1px_10px] place-items-center text-muted-foreground select-none`}
       data-separator-block="true"
       role="separator"
@@ -114,6 +117,67 @@ function insertSeparator(
 }
 
 /**
+ * Inserts a separator and focuses its new writing block when the panel is attached.
+ *
+ * @param reactPanel - Editor view receiving the inserted blocks.
+ * @param blockId - Active block used as the insertion point.
+ * @param writingFactory - Current factory for the continuation block.
+ * @returns After scheduling focus when insertion and root lookup succeed.
+ * @throws If a delegated document operation fails.
+ */
+function focusInsertedSeparator(
+  reactPanel: ReactPanelApi,
+  blockId: string,
+  writingFactory: BlockFactory,
+): void {
+  const writing = insertSeparator(reactPanel, blockId, separatorBlockFactory, writingFactory);
+  const root = reactPanel.getRoot();
+  if (writing && root) {
+    requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+  }
+}
+
+/**
+ * Registers the separator shortcut using the active panel and writing factory.
+ *
+ * @param editor - Keyboard registry and live default writing factory.
+ * @returns Disposer for the keyboard binding.
+ * @throws If keyboard registration fails.
+ */
+function registerSeparatorShortcut(
+  editor: Pick<ReactEditorApi, "keyboard" | "defaultWritingBlockFactory">,
+): () => void {
+  return editor.keyboard.register(
+    {
+      id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
+      keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
+      when: ({ raw: event }) => isEditableKeyboardEvent(event),
+    },
+    ({ reactPanel, root }) => {
+      const nativeSelection = reactPanel.selection.readDOM();
+      if (nativeSelection) {
+        reactPanel.selection.set(nativeSelection);
+      }
+      const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
+      if (!target) {
+        return false;
+      }
+      const writing = insertSeparator(
+        reactPanel,
+        target.blockId,
+        separatorBlockFactory,
+        editor.defaultWritingBlockFactory,
+      );
+      if (!writing) {
+        return false;
+      }
+      requestAnimationFrame(() => focusBlock(root, writing.id, 0));
+      return true;
+    },
+  );
+}
+
+/**
  * Installs the native separator block, its insertion actions, and its edgeless
  * partition role. The core model remains unaware of this React-owned feature.
  *
@@ -122,18 +186,6 @@ function insertSeparator(
 export const separatorBlockExtension = (): ReactEditorExtension => ({
   id: "block.separator",
   setup: (reactEditor) => {
-    const focusInserted = (reactPanel: ReactPanelApi, blockId: string): void => {
-      const writing = insertSeparator(
-        reactPanel,
-        blockId,
-        separatorBlockFactory,
-        reactEditor.defaultWritingBlockFactory,
-      );
-      const root = reactPanel.getRoot();
-      if (writing && root) {
-        requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-      }
-    };
     const disposers = [
       reactEditor.blockTypes.register({
         definition: {
@@ -155,36 +207,10 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
         title: "Separator",
         group: "Insert",
         keywords: ["divider", "split"],
-        execute: ({ blockId, reactPanel }) => focusInserted(reactPanel, blockId),
+        execute: ({ blockId, reactPanel }) =>
+          focusInsertedSeparator(reactPanel, blockId, reactEditor.defaultWritingBlockFactory),
       }),
-      reactEditor.keyboard.register(
-        {
-          id: KEYBOARD_BINDING_IDS.blockSeparatorCreate,
-          keys: BUILTIN_KEYMAP[KEYBOARD_BINDING_IDS.blockSeparatorCreate],
-          when: ({ raw: event }) => isEditableKeyboardEvent(event),
-        },
-        ({ reactPanel, root }) => {
-          const nativeSelection = reactPanel.selection.readDOM();
-          if (nativeSelection) {
-            reactPanel.selection.set(nativeSelection);
-          }
-          const target = firstKeyboardTarget(nativeSelection ?? reactPanel.selection.get());
-          if (!target) {
-            return false;
-          }
-          const writing = insertSeparator(
-            reactPanel,
-            target.blockId,
-            separatorBlockFactory,
-            reactEditor.defaultWritingBlockFactory,
-          );
-          if (!writing) {
-            return false;
-          }
-          requestAnimationFrame(() => focusBlock(root, writing.id, 0));
-          return true;
-        },
-      ),
+      registerSeparatorShortcut(reactEditor),
     ];
     return () => disposers.reverse().forEach((dispose) => dispose());
   },

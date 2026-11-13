@@ -11,7 +11,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Checkbox } from "../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { editorControlProps } from "../../constants";
-import type { ElementPropertiesProps } from "../../managers/elements/types";
+import type { ElementPropertiesProps } from "../../authoring";
 import { DEFAULT_FONTS } from "./presets";
 import type { EdgelessFontOption, TextHorizontalAlign, TextVerticalAlign } from "./types";
 import { ColorControl } from "../../components/edgeless/color-control";
@@ -118,6 +118,42 @@ function propertyControls({ elements, common, preview }: ElementPropertiesProps)
 }
 
 /**
+ * Renders horizontal and vertical alignment controls for selected visual elements.
+ *
+ * @param props - Same-type selection and shared property preview operations.
+ * @returns Alignment controls that preview changes through the host.
+ */
+function TextAlignmentControls(props: ElementPropertiesProps) {
+  const { common, preview } = props;
+  return (
+    <PropertyRow label="Align">
+      <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Horizontal text alignment">
+        {horizontalAlignments.map(({ value, label, icon }) => (
+          <EdgelessToolButton
+            key={value}
+            label={label}
+            icon={icon}
+            pressed={common("align") === value}
+            onClick={() => preview({ align: value })}
+          />
+        ))}
+      </span>
+      <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Vertical text alignment">
+        {verticalAlignments.map(({ value, label, icon }) => (
+          <EdgelessToolButton
+            key={value}
+            label={label}
+            icon={icon}
+            pressed={common("verticalAlign") === value}
+            onClick={() => preview({ verticalAlign: value })}
+          />
+        ))}
+      </span>
+    </PropertyRow>
+  );
+}
+
+/**
  * Renders the same-type multi-selection text property editor.
  * @param props - Selected snapshots and shared preview operations; connector adds label rotation.
  * @returns Text property rows inside the surface-owned right-side panel.
@@ -150,30 +186,7 @@ export function TextProperties(props: ElementPropertiesProps & { connector?: boo
           onChange={(fontSize) => preview({ fontSize })}
         />
       </PropertyRow>
-      <PropertyRow label="Align">
-        <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Horizontal text alignment">
-          {horizontalAlignments.map(({ value, label, icon }) => (
-            <EdgelessToolButton
-              key={value}
-              label={label}
-              icon={icon}
-              pressed={common("align") === value}
-              onClick={() => preview({ align: value })}
-            />
-          ))}
-        </span>
-        <span className={ALIGN_TOGGLES_CLASS} role="group" aria-label="Vertical text alignment">
-          {verticalAlignments.map(({ value, label, icon }) => (
-            <EdgelessToolButton
-              key={value}
-              label={label}
-              icon={icon}
-              pressed={common("verticalAlign") === value}
-              onClick={() => preview({ verticalAlign: value })}
-            />
-          ))}
-        </span>
-      </PropertyRow>
+      <TextAlignmentControls {...props} />
       {connector && (
         <PropertyRow label="Rotation">
           <PropertySelect
@@ -283,6 +296,31 @@ export function StickerProperties(props: ElementPropertiesProps) {
   );
 }
 /**
+ * Renders start and end marker controls for selected connectors.
+ *
+ * @param props - Same-type selection and shared property preview operations.
+ * @returns Endpoint controls that preview changes through the host.
+ */
+function ConnectorEndControls(props: ElementPropertiesProps) {
+  const { common, preview } = props;
+  return (
+    <PropertyRow label="Ends">
+      {(["startStyle", "endStyle"] as const).map((key) => (
+        <PropertySelect
+          key={key}
+          label={key === "startStyle" ? "Start endpoint" : "End endpoint"}
+          value={common(key)}
+          onChange={(style) => preview({ [key]: style })}
+        >
+          <NativeSelectOption value="none">None</NativeSelectOption>
+          <NativeSelectOption value="arrow">Arrow</NativeSelectOption>
+        </PropertySelect>
+      ))}
+    </PropertyRow>
+  );
+}
+
+/**
  * Connector route, stroke, endpoints, and text properties.
  * @param props - Same-type selection, mixed-value reader and local preview/commit callbacks.
  * @returns Property controls that preview through the supplied callbacks; the host owns commit and cancellation.
@@ -324,19 +362,7 @@ export function ConnectorProperties(props: ElementPropertiesProps) {
             <NativeSelectOption value="dashed-animated">Dashed animated</NativeSelectOption>
           </PropertySelect>
         </PropertyRow>
-        <PropertyRow label="Ends">
-          {(["startStyle", "endStyle"] as const).map((key) => (
-            <PropertySelect
-              key={key}
-              label={key === "startStyle" ? "Start endpoint" : "End endpoint"}
-              value={common(key)}
-              onChange={(style) => preview({ [key]: style })}
-            >
-              <NativeSelectOption value="none">None</NativeSelectOption>
-              <NativeSelectOption value="arrow">Arrow</NativeSelectOption>
-            </PropertySelect>
-          ))}
-        </PropertyRow>
+        <ConnectorEndControls {...props} />
       </PropertyGroup>
       <TextProperties {...props} connector />
     </>

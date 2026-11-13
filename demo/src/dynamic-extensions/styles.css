@@ -1,0 +1,40 @@
+.dynamic-block {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--rivto-block-selection-fill, #e8efff);
+}
+.dynamic-block button {
+  padding: 4px 8px;
+  border: 1px solid #657aa8;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+.dynamic-accordion-header,
+.dynamic-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dynamic-accordion-children {
+  min-height: 48px;
+  padding: var(--rivto-container-padding, 16px);
+  border: 1px dashed #657aa8;
+}
+.dynamic-note {
+  min-height: 36px;
+  outline-offset: -2px;
+  white-space: pre-wrap;
+}
+
+.dynamic-element {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 2px solid #657aa8;
+  background: #e8efff;
+  box-sizing: border-box;
+}

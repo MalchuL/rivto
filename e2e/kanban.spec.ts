@@ -8,6 +8,88 @@ const HANDLE_CLASS = "block-handle";
 const DROP_INDICATOR_SELECTOR = ".rivto-block-drop-line:visible";
 
 /**
+ * Seeds a Kanban board with three cards and optionally places it on the canvas.
+ *
+ * @param page - Demo page whose document will be replaced.
+ * @param mode - Surface on which the test will reorder cards.
+ * @returns Resolves after the fixture is ready and its history is cleared.
+ */
+async function prepareKanbanReorder(page: Page, mode: "block" | "edgeless"): Promise<void> {
+  await page.evaluate((mode) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
+    const column = board.children[0]!;
+    for (const content of ["Second card", "Third card"]) {
+      const id = editor.blocks.insertBlock(
+        { type: "paragraph", content },
+        editor.blocks.getInsertionDestinationAfter(board.id),
+      ).id;
+      editor.blocks.moveBlocks([id], column.id, "inside");
+    }
+    if (mode === "edgeless") {
+      editor.elements.insertElement({
+        type: "block",
+        zIndex: 0,
+        frame: { x: 20, y: 20, width: 950, height: 500 },
+        props: { startBlockId: board.id, endBlockId: board.id },
+      });
+    }
+    editor.history.clear();
+  }, mode);
+}
+
+/**
+ * Checks ordering and collapsed visibility of a populated column's add-card control.
+ *
+ * @param column - First Kanban column containing existing cards.
+ * @returns Resolves after two cards have been added and their controls verified.
+ */
+async function checkColumnAddCard(column: Locator): Promise<void> {
+  const addCard = column.getByRole("button", { name: "Add card to To do" });
+  await expect(addCard).toBeVisible();
+  await expect(
+    column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
+  ).toHaveCount(1);
+  await expect
+    .poll(() =>
+      column.evaluate((element) => {
+        const card = element.querySelector(
+          ":scope > .rivto-block-children > .rivto-kanban-card:last-of-type",
+        );
+        const button = element.querySelector(
+          ":scope > .rivto-block-children > .rivto-kanban-add-card",
+        );
+        const list = button?.parentElement;
+        return card && button && list
+          ? button.getBoundingClientRect().top -
+              card.getBoundingClientRect().bottom -
+              Number.parseFloat(getComputedStyle(list).rowGap)
+          : -1;
+      }),
+    )
+    .toBe(0);
+  const columnToggle = column.locator(
+    ':scope > .rivto-block-row :is([data-block-control="collapse"], [data-collapse-toggle])',
+  );
+  await columnToggle.click();
+  await expect(columnToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(addCard).toHaveCount(0);
+  await columnToggle.click();
+  await expect(addCard).toBeVisible();
+  for (const count of [2, 3]) {
+    await addCard.click();
+    await expect(
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
+    ).toHaveCount(count);
+    await expect(
+      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
+    ).toHaveCount(1);
+  }
+}
+
+/**
  * Moves a block through the pointer sensor into an explicitly declared region.
  * @param page - Browser page owning the editor.
  * @param source - Block subtree to move.
@@ -65,10 +147,69 @@ async function move(
   }
 }
 
+/**
+ * Exercises card and column moves in the expanded Kanban and checks collapse.
+ *
+ * @param page - Browser displaying the board.
+ * @param cards - Cards in the original first column.
+ * @param ids - Original card IDs in their initial order.
+ * @returns Resolves after the modal closes and its changes remain visible.
+ */
+async function checkExpandedKanban(
+  page: Page,
+  cards: Locator,
+  ids: (string | null)[],
+): Promise<void> {
+  const byId = (id: string | null) => page.locator(`[data-block-id="${id}"]`);
+  const rowById = (id: string | null) => byId(id).locator(`:scope > ${BLOCK_ROW_SELECTOR}`).first();
+  await page.getByRole("button", { name: "Expand Kanban", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "Expanded Kanban" });
+  await expect(modal).toBeVisible();
+  await expect(byId(ids[0]!)).toHaveCount(1);
+  await expect(modal.getByRole("combobox")).toHaveCount(0);
+  const progress = modal.locator('[data-block-type="kanban-column"]').nth(1);
+  await move(page, byId(ids[0]!), progress);
+  await expect(progress.locator(`[data-block-id="${ids[0]}"]`)).toHaveCount(1);
+  await move(page, byId(ids[0]!), rowById(ids[1]!), "before");
+  await expect(cards.first()).toHaveAttribute("data-block-id", ids[0]!);
+  const lanes = modal.locator(
+    '[data-block-type="kanban"] > div > [data-block-type="kanban-column"]',
+  );
+  const laneIds = await lanes.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute("data-block-id")),
+  );
+  await move(page, byId(laneIds[0]!), byId(laneIds[2]!), "after", "horizontal");
+  await expect(lanes.last()).toHaveAttribute("data-block-id", laneIds[0]!);
+  await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
+  await modal.getByRole("button", { name: "Add Kanban column" }).click();
+  await expect(lanes).toHaveCount(4);
+  await expect(lanes.last().getByLabel("Kanban column title")).toBeFocused();
+  await page.keyboard.type("Ideas ");
+  await expect(lanes.last().getByLabel("Kanban column title")).toContainText("Ideas");
+  await expect(
+    byId(laneIds[0]!).locator(
+      ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+    ),
+  ).toHaveCount(4);
+  await expect(
+    modal.locator('[data-slot-position="right"]').getByRole("button", { name: "Collapse Kanban" }),
+  ).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
+  await modal.getByRole("button", { name: "Collapse Kanban" }).click();
+  await expect(page.getByRole("dialog", { name: "Expanded Kanban" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand Kanban", exact: true })).toBeFocused();
+  await expect(
+    byId(laneIds[0]!).locator(
+      ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
+    ),
+  ).toHaveCount(4);
+}
+
 test("moves cards between columns, back to the outline, and into an empty column", async ({
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const columns = board.locator('[data-block-type="kanban-column"]');
@@ -92,6 +233,7 @@ test("moves cards between columns, back to the outline, and into an empty column
 
 test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -144,29 +286,8 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`reorders sibling cards from their outline edges in ${mode} mode`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/?test_features=1");
-    await page.evaluate((mode) => {
-      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
-        .__rivtoDemo.editor;
-      const board = editor.blocks.getBlocks().find((block) => block.type === "kanban")!;
-      editor.load({ ...editor.dump(), rootElementIds: [], blocks: [board], elements: [] });
-      const column = board.children[0]!;
-      for (const content of ["Second card", "Third card"]) {
-        const id = editor.blocks.insertBlock(
-          { type: "paragraph", content },
-          editor.blocks.getInsertionDestinationAfter(board.id),
-        ).id;
-        editor.blocks.moveBlocks([id], column.id, "inside");
-      }
-      if (mode === "edgeless") {
-        editor.elements.insertElement({
-          type: "block",
-          zIndex: 0,
-          frame: { x: 20, y: 20, width: 950, height: 500 },
-          props: { startBlockId: board.id, endBlockId: board.id },
-        });
-      }
-      editor.history.clear();
-    }, mode);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
+    await prepareKanbanReorder(page, mode);
     await page.locator(`[data-editor-mode="${mode}"]`).click();
     const column = page.locator('[data-block-type="kanban-column"]').first();
     const cards = column.locator(
@@ -194,49 +315,7 @@ for (const mode of ["block", "edgeless"] as const) {
       column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
     ).toHaveCount(1);
     await expect(column.getByLabel("4 cards", { exact: true })).toHaveText("4");
-    await page.getByRole("button", { name: "Expand Kanban", exact: true }).click();
-    const modal = page.getByRole("dialog", { name: "Expanded Kanban" });
-    await expect(modal).toBeVisible();
-    await expect(byId(ids[0]!)).toHaveCount(1);
-    await expect(modal.getByRole("combobox")).toHaveCount(0);
-    const progress = modal.locator('[data-block-type="kanban-column"]').nth(1);
-    await move(page, byId(ids[0]!), progress);
-    await expect(progress.locator(`[data-block-id="${ids[0]}"]`)).toHaveCount(1);
-    await move(page, byId(ids[0]!), rowById(ids[1]!), "before");
-    await expect(cards.first()).toHaveAttribute("data-block-id", ids[0]!);
-    const lanes = modal.locator(
-      '[data-block-type="kanban"] > div > [data-block-type="kanban-column"]',
-    );
-    const laneIds = await lanes.evaluateAll((nodes) =>
-      nodes.map((node) => node.getAttribute("data-block-id")),
-    );
-    await move(page, byId(laneIds[0]!), byId(laneIds[2]!), "after", "horizontal");
-    await expect(lanes.last()).toHaveAttribute("data-block-id", laneIds[0]!);
-    await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
-    await modal.getByRole("button", { name: "Add Kanban column" }).click();
-    await expect(lanes).toHaveCount(4);
-    await expect(lanes.last().getByLabel("Kanban column title")).toBeFocused();
-    await page.keyboard.type("Ideas ");
-    await expect(lanes.last().getByLabel("Kanban column title")).toContainText("Ideas");
-    await expect(
-      byId(laneIds[0]!).locator(
-        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
-      ),
-    ).toHaveCount(4);
-    await expect(
-      modal
-        .locator('[data-slot-position="right"]')
-        .getByRole("button", { name: "Collapse Kanban" }),
-    ).toBeVisible();
-    await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
-    await modal.getByRole("button", { name: "Collapse Kanban" }).click();
-    await expect(page.getByRole("dialog", { name: "Expanded Kanban" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Expand Kanban", exact: true })).toBeFocused();
-    await expect(
-      byId(laneIds[0]!).locator(
-        ':scope > .rivto-block-children > .rivto-kanban-card > [data-block-type="paragraph"]',
-      ),
-    ).toHaveCount(4);
+    await checkExpandedKanban(page, cards, ids);
   });
 }
 
@@ -244,6 +323,7 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const addColumn = board.getByRole("button", { name: "Add Kanban column" });
@@ -258,46 +338,7 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   await expect(addColumn).toBeVisible();
 
   const column = board.locator('[data-block-type="kanban-column"]').first();
-  const addCard = column.getByRole("button", { name: "Add card to To do" });
-  await expect(addCard).toBeVisible();
-  await expect(
-    column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
-  ).toHaveCount(1);
-  await expect
-    .poll(() =>
-      column.evaluate((element) => {
-        const card = element.querySelector(
-          ":scope > .rivto-block-children > .rivto-kanban-card:last-of-type",
-        );
-        const button = element.querySelector(
-          ":scope > .rivto-block-children > .rivto-kanban-add-card",
-        );
-        const list = button?.parentElement;
-        return card && button && list
-          ? button.getBoundingClientRect().top -
-              card.getBoundingClientRect().bottom -
-              Number.parseFloat(getComputedStyle(list).rowGap)
-          : -1;
-      }),
-    )
-    .toBe(0);
-  const columnToggle = column.locator(
-    ':scope > .rivto-block-row :is([data-block-control="collapse"], [data-collapse-toggle])',
-  );
-  await columnToggle.click();
-  await expect(columnToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(addCard).toHaveCount(0);
-  await columnToggle.click();
-  await expect(addCard).toBeVisible();
-  for (const count of [2, 3]) {
-    await addCard.click();
-    await expect(
-      column.locator(":scope > .rivto-block-children > .rivto-kanban-card > .rivto-block"),
-    ).toHaveCount(count);
-    await expect(
-      column.locator(":scope > .rivto-block-children > .rivto-kanban-add-card:last-child"),
-    ).toHaveCount(1);
-  }
+  await checkColumnAddCard(column);
 
   const emptyColumn = board.locator('[data-block-type="kanban-column"]').nth(1);
   const emptyAddCard = emptyColumn.getByRole("button", { name: "Add card to In progress" });
