@@ -19,7 +19,7 @@ function Note({ blockId }) {
     return null;
   }
   return h(BlockText, {
-    editing: editing.attributes,
+    attributes: editing.attributes,
     className: "dynamic-block dynamic-note",
     label: "Dynamic note",
   });

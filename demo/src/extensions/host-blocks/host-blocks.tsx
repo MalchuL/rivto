@@ -673,7 +673,7 @@ function MathBlock({ blockId }: { readonly blockId: string }) {
         <span>Results</span>
       </div>
       <BlockText
-        editing={editing.attributes}
+        attributes={editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
         label="Math source"
         spellCheck={false}

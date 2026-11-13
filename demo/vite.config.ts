@@ -2,6 +2,7 @@ import { localFileBridgePlugin } from "./local-file-bridge";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 import { reviewReportFilesPlugin } from "./review-report-files";
 
 export default defineConfig({
@@ -45,6 +46,18 @@ export default defineConfig({
         server.middlewares.use("/dynamic-sdk/authoring.js", (_request, response) => {
           response.setHeader("Content-Type", "text/javascript");
           response.end('export * from "/src/dynamic-authoring.ts";');
+        });
+        // These are independent browser modules; Vite must not transform their import map imports.
+        server.middlewares.use("/dynamic-extensions", (request, response, next) => {
+          const name = request.url?.split("?")[0];
+          if (!name || !/^\/[a-z0-9-]+\.js$/.test(name)) {
+            next();
+            return;
+          }
+          readFile(new URL(`./public/dynamic-extensions${name}`, import.meta.url)).then((code) => {
+            response.setHeader("Content-Type", "text/javascript");
+            response.end(code);
+          }, next);
         });
       },
     },

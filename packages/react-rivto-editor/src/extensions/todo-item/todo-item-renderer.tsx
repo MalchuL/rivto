@@ -95,7 +95,7 @@ export function TodoItem({
       </Button>
       <div className={TODO_BODY_CLASS}>
         <BlockText
-          editing={{
+          attributes={{
             ...editing.attributes,
             onInput: updateName,
             onCompositionEnd: finishComposition,

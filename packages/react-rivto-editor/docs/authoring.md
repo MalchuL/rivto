@@ -54,7 +54,7 @@ collaborative plain-text editor. Render those attributes through `BlockText`:
 
 ```tsx
 const editing = useBlockEditing(blockId);
-return <BlockText editing={editing.attributes} label="Note" />;
+return <BlockText attributes={editing.attributes} label="Note" />;
 ```
 
 `BlockText` supplies an accessible textbox role and name. Its `multiline` prop

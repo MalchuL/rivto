@@ -218,7 +218,7 @@ export function MarkdownContent({
   return (
     <div className={MARKDOWN_CONTENT_CLASS}>
       <BlockText
-        editing={editing.attributes}
+        attributes={editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_EDITOR_CLASS}`}
         label="Markdown block content"
         spellCheck

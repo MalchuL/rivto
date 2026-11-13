@@ -7,7 +7,7 @@ export interface BlockTextProps extends Omit<
   "children" | "contentEditable" | "onInput" | "onCompositionStart" | "onCompositionEnd"
 > {
   /** Attributes returned by useBlockEditing for this block. */
-  readonly editing: BlockTextEditingAttributes;
+  readonly attributes: BlockTextEditingAttributes;
   /** Accessible name of this text field. */
   readonly label: string;
   /** Whether the field is announced as multiline; defaults to true and does not restrict input. */
@@ -21,13 +21,13 @@ export interface BlockTextProps extends Omit<
  * not be supplied. Other native attributes configure the same editable element.
  *
  * @param props - Hook attributes, accessible name and native presentation.
- * @param props.editing - Attributes returned by useBlockEditing for this occurrence.
+ * @param props.attributes - Attributes returned by useBlockEditing for this occurrence.
  * @param props.label - Accessible name announced for the text field.
  * @param props.multiline - Whether to announce multiple lines; defaults to true and does not restrict input.
  * @returns One contenteditable textbox whose content is synchronized by the hook.
  */
-export function BlockText({ editing, label, multiline = true, ...props }: BlockTextProps) {
+export function BlockText({ attributes, label, multiline = true, ...props }: BlockTextProps) {
   return (
-    <div {...props} {...editing} role="textbox" aria-label={label} aria-multiline={multiline} />
+    <div {...props} {...attributes} role="textbox" aria-label={label} aria-multiline={multiline} />
   );
 }

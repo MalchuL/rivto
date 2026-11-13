@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { ElementRenderProps } from "../../authoring";
-import { editorControlProps } from "../../constants";
 import { elementControlProps } from "../../authoring/element-control";
 
 /**
@@ -63,7 +62,6 @@ export function RectangleShape(
       />
       {selected && !editing && !preview && (
         <circle
-          {...editorControlProps}
           {...elementControlProps<SVGCircleElement>((event) => {
             if (event.button !== 0) {
               return;

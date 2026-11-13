@@ -65,10 +65,15 @@ export type {
   ElementPropertiesProps,
   CreateElementInput,
 } from "../managers/elements/types";
+export { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 export type {
   BlockDefinition,
   ElementDefinition,
+  EditorBlock,
+  EditorBlockNode,
   EditorBlockInput,
+  EditorElementNode,
   EditorElementInput,
+  PanelAPI,
 } from "@chulane/rivto";
 export * from "./layout";

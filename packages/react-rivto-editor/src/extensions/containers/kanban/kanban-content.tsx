@@ -84,7 +84,7 @@ export function KanbanColumn({ blockId }: BlockLayoutProps) {
   return (
     <div className="rivto-kanban-column-header">
       <BlockText
-        editing={editing.attributes}
+        attributes={editing.attributes}
         className="rivto-kanban-column-title"
         label="Kanban column title"
       />

@@ -35,6 +35,7 @@ async function dragResizeHandle(page: Page, handle: Locator, dx: number): Promis
 for (const mode of ["block", "edgeless"]) {
   test(`Bento editing and layout in ${mode}`, async ({ page }) => {
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -109,6 +110,7 @@ for (const mode of ["block", "edgeless"]) {
 
 test("Bento edge resize freezes siblings until pointer release", async ({ page }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -164,6 +166,7 @@ test("Bento edge resize freezes siblings until pointer release", async ({ page }
 for (const edge of ["between", "under", "inside", "end-right", "end-under"] as const) {
   test(`Bento drag placement ${edge}`, async ({ page }) => {
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     await page.evaluate(() => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -236,6 +239,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -295,6 +299,7 @@ test("drags a page block into a bento as a tile and a tile back onto the page", 
 
 test("drops a page block into an empty Bento grid", async ({ page }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -328,6 +333,7 @@ test("drops a page block into an empty Bento grid", async ({ page }) => {
 
 test("Escape cancels a Bento resize while retaining its expanded panel", async ({ page }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;

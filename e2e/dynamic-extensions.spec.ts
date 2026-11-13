@@ -102,6 +102,10 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.up();
     await expect(counter).toHaveAttribute("data-block-selected", "true");
     await expect(button).toHaveText("Dynamic count: 2");
+  });
+
+  test(`selects container and status and edits text in ${mode}`, async ({ page }) => {
+    await openFixture(page, mode);
     const accordion = page.locator('[data-block-type="dynamic.accordion"]');
     const accordionHeader = accordion.locator(".dynamic-accordion-header");
     const accordionBox = (await accordionHeader.boundingBox())!;

@@ -69,6 +69,7 @@ test("moves cards between columns, back to the outline, and into an empty column
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const columns = board.locator('[data-block-type="kanban-column"]');
@@ -92,6 +93,7 @@ test("moves cards between columns, back to the outline, and into an empty column
 
 test("moves Kanban cards in edgeless mode", async ({ page }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await page.evaluate(() => {
     const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
       .editor;
@@ -144,6 +146,7 @@ for (const mode of ["block", "edgeless"] as const) {
   test(`reorders sibling cards from their outline edges in ${mode} mode`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/?test_features=1");
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     await page.evaluate((mode) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;
@@ -244,6 +247,7 @@ test("places Kanban add-card controls after cards and hides them while collapsed
   page,
 }) => {
   await page.goto("/?test_features=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   const board = page.locator('[data-block-type="kanban"]').first();
   await board.scrollIntoViewIfNeeded();
   const addColumn = board.getByRole("button", { name: "Add Kanban column" });

@@ -1,7 +1,7 @@
 import { VISUAL_TOOL_GROUPS, VISUAL_ELEMENT_TYPES } from "./constants";
 import { RECTANGLE_REMEMBERED_PROPERTIES } from "./remembered-properties";
 import type { ReactEditorApi } from "../../editor/types";
-import type { ReactElementRegistration } from "../../managers/elements/types";
+import type { ReactElementRegistration } from "../../authoring";
 import {
   connectorClipboardConverter,
   textElementClipboardConverter,

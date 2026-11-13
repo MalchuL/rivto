@@ -215,7 +215,7 @@ function ReviewBlock({
   return (
     <section className={REVIEW_BLOCK_CLASS} data-review-report={blockId}>
       <BlockText
-        editing={editing.attributes}
+        attributes={editing.attributes}
         className={REVIEW_PROBLEM_CLASS}
         label="Review problem"
         data-placeholder="Describe the problem"

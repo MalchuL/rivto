@@ -76,6 +76,7 @@ for (const [type, name] of [
 ]) {
   test(`copies and pastes a collapsed ${name} title in edgeless mode`, async ({ page }) => {
     await page.goto("/?test_features=1");
+    await expect(page.locator('[data-journal-document="today"] > .page-surface')).toBeVisible();
     await page.evaluate((type) => {
       const editor = (
         window as unknown as { __rivtoDemo: { editor: import("@chulane/rivto").DocumentEditorAPI } }

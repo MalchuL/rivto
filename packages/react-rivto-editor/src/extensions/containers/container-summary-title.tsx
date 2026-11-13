@@ -33,7 +33,7 @@ export function ContainerSummaryTitle({ blockId, name }: ContainerSummaryTitlePr
   const editing = useBlockEditing(blockId);
   return (
     <BlockText
-      editing={editing.attributes}
+      attributes={editing.attributes}
       className="rivto-container-summary-title"
       label={`${name} name`}
       data-placeholder={name}

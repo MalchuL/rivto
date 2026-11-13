@@ -7,17 +7,21 @@
  */
 import {
   bentoExtension,
-  BLOCK_TEXT_METADATA_KEY,
-  blockExtension,
   columnsExtension,
-  editorControlProps,
   kanbanExtension,
-  MarkdownContent,
   tableExtension,
+} from "@chulane/rivto-react";
+import {
+  BLOCK_TEXT_METADATA_KEY,
+  BlockSelectionButton,
+  blockExtension,
+  editorControlProps,
+  MarkdownContent,
+  useBlockContent,
   useBlockNode,
   usePanel,
   type ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import {
   useCallback,
   useRef,
@@ -32,7 +36,6 @@ import {
   sliderBlockDefinition,
 } from "./custom-block-definitions";
 import { hostBlockExtensions } from "../extensions/host-blocks";
-import { BlockSelectionButton, useBlockContent } from "@chulane/rivto-react/authoring";
 
 interface SliderProps {
   value: number;

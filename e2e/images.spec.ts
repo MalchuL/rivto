@@ -137,6 +137,7 @@ async function sendLocalImagePath(target: Locator, path: string): Promise<void> 
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
 });
 
 /**
@@ -537,6 +538,7 @@ for (const repeat of [0, 200]) {
     test(`drops a ${kind} into the gap between page blocks, repeat=${repeat}`, async ({ page }) => {
       if (repeat) {
         await page.goto(`/?repeat=${repeat}`);
+        await page.waitForFunction(() => "__rivtoDemo" in window);
       }
       const [first, second] = await createGapBlocks(page, repeat > 0);
       const following = page.locator(`[data-block-id="${second}"]`);
@@ -701,6 +703,7 @@ for (const repeat of [0, 200]) {
   }) => {
     if (repeat) {
       await page.goto(`/?repeat=${repeat}`);
+      await page.waitForFunction(() => "__rivtoDemo" in window);
     }
     const uri =
       "https://upload.wikimedia.org/wikipedia/commons/8/8c/Olga_alexandrovna_com_marida.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled";
@@ -748,6 +751,7 @@ for (const repeat of [false, true]) {
   }) => {
     if (repeat) {
       await page.goto("/?repeat=200");
+      await page.waitForFunction(() => "__rivtoDemo" in window);
     }
     await page.evaluate(() => {
       const demo = window as typeof window & {
@@ -982,6 +986,7 @@ for (const payload of ["addresses", "html", "files"] as const) {
     }) => {
       if (repeat) {
         await page.goto(`/?repeat=${repeat}`);
+        await page.waitForFunction(() => "__rivtoDemo" in window);
       }
       const uris = ["first.png", "second.png"].map((name) => new URL(`/${name}`, page.url()).href);
       await page.route(/\/(first|second)\.png$/, async (route) => {
@@ -1046,6 +1051,7 @@ for (const payload of ["uri-list", "plain", "html"] as const) {
     }) => {
       if (repeat) {
         await page.goto(`/?repeat=${repeat}`);
+        await page.waitForFunction(() => "__rivtoDemo" in window);
       }
       const imageUrl = new URL("/copied-image.png", page.url()).href;
       await page.route("**/copied-image.png", async (route) => {
@@ -1302,6 +1308,7 @@ for (const repeat of [0, 200]) {
   test(`canvas image resizes with a live preview, repeat=${repeat}`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto(`/?repeat=${repeat}`);
+    await page.waitForFunction(() => "__rivtoDemo" in window);
     await page.locator('[data-editor-mode="edgeless"]').click();
     await sendImage(page.locator(".edgeless-viewport").first(), "paste", true);
     const host = page.locator(IMAGE_ELEMENT_SELECTOR);
@@ -1359,6 +1366,7 @@ for (const repeat of [0, 200]) {
             params.set("imageFirst", "1");
           }
           await page.goto(`/?${params}`);
+          await page.waitForFunction(() => "__rivtoDemo" in window);
         }
         await page.evaluate(() => {
           const demo = window as unknown as {
@@ -1702,6 +1710,7 @@ test("unsupported binary copy observes a failed data read", async ({ page }) => 
 
 test("pastes images with only the image extension installed", async ({ page }) => {
   await page.goto("/?imageOnly=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
   await content.click();
   await page.keyboard.press("End");
@@ -1720,6 +1729,7 @@ test("pastes images with only the image extension installed", async ({ page }) =
 
 test("pastes generic files with only the file extension installed", async ({ page }) => {
   await page.goto("/?fileOnly=1");
+  await page.waitForFunction(() => "__rivtoDemo" in window);
   await sendFile(page.locator(".page-surface").first(), "paste", "file-only.txt");
   await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(1);
   await expect(page.locator(`${FILE_BLOCK_SELECTOR} ${FILE_NAME_SELECTOR}`)).toHaveText(

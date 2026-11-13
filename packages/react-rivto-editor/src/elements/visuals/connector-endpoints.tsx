@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { ElementRenderProps } from "../../authoring";
 import type { ConnectorEndpoint } from "./types";
-import { editorControlProps } from "../../constants";
+import { elementControlProps } from "../../authoring/element-control";
 
 /** Connector creation and reconnect gestures share the same canvas hit testing. */
 export const ConnectorInteractionContext = createContext<{
@@ -116,18 +116,16 @@ export function ConnectorEndpoints({
           return (
             <Button
               variant="ghost"
-              {...editorControlProps}
+              {...elementControlProps<HTMLButtonElement>((event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                moveEndpoint(key, event.nativeEvent);
+              })}
               key={key}
               className="edgeless-connector-endpoint border-0 bg-transparent hover:bg-transparent"
               data-edgeless-connector-endpoint={key}
               type="button"
               aria-label={`Reconnect ${key}`}
               style={{ left: point.x - element.frame.x, top: point.y - element.frame.y }}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                event.stopPropagation();
-                moveEndpoint(key, event.nativeEvent);
-              }}
               onPointerMove={(event) => {
                 if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
                   return;

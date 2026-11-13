@@ -44,6 +44,11 @@ export function createExtension() {
     render: Element,
     creation: {
       title: "Dynamic element",
+      icon: h(
+        "svg",
+        { width: 16, height: 16, viewBox: "0 0 16 16", fill: "none", "aria-hidden": true },
+        h("rect", { x: 2, y: 3, width: 12, height: 10, rx: 2, stroke: "currentColor" }),
+      ),
       create: () => ({ type: "dynamic.element", frame: { x: 0, y: 0, width: 160, height: 100 } }),
     },
   });

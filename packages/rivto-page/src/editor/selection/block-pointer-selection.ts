@@ -894,6 +894,24 @@ export class BlockPointerSelection {
       return "continue";
     }
     this.cancel();
+    this.toggleStructuralSelection(blockId);
+    root.ownerDocument.getSelection()?.removeAllRanges();
+    root.focus({ preventScroll: true });
+    if (control) {
+      // The browser may still send click after this configured modifier gesture.
+      this.suppressClickBlockId = blockId;
+    }
+    raw.preventDefault();
+    return "handled";
+  };
+
+  /**
+   * Toggles one block in the currently visible structural selection.
+   *
+   * @param blockId - Block to add or remove from selection.
+   * @returns Updates selection in canonical visible order, or clears it when empty.
+   */
+  private toggleStructuralSelection(blockId: string): void {
     const selection = this.editor.adapter.selection;
     const current = selection.get();
     const ids = new Set(
@@ -920,13 +938,5 @@ export class BlockPointerSelection {
     } else {
       selection.clear();
     }
-    root.ownerDocument.getSelection()?.removeAllRanges();
-    root.focus({ preventScroll: true });
-    if (control) {
-      // The browser may still send click after this configured modifier gesture.
-      this.suppressClickBlockId = blockId;
-    }
-    raw.preventDefault();
-    return "handled";
-  };
+  }
 }
