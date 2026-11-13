@@ -37,6 +37,40 @@ export default defineConfig({
     {
       name: "dynamic-authoring-entry",
       /**
+       * Adds the browser SDK entry only to the application build.
+       *
+       * Library fixtures provide their own single entry and may require an IIFE;
+       * merging the application entries into those builds makes Rollup reject them.
+       *
+       * @param config - Vite configuration including caller-provided build overrides.
+       * @param env - Current Vite command.
+       * @returns Application entry configuration, or undefined for library and non-build commands.
+       */
+      config(config, env) {
+        if (env.command !== "build" || config.build?.lib) {
+          return;
+        }
+        return {
+          build: {
+            rollupOptions: {
+              preserveEntrySignatures: "strict",
+              input: {
+                main: fileURLToPath(new URL("./index.html", import.meta.url)),
+                "dynamic-sdk/authoring": fileURLToPath(
+                  new URL("./src/dynamic-authoring.ts", import.meta.url),
+                ),
+              },
+              output: {
+                entryFileNames: (chunk: { name: string }) =>
+                  chunk.name === "dynamic-sdk/authoring"
+                    ? "dynamic-sdk/authoring.js"
+                    : "assets/[name]-[hash].js",
+              },
+            },
+          },
+        };
+      },
+      /**
        * Serves the authoring entry through Vite's shared development module graph.
        *
        * @param server - Development server receiving the stable browser SDK path.
@@ -155,23 +189,6 @@ export default defineConfig({
     // Source imports originate in two workspace packages. Force both to share
     // the demo's React runtime rather than following package-local symlinks.
     dedupe: ["react", "react-dom"],
-  },
-  build: {
-    rollupOptions: {
-      preserveEntrySignatures: "strict",
-      input: {
-        main: fileURLToPath(new URL("./index.html", import.meta.url)),
-        "dynamic-sdk/authoring": fileURLToPath(
-          new URL("./src/dynamic-authoring.ts", import.meta.url),
-        ),
-      },
-      output: {
-        entryFileNames: (chunk) =>
-          chunk.name === "dynamic-sdk/authoring"
-            ? "dynamic-sdk/authoring.js"
-            : "assets/[name]-[hash].js",
-      },
-    },
   },
   server: {
     // Polling keeps `pnpm demo` usable on machines whose shared inotify watcher

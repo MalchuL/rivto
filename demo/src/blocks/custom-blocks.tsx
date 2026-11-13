@@ -29,6 +29,7 @@ import {
   type ChangeEvent,
   type FocusEvent,
   type PointerEvent,
+  type RefObject,
 } from "react";
 import {
   COUNTER_BLOCK_TYPE,
@@ -54,44 +55,18 @@ export {
 } from "./custom-block-definitions";
 
 /**
- * Demo block with collaborative text and one validated range property.
+ * Creates pointer lifecycle callbacks for a slider's local draft.
  *
- * The thumb previews locally while dragging. The document, CRDT, and undo
- * history receive a single write when the pointer is released. Keyboard steps
- * still commit immediately.
- *
- * @param blockId - Stable ID of the slider block.
- * @returns The markdown body and range control, or null after deletion.
+ * @param draggingRef - Gesture state shared with the input callback.
+ * @param setDraftValue - Updates or clears the displayed preview.
+ * @param commitValue - Writes the final value through the block operation.
+ * @returns Callbacks for pointer start, completion and cancellation.
  */
-function SliderBlock({ blockId }: { readonly blockId: string }) {
-  const {
-    block,
-    operations: { setProp },
-  } = useBlockNode<SliderProps>(blockId);
-  const panel = usePanel();
-  const draggingRef = useRef(false);
-  const [draftValue, setDraftValue] = useState<number | null>(null);
-  const committedValue = block?.props.value ?? 50;
-  const value = draftValue ?? committedValue;
-
-  /**
-   * Writes the finished range into the block, skipping no-ops and mid-drag input.
-   *
-   * @param next - Value shown by the input when the gesture completed.
-   * @returns Nothing; the document is updated through `setProp`.
-   */
-  const commitValue = useCallback(
-    (next: number) => {
-      setDraftValue(null);
-      const current = panel.blocks.getBlockNode(blockId);
-      if (!current || next === (current.props.value ?? 50)) {
-        return;
-      }
-      setProp("value", next);
-    },
-    [panel, blockId, setProp],
-  );
-
+function sliderDragHandlers(
+  draggingRef: RefObject<boolean>,
+  setDraftValue: (value: number | null) => void,
+  commitValue: (value: number) => void,
+) {
   /**
    * Marks the current pointer gesture as an in-progress drag.
    *
@@ -101,24 +76,6 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
    */
   const beginDrag = () => {
     draggingRef.current = true;
-  };
-
-  /**
-   * Follows the thumb locally while dragging; keyboard changes write immediately.
-   *
-   * React `onChange` maps to the continuous `input` event, which would otherwise
-   * emit one CRDT update per pointer move.
-   *
-   * @param event - Native range `input` event.
-   * @returns Nothing; either draft state or the document property is updated.
-   */
-  const previewOrCommit = (event: ChangeEvent<HTMLInputElement>) => {
-    const next = Number(event.currentTarget.value);
-    if (draggingRef.current) {
-      setDraftValue(next);
-    } else {
-      commitValue(next);
-    }
   };
 
   /**
@@ -141,6 +98,87 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
     draggingRef.current = false;
     setDraftValue(null);
   };
+
+  return { beginDrag, finishDrag, discardDrag };
+}
+
+/**
+ * Keeps a slider preview local and commits completed changes through its block.
+ *
+ * The returned callbacks propagate failures from the property update.
+ *
+ * @param blockId - Stable block ID used to read the live value before writing.
+ * @param setProp - ID-bound operation that updates the slider value.
+ * @returns Draft value and input callbacks for this mounted slider.
+ * @throws If rendered outside a panel.
+ */
+function useSliderControl(blockId: string, setProp: (key: "value", value: number) => void) {
+  const panel = usePanel();
+  const draggingRef = useRef(false);
+  const [draftValue, setDraftValue] = useState<number | null>(null);
+  /**
+   * Writes the finished range into the block, skipping no-ops and mid-drag input.
+   *
+   * @param next - Value shown by the input when the gesture completed.
+   * @returns Nothing; the document is updated through `setProp`.
+   */
+  const commitValue = useCallback(
+    (next: number) => {
+      setDraftValue(null);
+      const current = panel.blocks.getBlockNode(blockId);
+      if (!current || next === (current.props.value ?? 50)) {
+        return;
+      }
+      setProp("value", next);
+    },
+    [panel, blockId, setProp],
+  );
+
+  /**
+   * Follows the thumb locally while dragging; keyboard changes write immediately.
+   *
+   * React `onChange` maps to the continuous `input` event, which would otherwise
+   * emit one CRDT update per pointer move.
+   *
+   * @param event - Native range `input` event.
+   * @returns Nothing; either draft state or the document property is updated.
+   */
+  const previewOrCommit = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.currentTarget.value);
+    if (draggingRef.current) {
+      setDraftValue(next);
+    } else {
+      commitValue(next);
+    }
+  };
+
+  return {
+    draftValue,
+    previewOrCommit,
+    ...sliderDragHandlers(draggingRef, setDraftValue, commitValue),
+  };
+}
+
+/**
+ * Demo block with collaborative text and one validated range property.
+ *
+ * The thumb previews locally while dragging. The document, CRDT, and undo
+ * history receive a single write when the pointer is released. Keyboard steps
+ * still commit immediately.
+ *
+ * @param blockId - Stable ID of the slider block.
+ * @returns The markdown body and range control, or null after deletion.
+ */
+function SliderBlock({ blockId }: { readonly blockId: string }) {
+  const {
+    block,
+    operations: { setProp },
+  } = useBlockNode<SliderProps>(blockId);
+  const { draftValue, beginDrag, previewOrCommit, finishDrag, discardDrag } = useSliderControl(
+    blockId,
+    setProp,
+  );
+  const value = draftValue ?? block?.props.value ?? 50;
 
   if (!block) {
     return null;

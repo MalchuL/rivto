@@ -57,28 +57,19 @@ export function useConnectorPreview({ element, operations }: ElementRenderProps)
 }
 
 /**
- * Selected connector endpoints use pointer capture and commit through the shared property API.
+ * Creates the pointer callbacks for one connector's endpoint controls.
  *
- * Pointer movement updates a local endpoint draft; release writes one property patch.
- * Pointer cancellation clears the draft and hover without persisting changes.
- * Transparent buttons preserve reconnect pointer targets without painting endpoint boxes.
- * A circular marker appears on hover or keyboard focus to show where a reconnect may begin.
- *
- * @param props - Connector snapshot, selection state and state from useConnectorPreview.
- * @param props.element - Persisted connector frame used to position the endpoint targets.
- * @param props.selected - Whether the endpoint controls should be mounted.
- * @param props.preview - Local endpoint drafts and panel-owned interaction services.
- * @returns Endpoint controls when selected, an empty fragment when unselected, or null without an interaction provider.
+ * @param elementId - Persisted connector receiving the final endpoint update.
+ * @param preview - Local draft and panel operations for this occurrence.
+ * @param interaction - Active canvas endpoint resolver and hover feedback.
+ * @returns Callbacks that preview movement and commit the released endpoint.
  */
-export function ConnectorEndpoints({
-  element,
-  selected,
-  preview,
-}: Omit<ElementRenderProps, "preview"> & { preview: ReturnType<typeof useConnectorPreview> }) {
-  const { interaction, source, target, setDraft, operations } = preview;
-  if (!interaction) {
-    return null;
-  }
+function connectorEndpointActions(
+  elementId: string,
+  preview: ReturnType<typeof useConnectorPreview>,
+  interaction: NonNullable<ReturnType<typeof useConnectorPreview>["interaction"]>,
+) {
+  const { setDraft, operations } = preview;
   const { resolveEndpoint, onReconnectHover } = interaction;
   /**
    * Previews one endpoint and its current attachment target without changing the document.
@@ -106,8 +97,36 @@ export function ConnectorEndpoints({
     const endpoint = resolveEndpoint(event.nativeEvent);
     setDraft(null);
     onReconnectHover(null);
-    operations.updateProperties(element.id, { [key]: endpoint });
+    operations.updateProperties(elementId, { [key]: endpoint });
   };
+  return { moveEndpoint, endEndpoint };
+}
+
+/**
+ * Selected connector endpoints use pointer capture and commit through the shared property API.
+ *
+ * Pointer movement updates a local endpoint draft; release writes one property patch.
+ * Pointer cancellation clears the draft and hover without persisting changes.
+ * Transparent buttons preserve reconnect pointer targets without painting endpoint boxes.
+ * A circular marker appears on hover or keyboard focus to show where a reconnect may begin.
+ *
+ * @param props - Connector snapshot, selection state and state from useConnectorPreview.
+ * @param props.element - Persisted connector frame used to position the endpoint targets.
+ * @param props.selected - Whether the endpoint controls should be mounted.
+ * @param props.preview - Local endpoint drafts and panel-owned interaction services.
+ * @returns Endpoint controls when selected, an empty fragment when unselected, or null without an interaction provider.
+ */
+export function ConnectorEndpoints({
+  element,
+  selected,
+  preview,
+}: Omit<ElementRenderProps, "preview"> & { preview: ReturnType<typeof useConnectorPreview> }) {
+  const { interaction, source, target, setDraft } = preview;
+  if (!interaction) {
+    return null;
+  }
+  const { onReconnectHover } = interaction;
+  const { moveEndpoint, endEndpoint } = connectorEndpointActions(element.id, preview, interaction);
   return (
     <>
       {selected &&

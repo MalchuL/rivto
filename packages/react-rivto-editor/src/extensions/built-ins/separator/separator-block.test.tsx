@@ -9,69 +9,67 @@ import {
 import { defaultWritingBlockExtension } from "../built-ins";
 import { SEPARATOR_BLOCK_TYPE, SeparatorBlock, separatorBlockExtension } from "./separator-block";
 
-describe("separator block extension", () => {
-  test("registers a contentless accessible separator renderer", async () => {
-    const editor = await createDocumentEditor({ registerWritingBlock: false });
-    const reactPanel = createReactEditor({
-      editor,
-      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
-    });
-
-    expect(editor.blockRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
-    expect(reactPanel.editor.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
-    const blockId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }).id;
-    const markup = renderToStaticMarkup(
-      <TestPanel panel={reactPanel}>
-        <SeparatorBlock blockId={blockId} />
-      </TestPanel>,
-    );
-    expect(markup).toContain('role="separator"');
-    expect(markup).toContain('data-separator-block="true"');
-    expect(markup).toContain('data-block-selection-anchor=""');
-
-    reactPanel.editor.destroy();
-    editor.destroy();
+test("separator block extension registers a contentless accessible separator renderer", async () => {
+  const editor = await createDocumentEditor({ registerWritingBlock: false });
+  const reactPanel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
   });
 
-  test("inserts a separator after content and focuses a new writing block", async () => {
-    const editor = await createDocumentEditor({ registerWritingBlock: false });
-    const reactPanel = createReactEditor({
-      editor,
-      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
-    });
-    const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" }).id;
-    reactPanel.selection.set(createCaretSelection(first, 0));
+  expect(editor.blockRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
+  expect(reactPanel.editor.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
+  const blockId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }).id;
+  const markup = renderToStaticMarkup(
+    <TestPanel panel={reactPanel}>
+      <SeparatorBlock blockId={blockId} />
+    </TestPanel>,
+  );
+  expect(markup).toContain('role="separator"');
+  expect(markup).toContain('data-separator-block="true"');
+  expect(markup).toContain('data-block-selection-anchor=""');
 
-    reactPanel.slashCommands.execute("block.separator.insert", { blockId: first });
+  reactPanel.editor.destroy();
+  editor.destroy();
+});
 
-    const roots = editor.blocks.getRootIds();
-    expect(roots).toHaveLength(3);
-    expect(editor.blocks.getBlockNode(roots[0]!)?.content).toBe("Keep me");
-    expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe(SEPARATOR_BLOCK_TYPE);
-    expect(editor.blocks.getBlockNode(roots[2]!)?.type).toBe("paragraph");
-    expect(editor.blocks.getBlockNode(roots[2]!)?.content).toBe("");
-
-    reactPanel.editor.destroy();
-    editor.destroy();
+test("separator block extension inserts a separator after content and focuses a new writing block", async () => {
+  const editor = await createDocumentEditor({ registerWritingBlock: false });
+  const reactPanel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
   });
+  const first = editor.blocks.insertBlock({ type: "paragraph", content: "Keep me" }).id;
+  reactPanel.selection.set(createCaretSelection(first, 0));
 
-  test("converts an empty leaf into a separator before inserting writing", async () => {
-    const editor = await createDocumentEditor({ registerWritingBlock: false });
-    const reactPanel = createReactEditor({
-      editor,
-      extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
-    });
-    const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
-    reactPanel.selection.set(createCaretSelection(empty, 0));
+  reactPanel.slashCommands.execute("block.separator.insert", { blockId: first });
 
-    reactPanel.slashCommands.execute("block.separator.insert", { blockId: empty });
+  const roots = editor.blocks.getRootIds();
+  expect(roots).toHaveLength(3);
+  expect(editor.blocks.getBlockNode(roots[0]!)?.content).toBe("Keep me");
+  expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+  expect(editor.blocks.getBlockNode(roots[2]!)?.type).toBe("paragraph");
+  expect(editor.blocks.getBlockNode(roots[2]!)?.content).toBe("");
 
-    expect(editor.blocks.getBlockNode(empty)?.type).toBe(SEPARATOR_BLOCK_TYPE);
-    const roots = editor.blocks.getRootIds();
-    expect(roots[0]).toBe(empty);
-    expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe("paragraph");
+  reactPanel.editor.destroy();
+  editor.destroy();
+});
 
-    reactPanel.editor.destroy();
-    editor.destroy();
+test("separator block extension converts an empty leaf into a separator before inserting writing", async () => {
+  const editor = await createDocumentEditor({ registerWritingBlock: false });
+  const reactPanel = createReactEditor({
+    editor,
+    extensions: [defaultWritingBlockExtension(), separatorBlockExtension()],
   });
+  const empty = editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
+  reactPanel.selection.set(createCaretSelection(empty, 0));
+
+  reactPanel.slashCommands.execute("block.separator.insert", { blockId: empty });
+
+  expect(editor.blocks.getBlockNode(empty)?.type).toBe(SEPARATOR_BLOCK_TYPE);
+  const roots = editor.blocks.getRootIds();
+  expect(roots[0]).toBe(empty);
+  expect(editor.blocks.getBlockNode(roots[1]!)?.type).toBe("paragraph");
+
+  reactPanel.editor.destroy();
+  editor.destroy();
 });

@@ -7,6 +7,14 @@ import {
   blockTypeSelector,
 } from "./dom-markers";
 
+/**
+ * Locates a character boundary in editable text in viewport coordinates.
+ *
+ * @param content - Editable block content.
+ * @param offset - Requested character offset, clamped to the text node.
+ * @returns The point at the requested boundary.
+ * @throws If the editable content has no text node.
+ */
 async function textPoint(content: Locator, offset: number): Promise<{ x: number; y: number }> {
   return content.evaluate((element, requestedOffset) => {
     const node = element.firstChild;
@@ -23,6 +31,12 @@ async function textPoint(content: Locator, offset: number): Promise<{ x: number;
   }, offset);
 }
 
+/**
+ * Reads the caret's text offset within one editable block.
+ *
+ * @param content - Editable block containing the caret.
+ * @returns The character offset, or -1 when the selection is elsewhere.
+ */
 async function caretOffset(content: Locator): Promise<number> {
   return content.evaluate((element) => {
     const selection = element.ownerDocument.getSelection();
@@ -34,6 +48,52 @@ async function caretOffset(content: Locator): Promise<number> {
     range.setEnd(selection.focusNode, selection.focusOffset);
     return range.toString().length;
   });
+}
+
+/**
+ * Captures the next copy event's portable and structured clipboard flavors.
+ *
+ * @param page - Browser page receiving the copy event.
+ * @returns Resolves after the one-shot listener is installed.
+ */
+async function captureMouseCopy(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.addEventListener(
+      "copy",
+      (event) => {
+        (
+          window as typeof window & {
+            mouseCopy?: { text: string; markdown: string; structured: string };
+          }
+        ).mouseCopy = {
+          text: event.clipboardData?.getData("text/plain") ?? "",
+          markdown: event.clipboardData?.getData("text/markdown") ?? "",
+          structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
+        };
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Selects text between two block offsets with the Shift+Alt pointer gesture.
+ *
+ * @param page - Browser receiving the keyboard and mouse input.
+ * @param contents - Ordered editable blocks containing the selection endpoints.
+ * @returns Resolves after both modifier keys are released.
+ */
+async function selectCrossBlockText(page: Page, contents: Locator): Promise<void> {
+  const start = await textPoint(contents.nth(0), 2);
+  const end = await textPoint(contents.nth(2), 8);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("Alt");
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 10 });
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await page.keyboard.up("Shift");
 }
 
 const structuredBundle = JSON.stringify({
@@ -194,23 +254,7 @@ test("copies a mouse text selection and pastes it inline", async ({ page }) => {
   const copiedText = await source.textContent();
   const targetText = await target.textContent();
   await source.selectText();
-  await page.evaluate(() => {
-    document.addEventListener(
-      "copy",
-      (event) => {
-        (
-          window as typeof window & {
-            mouseCopy?: { text: string; markdown: string; structured: string };
-          }
-        ).mouseCopy = {
-          text: event.clipboardData?.getData("text/plain") ?? "",
-          markdown: event.clipboardData?.getData("text/markdown") ?? "",
-          structured: event.clipboardData?.getData("application/x-rivto+json") ?? "",
-        };
-      },
-      { once: true },
-    );
-  });
+  await captureMouseCopy(page);
 
   await page.keyboard.press("Control+c");
   await expect
@@ -420,16 +464,7 @@ test("copies and pastes partial text across blocks with Shift+Alt", async ({ pag
   await contents.first().press("ArrowRight");
   await contents.first().press("ArrowRight");
   const selectedText = `${(await contents.nth(0).textContent())?.slice(2)}\n${await contents.nth(1).textContent()}\n${(await contents.nth(2).textContent())?.slice(0, 8)}`;
-  const start = await textPoint(contents.nth(0), 2);
-  const end = await textPoint(contents.nth(2), 8);
-  await page.keyboard.down("Shift");
-  await page.keyboard.down("Alt");
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(end.x, end.y, { steps: 10 });
-  await page.mouse.up();
-  await page.keyboard.up("Alt");
-  await page.keyboard.up("Shift");
+  await selectCrossBlockText(page, contents);
   await expect(page.locator(`${BLOCK_ID_SELECTOR}[data-block-selected]`)).toHaveCount(0);
 
   await page.evaluate(() => {

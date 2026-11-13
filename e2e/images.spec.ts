@@ -13,6 +13,293 @@ const FILE_ELEMENT_SELECTOR = '[data-edgeless-visual-kind="file"]';
 const FILE_NAME_SELECTOR = ".rivto-file-name";
 const FILE_TEXT_ICON_SELECTOR = ".lucide-file-text";
 
+/** Browser state exposed by the pending file-handler fixture. */
+interface PendingHandlerWindow {
+  /** Editor that owns the temporary file handler. */
+  __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+  /** Pending handler controls used by the test. */
+  pendingHandler: {
+    /** Whether the requested asynchronous stage has begun. */
+    started: boolean;
+    /**
+     * Releases the held upload or preparation stage.
+     *
+     * @returns Allows the pending handler operation to continue.
+     */
+    release: () => void;
+    /**
+     * Unregisters the handler while its operation is pending.
+     *
+     * @returns Removes the handler registration.
+     */
+    remove: () => void;
+  };
+}
+
+/**
+ * Pauses file preparation so the test can change its insertion destination.
+ *
+ * @param page - Demo page containing the file handler.
+ * @returns Resolves after the handler has been replaced.
+ */
+async function pauseFileReferencePreparation(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      /**
+       * Releases the file preparation paused by this fixture.
+       *
+       * @returns Allows preparation to continue after the destination changes.
+       */
+      releaseFileReference?: () => void;
+    };
+    const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler("file")!;
+    const prepare = handler.prepare;
+    Object.defineProperty(handler, "prepare", {
+      // Pause preparation until the test has changed the destination.
+      value: async (...args: Parameters<typeof prepare>) => {
+        await new Promise<void>((resolve) => {
+          demo.releaseFileReference = resolve;
+        });
+        return prepare(...args);
+      },
+    });
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+}
+
+/**
+ * Copies an image through the context menu and checks its clipboard MIME type.
+ *
+ * @param page - Browser with clipboard permissions.
+ * @param imageBlock - Rendered image block to copy.
+ * @returns Resolves when the image appears on the clipboard.
+ */
+async function checkImageCopy(page: Page, imageBlock: Locator): Promise<void> {
+  await imageBlock.locator(".rivto-image-frame").click({ button: "right" });
+  const copyImage = page.getByRole("menuitem", { name: "Copy image" });
+  await expect(copyImage).toBeVisible();
+  await copyImage.click();
+  await expect(copyImage).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const items = await navigator.clipboard.read();
+        return items.some(({ types }) => types.includes("image/png"));
+      }),
+    )
+    .toBe(true);
+}
+
+/**
+ * Resizes the dropped image and verifies double-click restores its natural size.
+ *
+ * @param page - Browser displaying the image block.
+ * @param imageBlock - Rendered image block with its resize control.
+ * @returns Resolves after both resize and reset have updated the document.
+ * @throws If the resize handle has no bounds.
+ */
+async function checkImageResizeAndReset(page: Page, imageBlock: Locator): Promise<void> {
+  await imageBlock.locator(".rivto-image-frame").hover();
+  const resize = imageBlock.locator(IMAGE_RESIZE_SELECTOR);
+  await expect(resize).toBeVisible();
+  const handle = await resize.boundingBox();
+  if (!handle) {
+    throw new Error("Image resize handle has no bounds");
+  }
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 54, handle.y + 24);
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        const id = document
+          .querySelector('[data-block-type="image"]')
+          ?.getAttribute("data-block-id");
+        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
+        return typeof props?.width === "number" && props.width > 24 && props.width === props.height;
+      }),
+    )
+    .toBe(true);
+  await imageBlock.locator(".rivto-image-frame").hover();
+  await resize.dblclick();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const demo = window as typeof window & {
+          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
+        };
+        const id = document
+          .querySelector('[data-block-type="image"]')
+          ?.getAttribute("data-block-id");
+        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
+        return [props?.width, props?.height];
+      }),
+    )
+    .toEqual([undefined, undefined]);
+}
+
+/**
+ * Dispatches two image files, HTML images, or image addresses as clipboard data.
+ *
+ * @param target - Surface receiving the paste event.
+ * @param uris - Image addresses used for text and HTML payloads.
+ * @param payload - Clipboard representation to construct.
+ * @returns Resolves after the paste event is dispatched.
+ */
+async function pasteMultipleImages(
+  target: Locator,
+  uris: string[],
+  payload: "addresses" | "html" | "files",
+): Promise<void> {
+  await target.evaluate(
+    (element, { values, payloadType }) => {
+      const data = new DataTransfer();
+      if (payloadType === "files") {
+        const bytes = Uint8Array.from(
+          atob(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+          ),
+          (character) => character.charCodeAt(0),
+        );
+        data.items.add(new File([bytes], "first.png", { type: "image/png" }));
+        data.items.add(new File([bytes], "second.png", { type: "image/png" }));
+      } else if (payloadType === "html") {
+        data.setData("text/html", values.map((uri) => `<img src="${uri}">`).join(""));
+      } else {
+        data.setData("text/plain", values.join("\n"));
+      }
+      const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    },
+    { values: uris, payloadType: payload },
+  );
+}
+
+/**
+ * Records which binary provider receives each attachment without changing storage.
+ *
+ * @param page - Demo page whose attachment handlers will be observed.
+ * @returns Resolves after both provider wrappers are installed.
+ */
+async function recordAttachmentWrites(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const demo = window as unknown as {
+      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
+      attachmentWrites: string[];
+    };
+    demo.attachmentWrites = [];
+    for (const id of ["image", "file"]) {
+      const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler(id)!;
+      const provider = handler.provider;
+      // Record which provider receives each file without changing its storage behavior.
+      Object.defineProperty(handler, "provider", {
+        value: {
+          ...provider,
+          write: async (blob: Blob, context: import("@chulane/rivto-react").BinaryWriteContext) => {
+            demo.attachmentWrites.push(`${id}:${context.name}`);
+            return provider.write(blob, context);
+          },
+        },
+      });
+    }
+  });
+}
+
+/**
+ * Sends an image and a text file together through the page surface.
+ *
+ * @param page - Browser hosting the page surface.
+ * @param eventType - Clipboard paste or pointer drop to dispatch.
+ * @returns Resolves after the mixed attachment event is dispatched.
+ */
+async function sendMixedFiles(page: Page, eventType: "paste" | "drop"): Promise<void> {
+  await page
+    .locator(".page-surface")
+    .first()
+    .evaluate((element, eventType) => {
+      const data = new DataTransfer();
+      const bytes = Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        ),
+        (character) => character.charCodeAt(0),
+      );
+      data.items.add(new File([bytes], "picture.png", { type: "image/png" }));
+      data.items.add(new File(["text"], "document.txt", { type: "text/plain" }));
+      const bounds = element
+        .querySelector<HTMLElement>(".rivto-block-row")!
+        .getBoundingClientRect();
+      const x = bounds.left + bounds.width / 2;
+      const y = bounds.bottom - 2;
+      const event =
+        eventType === "paste"
+          ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
+          : new DragEvent("drop", {
+              bubbles: true,
+              cancelable: true,
+              clientX: x,
+              clientY: y,
+            });
+      Object.defineProperty(event, eventType === "paste" ? "clipboardData" : "dataTransfer", {
+        value: data,
+      });
+      const target = eventType === "drop" ? (document.elementFromPoint(x, y) ?? element) : element;
+      target.dispatchEvent(event);
+    }, eventType);
+}
+
+/**
+ * Registers a file handler whose selected asynchronous stage can be paused.
+ *
+ * @param page - Demo page hosting the clipboard manager.
+ * @param stage - Upload or preparation step to pause.
+ * @returns Resolves after the temporary handler is registered.
+ */
+async function registerPendingFileHandler(
+  page: Page,
+  stage: "upload" | "preparation",
+): Promise<void> {
+  await page.evaluate((pendingStage) => {
+    const host = window as unknown as PendingHandlerWindow;
+    // Hold the selected stage until the test removes its handler.
+    const state = { started: false, release: () => {}, remove: () => {} };
+    const pending = new Promise<void>((resolve) => {
+      state.release = resolve;
+    });
+    state.remove = host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
+      id: "pending-handler",
+      provider: {
+        // Hold upload only when this test is exercising handler removal during storage.
+        write: async () => {
+          if (pendingStage === "upload") {
+            state.started = true;
+            await pending;
+          }
+          return "data:text/plain,content";
+        },
+        read: async () => undefined,
+      },
+      // Claim only the test file, leaving other files to existing handlers.
+      matches: ({ reference }) => reference.name === "pending-handler.txt",
+      // Hold preparation separately when that is the selected test stage.
+      prepare: async ({ reference }) => {
+        if (pendingStage === "preparation") {
+          state.started = true;
+          await pending;
+        }
+        return { kind: "block", type: "file", props: { ...reference } };
+      },
+    });
+    host.pendingHandler = state;
+  }, stage);
+}
+
 /**
  * Dispatches one tiny valid PNG through a clipboard or drop event.
  *
@@ -848,61 +1135,9 @@ test("drops an image block and pastes an item-only clipboard image on canvas", a
     )
     .toMatch(/\.png$/);
   if (browserName === "chromium") {
-    await imageBlock.locator(".rivto-image-frame").click({ button: "right" });
-    const copyImage = page.getByRole("menuitem", { name: "Copy image" });
-    await expect(copyImage).toBeVisible();
-    await copyImage.click();
-    await expect(copyImage).toBeHidden();
-    await expect
-      .poll(() =>
-        page.evaluate(async () => {
-          const items = await navigator.clipboard.read();
-          return items.some(({ types }) => types.includes("image/png"));
-        }),
-      )
-      .toBe(true);
+    await checkImageCopy(page, imageBlock);
   }
-  await imageBlock.locator(".rivto-image-frame").hover();
-  const resize = imageBlock.locator(IMAGE_RESIZE_SELECTOR);
-  await expect(resize).toBeVisible();
-  const handle = await resize.boundingBox();
-  if (!handle) {
-    throw new Error("Image resize handle has no bounds");
-  }
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + 54, handle.y + 24);
-  await page.mouse.up();
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const demo = window as typeof window & {
-          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
-        };
-        const id = document
-          .querySelector('[data-block-type="image"]')
-          ?.getAttribute("data-block-id");
-        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
-        return typeof props?.width === "number" && props.width > 24 && props.width === props.height;
-      }),
-    )
-    .toBe(true);
-  await imageBlock.locator(".rivto-image-frame").hover();
-  await resize.dblclick();
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const demo = window as typeof window & {
-          __rivtoDemo?: { editor: import("@chulane/rivto").DocumentEditorAPI };
-        };
-        const id = document
-          .querySelector('[data-block-type="image"]')
-          ?.getAttribute("data-block-id");
-        const props = id ? demo.__rivtoDemo?.editor.blocks.getBlockNode(id)?.props : undefined;
-        return [props?.width, props?.height];
-      }),
-    )
-    .toEqual([undefined, undefined]);
+  await checkImageResizeAndReset(page, imageBlock);
 
   await page.locator('[data-editor-mode="edgeless"]').click();
   await sendImage(page.locator(".edgeless-viewport").first(), "paste", true);
@@ -1005,29 +1240,7 @@ for (const payload of ["addresses", "html", "files"] as const) {
         const target = page
           .locator(mode === "page" ? ".page-surface" : ".edgeless-viewport")
           .first();
-        await target.evaluate(
-          (element, { values, payloadType }) => {
-            const data = new DataTransfer();
-            if (payloadType === "files") {
-              const bytes = Uint8Array.from(
-                atob(
-                  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-                ),
-                (character) => character.charCodeAt(0),
-              );
-              data.items.add(new File([bytes], "first.png", { type: "image/png" }));
-              data.items.add(new File([bytes], "second.png", { type: "image/png" }));
-            } else if (payloadType === "html") {
-              data.setData("text/html", values.map((uri) => `<img src="${uri}">`).join(""));
-            } else {
-              data.setData("text/plain", values.join("\n"));
-            }
-            const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
-            Object.defineProperty(event, "clipboardData", { value: data });
-            element.dispatchEvent(event);
-          },
-          { values: uris, payloadType: payload },
-        );
+        await pasteMultipleImages(target, uris, payload);
         const images = page
           .locator(mode === "page" ? IMAGE_BLOCK_SELECTOR : IMAGE_ELEMENT_SELECTOR)
           .locator(".rivto-image");
@@ -1368,64 +1581,8 @@ for (const repeat of [0, 200]) {
           await page.goto(`/?${params}`);
           await page.waitForFunction(() => "__rivtoDemo" in window);
         }
-        await page.evaluate(() => {
-          const demo = window as unknown as {
-            __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
-            attachmentWrites: string[];
-          };
-          demo.attachmentWrites = [];
-          for (const id of ["image", "file"]) {
-            const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler(id)!;
-            const provider = handler.provider;
-            // Record which provider receives each file without changing its storage behavior.
-            Object.defineProperty(handler, "provider", {
-              value: {
-                ...provider,
-                write: async (
-                  blob: Blob,
-                  context: import("@chulane/rivto-react").BinaryWriteContext,
-                ) => {
-                  demo.attachmentWrites.push(`${id}:${context.name}`);
-                  return provider.write(blob, context);
-                },
-              },
-            });
-          }
-        });
-        await page
-          .locator(".page-surface")
-          .first()
-          .evaluate((element, eventType) => {
-            const data = new DataTransfer();
-            const bytes = Uint8Array.from(
-              atob(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-              ),
-              (character) => character.charCodeAt(0),
-            );
-            data.items.add(new File([bytes], "picture.png", { type: "image/png" }));
-            data.items.add(new File(["text"], "document.txt", { type: "text/plain" }));
-            const bounds = element
-              .querySelector<HTMLElement>(".rivto-block-row")!
-              .getBoundingClientRect();
-            const x = bounds.left + bounds.width / 2;
-            const y = bounds.bottom - 2;
-            const event =
-              eventType === "paste"
-                ? new ClipboardEvent("paste", { bubbles: true, cancelable: true })
-                : new DragEvent("drop", {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: x,
-                    clientY: y,
-                  });
-            Object.defineProperty(event, eventType === "paste" ? "clipboardData" : "dataTransfer", {
-              value: data,
-            });
-            const target =
-              eventType === "drop" ? (document.elementFromPoint(x, y) ?? element) : element;
-            target.dispatchEvent(event);
-          }, eventType);
+        await recordAttachmentWrites(page);
+        await sendMixedFiles(page, eventType);
         await expect(page.locator(IMAGE_BLOCK_SELECTOR)).toHaveCount(1);
         await expect(page.locator(FILE_BLOCK_SELECTOR)).toHaveCount(1);
         await expect
@@ -1542,29 +1699,7 @@ test("rejects cross-origin and unauthorized native file opening", async ({ reque
 
 test("preserves a changed destination while a file reference is prepared", async ({ page }) => {
   await page.locator(BLOCK_CONTENT_SELECTOR).first().waitFor();
-  await page.evaluate(() => {
-    const demo = window as unknown as {
-      __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
-      /**
-       * Releases the file preparation paused by this fixture.
-       *
-       * @returns Allows preparation to continue after the destination changes.
-       */
-      releaseFileReference?: () => void;
-    };
-    const handler = demo.__rivtoDemo.reactEditor.clipboard.getFileHandler("file")!;
-    const prepare = handler.prepare;
-    Object.defineProperty(handler, "prepare", {
-      // Pause preparation until the test has changed the destination.
-      value: async (...args: Parameters<typeof prepare>) => {
-        await new Promise<void>((resolve) => {
-          demo.releaseFileReference = resolve;
-        });
-        return prepare(...args);
-      },
-    });
-    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
-  });
+  await pauseFileReferencePreparation(page);
   const content = page.locator(BLOCK_CONTENT_SELECTOR).first();
   await content.click();
   await page.keyboard.press("End");
@@ -1739,57 +1874,7 @@ test("pastes generic files with only the file extension installed", async ({ pag
 
 for (const stage of ["upload", "preparation"] as const) {
   test(`does not insert a file when its handler is removed during ${stage}`, async ({ page }) => {
-    await page.evaluate((pendingStage) => {
-      const host = window as unknown as {
-        __rivtoDemo: { reactEditor: import("@chulane/rivto-react").ReactEditorApi };
-        pendingHandler: {
-          /** Whether the requested asynchronous stage has begun. */
-          started: boolean;
-          /**
-           * Releases the held upload or preparation stage.
-           *
-           * @returns Allows the pending handler operation to continue.
-           */
-          release: () => void;
-          /**
-           * Unregisters the handler while its operation is pending.
-           *
-           * @returns Removes the handler registration.
-           */
-          remove: () => void;
-        };
-      };
-      // Hold the selected stage until the test removes its handler.
-      const state = { started: false, release: () => {}, remove: () => {} };
-      const pending = new Promise<void>((resolve) => {
-        state.release = resolve;
-      });
-      state.remove = host.__rivtoDemo.reactEditor.clipboard.registerFileHandler({
-        id: "pending-handler",
-        provider: {
-          // Hold upload only when this test is exercising handler removal during storage.
-          write: async () => {
-            if (pendingStage === "upload") {
-              state.started = true;
-              await pending;
-            }
-            return "data:text/plain,content";
-          },
-          read: async () => undefined,
-        },
-        // Claim only the test file, leaving other files to existing handlers.
-        matches: ({ reference }) => reference.name === "pending-handler.txt",
-        // Hold preparation separately when that is the selected test stage.
-        prepare: async ({ reference }) => {
-          if (pendingStage === "preparation") {
-            state.started = true;
-            await pending;
-          }
-          return { kind: "block", type: "file", props: { ...reference } };
-        },
-      });
-      host.pendingHandler = state;
-    }, stage);
+    await registerPendingFileHandler(page, stage);
     await sendFile(page.locator(".page-surface").first(), "paste", "pending-handler.txt");
     await expect
       .poll(() =>
