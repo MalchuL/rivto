@@ -127,7 +127,7 @@ export function HtmlFrame({
         }
         title={frameName}
         name={frameName}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-forms"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
         style={style}
