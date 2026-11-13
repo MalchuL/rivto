@@ -11,3 +11,5 @@ test-results/
 /third-party/
 /.agents/skills/diagram-design
 .pnpm-store/
+
+/demo/public/dynamic-extensions/

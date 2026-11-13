@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/*.test.mjs tests/*.test.ts"
+    "test": "node --test --experimental-strip-types tests/*.test.mjs tests/*.test.ts",
+    "build:extensions": "node build-dynamic-extensions.mjs",
+    "predev": "pnpm build:extensions",
+    "prebuild": "pnpm build:extensions"
   },
   "dependencies": {
     "@chulane/crdt-doc": "workspace:*",

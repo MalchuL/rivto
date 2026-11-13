@@ -11,6 +11,50 @@ an outline, column, tile, cell or Edgeless card without learning its parent type
 Fix missing shared behavior in the primitive or interaction owner, rather than
 adding a renderer-specific handler or a list of container exceptions.
 
+## Mandatory block authoring checklist
+
+Before completing an implementation or review, check every item below against the
+actual block and its installed editor extensions. Mark an item not applicable only
+when the block does not have that capability; state any unverified behavior and
+its reason. For an implementation, leave focused regression coverage where the
+behavior can recur and follow `rivto-performance-testing`. A review-only task
+reports findings and missing evidence without changing code or requiring new tests.
+
+- [ ] **Selection and controls:** Identify the structural selection region, editable
+      text and independent controls. A contentless block uses `useBlockNode` and
+      `useBlockSelectionAnchor` on its whole selectable body; a plain click on blank
+      body space selects the block. Mark controls with `editorControlProps`. When a
+      control intentionally supports both click and selection drag, put
+      `BLOCK_SELECTION_ANCHOR_ATTRIBUTE` on that control too, respect
+      `event.defaultPrevented` and applicable selection modifiers, and read live data
+      in its callback. Verify ordinary click activates only the control, a drag
+      selects without activating it, modifier selection does not activate it, and
+      keyboard control operation still works. Preserve native gestures for controls
+      that do not opt into selection drag. Test in Page and Edgeless where supported.
+- [ ] **Visible selection:** For every opaque renderer, child surface and control
+      background, check that the actual selected block remains visibly highlighted.
+      Consume `--rivto-block-selection-fill` with the ordinary background as fallback
+      where the background would otherwise cover the shared fill; preserve text, icon
+      and control legibility. Verify rendered colors or pixels as well as selection
+      state, and restoration after deselection, including nested or colored content
+      when applicable. A selected DOM attribute alone is not visual evidence.
+- [ ] **Canonical children and collapse:** When the block owns child layout, use
+      `rivto-containers` and the existing Page primitives; render each canonical
+      child once through `BlockChildren`, never a second renderer tree or a parallel
+      child list. Review empty and populated drop regions, geometry versus movement
+      permission, persisted parent/order and undo. If collapsible, use the existing
+      collapse state and installed reconciliation: children remain in the document,
+      hidden descendants stop receiving selection/drop, and focus and selection are
+      reconciled on collapse and restored appropriately on expansion. Test real drop
+      and collapse/expand on affected surfaces, including empty and populated states.
+- [ ] **Text editing and accessibility:** For a custom plain-text editable, spread
+      `useBlockEditing` attributes on exactly one contenteditable and give it an
+      accessible name, `role="textbox"` and `aria-multiline` when it is multiline.
+      Keep React children out of the hook-owned editable; preserve its ref, input and
+      composition handlers and browser-owned text. Verify native text selection,
+      keyboard input, focus, IME composition, undo/redo and external updates as
+      applicable. Contentless blocks use a structural anchor, not a fake editable.
+
 ## Read the current owning path
 
 Paths below are relative to the repository root. Inspect the current implementation

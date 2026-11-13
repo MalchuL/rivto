@@ -14,6 +14,26 @@ Keep persisted hierarchy in document-model, user operations in core/panel manage
 concrete block definitions and UI in React extensions, and generic rendering,
 placement, hover and selection in `@chulane/rivto-page`.
 
+## Mandatory block and container checklist
+
+Complete the **Mandatory block authoring checklist** in
+[`rivto-blocks`](../rivto-blocks/SKILL.md#mandatory-block-authoring-checklist) for
+every container, including its controls, selection fill and any editable header.
+Record inapplicable items and unverified behavior with reasons. Additionally:
+
+- [ ] Check that the layout composes shared Page primitives and renders each
+      canonical child exactly once; renderer state never replaces document hierarchy.
+- [ ] Verify empty and populated receiving regions with real pointer drop, visible
+      feedback, committed parent/order and undo; check move permission separately
+      from drop geometry in Page and Edgeless where supported.
+- [ ] For collapsible containers, verify persisted children survive collapse,
+      hidden descendants cannot be selected or targeted, and selection/focus are
+      reconciled when hiding and appropriate after reopening. Include a selected child
+      and both empty and populated states.
+
+For implementation and regression coverage follow `rivto-performance-testing`;
+a review-only task reports findings and gaps without changing code or adding tests.
+
 ## Read the affected path
 
 Paths below are relative to the repository root. Inspect callers and current

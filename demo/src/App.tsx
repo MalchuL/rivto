@@ -1,5 +1,6 @@
 import { BLOCK_HANDLE_SELECTOR } from "../../packages/react-rivto-editor/src/components/block-handle/constants";
 import { paragraphBlockFactory, separatorBlockFactory } from "@chulane/rivto-react/block-factories";
+import { createDynamicExtensions } from "./dynamic-extensions/loader";
 import { mindmapExtension } from "./extensions/mindmap/mindmap";
 import { ElementRegistrationTest } from "./ElementRegistrationTest";
 import { EditorLifecycleTest } from "./EditorLifecycleTest";
@@ -633,6 +634,7 @@ async function createDemoEditor() {
           blockIdExtension(),
           blockNumberExtension(),
           ...customBlockExtensions,
+          ...createDynamicExtensions(),
           embeddingExtension(),
           ...demoReviewReports(),
         ],
@@ -1037,6 +1039,7 @@ async function createEmptyDemoEditor() {
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
+      ...createDynamicExtensions(),
       ...demoReviewReports(),
     ],
   });
@@ -1518,6 +1521,7 @@ async function createMultiEditor(
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
+      ...createDynamicExtensions(),
       ...demoReviewReports(),
     ],
   });
@@ -1776,6 +1780,7 @@ async function createSyncedPeer(
       blockIdExtension(),
       blockNumberExtension(),
       ...customBlockExtensions,
+      ...createDynamicExtensions(),
       ...demoReviewReports(),
     ],
   });
