@@ -13,3 +13,18 @@ it("excludes competing gestures and prevents stale release from cancelling a lat
   drag!();
   expect(pointer.acquire()).toBeDefined();
 });
+
+it("restores embedded frame interaction only when the owning gesture releases", () => {
+  const pointer = new BlockPointerOwnership();
+  const root = document.createElement("div");
+  const release = pointer.acquire(root)!;
+  expect(root.hasAttribute("data-rivto-pointer-active")).toBe(true);
+  expect(pointer.acquire(root)).toBeUndefined();
+  release();
+  expect(root.hasAttribute("data-rivto-pointer-active")).toBe(false);
+  const next = pointer.acquire(root)!;
+  release();
+  expect(root.hasAttribute("data-rivto-pointer-active")).toBe(true);
+  next();
+  expect(root.hasAttribute("data-rivto-pointer-active")).toBe(false);
+});

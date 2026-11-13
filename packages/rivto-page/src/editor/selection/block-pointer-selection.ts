@@ -566,7 +566,7 @@ export class BlockPointerSelection {
       crossBlock: false,
       wholeBlocks: false,
     };
-    this.releasePointer = this.editor.pointer.acquire();
+    this.releasePointer = this.editor.pointer.acquire(root);
     if (!this.releasePointer) {
       return "continue";
     }

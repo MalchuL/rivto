@@ -5,9 +5,12 @@
  */
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
-import { useReactPanel } from "../../../hooks/editor/use-react-panel";
+import { useBlockSelected } from "../../../hooks/blocks/use-block-selection";
+import { usePanel } from "../../../hooks/editor/use-panel";
+import { useEmbeddedContentContext } from "../../../hooks/editor/use-embedded-content-context";
+import type { EmbeddedContentContext } from "../../../components/embedded-content-context";
 import type { BlockSlotProps } from "../../../managers/surfaces/types";
-import { createStructuralSelection, type EditorBlockNode, type PanelAPI } from "@chulane/rivto";
+import type { EditorBlockNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
 import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
 import { HtmlPasteTarget, HtmlSlotEditButton, HtmlSourceEditor } from "./html-chrome";
@@ -18,7 +21,7 @@ import {
   replacedPropPatch,
   type HtmlBlockView,
   type HtmlDraft,
-  type HtmlFrameCommand,
+  type HtmlWidgetCommand,
 } from "../protocol/protocol";
 
 /** Panel operations needed to read and update HTML blocks. */
@@ -53,11 +56,11 @@ export function HtmlBlock({
   editingStore,
 }: { readonly blockId: string } & HtmlEditingProps) {
   const { block } = useBlockNode(blockId);
-  const panel = useReactPanel();
+  const panel = usePanel();
   const anchor = useBlockSelectionAnchor(blockId);
   const [editing, setEditing] = useHtmlEditing(editingStore, "block", blockId);
   const onCommand = useHtmlBlockCommand(blockId);
-  const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
+  const { node, context } = useHtmlBlockView(blockId, block);
   if (!block || !node) {
     return null;
   }
@@ -72,6 +75,7 @@ export function HtmlBlock({
       <HtmlBlockBody
         block={block}
         node={node}
+        context={context}
         label={label}
         editing={editing}
         onCommand={onCommand}
@@ -87,21 +91,30 @@ export function HtmlBlock({
 }
 
 /**
- * Applies iframe commands through the owning panel, including block selection.
+ * Builds a block snapshot with the current surface and selection state.
+ *
+ * @param blockId - Persisted block whose selection is observed.
+ * @param block - Current detached block snapshot, absent after deletion.
+ * @returns Stable document data and separately observed presentation context;
+ * the node is undefined when the block is absent.
+ */
+export function useHtmlBlockView(blockId: string, block: EditorBlockNode | undefined) {
+  const selected = useBlockSelected(blockId);
+  const context = useEmbeddedContentContext(selected);
+  const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
+  return { node, context };
+}
+
+/**
+ * Applies iframe writes through the owning panel without claiming native clicks.
  *
  * @param blockId - Persisted block receiving commands from its iframe.
  * @returns Stable callback that ignores a deleted block.
  */
-export function useHtmlBlockCommand(blockId: string): (command: HtmlFrameCommand) => void {
-  const panel = useReactPanel();
+export function useHtmlBlockCommand(blockId: string): (command: HtmlWidgetCommand) => void {
+  const panel = usePanel();
   return useCallback(
-    (command: HtmlFrameCommand) => {
-      if (command.kind === "pointerdown" && panel.blocks.getBlockNode(blockId)) {
-        panel.selection.set(createStructuralSelection([blockId]));
-      } else {
-        applyBlockCommand(panel, blockId, command);
-      }
-    },
+    (command: HtmlWidgetCommand) => applyBlockCommand(panel, blockId, command),
     [panel, blockId],
   );
 }
@@ -122,7 +135,9 @@ export function HtmlBlockEditSlot({ block, editingStore }: BlockSlotProps & Html
 /** Props for the preview, editor, or empty paste target. */
 interface HtmlBlockBodyProps {
   readonly block: EditorBlockNode;
-  readonly node: HtmlBlockView;
+  readonly node: Omit<HtmlBlockView, "context">;
+  /** Current surface and selection independent of block data. */
+  readonly context: EmbeddedContentContext;
   readonly label: string;
   readonly editing: boolean;
   /**
@@ -131,7 +146,7 @@ interface HtmlBlockBodyProps {
    * @param command - Command received from the iframe.
    * @returns The command has been applied when supported.
    */
-  readonly onCommand: (command: HtmlFrameCommand) => void;
+  readonly onCommand: (command: HtmlWidgetCommand) => void;
   /**
    * Stores HTML submitted through the empty paste target.
    *
@@ -160,6 +175,7 @@ interface HtmlBlockBodyProps {
  * @param props - Current block snapshot and the callbacks that write it.
  * @param props.block - Detached block node used to seed the editor.
  * @param props.node - Snapshot posted into the sandbox.
+ * @param props.context - Surface and selection state posted separately.
  * @param props.label - Accessible iframe name.
  * @param props.editing - Whether the source editor is open.
  * @param props.onCommand - Handles a write from the sandbox.
@@ -171,6 +187,7 @@ interface HtmlBlockBodyProps {
 function HtmlBlockBody({
   block,
   node,
+  context,
   label,
   editing,
   onCommand,
@@ -197,6 +214,7 @@ function HtmlBlockBody({
       frameName={label}
       source={block.content}
       node={node}
+      context={context}
       fit="auto"
       interactive
       onCommand={onCommand}
@@ -210,7 +228,7 @@ function HtmlBlockBody({
  * @param block - Detached block node from the editor.
  * @returns A plain snapshot safe to post into the sandbox.
  */
-export function toBlockView(block: EditorBlockNode): HtmlBlockView {
+export function toBlockView(block: EditorBlockNode): Omit<HtmlBlockView, "context"> {
   return {
     kind: "block",
     id: block.id,
@@ -237,7 +255,7 @@ export function toBlockView(block: EditorBlockNode): HtmlBlockView {
 export function applyBlockCommand(
   panel: HtmlBlockPanel,
   blockId: string,
-  command: HtmlFrameCommand,
+  command: HtmlWidgetCommand,
 ): void {
   if (command.kind === "pointerdown" || !panel.blocks.getBlockNode(blockId)) {
     return;

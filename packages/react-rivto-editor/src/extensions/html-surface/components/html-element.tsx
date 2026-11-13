@@ -10,6 +10,7 @@ import { resolveEdgelessPointerTarget } from "../../edgeless/edgeless-pointer-ta
 import type { ElementRenderProps } from "../../../managers/elements/types";
 import type { ElementSlotProps } from "../../../managers/surfaces/types";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
+import { useEmbeddedContentContext } from "../../../hooks/editor/use-embedded-content-context";
 import type { EditorElementNode, PanelAPI } from "@chulane/rivto";
 import { useCallback, useMemo } from "react";
 import { useHtmlEditing, type HtmlEditingStore } from "../hooks/use-html-editing";
@@ -21,7 +22,7 @@ import {
   replacedPropPatch,
   type HtmlDraft,
   type HtmlElementView,
-  type HtmlFrameCommand,
+  type HtmlWidgetCommand,
 } from "../protocol/protocol";
 
 /** Panel operations needed to read and update HTML elements. */
@@ -81,6 +82,7 @@ export function HtmlElementEditSlot({
  * @param props.element - Current element, including local property previews.
  * @param props.reactPanel - Panel used to update this element.
  * @param props.preview - True while the element is a detached placement ghost.
+ * @param props.selected - Whether the owning canvas element is selected.
  * @param props.operations - Panel-bound canvas selection operations.
  * @param props.editingStore - State shared with its slot in this extension installation.
  * @returns The sandbox or the source editor, filling the host frame.
@@ -89,24 +91,13 @@ export function HtmlElement({
   element,
   reactPanel,
   preview,
+  selected,
   operations,
   editingStore,
 }: ElementRenderProps & HtmlEditingProps) {
   const [editing, setEditing] = useHtmlEditing(editingStore, "element", element.id);
-  const node = useMemo(() => toElementView(element), [element]);
-  const onCommand = useCallback(
-    (command: HtmlFrameCommand) => {
-      if (preview) {
-        return;
-      }
-      if (command.kind === "pointerdown" && reactPanel.elements.getElementNode(element.id)) {
-        selectHtmlElement(operations, element.id, command.primary);
-      } else if (command.kind !== "pointerdown") {
-        applyElementCommand(reactPanel, element.id, command);
-      }
-    },
-    [preview, reactPanel, element.id, operations],
-  );
+  const { node, context } = useHtmlElementView(element, selected, preview);
+  const onCommand = useHtmlElementCommand(reactPanel, operations, element.id, preview);
   const label = readLabel(element.props, "HTML");
   const source = typeof element.props.html === "string" ? element.props.html : "";
   return (
@@ -126,6 +117,7 @@ export function HtmlElement({
           frameName={label}
           source={source}
           node={node}
+          context={context}
           fit="fill"
           interactive={!preview}
           onCommand={onCommand}
@@ -133,6 +125,50 @@ export function HtmlElement({
       )}
     </div>
   );
+}
+
+/**
+ * Routes widget notifications and writes to the owning canvas occurrence.
+ *
+ * @param panel - Borrowed operations for reading and updating elements.
+ * @param operations - Borrowed canvas selection and parent operations.
+ * @param id - Persisted element identity.
+ * @param preview - Whether this is a detached, noninteractive placement preview.
+ * @returns Stable callback that ignores commands from previews and deleted elements.
+ */
+function useHtmlElementCommand(
+  panel: HtmlElementPanel,
+  operations: Pick<ElementRenderProps["operations"], "getSelection" | "getParentId" | "select">,
+  id: string,
+  preview: boolean,
+): (command: HtmlWidgetCommand) => void {
+  return useCallback(
+    (command: HtmlWidgetCommand) => {
+      if (preview) {
+        return;
+      }
+      if (command.kind === "pointerdown" && panel.elements.getElementNode(id)) {
+        selectHtmlElement(operations, id, command.primary);
+      } else if (command.kind !== "pointerdown") {
+        applyElementCommand(panel, id, command);
+      }
+    },
+    [preview, panel, id, operations],
+  );
+}
+
+/**
+ * Builds an element snapshot with its current surface and selection state.
+ *
+ * @param element - Detached element or placement preview supplied by the host.
+ * @param selected - Whether the canvas selection includes the element.
+ * @param preview - Whether the element is an uncommitted placement preview.
+ * @returns Stable document data and separately observed presentation context.
+ */
+function useHtmlElementView(element: EditorElementNode, selected: boolean, preview: boolean) {
+  const context = useEmbeddedContentContext(selected, preview);
+  const node = useMemo(() => toElementView(element), [element]);
+  return { node, context };
 }
 
 /**
@@ -174,7 +210,7 @@ function selectHtmlElement(
  * @param element - Detached element node from the canvas.
  * @returns A plain snapshot safe to post into the sandbox.
  */
-function toElementView(element: EditorElementNode): HtmlElementView {
+function toElementView(element: EditorElementNode): Omit<HtmlElementView, "context"> {
   return {
     kind: "element",
     id: element.id,
@@ -205,7 +241,7 @@ function toElementView(element: EditorElementNode): HtmlElementView {
 function applyElementCommand(
   panel: HtmlElementPanel,
   elementId: string,
-  command: HtmlFrameCommand,
+  command: HtmlWidgetCommand,
 ): void {
   if (!panel.elements.getElementNode(elementId)) {
     return;

@@ -86,6 +86,16 @@
   justify-self: start;
 }
 
+.html-frame-container {
+  position: relative;
+  min-width: 0;
+}
+
+.html-frame-container-fill {
+  flex: 1;
+  min-height: 0;
+}
+
 .html-surface-frame {
   width: 100%;
   border: 0;
