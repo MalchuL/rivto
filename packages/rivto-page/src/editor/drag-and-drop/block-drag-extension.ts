@@ -351,7 +351,7 @@ class BlockDragController {
       return "continue";
     }
     this.cancel();
-    const releasePointer = this.editor.pointer.acquire();
+    const releasePointer = this.editor.pointer.acquire(event.root);
     if (!releasePointer) {
       return "continue";
     }

@@ -221,12 +221,7 @@ container's renderer when the same primitive fails elsewhere. New renderers shou
 inherit the verified behavior without another drag handler, pointer callback,
 container-type check or duplicate selection tree.
 
-## Interactive embedded content
-
-For HTML/CSS/JavaScript content, inspect the package `html-surface` extension:
-its iframe isolates authored scripts, validates messages and sends current snapshots
-through the owning managers. Keep sample content in the host. Test the iframe's
-real controls, source editing, undo, and cleanup in Page and Edgeless as applicable.
+## Interactive controls
 
 Native controls must receive their own click: mark editor controls with
 `editorControlProps`, honor `defaultPrevented` when selection claims a gesture,
@@ -234,20 +229,5 @@ and avoid suppressing clicks merely because a drag might have occurred. Keep
 selection and pointer handling with the shared owner; test ordinary clicks,
 modifier selection, dragging, and keyboard activation on the rendered surface.
 
-For an embedded source editor, put `editorControlProps` on the wrapper containing
-the editable surface so Page's capture-phase selection recognizes the entire
-control. Check inherited canvas styles as well: a visual host may set
-`user-select: none`, so explicitly allow text selection on the editable content
-when needed. Preserve the embedded editor's own focus, selection and history.
-Use [e2e/html-interaction.spec.ts](../../../e2e/html-interaction.spec.ts) as a
-browser-input example: drag across actual text, assert the native selection and
-absence of structural block selection, then exercise typing, clipboard, local
-undo/redo, save and document undo. Cover Page and an Edgeless card when supported,
-in Chromium and Firefox; wait until text is visible and hit-testable before dragging.
-
-For the optional `unsafe-html` block, keep editor access host-controlled and
-source-specific. The sandbox bridge exposes only named operations, rechecks the
-current grant and source for each request, and keeps panel-local and shared-editor
-scopes distinct. Test disabled and forged requests, source changes, undo, and
-iframe startup before adding another operation; never put permission in widget
-props that the iframe can change.
+For HTML/CSS/JavaScript blocks and iframe-based embedded content, also read
+[rivto-html-extensions](../rivto-html-extensions/SKILL.md).

@@ -17,10 +17,17 @@ The script API is available as `window.rivto` before the authored markup runs:
 
 - `rivto.ready()` resolves with the first snapshot; `rivto.node` is the latest
   snapshot or `null` before it arrives.
-- `rivto.subscribe(callback)` invokes the callback on subsequent snapshots and
-  returns a function that removes that subscription. It does not invoke the
-  callback immediately. Subscriptions live in the iframe and end when it is
-  replaced or removed.
+- `rivto.props` and `rivto.context` are live shortcuts to the latest snapshot's
+  `props` and presentation context, or `null` before it arrives. The context has
+  `mode` (`"block"` or `"edgeless"`), `selected` and `preview` in both block and
+  element occurrences. `selected` means whole-block or whole-element selection,
+  not text selection; detached creation previews report `preview: true`.
+- `rivto.subscribe(callback)` invokes the callback on subsequent document-data
+  snapshots and returns a function that removes that subscription. Context-only
+  changes do not call it, so selection cannot inadvertently rerender widget text.
+- `rivto.subscribeContext(callback)` observes later presentation-context changes
+  and returns a disposer. Neither subscription invokes its callback immediately;
+  both live in the iframe and end when it is replaced or removed.
 - `rivto.setProp(key, value)` and `rivto.setProps(props)` merge properties.
   Values must be JSON-compatible, and prototype-related keys are rejected.
 - `rivto.setListProps(props)` merges block list properties; it has no effect on
@@ -30,6 +37,52 @@ The script API is available as `window.rivto` before the authored markup runs:
 Writes go through the current panel's managers and participate in document
 history. Placement previews ignore writes. Block iframe height follows its content
 up to 720 CSS pixels; an element iframe fills the host frame.
+
+Use `rivto.ready()` for the initial state and `rivto.subscribe()` for subsequent
+changes. These are detached snapshots: mutate widget properties with the bridge
+methods rather than changing `rivto.props` directly. A widget can use ordinary
+HTML classes and DOM layout APIs regardless of which surface hosts it:
+
+```html
+<div class="face" data-rivto-drag-handle></div>
+<button id="action">Activate</button>
+<script>
+  function renderContext(context) {
+    document.body.classList.toggle("selected", context.selected);
+    document.body.dataset.mode = context.mode;
+  }
+  rivto.ready().then(function (node) {
+    renderContext(node.context);
+    rivto.subscribeContext(renderContext);
+  });
+</script>
+```
+
+`data-rivto-drag-handle` marks a noninteractive region that the surrounding
+surface may use for its normal drag and selection gestures. The host projects a
+native hit target over the region; it never converts iframe messages into pointer
+events or trusts them as permission to edit another object. Mark only regions
+that do not contain buttons, links, editable fields or text that must be selected:
+the host target receives their pointer input. Without a marker, background areas
+are used as drag targets while text, native controls and elements with click or
+pointer listeners retain iframe interaction. Mark custom interactive content with
+`data-rivto-interactive` when its interaction is delegated to the document or window,
+or uses an event the bridge cannot identify. Regions follow normal layout, scrolling and element size;
+they are clipped to the iframe and rectangular overflow ancestors. Continuous
+CSS transforms on a marked region are not tracked frame by frame.
+Removing the last marker restores automatic background targets. Placement previews are inert.
+
+React renderers for other embedded blocks, elements or containers can reuse
+`EmbeddedDragHandles` with clipped viewport-relative regions and a positioned
+containing box. Set `blockSelectionAnchor` for block content so Page can start a
+range gesture without selecting the block on a plain click; `className` can style
+the host targets. The surrounding
+surface owns the actual gesture and document mutation. `EmbeddedContentContext`
+describes the shared presentation fields. `useEmbeddedContentContext(selected,
+preview)` combines the actual surface with the caller's existing selection state.
+Block renderers can obtain selection with `useBlockSelected`, while element
+renderers receive `selected` and `preview` in `ElementRenderProps`. Containers
+can pass the selection state owned by their existing layout.
 
 The sandbox prevents scripts from reading the parent's DOM and origin, but does
 not prevent network requests. Scripts receive the widget's snapshot, including

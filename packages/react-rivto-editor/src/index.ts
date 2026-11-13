@@ -12,6 +12,12 @@ export * from "./blocks";
 export { MarkdownContent } from "./blocks/markdown/markdown";
 export * from "./capabilities";
 export * from "./components";
+export { EmbeddedDragHandles } from "./components/embedded-drag-handles";
+export type {
+  EmbeddedContentContext,
+  EmbeddedDragHandleRegion,
+} from "./components/embedded-content-context";
+export type { EmbeddedDragHandlesProps } from "./components/embedded-drag-handles";
 export * from "./constants";
 export { EditorStorageContext } from "./editor/editor-storage-context";
 export { ReactEditor, createReactEditor } from "./editor/react-editor";
@@ -319,5 +325,10 @@ export * from "./attachments";
 
 export { htmlSurfaceExtension } from "./extensions/html-surface/extension";
 export { HTML_BLOCK_TYPE, HTML_ELEMENT_TYPE } from "./extensions/html-surface/protocol/protocol";
+export type {
+  HtmlBlockView,
+  HtmlElementView,
+  HtmlNodeView,
+} from "./extensions/html-surface/protocol/protocol";
 
 export { UNSAFE_HTML_BLOCK_TYPE } from "./extensions/html-surface/components/unsafe-html-block";

@@ -1,12 +1,13 @@
 /** HTML block with explicitly enabled, sandboxed editor operations. */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import type { EditorBlockNode } from "@chulane/rivto";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
 import { useReactPanel } from "../../../hooks/editor/use-react-panel";
 import { editorControlProps } from "../../../constants";
 import { Button } from "../../../components/ui/button";
 import { formatWidgetProps, readLabel, type HtmlDraft } from "../protocol/protocol";
-import { commitBlockDraft, toBlockView, useHtmlBlockCommand } from "./html-block";
+import { commitBlockDraft, useHtmlBlockView, useHtmlBlockCommand } from "./html-block";
 import { HtmlFrame } from "./html-frame";
 import { HtmlPasteTarget, HtmlSourceEditor } from "./html-chrome";
 
@@ -84,7 +85,7 @@ function useUnsafeHtmlBlock(blockId: string) {
   const [draftAccess, setDraftAccess] = useState(false);
   const [denied, setDenied] = useState(false);
   const enabled = grant !== null && block?.content === grant;
-  const node = useMemo(() => (block ? toBlockView(block) : undefined), [block]);
+  const { node, context } = useHtmlBlockView(blockId, block);
   const onCommand = useHtmlBlockCommand(blockId);
   useEffect(() => {
     if (grant !== null && block?.content !== grant) {
@@ -94,6 +95,7 @@ function useUnsafeHtmlBlock(blockId: string) {
   return {
     block,
     node,
+    context,
     panel,
     blockId,
     editing,
@@ -163,6 +165,7 @@ function UnsafeHtmlBody({ state }: UnsafeHtmlBodyProps) {
       frameName={state.label}
       source={block.content}
       node={node}
+      context={state.context}
       fit="auto"
       interactive
       onCommand={state.onCommand}
@@ -180,7 +183,7 @@ function UnsafeHtmlBody({ state }: UnsafeHtmlBodyProps) {
 /** Props for the source and permission editor. */
 interface UnsafeHtmlEditorProps {
   /** Current block snapshot. */
-  readonly block: Parameters<typeof toBlockView>[0];
+  readonly block: EditorBlockNode;
   /** Draft permission selected by the user. */
   readonly access: boolean;
   /**

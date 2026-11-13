@@ -5,3 +5,8 @@
   --rivto-outline-control-offset: 0px;
   @apply page:flex page:flex-col page:gap-[var(--rivto-block-gap,4px)] page:text-[color:var(--rivto-block-foreground,#172033)];
 }
+
+/* Keep a Page gesture in its owning document until it is released or cancelled. */
+[data-rivto-pointer-active] iframe {
+  pointer-events: none !important;
+}

@@ -247,24 +247,5 @@ preset dragging as well as canvas placement on normal and large documents.
 
 ## Interactive HTML elements
 
-The `html-surface` extension demonstrates a sandboxed HTML element with live
-host-relative resize. Keep its script bridge validated and use the shared element
-operations for writes. Exercise iframe controls and editor selection with real
-pointer and keyboard input; controls and drag gestures must retain separate owners.
-
-Pointer events inside an iframe do not bubble to the canvas host. When iframe
-interaction should select the element, use the existing HTML frame message path:
-validate the frame source, token and message, ignore detached previews, and select
-through the panel's existing operations. Preserve the iframe's native event so a
-button acts on the first click and text remains selectable. Follow the shared group
-target and modifier-selection behavior; do not keep a separate selection store.
-Iframe content gestures are not canvas drag gestures; keep the host's transform
-controls available for moving or resizing.
-
-For embedded source editors, mark their wrapper with `editorControlProps` and
-check inherited `user-select` styles so focus, text selection and keyboard editing
-belong to the editor. Use
-[e2e/html-interaction.spec.ts](../../../e2e/html-interaction.spec.ts) to exercise
-native pointer selection, typing, clipboard, undo/redo, save and document undo.
-Also verify first-click iframe controls, native iframe text selection, modifier
-multi-selection and grouped elements in Chromium and Firefox.
+For HTML/CSS/JavaScript elements and iframe-based embedded content, also read
+[rivto-html-extensions](../rivto-html-extensions/SKILL.md).

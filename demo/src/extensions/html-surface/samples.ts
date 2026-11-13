@@ -352,7 +352,7 @@ const CLOCK_HTML = `<style>
   .second { width: 2px; height: 40%; margin-left: -1px; background: #d4532b; }
   .cap { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: currentColor; }
 </style>
-<div class="stage"><div class="face" id="face">
+<div class="stage" data-rivto-drag-handle><div class="face" id="face">
   <div class="hand hour" id="hour"></div>
   <div class="hand minute" id="minute"></div>
   <div class="hand second" id="second"></div>

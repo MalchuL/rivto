@@ -64,3 +64,22 @@ test("accepts only boolean modifier state for iframe pointer messages", () => {
     ),
   ).toBeUndefined();
 });
+
+test("clips embedded drag regions and rejects malformed frame messages", () => {
+  const message = (handles: unknown) => ({
+    channel: HTML_CHANNEL,
+    token: "frame",
+    kind: "drag-handles",
+    handles,
+  });
+  expect(
+    parseFrameMessage(message([{ x: -0.25, y: 0.5, width: 0.5, height: 1 }]), "frame"),
+  ).toEqual({ kind: "drag-handles", handles: [{ x: 0, y: 0.5, width: 0.25, height: 0.5 }] });
+  expect(
+    parseFrameMessage(message([{ x: 0, y: 0, width: Infinity, height: 1 }]), "frame"),
+  ).toBeUndefined();
+  expect(
+    parseFrameMessage(message(Array.from({ length: 65 }, () => ({}))), "frame"),
+  ).toBeUndefined();
+  expect(parseFrameMessage(message([]), "another-frame")).toBeUndefined();
+});
