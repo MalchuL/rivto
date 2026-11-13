@@ -1,16 +1,12 @@
+import { BlockText } from "../../../authoring/block-text";
+import { useBlockContent } from "../../../authoring/use-block-content";
 import { createCaretSelection } from "@chulane/rivto";
-import type { BlockLayoutProps } from "@chulane/rivto-page";
+import type { BlockLayoutProps } from "../../../authoring/layout";
 import { PlusIcon } from "lucide-react";
 import { useCallback, useSyncExternalStore } from "react";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
-import {
-  useBlockEditing,
-  useBlockNode,
-  useBlockSelectionAnchor,
-  usePanel,
-  useReactPanel,
-} from "../../../hooks";
+import { useBlockEditing, useBlockNode, usePanel, useReactPanel } from "../../../hooks";
 import { focusBlock } from "../../../managers";
 import { KANBAN_COLUMN_BLOCK_TYPE } from "./kanban-behavior";
 import {
@@ -57,8 +53,8 @@ function useKanbanCounts(boardId: string): string {
  * @returns A structural header; Page owns the separately composed columns.
  */
 export function Kanban({ blockId }: BlockLayoutProps) {
-  const attributes = useBlockSelectionAnchor(blockId);
-  const editing = useBlockNode(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const counts = useKanbanCounts(blockId);
   return (
     <div {...attributes} className={`rivto-kanban-summary ${CONTAINER_SUMMARY_CLASS}`}>
@@ -87,10 +83,10 @@ export function KanbanColumn({ blockId }: BlockLayoutProps) {
   const count = editing.block?.childIds.length ?? 0;
   return (
     <div className="rivto-kanban-column-header">
-      <div
-        {...editing.attributes}
+      <BlockText
+        editing={editing.attributes}
         className="rivto-kanban-column-title"
-        aria-label="Kanban column title"
+        label="Kanban column title"
       />
       <span className="rivto-kanban-column-count" aria-label={`${count} cards`}>
         {count}

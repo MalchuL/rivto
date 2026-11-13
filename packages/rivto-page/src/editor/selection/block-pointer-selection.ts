@@ -168,6 +168,13 @@ export class BlockPointerSelection {
    */
   private installStart(feature: "pointer" | "range"): void {
     const events = this.editor.events;
+    if (feature === "range") {
+      events.register(
+        "selection.range.suppress-click",
+        { type: "click", capture: true, scope: "block", priority: 100 },
+        this.onSuppressedClick,
+      );
+    }
     events.register(
       `selection.${feature}.start`,
       { type: "pointerdown", scope: "block", priority: feature === "range" ? 20 : 0 },
@@ -237,14 +244,7 @@ export class BlockPointerSelection {
     events.register(
       "selection.suppress-click",
       { type: "click", capture: true, scope: "block", priority: 100 },
-      (event) => {
-        if (this.suppressClickBlockId === event.blockId) {
-          this.suppressClickBlockId = undefined;
-          event.raw.preventDefault();
-          return "handled";
-        }
-        return "continue";
-      },
+      this.onSuppressedClick,
     );
   }
   /**
@@ -305,11 +305,31 @@ export class BlockPointerSelection {
   private installToggle(): void {
     const events = this.editor.events;
     events.register(
+      "selection.toggle.suppress-click",
+      { type: "click", capture: true, scope: "block", priority: 100 },
+      this.onSuppressedClick,
+    );
+    events.register(
       "selection.toggle",
       { type: "pointerdown", capture: true, scope: "block", priority: 50 },
       this.onToggle,
     );
   }
+
+  /**
+   * Claims a control click after the editor has consumed its pointer gesture.
+   *
+   * @param input - Native click in the block that initiated the gesture.
+   * @returns Handled when this click belongs to the claimed gesture.
+   */
+  private onSuppressedClick = (input: BlockInputEvent<"click">): BlockInputResult => {
+    if (this.suppressClickBlockId !== input.blockId) {
+      return "continue";
+    }
+    this.suppressClickBlockId = undefined;
+    input.raw.preventDefault();
+    return "handled";
+  };
 
   /**
    * Reads canonical selectable order from the host, including collapse filtering.
@@ -558,6 +578,13 @@ export class BlockPointerSelection {
       this.pointer = start;
     }
     if (handled) {
+      const control = this.isElement(raw.target)
+        ? raw.target.closest(EDITOR_CONTROL_SELECTOR)
+        : null;
+      if (control?.matches(BLOCK_SELECTION_ANCHOR_SELECTOR)) {
+        // A range gesture can be followed by a native click on the opted-in control.
+        this.suppressClickBlockId = start.anchorPosition.blockId;
+      }
       raw.preventDefault();
     }
     if (!this.features.has("pointer")) {
@@ -895,6 +922,10 @@ export class BlockPointerSelection {
     }
     root.ownerDocument.getSelection()?.removeAllRanges();
     root.focus({ preventScroll: true });
+    if (control) {
+      // The browser may still send click after this configured modifier gesture.
+      this.suppressClickBlockId = blockId;
+    }
     raw.preventDefault();
     return "handled";
   };

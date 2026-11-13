@@ -1,4 +1,4 @@
-import { BlockDropWrapper, type BlockChildrenItemProps } from "@chulane/rivto-page";
+import { BlockDropWrapper, type BlockChildrenItemProps } from "../../../authoring/layout";
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { useBlockNode, useReactPanel } from "../../../hooks";
 import { editorControlProps } from "../../../constants";

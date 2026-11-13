@@ -7,7 +7,6 @@
  */
 import {
   bentoExtension,
-  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   BLOCK_TEXT_METADATA_KEY,
   blockExtension,
   columnsExtension,
@@ -16,7 +15,6 @@ import {
   MarkdownContent,
   tableExtension,
   useBlockNode,
-  useBlockSelectionAnchor,
   usePanel,
   type ReactEditorExtension,
 } from "@chulane/rivto-react";
@@ -26,7 +24,6 @@ import {
   useState,
   type ChangeEvent,
   type FocusEvent,
-  type MouseEvent,
   type PointerEvent,
 } from "react";
 import {
@@ -35,6 +32,7 @@ import {
   sliderBlockDefinition,
 } from "./custom-block-definitions";
 import { hostBlockExtensions } from "../extensions/host-blocks";
+import { BlockSelectionButton, useBlockContent } from "@chulane/rivto-react/authoring";
 
 interface SliderProps {
   value: number;
@@ -43,8 +41,6 @@ interface SliderProps {
 interface CounterProps {
   count: number;
 }
-
-const COUNTER_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
 export { duplicateBlockInput } from "./block-utils";
 export {
@@ -171,17 +167,14 @@ function SliderBlock({ blockId }: { readonly blockId: string }) {
 
 /** Demo contentless block proving controls can participate in structural selection. */
 function CounterBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode<CounterProps>(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent<CounterProps>(blockId);
+  const attributes = editing.selectionProps;
   const panel = usePanel();
   if (!editing.block) {
     return null;
   }
   const count = editing.block.props.count ?? 0;
-  const increment = (event: MouseEvent<HTMLButtonElement>) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey) {
-      return;
-    }
+  const increment = () => {
     const current = panel.blocks.getBlockNode(blockId)?.props as CounterProps | undefined;
     if (!current) {
       return;
@@ -193,15 +186,9 @@ function CounterBlock({ blockId }: { readonly blockId: string }) {
     // right-hand side a valid structural-selection anchor. The actual Counter
     // button remains compact and retains its normal click behavior.
     <div {...attributes} className="custom-counter-selection-region">
-      <button
-        {...COUNTER_SELECTION_ATTRIBUTES}
-        {...editorControlProps}
-        type="button"
-        className="custom-counter-block"
-        onClick={increment}
-      >
+      <BlockSelectionButton className="custom-counter-block" onClick={increment}>
         Count: {count}
-      </button>
+      </BlockSelectionButton>
     </div>
   );
 }

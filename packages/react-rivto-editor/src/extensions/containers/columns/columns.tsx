@@ -5,6 +5,7 @@
  * deleting them. Drag, clipboard, snapshots, and undo remain owned by core.
  * @module
  */
+import { useBlockContent } from "../../../authoring/use-block-content";
 import { ColumnsLayout, ColumnsColumnLayout } from "./columns-layout";
 import { type EditorBlockInput } from "@chulane/rivto";
 import { MinusIcon, PlusIcon, SettingsIcon } from "lucide-react";
@@ -24,12 +25,7 @@ import { Label } from "../../../components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  useEditorRoot,
-  useReactPanel,
-} from "../../../hooks";
+import { useBlockNode, useEditorRoot, useReactPanel } from "../../../hooks";
 import { type BlockSlotProps, type ReactEditorExtension } from "../../../managers";
 import {
   COLUMNS_BLOCK_TYPE,
@@ -165,8 +161,8 @@ export function setColumnsCount(
  * @throws If rendered outside an editor panel.
  */
 export function Columns({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const block = editing.block;
   if (!block) {
     return null;
@@ -205,9 +201,8 @@ export function Columns({ blockId }: { readonly blockId: string }) {
 function ColumnsColumn({ blockId }: { readonly blockId: string }) {
   const reactPanel = useReactPanel();
   const { element: root } = useEditorRoot();
-  const { block } = useBlockNode(blockId);
+  const { block, selectionProps: attributes } = useBlockContent(blockId);
   const empty = block?.childIds.length === 0;
-  const attributes = useBlockSelectionAnchor(blockId);
   /**
    * Creates the first writing block when the column has no nested content.
    * @param event - Click or keyboard activation of the empty column.

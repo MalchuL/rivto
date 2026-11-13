@@ -10,13 +10,15 @@
 import type { EditorElementNode } from "@chulane/rivto";
 import {
   BLOCK_TEXT_METADATA_KEY,
+  BlockText,
   blockExtension,
+  elementExtension,
   editorControlProps,
   useBlockEditing,
   useEditorSelection,
   usePanel,
   type ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import { useState, type ChangeEvent } from "react";
 import {
   REVIEW_REPORT_TYPE,
@@ -212,12 +214,10 @@ function ReviewBlock({
 
   return (
     <section className={REVIEW_BLOCK_CLASS} data-review-report={blockId}>
-      <div
-        {...editing.attributes}
+      <BlockText
+        editing={editing.attributes}
         className={REVIEW_PROBLEM_CLASS}
-        role="textbox"
-        aria-label="Review problem"
-        aria-multiline="true"
+        label="Review problem"
         data-placeholder="Describe the problem"
       />
       <div {...editing.preventTextEditingAttributes}>
@@ -354,20 +354,13 @@ export function reviewReportExtensions(options: {
         keywords: ["report", "context", "snapshot"],
       },
     }),
-    {
-      id: "demo.review-report.elements",
-      setup: (reactEditor) => {
-        return reactEditor.elementTypes.register({
-          definition: {
-            type: REVIEW_REPORT_TYPE,
-            validate: (props) => reviewElementPropsSchema.parse(props),
-          },
-          render: ({ element }) => (
-            <ReviewElement element={element} saveReport={options.saveReport} />
-          ),
-        });
+    elementExtension({
+      definition: {
+        type: REVIEW_REPORT_TYPE,
+        validate: (props) => reviewElementPropsSchema.parse(props),
       },
-    },
+      render: ({ element }) => <ReviewElement element={element} saveReport={options.saveReport} />,
+    }),
   ];
 }
 

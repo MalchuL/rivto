@@ -12,17 +12,17 @@ import {
   BLOCK_ID_ATTRIBUTE,
   BLOCK_TEXT_METADATA_KEY,
   MarkdownContent,
+  BlockText,
+  useBlockContent,
   useBlockEditing,
   useReactPanel,
-  useBlockNode,
-  useBlockSelectionAnchor,
   type ClipboardFormatter,
   type PortableBlockFormats,
   type ReactBlockRegistration,
   type ReactEditorApi,
   type ReactPanelApi,
   type ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import "./host-blocks.css";
 import { createCaretSelection } from "@chulane/rivto";
 import { Link2Icon, PencilIcon } from "lucide-react";
@@ -591,8 +591,8 @@ function BookmarkBlock({ blockId }: { readonly blockId: string }) {
  * @returns A structural selection region containing the heading list.
  */
 function TableOfContentsBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const panel = useReactPanel();
   const reactEditor = panel.document;
   const revision = useDocumentBlockRevision();
@@ -672,12 +672,10 @@ function MathBlock({ blockId }: { readonly blockId: string }) {
         <span>Expressions</span>
         <span>Results</span>
       </div>
-      <div
-        {...editing.attributes}
+      <BlockText
+        editing={editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MATH_SOURCE_CLASS}`}
-        role="textbox"
-        aria-label="Math source"
-        aria-multiline="true"
+        label="Math source"
         spellCheck={false}
       />
       <div className={MATH_VALUE_CLASS} data-math-value="" aria-label="Math results">

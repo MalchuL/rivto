@@ -1,4 +1,4 @@
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import { EditableLabel } from "../../components";
 import type {
   ShapeVisual,

@@ -12,7 +12,8 @@ model entity.
 
 Keep persisted hierarchy in document-model, user operations in core/panel managers,
 concrete block definitions and UI in React extensions, and generic rendering,
-placement, hover and selection in `@chulane/rivto-page`.
+placement, hover and selection in `@chulane/rivto-page`. Import public authoring
+primitives through `@chulane/rivto-react/authoring`.
 
 ## Mandatory block and container checklist
 
@@ -130,9 +131,9 @@ Page creates one `BlockNode` / `BlockView` per block. A typical layout returns:
   parent row on its first child with negative margins or absolute positioning.
   Whether a header is visible while expanded is a product choice, not a universal
   collapsed-summary rule.
-- Use `useBlockSelectionAnchor(blockId)` for contentless structural UI and spread
-  the attributes onto its actual selectable region. Do not make it contenteditable.
-  Editable titles use `useBlockEditing(blockId)` and persisted content. Protect
+- Use `useBlockContent(blockId)` for contentless structural UI and spread its
+  `selectionProps` onto the actual selectable region. Do not make it contenteditable.
+  Editable titles use `useBlockEditing(blockId)`, `BlockText` and persisted content. Protect
   nested controls using the existing editing attributes when appropriate.
 - Derive summaries from the narrowest reactive source that supplies their data.
   `useBlockNode` is shallow; recursive counts need an appropriate structural

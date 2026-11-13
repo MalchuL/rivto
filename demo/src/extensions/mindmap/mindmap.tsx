@@ -2,11 +2,12 @@ import { useMemo } from "react";
 import { Button } from "../../../../packages/react-rivto-editor/src/components/ui/button";
 import { Input } from "../../../../packages/react-rivto-editor/src/components/ui/input";
 import { Label } from "../../../../packages/react-rivto-editor/src/components/ui/label";
+import { elementControlProps } from "@chulane/rivto-react/authoring";
 import type {
   ElementRenderProps,
   ElementPropertiesProps,
   ReactEditorExtension,
-} from "@chulane/rivto-react";
+} from "@chulane/rivto-react/authoring";
 import {
   layoutMindmap,
   readMindmapNodes,
@@ -112,7 +113,7 @@ function MindmapElement({ element, reactPanel, preview }: ElementRenderProps) {
               }}
             >
               <Input
-                data-edgeless-ui="true"
+                {...elementControlProps<HTMLInputElement>(() => select())}
                 aria-label={`Mindmap node ${node.id}`}
                 value={node.label}
                 style={{
@@ -124,11 +125,6 @@ function MindmapElement({ element, reactPanel, preview }: ElementRenderProps) {
                   color: "var(--rivto-foreground, #222)",
                   fontSize,
                 }}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  select();
-                }}
-                onDoubleClick={(event) => event.stopPropagation()}
                 onChange={(event) =>
                   change(
                     (current) =>
@@ -141,7 +137,7 @@ function MindmapElement({ element, reactPanel, preview }: ElementRenderProps) {
               />
               <Button
                 type="button"
-                data-edgeless-ui="true"
+                {...elementControlProps<HTMLButtonElement>(() => select())}
                 aria-label={`Add branch to ${node.label || "node"}`}
                 style={{
                   flexShrink: 0,
@@ -154,10 +150,6 @@ function MindmapElement({ element, reactPanel, preview }: ElementRenderProps) {
                   background: color,
                   cursor: "pointer",
                   marginRight: 4,
-                }}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  select();
                 }}
                 onClick={(event) => {
                   event.stopPropagation();

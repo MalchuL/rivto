@@ -329,6 +329,11 @@ test("replaces invalid structured block properties with an Error block", async (
   await expect(error).toBeVisible();
   await expect(error).toContainText("invalid-counter");
   await expect(error).toContainText('"count": -1');
+  await error.click();
+  await expect(error.locator("xpath=ancestor::*[@data-block-id][1]")).toHaveAttribute(
+    "data-block-selected",
+    "true",
+  );
 });
 
 test("copies a multi-block selection from the focused page", async ({ page }) => {

@@ -6,7 +6,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import type { ConnectorEndpoint } from "./types";
 import { editorControlProps } from "../../constants";
 

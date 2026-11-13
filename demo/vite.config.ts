@@ -33,6 +33,21 @@ export default defineConfig({
         }
       },
     },
+    {
+      name: "dynamic-authoring-entry",
+      /**
+       * Serves the authoring entry through Vite's shared development module graph.
+       *
+       * @param server - Development server receiving the stable browser SDK path.
+       * @returns Registers the middleware before the server starts serving requests.
+       */
+      configureServer(server) {
+        server.middlewares.use("/dynamic-sdk/authoring.js", (_request, response) => {
+          response.setHeader("Content-Type", "text/javascript");
+          response.end('export * from "/src/dynamic-authoring.ts";');
+        });
+      },
+    },
     tailwindcss(),
     localFileBridgePlugin(),
     reviewReportFilesPlugin(fileURLToPath(new URL("../reports/", import.meta.url))),
@@ -65,6 +80,12 @@ export default defineConfig({
         find: "@chulane/rivto-react/block-factories",
         replacement: fileURLToPath(
           new URL("../packages/react-rivto-editor/src/block-factories.ts", import.meta.url),
+        ),
+      },
+      {
+        find: "@chulane/rivto-react/authoring",
+        replacement: fileURLToPath(
+          new URL("../packages/react-rivto-editor/src/authoring/index.ts", import.meta.url),
         ),
       },
       {
@@ -121,6 +142,23 @@ export default defineConfig({
     // Source imports originate in two workspace packages. Force both to share
     // the demo's React runtime rather than following package-local symlinks.
     dedupe: ["react", "react-dom"],
+  },
+  build: {
+    rollupOptions: {
+      preserveEntrySignatures: "strict",
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        "dynamic-sdk/authoring": fileURLToPath(
+          new URL("./src/dynamic-authoring.ts", import.meta.url),
+        ),
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === "dynamic-sdk/authoring"
+            ? "dynamic-sdk/authoring.js"
+            : "assets/[name]-[hash].js",
+      },
+    },
   },
   server: {
     // Polling keeps `pnpm demo` usable on machines whose shared inotify watcher

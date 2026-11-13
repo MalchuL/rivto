@@ -3,9 +3,8 @@ import { z } from "zod";
 import {
   blockExtension,
   editorControlProps,
-  useBlockNode,
-  useBlockSelectionAnchor,
-} from "@chulane/rivto-react";
+  useBlockContent,
+} from "@chulane/rivto-react/authoring";
 
 /**
  * Renders a selectable status with a separately owned native toggle.
@@ -14,14 +13,13 @@ import {
  * @returns {import('react').ReactNode} Status control, or null after deletion.
  */
 function Status({ blockId }) {
-  const { block, operations } = useBlockNode(blockId);
-  const anchor = useBlockSelectionAnchor(blockId);
+  const { block, operations, selectionProps } = useBlockContent(blockId);
   if (!block) {
     return null;
   }
   return h(
     "div",
-    { ...anchor, className: "dynamic-block dynamic-status" },
+    { ...selectionProps, className: "dynamic-block dynamic-status" },
     h(
       "label",
       null,

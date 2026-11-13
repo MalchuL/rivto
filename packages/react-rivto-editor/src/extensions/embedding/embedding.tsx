@@ -1,3 +1,4 @@
+import { useBlockContent } from "../../authoring/use-block-content";
 import { clipboardContentBundle } from "../../managers/clipboard/clipboard-content";
 import { writeClipboardBundle } from "../../managers/clipboard/browser-clipboard";
 import { Link2Icon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
@@ -10,7 +11,7 @@ import { editorControlProps } from "../../constants";
 import { EditorEmbed } from "../../components/editor-embed/editor-embed";
 import type { BlockResolution } from "../../editor/editor-storage";
 import { EditorStorageContext } from "../../editor/editor-storage-context";
-import { useBlockNode, useBlockSelectionAnchor, usePanel } from "../../hooks";
+import { usePanel } from "../../hooks";
 import { useAcquiredEditor } from "../../hooks/editor/use-acquired-editor";
 import type { BlockSlotProps, ReactEditorExtension } from "../../managers";
 import { PageSurface } from "../../surfaces/page";
@@ -65,8 +66,8 @@ export interface EmbeddingProps extends Record<string, unknown> {
 
 /** Renders the selectable reference anchor without adding a header above the source editor. */
 function EmbeddingBlock({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode<EmbeddingProps>(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent<EmbeddingProps>(blockId);
+  const attributes = editing.selectionProps;
   if (!editing.block) {
     return null;
   }

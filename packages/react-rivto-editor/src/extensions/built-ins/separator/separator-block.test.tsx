@@ -1,6 +1,7 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  TestPanel,
   createTestReactEditor as createReactEditor,
   createTestCoreEditor as createDocumentEditor,
 } from "../../../test-utils";
@@ -18,9 +19,15 @@ describe("separator block extension", () => {
 
     expect(editor.blockRegistry.has(SEPARATOR_BLOCK_TYPE)).toBe(true);
     expect(reactPanel.editor.blockTypes.separatesBlockElements(SEPARATOR_BLOCK_TYPE)).toBe(true);
-    expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('role="separator"');
-    expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-separator-block="true"');
-    expect(renderToStaticMarkup(<SeparatorBlock />)).toContain('data-block-selection-anchor=""');
+    const blockId = editor.blocks.insertBlock({ type: SEPARATOR_BLOCK_TYPE }).id;
+    const markup = renderToStaticMarkup(
+      <TestPanel panel={reactPanel}>
+        <SeparatorBlock blockId={blockId} />
+      </TestPanel>,
+    );
+    expect(markup).toContain('role="separator"');
+    expect(markup).toContain('data-separator-block="true"');
+    expect(markup).toContain('data-block-selection-anchor=""');
 
     reactPanel.editor.destroy();
     editor.destroy();

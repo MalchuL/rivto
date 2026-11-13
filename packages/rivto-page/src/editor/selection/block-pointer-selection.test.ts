@@ -73,6 +73,9 @@ it.each([
       allowed ? ["counter"] : [],
     );
     expect(event.defaultPrevented).toBe(allowed);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    root.querySelector("span")!.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(allowed);
     if (allowed) {
       root.querySelector("span")!.dispatchEvent(
         new MouseEvent("pointerdown", {

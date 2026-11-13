@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { useBlockNode } from "../../hooks";
+import { useBlockContent } from "../../authoring/use-block-content";
 import type { BlockRendererProps } from "../../managers";
 
 const UNKNOWN_BLOCK_CLASS = "page-unknown-block";
@@ -18,12 +18,13 @@ const UNKNOWN_BLOCK_CLASS = "page-unknown-block";
  * @returns A dashed note naming the type and echoing its content.
  */
 export function UnknownBlock({ blockId }: BlockRendererProps) {
-  const { block } = useBlockNode(blockId);
+  const { block, selectionProps } = useBlockContent(blockId);
   if (!block) {
     return null;
   }
   return (
     <div
+      {...selectionProps}
       className={`${UNKNOWN_BLOCK_CLASS} rounded-md border border-dashed border-input px-2.5 py-2 text-muted-foreground`}
       role="note"
     >

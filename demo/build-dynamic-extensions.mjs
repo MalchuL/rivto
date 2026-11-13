@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { transformWithEsbuild } from "vite";
 
-const names = ["accordion", "counter", "note", "status"];
+const names = ["accordion", "counter", "element", "note", "status"];
 // An optional directory allows rebuilding extension files into an already built demo.
 const output = process.argv[2]
   ? pathToFileURL(`${resolve(process.argv[2])}/`)

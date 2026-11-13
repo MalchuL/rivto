@@ -7,7 +7,7 @@
  */
 import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE } from "../../../constants";
+import { useBlockSelectionAnchor } from "../../../hooks/blocks/use-block-selection-anchor";
 import type { ReactPanelApi } from "../../../panels/types";
 import {
   BUILTIN_KEYMAP,
@@ -25,17 +25,19 @@ export { SEPARATOR_BLOCK_TYPE } from "./constants";
 const SEPARATOR_BLOCK_CLASS = "rivto-separator-block";
 const SEPARATOR_LINE_CLASS = "rivto-separator-line";
 const SEPARATOR_ARROW_CLASS = "rivto-separator-arrow";
-const SEPARATOR_SELECTION_ATTRIBUTES = { [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
 
 /**
  * Contentless divider renderer shared by page and nested edgeless block trees.
  *
+ * @param props - Stable block identity supplied by the editor.
+ * @param props.blockId - ID of the separator block.
  * @returns A three-row grid: an upward arrow, the rule, and a downward arrow.
  */
-export function SeparatorBlock() {
+export function SeparatorBlock({ blockId }: { readonly blockId: string }) {
+  const selectionProps = useBlockSelectionAnchor(blockId);
   return (
     <div
-      {...SEPARATOR_SELECTION_ATTRIBUTES}
+      {...selectionProps}
       className={`${SEPARATOR_BLOCK_CLASS} grid min-h-[21px] w-full grid-rows-[10px_1px_10px] place-items-center text-muted-foreground select-none`}
       data-separator-block="true"
       role="separator"

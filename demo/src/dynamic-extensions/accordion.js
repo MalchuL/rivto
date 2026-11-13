@@ -1,12 +1,14 @@
 import { createElement as h, Fragment } from "react";
 import { z } from "zod";
-import { BlockRow, BlockContent, BlockBody, BlockChildren } from "@chulane/rivto-page";
 import {
   blockExtension,
+  BlockRow,
+  BlockContent,
+  BlockBody,
+  BlockChildren,
   editorControlProps,
-  useBlockNode,
-  useBlockSelectionAnchor,
-} from "@chulane/rivto-react";
+  useBlockContent,
+} from "@chulane/rivto-react/authoring";
 
 /**
  * Renders the accordion header and controls its persisted collapse state.
@@ -15,15 +17,14 @@ import {
  * @returns {import('react').ReactNode} Header, or null after deletion.
  */
 function Accordion({ blockId }) {
-  const { block, operations } = useBlockNode(blockId);
-  const anchor = useBlockSelectionAnchor(blockId);
+  const { block, operations, selectionProps } = useBlockContent(blockId);
   if (!block) {
     return null;
   }
   const collapsed = block.listProps.collapsed === true;
   return h(
     "div",
-    { ...anchor, className: "dynamic-block dynamic-accordion-header" },
+    { ...selectionProps, className: "dynamic-block dynamic-accordion-header" },
     h(
       "button",
       {

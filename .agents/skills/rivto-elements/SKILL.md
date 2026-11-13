@@ -118,8 +118,9 @@ before the canvas owner discards previews. Do not recreate this lifecycle per ty
 `rememberedProperties` opts style keys into future creation defaults; do not
 accidentally remember authored content such as an entire mindmap tree.
 
-Mark internal inputs/buttons with `data-edgeless-ui="true"` and stop their pointer
-propagation so they do not start a canvas drag. Give them accessible labels and
+Apply `elementControlProps()` from `@chulane/rivto-react/authoring` to internal
+inputs/buttons so they retain their pointer gestures without starting a canvas drag.
+Pass a pointer-down callback to the helper when the control needs its own action. Give them accessible labels and
 preserve native editing/focus. When a control should select its owning element, use
 the existing panel-scoped selection command rather than independent React state.
 Keep a usable region for selecting/moving the whole element.

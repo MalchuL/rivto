@@ -1,6 +1,7 @@
 [
   "/dynamic-extensions/accordion.js",
   "/dynamic-extensions/counter.js",
+  "/dynamic-extensions/element.js",
   "/dynamic-extensions/note.js",
   "/dynamic-extensions/status.js"
 ]

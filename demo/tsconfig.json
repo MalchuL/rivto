@@ -16,6 +16,7 @@
       "@chulane/rivto-edgeless": ["../packages/rivto-edgeless/src/index.ts"],
       "@chulane/rivto-keyboard": ["../packages/rivto-keyboard/src/index.ts"],
       "@chulane/rivto-page": ["../packages/rivto-page/src/index.ts"],
+      "@chulane/rivto-react/authoring": ["../packages/react-rivto-editor/src/authoring/index.ts"],
       "@chulane/rivto-react/block-factories": [
         "../packages/react-rivto-editor/src/block-factories.ts"
       ],

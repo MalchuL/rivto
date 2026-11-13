@@ -1,3 +1,4 @@
+import { useBlockContent } from "../../authoring/use-block-content";
 import {
   BlockBody,
   BlockChildren,
@@ -5,7 +6,7 @@ import {
   BlockDropTarget,
   BlockRow,
   type BlockChildrenItemProps,
-} from "@chulane/rivto-page";
+} from "../../authoring/layout";
 import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../block-behaviors/types";
 import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
 /**
@@ -43,7 +44,6 @@ import { editorControlProps } from "../../constants";
 import {
   useBlock,
   useBlockNode,
-  useBlockSelectionAnchor,
   useEditorRoot,
   useReactPanel,
   usePanel,
@@ -531,8 +531,7 @@ function TodoStorageToolbar({ blockId }: TodoStorageComponentProps) {
  * @returns Toolbar or collapsed summary; null when the block has been removed.
  */
 export function TodoStorage({ blockId }: TodoStorageComponentProps) {
-  const { block } = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const { block, selectionProps: attributes } = useBlockContent(blockId);
   if (!block) {
     return null;
   }

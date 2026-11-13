@@ -1,15 +1,11 @@
 import { createElement as h } from "react";
 import { z } from "zod";
 import {
-  BLOCK_SELECTION_ANCHOR_ATTRIBUTE,
   blockExtension,
-  editorControlProps,
-  useBlockNode,
-  useBlockSelectionAnchor,
+  BlockSelectionButton,
+  useBlockContent,
   usePanel,
-} from "@chulane/rivto-react";
-
-const selectionButton = { ...editorControlProps, [BLOCK_SELECTION_ANCHOR_ATTRIBUTE]: "" };
+} from "@chulane/rivto-react/authoring";
 
 /**
  * Renders a selectable counter whose button also accepts selection drags.
@@ -18,24 +14,18 @@ const selectionButton = { ...editorControlProps, [BLOCK_SELECTION_ANCHOR_ATTRIBU
  * @returns {import('react').ReactNode} Counter content, or null after deletion.
  */
 function Counter({ blockId }) {
-  const { block, operations } = useBlockNode(blockId);
-  const anchor = useBlockSelectionAnchor(blockId);
+  const { block, operations, selectionProps } = useBlockContent(blockId);
   const panel = usePanel();
   if (!block) {
     return null;
   }
   return h(
     "div",
-    { ...anchor, className: "dynamic-block dynamic-counter" },
+    { ...selectionProps, className: "dynamic-block dynamic-counter" },
     h(
-      "button",
+      BlockSelectionButton,
       {
-        ...selectionButton,
-        type: "button",
-        onClick: (event) => {
-          if (event.defaultPrevented || event.ctrlKey || event.metaKey) {
-            return;
-          }
+        onClick: () => {
           const current = panel.blocks.getBlockNode(blockId);
           if (current) {
             operations.setProp("count", current.props.count + 1);

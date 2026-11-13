@@ -1,3 +1,4 @@
+import { BlockText } from "../../authoring/block-text";
 /**
  * Renders editable block text with an idle Markdown preview.
  * The shared editing hook owns DOM text synchronization, while node operations
@@ -216,12 +217,10 @@ export function MarkdownContent({
 
   return (
     <div className={MARKDOWN_CONTENT_CLASS}>
-      <div
-        {...editing.attributes}
+      <BlockText
+        editing={editing.attributes}
         className={`${PAGE_BLOCK_CONTENT_CLASS} ${MARKDOWN_EDITOR_CLASS}`}
-        role="textbox"
-        aria-label="Markdown block content"
-        aria-multiline="true"
+        label="Markdown block content"
         spellCheck
         style={
           isEditing

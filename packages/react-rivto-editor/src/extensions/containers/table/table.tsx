@@ -1,3 +1,4 @@
+import { useBlockContent } from "../../../authoring/use-block-content";
 import { TableResizeController } from "./table-resize-controller";
 import {
   columnWidth,
@@ -24,7 +25,7 @@ import {
   BlockItem,
   BlockRow,
   type BlockChildrenItemProps,
-} from "@chulane/rivto-page";
+} from "../../../authoring/layout";
 import { type EditorBlock, type EditorBlockInput } from "@chulane/rivto";
 import { PlusIcon } from "lucide-react";
 import {
@@ -48,13 +49,7 @@ import { MarkdownContent } from "../../../blocks/markdown/markdown";
 import { Button } from "../../../components/ui/button";
 import { editorControlProps } from "../../../constants";
 import type { ReactPanelApi } from "../../../panels/types";
-import {
-  useBlockNode,
-  useBlockSelectionAnchor,
-  useEditorRoot,
-  useReactPanel,
-  usePanel,
-} from "../../../hooks";
+import { useBlockNode, useEditorRoot, useReactPanel, usePanel } from "../../../hooks";
 import { type ReactEditorExtension } from "../../../managers";
 import {
   TABLE_BLOCK_TYPE,
@@ -354,8 +349,8 @@ function useTableDimensions(tableId: string): { readonly rows: number; readonly 
  * @throws If rendered outside an editor panel.
  */
 export function Table({ blockId }: { readonly blockId: string }) {
-  const editing = useBlockNode(blockId);
-  const attributes = useBlockSelectionAnchor(blockId);
+  const editing = useBlockContent(blockId);
+  const attributes = editing.selectionProps;
   const { rows, columns } = useTableDimensions(blockId);
   const block = editing.block;
   if (!block) {

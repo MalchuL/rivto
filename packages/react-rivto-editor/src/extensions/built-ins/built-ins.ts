@@ -10,7 +10,7 @@ import { blockHandleExtension } from "./block-handle/extension";
 import { createStructuralSelection } from "@chulane/rivto";
 import { createElement } from "react";
 import { blockIdsOf, insertBlockElementSeparator } from "../../elements/block-element-projection";
-import { type ReactBlockRegistration, type ReactEditorExtension } from "../../managers";
+import { type ReactEditorExtension } from "../../managers";
 import { registerClipboard, type ClipboardExtensionOptions } from "./clipboard/clipboard";
 import { createErrorBlockInput, errorBlockExtension } from "./error/error-block";
 import { registerHistory, type HistoryExtensionOptions } from "./history/history";
@@ -298,14 +298,6 @@ export const slashCommandExtension = (
     ];
     // Core slash registrations are stack-like and therefore dispose in reverse.
     return () => disposers.reverse().forEach((dispose) => dispose());
-  },
-});
-
-/** Creates one atomic model, renderer, and optional slash-command extension. */
-export const blockExtension = (registration: ReactBlockRegistration): ReactEditorExtension => ({
-  id: `block.${registration.definition.type}`,
-  setup: (reactEditor) => {
-    reactEditor.blockTypes.register(registration);
   },
 });
 

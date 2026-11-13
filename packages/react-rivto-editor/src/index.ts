@@ -18,11 +18,7 @@ export { ReactEditor, createReactEditor } from "./editor/react-editor";
 export type { BlockElementProps } from "./elements/types";
 export { pageDragExtension } from "./extensions/block-drag";
 export type { PageDragOptions } from "./extensions/block-drag";
-export {
-  blockExtension,
-  defaultWritingBlockExtension,
-  standardPreset,
-} from "./extensions/built-ins/built-ins";
+export { defaultWritingBlockExtension, standardPreset } from "./extensions/built-ins/built-ins";
 export type {
   SlashMenuPositionOptions,
   StandardPresetOptions,
@@ -316,3 +312,5 @@ export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
 export * from "./extensions/file";
 export * from "./extensions/image";
 export * from "./attachments";
+
+export { blockExtension, elementExtension } from "./authoring/extension";

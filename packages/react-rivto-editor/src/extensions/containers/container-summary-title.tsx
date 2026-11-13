@@ -1,3 +1,4 @@
+import { BlockText } from "../../authoring/block-text";
 import { useBlockEditing } from "../../hooks";
 import { BLOCK_SELECTION_ANCHOR_ATTRIBUTE, editorControlProps } from "../../constants";
 
@@ -31,11 +32,10 @@ interface ContainerSummaryTitleProps {
 export function ContainerSummaryTitle({ blockId, name }: ContainerSummaryTitleProps) {
   const editing = useBlockEditing(blockId);
   return (
-    <div
-      {...editing.attributes}
+    <BlockText
+      editing={editing.attributes}
       className="rivto-container-summary-title"
-      role="textbox"
-      aria-label={`${name} name`}
+      label={`${name} name`}
       data-placeholder={name}
       onFocus={(event) => {
         if (event.currentTarget.textContent === "") {

@@ -7,7 +7,7 @@ import {
   BlockContent,
   BlockRow,
   type BlockLayoutProps,
-} from "@chulane/rivto-page";
+} from "../../../authoring/layout";
 import { useBlockNode } from "../../../hooks/blocks/use-block";
 
 /**

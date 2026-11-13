@@ -1,3 +1,4 @@
+import { BlockText } from "../../authoring/block-text";
 import { CheckIcon, EllipsisIcon, MinusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button";
@@ -93,13 +94,14 @@ export function TodoItem({
         {statusIcon}
       </Button>
       <div className={TODO_BODY_CLASS}>
-        <div
-          {...editing.attributes}
+        <BlockText
+          editing={{
+            ...editing.attributes,
+            onInput: updateName,
+            onCompositionEnd: finishComposition,
+          }}
           className={TODO_NAME_CLASS}
-          role="textbox"
-          aria-label="TODO item name"
-          onInput={updateName}
-          onCompositionEnd={finishComposition}
+          label="TODO item name"
         />
         <Input
           {...editorControlProps}

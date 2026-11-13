@@ -11,7 +11,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Checkbox } from "../../components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "../../components/ui/native-select";
 import { editorControlProps } from "../../constants";
-import type { ElementPropertiesProps } from "../../managers/elements/types";
+import type { ElementPropertiesProps } from "../../authoring";
 import { DEFAULT_FONTS } from "./presets";
 import type { EdgelessFontOption, TextHorizontalAlign, TextVerticalAlign } from "./types";
 import { ColorControl } from "../../components/edgeless/color-control";

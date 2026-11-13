@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import { editorControlProps } from "../../constants";
+import { elementControlProps } from "../../authoring/element-control";
 
 /**
  * Paints a rectangle with a local corner-radius draft and an accessible adjustment handle.
@@ -63,7 +64,14 @@ export function RectangleShape(
       {selected && !editing && !preview && (
         <circle
           {...editorControlProps}
-          data-edgeless-ui="true"
+          {...elementControlProps<SVGCircleElement>((event) => {
+            if (event.button !== 0) {
+              return;
+            }
+            event.currentTarget.focus();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setDraft(Math.min(saved, maximum));
+          })}
           className="edgeless-rectangle-radius"
           role="slider"
           tabIndex={0}
@@ -76,16 +84,6 @@ export function RectangleShape(
           cy={offset}
           r={5 / scale}
           vectorEffect="non-scaling-stroke"
-          onDoubleClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            if (event.button !== 0) {
-              return;
-            }
-            event.currentTarget.focus();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            setDraft(Math.min(saved, maximum));
-          }}
           onPointerMove={(event) => {
             if (draft === null || !event.currentTarget.hasPointerCapture(event.pointerId)) {
               return;

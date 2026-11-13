@@ -1,6 +1,11 @@
 import { createElement as h } from "react";
 import { z } from "zod";
-import { BLOCK_TEXT_METADATA_KEY, blockExtension, useBlockEditing } from "@chulane/rivto-react";
+import {
+  BLOCK_TEXT_METADATA_KEY,
+  BlockText,
+  blockExtension,
+  useBlockEditing,
+} from "@chulane/rivto-react/authoring";
 
 /**
  * Renders a collaborative plain-text note using the editor-owned editable.
@@ -13,12 +18,10 @@ function Note({ blockId }) {
   if (!editing.block) {
     return null;
   }
-  return h("div", {
-    ...editing.attributes,
+  return h(BlockText, {
+    editing: editing.attributes,
     className: "dynamic-block dynamic-note",
-    role: "textbox",
-    "aria-multiline": true,
-    "aria-label": "Dynamic note",
+    label: "Dynamic note",
   });
 }
 

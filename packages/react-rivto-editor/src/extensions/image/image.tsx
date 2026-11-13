@@ -7,19 +7,19 @@
  *
  * @module
  */
+import { useBlockContent } from "../../authoring/use-block-content";
 import { escapeHtml } from "../../utils/escape-html";
 import { FileIngestion } from "../file/ingestion/file-ingestion";
 import {
   FileUploadStatusOverlay,
   FileUploadStatusStore,
 } from "../file/ingestion/file-upload-status";
-import type { ElementRenderProps } from "../../managers/elements/types";
+import type { ElementRenderProps } from "../../authoring";
 import type { BlockRendererProps } from "../../managers/blocks/renderer-types";
 import type { ReactEditorExtension } from "../../managers";
 import type { ReactEditorApi } from "../../editor/types";
 import { singleSelectedClipboardProps } from "../../managers/clipboard/clipboard-content";
 import type { BinaryProvider } from "../../attachments";
-import { useBlock, useBlockSelectionAnchor } from "../../hooks";
 import { configureImageViews, ImageView, type ImageViewCustomizations } from "./view/image-view";
 import { serializeImageMacro } from "./macro/image-macro";
 import { IMAGE_BLOCK_TYPE, prepareImageAsset } from "./ingestion/image-asset";
@@ -118,8 +118,7 @@ function imageProps(props: Record<string, unknown>): ImageProps | undefined {
  * @returns The shared image view, or a validation error for invalid props.
  */
 function ImageBlock({ blockId }: BlockRendererProps) {
-  const { block, operations } = useBlock(blockId);
-  const selectionAnchor = useBlockSelectionAnchor(blockId);
+  const { block, operations, selectionProps: selectionAnchor } = useBlockContent(blockId);
   const image = block ? imageProps(block.props) : undefined;
   if (!image) {
     return (
