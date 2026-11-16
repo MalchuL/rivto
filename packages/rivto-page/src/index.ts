@@ -3,6 +3,7 @@ export type {
   BlockBackgroundStyle,
   BlockTextStyle,
   BlockBorderStyle,
+  BlockSizeStyle,
 } from "./adapter/block-style";
 /**
  * Autonomous block presentation contracts, controller, component, and limited hooks.

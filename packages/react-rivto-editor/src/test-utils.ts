@@ -1,5 +1,4 @@
 import type { ReactPanelApi } from "./panels/types";
-import { createBlockOutlineContext } from "./block-behaviors/utils/context";
 import { ReactPanel } from "./panels/react-panel";
 import { YjsDoc } from "@chulane/crdt-doc";
 import {
@@ -182,13 +181,7 @@ export async function createTestMultiEditor(
  * @throws If a behavior or delegated block mutation fails.
  */
 export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
-  if (!context) {
-    return;
-  }
-  reactPanel.batchUpdates(() =>
-    reactPanel.editor.blockBehaviors.dispatch("onIndent", context, ids),
-  );
+  reactPanel.batchUpdates(() => reactPanel.blocks.indentBlocks(ids));
 }
 
 /**
@@ -203,11 +196,8 @@ export function indentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]):
  * @throws If a behavior or delegated block mutation fails.
  */
 export function outdentBlocks(reactPanel: ReactPanelApi, ids: readonly string[]): void {
-  const context = createBlockOutlineContext(reactPanel, ids[0], reactPanel.selection.get());
-  if (!context) {
+  if (ids.some((id) => !reactPanel.blocks.canOutdent(id))) {
     return;
   }
-  reactPanel.batchUpdates(() =>
-    reactPanel.editor.blockBehaviors.dispatch("onOutdent", context, ids),
-  );
+  reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks(ids));
 }

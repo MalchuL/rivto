@@ -6,6 +6,41 @@
   @apply page:rounded-[var(--rivto-block-radius,10px)];
 }
 
+.rivto-block[data-block-width] {
+  width: var(--rivto-block-own-width, auto);
+}
+
+.rivto-block[data-block-width-policy="grow"] {
+  width: max-content;
+  min-width: min(var(--rivto-block-own-width), 100%);
+  max-width: 100%;
+}
+
+.rivto-block[data-block-width-policy="scroll"] {
+  overflow-x: auto;
+}
+
+.rivto-block[data-block-width-policy="clip"] {
+  overflow-x: hidden;
+}
+
+.rivto-block[data-block-height-policy="grow"] {
+  min-height: var(--rivto-block-own-height);
+}
+
+.rivto-block[data-block-height-policy="scroll"],
+.rivto-block[data-block-height-policy="clip"] {
+  height: var(--rivto-block-own-height);
+}
+
+.rivto-block[data-block-height-policy="scroll"] {
+  overflow-y: auto;
+}
+
+.rivto-block[data-block-height-policy="clip"] {
+  overflow-y: hidden;
+}
+
 /* Selection belongs to the single block shell, including layouts without a row. */
 /* Layout surfaces consume this inherited fill while a subtree is selected.
  * Painting backgrounds directly preserves the exact theme color and leaves text,

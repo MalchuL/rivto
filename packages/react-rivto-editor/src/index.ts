@@ -17,6 +17,9 @@ export { EditorStorageContext } from "./editor/editor-storage-context";
 export { ReactEditor, createReactEditor } from "./editor/react-editor";
 export type { BlockElementProps } from "./elements/types";
 export { pageDragExtension } from "./extensions/block-drag";
+export { BlockResizeHandles } from "./extensions/containers/block-resize/block-resize-handles";
+export type { BlockResizeHandlesProps } from "./extensions/containers/block-resize/block-resize-handles";
+export type { BlockResizeEdge } from "./extensions/containers/block-resize/block-resize-controller";
 export type { PageDragOptions } from "./extensions/block-drag";
 export {
   blockExtension,
@@ -184,11 +187,8 @@ export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors"
 export type {
   BlockBehavior,
   BlockBehaviorContext,
-  BlockOutlineContext,
   BlockBehaviorData,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorOutcome,
-  BlockMoveContext,
 } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export {
@@ -316,3 +316,9 @@ export type { RegisteredSurfaceProps } from "./surfaces/registered-surface";
 export * from "./extensions/file";
 export * from "./extensions/image";
 export * from "./attachments";
+
+export { transferBlocksBetweenDocuments } from "./block-transfer/cross-document-block-transfer";
+export type {
+  BlockTransferPanel,
+  CrossDocumentBlockTransferPlacement,
+} from "./block-transfer/types";

@@ -1105,16 +1105,10 @@ test("panel behavior resolves against its own document before any DOM root is mo
   const a = f.a.editor;
   const b = f.b.editor;
   expect(
-    a.blockBehaviors.resolveAll({
-      editor: a,
-      block: a.blocks.getBlockNode("same-id")!,
-    })[0],
+    a.blockBehaviors.resolveAll(a.blocks.getBlockNode("same-id")!)[0],
   ).toBeInstanceOf(DefaultBlockBehavior);
   expect(
-    b.blockBehaviors.resolveAll({
-      editor: b,
-      block: b.blocks.getBlockNode("same-id")!,
-    })[0],
+    b.blockBehaviors.resolveAll(b.blocks.getBlockNode("same-id")!)[0],
   ).toBeInstanceOf(DefaultBlockBehavior);
   expect(a.blockListProps.prepare({})).toEqual({});
   expect(() => a.blockListProps.validate({})).not.toThrow();

@@ -33,7 +33,17 @@ export class PanelSelectionManager implements PanelSelectionApi {
    */
   constructor(
     private readonly reactPanel: ReactPanelApi,
-    private readonly coreSelection: Omit<SelectionManagerApi, "resolveBlockSelection">,
+    private readonly coreSelection: Pick<
+      SelectionManagerApi,
+      | "clear"
+      | "delete"
+      | "get"
+      | "isBlockSelected"
+      | "isElementSelected"
+      | "set"
+      | "snapshot"
+      | "subscribe"
+    >,
   ) {}
 
   /**
@@ -79,21 +89,36 @@ export class PanelSelectionManager implements PanelSelectionApi {
     return this.coreSelection.subscribe(listener);
   }
 
-  /** Deletes selected content through core only when this panel owns the selection.
-   * Does nothing when the selection is empty, outside this subtree, or owned by another panel. */
+  /**
+   * Deletes the active panel's selected content within its block and element boundaries.
+   *
+   * Structural block removal and selected element deletion share one history batch.
+   * A structural behavior that claims the block group leaves the selection intact.
+   * Text and element-only selections are deleted by the shared selection manager.
+   *
+   * @returns After deletion, or without changes for an inaccessible selection.
+   * @throws If a structural behavior or delegated deletion fails.
+   */
   delete(): void {
     if (!this.isSelectionInActivePanel()) {
       return;
     }
     const selection = this.coreSelection.get();
-    if (
-      selection &&
-      isStructuralSelection(selection) &&
-      selection.blocks.some(({ id }) => !this.reactPanel.blocks.canRemove(id))
-    ) {
+    if (!selection || !isStructuralSelection(selection)) {
+      this.coreSelection.delete();
       return;
     }
-    this.coreSelection.delete();
+    const ids = selection.blocks.map(({ id }) => id);
+    if (ids.some((id) => !this.reactPanel.blocks.canRemove(id))) {
+      return;
+    }
+    this.reactPanel.batchUpdates(() => {
+      if (!this.reactPanel.blocks.removeBlocks(ids)) {
+        return;
+      }
+      this.reactPanel.elements.removeElements(selection.elements ?? []);
+      this.coreSelection.clear();
+    });
   }
 
   /** @returns Immutable core selection snapshot with stable identity until selection changes,

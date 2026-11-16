@@ -184,7 +184,9 @@ export class SelectionManager implements SelectionManagerApi {
     // either branch so mixed canvas+page selections stay one undo step.
     if (!range || isStructuralSelection(current)) {
       this.editor.history.batchUpdates(() => {
-        range?.blocks.forEach((block) => this.editor.blocks.removeBlock(block.id));
+        if (range && !this.editor.blocks.removeBlocks(range.blocks.map((block) => block.id))) {
+          return;
+        }
         this.editor.elements.removeElements(elementIds);
         this.clear();
       });
@@ -197,8 +199,11 @@ export class SelectionManager implements SelectionManagerApi {
       const prefix = first.block.content.slice(0, first.startOffset);
       const suffix = last.block.content.slice(last.endOffset);
       this.editor.history.batchUpdates(() => {
-        range.blocks.slice(1).forEach((block) => this.editor.blocks.removeBlock(block.id));
-        this.editor.blocks.updateBlock(first.block.id, { content: prefix + suffix });
+        this.editor.blocks.replaceTextSelection(
+          first.block.id,
+          range.blocks.slice(1).map((block) => block.id),
+          prefix + suffix,
+        );
         this.editor.elements.removeElements(elementIds);
         this.collapse(first.block.id, prefix.length);
       });

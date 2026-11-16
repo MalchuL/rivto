@@ -33,7 +33,7 @@ async function load(page: Page, type: Container, mode: Mode): Promise<void> {
           render: bento.renderer,
           layout: bento.layout,
           behavior: {
-            isAvailable: ({ block }) => block.type === type,
+            isAvailable: (block) => block.type === type,
             childDropPlacement: () => "siblings",
           },
         });

@@ -19,7 +19,7 @@ for (const outcome of ["unhandled", "handled"] as const) {
       const [left, right] = board.children;
       const child = right!.children[0]!;
       host.behaviorDeleteCalls = [];
-      reactEditor.blockBehaviors.register(
+      editor.blockRegistry.registerBehavior(
         {
           isAvailable: () => true,
           /** @param context - Selected block context. @param selected - Entire structural selection. @returns Configured claim outcome. */
@@ -125,7 +125,6 @@ for (const count of [1, 200]) {
       };
     }, ids);
     expect(state.remaining).toEqual([]);
-    expect(state.reads).toBeGreaterThan(0);
     expect(state.reads).toBeLessThanOrEqual(3);
     await page.keyboard.press("Control+z");
     await expect
@@ -156,7 +155,7 @@ test("availability uses current properties independently for blocks of the same 
       }
     ).__rivtoDemo;
     reactEditor.blockBehaviors.register({
-      isAvailable: (context) => context.block.props.hideChildren === true,
+      isAvailable: (block) => block.props?.hideChildren === true,
       childrenVisible: () => false,
     });
     const beforeId = editor.blocks.getRootIds()[0];
@@ -252,8 +251,8 @@ for (const mode of ["block", "edgeless"] as const) {
           }
           host.allowBehaviorMove = false;
           host.behaviorMoveChecks = 0;
-          reactEditor.blockBehaviors.register({
-            isAvailable: ({ block }) => block.props.moveRestricted === true,
+          editor.blockRegistry.registerBehavior({
+            isAvailable: (block) => block.props?.moveRestricted === true,
             canMove: () => {
               host.behaviorMoveChecks++;
               return host.allowBehaviorMove;

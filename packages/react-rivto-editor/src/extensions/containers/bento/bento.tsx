@@ -1,7 +1,7 @@
 import { createContainerBackgroundProcessor } from "../../../blocks/background-color";
 /**
  * Optional responsive Bento container for ordinary editor blocks. Width
- * preferences live in block props; content controls height. Tile widths are
+ * preferences live in block styles; content controls height by default. Tile widths are
  * previewed from left and right edges without reflowing the wrap layout, then
  * persisted once the pointer is released. Shared tree, keyboard and drag
  * extensions retain ownership of hierarchy, Enter, selection and transactions.
@@ -21,7 +21,7 @@ import {
   ContainerSummaryTitle,
 } from "../container-summary-title";
 import type { ReactEditorExtension } from "../../../managers";
-import { BENTO_BLOCK_TYPE, bentoBehavior } from "./bento-behavior";
+import { BENTO_BLOCK_TYPE, bentoBehavior, restoreBentoSize } from "./bento-behavior";
 
 export { BENTO_BLOCK_TYPE } from "./bento-behavior";
 const SUMMARY_CLASS = "rivto-bento-summary";
@@ -103,6 +103,23 @@ export function bentoExtension(): ReactEditorExtension {
           reactEditor.blocks.registerProcessor(
             createContainerBackgroundProcessor(BENTO_BLOCK_TYPE),
           ),
+        ),
+        // Normalize detached copies before their destination-specific enter hook runs.
+        // The processor does not inspect the destination parent: an ID absent from
+        // this document may carry Bento overrides from a copy or another document.
+        // Restore its saved dimensions first; a receiving Bento reapplies its size
+        // in onChildEnter. Existing blocks keep their current placement size.
+        reactEditor.extensions.registerCleanup(
+          reactEditor.blocks.registerProcessor({
+            id: "bento.restore-detached-width",
+            priority: 0,
+            processor: (block) => {
+              if (block.id && reactEditor.blocks.hasBlock(block.id)) {
+                return block;
+              }
+              return restoreBentoSize(block);
+            },
+          }),
         ),
         reactEditor.blockTypes.register({
           definition: {

@@ -144,7 +144,7 @@ export function setColumnsCount(
     }
     const removed = columns.slice(next);
     relocateColumnContents(
-      reactPanel,
+      reactPanel.document.blocks,
       removed.map((column) => column.id),
     );
     reactPanel.blocks.removeBlocks(removed.map((column) => column.id));

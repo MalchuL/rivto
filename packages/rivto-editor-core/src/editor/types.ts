@@ -26,9 +26,9 @@ export interface CreateDocumentEditorOptions {
 /**
  * Public editor coordinator exposed to UI and integrations.
  *
- * Block and element behavior is intentionally available only through
- * `.blocks` and `.elements`. The editor itself owns cross-cutting runtime lifecycle,
- * commands, selection, history, snapshots, and document subscriptions.
+ * Block and element operations live on `.blocks` and `.elements`; editor-local
+ * structural policy is owned by `.blocks`. The editor owns their
+ * lifecycle as well as commands, selection, history, snapshots, and subscriptions.
  */
 export interface DocumentEditorAPI {
   /** Definitions applied by the element command pipeline; loading unknown types remains lossless. */
@@ -37,7 +37,7 @@ export interface DocumentEditorAPI {
   readonly blocks: BlockManagerApi;
   /** Editor-wide list-property defaults and semantic validation. */
   readonly blockListProps: BlockListPropsManagerApi;
-  /** Native block definitions, defaults, and property validation. */
+  /** Native block definitions, behavior registrations, defaults, and property validation. */
   readonly blockRegistry: BlockRegistryManagerApi;
   /** Generic first-class canvas element operations. */
   readonly elements: ElementManagerApi;

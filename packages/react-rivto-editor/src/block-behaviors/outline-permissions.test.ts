@@ -21,7 +21,7 @@ test("indent permissions work without dragging and preserve selection and undo",
     const beforeSelection = panel.selection.snapshot();
     core.history.clear();
     const calls: string[][] = [];
-    const release = panel.editor.blockBehaviors.register({
+    const release = core.blockRegistry.registerBehavior({
       isAvailable: () => true,
       canMove: (context) => {
         calls.push(context.sources.map((source) => source.id));
@@ -78,7 +78,7 @@ test.each(["lift", "tail"])(
       const beforeSelection = panel.selection.snapshot();
       core.history.clear();
       const calls: Array<{ ids: string[]; parentId: string | null; beforeId?: string }> = [];
-      const release = panel.editor.blockBehaviors.register({
+      const release = core.blockRegistry.registerBehavior({
         isAvailable: () => true,
         canMove: ({ sources, destination }) => {
           calls.push({ ids: sources.map((source) => source.id), ...destination });

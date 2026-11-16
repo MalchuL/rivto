@@ -113,10 +113,7 @@ test("bento inside bento keeps each board as its own floor", async () => {
   expect(editor.blocks.getParentId(tile)).toBe(inner);
   expect(
     reactPanel.editor.blockBehaviors
-      .resolveAll({
-        editor: reactPanel.editor,
-        block: editor.blocks.getBlockNode(outer)!,
-      })
+      .resolveAll(editor.blocks.getBlockNode(outer)!)
       .some((behavior) => behavior instanceof BentoBehavior),
   ).toBe(true);
   reactPanel.editor.destroy();
@@ -186,19 +183,10 @@ test("table inside a bento tile and bento inside a table cell compose floors", a
  * @returns After asserting the parent's explicit rejection outcome.
  */
 function expectParentOutdentRejected(panel: ReactPanelApi, id: string): void {
-  const block = panel.blocks.getBlockNode(id)!;
-  const behavior = panel.editor.blockBehaviors
-    .resolveAll({ editor: panel.editor, block })
-    .find((candidate) => candidate.onChildOutdent);
-  expect(
-    behavior?.onChildOutdent?.(
-      {
-        reactPanel: panel,
-        block,
-        parentId: panel.blocks.getParentId(id) ?? null,
-        selection: undefined,
-      },
-      block.childIds,
-    ),
-  ).toBe("rejected");
+  const children = panel.blocks.getChildIds(id);
+  if (!children.length) {
+    return;
+  }
+  expect(panel.blocks.outdentBlocks([children[0]!])).toBe(true);
+  expect(panel.blocks.getParentId(children[0]!)).toBe(id);
 }

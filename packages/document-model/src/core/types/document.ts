@@ -6,7 +6,13 @@
  * inheriting adapter state or exposing persistence-only operations.
  */
 
-/** Opaque properties interpreted by page/outline extensions. */
+/**
+ * Opaque properties interpreted by page/outline extensions.
+ *
+ * The optional `style` value can contain fields interpreted by presentation layers.
+ * Stored values must be portable, but the model does not validate their style
+ * schema; they may contain other or malformed fields.
+ */
 export type BlockListProps = Record<string, unknown>;
 
 /** Current document snapshot schema version. */
@@ -176,6 +182,13 @@ export interface BlockDestination {
 }
 
 export interface DocumentBlockManagerApi {
+  /**
+   * Allocates an unused block identity without inserting or reserving it.
+   *
+   * @returns A new identity from this document's configured generator.
+   * @throws If the generator produces an invalid or already stored identity.
+   */
+  createBlockId(): string;
   /** Monotonic block-data and hierarchy revision. */
   readonly revision: number;
   /** Whether the root block list is empty. */

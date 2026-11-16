@@ -878,13 +878,13 @@ function seedFeatureDemo(editor: FeatureSeedEditor, documentId: string): void {
         {
           ...paragraphBlockFactory.createEmptyBlock(),
           content: "A small idea",
-          props: { bentoWidth: 220 },
+          pluginData: { bentoWidth: 220 },
         },
         {
           ...paragraphBlockFactory.createEmptyBlock(),
           content:
             "Room to explore. Drag this tile's left or right edge to resize. Heights follow your content, and tiles wrap with the editor width.",
-          props: { bentoWidth: 400 },
+          pluginData: { bentoWidth: 400 },
         },
         {
           ...paragraphBlockFactory.createEmptyBlock(),

@@ -1,7 +1,7 @@
+import type { BlockInput } from "@chulane/document-model";
 import type { KeyboardSelectionTarget } from "../../../../managers/keyboard/selection";
 import type {
   BlockBehavior,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorContext,
   BlockBehaviorOutcome,
 } from "../../../../block-behaviors/types";
@@ -17,10 +17,10 @@ export class ListBlockBehavior implements BlockBehavior {
    * @param context - Current detached block fields and runtime; availability does not depend on a particular method or native type.
    * @returns True unless checkbox or a numbered mode owns this marker.
    */
-  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
+  isAvailable(context: BlockInput): boolean {
     return (
-      context.block.listProps.type !== "checkbox" &&
-      !isNumberedListType(context.block.listProps.type)
+      context.listProps?.type !== "checkbox" &&
+      !isNumberedListType(context.listProps?.type)
     );
   }
 

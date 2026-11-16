@@ -34,13 +34,7 @@ export {
 } from "./extensions/containers/kanban/kanban";
 
 export { ContainerBlockBehavior, DefaultBlockBehavior } from "./block-behaviors";
-export type {
-  BlockBehavior,
-  BlockBehaviorContext,
-  BlockOutlineContext,
-  BlockBehaviorOutcome,
-  BlockMoveContext,
-} from "./block-behaviors";
+export type { BlockBehavior, BlockBehaviorContext, BlockBehaviorOutcome } from "./block-behaviors";
 export { BlockModal, BlockModalButton } from "./blocks/block-modal/block-modal";
 export {
   BENTO_BLOCK_TYPE,

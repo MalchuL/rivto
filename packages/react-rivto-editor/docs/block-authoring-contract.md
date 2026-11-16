@@ -237,15 +237,14 @@ return <div {...attributes} className={BOARD_BODY_CLASS} />;
 ```
 
 Container behavior is declared separately by extending the abstract `ContainerBlockBehavior`.
-Implement `isAvailable(context)` to select the intended native type; registration
+Implement `isAvailable(block)` to select the intended native type; registration
 no longer supplies an implicit type restriction. The base provides container
 Enter handling, without inheriting generic outline actions. Movement restrictions
 belong to the optional `canMove(context)` method. Applicability always receives
-`{ editor, block }`, with current detached fields and no discriminator or method
-name. A native behavior selects its type directly through `block.type`. The
+the current detached block fields, with no discriminator or method name. A native behavior selects its type directly through `block.type`. The
 registry considers moved sources followed by the receiving parent using this same
 contract; the first matching candidate selects a registration, whose canMove runs once. Movement
-arguments stay in `BlockMoveContext`: sources, destination, editor, and the parent
+arguments stay in `BlockStructuralMoveContext`: sources, destination, and the parent
 resolved once by the registry, including null at the document root. Foreign source
 fields are used directly rather than resolving their IDs in the destination document.
 Every applicable permission must allow the move; an omitted hook adds no restriction.

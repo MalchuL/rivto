@@ -312,10 +312,8 @@ function importClipboardBlocks(
   blocks: readonly EditorBlockInput[],
   destination?: BlockDestination,
 ) {
-  return editor.blocks.importForest(
-    blocks,
-    destination,
-    context.onPrepareError,
-    context.blockIdMap,
-  );
+  return editor.blocks.importForest(blocks, destination, {
+    onError: context.onPrepareError,
+    ids: context.blockIdMap,
+  });
 }

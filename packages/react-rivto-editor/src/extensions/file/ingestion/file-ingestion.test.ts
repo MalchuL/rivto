@@ -134,7 +134,7 @@ test("refuses a file block when the receiving block rejects its type", async () 
   const panel = createTestReactEditor({ editor, extensions: [fileExtension({ provider })] });
   const parent = panel.blocks.insertBlock({ type: "paragraph" }, { root: true });
   const { statuses, feedback } = feedbackStore();
-  const permission = jestApi.spyOn(panel.editor.blockBehaviors, "canMove").mockReturnValue(false);
+  const permission = jestApi.spyOn(panel.editor.blocks, "canMove").mockReturnValue(false);
   const ingestion = new FileIngestion(feedback);
   ingestion.ingest({
     panel,

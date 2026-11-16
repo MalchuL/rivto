@@ -159,18 +159,18 @@ const JOURNAL_SECTIONS: BlockInput[][] = [
           type: "paragraph",
           content:
             "**A cooperative puzzle**\nWork together, take turns, and celebrate the small discoveries.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
         {
           type: "paragraph",
           content:
             "**A quick card game**\nSomething easy to teach, with another round always an option.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
         {
           type: "paragraph",
           content: "**A jigsaw by the window**\nLeave it out for anyone who wants to add a piece.",
-          props: { bentoWidth: 260 },
+          pluginData: { bentoWidth: 260 },
         },
       ],
     },

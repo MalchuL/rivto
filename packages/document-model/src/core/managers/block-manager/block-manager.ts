@@ -84,6 +84,22 @@ export class DocumentBlockManager implements DocumentBlockManagerApi {
   protected generateId(): string {
     return crypto.randomUUID();
   }
+
+  /**
+   * Allocates an identity using this document's block identity policy.
+   *
+   * The returned identity is not reserved until insertion.
+   *
+   * @returns A newly generated identity not currently present in storage.
+   * @throws If the configured generator returns an invalid or existing identity.
+   */
+  createBlockId(): string {
+    const id = requireNonemptyId(this.generateId(), "Block");
+    if (this.storage.has(id)) {
+      throw new Error(`Block ${id} already exists`);
+    }
+    return id;
+  }
   /** Detached snapshots invalidated before subscribers are notified. */
   private readonly cache: BlockCache;
   /**

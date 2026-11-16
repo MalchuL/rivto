@@ -1,6 +1,14 @@
 export * from "./managers";
 export * from "./editor";
 export * from "./panels";
+export type {
+  BlockChildBehaviorContext,
+  BlockStructuralBehavior,
+  BlockStructuralScope,
+  BlockStructuralMoveContext,
+  BlockStructuralContext,
+  BlockStructuralOutcome,
+} from "./block-behaviors/types";
 export { BlockReferenceResolver } from "./references/block-reference-resolver";
 export { waitWithAbort } from "./references/wait-with-abort";
 export type {

@@ -233,7 +233,7 @@ function deleteMenuBlocks(context: BlockContextMenuContext): void {
     throw new Error("The invoking panel is no longer mounted");
   }
   reactPanel.selection.set(createStructuralSelection([...rootIds]));
-  deletePanelSelection(reactPanel, root);
+  deletePanelSelection(reactPanel);
   if (!focusSelectionCaret(root, reactPanel.selection)) {
     root.focus({ preventScroll: true });
   }

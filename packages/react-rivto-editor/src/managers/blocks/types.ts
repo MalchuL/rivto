@@ -54,7 +54,7 @@ export interface ReactBlockRegistration {
   /**
    * Editing and movement integration owned together with this block definition.
    *
-   * The same instance is reused for every block selected by isAvailable(context).
+   * The same instance is reused for every block selected by isAvailable(block).
    * BlockTypeManager registers it with runtime.blockBehaviors and removes it with
    * this registration. The instance must select its own native types; registration
    * does not add an implicit definition.type guard. Omit it to let other applicable

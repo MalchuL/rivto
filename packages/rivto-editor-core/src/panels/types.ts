@@ -11,7 +11,7 @@ import type {
   EditorElementPatch,
   EditorElementUpdate,
 } from "../editor/model";
-import type { BlockPrepareErrorHandler } from "../managers/block-manager/types";
+import type { BlockImportOptions, BlockPrepareErrorHandler } from "../managers/block-manager/types";
 import type { ImportedBlockForest } from "../managers/types";
 
 /** Fixed, independent block and element boundaries; omitted roots select the whole document. */
@@ -396,7 +396,7 @@ export interface PanelBlocksAPI {
   /** @param id - Local subtree to remove. @throws If outside or the protected embedding root. */
   removeBlock(id: string): void;
   /** @param ids - Local subtrees. @throws Before any write if a target is outside or protected. */
-  removeBlocks(ids: readonly string[]): void;
+  removeBlocks(ids: readonly string[]): boolean;
   /** @param targetId - Surviving local block. @param sourceId - Removed local block. @returns Caret offset after merging. */
   mergeBlocks(targetId: string, sourceId: string): number;
   /** @param id - Local subtree. @param targetId - Local destination or panel list start. @param position - Placement relative to target. */
@@ -410,17 +410,16 @@ export interface PanelBlocksAPI {
   /** @param id - Local subtree to indent. */
   indentBlock(id: string): void;
   /** @param ids - Local sibling roots. @throws If indent could adopt an outside sibling. */
-  indentBlocks(ids: readonly string[]): void;
+  indentBlocks(ids: readonly string[]): boolean;
   /** @param id - Local subtree to outdent. @throws At the panel boundary. */
   outdentBlock(id: string): void;
   /** @param ids - Local sibling roots. @throws Before mutation if any outdent crosses the boundary. */
-  outdentBlocks(ids: readonly string[]): void;
+  outdentBlocks(ids: readonly string[]): boolean;
   /** Imports a copied forest directly into a validated panel destination. */
   importForest(
     input: readonly (EditorBlock | EditorBlockInput)[],
     destination?: PanelDestination,
-    onError?: BlockPrepareErrorHandler,
-    ids?: ReadonlyMap<string, string>,
+    options?: BlockImportOptions,
   ): ImportedBlockForest;
   /** Whether the selected block itself is displayed and protected. */
   readonly includeRoot: boolean;

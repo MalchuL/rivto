@@ -33,7 +33,7 @@ export interface BlockViewProps extends HTMLAttributes<HTMLDivElement> {
  * color without inheriting a parent block's color or installing a theme subscription.
  * A layout may make its shell transparent when it owns the background paint, avoiding
  * duplicate compositing for translucent colors while retaining selection precedence.
- * The node's local style supplies its own background, text and border. Text rules
+ * The node's local style supplies its own background, text, border and dimensions. Text rules
  * are scoped to this block's content; descendants retain their independent styles.
  * The selection fill and public background override retain their existing priority.
  *
@@ -57,6 +57,9 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function Blo
     typeof appearance?.background?.color === "string" ? appearance.background.color : undefined;
   const text = appearance?.text;
   const border = appearance?.border;
+  const size = appearance?.size;
+  const width = typeof size?.width === "string" ? size.width : undefined;
+  const height = typeof size?.height === "string" ? size.height : undefined;
   const textColor = typeof text?.color === "string" ? text.color : undefined;
   const fontFamily = typeof text?.fontFamily === "string" ? text.fontFamily : undefined;
   const fontSize = typeof text?.fontSize === "string" ? text.fontSize : undefined;
@@ -72,6 +75,8 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function Blo
   const borderStyle = typeof border?.style === "string" ? border.style : undefined;
   const borderRadius = typeof border?.radius === "string" ? border.radius : undefined;
   const blockStyle: BlockCssProperties = {
+    "--rivto-block-own-width": width ? blockStyleLength(width) : "initial",
+    "--rivto-block-own-height": height ? blockStyleLength(height) : "initial",
     borderColor,
     borderWidth: borderWidth ? blockStyleLength(borderWidth) : undefined,
     borderStyle,
@@ -97,6 +102,9 @@ export const BlockView = forwardRef<HTMLDivElement, BlockViewProps>(function Blo
       data-block-type={block.type}
       data-block-list-type={block.listType}
       data-block-background={background || undefined}
+      data-block-width={width !== undefined || undefined}
+      data-block-width-policy={width ? size?.widthPolicy : undefined}
+      data-block-height-policy={height ? (size?.heightPolicy ?? "grow") : undefined}
       data-block-text-color={textColor !== undefined || undefined}
       data-block-font-family={fontFamily !== undefined || undefined}
       data-block-font-size={fontSize !== undefined || undefined}

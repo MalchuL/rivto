@@ -30,7 +30,7 @@ export class DocumentEditor implements DocumentEditorAPI {
   readonly blocks: BlockManager;
   /** Public owner of list-property defaults and semantic validation. */
   readonly blockListProps: BlockListPropsManager;
-  /** Public owner of native block definitions and property validation. */
+  /** Public owner of native block definitions, behavior registrations, and property validation. */
   readonly blockRegistry: BlockRegistryManager;
   /** Public owner of first-class canvas element commands. */
   readonly elements: ElementManager;
@@ -67,7 +67,7 @@ export class DocumentEditor implements DocumentEditorAPI {
     this.history = new HistoryManager(this.document.history);
     this.blockRegistry = new BlockRegistryManager();
     this.blockListProps = new BlockListPropsManager();
-    this.blocks = new BlockManager(this);
+    this.blocks = new BlockManager(this, this.blockRegistry);
     this.elements = new ElementManager(this);
     this.selection = new SelectionManager(this);
     this.clipboard = new ClipboardManager(this);

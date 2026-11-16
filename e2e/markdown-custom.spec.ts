@@ -16,6 +16,7 @@ import {
   blockTypeSelector,
 } from "./dom-markers";
 import type { DocumentEditorAPI } from "@chulane/rivto";
+import type { ReactEditor } from "@chulane/rivto-react";
 
 const BLOCK_ANCESTOR_XPATH = `xpath=ancestor::*[@${BLOCK_ID_ATTRIBUTE}][1]`;
 const MARKDOWN_CODE_EDITOR_CLASS = "markdown-code-editor";
@@ -400,6 +401,48 @@ test("filters typo queries, converts in place, and undoes query removal with con
   await expect(converted).toHaveAttribute("data-block-type", "paragraph");
   await converted.locator("[data-block-content]").click();
   await expect(converted.locator("[data-block-content]")).toHaveText(`${initial}/sloder`);
+});
+
+test("updates slash search after a second slash", async ({ page }) => {
+  const content = page.locator('[data-journal-document="today"] [data-block-content]').last();
+  await content.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("//text");
+  const menu = page.locator("[data-slash-menu]");
+  await expect(menu.locator('[data-slash-command="type.paragraph"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await expect(menu.locator('[data-slash-command="type.demo.slider"]')).toHaveCount(0);
+});
+
+test("refreshes content-dependent slash availability while typing", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const { editor, reactEditor } = (
+      window as unknown as {
+        __rivtoDemo: { editor: DocumentEditorAPI; reactEditor: ReactEditor };
+      }
+    ).__rivtoDemo;
+    reactEditor.slashCommands.register({
+      id: "test.empty-content",
+      title: "Empty content",
+      isAvailable: ({ blockId, reactPanel }) => {
+        const content = reactPanel.blocks.getBlockNode(blockId)?.content;
+        return content !== undefined && /^\/[a-z]*$/.test(content);
+      },
+      execute: () => {},
+    });
+    return editor.blocks.insertBlock({ type: "paragraph", content: "" }).id;
+  });
+  const content = page.locator(blockIdSelector(id)).locator("[data-block-content]");
+  await content.click();
+  await page.keyboard.type("/");
+  const command = page.locator('[data-slash-command="test.empty-content"]');
+  await expect(command).toBeVisible();
+  await page.keyboard.type("/");
+  await expect(command).toHaveCount(0);
+  await page.keyboard.press("Backspace");
+  await expect(command).toBeVisible();
 });
 
 test("keeps a filtered slash menu beside the caret when it opens upward", async ({ page }) => {

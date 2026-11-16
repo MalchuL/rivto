@@ -32,7 +32,26 @@ export interface BlockBorderStyle {
   readonly radius?: string;
 }
 
-/** Portable appearance of one block; it does not apply to descendant blocks. */
+/** Preferred block dimensions and behavior when content exceeds them. */
+export interface BlockSizeStyle {
+  /** Preferred width; a unitless value is interpreted as pixels. */
+  readonly width?: string;
+  /** Grow from the preferred width, or retain it and scroll or clip horizontal overflow. */
+  readonly widthPolicy?: "grow" | "scroll" | "clip";
+  /** Height or minimum height; a unitless value is interpreted as pixels. */
+  readonly height?: string;
+  /** Grow beyond height by default, or use a fixed height with scrolling or clipping. */
+  readonly heightPolicy?: "grow" | "scroll" | "clip";
+}
+
+/**
+ * Portable appearance of one block supplied by the host adapter.
+ *
+ * Rivto's document host stores this data in `listProps.style`; other hosts may
+ * use their own storage. This describes recognized fields, not validation of persisted data. Unknown
+ * or malformed fields may also be present and must be checked by consumers.
+ * A block's own appearance does not apply to descendant blocks.
+ */
 export interface BlockStyle {
   /** Own background, including an optional alpha channel. */
   readonly background?: BlockBackgroundStyle;
@@ -40,4 +59,6 @@ export interface BlockStyle {
   readonly text?: BlockTextStyle;
   /** Own border appearance. */
   readonly border?: BlockBorderStyle;
+  /** Own dimensions and overflow behavior. */
+  readonly size?: BlockSizeStyle;
 }

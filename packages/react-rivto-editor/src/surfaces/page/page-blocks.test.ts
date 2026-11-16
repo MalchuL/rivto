@@ -10,7 +10,16 @@ it("persists and removes block styles with undo, clipboard and snapshot round tr
   const panel = createTestReactEditor({ editor: core });
   const node = core.blocks.insertBlock({ type: "paragraph" });
   const blocks = new PageBlocks(panel, panel.editor.blockBehaviors);
-  const style = { text: { color: "#ff0000" }, border: { radius: "20px" } };
+  const style = {
+    text: { color: "#ff0000" },
+    border: { radius: "20px" },
+    size: {
+      width: "300px",
+      widthPolicy: "clip" as const,
+      height: "100px",
+      heightPolicy: "scroll" as const,
+    },
+  };
   core.history.clear();
   blocks.updateBlockNode(node.id, { style });
   expect(blocks.getBlockNode(node.id)?.style).toEqual(style);
@@ -84,7 +93,7 @@ it("reuses model snapshots and addressed subscriptions without visiting descenda
      * @param context - Current own-node behavior context.
      * @returns Whether this is the fixture parent.
      */
-    isAvailable: ({ block }) => block.id === root.id,
+    isAvailable: (block) => block.id === root.id,
     /**
      * Hides fixture children while the registration is installed.
      *

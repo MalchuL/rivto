@@ -9,7 +9,7 @@ import {
   type ResolvedBlockDropTarget,
 } from "@chulane/rivto-page";
 import type { CrossDocumentBlockPanel } from "../../extensions/block-drag/cross-document/panel";
-import { CrossDocumentBlockTransfer } from "../../extensions/built-ins/clipboard/cross-document-block-transfer";
+import { transferBlocksBetweenDocuments } from "../../block-transfer/cross-document-block-transfer";
 import { crossDocumentPageRootControllers } from "../../extensions/block-drag/cross-document/target";
 import type { CrossDocumentPageRootController } from "../../extensions/block-drag/types";
 import { PageDragOccurrence } from "./page-drag-occurrence";
@@ -222,7 +222,7 @@ export class PageBlockDrag implements BlockDragAdapter {
     } else if (receiver.document.getDocument() === this.panel.document.getDocument()) {
       this.panel.document.blocks.moveBlocks([...ids], move.targetId, move.position);
     } else {
-      new CrossDocumentBlockTransfer(this.panel, receiver).move(ids, move);
+      transferBlocksBetweenDocuments(this.panel, receiver, ids, move);
     }
     if (receiver !== this.panel) {
       this.panel.selection.clear();
@@ -297,7 +297,7 @@ export class PageBlockDrag implements BlockDragAdapter {
     if (
       sources.length !== ids.length ||
       (!sameDocument && this.hasIdentityConflict(sources, receiver)) ||
-      !receiver.editor.blockBehaviors.canMove({
+      !receiver.editor.blocks.canMove({
         sources,
         destination: { parentId: parent, beforeId },
       })

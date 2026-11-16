@@ -4,7 +4,7 @@ import { DocumentModelImpl } from "@chulane/document-model";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 import { createCaretSelection, createStructuralSelection } from "@chulane/rivto";
 import { z } from "zod";
-import { CrossDocumentBlockTransfer } from "../extensions/built-ins/clipboard/cross-document-block-transfer";
+import { transferBlocksBetweenDocuments } from "../block-transfer/cross-document-block-transfer";
 import { createReactEditor } from "./react-editor";
 import { EditorStorage } from "./editor-storage";
 
@@ -196,14 +196,14 @@ it("transfers stable subtree IDs and validates the destination before deleting t
     children: [{ id: "child", type: "paragraph" }],
   });
   expect(() =>
-    new CrossDocumentBlockTransfer(multi.getEditor("A")!, multi.getEditor("B")!).move(["parent"], {
+    transferBlocksBetweenDocuments(multi.getEditor("A")!, multi.getEditor("B")!, ["parent"], {
       targetId: "missing",
       position: "inside",
     }),
   ).toThrow();
   expect(a.blocks.hasBlock("parent")).toBe(true);
   expect(b.blocks.getRootIds()).toEqual([]);
-  new CrossDocumentBlockTransfer(multi.getEditor("A")!, multi.getEditor("B")!).move(["parent"], {
+  transferBlocksBetweenDocuments(multi.getEditor("A")!, multi.getEditor("B")!, ["parent"], {
     targetId: null,
     position: "after",
   });
@@ -230,7 +230,7 @@ it("rejects destination type rules without a partial transfer", async () => {
   const b = (await multi.acquireEditor("B")).editor;
   a.blocks.insertBlock({ id: "custom", type: "custom" });
   expect(() =>
-    new CrossDocumentBlockTransfer(multi.getEditor("A")!, multi.getEditor("B")!).move(["custom"], {
+    transferBlocksBetweenDocuments(multi.getEditor("A")!, multi.getEditor("B")!, ["custom"], {
       targetId: null,
       position: "after",
     }),

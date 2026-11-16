@@ -18,7 +18,8 @@ import type {
 import type { ElementDestination, BlockDestination } from "@chulane/document-model";
 import type { EditorMode } from "../editor/types";
 import type { BlockProcessor } from "./block-manager/block-pipe";
-import type { BlockPrepareErrorHandler } from "./block-manager/types";
+import type { BlockStructuralBehavior, BlockStructuralScope } from "../block-behaviors/types";
+import type { BlockImportOptions, BlockPrepareErrorHandler } from "./block-manager/types";
 import type { BlockListPropsManagerApi } from "./block-list-props-manager";
 import type { BlockDefinition } from "./block-registry-manager/types";
 import type { ClipboardBundle, ClipboardPasteInput } from "./clipboard-manager/clipboard-data";
@@ -67,6 +68,16 @@ export interface ImportedBlockForest {
 
 /** Public typed block-operation contract. */
 export interface BlockManagerApi {
+  /**
+   * Evaluates editor-local structural move permissions for detached roots.
+   *
+   * @param request - Moved roots and destination in this editor's document.
+   * @returns False for an invalid destination, empty selection, or a behavior veto.
+   */
+  canMove(request: {
+    sources: readonly Readonly<Omit<EditorBlock, "children">>[];
+    destination: BlockDestination;
+  }): boolean;
   /** Monotonic active-document block revision. */
   readonly revision: number;
   /** @param processor - Editor-owned processor. @returns Its disposer. */
@@ -108,12 +119,22 @@ export interface BlockManagerApi {
   getChildIds(parentId: string): readonly string[];
   /** @param afterId - Sibling to follow, null to prepend, or omitted to append. @returns Document destination. @throws For a missing sibling. */
   getInsertionDestinationAfter(afterId?: string | null): BlockDestination;
-  /** @param blocks - Complete copied roots or creation inputs. @param destination - Actual parent and optional next sibling. @param onError - Optional one-shot node recovery. @param ids - Optional preallocated source-to-destination IDs; processors and validation still run. @returns Imported roots and identities. */
+  /**
+   * Prepares and imports a forest in one history batch.
+   *
+   * @param blocks - Complete copied roots or creation inputs.
+   * @param destination - Actual parent and optional next sibling.
+   * @param options - Optional recovery, identity mapping, and preservation requirements.
+   * @param options.onError - Optional one-shot node recovery.
+   * @param options.ids - Optional preallocated source-to-destination ID mapping.
+   * @param options.preserveIds - Whether to reject missing, conflicting, or changed source IDs.
+   * @returns Imported roots and their source-to-destination identity mapping.
+   * @throws If preparation fails or requested source identities cannot be preserved.
+   */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
     destination?: BlockDestination,
-    onError?: BlockPrepareErrorHandler,
-    ids?: ReadonlyMap<string, string>,
+    options?: BlockImportOptions,
   ): ImportedBlockForest;
   /** @param id - Block ID. @param patch - Mutable fields. @returns Updated non-recursive block fields. */
   updateBlock(id: string, patch: EditorBlockPatch): EditorBlockNode;
@@ -129,8 +150,25 @@ export interface BlockManagerApi {
   setBlockType(id: string, type: string): void;
   /** @param id - Block ID to remove. @returns No value. */
   removeBlock(id: string): void;
-  /** @param ids - Block IDs to remove. @returns No value. */
-  removeBlocks(ids: string[]): void;
+  /**
+   * Consults structural behaviors and removes the requested subtrees when they defer.
+   *
+   * @param ids - Selected subtree roots in their requested order.
+   * @param scope - Panel boundary for behavior context; defaults to the document.
+   * @returns True when generic removal ran; false when a behavior handled or rejected it.
+   * @throws If a behavior or document mutation fails.
+   */
+  removeBlocks(ids: readonly string[], scope?: BlockStructuralScope): boolean;
+  /**
+   * Replaces selected text across blocks and removes the trailing block subtrees.
+   *
+   * @param firstId - Block receiving the resulting text.
+   * @param trailingIds - Following selected blocks to remove.
+   * @param content - Remaining prefix and suffix joined by the caller.
+   * @returns After the trailing subtrees and first block are updated.
+   * @throws If block validation, transition hooks, or a document mutation fails.
+   */
+  replaceTextSelection(firstId: string, trailingIds: readonly string[], content: string): void;
   /** @param targetId - Surviving block. @param sourceId - Removed source. @returns Merge offset. */
   mergeBlocks(targetId: string, sourceId: string): number;
   /** @param id - Moving block. @param targetId - Destination. @param position - Placement. @returns No value. */
@@ -154,12 +192,26 @@ export interface BlockManagerApi {
   ): void;
   /** @param id - Block ID. @returns No value. */
   indentBlock(id: string): void;
-  /** @param ids - Block IDs. @returns No value. */
-  indentBlocks(ids: string[]): void;
+  /**
+   * Applies registered outline behaviors before indenting a group.
+   *
+   * @param ids - Block IDs in selection order.
+   * @param scope - Panel boundary for behavior context; defaults to the document.
+   * @returns True when the leading block exists in the scope, including handled no-ops.
+   * @throws If a behavior or delegated operation fails.
+   */
+  indentBlocks(ids: string[], scope?: BlockStructuralScope): boolean;
   /** @param id - Block ID. @returns No value. */
   outdentBlock(id: string): void;
-  /** @param ids - Block IDs. @returns No value. */
-  outdentBlocks(ids: string[]): void;
+  /**
+   * Applies registered outline behaviors before outdenting a group.
+   *
+   * @param ids - Block IDs in selection order.
+   * @param scope - Panel boundary for behavior context; defaults to the document.
+   * @returns True when the leading block exists in the scope, including handled no-ops.
+   * @throws If a behavior or delegated operation fails.
+   */
+  outdentBlocks(ids: string[], scope?: BlockStructuralScope): boolean;
   /** @param id - Block ID. @param key - Property key. @param value - New value. @returns No value. */
   setBlockProp(id: string, key: string, value: unknown): void;
   /** @param id - Block ID. @param pluginId - Namespace. @param value - New value. @returns No value. */
@@ -170,8 +222,21 @@ export interface BlockManagerApi {
 
 export type { BlockListPropsManagerApi };
 
-/** Public native block-definition registry contract. */
+/** Public block-definition and structural-behavior registration contract. */
 export interface BlockRegistryManagerApi {
+  /**
+   * Registers editor-local structural behavior for parent-child changes.
+   *
+   * The same instance at the same priority runs once until every registration is released.
+   *
+   * Behavior registration does not notify native-definition subscribers.
+   *
+   * @param behavior - Synchronous structural behavior, independent of presentation.
+   * @param priority - Higher-priority behaviors run first; defaults to zero.
+   * @returns Idempotent disposer for this registration.
+   * @throws If priority is not finite.
+   */
+  registerBehavior(behavior: BlockStructuralBehavior, priority?: number): () => void;
   /**
    * Registers the exact complete native definition until its disposer runs.
    *
@@ -184,7 +249,12 @@ export interface BlockRegistryManagerApi {
    * Initial and rollback observer failures are combined in an AggregateError.
    */
   defineBlock(definition: BlockDefinition): () => void;
-  /** @param listener - Registry listener. @returns Its disposer. */
+  /**
+   * Observes additions and removals of native block definitions.
+   *
+   * @param listener - Callback invoked after definition changes.
+   * @returns Idempotent disposer removing the listener.
+   */
   subscribe(listener: () => void): () => void;
   /** @param type - Native type. @returns Its definition or undefined. */
   get(type: string): BlockDefinition | undefined;
@@ -196,8 +266,6 @@ export interface BlockRegistryManagerApi {
   prepareTypeChange(type: string, current: Record<string, unknown>): Record<string, unknown>;
   /** @param type - Native type. @param props - Candidate props. @returns Validated props. */
   validate(type: string, props: Record<string, unknown>): Record<string, unknown>;
-  /** @returns No value after releasing definitions. */
-  destroy(): void;
 }
 
 /** Document-wide element commands; canvas handles expose restricted operations. */

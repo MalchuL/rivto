@@ -158,6 +158,7 @@ for (const mode of ["block", "edgeless"] as const) {
           style: {
             background: { color: "#ff0000" },
             text: { color: "#0000ff", fontSize: 123 },
+            size: { width: 123, height: "60" },
             future: { value: 42 },
           },
         },
@@ -169,6 +170,8 @@ for (const mode of ["block", "edgeless"] as const) {
     }
     const block = page.locator(`[data-block-id="${id}"]`).first();
     await expect(block).toHaveCSS("background-color", "rgb(255, 0, 0)");
+    await expect(block).toHaveCSS("min-height", "60px");
+    await expect(block).not.toHaveCSS("width", "123px");
     await expect(block.locator(".rivto-block-content").first()).toHaveCSS(
       "color",
       "rgb(0, 0, 255)",
@@ -192,7 +195,51 @@ for (const mode of ["block", "edgeless"] as const) {
     expect(style).toEqual({
       background: { color: "#00000000" },
       text: { color: "#0000ff", fontSize: 123 },
+      size: { width: 123, height: "60" },
       future: { value: 42 },
     });
+  });
+}
+
+for (const mode of ["block", "edgeless"] as const) {
+  test(`renders block dimensions and height policies in ${mode}`, async ({ page }) => {
+    await page.goto("/?test_features=1");
+    await page.locator('[data-journal-document="today"] [data-block-id]').first().waitFor();
+    const ids = await page.evaluate(() => {
+      const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo.editor;
+      return (["grow", "scroll", "clip"] as const).map(
+        (heightPolicy) =>
+          editor.blocks.insertBlock({
+            type: "paragraph",
+            content: "Long content ".repeat(80),
+            listProps: { style: { size: { width: "320", height: "60", heightPolicy } } },
+          }).id,
+      );
+    });
+    if (mode === "edgeless") {
+      await page.getByRole("button", { name: "Edgeless", exact: true }).first().click();
+    }
+    for (const [index, policy] of ["grow", "scroll", "clip"].entries()) {
+      const block = page.locator(`[data-block-id="${ids[index]}"]`).first();
+      await block.scrollIntoViewIfNeeded();
+      await expect(block).toHaveCSS("width", "320px");
+      await expect(block.locator(".markdown-preview")).toBeVisible();
+      await expect
+        .poll(() => block.evaluate((element) => element.scrollHeight))
+        .toBeGreaterThan(60);
+      const bounds = await block.evaluate((element) => ({
+        height: element.getBoundingClientRect().height,
+        scrollHeight: element.scrollHeight,
+        overflow: getComputedStyle(element).overflowY,
+      }));
+      if (policy === "grow") {
+        expect(bounds.height).toBeGreaterThan(60);
+      } else {
+        expect(bounds.height).toBe(60);
+        expect(bounds.scrollHeight).toBeGreaterThan(60);
+        expect(bounds.overflow).toBe(policy === "scroll" ? "auto" : "hidden");
+      }
+    }
   });
 }

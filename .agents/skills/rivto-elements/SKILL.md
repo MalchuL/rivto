@@ -5,6 +5,12 @@ description: Create or change Rivto edgeless element types, renderers, creation 
 
 # Rivto Elements
 
+For every new element, read the shared [interaction paths](../rivto-blocks/references/interaction-paths.md)
+and fill the [implementation checklist](../rivto-blocks/references/implementation-checklist.md)
+for the requested feature before implementation. Keep it in the working notes or
+response, mark inapplicable items with a reason, and update it with evidence as
+work finishes. Follow the same checklist for a review, scoped to the change.
+
 Build custom canvas elements through the same registration contract as built-in
 figures. **Unless the user explicitly requests otherwise, implement live visual
 updates during interaction, including resize, from the first version.** Updating

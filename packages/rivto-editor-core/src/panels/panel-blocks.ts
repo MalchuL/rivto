@@ -1,5 +1,6 @@
 import type { BlockDestination } from "@chulane/document-model";
 import type {
+  BlockImportOptions,
   BlockPrepareErrorHandler,
   DocumentEditorAPI,
   EditorBlock,
@@ -309,18 +310,19 @@ export class PanelBlocks implements PanelBlocksAPI {
    *
    * @param input - Copied forest.
    * @param destination - Local parent or panel root.
-   * @param onError - Optional preparation recovery.
-   * @param ids - Preallocated import identities.
+   * @param options - Optional recovery, preallocated identities, and identity requirements.
+   * @param options.onError - Optional preparation recovery.
+   * @param options.ids - Preallocated import identities.
+   * @param options.preserveIds - Whether every source identity must be preserved.
    * @returns Imported subtrees and their ID map.
    * @throws Before writes for an invalid panel destination.
    */
   importForest(
     input: readonly (EditorBlock | EditorBlockInput)[],
     destination: PanelDestination = { root: true },
-    onError?: BlockPrepareErrorHandler,
-    ids?: ReadonlyMap<string, string>,
+    options?: BlockImportOptions,
   ) {
-    return this.document.blocks.importForest(input, this.destination(destination), onError, ids);
+    return this.document.blocks.importForest(input, this.destination(destination), options);
   }
   /**
    * Prepares detached block inputs through the document processing pipeline.
@@ -440,9 +442,9 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param ids - Local subtrees.
    * @throws Before any write if a target is outside or protected.
    */
-  removeBlocks(ids: readonly string[]) {
+  removeBlocks(ids: readonly string[]): boolean {
     ids.forEach((id) => this.require(id, true));
-    this.document.blocks.removeBlocks([...ids]);
+    return this.document.blocks.removeBlocks(ids, this);
   }
   /**
    * Merges a removable source block into an included surviving block.
@@ -516,21 +518,11 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param ids - Local sibling roots.
    * @throws If indent could adopt an outside sibling.
    */
-  indentBlocks(ids: readonly string[]) {
+  indentBlocks(ids: readonly string[]): boolean {
     ids.forEach((id) => this.require(id, true));
-    if (!ids.length) {
-      return;
-    }
-    const ordered = this.document.blocks.getOrderedIds(ids);
-    const parent = this.document.blocks.getParentId(ordered[0]!);
-    const siblings =
-      parent == null ? this.document.blocks.getRootIds() : this.document.blocks.getChildIds(parent);
-    const previous = siblings[siblings.indexOf(ordered[0]!) - 1];
-    if (previous) {
-      this.require(previous);
-    }
-    this.document.blocks.indentBlocks([...ids]);
+    return this.document.blocks.indentBlocks([...ids], this);
   }
+
   /**
    * Moves one subtree up a level while enforcing the panel boundary.
    *
@@ -546,15 +538,16 @@ export class PanelBlocks implements PanelBlocksAPI {
    * @param ids - Local sibling roots.
    * @throws Before mutation if any outdent crosses the boundary.
    */
-  outdentBlocks(ids: readonly string[]) {
+  outdentBlocks(ids: readonly string[]): boolean {
     ids.forEach((id) => {
       this.require(id, true);
       if (!this.canOutdent(id)) {
         throw new Error("Cannot outdent outside panel");
       }
     });
-    this.document.blocks.outdentBlocks([...ids]);
+    return this.document.blocks.outdentBlocks([...ids], this);
   }
+
   /**
    * Observes a block and its membership in the panel, notifying when the block changes or enters or leaves scope.
    *

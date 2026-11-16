@@ -1,3 +1,4 @@
+import type { BlockStructuralContext, BlockStructuralOutcome } from "@chulane/rivto";
 import {
   BlockBody,
   BlockChildren,
@@ -6,8 +7,7 @@ import {
   BlockRow,
   type BlockChildrenItemProps,
 } from "@chulane/rivto-page";
-import type { BlockOutlineContext, BlockBehaviorOutcome } from "../../block-behaviors/types";
-import type { BlockBehaviorAvailabilityContext } from "../../block-behaviors/types";
+import type { BlockInput } from "@chulane/document-model";
 /**
  * Provides TODO-storage data rules, direct-child filtering, status ordering,
  * toolbar presentation, and the complete layout shared by page and edgeless
@@ -130,6 +130,17 @@ const TodoStorageContext = createContext<TodoStorageContextValue | undefined>(un
 /** Vertical-container behavior restricted to TODO storage blocks. */
 class TodoStorageBehavior extends ContainerBlockBehavior {
   /**
+   * Selects TODO storage without applying its container actions to ordinary task blocks.
+   *
+   * Applicability uses detached block fields and does not depend on presentation state.
+   * @param context - Current detached block fields; applicability is independent of the called method.
+   * @returns True only for the TODO storage native type.
+   */
+  override isAvailable(context: BlockInput): boolean {
+    return context.type === TODO_STORAGE_BLOCK_TYPE;
+  }
+
+  /**
    * Keeps direct children within this container during outline outdent.
    *
    * This outline restriction does not prevent independently permitted dragging.
@@ -139,17 +150,8 @@ class TodoStorageBehavior extends ContainerBlockBehavior {
    * @param ids - Complete child group requested by the outline operation.
    * @returns Rejected without mutating the document.
    */
-  onChildOutdent(context: BlockOutlineContext, ids: readonly string[]): BlockBehaviorOutcome {
+  onChildOutdent(context: BlockStructuralContext, ids: readonly string[]): BlockStructuralOutcome {
     return "rejected";
-  }
-
-  /**
-   * Selects TODO storage without applying its container actions to ordinary task blocks.
-   * @param context - Current detached block fields and runtime; applicability is independent of the called method.
-   * @returns True only for the TODO storage native type.
-   */
-  override isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
-    return context.block.type === TODO_STORAGE_BLOCK_TYPE;
   }
 }
 

@@ -230,7 +230,7 @@ export class ReactEditor implements ReactEditorApi {
     extensions.registerCleanup(() => this.blockContextMenu.destroy());
     extensions.registerCleanup(() => slashCommands.destroy());
     this.renderers = new RendererManager(extensions, options.unknownBlockRenderer);
-    this.blockBehaviors = new BlockBehaviorRegistry(this, extensions);
+    this.blockBehaviors = new BlockBehaviorRegistry(extensions, editor.blockRegistry);
     this.blockListProps = new BlockListPropsManager(extensions, editor.blockListProps);
     this.blockTypes = new BlockTypeManager(this, editor, extensions);
     this.attachments = new AttachmentManager(this, extensions, options.attachments);

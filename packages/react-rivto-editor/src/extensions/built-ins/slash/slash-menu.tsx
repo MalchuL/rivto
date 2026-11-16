@@ -174,17 +174,7 @@ export function SlashMenu({ options = {} }: { readonly options?: SlashMenuPositi
     () => slashCommands.revision,
   );
 
-  const available = useMemo(
-    () => (session ? slashCommands.getAll({ blockId: session.blockId }) : []),
-    [
-      reactPanel,
-      slashCommands,
-      slashCommands.revision,
-      session?.blockId,
-      session?.document,
-      session?.rootBlockId,
-    ],
-  );
+  const available = session ? slashCommands.getAll({ blockId: session.blockId }) : [];
   const ranked = useMemo(
     () => rankSlashCommands(available, session?.query ?? ""),
     [available, session?.query],

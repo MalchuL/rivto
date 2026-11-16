@@ -452,11 +452,11 @@ registration uses `behavior`, alongside `definition` and `render`.
 The `BlockNode` React component still renders the block shell.
 Several behaviors can be registered with
 `runtime.blockBehaviors.register(behavior, priority = 0)`. Each implements
-`isAvailable({ editor, block })` using current detached block fields. Every method
+`isAvailable(block)` using current detached block fields. Every method
 uses the same availability context without a discriminator or operation name.
 During movement, the registry tests source blocks and the receiving parent and
 calls each matching registration's canMove method once. Only canMove receives
-sources, destination, editor, and the resolved parent as its BlockMoveContext.
+sources, destination, and the resolved parent as its BlockStructuralMoveContext.
 The called method owns any operation-specific eligibility. Higher priorities run first,
 with stable registration order at ties. Native behaviors use `0`, list/collapse
 use `-100`, and `DefaultBlockBehavior` is an ordinary registration at `-1000`.

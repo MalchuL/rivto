@@ -5,6 +5,12 @@ description: Implement or review Rivto blocks that own child layout, such as boa
 
 # Rivto Containers
 
+For every new container, read the shared [interaction paths](../rivto-blocks/references/interaction-paths.md)
+and fill the [implementation checklist](../rivto-blocks/references/implementation-checklist.md)
+for the requested feature before implementation. Keep it in the working notes or
+response, mark inapplicable items with a reason, and update it with evidence as
+work finishes. Follow the same checklist for a review, scoped to the change.
+
 A container is an ordinary block whose registered layout arranges its children.
 There is no separate container tree or rendering engine. `ContainerBlockBehavior`
 implements `BlockBehavior`; it is interaction policy, not a renderer or a second

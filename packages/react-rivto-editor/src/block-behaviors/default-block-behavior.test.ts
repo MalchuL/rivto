@@ -6,7 +6,12 @@ import { createTestReactEditor as createReactEditor } from "../test-utils";
  *
  * @module
  */
-import { createCaretSelection } from "@chulane/rivto";
+import {
+  createCaretSelection,
+  type BlockStructuralBehavior,
+  type BlockStructuralMoveContext,
+} from "@chulane/rivto";
+import type { BlockInput } from "@chulane/document-model";
 import { createTestCoreEditor } from "../test-utils";
 
 import {
@@ -17,12 +22,11 @@ import { createTableBlockInput, tableExtension } from "../extensions/containers/
 import { firstKeyboardTarget } from "../managers/keyboard/selection";
 import { createBlockBehaviorContext } from "./utils/context";
 import { DefaultBlockBehavior } from "./default-block-behavior";
-import type { BlockBehavior, BlockBehaviorAvailabilityContext, BlockMoveContext } from "./types";
 
-class RejectingBlockBehavior implements BlockBehavior {
+class RejectingBlockBehavior implements BlockStructuralBehavior {
   /** @param context - Block being checked. @returns Whether this paragraph behavior applies. */
-  isAvailable(context: BlockBehaviorAvailabilityContext): boolean {
-    return context.block.type === "paragraph";
+  isAvailable(block: BlockInput): boolean {
+    return block.type === "paragraph";
   }
 
   /**
@@ -31,7 +35,7 @@ class RejectingBlockBehavior implements BlockBehavior {
    * @param context - Unused candidate destination.
    * @returns Always `false`.
    */
-  canMove(context: BlockMoveContext): boolean {
+  canMove(context: BlockStructuralMoveContext): boolean {
     return false;
   }
 }
@@ -47,10 +51,7 @@ test("resolve falls back to DefaultBlockBehavior and indent stays free at the ro
     { type: "paragraph", content: "Second" },
     editor.blocks.getInsertionDestinationAfter(first),
   ).id;
-  const behaviors = reactPanel.editor.blockBehaviors.resolveAll({
-    editor: reactPanel.editor,
-    block: editor.blocks.getBlockNode(second)!,
-  });
+  const behaviors = reactPanel.editor.blockBehaviors.resolveAll(editor.blocks.getBlockNode(second)!);
   expect(behaviors[0]).toBeInstanceOf(DefaultBlockBehavior);
   expect(behaviors.some((behavior) => !(behavior instanceof DefaultBlockBehavior))).toBe(false);
   editor.blocks.indentBlock(second);
@@ -70,14 +71,14 @@ test("asks the resolved behavior whether a drop is accepted", async () => {
       defaultWritingBlockExtension(),
       {
         id: "test.reject-drop",
-        setup: (reactEditor) => reactEditor.blockBehaviors.register(rejectingBehavior),
+        setup: (reactEditor) => reactEditor.blockRegistry.registerBehavior(rejectingBehavior),
       },
     ],
   });
   const targetId = editor.blocks.insertBlock({ type: "paragraph" }).id;
 
   expect(
-    reactPanel.editor.blockBehaviors.canMove({
+    reactPanel.editor.blocks.canMove({
       destination: { parentId: targetId },
       sources: [editor.blocks.getBlock(targetId)!],
     }),
@@ -295,22 +296,22 @@ test("drop validation checks the destination parent and every source snapshot", 
       const content = editor.blocks.insertBlock({ type: "paragraph" });
       const destination = { parentId: parent.id };
       expect(
-        reactPanel.editor.blockBehaviors.canMove({ destination: destination, sources: [content] }),
+        reactPanel.editor.blocks.canMove({ destination: destination, sources: [content] }),
       ).toBe(false);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: destination,
           sources: [{ ...shell, id: "foreign-shell" }],
         }),
       ).toBe(true);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: destination,
           sources: [shell, content],
         }),
       ).toBe(false);
       expect(
-        reactPanel.editor.blockBehaviors.canMove({
+        reactPanel.editor.blocks.canMove({
           destination: { ...destination, parentId: null },
           sources: [shell],
         }),
@@ -321,7 +322,7 @@ test("drop validation checks the destination parent and every source snapshot", 
         shellType === "table-cell"
       ) {
         expect(
-          reactPanel.editor.blockBehaviors.canMove({
+          reactPanel.editor.blocks.canMove({
             destination: { parentId: shell.id },
             sources: [{ ...content, id: "foreign-content" }],
           }),

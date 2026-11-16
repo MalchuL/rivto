@@ -24,7 +24,7 @@ card, lane, tile, row, or column collection alongside the block hierarchy.
 | Container | Current hierarchy                                                        | Persisted container-specific values                                                             |
 | --------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | Kanban    | `kanban` → `kanban-column` → ordinary blocks/subtrees                    | Column title is its `content`; a card has no special native type.                               |
-| Bento     | `bento` → ordinary blocks/subtrees                                       | Preferred width is `props.bentoWidth` on the direct child block, not on a separate tile record. |
+| Bento     | `bento` → ordinary blocks/subtrees                                       | Preferred width is `pluginData.bentoWidth` on the direct child block, not on a separate tile record. |
 | Columns   | `columns` → `columns-column` → ordinary blocks/subtrees                  | Board `props.showDividers`, boolean, defaults to true.                                          |
 | Table     | `table` → `table-row` → `table-cell` → optional ordinary blocks/subtrees | Cell text is its `content`; `props.tableColumnWidth` is stored separately on each cell.         |
 
@@ -84,7 +84,7 @@ Source directory: [bento](../packages/react-rivto-editor/src/extensions/containe
   Page's `BlockDropWrapper`, with the actual block rendered once inside it.
   Resize controls belong to the placement wrapper.
 - Missing/nonfinite width reads as **280 CSS px**. Valid numeric values clamp to
-  **160–960 CSS px**. The value persists on the child as `bentoWidth`.
+  **160–960 CSS px**. The value persists on the child as `pluginData.bentoWidth`.
 - Left and right resize edges preview width without committing each pointer move.
   The controller freezes sibling placement during the gesture, handles viewport
   scale, and commits the width on a successful release.

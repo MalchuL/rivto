@@ -40,10 +40,7 @@ test.each([...modes, "unknown"])(
       new ListBlockBehavior(),
     ];
     const selected = behaviors.map((behavior) =>
-      behavior.isAvailable({
-        editor: panel.editor,
-        block: { ...block, listProps: { type } },
-      }),
+      behavior.isAvailable({ ...block, listProps: { type } }),
     );
     const checkbox = type === "checkbox";
     const numbered =

@@ -57,7 +57,7 @@ export function registerKeyboardBlockMove(reactEditor: ReactEditorApi): void {
     });
     if (
       sources.length !== roots.ids.length ||
-      !reactEditor.blockBehaviors.canMove({ sources, destination })
+      !reactEditor.blocks.canMove({ sources, destination })
     ) {
       return true;
     }

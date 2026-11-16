@@ -195,3 +195,36 @@ test("container conversion preserves the protected root identity without a sibli
   });
   await f.close();
 });
+
+test("structural selection deletion uses panel behavior context and undoes blocks and elements together", async () => {
+  const f = await fixture();
+  try {
+    let reject = true;
+    f.document.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === "a",
+      onStructuralDelete: (context) => {
+        expect(context.blocks).toBe(f.children.blocks);
+        expect(context.parentId).toBeNull();
+        return reject ? "rejected" : "unhandled";
+      },
+    });
+    const selection = { ...createStructuralSelection(["a"]), elements: ["inside"] };
+    f.children.selection.set(selection);
+    f.document.history.clear();
+    f.children.selection.delete();
+    expect(f.document.blocks.hasBlock("a")).toBe(true);
+    expect(f.document.elements.hasElement("inside")).toBe(true);
+    expect(f.children.selection.get()).toEqual(f.document.selection.get());
+    expect(f.children.selection.get()?.blocks.map(({ id }) => id)).toEqual(["a"]);
+    reject = false;
+    f.children.selection.delete();
+    expect(f.document.blocks.hasBlock("a")).toBe(false);
+    expect(f.document.elements.hasElement("inside")).toBe(false);
+    expect(f.document.selection.get()).toBeUndefined();
+    f.document.history.undo();
+    expect(f.document.blocks.hasBlock("a")).toBe(true);
+    expect(f.document.elements.hasElement("inside")).toBe(true);
+  } finally {
+    await f.close();
+  }
+});

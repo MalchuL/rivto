@@ -8,7 +8,6 @@
  * @module
  */
 import { getSelectedBlockIds, isStructuralSelection } from "@chulane/rivto";
-import { createBlockOutlineContext } from "../../../../block-behaviors/utils/context";
 import type { ReactPanelApi } from "../../../../panels/types";
 import {
   firstKeyboardTarget,
@@ -188,11 +187,13 @@ export function applyIndentShortcut(
     return false;
   }
 
-  const context = createBlockOutlineContext(reactPanel, target.blockId, selection);
-  if (!context) {
+  if (!reactPanel.blocks.getBlockNode(target.blockId)) {
     return false;
   }
   const targetIds = indentTargetIds(target);
+  if (outdent && targetIds.some((id) => !reactPanel.blocks.canOutdent(id))) {
+    return true;
+  }
   // Reparenting a virtualized root block partially above the viewport changes
   // both the root count and its DOM parent. Preserve the viewport through that
   // render instead of letting browser scroll anchoring reveal the hidden row edge.
@@ -243,11 +244,9 @@ export function applyIndentShortcut(
   };
   viewportSettlements.set(root, settlement);
   view?.addEventListener("wheel", onWheel, { passive: true });
-  const claimed = reactPanel.editor.blockBehaviors.dispatch(
-    outdent ? "onOutdent" : "onIndent",
-    context,
-    targetIds,
-  );
+  const claimed = outdent
+    ? reactPanel.blocks.outdentBlocks(targetIds)
+    : reactPanel.blocks.indentBlocks(targetIds);
   // Selection state remains model-backed. Keep only the selected blocks that
   // were already in the virtual window mounted across the reparent; this
   // preserves local measurements without rendering the complete selection.

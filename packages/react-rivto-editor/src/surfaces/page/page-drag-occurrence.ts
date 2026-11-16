@@ -67,7 +67,7 @@ export class PageDragOccurrence implements CrossDocumentPageRootController {
         ? new Set(sources.map(({ id }) => id))
         : new Set<string>();
     const accepts: BlockDropAcceptance = (destination) =>
-      this.reactPanel.editor.blockBehaviors.canMove({
+      this.reactPanel.editor.blocks.canMove({
         sources,
         destination: {
           parentId: destination.parentId,

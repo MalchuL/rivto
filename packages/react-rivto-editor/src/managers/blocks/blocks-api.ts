@@ -1,5 +1,6 @@
 import type { BlockDestination } from "@chulane/document-model";
 import type {
+  BlockImportOptions,
   BlockPrepareErrorHandler,
   EditorBlock,
   EditorBlockInput,
@@ -167,14 +168,17 @@ export interface BlocksApi {
    *
    * Imports a detached forest and reports its destination identities.
    * @param blocks - Complete copied roots or creation inputs to import.
-   * @param afterId - Existing sibling to follow, null to prepend, or undefined to append.
-   * @param onError - Optional one-shot replacement for a failed block.
+   * @param destination - Receiving parent and optional next sibling; omitted appends to roots.
+   * @param options - Optional recovery and identity requirements.
+   * @param options.onError - Optional one-shot replacement for a failed block.
+   * @param options.ids - Optional preallocated source-to-destination IDs.
+   * @param options.preserveIds - Whether to preserve every source ID.
    * @returns Complete persisted roots and source-to-destination ID mapping.
    */
   importForest(
     blocks: readonly (EditorBlock | EditorBlockInput)[],
-    afterId?: string | null,
-    onError?: BlockPrepareErrorHandler,
+    destination?: BlockDestination,
+    options?: BlockImportOptions,
   ): { roots: EditorBlock[]; idMap: ReadonlyMap<string, string> };
   /** Clears one block while preserving its identity.
    *

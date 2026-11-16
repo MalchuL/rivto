@@ -12,7 +12,6 @@ import type { ReactPanelApi } from "../../panels/types";
 import type { KeyboardSelectionTarget } from "../../managers/keyboard/selection";
 import type { BlockBehaviorContext, BlockBehaviorOutcome } from "../types";
 import { focusCaret, scheduleBlockFocus } from "./focus-ops";
-import { createBlockOutlineContext } from "./context";
 
 /**
  * Slices a block at a caret and inserts a following writing block.
@@ -82,16 +81,7 @@ export function splitBlock(
     reactPanel.blocks.canOutdent(block.id)
   ) {
     // Lift one permitted level per Enter, stopping at container outline floors.
-    const outlineContext = createBlockOutlineContext(
-      reactPanel,
-      block.id,
-      reactPanel.selection.get(),
-    );
-    if (outlineContext) {
-      reactPanel.batchUpdates(() =>
-        reactPanel.editor.blockBehaviors.dispatch("onOutdent", outlineContext, [block.id]),
-      );
-    }
+    reactPanel.batchUpdates(() => reactPanel.blocks.outdentBlocks([block.id]));
     focusCaret(reactPanel, root, block.id, 0);
     return "handled";
   }

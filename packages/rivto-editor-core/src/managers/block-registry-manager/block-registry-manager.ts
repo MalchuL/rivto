@@ -1,3 +1,4 @@
+import type { BlockStructuralBehavior } from "../../block-behaviors/types";
 import type { BlockDefinition } from "./types";
 import type { BlockRegistryManagerApi } from "../types";
 import type { EditorBlockInput } from "../../editor/model";
@@ -84,15 +85,23 @@ const validateProps = (
 };
 
 /**
- * Owns the runtime mapping from persisted native types to block definitions.
+ * Owns editor-local block definitions and ordered structural behavior registrations.
  *
  * The manager does not render UI or mutate document blocks. It validates type
  * ownership, prepares editor-level creation data, and publishes definition
- * lifecycle changes to its own subscribers.
+ * lifecycle changes to its own subscribers. Behaviors are registered independently
+ * of definitions and selected by their own applicability predicates.
  */
 export class BlockRegistryManager implements BlockRegistryManagerApi {
   // Block name to definition
   private readonly definitions = new Map<string, BlockDefinition>();
+
+  /** Editor-local behavior entries, kept in descending priority order. */
+  private readonly behaviorRegistrations: Array<{
+    behavior: BlockStructuralBehavior;
+    priority: number;
+    references: number;
+  }> = [];
 
   /** Definition disposers retained for deterministic editor teardown. */
   private readonly removeDefinitions = new Set<() => void>();
@@ -155,6 +164,59 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
       throw error;
     }
     return dispose;
+  }
+
+  /**
+   * Registers one core structural behavior until its disposer is called.
+   *
+   * Registrations of the same instance and priority share one chain entry until
+   * every corresponding disposer is called. Behavior changes do not notify
+   * definition observers; those subscriptions describe native definitions only.
+   *
+   * @param behavior - Applicability, move permissions, and structural action or transition hooks.
+   * @param priority - Finite ordering value; higher values run first.
+   * @returns Idempotent disposer for this exact registration.
+   * @throws If priority is not finite.
+   */
+  registerBehavior(behavior: BlockStructuralBehavior, priority = 0): () => void {
+    if (!Number.isFinite(priority)) {
+      throw new Error("Block behavior priority must be finite");
+    }
+    let registration = this.behaviorRegistrations.find(
+      (entry) => entry.behavior === behavior && entry.priority === priority,
+    );
+    if (!registration) {
+      registration = { behavior, priority, references: 0 };
+      this.behaviorRegistrations.push(registration);
+      this.behaviorRegistrations.sort((a, b) => b.priority - a.priority);
+    }
+    registration.references++;
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      registration.references--;
+      if (registration.references === 0) {
+        const index = this.behaviorRegistrations.indexOf(registration);
+        if (index !== -1) {
+          this.behaviorRegistrations.splice(index, 1);
+        }
+      }
+    };
+  }
+
+  /**
+   * Reads the ordered behavior entries for the block operation strategy.
+   *
+   * The returned live list is read-only to its borrower and remains owned by
+   * this registry. Registration priority and cleanup stay internal.
+   *
+   * @returns Current behavior entries, in descending priority and stable tie order.
+   */
+  getBehaviorRegistrations(): readonly { readonly behavior: BlockStructuralBehavior }[] {
+    return this.behaviorRegistrations;
   }
 
   /**
@@ -247,14 +309,17 @@ export class BlockRegistryManager implements BlockRegistryManagerApi {
   }
 
   /**
-   * Removes every definition owned by this manager.
+   * Releases every behavior and definition owned by this manager.
    *
-   * Definitions are disposed in reverse registration order so dependent
-   * extensions observe a predictable teardown sequence.
+   * Behavior entries are cleared first. Definitions are disposed in reverse
+   * registration order so dependent extensions observe a predictable teardown
+   * sequence; their existing lifecycle notifications remain in effect.
    *
-   * @returns No value.
+   * @returns After behavior entries and definition subscriptions are released.
+   * @throws If a definition disposer or its observer fails.
    */
   destroy(): void {
+    this.behaviorRegistrations.length = 0;
     [...this.removeDefinitions].reverse().forEach((dispose) => dispose());
     this.listeners.clear();
   }

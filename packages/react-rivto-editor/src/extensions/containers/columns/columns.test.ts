@@ -1,3 +1,4 @@
+import { deletePanelSelection } from "../../built-ins/selection/selection-deletion";
 import { createTestReactEditor as createReactEditor } from "../../../test-utils";
 /**
  * Checks that Columns uses the ordinary block hierarchy: nested identities
@@ -99,7 +100,7 @@ test("structural column deletion moves nested blocks instead of removing them", 
   const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" }).id;
   editor.blocks.moveBlocks([nested], right!.id, "inside");
 
-  relocateColumnContents(editor, [right!.id]);
+  relocateColumnContents(editor.blocks, [right!.id]);
   editor.blocks.removeBlock(right!.id);
   expect(editor.blocks.getBlock(left!.id)?.children.map((child) => child.id)).toEqual([nested]);
   expect(editor.blocks.getBlockNode(nested)?.content).toBe("Survive");
@@ -139,4 +140,25 @@ test("validates and preserves divider visibility through history, snapshots, and
 
   reactPanel.editor.destroy();
   editor.destroy();
+});
+
+test("structural selection deletion relocates column contents and undo restores the board", async () => {
+  const { editor, reactPanel } = await createColumnsRuntime();
+  try {
+    const boardId = editor.blocks.insertBlock(createColumnsBlockInput(2)).id;
+    const [left, right] = editor.blocks.getBlock(boardId)!.children;
+    const nested = editor.blocks.insertBlock({ type: "paragraph", content: "Survive" }).id;
+    editor.blocks.moveBlocks([nested], right!.id, "inside");
+    reactPanel.selection.set(createStructuralSelection([right!.id]));
+    editor.history.clear();
+    deletePanelSelection(reactPanel);
+    expect(editor.blocks.getBlockNode(right!.id)).toBeUndefined();
+    expect(editor.blocks.getParentId(nested)).toBe(left!.id);
+    editor.history.undo();
+    expect(editor.blocks.getParentId(right!.id)).toBe(boardId);
+    expect(editor.blocks.getParentId(nested)).toBe(right!.id);
+  } finally {
+    reactPanel.editor.destroy();
+    await editor.destroy();
+  }
 });

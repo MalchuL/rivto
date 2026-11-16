@@ -33,7 +33,7 @@ interface BlockCanvasDropPanel extends Pick<ReactPanelApi, "rootBlockId" | "batc
       ReactPanelApi["editor"]["blockTypes"],
       "getDefaultBlockElementSeparatorType" | "separatesBlockElements"
     >;
-    readonly blockBehaviors: Pick<ReactPanelApi["editor"]["blockBehaviors"], "canMove">;
+    readonly blocks: Pick<ReactPanelApi["editor"]["blocks"], "canMove">;
   };
 }
 
@@ -90,7 +90,10 @@ export function registerBlockCanvasDrop(
       return false;
     }
     if (
-      !panel.editor.blockBehaviors.canMove({ sources: blocks, destination: { parentId: null } })
+      !panel.editor.blocks.canMove({
+        sources: blocks,
+        destination: { parentId: null },
+      })
     ) {
       return false;
     }

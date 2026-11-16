@@ -438,3 +438,34 @@ test("failed destruction still disconnects metadata and definition observers", a
     await core.destroy();
   }
 });
+
+test("block registration releases its core structural behavior with presentation", async () => {
+  const core = await createTestCoreEditor();
+  const panel = createTestReactEditor({ editor: core });
+  try {
+    const release = panel.editor.blockTypes.register({
+      definition: { type: "structural-owner" },
+      render: () => null,
+      behavior: {
+        isAvailable: (block) => block.type === "structural-owner",
+        onChildIndent: () => "rejected",
+      },
+    });
+    core.blocks.insertBlock({
+      id: "owner",
+      type: "structural-owner",
+      children: [
+        { id: "first", type: "paragraph" },
+        { id: "second", type: "paragraph" },
+      ],
+    });
+    panel.blocks.indentBlocks(["second"]);
+    expect(core.blocks.getParentId("second")).toBe("owner");
+    release();
+    panel.blocks.indentBlocks(["second"]);
+    expect(core.blocks.getParentId("second")).toBe("first");
+  } finally {
+    panel.editor.destroy();
+    await core.destroy();
+  }
+});

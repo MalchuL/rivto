@@ -292,7 +292,7 @@ function validatePreparedBlocks(
     parentId: placement.parentId,
     beforeId: placement.kind === "between" ? (placement.nextId ?? undefined) : undefined,
   };
-  if (!panel.editor.blockBehaviors.canMove({ sources, destination })) {
+  if (!panel.editor.blocks.canMove({ sources, destination })) {
     throw new Error("Files cannot be inserted at this destination");
   }
   return sources.map((source) => source.id);

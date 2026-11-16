@@ -1,3 +1,4 @@
+import type { BlockInput } from "@chulane/document-model";
 /**
  * Shared defaults for layout containers (boards, lanes, cells).
  *
@@ -13,7 +14,6 @@ import { createCaretSelection, type EditorBlock } from "@chulane/rivto";
 import { scheduleBlockFocus } from "./utils/focus-ops";
 import type {
   BlockBehavior,
-  BlockBehaviorAvailabilityContext,
   BlockBehaviorContext,
   BlockBehaviorOutcome,
 } from "./types";
@@ -31,7 +31,7 @@ export abstract class ContainerBlockBehavior implements BlockBehavior {
    * @param context - Current block fields and runtime, including foreign sources or a receiving parent during move checks.
    * @returns Whether the concrete container behavior applies to this block.
    */
-  abstract isAvailable(context: BlockBehaviorAvailabilityContext): boolean;
+  abstract isAvailable(context: BlockInput): boolean;
 
   /**
    * Inserts a writing block as the first child when this container is empty.

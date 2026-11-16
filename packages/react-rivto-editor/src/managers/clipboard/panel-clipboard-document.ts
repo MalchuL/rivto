@@ -54,12 +54,11 @@ export function panelClipboardDocument(reactPanel: ReactPanelApi): DocumentEdito
           )) satisfies DocumentEditorAPI["blocks"]["insertBlock"];
       }
       if (key === "importForest") {
-        return ((input, place, onError, ids) =>
+        return ((input, place, options) =>
           reactPanel.blocks.importForest(
             input,
             destination(place),
-            onError,
-            ids,
+            options,
           )) satisfies DocumentEditorAPI["blocks"]["importForest"];
       }
       if (key in reactPanel.blocks) {

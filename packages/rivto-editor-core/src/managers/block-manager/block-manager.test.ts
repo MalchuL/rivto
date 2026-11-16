@@ -368,8 +368,7 @@ test("imports with preallocated identities and runs processors once per block", 
       },
     ],
     undefined,
-    undefined,
-    ids,
+    { ids },
   );
   expect(calls).toEqual(["new-parent", "new-child"]);
   expect(result.idMap).toBe(ids);
@@ -385,12 +384,9 @@ test("imports with preallocated identities and runs processors once per block", 
 test("rejects an incomplete preallocated identity map before insertion", async () => {
   const editor = await createTestEditor();
   expect(() =>
-    editor.blocks.importForest(
-      [{ id: "source", type: "paragraph" }],
-      undefined,
-      undefined,
-      new Map(),
-    ),
+    editor.blocks.importForest([{ id: "source", type: "paragraph" }], undefined, {
+      ids: new Map(),
+    }),
   ).toThrow("Missing imported block ID");
   expect(editor.blocks.getRootIds()).toEqual([]);
   await editor.destroy();
@@ -401,7 +397,9 @@ test("import recovery can replace a rejected subtree with a single error block",
   const imported = editor.blocks.importForest(
     [{ id: "invalid", type: "unknown", children: [{ id: "child", type: "paragraph" }] }],
     undefined,
-    (block) => ({ type: "paragraph", content: "Recovered", props: { original: block } }),
+    {
+      onError: (block) => ({ type: "paragraph", content: "Recovered", props: { original: block } }),
+    },
   );
   expect(imported.roots[0]).toMatchObject({
     id: imported.idMap.get("invalid"),
@@ -409,4 +407,233 @@ test("import recovery can replace a rejected subtree with a single error block",
     children: [],
   });
   editor.destroy();
+});
+
+test("core structural behavior processes child creation and movement without React", async () => {
+  const editor = await createTestEditor();
+  try {
+    const parent = editor.blocks.insertBlock({ type: "paragraph" });
+    const events: string[] = [];
+    const dispose = editor.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === parent.id,
+      onChildEnter: ({ child }) => {
+        events.push("enter");
+        return { ...child, pluginData: { ...child.pluginData, active: true } };
+      },
+      onChildExit: ({ child }) => {
+        events.push("exit");
+        return { ...child, pluginData: { ...child.pluginData, active: false } };
+      },
+    });
+    const child = editor.blocks.insertBlock({ type: "paragraph" }, { parentId: parent.id });
+    expect(editor.blocks.getBlockNode(child.id)?.pluginData.active).toBe(true);
+    editor.history.clear();
+    editor.blocks.moveBlock(child.id, parent.id, "after");
+    expect(events).toEqual(["enter", "exit"]);
+    expect(editor.blocks.getBlockNode(child.id)?.pluginData.active).toBe(false);
+    editor.history.undo();
+    expect(editor.blocks.getParentId(child.id)).toBe(parent.id);
+    expect(editor.blocks.getBlockNode(child.id)?.pluginData.active).toBe(true);
+    dispose();
+    dispose();
+  } finally {
+    editor.destroy();
+  }
+});
+
+test("core movement policies inspect foreign sources and the resolved parent", async () => {
+  const editor = await createTestEditor();
+  try {
+    const parent = editor.blocks.insertBlock({ type: "paragraph" });
+    const source = editor.blocks.insertBlock({ type: "paragraph" });
+    const calls: string[] = [];
+    const dispose = editor.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === parent.id,
+      canMove: ({ sources, parent: receiver }) => {
+        calls.push(`${sources[0]?.id}:${receiver?.id}`);
+        return sources[0]?.props.allowed === true;
+      },
+    });
+    const foreign = {
+      ...editor.blocks.getBlockNode(source.id)!,
+      id: "foreign",
+      props: { allowed: true },
+    };
+    expect(
+      editor.blocks.canMove({
+        sources: [foreign],
+        destination: { parentId: parent.id },
+      }),
+    ).toBe(true);
+    expect(calls).toEqual([`foreign:${parent.id}`]);
+    expect(
+      editor.blocks.canMove({
+        sources: [{ ...foreign, props: {} }],
+        destination: { parentId: parent.id },
+      }),
+    ).toBe(false);
+    dispose();
+    expect(
+      editor.blocks.canMove({
+        sources: [foreign],
+        destination: { parentId: "missing" },
+      }),
+    ).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});
+
+test("import preserves requested identities before writing any roots", async () => {
+  const editor = await createTestEditor();
+  try {
+    const source = [
+      { id: "parent", type: "paragraph", children: [{ id: "child", type: "paragraph" }] },
+      { id: "sibling", type: "paragraph" },
+    ];
+    const dispose = editor.blocks.registerProcessor({
+      id: "rewrite-import-id",
+      priority: 0,
+      processor: (block) => (block.id === "child" ? { ...block, id: "changed" } : block),
+    });
+    expect(() => editor.blocks.importForest(source, undefined, { preserveIds: true })).toThrow(
+      "preserve block IDs",
+    );
+    expect(editor.blocks.getRootIds()).toEqual([]);
+    dispose();
+    editor.blocks.insertBlock({ id: "sibling", type: "paragraph" });
+    expect(() => editor.blocks.importForest(source, undefined, { preserveIds: true })).toThrow(
+      "Destination already contains block sibling",
+    );
+    expect(editor.blocks.getRootIds()).toEqual(["sibling"]);
+    editor.blocks.removeBlock("sibling");
+    editor.history.clear();
+    const imported = editor.blocks.importForest(source, undefined, { preserveIds: true });
+    expect(imported.roots.map(({ id }) => id)).toEqual(["parent", "sibling"]);
+    expect(imported.roots[0]?.children[0]?.id).toBe("child");
+    editor.history.undo();
+    expect(editor.blocks.getRootIds()).toEqual([]);
+  } finally {
+    await editor.destroy();
+  }
+});
+
+test("outline commands order selected roots once and preserve undo", async () => {
+  const editor = await createTestEditor();
+  try {
+    editor.blocks.insertBlock({
+      id: "parent",
+      type: "paragraph",
+      children: [
+        { id: "first", type: "paragraph" },
+        { id: "second", type: "paragraph" },
+        { id: "third", type: "paragraph" },
+        { id: "tail", type: "paragraph" },
+      ],
+    });
+    const ordered = jest.spyOn(editor.blocks, "getOrderedIds");
+    editor.history.clear();
+    editor.blocks.indentBlocks(["third", "second"]);
+    expect(ordered).toHaveBeenCalledTimes(1);
+    expect(editor.blocks.getChildIds("first")).toEqual(["second", "third"]);
+    ordered.mockClear();
+    editor.blocks.outdentBlocks(["third", "second"]);
+    expect(ordered).toHaveBeenCalledTimes(1);
+    expect(editor.blocks.getChildIds("parent")).toEqual(["first", "second", "third", "tail"]);
+    editor.history.undo();
+    expect(editor.blocks.getChildIds("first")).toEqual(["second", "third"]);
+  } finally {
+    await editor.destroy();
+  }
+});
+
+test.each([0, 200])(
+  "outline commands avoid reading %i unrelated descendants",
+  async (unrelatedCount) => {
+    const editor = await createTestEditor();
+    try {
+      editor.blocks.insertBlock({
+        id: "unrelated",
+        type: "paragraph",
+        children: Array.from({ length: unrelatedCount }, (_, index) => ({
+          id: `unrelated-${index}`,
+          type: "paragraph",
+        })),
+      });
+      editor.blocks.insertBlock({
+        id: "parent",
+        type: "paragraph",
+        children: [
+          { id: "first", type: "paragraph" },
+          { id: "second", type: "paragraph" },
+          { id: "third", type: "paragraph" },
+        ],
+      });
+      const reads = jest.spyOn(editor.runtime.blocks, "getBlockNode");
+      editor.history.clear();
+      editor.blocks.indentBlocks(["second", "third"]);
+      expect(editor.blocks.getChildIds("first")).toEqual(["second", "third"]);
+      expect(reads.mock.calls.some(([id]) => id.startsWith("unrelated-"))).toBe(false);
+      reads.mockClear();
+      editor.blocks.outdentBlocks(["second", "third"]);
+      expect(editor.blocks.getChildIds("parent")).toEqual(["first", "second", "third"]);
+      expect(reads.mock.calls.some(([id]) => id.startsWith("unrelated-"))).toBe(false);
+      editor.history.undo();
+      expect(editor.blocks.getChildIds("first")).toEqual(["second", "third"]);
+    } finally {
+      await editor.destroy();
+    }
+  },
+);
+
+test.each([false, true])(
+  "outdent respects outline adjacency across parent boundaries when a gap is %s",
+  async (hasGap) => {
+    const editor = await createTestEditor();
+    try {
+      editor.blocks.insertBlock({
+        id: "parent",
+        type: "paragraph",
+        children: [
+          { id: "first", type: "paragraph" },
+          { id: "last", type: "paragraph" },
+          ...(hasGap ? [{ id: "gap", type: "paragraph" }] : []),
+        ],
+      });
+      editor.blocks.insertBlock({ id: "next", type: "paragraph" });
+      editor.history.clear();
+      editor.blocks.outdentBlocks(["last", "next"]);
+      expect(editor.blocks.getParentId("last")).toBe(hasGap ? "parent" : null);
+      expect(editor.blocks.getRootIds()).toEqual(
+        hasGap ? ["parent", "next"] : ["parent", "last", "next"],
+      );
+      if (!hasGap) {
+        editor.history.undo();
+        expect(editor.blocks.getParentId("last")).toBe("parent");
+      }
+    } finally {
+      await editor.destroy();
+    }
+  },
+);
+
+test("ordering a large outline selection reads its sibling list a bounded number of times", async () => {
+  const editor = await createTestEditor();
+  try {
+    const children = Array.from({ length: 41 }, (_, index) => ({
+      id: `child-${index}`,
+      type: "paragraph",
+    }));
+    editor.blocks.insertBlock({ id: "parent", type: "paragraph", children });
+    const reads = jest.spyOn(editor.blocks, "getChildIds");
+    const selected = children.slice(1).map(({ id }) => id);
+    editor.history.clear();
+    editor.blocks.indentBlocks(selected);
+    expect(reads.mock.calls.filter(([id]) => id === "parent").length).toBeLessThanOrEqual(2);
+    expect(editor.blocks.getChildIds("child-0")).toEqual(selected);
+    editor.history.undo();
+    expect(editor.blocks.getChildIds("parent")).toHaveLength(41);
+  } finally {
+    await editor.destroy();
+  }
 });
