@@ -598,7 +598,7 @@ export class BlockManager<
    * Replaces text across selected blocks while removing fully covered trailing blocks.
    *
    * Text selection is not a structural block deletion; child-exit transitions
-   * still run for removed subtrees. The caller owns the surrounding batch.
+   * still run for removed subtrees. The replacement and removals share one history batch.
    *
    * @param firstId - Surviving block receiving the combined text.
    * @param trailingIds - Selected trailing block IDs to remove.
@@ -607,9 +607,22 @@ export class BlockManager<
    * @throws If transition hooks, validation, or document mutations fail.
    */
   replaceTextSelection(firstId: string, trailingIds: readonly string[], content: string): void {
-    this.prepareRemoval(trailingIds);
-    trailingIds.forEach((id) => this.document.blocks.removeBlock(id));
-    this.updateBlock(firstId, { content });
+    // Removing an ancestor would also delete the block that receives the replacement text.
+    const removed = new Set(trailingIds);
+    let ancestor: string | null | undefined = firstId;
+    while (ancestor != null) {
+      if (removed.has(ancestor)) {
+        throw new Error("Trailing blocks cannot contain the surviving block");
+      }
+      ancestor = this.document.blocks.getParentId(ancestor);
+    }
+    this.editor.history.batchUpdates(() => {
+      this.prepareRemoval(trailingIds);
+      // History batches retain earlier writes on error. Update the survivor first so a stale
+      // selection or rejected update leaves the trailing content available.
+      this.updateBlock(firstId, { content });
+      trailingIds.forEach((id) => this.document.blocks.removeBlock(id));
+    });
   }
 
   /**

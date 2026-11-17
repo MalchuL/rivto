@@ -381,8 +381,12 @@ function BackgroundColorSwatch({
   const { reactPanel, blockIds } = context;
   const selected = blockIds.every((id) => {
     const current = readBackground(context, id);
+    // An inherited background has no parsed color, and the transparent token has no
+    // palette entry. Comparing those two missing values would select “No color”.
     return (
-      current === color || parseBlockBackground(current)?.color.toLowerCase() === palette[color]
+      current === color ||
+      (palette[color] !== undefined &&
+        parseBlockBackground(current)?.color.toLowerCase() === palette[color])
     );
   });
   return (

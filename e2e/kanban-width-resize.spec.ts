@@ -14,7 +14,7 @@ for (const mode of ["block", "edgeless"] as const) {
         editor.elements.insertElement({
           type: "block",
           zIndex: 0,
-          frame: { x: 20, y: 20, width: 950, height: 500 },
+          frame: { x: 220, y: 180, width: 950, height: 500 },
           props: { startBlockId: board.id, endBlockId: board.id },
         });
       }
@@ -27,7 +27,15 @@ for (const mode of ["block", "edgeless"] as const) {
     await column.scrollIntoViewIfNeeded();
     const right = column.getByRole("separator", { name: "Resize Kanban column from the right" });
     await expect(right).toBeVisible();
-    const initial = await column.evaluate((element) => element.getBoundingClientRect().width);
+    if (mode === "edgeless") {
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    }
+    const initial = await column.evaluate((element) => (element as HTMLElement).offsetWidth);
+    const scale = (await column.boundingBox())!.width / initial;
+    if (mode === "edgeless") {
+      expect(scale).toBeGreaterThan(1);
+    }
+    const dragged = initial + 40 / scale;
     const other = await sibling.evaluate((element) => element.getBoundingClientRect().width);
     const box = (await right.boundingBox())!;
     const x = box.x + box.width / 2;
@@ -46,14 +54,13 @@ for (const mode of ["block", "edgeless"] as const) {
       page.evaluate((id) => {
         const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
           .__rivtoDemo.editor;
-        return (
+        const size = (
           editor.blocks.getBlockNode(id)?.listProps.style as
             { size?: { width?: string } } | undefined
-        )?.size?.width;
+        )?.size;
+        return Number.parseFloat(size?.width ?? "");
       }, ids[0]!);
-    await expect
-      .poll(readWidth)
-      .toBe(`${Math.min(960, Math.max(160, Math.round(initial) + 40))}px`);
+    await expect.poll(readWidth).toBeCloseTo(dragged, 1);
     await page.evaluate(() =>
       (
         window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
@@ -61,17 +68,13 @@ for (const mode of ["block", "edgeless"] as const) {
     );
     await right.focus();
     await page.keyboard.press("ArrowRight");
-    await expect
-      .poll(readWidth)
-      .toBe(`${Math.min(960, Math.max(160, Math.round(initial) + 50))}px`);
+    await expect.poll(readWidth).toBeCloseTo(dragged + 10, 1);
     await page.evaluate(() =>
       (
         window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }
       ).__rivtoDemo.editor.history.undo(),
     );
-    await expect
-      .poll(readWidth)
-      .toBe(`${Math.min(960, Math.max(160, Math.round(initial) + 40))}px`);
+    await expect.poll(readWidth).toBeCloseTo(dragged, 1);
     const beforeCancel = await readWidth();
     const left = column.getByRole("separator", { name: "Resize Kanban column from the left" });
     const updated = (await left.boundingBox())!;
@@ -85,9 +88,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await expect(column).not.toHaveAttribute("data-width-resizing");
     await left.focus();
     await page.keyboard.press("ArrowLeft");
-    await expect
-      .poll(readWidth)
-      .toBe(`${Math.min(960, Math.max(160, Math.round(initial) + 50))}px`);
+    await expect.poll(readWidth).toBeCloseTo(dragged + 10, 1);
     await page.evaluate((id) => {
       const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
         .__rivtoDemo.editor;

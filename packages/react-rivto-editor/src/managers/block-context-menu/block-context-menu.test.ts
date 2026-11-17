@@ -1,6 +1,7 @@
 import { createStructuralSelection } from "@chulane/rivto";
 import { createTestCoreEditor, createTestReactEditor } from "../../test-utils";
 import { blockMenuTargets, executeBlockMenuEntry } from "./targets";
+import { createTableBlockInput, tableExtension } from "../../extensions/containers/table/table";
 import { standardPreset } from "../../extensions/built-ins/built-ins";
 import { todoItemExtension } from "../../extensions/todo-item/todo-item";
 
@@ -14,7 +15,7 @@ async function fixture() {
   const core = await createTestCoreEditor({ registerWritingBlock: false });
   const panel = createTestReactEditor({
     editor: core,
-    extensions: [standardPreset(), todoItemExtension()],
+    extensions: [standardPreset(), todoItemExtension(), tableExtension()],
   });
   const parent = core.blocks.insertBlock({
     type: "paragraph",
@@ -69,6 +70,23 @@ test("inserts blocks and a separator next to the clicked block", async () => {
   ).toBe(false);
   f.panel.editor.destroy();
   await f.core.destroy();
+});
+
+test("omits and rejects sibling insertion in a table row", async () => {
+  const f = await fixture();
+  try {
+    const table = f.core.blocks.insertBlock(createTableBlockInput(1, 2));
+    const row = table.children[0]!;
+    const context = blockMenuTargets(f.panel, row.children[0]!.id);
+    for (const id of ["block.insert-above", "block.insert-below", "block.insert-separator"]) {
+      expect(f.panel.blockContextMenu.getAll(context).map((entry) => entry.id)).not.toContain(id);
+      await f.panel.editor.blockContextMenu.get(id)!.execute!(context);
+    }
+    expect(f.core.blocks.getBlock(row.id)?.children).toEqual(row.children);
+  } finally {
+    await f.panel.editor.destroy();
+    await f.core.destroy();
+  }
 });
 
 test("recursive collapse includes hidden descendants and expands in one undo step", async () => {

@@ -6,6 +6,31 @@
 import { createTestEditor, createStructuralSelection } from "../../editor/test-utils";
 
 describe("block feature ownership independent of presentation", () => {
+  it("preserves trailing blocks when the text survivor is stale", async () => {
+    const editor = await createTestEditor();
+    const block = editor.blocks.insertBlock({ type: "paragraph" });
+    expect(() => editor.blocks.replaceTextSelection("missing", [block.id], "x")).toThrow();
+    expect(editor.blocks.hasBlock(block.id)).toBe(true);
+    await editor.destroy();
+  });
+
+  it("publishes direct text replacement once and restores the entire range with undo", async () => {
+    const editor = await createTestEditor();
+    const first = editor.blocks.insertBlock({ type: "paragraph", content: "first" });
+    const last = editor.blocks.insertBlock({ type: "paragraph", content: "last" });
+    editor.history.clear();
+    const changes = jest.fn();
+    const release = editor.subscribe(changes);
+    editor.blocks.replaceTextSelection(first.id, [last.id], "combined");
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(editor.blocks.getBlockNode(first.id)?.content).toBe("combined");
+    expect(editor.blocks.hasBlock(last.id)).toBe(false);
+    editor.history.undo();
+    expect(editor.blocks.getBlocks()).toEqual([first, last]);
+    release();
+    await editor.destroy();
+  });
+
   it("reports document removal and outdent eligibility", async () => {
     const editor = await createTestEditor();
     const root = editor.blocks.insertBlock({ type: "paragraph" });

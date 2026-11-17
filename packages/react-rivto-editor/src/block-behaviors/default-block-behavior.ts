@@ -188,8 +188,11 @@ export class DefaultBlockBehavior implements BlockBehavior {
    * Leaves child-bearing blocks intact. An empty surface retains keyboard focus
    * so undo remains available after its last block is removed.
    *
+   * A structural behavior can consume Backspace while keeping the block. Wait for generic
+   * removal to succeed before changing card endpoints, discarding geometry, or moving focus.
+   *
    * @param context - Block and surface receiving Backspace.
-   * @returns Whether the block was removed and focus moved to its next sibling or surface.
+   * @returns Whether Backspace was consumed, including when a structural behavior vetoed removal.
    */
   private removeFirstEmptyBlock(context: BlockBehaviorContext): boolean {
     const { reactPanel, block, root } = context;
@@ -237,11 +240,13 @@ export class DefaultBlockBehavior implements BlockBehavior {
         return false;
       }
       reactPanel.batchUpdates(() => {
+        if (!reactPanel.blocks.removeBlocks([block.id])) {
+          return;
+        }
         cards.forEach((element) => reactPanel.elements.removeElement(element.id));
-        reactPanel.blocks.removeBlock(block.id);
         reactPanel.selection.clear();
+        root.focus({ preventScroll: true });
       });
-      root.focus({ preventScroll: true });
       return true;
     }
     if (!nextSibling) {
@@ -255,6 +260,9 @@ export class DefaultBlockBehavior implements BlockBehavior {
     }
     // Keep card ranges and block deletion in the same undo item; publish focus after removal.
     reactPanel.batchUpdates(() => {
+      if (!reactPanel.blocks.removeBlocks([block.id])) {
+        return;
+      }
       for (const element of reactPanel.elements.getElementNodes()) {
         if (element.type !== "block") {
           continue;
@@ -269,7 +277,6 @@ export class DefaultBlockBehavior implements BlockBehavior {
           });
         }
       }
-      reactPanel.blocks.removeBlock(block.id);
       focusCaret(reactPanel, root, next.blockId, 0);
     });
     return true;

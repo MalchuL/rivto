@@ -1,5 +1,7 @@
 import { createCaretSelection } from "@chulane/rivto";
 import { ArrowUpToLineIcon, ArrowDownToLineIcon } from "lucide-react";
+import type { BlockFactory } from "../../../block-factories";
+import type { ReactPanelApi } from "../../../panels/types";
 import { focusBlock } from "../../../managers";
 import type { BlockContextMenuEntry } from "../../../managers/block-context-menu/types";
 
@@ -13,6 +15,49 @@ interface InsertionMenu {
    * @throws If the registration is invalid or duplicates an existing entry.
    */
   register(entry: BlockContextMenuEntry): () => void;
+}
+
+/**
+ * Resolves a new sibling and checks its proposed placement against the panel and block behaviors.
+ *
+ * An accessible anchor can still have a parent that restricts child types, such as a table
+ * row. Menu availability and execution both check the live destination in case the anchor moves.
+ *
+ * @param panel - Panel whose root bounds the sibling list.
+ * @param anchor - Clicked block which must allow sibling insertion.
+ * @param factory - Supplies the new block's initial fields.
+ * @param position - Requested side of the anchor.
+ * @returns Creation input and destination, or undefined for a protected or disallowed placement.
+ */
+export function siblingInsertion(
+  panel: Pick<ReactPanelApi, "blocks">,
+  anchor: string,
+  factory: BlockFactory,
+  position: "above" | "below",
+) {
+  if (!panel.blocks.canRemove(anchor)) {
+    return;
+  }
+  const parentId = panel.blocks.getParentId(anchor);
+  if (parentId === undefined) {
+    return;
+  }
+  const destination =
+    position === "above"
+      ? { parentId, beforeId: anchor }
+      : panel.blocks.getInsertionDestinationAfter(anchor);
+  const input = factory.createEmptyBlock();
+  const block = {
+    ...input,
+    id: input.id ?? crypto.randomUUID(),
+    content: input.content ?? "",
+    listProps: input.listProps ?? {},
+    props: input.props ?? {},
+    pluginData: input.pluginData ?? {},
+  };
+  if (panel.blocks.canMove({ sources: [block], destination })) {
+    return { block, destination };
+  }
 }
 
 /**
@@ -41,7 +86,13 @@ export function registerBlockInsertionActions(menu: InsertionMenu): void {
        * @param context - Invoking panel and clicked block.
        * @returns Whether the panel exposes the clicked block's sibling list.
        */
-      isAvailable: ({ reactPanel, blockId }) => reactPanel.blocks.canRemove(blockId),
+      isAvailable: ({ reactPanel, blockId }) =>
+        !!siblingInsertion(
+          reactPanel,
+          blockId,
+          reactPanel.editor.defaultWritingBlockFactory,
+          position,
+        ),
       /**
        * Inserts the writing block at the requested sibling position.
        *
@@ -50,21 +101,16 @@ export function registerBlockInsertionActions(menu: InsertionMenu): void {
        * @throws If the panel rejects the insertion or selection update.
        */
       execute: ({ reactPanel, blockId }) => {
-        const parentId = reactPanel.blocks.getParentId(blockId);
-        if (parentId === undefined) {
+        const insertion = siblingInsertion(
+          reactPanel,
+          blockId,
+          reactPanel.editor.defaultWritingBlockFactory,
+          position,
+        );
+        if (!insertion) {
           return;
         }
-        let destination = reactPanel.blocks.getInsertionDestinationAfter(blockId);
-        if (position === "above") {
-          destination =
-            parentId === null
-              ? { parentId: null, beforeId: blockId }
-              : { parentId, beforeId: blockId };
-        }
-        const block = reactPanel.blocks.insertBlock(
-          reactPanel.editor.defaultWritingBlockFactory.createEmptyBlock(),
-          destination,
-        );
+        const block = reactPanel.blocks.insertBlock(insertion.block, insertion.destination);
         reactPanel.selection.set(createCaretSelection(block.id, 0));
         const root = reactPanel.getRoot();
         if (root) {

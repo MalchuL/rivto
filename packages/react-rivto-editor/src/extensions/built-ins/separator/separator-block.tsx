@@ -25,6 +25,7 @@ import {
   type ReactEditorExtension,
 } from "../../../managers";
 import { separatorBlockFactory, type BlockFactory } from "../../../block-factories";
+import { siblingInsertion } from "../block-handle/insertion";
 import { SEPARATOR_BLOCK_TYPE } from "./constants";
 
 export { SEPARATOR_BLOCK_TYPE } from "./constants";
@@ -207,7 +208,8 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
          * @param context - Invoking panel and clicked block.
          * @returns Whether the clicked block can have a sibling in this panel.
          */
-        isAvailable: ({ reactPanel, blockId }) => reactPanel.blocks.canRemove(blockId),
+        isAvailable: ({ reactPanel, blockId }) =>
+          !!siblingInsertion(reactPanel, blockId, separatorBlockFactory, "below"),
         /**
          * Inserts a separator immediately after the clicked block.
          *
@@ -216,10 +218,10 @@ export const separatorBlockExtension = (): ReactEditorExtension => ({
          * @throws If the panel rejects the insertion.
          */
         execute: ({ reactPanel, blockId }) => {
-          reactPanel.blocks.insertBlock(
-            separatorBlockFactory.createEmptyBlock(),
-            reactPanel.blocks.getInsertionDestinationAfter(blockId),
-          );
+          const insertion = siblingInsertion(reactPanel, blockId, separatorBlockFactory, "below");
+          if (insertion) {
+            reactPanel.blocks.insertBlock(insertion.block, insertion.destination);
+          }
         },
       }),
       reactEditor.keyboard.register(

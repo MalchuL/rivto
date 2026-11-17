@@ -11,6 +11,7 @@ import { registerBlockSurfaceDrop } from "../block-surface-drop";
 import {
   EDGELESS_BLOCK_ELEMENT_TYPE,
   EDGELESS_CARD_DEFAULT_FRAME,
+  blockIdsOf,
   insertBlockElementSeparator,
 } from "../../elements/block-element-projection";
 
@@ -26,7 +27,10 @@ interface BlockCanvasDropPanel extends Pick<ReactPanelApi, "rootBlockId" | "batc
     | "getInsertionDestinationAfter"
     | "moveBlocks"
   >;
-  readonly elements: Pick<ReactPanelApi["elements"], "getElementNodes" | "insertElement">;
+  readonly elements: Pick<
+    ReactPanelApi["elements"],
+    "getElementNodes" | "insertElement" | "updateElement"
+  >;
   readonly selection: Pick<ReactPanelApi["selection"], "set">;
   readonly editor: {
     readonly blockTypes: Pick<
@@ -44,8 +48,9 @@ interface BlockCanvasDropPanel extends Pick<ReactPanelApi, "rootBlockId" | "batc
  * well as empty, inaccessible or disallowed selections and bounded panels. It
  * also requires a current root and a registered block-element separator type.
  * For an accepted release, it converts client coordinates to canvas world
- * coordinates, moves the selected roots after a separator and inserts one block
- * element spanning them in a single panel batch. It then selects the moved roots
+ * coordinates. A complete card keeps its identity, dimensions and children as it
+ * moves to that point. A partial range moves after a separator in a new block
+ * element spanning the selected roots in a single panel batch. It then selects the moved roots
  * in their resulting document order. The existing blocks and subtrees are moved,
  * not copied.
  *
@@ -99,8 +104,29 @@ export function registerBlockCanvasDrop(
     }
     const rect = viewport.getBoundingClientRect();
     const point = canvas.toWorld({ x: x - rect.left, y: y - rect.top });
-    const zIndex =
-      Math.max(0, ...panel.elements.getElementNodes().map((element) => element.zIndex)) + 1;
+    const elements = panel.elements.getElementNodes();
+    const zIndex = Math.max(0, ...elements.map((element) => element.zIndex)) + 1;
+    const selected = new Set(ids);
+    const first = roots.find((id) => selected.has(id));
+    // Reconciliation retains cards with matching endpoints. Reuse the card only when the
+    // selection covers every root in its range, including any roots between the endpoints.
+    const card = elements.find((element) => {
+      if (
+        element.type !== EDGELESS_BLOCK_ELEMENT_TYPE ||
+        (element.props.startBlockId !== first && element.props.endBlockId !== first)
+      ) {
+        return false;
+      }
+      const range = blockIdsOf(element, roots);
+      return range.length === selected.size && range.every((id) => selected.has(id));
+    });
+    if (card) {
+      panel.batchUpdates(() => {
+        panel.elements.updateElement(card.id, { frame: { ...card.frame, ...point }, zIndex });
+      });
+      panel.selection.set(createStructuralSelection(blockIdsOf(card, roots)));
+      return true;
+    }
     let movedIds: readonly string[] = [];
     panel.batchUpdates(() => {
       // A separator keeps the new card's roots separate from the preceding card.
@@ -111,7 +137,6 @@ export function registerBlockCanvasDrop(
           : insertBlockElementSeparator(panel, last).id;
       panel.blocks.moveBlocks(ids, separator, "after");
       // Grouped moves use document order, which can differ from selection order.
-      const selected = new Set(ids);
       movedIds = panel.blocks.getRootIds().filter((id) => selected.has(id));
       panel.elements.insertElement({
         type: EDGELESS_BLOCK_ELEMENT_TYPE,

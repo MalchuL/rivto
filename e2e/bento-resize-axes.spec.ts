@@ -2,6 +2,56 @@ import { expect, test } from "@playwright/test";
 import type { DocumentEditorAPI } from "@chulane/rivto";
 
 for (const mode of ["block", "edgeless"] as const) {
+  test(`styled source blocks fit resized Bento embeddings in ${mode}`, async ({ page }) => {
+    await page.goto("/?test_features=1");
+    const ids = await page.evaluate((mode) => {
+      const { editor } = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } })
+        .__rivtoDemo;
+      const source = editor.blocks.insertBlock({
+        type: "paragraph",
+        content: "Referenced text",
+        listProps: { style: { size: { width: "480px" } } },
+      });
+      const board = editor.blocks.insertBlock({
+        type: "bento",
+        children: [
+          {
+            type: "embedding",
+            props: { targetBlockId: source.id, targetDocumentId: editor.getDocument().id },
+            listProps: { style: { size: { width: "240px" } } },
+          },
+        ],
+      });
+      if (mode === "edgeless") {
+        editor.elements.insertElement({
+          type: "block",
+          zIndex: 0,
+          frame: { x: 20, y: 20, width: 800, height: 500 },
+          props: { startBlockId: board.id, endBlockId: board.id },
+        });
+      }
+      return { source: source.id, embedding: board.children[0]!.id };
+    }, mode);
+    await page.locator(`[data-editor-mode="${mode}"]`).click();
+    const tile = page
+      .locator(".rivto-bento-tile")
+      .filter({
+        has: page.locator(`[data-block-id="${ids.embedding}"]`),
+      })
+      .first();
+    const reference = tile.locator(`[data-block-id="${ids.source}"]`);
+    await expect(reference).toBeVisible();
+    const edge = tile.getByRole("separator", { name: "Resize Bento tile from the right" });
+    const before = (await tile.boundingBox())!.width;
+    await edge.press("ArrowLeft");
+    await expect.poll(async () => (await tile.boundingBox())!.width).toBeLessThan(before);
+    const surface = tile.locator(".rivto-embedded-surface");
+    const content = (await reference.boundingBox())!;
+    const bounds = (await surface.boundingBox())!;
+    expect(content.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(content.x + content.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+  });
+
   test(`Bento corner and bottom handles resize and restore both axes in ${mode}`, async ({
     page,
   }) => {
@@ -83,6 +133,14 @@ for (const mode of ["block", "edgeless"] as const) {
     );
     const bottom = tile.getByRole("separator", { name: "Resize Bento tile from the bottom" });
     const beforeBottom = (await read()) as { size: { width: string; height: string } };
+    let scale = 1;
+    if (mode === "edgeless") {
+      await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+      scale = await block.evaluate(
+        (node) => node.getBoundingClientRect().height / (node as HTMLElement).offsetHeight,
+      );
+      expect(scale).toBeLessThan(1);
+    }
     const dragBottom = (await bottom.boundingBox())!;
     await page.mouse.move(
       dragBottom.x + dragBottom.width / 2,
@@ -97,7 +155,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.mouse.up();
     await expect
       .poll(async () => parseFloat(((await read()) as { size: { height: string } }).size.height))
-      .toBe(parseFloat(beforeBottom.size.height) + 20);
+      .toBeCloseTo(parseFloat(beforeBottom.size.height) + 20 / scale, 1);
     expect(((await read()) as { size: { width: string } }).size.width).toBe(
       beforeBottom.size.width,
     );
@@ -106,7 +164,7 @@ for (const mode of ["block", "edgeless"] as const) {
     await page.keyboard.press("ArrowDown");
     await expect
       .poll(async () => parseFloat(((await read()) as { size: { height: string } }).size.height))
-      .toBe(previousHeight + 10);
+      .toBe(Math.round(previousHeight) + 10);
     const beforeCancel = await read();
     const bottomBox = (await bottom.boundingBox())!;
     await page.mouse.move(bottomBox.x + bottomBox.width / 2, bottomBox.y + bottomBox.height / 2);

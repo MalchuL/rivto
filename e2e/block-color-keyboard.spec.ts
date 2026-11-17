@@ -12,6 +12,10 @@ test("menu arrows skip background controls while Tab reaches them", async ({ pag
     .click({ button: "right" });
   const menu = page.getByRole("menu").first();
   await expect(menu).toBeVisible();
+  await expect(menu.getByRole("button", { name: "No color", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await page.keyboard.press("Home");
   for (let index = 0; index < 15; index++) {
     await page.keyboard.press("ArrowDown");

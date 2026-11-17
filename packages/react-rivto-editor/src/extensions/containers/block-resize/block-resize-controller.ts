@@ -47,6 +47,8 @@ interface BlockResizeGesture {
   readonly pointerId: number;
   readonly handle: HTMLElement;
   readonly edge: BlockResizeEdge;
+  readonly scaleX: number;
+  readonly scaleY: number;
   readonly startX: number;
   readonly startWidth: number;
   readonly startY: number;
@@ -193,6 +195,15 @@ export class BlockResizeController {
       pointerId: event.pointerId,
       handle,
       edge,
+      // Pointer movement uses viewport pixels. At 2× zoom, a 20-pixel drag changes
+      // the stored width or height by 10 local CSS pixels.
+      // Capture the rendered-to-local ratio before applying any preview styles.
+      scaleX: (startWidth && this.placement.getBoundingClientRect().width / startWidth) || 1,
+      scaleY:
+        (this.resizesHeight(edge) &&
+          startHeight &&
+          heightTarget.getBoundingClientRect().height / startHeight) ||
+        1,
       startX: event.clientX,
       startWidth,
       startY: event.clientY,
@@ -241,13 +252,13 @@ export class BlockResizeController {
       return;
     }
     if (this.resizesWidth(active.edge)) {
-      const delta = event.clientX - active.startX;
+      const delta = (event.clientX - active.startX) / active.scaleX;
       active.width = normalizeResizeWidth(
         active.startWidth + (active.edge.includes("right") ? delta : -delta),
       );
     }
     if (this.resizesHeight(active.edge)) {
-      const delta = event.clientY - active.startY;
+      const delta = (event.clientY - active.startY) / active.scaleY;
       active.height = Math.max(
         MIN_RESIZE_HEIGHT,
         Math.min(

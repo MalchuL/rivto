@@ -195,6 +195,22 @@ test("Backspace removes a one-block card without changing another card", async (
   const empty = page.locator(`[data-block-id="${ids.empty}"]`);
   const other = page.locator(`[data-block-id="${ids.before}"]`);
   await empty.locator("[data-block-content]").click();
+  await page.evaluate((id) => {
+    const editor = (window as unknown as { __rivtoDemo: { editor: DocumentEditorAPI } }).__rivtoDemo
+      .editor;
+    const dispose = editor.blockRegistry.registerBehavior({
+      isAvailable: (block) => block.id === id,
+      onStructuralDelete: () => {
+        dispose();
+        return "rejected";
+      },
+    });
+  }, ids.empty);
+  const card = empty.locator("xpath=ancestor::*[@data-edgeless-root][1]");
+  const originalId = await card.getAttribute("data-edgeless-root");
+  await page.keyboard.press("Backspace");
+  await expect(card).toHaveAttribute("data-edgeless-root", originalId!);
+  await expect(empty.locator("[data-block-content]")).toBeFocused();
   await page.keyboard.press("Backspace");
   await expect(empty).toHaveCount(0);
   await expect(other).toContainText("Other card");

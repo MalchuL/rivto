@@ -2736,6 +2736,37 @@ test("moves a card root to a new card on blank canvas", async ({ page }) => {
   await expect(moved).not.toHaveAttribute("data-edgeless-root", originalId);
 });
 
+test("repositions a whole card on blank canvas without splitting its range", async ({ page }) => {
+  const id = await page.evaluate(() => {
+    const editor = (window as unknown as DemoWindow).__rivtoDemo.editor;
+    const root = editor.blocks.insertBlock({ type: "paragraph", content: "Whole card" });
+    editor.load({ ...editor.dump(), rootElementIds: [], blocks: [root], elements: [] });
+    return root.id;
+  });
+  await switchMode(page, "edgeless");
+  const card = page
+    .locator("[data-edgeless-root]")
+    .filter({ has: page.locator(blockIdSelector(id)) });
+  const original = await card.getAttribute("data-edgeless-root");
+  const before = await card.boundingBox();
+  const handle = (await card.locator(".block-handle").boundingBox())!;
+  const point = await emptyCanvasPoint(page);
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
+  await expect(card).toHaveCount(1);
+  await expect(card).toHaveAttribute("data-edgeless-root", original!);
+  await expect.poll(async () => Math.abs((await card.boundingBox())!.x - point.x)).toBeLessThan(2);
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as DemoWindow).__rivtoDemo.editor.blocks.getRootIds(),
+    ),
+  ).toEqual([id]);
+  await page.evaluate(() => (window as unknown as DemoWindow).__rivtoDemo.editor.history.undo());
+  await expect.poll(async () => (await card.boundingBox())!.x).toBe(before!.x);
+});
+
 test("moves selected sibling blocks together onto blank canvas", async ({ page }) => {
   await switchMode(page, "edgeless");
   const card = page
